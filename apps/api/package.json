@@ -1,0 +1,25 @@
+{
+  "name": "@relay/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "db:migrate": "wrangler d1 migrations apply relay --local",
+    "db:migrate:remote": "wrangler d1 migrations apply relay --remote",
+    "deploy:check": "wrangler deploy --dry-run",
+    "icons": "node scripts/icons.mjs"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "marked": "^15.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260811.1",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.0.0"
+  }
+}

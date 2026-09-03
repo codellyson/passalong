@@ -1,0 +1,125 @@
+# PRD: Relay (working name)
+
+**Version:** 0.1 draft  **Author:** Lukman Isiaka  **Date:** September 2026  **Status:** Draft for review
+
+## 1. One-liner
+
+Relay lets a developer capture an implementation they just finished in one context and hand it to another context (a different repo, machine, agent session, or teammate) in a form an AI agent can act on directly.
+
+## 2. Problem
+
+Developers increasingly work across many contexts in parallel: multiple repos, multiple products, multiple agent sessions, sometimes multiple machines. Solutions figured out in one context regularly need to be implemented somewhere else. Today that transfer happens through Slack messages, memory, copy-pasted snippets, or re-explaining the problem to a fresh agent session from scratch.
+
+This is lossy and slow. The original session contained the full reasoning: what was tried, what failed, which decisions were made and why, and how success was verified. Almost none of that survives the transfer. The receiving context (whether it is the same person five minutes later or a teammate on a different codebase) starts close to zero.
+
+Repo docs do not solve this. A `docs/` folder is scoped to one repo and written for permanence. The artifact needed here is scoped to a transfer moment and written for execution: portable, structured, and consumable by an agent on the receiving side.
+
+## 3. Insight
+
+In the age of AI agents, an implementation guide is no longer documentation. It is executable context. A well structured transfer guide can be pulled into a receiving agent's context via MCP and acted on immediately. The product is not a knowledge base. It is a baton pass between contexts.
+
+## 4. Who it is for
+
+**v1 persona:** the multi-context solo developer. Someone running several products, services, or client projects at once. The sender and receiver are frequently the same person in different sessions. No team required to get value on day one.
+
+**v2 persona:** the small dev team (2 to 15 engineers). Teams where knowledge transfer currently happens over chat, and where agents (Claude Code, Cursor, etc.) are part of the daily workflow.
+
+## 5. Core loop (v1)
+
+1. **Finish work in an agent session.** Developer solves something non-trivial in Claude Code (or any agent tool).
+2. **Capture.** Run `relay share`. The CLI (or an agent skill/hook) distills the session into a draft transfer guide: problem, solution shape, decisions and rationale, concrete steps with context-specific parts flagged, and verification steps.
+3. **Trim and publish.** Developer reviews the draft, cuts noise, publishes. The guide gets a short ID and is synced.
+4. **Pull on the other side.** In the receiving context, run `relay pull <id>` or let the receiving agent fetch it via the Relay MCP server. The guide lands in the agent's context and the agent implements, adapting the flagged context-specific parts.
+5. **Close.** Optionally mark the guide as consumed. Guides that keep getting pulled can be promoted to a reusable reference.
+
+The demo moment: solve a bug in service A, run one command, open a session in service B, and the agent there already knows the whole story.
+
+## 6. The artifact: what a transfer guide contains
+
+Plain markdown with frontmatter. No proprietary format, fully exportable, git-friendly.
+
+**Frontmatter:**
+- id, title, created, author
+- source_context: repo/product where it originated
+- status: draft, published, consumed, promoted
+- stack_assumptions: e.g. Postgres, Next.js 15, Paystack v2 API
+- tags
+
+**Body sections:**
+- **Problem.** What was broken or needed, in two or three sentences.
+- **Solution shape.** The approach at a high level, before any code.
+- **Decisions and rationale.** What was chosen, what was rejected, and why. This is what lets the receiving context adapt instead of blindly copying.
+- **Steps.** Concrete implementation steps. Context-specific parts are explicitly marked (e.g. "ASSUMES: Postgres. If MySQL, adjust X").
+- **Verification.** How to confirm it worked: commands, expected outputs, test cases.
+- **Gotchas.** Things that failed along the way and why. Often the highest-value section.
+
+## 7. Product surface (v1)
+
+**CLI (`relay`):**
+- `relay share` - capture from the current session/directory, open draft for review
+- `relay pull <id>` - fetch a guide into the current directory/context
+- `relay list` - list your guides
+- `relay open <id>` - view in terminal or browser
+
+**MCP server:** Exposes `search_guides`, `get_guide`, and `publish_guide` tools so any MCP-capable agent can pull and create guides without leaving the session. This is the strategic rail: it makes Relay tool-agnostic across Claude Code, Cursor, Windsurf, and whatever comes next.
+
+**Capture skill/hook for Claude Code:** A skill that, when invoked at session end, distills the transcript into the guide structure above. This is the cold start killer: guides are created as a byproduct of work, not as a writing chore.
+
+**Thin web view:** Read-only rendering of guides with a shareable link. No editor at launch. Editing happens in your own tools on the markdown.
+
+## 8. v2: team coordination
+
+- Team workspaces with invite by email
+- Guides addressed to a person or team ("handoff to X"), with notification
+- Pull activity visible to the sender (did the transfer land?)
+- Team-wide MCP endpoint so every member's agents can search the team's guides
+- Promotion flow: transfer guides that keep getting pulled graduate into a small set of maintained references
+
+Explicitly out of scope for v2: analytics dashboards, rich text editor, comments/threads, permissions beyond workspace membership.
+
+## 9. Positioning
+
+**What Relay is not:** a wiki, a docs site, a replacement for `docs/` in a repo, a note-taking app.
+
+**What it competes with in practice:** Slack messages to teammates, messages to self, copy-pasted snippets, and re-prompting agents from scratch.
+
+**Why not just git?** Git is scoped to one repo and has no delivery mechanism into agent context across repos and tools. Relay's job is the crossing: repo to repo, machine to machine, person to person, agent to agent.
+
+**Why now:** agents made implementation knowledge executable. MCP made cross-tool delivery possible. Neither was true 18 months ago.
+
+## 10. Principles (Just X DNA)
+
+- **No lock-in.** Guides are plain markdown. `relay export` dumps everything. Deleting your account leaves you with all your content.
+- **Local-first spirit.** The CLI works against a local store; sync is the hosted layer. Solo usage should feel like a local tool that happens to sync.
+- **Zero-friction start.** Install, `relay share`, done. Account required only when sync/team enters the picture (this is the one deliberate deviation from pure no-account, since transfer across machines inherently needs a rail).
+- **Agent-native.** Every feature must answer: can an agent do this without a human clicking through a UI?
+
+## 11. Monetization
+
+- **Free:** solo, unlimited local guides, limited synced guides (e.g. 25 active), personal MCP endpoint.
+- **Team (paid, per seat):** shared workspace, team MCP endpoint, handoff/notification flow, unlimited synced guides.
+- **Target buyer:** the eng lead or senior dev tired of re-explaining. Land via one enthusiastic dev on the free tier, expand to team.
+
+Pricing note: this is deliberately a team-monetized product. The solo tier is the distribution engine, not the revenue.
+
+## 12. Risks and open questions
+
+- **Capture quality.** If `relay share` produces mediocre distillations, the loop dies. Mitigation: this is the first thing to prototype and pressure-test before building anything else.
+- **Platform absorption.** Anthropic (skills), Cursor, and GitHub are circling adjacent territory. Defensible ground: cross-tool, cross-repo, transfer-shaped rather than library-shaped. The window argues for shipping the narrow loop fast.
+- **"Why not just paste it into the next session?"** For small transfers, pasting wins. Relay has to win on: structure (verification and gotchas survive), addressability (short IDs, MCP search), and cross-machine/cross-person reach. Positioning must be honest that trivial transfers do not need it.
+- **Session access.** Capture depends on being able to read the agent session (transcript, hooks). Claude Code hooks make this feasible today; other tools vary. Fallback: `relay share` can also distill from a working directory diff plus a short prompt.
+- **Naming.** "Relay" is the working name. Alternatives in the transfer family: Handoff, Baton, JustRelay (to keep the Just X convention). Decide before public launch.
+
+## 13. Milestones
+
+- **M0 - Capture spike (1 to 2 weeks):** prototype the session-to-guide distillation as a Claude Code skill. Success = you personally use it for real transfers between your own projects and the drafts need only light trimming.
+- **M1 - Solo loop (3 to 4 weeks):** CLI (share, pull, list), local store, hosted sync, personal MCP server, thin web view. Success = you stop pasting context between your own sessions.
+- **M2 - Team layer:** workspaces, invites, addressed handoffs, team MCP endpoint. Success = one external team (Khaime is the obvious candidate) uses it for a real cross-person transfer weekly.
+- **M3 - Public launch:** landing page, docs, Show HN / dev community launch, free and team tiers live.
+
+## 14. Success metrics
+
+- **Activation:** first `relay share` to first `relay pull` in a different context within 7 days.
+- **Core health:** weekly transfers per active user (share + pull pairs).
+- **Quality proxy:** percent of pulled guides marked consumed without follow-up edits to the guide.
+- **v2:** percent of transfers that cross a person boundary (self-transfer vs team-transfer ratio).

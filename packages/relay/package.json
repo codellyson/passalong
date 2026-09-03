@@ -1,0 +1,44 @@
+{
+  "name": "justrelay",
+  "version": "0.1.0",
+  "description": "Hand a finished implementation from one context to another, in a form an AI agent can act on.",
+  "keywords": [
+    "mcp",
+    "claude-code",
+    "agent",
+    "handoff",
+    "knowledge-transfer",
+    "cli",
+    "markdown"
+  ],
+  "homepage": "https://relay.kreativekorna.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codellyson/relay.git",
+    "directory": "packages/relay"
+  },
+  "author": "Lukman Isiaka",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "relay": "bin/relay"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skill"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.24.0"
+  }
+}
