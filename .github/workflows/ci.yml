@@ -64,7 +64,7 @@ jobs:
       - name: Apply D1 migrations
         run: pnpm -C apps/api db:migrate:remote
       - name: Deploy Worker
-        run: pnpm -C apps/api deploy
+        run: pnpm -C apps/api run deploy
       - name: Smoke test
         run: |
           for i in 1 2 3 4 5 6; do

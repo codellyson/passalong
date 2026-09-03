@@ -29,7 +29,7 @@ pnpm -C apps/api deploy:check   # wrangler dry run: bindings, assets, routes
 
 ```sh
 pnpm -C apps/api db:migrate:remote   # applies any new files in apps/api/migrations
-pnpm -C apps/api deploy
+pnpm -C apps/api run deploy
 ```
 
 First deploy creates the `relay.kreativekorna.com` DNS record and certificate; allow a minute.

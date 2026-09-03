@@ -54,7 +54,7 @@ pnpm -C apps/api lint                  # tsc
 pnpm -C apps/api db:migrate            # local D1 (re-run if wrangler.jsonc's database_id changes)
 pnpm dev:api                           # Worker on :8787
 RELAY_API=http://localhost:8787 RELAY_HOME=/tmp/rh packages/relay/bin/relay login
-pnpm -C apps/api db:migrate:remote && pnpm -C apps/api deploy
+pnpm -C apps/api db:migrate:remote && pnpm -C apps/api run deploy
 ```
 
 ## Sharp edges
@@ -68,7 +68,7 @@ pnpm -C apps/api db:migrate:remote && pnpm -C apps/api deploy
 
 ## Deploying
 
-`docs/DEPLOY.md` is the runbook: preflight, Worker (`db:migrate:remote` then `deploy`), then the
+`docs/DEPLOY.md` is the runbook: preflight, Worker (`db:migrate:remote` then `run deploy`; plain `pnpm deploy` is a pnpm built-in), then the
 npm package. Production host is `relay.kreativekorna.com` (custom-domain route in
 `wrangler.jsonc`); `DEFAULT_API` in `packages/relay/src/api.js` and `homepage` in its
 `package.json` must match it. Account creation is throttled by the `ACCOUNT_LIMIT` rate-limit
