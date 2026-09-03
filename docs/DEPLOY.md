@@ -80,9 +80,30 @@ and runs `claude mcp add relay -- relay mcp`, so those two paths are part of the
   5 per IP per minute via the `ACCOUNT_LIMIT` rate-limit binding.
 - Observability is on with full sampling; `wrangler tail` streams logs.
 
-## Not yet in place
+## Continuous deploy
 
-- No git remote. The package's `repository` field assumes `github.com/codellyson/relay`.
-- No CI. Preflight is manual.
+`.github/workflows/ci.yml` runs the preflight on every push and pull request. A green push to
+`master` then applies remote migrations, deploys the Worker, and smoke-tests `/health`. The
+deploy job skips itself until the token secret exists, so CI is safe to run before setup.
+
+One-time setup:
+
+1. Create an API token at <https://dash.cloudflare.com/profile/api-tokens>: start from the
+   **Edit Cloudflare Workers** template and add **Account → D1 → Edit**. Scope it to this
+   account and, under Zone Resources, to `kreativekorna.com`.
+2. Store it: `gh secret set CLOUDFLARE_API_TOKEN` (paste when prompted).
+   `CLOUDFLARE_ACCOUNT_ID` is already set.
+3. Do the **first** deploy from your machine (section 1 above). Creating the custom domain and
+   its certificate needs zone permissions the token may not have; once the domain exists,
+   the token only needs to update the Worker.
+
+`.github/workflows/release.yml` publishes `justrelay` to npm when a `v*` tag is pushed and the
+tag matches `packages/relay/package.json`. It needs `NPM_TOKEN` (an npm Automation token):
+
+```sh
+cd packages/relay && npm version patch && git push && git push --tags
+```
+
+## Not yet in place
 - No custom-domain fallback: if `relay.kreativekorna.com` moves, change the route, the
   `DEFAULT_API` constant, and `homepage` in the package together.

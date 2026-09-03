@@ -1,0 +1,38 @@
+# Publishes the CLI to npm when a version tag is pushed. The Worker deploys on every master push
+# (ci.yml); the package is released deliberately, because users install it.
+#
+#   cd packages/relay && npm version patch   # bumps package.json, commits, tags vX.Y.Z
+#   git push && git push --tags
+#
+# Needs NPM_TOKEN (an npm "Automation" token, so it works without 2FA prompts).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C packages/relay test
+      - name: Tag must match package version
+        run: |
+          v="$(node -p "require('./packages/relay/package.json').version")"
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != package v$v" >&2; exit 1; }
+      - name: Publish
+        run: cd packages/relay && npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
