@@ -3,3 +3,4 @@ User-agent: *
 Allow: /$
 Disallow: /g/
 Disallow: /v1/
+Disallow: /hub

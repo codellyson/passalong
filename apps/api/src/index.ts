@@ -14,7 +14,7 @@
 // assets layer before this Worker runs; see wrangler.jsonc.
 import { Hono } from "hono";
 import { body as bodyOf, type Meta, parseMeta, STATUSES, setField } from "./guide.js";
-import { renderGuide, renderHome } from "./render.js";
+import { renderGuide, renderHome, renderHub } from "./render.js";
 
 // Workers rate-limit binding (wrangler.jsonc `ratelimits`). Optional so local dev without it
 // still works.
@@ -312,6 +312,15 @@ app.get("/g/:id/:key", async (c) => {
 });
 
 app.get("/", (c) => c.html(renderHome(), 200, VIEW_HEADERS));
+
+// The hub is the one page that runs script: its own static file, talking only to this origin.
+// Guide pages keep the stricter VIEW_HEADERS.
+const HUB_HEADERS = {
+  ...VIEW_HEADERS,
+  "content-security-policy":
+    "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'",
+};
+app.get("/hub", (c) => c.html(renderHub(), 200, HUB_HEADERS));
 app.get("/health", (c) => c.json({ ok: true }));
 
 app.notFound((c) =>

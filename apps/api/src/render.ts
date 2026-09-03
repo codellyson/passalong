@@ -2,6 +2,10 @@
 import { marked } from "marked";
 import type { Meta } from "./guide.js";
 
+// Bump when public/styles.css changes: _headers lets browsers cache it for an hour, and a stale
+// stylesheet silently breaks new pages (the hub shipped unstyled to anyone who had visited).
+const STYLES = "/styles.css?v=2";
+
 const esc = (s: string) =>
   s.replace(
     /[&<>"']/g,
@@ -35,7 +39,7 @@ function page(o: {
     `<link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">`,
     `<link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
     `<link rel="manifest" href="/site.webmanifest">`,
-    `<link rel="stylesheet" href="/styles.css">`,
+    `<link rel="stylesheet" href="${STYLES}">`,
   ]
     .filter(Boolean)
     .join("");
@@ -98,6 +102,24 @@ export function renderGuide(g: GuideView): string {
   });
 }
 
+/** The hub: your synced guides. Everything dynamic happens in /hub.js against /v1/*. */
+export function renderHub(): string {
+  const inner = `
+<header>
+  ${BRAND}
+  <h1>Your guides</h1>
+  <div class="meta"><span>everything synced to this account · <a href="/">what is Relay?</a></span></div>
+</header>
+<div id="app"><noscript><p>The hub needs JavaScript. The CLI does not: <code>relay list</code>.</p></noscript></div>
+<script src="/hub.js" defer></script>`;
+  return page({
+    title: "Relay hub",
+    description: "Your synced transfer guides.",
+    noindex: true,
+    inner,
+  });
+}
+
 export function renderHome(): string {
   const inner = `
 <header>
@@ -118,6 +140,7 @@ relay login     # optional: sync across machines</code></pre>
 <li>In the other context: <code>relay pull &lt;id&gt;</code>, or hand the link to an agent.</li>
 </ol>
 <p>Guides are plain markdown with frontmatter. <code>relay export</code> dumps everything. There is nothing to lock you in.</p>
+<p>Already syncing? <a href="/hub">Open your hub</a>, or run <code>relay hub</code>.</p>
 </article>`;
   return page({
     title: "Relay",

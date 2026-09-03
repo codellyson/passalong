@@ -5,6 +5,7 @@
 //   relay pull <id|link>      fetch a guide into ./.relay/ and print it
 //   relay list [query]        your guides, local and synced
 //   relay open <id> [--print] view a guide in the browser (or the terminal)
+//   relay hub                 open your synced guides in the browser
 //   relay done <id>           mark consumed: implemented on the receiving side
 //   relay promote <id>        mark promoted: graduated into a reusable reference
 //   relay rm <id>             delete a guide locally and from sync
@@ -118,6 +119,17 @@ const commands = {
       process.stdout.write(serialize(guide));
       if (guide.meta.url) console.error(`\nlink: ${guide.meta.url}`);
     }
+  },
+
+  async hub() {
+    if (!api.loggedIn()) die("not logged in — run `relay login` first (the hub shows synced guides)");
+    // The token rides in the URL fragment: the browser never sends it to the server, and the
+    // page moves it into localStorage and scrubs the address bar on load.
+    const url = `${api.baseUrl()}/hub#token=${encodeURIComponent(api.token())}`;
+    if (tty) {
+      openInBrowser(url);
+      console.error(`${api.baseUrl()}/hub`);
+    } else console.log(url);
   },
 
   async done(f) {

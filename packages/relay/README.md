@@ -29,6 +29,7 @@ relay share [file]        publish a guide (newest draft, or a scaffold you edit)
 relay pull <id|link>      fetch a guide into ./.relay/ and print it
 relay list [query]        your guides, local and synced
 relay open <id> [--print] view a guide in the browser (or the terminal)
+relay hub                 open your synced guides in the browser
 relay done <id>           mark consumed: implemented on the receiving side
 relay promote <id>        mark promoted: graduated into a reusable reference
 relay rm <id>             delete a guide locally and from sync

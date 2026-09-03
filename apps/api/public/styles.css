@@ -167,3 +167,146 @@ footer {
   font-size: 13px;
   color: var(--muted);
 }
+
+/* ---- hub ---------------------------------------------------------------------------- */
+.hub .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.hub input[type="search"],
+.signin input {
+  flex: 1 1 16rem;
+  font:
+    15px / 1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--code);
+  color: var(--fg);
+}
+.hub input:focus,
+.signin input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.chip,
+.btn {
+  font:
+    13px / 1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: none;
+}
+.chip:hover,
+.btn:hover {
+  color: var(--fg);
+  border-color: var(--muted);
+}
+.chip.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.btn.danger:hover {
+  color: #c0392b;
+  border-color: #c0392b;
+}
+.guides {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.guide {
+  padding: 1.1rem 0;
+  border-top: 1px solid var(--line);
+  margin: 0;
+}
+.guide:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.guide .head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+.guide .title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--fg);
+  text-decoration: none;
+}
+.guide .title:hover {
+  color: var(--accent);
+}
+.guide .meta {
+  margin-top: 0.4rem;
+}
+.guide .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+.guide.consumed .title {
+  color: var(--muted);
+}
+.status.consumed {
+  color: var(--muted);
+}
+.status.promoted::before {
+  content: "\2605  ";
+}
+.signin {
+  max-width: 34rem;
+}
+.signin form {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.signin button,
+.empty pre {
+  font:
+    14px / 1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.signin button {
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: var(--bg);
+  cursor: pointer;
+}
+.empty {
+  color: var(--muted);
+  padding: 2rem 0;
+}
+.error {
+  color: #c0392b;
+  font:
+    13px / 1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}

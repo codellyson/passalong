@@ -62,6 +62,11 @@ pnpm -C apps/api db:migrate:remote && pnpm -C apps/api run deploy
 - Local D1 state is keyed by `database_id`; migrations applied under a placeholder id vanish when
   the real id is set. Symptom: `no such table: account`.
 - `node --test test/` treats the directory as a file; use bare `node --test`.
+- `public/styles.css` is browser-cached for an hour (`public/_headers`). After changing it, bump
+  `STYLES` in `apps/api/src/render.ts` or returning visitors get the old sheet.
+- `/hub` is the only page allowed to run script (`HUB_HEADERS` in `index.ts`); it is a static
+  `public/hub.js` talking to `/v1/*` with the token from `localStorage`. `relay hub` passes the
+  token in the URL fragment, which the page stores and scrubs on load.
 - `relay share` opens `$EDITOR` only at a TTY. Agents and scripts pass a file and get no editor.
 - The CLI prints the guide id (and pulled markdown) on **stdout** and everything else on stderr,
   so `ID=$(relay share draft.md)` works.
