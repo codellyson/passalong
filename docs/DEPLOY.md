@@ -93,9 +93,9 @@ One-time setup:
    account and, under Zone Resources, to `kreativekorna.com`.
 2. Store it: `gh secret set CLOUDFLARE_API_TOKEN` (paste when prompted).
    `CLOUDFLARE_ACCOUNT_ID` is already set.
-3. Do the **first** deploy from your machine (section 1 above). Creating the custom domain and
-   its certificate needs zone permissions the token may not have; once the domain exists,
-   the token only needs to update the Worker.
+3. Push to `master` (or re-run the last `ci` workflow). The first CI deploy on 2026-09-03
+   created the custom domain and certificate itself, so the template token's zone permissions
+   are sufficient; no local deploy is required.
 
 `.github/workflows/release.yml` publishes `justrelay` to npm when a `v*` tag is pushed and the
 tag matches `packages/relay/package.json`. It needs `NPM_TOKEN` (an npm Automation token):

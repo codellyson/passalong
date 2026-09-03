@@ -26,6 +26,7 @@ type Env = {
   ACCOUNT_LIMIT?: RateLimiter;
   FREE_SYNC_LIMIT: string;
   ENVIRONMENT: string;
+  PUBLIC_ORIGIN?: string;
 };
 type Vars = { account: string };
 
@@ -63,6 +64,11 @@ interface GuideRow {
   updated: string;
   pulls: number;
 }
+
+// Share links are built from the request origin. Under `wrangler dev` a custom-domain route makes
+// requests look like they came from production, so local dev overrides it via .dev.vars.
+const origin = (c: { env: Env; req: { url: string } }) =>
+  c.env.PUBLIC_ORIGIN || new URL(c.req.url).origin;
 
 const shareUrl = (origin: string, row: Pick<GuideRow, "id" | "share_key">) =>
   `${origin}/g/${row.id}/${row.share_key}`;
@@ -143,8 +149,8 @@ app.get("/v1/guides", async (c) => {
   const { results } = await c.env.DB.prepare(sql)
     .bind(...binds)
     .all<GuideRow>();
-  const origin = new URL(c.req.url).origin;
-  return c.json({ guides: results.map((r) => summary(origin, r)) });
+  const base = origin(c);
+  return c.json({ guides: results.map((r) => summary(base, r)) });
 });
 
 app.put("/v1/guides/:id", async (c) => {
@@ -186,9 +192,9 @@ app.put("/v1/guides/:id", async (c) => {
     }
   }
 
-  const origin = new URL(c.req.url).origin;
+  const base = origin(c);
   const share_key = existing?.share_key ?? rand(22);
-  const url = shareUrl(origin, { id, share_key });
+  const url = shareUrl(base, { id, share_key });
   markdown = setField(markdown, "url", url);
   if (!meta.id) markdown = setField(markdown, "id", id);
   const now = new Date().toISOString();
@@ -299,7 +305,7 @@ app.get("/g/:id/:key", async (c) => {
     id: row.id,
     meta,
     body: bodyOf(row.markdown),
-    url: shareUrl(new URL(c.req.url).origin, row),
+    url: shareUrl(origin(c), row),
     pulls: row.pulls,
   });
   return c.html(html, 200, VIEW_HEADERS);
