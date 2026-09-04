@@ -1,6 +1,6 @@
 // Just enough of the guide format for the server: read the frontmatter fields it indexes, and
 // patch a field in place without disturbing the rest of the document. The full format lives in
-// packages/relay/src/guide.js; this mirrors its parsing rules for strings and string lists.
+// packages/passalong/src/guide.js; this mirrors its parsing rules for strings and string lists.
 
 export const STATUSES = ["draft", "published", "consumed", "promoted"] as const;
 export type Status = (typeof STATUSES)[number];

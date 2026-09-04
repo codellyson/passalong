@@ -1,10 +1,10 @@
-// The local store: ~/.relay (override with RELAY_HOME). Guides are one markdown file each so
+// The local store: ~/.passalong (override with PASSALONG_HOME). Guides are one markdown file each so
 // the whole thing is greppable, git-friendly, and there is nothing to export that isn't
 // already a file you own.
 //
-//   ~/.relay/config.json   api url + token
-//   ~/.relay/guides/<id>.md
-//   ~/.relay/drafts/*.md   captured but not yet shared
+//   ~/.passalong/config.json   api url + token
+//   ~/.passalong/guides/<id>.md
+//   ~/.passalong/drafts/*.md   captured but not yet shared
 import {
   existsSync,
   mkdirSync,
@@ -18,7 +18,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse, serialize } from "./guide.js";
 
-export const HOME = process.env.RELAY_HOME || join(homedir(), ".relay");
+export const HOME = process.env.PASSALONG_HOME || join(homedir(), ".passalong");
 export const GUIDES = join(HOME, "guides");
 export const DRAFTS = join(HOME, "drafts");
 const CONFIG = join(HOME, "config.json");

@@ -1,12 +1,12 @@
-// The Relay MCP server (stdio). This is the rail that makes Relay tool-agnostic: any MCP-capable
+// The Passalong MCP server (stdio). This is the rail that makes Passalong tool-agnostic: any MCP-capable
 // agent can search, pull, and publish guides without leaving its session.
 //
-//   claude mcp add relay -- relay mcp
+//   claude mcp add passalong -- passalong mcp
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { SECTIONS, template } from "./guide.js";
-import * as relay from "./relay.js";
+import * as passalong from "./passalong.js";
 
 const text = (s) => ({ content: [{ type: "text", text: s }] });
 const json = (data) => text(JSON.stringify(data, null, 2));
@@ -14,14 +14,14 @@ const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError
 
 export async function serve() {
   const server = new McpServer(
-    { name: "relay", version: "0.1.0" },
+    { name: "passalong", version: "0.1.0" },
     {
       instructions:
-        "Relay hands finished implementations between contexts as transfer guides: markdown with " +
+        "Passalong hands finished implementations between contexts as transfer guides: markdown with " +
         `frontmatter and the sections ${SECTIONS.join(", ")}. ` +
-        "When the user references a relay id or link, call get_guide and follow its Steps, adapting " +
+        "When the user references a passalong id or link, call get_guide and follow its Steps, adapting " +
         "anything marked ASSUMES to this codebase; run its Verification before declaring done. " +
-        "When the user asks to share, hand off, or relay what was just done, distill the session " +
+        "When the user asks to share, hand off, or passalong what was just done, distill the session " +
         "into a guide (guide_template shows the shape) and call publish_guide. Gotchas are the " +
         "highest-value section: record what failed and why.",
     },
@@ -38,7 +38,7 @@ export async function serve() {
     },
     async ({ query }) => {
       try {
-        const rows = await relay.list(query);
+        const rows = await passalong.list(query);
         return json({ guides: rows, warning: rows.warning });
       } catch (err) {
         return fail(err);
@@ -51,20 +51,20 @@ export async function serve() {
     {
       title: "Get guide",
       description:
-        "Fetch a transfer guide by relay id or share link and return its full markdown. Also writes " +
-        "it to .relay/<id>.md in the working directory so it survives the session.",
+        "Fetch a transfer guide by passalong id or share link and return its full markdown. Also writes " +
+        "it to .passalong/<id>.md in the working directory so it survives the session.",
       inputSchema: {
-        ref: z.string().describe("relay id (e.g. k3mq2xa7) or share URL"),
+        ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
         cwd: z
           .string()
           .optional()
-          .describe("directory to write .relay/<id>.md into; default is the server's cwd"),
+          .describe("directory to write .passalong/<id>.md into; default is the server's cwd"),
       },
     },
     async ({ ref, cwd }) => {
       try {
-        const { markdown, path, from } = await relay.pull(ref, { cwd: cwd || process.cwd() });
-        return text(`${markdown}\n\n<!-- relay: ${from}; written to ${path} -->`);
+        const { markdown, path, from } = await passalong.pull(ref, { cwd: cwd || process.cwd() });
+        return text(`${markdown}\n\n<!-- passalong: ${from}; written to ${path} -->`);
       } catch (err) {
         return fail(err);
       }
@@ -88,7 +88,7 @@ export async function serve() {
     },
     async ({ markdown, cwd }) => {
       try {
-        const { guide, url, synced, path } = await relay.share(markdown, {
+        const { guide, url, synced, path } = await passalong.share(markdown, {
           cwd: cwd || process.cwd(),
         });
         return json({ id: guide.meta.id, title: guide.meta.title, url, synced, path });
@@ -118,8 +118,8 @@ export async function serve() {
     },
     async ({ id, status }) => {
       try {
-        const g = await relay.setStatus(id, status);
-        return json(relay.summary(g));
+        const g = await passalong.setStatus(id, status);
+        return json(passalong.summary(g));
       } catch (err) {
         return fail(err);
       }

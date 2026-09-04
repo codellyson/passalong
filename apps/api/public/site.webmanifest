@@ -1,6 +1,6 @@
 {
-  "name": "Relay",
-  "short_name": "Relay",
+  "name": "Passalong",
+  "short_name": "Passalong",
   "description": "Hand finished work to another context.",
   "start_url": "/",
   "display": "browser",

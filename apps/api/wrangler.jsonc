@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "relay-api",
+  "name": "passalong-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-16",
   "compatibility_flags": ["nodejs_compat"],
@@ -18,7 +18,7 @@
 
   // One host for the API, the share links, and the landing page. A one-level subdomain, so
   // Cloudflare's free Universal SSL covers it. Wrangler creates the DNS record on deploy.
-  "routes": [{ "pattern": "relay.kreativekorna.com", "custom_domain": true }],
+  "routes": [{ "pattern": "passalong.kreativekorna.com", "custom_domain": true }],
 
   // Account creation is the only unauthenticated write. Per-IP throttle so a script cannot
   // fill the account table; `namespace_id` just has to be unique within this account.
@@ -29,9 +29,9 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "relay",
+      "database_name": "passalong",
       // An identifier, not a secret: it names the database, not who may use it.
-      "database_id": "2b2c58a0-ce11-48a6-8494-19a9fa1b02ea",
+      "database_id": "1c3e3932-242d-4e7f-ae3e-09c598b6a5ca",
       "migrations_dir": "migrations"
     }
   ],

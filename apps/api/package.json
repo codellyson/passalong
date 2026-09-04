@@ -1,5 +1,5 @@
 {
-  "name": "@relay/api",
+  "name": "@passalong/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,8 +8,8 @@
     "deploy": "wrangler deploy",
     "test": "node --test",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "db:migrate": "wrangler d1 migrations apply relay --local",
-    "db:migrate:remote": "wrangler d1 migrations apply relay --remote",
+    "db:migrate": "wrangler d1 migrations apply passalong --local",
+    "db:migrate:remote": "wrangler d1 migrations apply passalong --remote",
     "deploy:check": "wrangler deploy --dry-run",
     "icons": "node scripts/icons.mjs"
   },

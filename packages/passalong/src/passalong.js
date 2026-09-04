@@ -1,4 +1,4 @@
-// The operations Relay exposes. Both surfaces (bin/relay and the MCP server) call these, so
+// The operations Passalong exposes. Both surfaces (bin/passalong and the MCP server) call these, so
 // anything an agent can do through MCP a human can do from the terminal and vice versa.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -7,7 +7,7 @@ import { context } from "./capture.js";
 import { ID_RE, parse, STATUSES, serialize, stamp, stripPlaceholders, validate } from "./guide.js";
 import * as store from "./store.js";
 
-export class RelayError extends Error {}
+export class PassalongError extends Error {}
 
 /**
  * Publish a guide from markdown: fill in defaults, validate, store locally, and sync when
@@ -25,7 +25,7 @@ export async function share(markdown, { cwd = process.cwd() } = {}) {
   );
   const errors = validate(guide);
   if (errors.length)
-    throw new RelayError(`guide is not ready to share:\n  - ${errors.join("\n  - ")}`);
+    throw new PassalongError(`guide is not ready to share:\n  - ${errors.join("\n  - ")}`);
   if (guide.meta.status === "draft")
     guide = { ...guide, meta: { ...guide.meta, status: "published" } };
 
@@ -51,7 +51,8 @@ export async function resolve(ref) {
     const { readFileSync } = await import("node:fs");
     return { guide: parse(readFileSync(ref, "utf8")), from: "file" };
   }
-  if (!ID_RE.test(ref)) throw new RelayError(`"${ref}" is not a relay id, share link, or .md file`);
+  if (!ID_RE.test(ref))
+    throw new PassalongError(`"${ref}" is not a passalong id, share link, or .md file`);
   const local = store.get(ref);
   if (local) return { guide: local, from: "local" };
   if (api.loggedIn()) {
@@ -64,20 +65,20 @@ export async function resolve(ref) {
       if (err.status !== 404) throw err;
     }
   }
-  throw new RelayError(
+  throw new PassalongError(
     `no guide "${ref}" (not local${api.loggedIn() ? " or synced" : "; not logged in, so sync was not checked"})`,
   );
 }
 
 /**
- * Pull a guide into a working directory: writes .relay/<id>.md there and returns the guide so
+ * Pull a guide into a working directory: writes .passalong/<id>.md there and returns the guide so
  * the caller can put the text straight into an agent's context.
  */
 export async function pull(ref, { cwd = process.cwd(), write = true } = {}) {
   const { guide, from } = await resolve(ref);
   let path = null;
   if (write) {
-    const dir = join(cwd, ".relay");
+    const dir = join(cwd, ".passalong");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     path = join(dir, `${guide.meta.id}.md`);
     writeFileSync(path, serialize(guide));
@@ -124,7 +125,7 @@ export function summary(g) {
 /** Move a guide through its lifecycle: published → consumed → promoted (any order allowed). */
 export async function setStatus(id, status) {
   if (!STATUSES.includes(status))
-    throw new RelayError(`status must be one of ${STATUSES.join(", ")}`);
+    throw new PassalongError(`status must be one of ${STATUSES.join(", ")}`);
   const { guide } = await resolve(id);
   const next = { ...guide, meta: { ...guide.meta, status } };
   store.save(next);

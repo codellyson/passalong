@@ -30,7 +30,7 @@ function page(o: {
     o.noindex ? `<meta name="robots" content="noindex">` : "",
     `<meta name="theme-color" content="#b5451b">`,
     `<meta property="og:type" content="${o.url ? "article" : "website"}">`,
-    `<meta property="og:site_name" content="Relay">`,
+    `<meta property="og:site_name" content="Passalong">`,
     `<meta property="og:title" content="${esc(o.title)}">`,
     `<meta property="og:description" content="${esc(o.description)}">`,
     o.url ? `<meta property="og:url" content="${esc(o.url)}">` : "",
@@ -46,7 +46,7 @@ function page(o: {
   return `<!doctype html><html lang="en"><head>${head}</head><body><main>${o.inner}</main></body></html>`;
 }
 
-const BRAND = `<a class="brand" href="/"><img src="/favicon.svg" alt="">Relay</a>`;
+const BRAND = `<a class="brand" href="/"><img src="/favicon.svg" alt="">Passalong</a>`;
 
 /** The first paragraph-ish run of the body, for the description meta. */
 function summarize(body: string, max = 160): string {
@@ -57,7 +57,7 @@ function summarize(body: string, max = 160): string {
     .split(/\n\s*\n/)
     .map((p) => p.replace(/\s+/g, " ").trim())
     .find((p) => p.length > 0);
-  if (!text) return "A Relay transfer guide.";
+  if (!text) return "A Passalong transfer guide.";
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
@@ -91,8 +91,8 @@ export function renderGuide(g: GuideView): string {
   </div>
 </header>
 <article>${html}</article>
-<div class="pull">Pull this into your context:<br><code>relay pull ${esc(g.url)}</code><br>or paste the link to an agent with the Relay MCP server.</div>
-<footer>Read-only. Edit the markdown in your own tools and <code>relay share</code> again.</footer>`;
+<div class="pull">Pull this into your context:<br><code>passalong pull ${esc(g.url)}</code><br>or paste the link to an agent with the Passalong MCP server.</div>
+<footer>Read-only. Edit the markdown in your own tools and <code>passalong share</code> again.</footer>`;
   return page({
     title: g.meta.title || g.id,
     description: summarize(g.body),
@@ -108,12 +108,12 @@ export function renderHub(): string {
 <header>
   ${BRAND}
   <h1>Your guides</h1>
-  <div class="meta"><span>everything synced to this account · <a href="/">what is Relay?</a></span></div>
+  <div class="meta"><span>everything synced to this account · <a href="/">what is Passalong?</a></span></div>
 </header>
-<div id="app"><noscript><p>The hub needs JavaScript. The CLI does not: <code>relay list</code>.</p></noscript></div>
+<div id="app"><noscript><p>The hub needs JavaScript. The CLI does not: <code>passalong list</code>.</p></noscript></div>
 <script src="/hub.js" defer></script>`;
   return page({
-    title: "Relay hub",
+    title: "Passalong hub",
     description: "Your synced transfer guides.",
     noindex: true,
     inner,
@@ -130,20 +130,20 @@ export function renderHome(): string {
 <article>
 <p>Solve something non-trivial in one agent session. Run one command. Open a session somewhere else and the agent there already knows the whole story: the problem, the decisions, the steps, how to verify, and what went wrong along the way.</p>
 <h2>Install</h2>
-<pre><code>npm i -g justrelay
-relay setup     # Claude Code skill + MCP server
-relay login     # optional: sync across machines</code></pre>
+<pre><code>npm i -g passalong
+passalong setup     # Claude Code skill + MCP server
+passalong login     # optional: sync across machines</code></pre>
 <h2>The loop</h2>
 <ol>
-<li>Finish work in an agent session. Say <em>"relay this"</em>, or run <code>relay share</code>.</li>
+<li>Finish work in an agent session. Say <em>"pass this along"</em>, or run <code>passalong share</code>.</li>
 <li>Review the draft, trim, publish. You get a short id and a link.</li>
-<li>In the other context: <code>relay pull &lt;id&gt;</code>, or hand the link to an agent.</li>
+<li>In the other context: <code>passalong pull &lt;id&gt;</code>, or hand the link to an agent.</li>
 </ol>
-<p>Guides are plain markdown with frontmatter. <code>relay export</code> dumps everything. There is nothing to lock you in.</p>
-<p>Already syncing? <a href="/hub">Open your hub</a>, or run <code>relay hub</code>.</p>
+<p>Guides are plain markdown with frontmatter. <code>passalong export</code> dumps everything. There is nothing to lock you in.</p>
+<p>Already syncing? <a href="/hub">Open your hub</a>, or run <code>passalong hub</code>.</p>
 </article>`;
   return page({
-    title: "Relay",
+    title: "Passalong",
     description:
       "Hand finished work to another context. A baton pass between repos, machines, agent sessions, and teammates, in a form an agent can act on.",
     inner,

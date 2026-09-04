@@ -145,7 +145,7 @@ export function sections(body) {
 export function validate({ meta, body }) {
   const errors = [];
   if (!meta.title) errors.push("frontmatter needs a title");
-  if (meta.id && !ID_RE.test(meta.id)) errors.push(`id "${meta.id}" is not a valid relay id`);
+  if (meta.id && !ID_RE.test(meta.id)) errors.push(`id "${meta.id}" is not a valid passalong id`);
   if (meta.status && !STATUSES.includes(meta.status)) {
     errors.push(`status must be one of ${STATUSES.join(", ")}`);
   }
@@ -153,7 +153,7 @@ export function validate({ meta, body }) {
   for (const s of ["Problem", "Steps"]) {
     if (!have[s]) errors.push(`missing "## ${s}" section`);
   }
-  if (body.includes("<!-- relay:")) errors.push("template placeholders are still in the body");
+  if (body.includes("<!-- passalong:")) errors.push("template placeholders are still in the body");
   return errors;
 }
 
@@ -172,22 +172,22 @@ export function stamp(guide, defaults = {}) {
 export function template(meta = {}) {
   const body = [
     "## Problem",
-    "<!-- relay: What was broken or needed, in two or three sentences. -->",
+    "<!-- passalong: What was broken or needed, in two or three sentences. -->",
     "",
     "## Solution shape",
-    "<!-- relay: The approach at a high level, before any code. -->",
+    "<!-- passalong: The approach at a high level, before any code. -->",
     "",
     "## Decisions and rationale",
-    "<!-- relay: What was chosen, what was rejected, and why. This lets the receiver adapt instead of copy. -->",
+    "<!-- passalong: What was chosen, what was rejected, and why. This lets the receiver adapt instead of copy. -->",
     "",
     "## Steps",
-    "<!-- relay: Concrete implementation steps. Mark context-specific parts: ASSUMES: Postgres. If MySQL, adjust X. -->",
+    "<!-- passalong: Concrete implementation steps. Mark context-specific parts: ASSUMES: Postgres. If MySQL, adjust X. -->",
     "",
     "## Verification",
-    "<!-- relay: Commands, expected outputs, test cases that prove it worked. -->",
+    "<!-- passalong: Commands, expected outputs, test cases that prove it worked. -->",
     "",
     "## Gotchas",
-    "<!-- relay: What failed along the way and why. Often the highest-value section. -->",
+    "<!-- passalong: What failed along the way and why. Often the highest-value section. -->",
   ].join("\n");
   return serialize({
     meta: {
@@ -205,5 +205,5 @@ export function template(meta = {}) {
 
 /** Strip the template comments so an untouched section reads as empty rather than as a prompt. */
 export function stripPlaceholders(body) {
-  return body.replace(/^<!-- relay:.*?-->\n?/gm, "").trim();
+  return body.replace(/^<!-- passalong:.*?-->\n?/gm, "").trim();
 }

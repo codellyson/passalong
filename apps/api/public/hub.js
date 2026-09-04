@@ -2,7 +2,7 @@
 // only in this browser's localStorage. No framework, no build step; everything the page can do,
 // the CLI and MCP server can do too.
 (() => {
-  const KEY = "relay.token";
+  const KEY = "passalong.token";
   const $ = (sel, root = document) => root.querySelector(sel);
   const el = (tag, attrs = {}, ...children) => {
     const n = document.createElement(tag);
@@ -31,7 +31,7 @@
     },
   };
 
-  // `relay hub` opens /hub#token=… so the token never hits the server or a log line; the page
+  // `passalong hub` opens /hub#token=… so the token never hits the server or a log line; the page
   // moves it into storage and scrubs the URL before anything else happens.
   const fromHash = new URLSearchParams(location.hash.slice(1)).get("token");
   if (fromHash) {
@@ -140,9 +140,9 @@
         {},
         "Paste your account token. It stays in this browser and is only ever sent to this host. ",
         "The CLI prints it with ",
-        el("code", {}, "relay login"),
+        el("code", {}, "passalong login"),
         ", or open the hub straight from the terminal with ",
-        el("code", {}, "relay hub"),
+        el("code", {}, "passalong hub"),
         ".",
       ),
       el(
@@ -159,7 +159,7 @@
         },
         el("input", {
           type: "password",
-          placeholder: "rl_…",
+          placeholder: "pa_…",
           autocomplete: "off",
           spellcheck: "false",
         }),
@@ -170,7 +170,7 @@
   }
 
   function row(g) {
-    const pull = `relay pull ${g.id}`;
+    const pull = `passalong pull ${g.id}`;
     const actions = [
       el("a", { class: "btn", href: g.url, target: "_blank", rel: "noopener" }, "open"),
       el(
@@ -269,8 +269,8 @@
             "div",
             { class: "empty" },
             el("p", {}, "Nothing synced yet. After your next finished piece of work:"),
-            el("pre", {}, el("code", {}, "relay share")),
-            el("p", {}, "or say ", el("em", {}, "“relay this”"), " to Claude Code."),
+            el("pre", {}, el("code", {}, "passalong share")),
+            el("p", {}, "or say ", el("em", {}, "“pass this along”"), " to Claude Code."),
           )
         : list.length === 0
           ? el("p", { class: "empty" }, "No guides match.")

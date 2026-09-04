@@ -1,9 +1,9 @@
 ---
-name: relay-capture
-description: Distill what was just accomplished in this session into a Relay transfer guide and publish it, so another repo, machine, agent session, or teammate can implement the same thing. Use when the user says "relay this", "hand this off", "share this with <repo/person>", "capture this for later", "write a transfer guide", or runs /relay-capture.
+name: passalong-capture
+description: Distill what was just accomplished in this session into a Passalong transfer guide and publish it, so another repo, machine, agent session, or teammate can implement the same thing. Use when the user says "pass this along", "passalong this", "hand this off", "share this with <repo/person>", "capture this for later", "write a transfer guide", or runs /passalong-capture.
 ---
 
-# Relay capture
+# Passalong capture
 
 You are turning this session into a **transfer guide**: executable context for an agent in a
 different place. The reader is an AI agent (with a developer watching) that has none of this
@@ -19,17 +19,17 @@ session's history. Write for execution, not for permanence.
 3. **Mark context-specific parts** so the receiver can adapt rather than copy. Put
    `ASSUMES: <thing>. If <alternative>, <what changes>.` at the start of any step that depends on
    this repo's stack, layout, or conventions.
-4. **Save the draft** to `~/.relay/drafts/<slug>.md` (create the directory if needed), then run:
+4. **Save the draft** to `~/.passalong/drafts/<slug>.md` (create the directory if needed), then run:
 
    ```bash
-   relay share ~/.relay/drafts/<slug>.md --no-edit
+   passalong share ~/.passalong/drafts/<slug>.md --no-edit
    ```
 
    It prints the guide id on stdout and the share link on stderr.
 5. **Report** the id (and link if synced) and one line on how to use it on the other side:
-   `relay pull <id>` in the target repo, or "pull relay <id>" to an agent with the Relay MCP server.
+   `passalong pull <id>` in the target repo, or "pull passalong <id>" to an agent with the Passalong MCP server.
 
-If the `relay` command is missing, tell the user to run `npm i -g justrelay && relay setup` and
+If the `passalong` command is missing, tell the user to run `npm i -g passalong && passalong setup` and
 still write the draft file so nothing is lost.
 
 ## Guide structure

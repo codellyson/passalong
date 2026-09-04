@@ -1,4 +1,4 @@
--- Accounts are tokens. No email or password in v1: `relay login` mints one, and pasting the
+-- Accounts are tokens. No email or password in v1: `passalong login` mints one, and pasting the
 -- token on another machine attaches it. Only the hash is stored.
 CREATE TABLE account (
   id         TEXT PRIMARY KEY,

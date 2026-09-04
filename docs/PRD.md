@@ -1,10 +1,10 @@
-# PRD: Relay (working name)
+# PRD: Passalong (formerly Relay)
 
 **Version:** 0.1 draft  **Author:** Lukman Isiaka  **Date:** September 2026  **Status:** Draft for review
 
 ## 1. One-liner
 
-Relay lets a developer capture an implementation they just finished in one context and hand it to another context (a different repo, machine, agent session, or teammate) in a form an AI agent can act on directly.
+Passalong lets a developer capture an implementation they just finished in one context and hand it to another context (a different repo, machine, agent session, or teammate) in a form an AI agent can act on directly.
 
 ## 2. Problem
 
@@ -27,9 +27,9 @@ In the age of AI agents, an implementation guide is no longer documentation. It 
 ## 5. Core loop (v1)
 
 1. **Finish work in an agent session.** Developer solves something non-trivial in Claude Code (or any agent tool).
-2. **Capture.** Run `relay share`. The CLI (or an agent skill/hook) distills the session into a draft transfer guide: problem, solution shape, decisions and rationale, concrete steps with context-specific parts flagged, and verification steps.
+2. **Capture.** Run `passalong share`. The CLI (or an agent skill/hook) distills the session into a draft transfer guide: problem, solution shape, decisions and rationale, concrete steps with context-specific parts flagged, and verification steps.
 3. **Trim and publish.** Developer reviews the draft, cuts noise, publishes. The guide gets a short ID and is synced.
-4. **Pull on the other side.** In the receiving context, run `relay pull <id>` or let the receiving agent fetch it via the Relay MCP server. The guide lands in the agent's context and the agent implements, adapting the flagged context-specific parts.
+4. **Pull on the other side.** In the receiving context, run `passalong pull <id>` or let the receiving agent fetch it via the Passalong MCP server. The guide lands in the agent's context and the agent implements, adapting the flagged context-specific parts.
 5. **Close.** Optionally mark the guide as consumed. Guides that keep getting pulled can be promoted to a reusable reference.
 
 The demo moment: solve a bug in service A, run one command, open a session in service B, and the agent there already knows the whole story.
@@ -55,13 +55,13 @@ Plain markdown with frontmatter. No proprietary format, fully exportable, git-fr
 
 ## 7. Product surface (v1)
 
-**CLI (`relay`):**
-- `relay share` - capture from the current session/directory, open draft for review
-- `relay pull <id>` - fetch a guide into the current directory/context
-- `relay list` - list your guides
-- `relay open <id>` - view in terminal or browser
+**CLI (`passalong`):**
+- `passalong share` - capture from the current session/directory, open draft for review
+- `passalong pull <id>` - fetch a guide into the current directory/context
+- `passalong list` - list your guides
+- `passalong open <id>` - view in terminal or browser
 
-**MCP server:** Exposes `search_guides`, `get_guide`, and `publish_guide` tools so any MCP-capable agent can pull and create guides without leaving the session. This is the strategic rail: it makes Relay tool-agnostic across Claude Code, Cursor, Windsurf, and whatever comes next.
+**MCP server:** Exposes `search_guides`, `get_guide`, and `publish_guide` tools so any MCP-capable agent can pull and create guides without leaving the session. This is the strategic rail: it makes Passalong tool-agnostic across Claude Code, Cursor, Windsurf, and whatever comes next.
 
 **Capture skill/hook for Claude Code:** A skill that, when invoked at session end, distills the transcript into the guide structure above. This is the cold start killer: guides are created as a byproduct of work, not as a writing chore.
 
@@ -79,19 +79,19 @@ Explicitly out of scope for v2: analytics dashboards, rich text editor, comments
 
 ## 9. Positioning
 
-**What Relay is not:** a wiki, a docs site, a replacement for `docs/` in a repo, a note-taking app.
+**What Passalong is not:** a wiki, a docs site, a replacement for `docs/` in a repo, a note-taking app.
 
 **What it competes with in practice:** Slack messages to teammates, messages to self, copy-pasted snippets, and re-prompting agents from scratch.
 
-**Why not just git?** Git is scoped to one repo and has no delivery mechanism into agent context across repos and tools. Relay's job is the crossing: repo to repo, machine to machine, person to person, agent to agent.
+**Why not just git?** Git is scoped to one repo and has no delivery mechanism into agent context across repos and tools. Passalong's job is the crossing: repo to repo, machine to machine, person to person, agent to agent.
 
 **Why now:** agents made implementation knowledge executable. MCP made cross-tool delivery possible. Neither was true 18 months ago.
 
 ## 10. Principles (Just X DNA)
 
-- **No lock-in.** Guides are plain markdown. `relay export` dumps everything. Deleting your account leaves you with all your content.
+- **No lock-in.** Guides are plain markdown. `passalong export` dumps everything. Deleting your account leaves you with all your content.
 - **Local-first spirit.** The CLI works against a local store; sync is the hosted layer. Solo usage should feel like a local tool that happens to sync.
-- **Zero-friction start.** Install, `relay share`, done. Account required only when sync/team enters the picture (this is the one deliberate deviation from pure no-account, since transfer across machines inherently needs a rail).
+- **Zero-friction start.** Install, `passalong share`, done. Account required only when sync/team enters the picture (this is the one deliberate deviation from pure no-account, since transfer across machines inherently needs a rail).
 - **Agent-native.** Every feature must answer: can an agent do this without a human clicking through a UI?
 
 ## 11. Monetization
@@ -104,11 +104,11 @@ Pricing note: this is deliberately a team-monetized product. The solo tier is th
 
 ## 12. Risks and open questions
 
-- **Capture quality.** If `relay share` produces mediocre distillations, the loop dies. Mitigation: this is the first thing to prototype and pressure-test before building anything else.
+- **Capture quality.** If `passalong share` produces mediocre distillations, the loop dies. Mitigation: this is the first thing to prototype and pressure-test before building anything else.
 - **Platform absorption.** Anthropic (skills), Cursor, and GitHub are circling adjacent territory. Defensible ground: cross-tool, cross-repo, transfer-shaped rather than library-shaped. The window argues for shipping the narrow loop fast.
-- **"Why not just paste it into the next session?"** For small transfers, pasting wins. Relay has to win on: structure (verification and gotchas survive), addressability (short IDs, MCP search), and cross-machine/cross-person reach. Positioning must be honest that trivial transfers do not need it.
-- **Session access.** Capture depends on being able to read the agent session (transcript, hooks). Claude Code hooks make this feasible today; other tools vary. Fallback: `relay share` can also distill from a working directory diff plus a short prompt.
-- **Naming.** "Relay" is the working name. Alternatives in the transfer family: Handoff, Baton, JustRelay (to keep the Just X convention). Decide before public launch.
+- **"Why not just paste it into the next session?"** For small transfers, pasting wins. Passalong has to win on: structure (verification and gotchas survive), addressability (short IDs, MCP search), and cross-machine/cross-person reach. Positioning must be honest that trivial transfers do not need it.
+- **Session access.** Capture depends on being able to read the agent session (transcript, hooks). Claude Code hooks make this feasible today; other tools vary. Fallback: `passalong share` can also distill from a working directory diff plus a short prompt.
+- **Naming.** Decided 2026-09-04: **Passalong** (was "Relay"). Relay fit the metaphor but was unownable (npm, search, a dozen products). Passalong is plain English, covers self-transfer as well as handoff to a person, and is free on npm and .dev. Rejected: LetThemKnow (implies another person; sounds like notifications), Baton/Handoff/Portage (taken or colliding).
 
 ## 13. Milestones
 
@@ -119,7 +119,7 @@ Pricing note: this is deliberately a team-monetized product. The solo tier is th
 
 ## 14. Success metrics
 
-- **Activation:** first `relay share` to first `relay pull` in a different context within 7 days.
+- **Activation:** first `passalong share` to first `passalong pull` in a different context within 7 days.
 - **Core health:** weekly transfers per active user (share + pull pairs).
 - **Quality proxy:** percent of pulled guides marked consumed without follow-up edits to the guide.
 - **v2:** percent of transfers that cross a person boundary (self-transfer vs team-transfer ratio).

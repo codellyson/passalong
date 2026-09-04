@@ -2,7 +2,7 @@
 // CLI is a purely local tool, and every function throws a NotLoggedIn the CLI turns into a hint.
 import { readConfig } from "./store.js";
 
-export const DEFAULT_API = "https://relay.kreativekorna.com";
+export const DEFAULT_API = "https://passalong.kreativekorna.com";
 
 export class ApiError extends Error {
   constructor(status, message) {
@@ -12,11 +12,11 @@ export class ApiError extends Error {
 }
 
 export function baseUrl() {
-  return (process.env.RELAY_API || readConfig().api || DEFAULT_API).replace(/\/$/, "");
+  return (process.env.PASSALONG_API || readConfig().api || DEFAULT_API).replace(/\/$/, "");
 }
 
 export function token() {
-  return process.env.RELAY_TOKEN || readConfig().token || null;
+  return process.env.PASSALONG_TOKEN || readConfig().token || null;
 }
 
 export function loggedIn() {
@@ -27,7 +27,7 @@ async function call(path, { method = "GET", body, auth = true, raw = false } = {
   const headers = {};
   if (auth) {
     const t = token();
-    if (!t) throw new ApiError(401, "not logged in — run `relay login` to enable sync");
+    if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
     headers.authorization = `Bearer ${t}`;
   }
   if (body !== undefined) {

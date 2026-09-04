@@ -1,4 +1,4 @@
-// Relay sync API + web view. A Hono app on a Worker with one D1 database.
+// Passalong sync API + web view. A Hono app on a Worker with one D1 database.
 //
 //   POST   /v1/accounts               mint an account; the token is the account
 //   GET    /v1/me                      who am I, how many guides
@@ -94,7 +94,7 @@ app.use("/v1/*", async (c, next) => {
   if (c.req.method === "POST" && c.req.path === "/v1/accounts") return next();
   const auth = c.req.header("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!token) return err(c, 401, "missing bearer token — run `relay login`");
+  if (!token) return err(c, 401, "missing bearer token — run `passalong login`");
   const row = await c.env.DB.prepare("SELECT id FROM account WHERE token_hash = ?")
     .bind(await sha256(token))
     .first<{ id: string }>();
@@ -102,7 +102,7 @@ app.use("/v1/*", async (c, next) => {
     return err(
       c,
       401,
-      "token not recognized — run `relay login` for a new account or paste a valid token",
+      "token not recognized — run `passalong login` for a new account or paste a valid token",
     );
   c.set("account", row.id);
   await next();
@@ -116,7 +116,7 @@ app.post("/v1/accounts", async (c) => {
       return err(c, 429, "too many accounts created from this address; try again in a minute");
   }
   const id = rand(10);
-  const token = `rl_${rand(32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")}`;
+  const token = `pa_${rand(32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")}`;
   await c.env.DB.prepare("INSERT INTO account (id, token_hash, created) VALUES (?, ?, ?)")
     .bind(id, await sha256(token), new Date().toISOString())
     .run();
@@ -187,7 +187,7 @@ app.put("/v1/guides/:id", async (c) => {
       return err(
         c,
         402,
-        `free tier keeps ${limit} active synced guides; mark some consumed (relay done <id>) or remove them`,
+        `free tier keeps ${limit} active synced guides; mark some consumed (passalong done <id>) or remove them`,
       );
     }
   }

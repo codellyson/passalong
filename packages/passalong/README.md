@@ -1,4 +1,4 @@
-# Passalong
+# passalong
 
 Hand finished work to another context.
 
@@ -39,50 +39,15 @@ passalong setup               install the Claude Code capture skill + register t
 passalong mcp                 run the MCP server over stdio
 ```
 
-## The guide
-
-Plain markdown with frontmatter. Yours to edit, grep, and commit.
-
-```markdown
----
-id: k3mq2xa7
-title: Verify Paystack webhook signatures
-created: 2026-09-03T10:00:00.000Z
-author: Lukman Isiaka
-source_context: monieplan@main
-status: published
-stack_assumptions: [Next.js 15, Postgres]
-tags: [paystack, webhooks]
----
-
-## Problem
-## Solution shape
-## Decisions and rationale
-## Steps
-## Verification
-## Gotchas
-```
-
 ## MCP
 
-`passalong setup` registers the server with Claude Code. For other clients:
-
-```sh
-claude mcp add passalong -- passalong mcp     # or the equivalent stdio config
-```
+`passalong setup` registers the server with Claude Code. For other clients, run `passalong mcp` over stdio.
 
 Tools: `search_guides`, `get_guide`, `publish_guide`, `guide_template`, `set_guide_status`.
 
-## Principles
+## Guides are files
 
-- **No lock-in.** Guides are files. `passalong export` dumps everything.
-- **Local-first.** Works with no account. Sync is the hosted layer.
-- **Agent-native.** Everything the CLI does, an agent can do over MCP.
+Plain markdown with frontmatter in `~/.passalong/guides`. Yours to edit, grep, and commit.
+`passalong export` dumps everything. Works with no account; `passalong login` adds sync and share links.
 
-## Repo
-
-- `packages/passalong` — CLI + MCP server (`passalong` on npm)
-- `apps/api` — sync API and read-only web view (Cloudflare Worker + D1; static assets in `public/`)
-- `docs/PRD.md` — the product spec
-
-See `AGENTS.md` for how it fits together.
+Point at a self-hosted server with `PASSALONG_API=https://your-host` before `passalong login`.

@@ -1,15 +1,15 @@
 {
-  "name": "relay-workspace",
+  "name": "passalong-workspace",
   "version": "0.1.0",
   "private": true,
-  "description": "Relay: hand a finished implementation from one context to another, in a form an agent can act on.",
+  "description": "Passalong: hand a finished implementation from one context to another, in a form an agent can act on.",
   "type": "module",
   "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "dev:api": "pnpm --filter @relay/api dev",
+    "dev:api": "pnpm --filter @passalong/api dev",
     "test": "pnpm -r test",
     "lint": "biome check .",
     "format": "biome format --write ."

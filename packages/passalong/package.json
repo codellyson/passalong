@@ -1,5 +1,5 @@
 {
-  "name": "justrelay",
+  "name": "passalong",
   "version": "0.1.0",
   "description": "Hand a finished implementation from one context to another, in a form an AI agent can act on.",
   "keywords": [
@@ -11,17 +11,17 @@
     "cli",
     "markdown"
   ],
-  "homepage": "https://relay.kreativekorna.com",
+  "homepage": "https://passalong.kreativekorna.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/codellyson/relay.git",
-    "directory": "packages/relay"
+    "url": "https://github.com/codellyson/passalong.git",
+    "directory": "packages/passalong"
   },
   "author": "Lukman Isiaka",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "relay": "bin/relay"
+    "passalong": "bin/passalong"
   },
   "files": [
     "bin",

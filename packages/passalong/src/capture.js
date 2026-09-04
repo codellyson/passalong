@@ -1,6 +1,6 @@
 // Fallback capture when no agent wrote a draft: scaffold one from the working directory so the
 // developer starts from "what changed" instead of a blank page. The Claude Code skill in
-// skills/relay-capture does the real distillation from a session transcript.
+// skills/passalong-capture does the real distillation from a session transcript.
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 import { template } from "./guide.js";
@@ -44,7 +44,7 @@ export function scaffold(cwd = process.cwd()) {
   if (c.commits.length) {
     md += [
       "",
-      "<!-- relay: recent activity in this repo, for reference while you write. Delete when done.",
+      "<!-- passalong: recent activity in this repo, for reference while you write. Delete when done.",
       ...c.commits.map((l) => `  ${l}`),
       c.changed ? `  ${c.changed}` : "",
       ...c.files.slice(0, 30).map((f) => `  ${f}`),

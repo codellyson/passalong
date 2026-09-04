@@ -1,4 +1,4 @@
-// Rasterize the Relay mark (public/favicon.svg) to the PNG sizes the manifest and iOS want.
+// Rasterize the Passalong mark (public/favicon.svg) to the PNG sizes the manifest and iOS want.
 // Pure Node: a tiny PNG encoder over a geometric render, so there is no image toolchain to
 // install. Re-run after changing the mark: `node scripts/icons.mjs`.
 

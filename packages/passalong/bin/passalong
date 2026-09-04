@@ -1,18 +1,18 @@
 #!/usr/bin/env node
-// Relay CLI. Few flags on purpose: the defaults are the product.
+// Passalong CLI. Few flags on purpose: the defaults are the product.
 //
-//   relay share [file]        publish a guide (newest draft, or a scaffold you edit) → id + link
-//   relay pull <id|link>      fetch a guide into ./.relay/ and print it
-//   relay list [query]        your guides, local and synced
-//   relay open <id> [--print] view a guide in the browser (or the terminal)
-//   relay hub                 open your synced guides in the browser
-//   relay done <id>           mark consumed: implemented on the receiving side
-//   relay promote <id>        mark promoted: graduated into a reusable reference
-//   relay rm <id>             delete a guide locally and from sync
-//   relay export [dir]        dump every guide as plain markdown (default ./relay-export)
-//   relay login [token]       create an account, or attach this machine to an existing one
-//   relay setup               install the Claude Code capture skill + register the MCP server
-//   relay mcp                 run the MCP server over stdio
+//   passalong share [file]        publish a guide (newest draft, or a scaffold you edit) → id + link
+//   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
+//   passalong list [query]        your guides, local and synced
+//   passalong open <id> [--print] view a guide in the browser (or the terminal)
+//   passalong hub                 open your synced guides in the browser
+//   passalong done <id>           mark consumed: implemented on the receiving side
+//   passalong promote <id>        mark promoted: graduated into a reusable reference
+//   passalong rm <id>             delete a guide locally and from sync
+//   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
+//   passalong login [token]       create an account, or attach this machine to an existing one
+//   passalong setup               install the Claude Code capture skill + register the MCP server
+//   passalong mcp                 run the MCP server over stdio
 import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import * as api from "../src/api.js";
 import { scaffold } from "../src/capture.js";
 import { serialize } from "../src/guide.js";
-import * as relay from "../src/relay.js";
+import * as passalong from "../src/passalong.js";
 import * as store from "../src/store.js";
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -79,30 +79,30 @@ const commands = {
         path = store.draftPath(new Date().toISOString().replace(/[:.]/g, "-"));
         writeFileSync(path, scaffold());
         fromDrafts = true;
-        if (!tty) die(`no draft to share; scaffolded ${path} — fill it in and run \`relay share ${path}\``);
+        if (!tty) die(`no draft to share; scaffolded ${path} — fill it in and run \`passalong share ${path}\``);
       }
     }
     if (!existsSync(path)) die(`no such file: ${path}`);
     if (tty && !f["no-edit"]) edit(path);
-    const { guide, url, synced, path: saved } = await relay.share(readFileSync(path, "utf8")).catch((e) => die(e.message));
+    const { guide, url, synced, path: saved } = await passalong.share(readFileSync(path, "utf8")).catch((e) => die(e.message));
     if (fromDrafts) store.removeDraft(path);
     console.log(guide.meta.id);
     console.error(`shared "${guide.meta.title}" → ${saved}`);
     if (synced) console.error(`link: ${url}`);
-    else console.error("not synced (run `relay login` to sync across machines)");
+    else console.error("not synced (run `passalong login` to sync across machines)");
   },
 
   async pull(f) {
-    const ref = f._[0] || die("usage: relay pull <id|link>");
-    const { markdown, path, from } = await relay.pull(ref).catch((e) => die(e.message));
+    const ref = f._[0] || die("usage: passalong pull <id|link>");
+    const { markdown, path, from } = await passalong.pull(ref).catch((e) => die(e.message));
     process.stdout.write(markdown);
     console.error(`\npulled from ${from} → ${path}`);
   },
 
   async list(f) {
-    const rows = await relay.list(f._.join(" "));
+    const rows = await passalong.list(f._.join(" "));
     if (rows.warning) console.error(`warning: ${rows.warning}`);
-    if (!rows.length) return console.error("no guides yet — run `relay share` after your next finished piece of work");
+    if (!rows.length) return console.error("no guides yet — run `passalong share` after your next finished piece of work");
     for (const r of rows) {
       const tags = r.tags?.length ? `  #${r.tags.join(" #")}` : "";
       console.log(`${r.id}  ${r.status.padEnd(9)} ${relDate(r.created).padEnd(10)} ${r.title}${tags}`);
@@ -110,8 +110,8 @@ const commands = {
   },
 
   async open(f) {
-    const id = f._[0] || die("usage: relay open <id>");
-    const { guide } = await relay.resolve(id).catch((e) => die(e.message));
+    const id = f._[0] || die("usage: passalong open <id>");
+    const { guide } = await passalong.resolve(id).catch((e) => die(e.message));
     if (guide.meta.url && tty && !f.print) {
       openInBrowser(guide.meta.url);
       console.error(guide.meta.url);
@@ -122,7 +122,7 @@ const commands = {
   },
 
   async hub() {
-    if (!api.loggedIn()) die("not logged in — run `relay login` first (the hub shows synced guides)");
+    if (!api.loggedIn()) die("not logged in — run `passalong login` first (the hub shows synced guides)");
     // The token rides in the URL fragment: the browser never sends it to the server, and the
     // page moves it into localStorage and scrubs the address bar on load.
     const url = `${api.baseUrl()}/hub#token=${encodeURIComponent(api.token())}`;
@@ -133,26 +133,26 @@ const commands = {
   },
 
   async done(f) {
-    const id = f._[0] || die("usage: relay done <id>");
-    const g = await relay.setStatus(id, "consumed").catch((e) => die(e.message));
+    const id = f._[0] || die("usage: passalong done <id>");
+    const g = await passalong.setStatus(id, "consumed").catch((e) => die(e.message));
     console.error(`${g.meta.id} marked consumed`);
   },
 
   async promote(f) {
-    const id = f._[0] || die("usage: relay promote <id>");
-    const g = await relay.setStatus(id, "promoted").catch((e) => die(e.message));
+    const id = f._[0] || die("usage: passalong promote <id>");
+    const g = await passalong.setStatus(id, "promoted").catch((e) => die(e.message));
     console.error(`${g.meta.id} marked promoted`);
   },
 
   async rm(f) {
-    const id = f._[0] || die("usage: relay rm <id>");
-    await relay.remove(id).catch((e) => die(e.message));
+    const id = f._[0] || die("usage: passalong rm <id>");
+    await passalong.remove(id).catch((e) => die(e.message));
     console.error(`${id} removed`);
   },
 
   async export(f) {
-    const dir = resolve(f._[0] || "relay-export");
-    const paths = relay.exportAll(dir);
+    const dir = resolve(f._[0] || "passalong-export");
+    const paths = passalong.exportAll(dir);
     console.error(`exported ${paths.length} guide${paths.length === 1 ? "" : "s"} → ${dir}`);
   },
 
@@ -168,7 +168,7 @@ const commands = {
       const who = await api.me().catch(() => null);
       if (who) {
         console.error(`already logged in (account ${who.account}). Attach another machine with:`);
-        console.error(`  relay login ${api.token()}`);
+        console.error(`  passalong login ${api.token()}`);
         return;
       }
     }
@@ -176,25 +176,25 @@ const commands = {
     store.writeConfig({ token, api: api.baseUrl() });
     console.error(`account ${account} created on ${api.baseUrl()}. Sync is on.`);
     console.error("Attach other machines with:");
-    console.error(`  relay login ${token}`);
+    console.error(`  passalong login ${token}`);
     console.error("(the token is the account — keep it private)");
   },
 
   async setup() {
-    const skillDir = join(homedir(), ".claude", "skills", "relay-capture");
+    const skillDir = join(homedir(), ".claude", "skills", "passalong-capture");
     mkdirSync(skillDir, { recursive: true });
     cpSync(join(PKG, "skill"), skillDir, { recursive: true });
     console.error(`installed Claude Code skill → ${skillDir}`);
     try {
-      execFileSync("claude", ["mcp", "add", "--scope", "user", "relay", "--", "relay", "mcp"], { stdio: "pipe" });
-      console.error("registered MCP server: claude mcp add relay -- relay mcp");
+      execFileSync("claude", ["mcp", "add", "--scope", "user", "passalong", "--", "passalong", "mcp"], { stdio: "pipe" });
+      console.error("registered MCP server: claude mcp add passalong -- passalong mcp");
     } catch (err) {
       const msg = String(err.stderr || err.message);
       if (/already exists/i.test(msg)) console.error("MCP server already registered");
-      else console.error(`could not register MCP server automatically (${msg.trim()}).\n  run: claude mcp add relay -- relay mcp`);
+      else console.error(`could not register MCP server automatically (${msg.trim()}).\n  run: claude mcp add passalong -- passalong mcp`);
     }
-    if (!api.loggedIn()) console.error("sync is off; run `relay login` when you want guides to follow you across machines");
-    console.error("done. In Claude Code, say \"relay this\" at the end of a task, or run /relay-capture.");
+    if (!api.loggedIn()) console.error("sync is off; run `passalong login` when you want guides to follow you across machines");
+    console.error("done. In Claude Code, say \"pass this along\" at the end of a task, or run /passalong-capture.");
   },
 
   async mcp() {
@@ -204,8 +204,8 @@ const commands = {
 
   async help() {
     const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
-    const lines = src.split("\n").filter((l) => l.startsWith("//   relay "));
-    console.log("relay — hand finished work to another context\n");
+    const lines = src.split("\n").filter((l) => l.startsWith("//   passalong "));
+    console.log("passalong — hand finished work to another context\n");
     console.log(lines.map((l) => l.slice(3)).join("\n"));
   },
 };
