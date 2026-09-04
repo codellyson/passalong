@@ -72,6 +72,7 @@ export const invite = (slug, email = "") =>
 export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 
+export const board = () => call("/v1/board");
 export const notifications = ({ unread = true, limit = 0 } = {}) =>
   call(`/v1/notifications${q({ unread: unread ? "1" : "", limit: limit || "" })}`);
 /** No ids means "everything unread". */

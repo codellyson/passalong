@@ -10,6 +10,7 @@
 //   POST   /v1/invites/:code/accept    join the team behind an invite
 //   GET    /v1/guides?q=&scope=        list/search: scope=all (default) | mine | <team slug>
 //   GET    /v1/inbox                   guides handed to you (or your teams) you have not pulled
+//   GET    /v1/board                   the four queues: waiting, in flight, landed, promote
 //   GET    /v1/notifications?unread=   what happened while you were away
 //   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
@@ -480,7 +481,7 @@ app.get("/v1/guides", async (c) => {
 });
 
 // Handed to me (or to a team I'm in, by someone else) and not yet pulled by me.
-app.get("/v1/inbox", async (c) => {
+async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
   const account = c.get("account");
   const ids = (await myTeams(c)).map((t) => t.id);
   const teamClause = ids.length
@@ -491,11 +492,71 @@ app.get("/v1/inbox", async (c) => {
      WHERE account_id <> ? AND status = 'published'
        AND (to_account_id = ? ${teamClause})
        AND id NOT IN (SELECT guide_id FROM pull WHERE account_id = ?)
-     ORDER BY created DESC LIMIT 100`,
+     ORDER BY created DESC LIMIT ?`,
   )
-    .bind(account, account, ...ids, account)
+    .bind(account, account, ...ids, account, limit)
     .all<GuideRow>();
-  return c.json({ guides: await summaries(c, results) });
+  return results;
+}
+
+app.get("/v1/inbox", async (c) => c.json({ guides: await summaries(c, await inboxRows(c)) }));
+
+// ---- board ------------------------------------------------------------------------------
+
+// A transfer is only finished when it lands on the other side, so the dashboard is four queues
+// rather than four numbers: what is waiting on you, what you handed over and nobody has taken
+// yet, what landed and is still open, and what has been pulled enough times to be worth keeping.
+// Someone else pulling is what counts everywhere here — your own pull from another machine is
+// not the transfer landing.
+const STALE_DAYS = 7;
+const PULLED_BY_OTHERS = `EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id
+     AND p.account_id <> '' AND p.account_id <> g.account_id)`;
+
+app.get("/v1/board", async (c) => {
+  const account = c.get("account");
+  const mine = (sql: string, ...binds: unknown[]) =>
+    c.env.DB.prepare(sql)
+      .bind(account, ...binds)
+      .all<GuideRow>();
+
+  const [waiting, flight, landed, promote] = await Promise.all([
+    inboxRows(c, 20),
+    // Handed to a person or a team, and still untouched by anyone but you.
+    mine(
+      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
+         AND (g.to_account_id <> '' OR g.team_id <> '') AND NOT ${PULLED_BY_OTHERS}
+       ORDER BY g.created ASC LIMIT 20`,
+    ).then((r) => r.results),
+    // Someone has it and has not said it shipped. Guides past the promote line are shown there
+    // instead, so one guide never occupies two cards.
+    mine(
+      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
+         AND g.pulls < 3 AND ${PULLED_BY_OTHERS}
+       ORDER BY g.updated DESC LIMIT 20`,
+    ).then((r) => r.results),
+    mine(
+      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published' AND g.pulls >= 3
+       ORDER BY g.pulls DESC LIMIT 20`,
+    ).then((r) => r.results),
+  ]);
+
+  // One summaries() pass over every row, then split back into buckets: the lookups it does
+  // (teams, people, recent pulls) are per-call, not per-row.
+  const all = [...waiting, ...flight, ...landed, ...promote];
+  const byId = new Map((await summaries(c, all)).map((s) => [s.id, s]));
+  const pick = (rows: GuideRow[]) => rows.map((r) => byId.get(r.id)).filter(Boolean);
+  const cutoff = Date.now() - STALE_DAYS * 864e5;
+
+  return c.json({
+    waiting: pick(waiting),
+    in_flight: pick(flight).map((g) => ({
+      ...g,
+      stale: new Date(g?.created ?? 0).getTime() < cutoff,
+    })),
+    landed: pick(landed),
+    promote: pick(promote),
+    unread: await unreadCount(c.env, account),
+  });
 });
 
 // ---- notifications ----------------------------------------------------------------------

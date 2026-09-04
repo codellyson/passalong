@@ -28,6 +28,7 @@ passalong login      # optional: sync guides across machines and get share links
 passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
 passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 passalong inbox               guides handed to you that you have not pulled yet
+passalong board               waiting on you, in flight, landed, worth keeping
 passalong activity [--all]    what happened while you were away; clears unless --all
 passalong list [query]        your guides and your teams', local and synced
 passalong open <id> [--print] view a guide in the browser (or the terminal)

@@ -133,6 +133,12 @@ export async function inbox() {
 }
 
 /**
+ * The state of your transfers as four queues: waiting on you, in flight (handed over, untouched),
+ * landed (someone has it, not closed), and worth keeping (pulled enough to promote). Needs sync.
+ */
+export const board = () => api.board();
+
+/**
  * What happened while you were away: your guides being pulled and shipped, guides handed to you,
  * invites taken up. Each item carries a rendered `text` line so every surface says the same thing.
  */

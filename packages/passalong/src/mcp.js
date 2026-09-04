@@ -72,6 +72,26 @@ export async function serve() {
   );
 
   server.registerTool(
+    "board",
+    {
+      title: "Board",
+      description:
+        "The state of this user's transfers as four queues: waiting on you (handed to you, not " +
+        "pulled), in flight (handed over, nobody has taken it — `stale` means it has sat for over " +
+        "a week), landed (someone has it and has not marked it consumed), and worth keeping " +
+        "(pulled enough to promote into a reference). Use it to answer 'what is outstanding?'.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return json(await passalong.board());
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "activity",
     {
       title: "Activity",

@@ -4,6 +4,7 @@
 //   passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong inbox               guides handed to you that you have not pulled yet
+//   passalong board               waiting on you, in flight, landed, worth keeping
 //   passalong activity [--all]    what happened while you were away; clears unless --all
 //   passalong list [query]        your guides and your teams', local and synced
 //   passalong open <id> [--print] view a guide in the browser (or the terminal)
@@ -139,6 +140,23 @@ const commands = {
     if (!rows.length) return console.error("inbox empty — nothing handed to you that you haven't pulled");
     for (const r of rows) console.log(guideLine(r));
     console.error(`\n${rows.length} waiting. Pull one with: passalong pull <id>`);
+  },
+
+  async board() {
+    const b = await passalong.board().catch((e) => die(e.message));
+    const queue = (title, note, rows, line) => {
+      if (!rows.length) return;
+      console.log(`\n${title} · ${rows.length}   ${note}`);
+      for (const g of rows) console.log(`  ${g.id}  ${relDate(g.created).padEnd(10)} ${line(g)}`);
+    };
+    queue("Waiting on you", "handed to you, not pulled yet", b.waiting, (g) => `${g.title}  from @${g.from || "?"}`);
+    queue("In flight", "handed over, nobody has taken it", b.in_flight, (g) =>
+      `${g.title}  to ${g.team}${g.to ? `/@${g.to}` : ""}${g.stale ? "  ← not picked up" : ""}`);
+    queue("Landed", "someone has it and hasn't said it shipped", b.landed, (g) => `${g.title}  ${g.pulls} pull${g.pulls === 1 ? "" : "s"}`);
+    queue("Worth keeping", "pulled enough to graduate into a reference", b.promote, (g) => `${g.title}  ${g.pulls} pulls`);
+    const total = b.waiting.length + b.in_flight.length + b.landed.length + b.promote.length;
+    if (!total) console.error("nothing in flight — every transfer is closed");
+    else if (b.unread) console.error(`\n${b.unread} new: passalong activity`);
   },
 
   async activity(f) {

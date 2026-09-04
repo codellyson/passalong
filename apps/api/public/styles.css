@@ -311,23 +311,7 @@ footer {
     monospace;
 }
 
-/* ---- hub: teams and inbox ---------------------------------------------------------- */
-.inboxbox {
-  border: 1px solid var(--accent);
-  border-radius: 0.5rem;
-  padding: 0.25rem 1rem 0.75rem;
-  margin-bottom: 1.5rem;
-}
-.inboxbox h2 {
-  margin: 0.75rem 0 0.25rem;
-  color: var(--accent);
-}
-.guide.inbox {
-  border-top-color: transparent;
-}
-.guide.inbox:last-child {
-  border-bottom: none;
-}
+/* ---- hub: board, teams, activity ---------------------------------------------------- */
 .chips.scopes {
   margin-bottom: 1rem;
 }
@@ -424,4 +408,75 @@ footer {
 .note.unread .when::before {
   content: "• ";
   color: var(--accent);
+}
+.board {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr));
+  margin-bottom: 1.5rem;
+}
+.card {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.25rem 1rem 0.75rem;
+}
+.card.waiting {
+  border-color: var(--accent);
+}
+.card .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.card h2 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+}
+.card.waiting h2 {
+  color: var(--accent);
+}
+.card .head .muted {
+  font-size: 13px;
+}
+.card-rows {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.card-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.75rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.card-row:first-child {
+  border-top: 0;
+}
+.card-row .card-title {
+  color: var(--fg);
+  text-decoration: none;
+  font-weight: 600;
+}
+.card-row .card-title:hover {
+  color: var(--accent);
+}
+.card-row .meta {
+  grid-column: 1;
+}
+.card-row .btn {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.card-row .warn {
+  color: var(--accent);
+}
+h2.all {
+  margin: 2rem 0 0.5rem;
 }

@@ -43,7 +43,7 @@
     token: store.get(),
     me: null,
     guides: [],
-    inbox: [],
+    board: null, // the four queues from /v1/board
     activity: [],
     unread: 0,
     team: null, // full team detail when a team chip is selected
@@ -77,15 +77,15 @@
   async function load() {
     state.error = null;
     try {
-      const [me, list, inbox, activity] = await Promise.all([
+      const [me, list, board, activity] = await Promise.all([
         api("/v1/me"),
         api(`/v1/guides?scope=${encodeURIComponent(state.scope)}`),
-        api("/v1/inbox"),
+        api("/v1/board"),
         api("/v1/notifications?limit=30"),
       ]);
       state.me = me;
       state.guides = list.guides;
-      state.inbox = inbox.guides;
+      state.board = board;
       state.activity = activity.notifications;
       state.unread = activity.unread;
       state.team =
@@ -136,6 +136,8 @@
     render();
   }
 
+  // Both of these move a guide between queues, so reload rather than patch state by hand: the
+  // board's buckets are defined by SQL, and guessing them here is how the two drift apart.
   const setStatus = (g, status) =>
     act(async () => {
       await api(`/v1/guides/${g.id}/status`, {
@@ -144,15 +146,14 @@
         body: JSON.stringify({ status }),
       });
       g.status = status;
-      state.inbox = state.inbox.filter((x) => x.id !== g.id || status !== "consumed");
+      await load();
     });
 
   const remove = (g) => {
     if (!confirm(`Remove "${g.title}" from sync? Local copies are untouched.`)) return;
     act(async () => {
       await api(`/v1/guides/${g.id}`, { method: "DELETE" });
-      state.guides = state.guides.filter((x) => x.id !== g.id);
-      if (state.me) state.me.guides -= 1;
+      await load();
     });
   };
 
@@ -220,7 +221,7 @@
     return el("span", { class: "pulled" }, "pulled by ", el("b", {}, parts.join(", ")));
   }
 
-  function row(g, { inbox = false } = {}) {
+  function row(g) {
     const pull = `passalong pull ${g.id}`;
     const actions = [
       el("a", { class: "btn", href: g.url, target: "_blank", rel: "noopener" }, "open"),
@@ -266,7 +267,7 @@
 
     return el(
       "li",
-      { class: `guide ${g.status}${inbox ? " inbox" : ""}` },
+      { class: `guide ${g.status}` },
       el(
         "div",
         { class: "head" },
@@ -275,7 +276,7 @@
           { class: "title", href: g.url, target: "_blank", rel: "noopener" },
           g.title || g.id,
         ),
-        el("span", { class: `status ${g.status}` }, g.for_me && inbox ? "for you" : g.status),
+        el("span", { class: `status ${g.status}` }, g.status),
       ),
       el(
         "div",
@@ -292,6 +293,86 @@
         (g.tags || []).map((t) => el("span", { class: "tag" }, `#${t}`)),
       ),
       el("div", { class: "actions" }, actions),
+    );
+  }
+
+  // A queue line: what it is, who it is with, and the one action that moves it along. The full
+  // row with every button lives in the list below; up here a card is a thing to act on, not to
+  // browse.
+  function cardRow(g, action) {
+    const pull = `passalong pull ${g.id}`;
+    return el(
+      "li",
+      { class: `card-row${g.stale ? " stale" : ""}` },
+      el(
+        "a",
+        { class: "card-title", href: g.url, target: "_blank", rel: "noopener" },
+        g.title || g.id,
+      ),
+      el(
+        "span",
+        { class: "meta" },
+        g.mine
+          ? el("span", {}, "to ", el("b", {}, `${g.team}${g.to ? ` / @${g.to}` : ""}`))
+          : el("span", {}, "from ", el("b", {}, `@${g.from || "?"}`)),
+        el("span", {}, rel(g.created)),
+        g.stale ? el("span", { class: "warn" }, "not picked up") : "",
+        g.pulls ? el("span", {}, `${g.pulls} pull${g.pulls === 1 ? "" : "s"}`) : "",
+      ),
+      action === "pull"
+        ? el(
+            "button",
+            { class: "btn", onclick: (e) => copy(pull, e.target), title: pull },
+            "copy pull",
+          )
+        : action === "done"
+          ? el("button", { class: "btn", onclick: () => setStatus(g, "consumed") }, "done")
+          : action === "promote"
+            ? el(
+                "button",
+                { class: "btn nudge", onclick: () => setStatus(g, "promoted") },
+                "promote",
+              )
+            : el("button", { class: "btn", onclick: (e) => copy(g.url, e.target) }, "copy link"),
+    );
+  }
+
+  const card = (cls, title, note, guides, action) =>
+    guides?.length
+      ? el(
+          "section",
+          { class: `card ${cls}` },
+          el(
+            "div",
+            { class: "head" },
+            el("h2", {}, `${title} · ${guides.length}`),
+            el("span", { class: "muted" }, note),
+          ),
+          el(
+            "ul",
+            { class: "card-rows" },
+            guides.map((g) => cardRow(g, action)),
+          ),
+        )
+      : "";
+
+  // The state of your transfers, in the order you can do something about them.
+  function board() {
+    const b = state.board;
+    if (!b) return "";
+    return el(
+      "div",
+      { class: "board" },
+      card("waiting", "Waiting on you", "handed to you, not pulled yet", b.waiting, "pull"),
+      card("flight", "In flight", "handed over, nobody has taken it", b.in_flight, "link"),
+      card("landed", "Landed", "someone has it and hasn't said it shipped", b.landed, "done"),
+      card(
+        "promote",
+        "Worth keeping",
+        "pulled enough to graduate into a reference",
+        b.promote,
+        "promote",
+      ),
     );
   }
 
@@ -419,19 +500,8 @@
     return el(
       "section",
       { class: "hub" },
+      board(),
       activityBox(),
-      state.inbox.length
-        ? el(
-            "section",
-            { class: "inboxbox" },
-            el("h2", {}, `Handed to you · ${state.inbox.length}`),
-            el(
-              "ul",
-              { class: "guides" },
-              state.inbox.map((g) => row(g, { inbox: true })),
-            ),
-          )
-        : "",
       teams.length
         ? el(
             "div",
@@ -442,6 +512,7 @@
           )
         : "",
       teamPanel(),
+      state.guides.length ? el("h2", { class: "all" }, "All guides") : "",
       el(
         "div",
         { class: "toolbar" },
@@ -494,7 +565,7 @@
               store.set(null);
               state.token = null;
               state.guides = [];
-              state.inbox = [];
+              state.board = null;
               state.activity = [];
               state.unread = 0;
               state.me = null;

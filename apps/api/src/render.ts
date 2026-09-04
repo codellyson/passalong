@@ -4,7 +4,7 @@ import type { Meta } from "./guide.js";
 
 // Bump when public/styles.css changes: _headers lets browsers cache it for an hour, and a stale
 // stylesheet silently breaks new pages (the hub shipped unstyled to anyone who had visited).
-const STYLES = "/styles.css?v=4";
+const STYLES = "/styles.css?v=5";
 
 const esc = (s: string) =>
   s.replace(
@@ -107,8 +107,8 @@ export function renderHub(): string {
   const inner = `
 <header>
   ${BRAND}
-  <h1>Your guides</h1>
-  <div class="meta"><span>yours and your teams\u2019 · <a href="/">what is Passalong?</a></span></div>
+  <h1>Your transfers</h1>
+  <div class="meta"><span>what is waiting, in flight, and landed · <a href="/">what is Passalong?</a></span></div>
 </header>
 <div id="app"><noscript><p>The hub needs JavaScript. The CLI does not: <code>passalong list</code>.</p></noscript></div>
 <script src="/hub.js" defer></script>`;

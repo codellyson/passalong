@@ -12,8 +12,8 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
     **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
-  - `src/mcp.js` — MCP tools: `search_guides`, `get_guide`, `publish_guide`, `guide_template`,
-    `set_guide_status`.
+  - `src/mcp.js` — MCP tools: `search_guides`, `inbox`, `board`, `activity`, `get_guide`,
+    `publish_guide`, `guide_template`, `set_guide_status`.
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to
@@ -42,6 +42,13 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),
   not yet pulled by me. Every pull is a `pull` row; the sender sees them as `pulled_by`. Handles
   are global and unique.
+- **The board (`GET /v1/board`).** The hub's home, `passalong board`, and the MCP `board` tool are
+  one endpoint: four queues defined in SQL, not in the client. Waiting = the inbox query. In
+  flight = mine, addressed to a person or team, with `NOT EXISTS` a pull by anyone but me (`stale`
+  past 7 days). Landed = the same `EXISTS` with `pulls < 3`. Worth keeping = `pulls >= 3`, which
+  is why landed excludes it: one guide, one card. "Someone else pulled it" is the test everywhere
+  — your own pull from another machine is not the transfer landing. The hub reloads after a status
+  change rather than moving rows itself; re-deriving buckets in JS is how the two drift apart.
 - **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
   to whoever should hear it: `handoff`, `shared`, `pulled`, `consumed`, `joined`. Rows first,
   delivery second — mail is a channel over the row, so the feed works with no mailer configured.
