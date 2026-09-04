@@ -18,7 +18,10 @@ test("a password verifies against its own hash and nothing else", async () => {
 });
 
 test("the same password hashes differently every time", async () => {
-  const [a, b] = [await hashPassword("correct-horse-battery"), await hashPassword("correct-horse-battery")];
+  const [a, b] = [
+    await hashPassword("correct-horse-battery"),
+    await hashPassword("correct-horse-battery"),
+  ];
   assert.notEqual(a, b, "a shared salt would let one crack answer for every account");
   assert.equal(await verifyPassword("correct-horse-battery", b), true);
 });
