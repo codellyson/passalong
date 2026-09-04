@@ -92,6 +92,8 @@ const META_ORDER = [
   "author",
   "source_context",
   "status",
+  "team",
+  "to",
   "stack_assumptions",
   "tags",
 ];

@@ -310,3 +310,69 @@ footer {
     Menlo,
     monospace;
 }
+
+/* ---- hub: teams and inbox ---------------------------------------------------------- */
+.inboxbox {
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+  padding: 0.25rem 1rem 0.75rem;
+  margin-bottom: 1.5rem;
+}
+.inboxbox h2 {
+  margin: 0.75rem 0 0.25rem;
+  color: var(--accent);
+}
+.guide.inbox {
+  border-top-color: transparent;
+}
+.guide.inbox:last-child {
+  border-bottom: none;
+}
+.chips.scopes {
+  margin-bottom: 1rem;
+}
+.team {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.25rem 1rem 1rem;
+  margin-bottom: 1.5rem;
+}
+.team .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.team h2 {
+  margin: 0.75rem 0 0.25rem;
+}
+.members {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0.75rem;
+  font:
+    14px / 1.7 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.muted {
+  color: var(--muted);
+}
+.invite {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.invite code {
+  user-select: all;
+}
+.pulled b {
+  color: var(--accent);
+}
+.btn.nudge {
+  color: var(--accent);
+  border-color: var(--accent);
+}

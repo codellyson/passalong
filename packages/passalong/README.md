@@ -25,9 +25,10 @@ passalong login      # optional: sync guides across machines and get share links
 ## Commands
 
 ```
-passalong share [file]        publish a guide (newest draft, or a scaffold you edit) → id + link
+passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
 passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
-passalong list [query]        your guides, local and synced
+passalong inbox               guides handed to you that you have not pulled yet
+passalong list [query]        your guides and your teams', local and synced
 passalong open <id> [--print] view a guide in the browser (or the terminal)
 passalong hub                 open your synced guides in the browser
 passalong done <id>           mark consumed: implemented on the receiving side
@@ -35,15 +36,39 @@ passalong promote <id>        mark promoted: graduated into a reusable reference
 passalong rm <id>             delete a guide locally and from sync
 passalong export [dir]        dump every guide as plain markdown
 passalong login [token]       create an account, or attach this machine to an existing one
+passalong me [--handle H] [--name N] [--email E]   who you are to teammates
+passalong team                current team and its members
+passalong team create <name>  start a team (you become its owner)
+passalong team invite [email] make an invite link (mailed when an email is given)
+passalong team join <link>    accept an invite
+passalong team use <slug>     switch the current team
 passalong setup               install the Claude Code capture skill + register the MCP server
 passalong mcp                 run the MCP server over stdio
 ```
+
+## Teams
+
+A team is the unit of sharing. Members can find, pull, and mark consumed every guide shared to
+the team; a guide can also be handed to one person, who sees it in their inbox (and by email
+when the server has mail configured).
+
+```sh
+passalong me --handle lukman            # how teammates address you
+passalong team create Khaime            # you become owner; "khaime" is now current
+passalong team invite ada@example.com   # or no email: prints a link to send yourself
+passalong team join <link>              # on Ada's machine
+passalong share --to khaime/ada         # hand this guide to Ada
+passalong inbox                         # on Ada's side: what was handed to you
+```
+
+The sender's `passalong list` and hub show who pulled each guide and when. Guides that keep
+getting pulled get a nudge to promote them into the team's small set of maintained references.
 
 ## MCP
 
 `passalong setup` registers the server with Claude Code. For other clients, run `passalong mcp` over stdio.
 
-Tools: `search_guides`, `get_guide`, `publish_guide`, `guide_template`, `set_guide_status`.
+Tools: `search_guides`, `inbox`, `get_guide`, `publish_guide` (with `to`), `guide_template`, `set_guide_status`.
 
 ## Guides are files
 

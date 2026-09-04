@@ -37,6 +37,11 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   no email or password in v1; that is the v2 team layer.
 - **Status lifecycle**: draft → published → consumed → promoted. The server stores status both in
   the `guide.status` column and inside the markdown (`setField`) so a pulled `.md` is truthful.
+- **Teams (M2).** `team`/`membership`/`invite`/`pull` tables (migration 0002). A guide's
+  `team_id` makes it readable and consumable by members; `to_account_id` addresses one member,
+  who is emailed if `BREVO_API_KEY` is set (otherwise inbox only). Only the author can promote or
+  delete. `GET /v1/inbox` = handed to me (or my teams, by others), not yet pulled by me. Every
+  pull is a `pull` row; the sender sees them as `pulled_by`. Handles are global and unique.
 - **Local-first.** With no token every command works offline. Sync failures on `list` degrade to
   a warning, never an error.
 - **CSP on the web view** (`default-src 'none'; style-src 'self'`) is what makes rendering owner

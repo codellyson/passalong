@@ -4,7 +4,7 @@ import type { Meta } from "./guide.js";
 
 // Bump when public/styles.css changes: _headers lets browsers cache it for an hour, and a stale
 // stylesheet silently breaks new pages (the hub shipped unstyled to anyone who had visited).
-const STYLES = "/styles.css?v=2";
+const STYLES = "/styles.css?v=3";
 
 const esc = (s: string) =>
   s.replace(
@@ -108,13 +108,40 @@ export function renderHub(): string {
 <header>
   ${BRAND}
   <h1>Your guides</h1>
-  <div class="meta"><span>everything synced to this account · <a href="/">what is Passalong?</a></span></div>
+  <div class="meta"><span>yours and your teams\u2019 · <a href="/">what is Passalong?</a></span></div>
 </header>
 <div id="app"><noscript><p>The hub needs JavaScript. The CLI does not: <code>passalong list</code>.</p></noscript></div>
 <script src="/hub.js" defer></script>`;
   return page({
     title: "Passalong hub",
     description: "Your synced transfer guides.",
+    noindex: true,
+    inner,
+  });
+}
+
+/** Where an invite link lands: the one command to run. */
+export function renderJoin(o: { team: string; code: string; url: string }): string {
+  const inner = `
+<header>
+  ${BRAND}
+  <h1>Join ${esc(o.team)}</h1>
+  <div class="meta"><span>an invite to a Passalong team</span></div>
+</header>
+<article>
+<p>Teams share transfer guides: when a teammate finishes something you need to implement, they hand it to you and it lands in your inbox, ready for your agent.</p>
+<h2>If you already have Passalong</h2>
+<pre><code>passalong team join ${esc(o.url)}</code></pre>
+<h2>If not</h2>
+<pre><code>npm i -g passalong
+passalong setup      # Claude Code skill + MCP server
+passalong login      # your account
+passalong me --handle you
+passalong team join ${esc(o.url)}</code></pre>
+</article>`;
+  return page({
+    title: `Join ${o.team}`,
+    description: `Invitation to the ${o.team} team on Passalong.`,
     noindex: true,
     inner,
   });

@@ -1,5 +1,6 @@
-// The Passalong MCP server (stdio). This is the rail that makes Passalong tool-agnostic: any MCP-capable
-// agent can search, pull, and publish guides without leaving its session.
+// The Passalong MCP server (stdio). This is the rail that makes Passalong tool-agnostic: any
+// MCP-capable agent can search, pull, and publish guides without leaving its session. With a
+// team, the same tools see the team's guides and the user's inbox.
 //
 //   claude mcp add passalong -- passalong mcp
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -14,16 +15,18 @@ const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError
 
 export async function serve() {
   const server = new McpServer(
-    { name: "passalong", version: "0.1.0" },
+    { name: "passalong", version: "0.2.0" },
     {
       instructions:
-        "Passalong hands finished implementations between contexts as transfer guides: markdown with " +
-        `frontmatter and the sections ${SECTIONS.join(", ")}. ` +
-        "When the user references a passalong id or link, call get_guide and follow its Steps, adapting " +
-        "anything marked ASSUMES to this codebase; run its Verification before declaring done. " +
-        "When the user asks to share, hand off, or passalong what was just done, distill the session " +
-        "into a guide (guide_template shows the shape) and call publish_guide. Gotchas are the " +
-        "highest-value section: record what failed and why.",
+        "Passalong hands finished implementations between contexts as transfer guides: markdown " +
+        `with frontmatter and the sections ${SECTIONS.join(", ")}. ` +
+        "When the user references a passalong id or link, call get_guide and follow its Steps, " +
+        "adapting anything marked ASSUMES to this codebase; run its Verification before declaring " +
+        "done, then set_guide_status consumed. When the user asks to pass along, hand off, or " +
+        "share what was just done, distill the session into a guide (guide_template shows the " +
+        "shape) and call publish_guide, with `to` as team or team/handle when it is for a teammate. " +
+        "At the start of work, inbox shows guides teammates have handed to this user. Gotchas are " +
+        "the highest-value section: record what failed and why.",
     },
   );
 
@@ -32,14 +35,35 @@ export async function serve() {
     {
       title: "Search guides",
       description:
-        "Search the user's transfer guides (local and synced) by words in the title, tags, stack, " +
-        "or body. Empty query lists everything, newest first.",
-      inputSchema: { query: z.string().default("") },
+        "Search transfer guides by words in the title, tags, stack, or body: the user's own " +
+        "(local and synced) plus every team they belong to. Empty query lists everything, newest first.",
+      inputSchema: {
+        query: z.string().default(""),
+        scope: z.string().optional().describe('"mine", "all" (default), or a team slug'),
+      },
     },
-    async ({ query }) => {
+    async ({ query, scope }) => {
       try {
-        const rows = await passalong.list(query);
+        const rows = await passalong.list(query, { scope: scope || "" });
         return json({ guides: rows, warning: rows.warning });
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "inbox",
+    {
+      title: "Inbox",
+      description:
+        "Guides handed to this user (or to their teams) that they have not pulled yet. Call it " +
+        "when starting work so handoffs are not missed. Needs sync (passalong login).",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return json({ guides: await passalong.inbox() });
       } catch (err) {
         return fail(err);
       }
@@ -51,8 +75,9 @@ export async function serve() {
     {
       title: "Get guide",
       description:
-        "Fetch a transfer guide by passalong id or share link and return its full markdown. Also writes " +
-        "it to .passalong/<id>.md in the working directory so it survives the session.",
+        "Fetch a transfer guide by passalong id or share link and return its full markdown. Also " +
+        "writes it to .passalong/<id>.md in the working directory so it survives the session. " +
+        "Pulling a teammate's guide tells them the transfer landed.",
       inputSchema: {
         ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
         cwd: z
@@ -77,21 +102,33 @@ export async function serve() {
       title: "Publish guide",
       description:
         "Publish a transfer guide from markdown (frontmatter + sections). Missing id, created, " +
-        "author, and source_context are filled in. Returns the id and share link.",
+        'author, and source_context are filled in. `to` addresses it to a team ("khaime") or a ' +
+        'teammate ("khaime/lukman"), who is notified. Returns the id and share link.',
       inputSchema: {
         markdown: z.string().describe("full guide markdown; start from guide_template"),
+        to: z.string().optional().describe("team slug, or team/handle for a specific teammate"),
         cwd: z
           .string()
           .optional()
           .describe("directory the work happened in, used to infer source_context"),
       },
     },
-    async ({ markdown, cwd }) => {
+    async ({ markdown, to, cwd }) => {
       try {
-        const { guide, url, synced, path } = await passalong.share(markdown, {
+        const { guide, url, synced, notified, path } = await passalong.share(markdown, {
           cwd: cwd || process.cwd(),
+          to,
         });
-        return json({ id: guide.meta.id, title: guide.meta.title, url, synced, path });
+        return json({
+          id: guide.meta.id,
+          title: guide.meta.title,
+          url,
+          synced,
+          team: guide.meta.team || "",
+          to: guide.meta.to || "",
+          notified,
+          path,
+        });
       } catch (err) {
         return fail(err);
       }
@@ -113,7 +150,8 @@ export async function serve() {
     {
       title: "Set guide status",
       description:
-        "Mark a guide consumed (implemented on the receiving side) or promoted (a reusable reference).",
+        "Mark a guide consumed (implemented on the receiving side) or promoted (a reusable reference). " +
+        "Only the author can promote.",
       inputSchema: { id: z.string(), status: z.enum(["published", "consumed", "promoted"]) },
     },
     async ({ id, status }) => {

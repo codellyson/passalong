@@ -29,7 +29,10 @@ session's history. Write for execution, not for permanence.
    passalong share ~/.passalong/drafts/<slug>.md --no-edit
    ```
 
-   It prints the guide id on stdout and the share link on stderr.
+   If the user named a person or team ("share this with Ada", "hand this to the platform
+   team"), add `--to <team>` or `--to <team>/<handle>`; `passalong team` lists the current
+   team's members and their handles. It prints the guide id on stdout and the share link (and
+   who it was handed to) on stderr.
 6. **Report** the id (and link if synced) and one line on how to use it on the other side:
    `passalong pull <id>` in the target repo, or "pull passalong <id>" to an agent with the Passalong MCP server.
 

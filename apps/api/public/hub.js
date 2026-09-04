@@ -1,6 +1,6 @@
-// The hub: your synced guides in one place. Talks to /v1/* with the account token, which lives
-// only in this browser's localStorage. No framework, no build step; everything the page can do,
-// the CLI and MCP server can do too.
+// The hub: your guides and your teams' in one place. Talks to /v1/* with the account token,
+// which lives only in this browser's localStorage. No framework, no build step; everything the
+// page can do, the CLI and MCP server can do too.
 (() => {
   const KEY = "passalong.token";
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -31,15 +31,26 @@
     },
   };
 
-  // `passalong hub` opens /hub#token=… so the token never hits the server or a log line; the page
-  // moves it into storage and scrubs the URL before anything else happens.
+  // `passalong hub` opens /hub#token=… so the token never hits the server or a log line; the
+  // page moves it into storage and scrubs the URL before anything else happens.
   const fromHash = new URLSearchParams(location.hash.slice(1)).get("token");
   if (fromHash) {
     store.set(fromHash);
     history.replaceState(null, "", location.pathname);
   }
 
-  const state = { token: store.get(), me: null, guides: [], q: "", status: "all", error: null };
+  const state = {
+    token: store.get(),
+    me: null,
+    guides: [],
+    inbox: [],
+    team: null, // full team detail when a team chip is selected
+    q: "",
+    status: "all",
+    scope: "all",
+    error: null,
+    invite: null,
+  };
 
   async function api(path, init = {}) {
     const res = await fetch(path, {
@@ -64,7 +75,18 @@
   async function load() {
     state.error = null;
     try {
-      [state.me, { guides: state.guides }] = await Promise.all([api("/v1/me"), api("/v1/guides")]);
+      const [me, list, inbox] = await Promise.all([
+        api("/v1/me"),
+        api(`/v1/guides?scope=${encodeURIComponent(state.scope)}`),
+        api("/v1/inbox"),
+      ]);
+      state.me = me;
+      state.guides = list.guides;
+      state.inbox = inbox.guides;
+      state.team =
+        state.scope !== "all" && state.scope !== "mine"
+          ? await api(`/v1/teams/${encodeURIComponent(state.scope)}`)
+          : null;
     } catch (e) {
       state.error = e.message;
     }
@@ -74,7 +96,8 @@
   const rel = (iso) => {
     if (!iso) return "";
     const d = (Date.now() - new Date(iso).getTime()) / 864e5;
-    if (d < 1) return "today";
+    if (d < 1 / 24) return "just now";
+    if (d < 1) return `${Math.floor(d * 24)}h ago`;
     if (d < 30) return `${Math.floor(d)}d ago`;
     return iso.slice(0, 10);
   };
@@ -85,40 +108,57 @@
     return state.guides.filter((g) => {
       if (state.status !== "all" && g.status !== state.status) return false;
       if (!terms.length) return true;
-      const hay = [g.title, g.source_context, ...(g.tags || []), ...(g.stack_assumptions || [])]
+      const hay = [
+        g.title,
+        g.source_context,
+        g.from,
+        g.to,
+        ...(g.tags || []),
+        ...(g.stack_assumptions || []),
+      ]
         .join("\n")
         .toLowerCase();
       return terms.every((t) => hay.includes(t));
     });
   }
 
-  async function setStatus(g, status) {
+  async function act(fn) {
     try {
+      await fn();
+    } catch (e) {
+      state.error = e.message;
+    }
+    render();
+  }
+
+  const setStatus = (g, status) =>
+    act(async () => {
       await api(`/v1/guides/${g.id}/status`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ status }),
       });
       g.status = status;
-      render();
-    } catch (e) {
-      state.error = e.message;
-      render();
-    }
-  }
+      state.inbox = state.inbox.filter((x) => x.id !== g.id || status !== "consumed");
+    });
 
-  async function remove(g) {
+  const remove = (g) => {
     if (!confirm(`Remove "${g.title}" from sync? Local copies are untouched.`)) return;
-    try {
+    act(async () => {
       await api(`/v1/guides/${g.id}`, { method: "DELETE" });
       state.guides = state.guides.filter((x) => x.id !== g.id);
       if (state.me) state.me.guides -= 1;
-      render();
-    } catch (e) {
-      state.error = e.message;
-      render();
-    }
-  }
+    });
+  };
+
+  const makeInvite = (slug) =>
+    act(async () => {
+      state.invite = await api(`/v1/teams/${encodeURIComponent(slug)}/invites`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+    });
 
   function copy(text, btn) {
     navigator.clipboard?.writeText(text).then(() => {
@@ -169,7 +209,13 @@
     );
   }
 
-  function row(g) {
+  function pulledBy(g) {
+    if (!g.mine || !g.pulled_by?.length) return "";
+    const parts = g.pulled_by.map((p) => `${p.handle ? `@${p.handle}` : "link"} ${rel(p.at)}`);
+    return el("span", { class: "pulled" }, "pulled by ", el("b", {}, parts.join(", ")));
+  }
+
+  function row(g, { inbox = false } = {}) {
     const pull = `passalong pull ${g.id}`;
     const actions = [
       el("a", { class: "btn", href: g.url, target: "_blank", rel: "noopener" }, "open"),
@@ -182,19 +228,40 @@
     ];
     if (g.status !== "consumed")
       actions.push(el("button", { class: "btn", onclick: () => setStatus(g, "consumed") }, "done"));
-    if (g.status !== "promoted")
+    if (g.mine && g.status !== "promoted")
       actions.push(
-        el("button", { class: "btn", onclick: () => setStatus(g, "promoted") }, "promote"),
+        el(
+          "button",
+          {
+            class: `btn${g.status === "published" && g.pulls >= 3 ? " nudge" : ""}`,
+            onclick: () => setStatus(g, "promoted"),
+          },
+          g.status === "published" && g.pulls >= 3 ? "★ promote — keeps getting pulled" : "promote",
+        ),
       );
-    if (g.status === "consumed" || g.status === "promoted")
+    if (g.mine && (g.status === "consumed" || g.status === "promoted"))
       actions.push(
         el("button", { class: "btn", onclick: () => setStatus(g, "published") }, "reopen"),
       );
-    actions.push(el("button", { class: "btn danger", onclick: () => remove(g) }, "remove"));
+    if (g.mine)
+      actions.push(el("button", { class: "btn danger", onclick: () => remove(g) }, "remove"));
+
+    const who = g.team
+      ? el(
+          "span",
+          {},
+          g.mine ? "to " : "from ",
+          el(
+            "b",
+            {},
+            g.mine ? `${g.team}${g.to ? ` / @${g.to}` : ""}` : `@${g.from || "?"} in ${g.team}`,
+          ),
+        )
+      : "";
 
     return el(
       "li",
-      { class: `guide ${g.status}` },
+      { class: `guide ${g.status}${inbox ? " inbox" : ""}` },
       el(
         "div",
         { class: "head" },
@@ -203,15 +270,17 @@
           { class: "title", href: g.url, target: "_blank", rel: "noopener" },
           g.title || g.id,
         ),
-        el("span", { class: `status ${g.status}` }, g.status),
+        el("span", { class: `status ${g.status}` }, g.for_me && inbox ? "for you" : g.status),
       ),
       el(
         "div",
         { class: "meta" },
         el("span", {}, "id ", el("b", {}, g.id)),
-        g.source_context ? el("span", {}, "from ", el("b", {}, g.source_context)) : "",
+        who,
+        g.source_context ? el("span", {}, "repo ", el("b", {}, g.source_context)) : "",
         el("span", {}, rel(g.created)),
         el("span", {}, `${g.pulls} pull${g.pulls === 1 ? "" : "s"}`),
+        pulledBy(g),
         g.stack_assumptions?.length
           ? el("span", {}, "assumes ", el("b", {}, g.stack_assumptions.join(", ")))
           : "",
@@ -221,33 +290,116 @@
     );
   }
 
+  function teamPanel() {
+    const t = state.team;
+    if (!t) return "";
+    return el(
+      "section",
+      { class: "team" },
+      el(
+        "div",
+        { class: "head" },
+        el("h2", {}, t.name),
+        el(
+          "span",
+          { class: "meta" },
+          el("span", {}, `${t.members.length} member${t.members.length === 1 ? "" : "s"}`),
+          el("span", {}, `${t.guides} guide${t.guides === 1 ? "" : "s"}`),
+          el("span", {}, `you are ${t.role}`),
+        ),
+      ),
+      el(
+        "ul",
+        { class: "members" },
+        t.members.map((m) =>
+          el(
+            "li",
+            {},
+            el("b", {}, m.handle ? `@${m.handle}` : "(no handle yet)"),
+            m.name ? ` ${m.name}` : "",
+            el("span", { class: "muted" }, ` · ${m.role} · joined ${rel(m.joined)}`),
+          ),
+        ),
+      ),
+      el(
+        "div",
+        { class: "actions" },
+        el("button", { class: "btn", onclick: () => makeInvite(t.slug) }, "new invite link"),
+        state.invite
+          ? el(
+              "span",
+              { class: "invite" },
+              el("code", {}, state.invite.url),
+              el(
+                "button",
+                { class: "btn", onclick: (e) => copy(state.invite.url, e.target) },
+                "copy",
+              ),
+            )
+          : el(
+              "span",
+              { class: "muted" },
+              "hand a teammate a link; they run ",
+              el("code", {}, "passalong team join <link>"),
+            ),
+      ),
+    );
+  }
+
   function hub() {
     const list = visible();
     const counts = {};
     for (const g of state.guides) counts[g.status] = (counts[g.status] || 0) + 1;
-    const filter = (value, label) =>
-      el(
-        "button",
-        {
-          class: `chip${state.status === value ? " on" : ""}`,
-          onclick: () => {
-            state.status = value;
-            render();
-          },
+    const chip = (on, label, onclick) =>
+      el("button", { class: `chip${on ? " on" : ""}`, onclick }, label);
+    const statusChip = (value, label) =>
+      chip(
+        state.status === value,
+        `${label}${value === "all" ? ` ${state.guides.length}` : counts[value] ? ` ${counts[value]}` : ""}`,
+        () => {
+          state.status = value;
+          render();
         },
-        label,
-        value === "all" ? ` ${state.guides.length}` : counts[value] ? ` ${counts[value]}` : "",
       );
+    const scopeChip = (value, label) =>
+      chip(state.scope === value, label, () => {
+        state.scope = value;
+        state.invite = null;
+        load();
+      });
+    const teams = state.me?.teams || [];
 
     return el(
       "section",
       { class: "hub" },
+      state.inbox.length
+        ? el(
+            "section",
+            { class: "inboxbox" },
+            el("h2", {}, `Handed to you · ${state.inbox.length}`),
+            el(
+              "ul",
+              { class: "guides" },
+              state.inbox.map((g) => row(g, { inbox: true })),
+            ),
+          )
+        : "",
+      teams.length
+        ? el(
+            "div",
+            { class: "chips scopes" },
+            scopeChip("all", "everything"),
+            scopeChip("mine", "mine"),
+            teams.map((t) => scopeChip(t.slug, t.name)),
+          )
+        : "",
+      teamPanel(),
       el(
         "div",
         { class: "toolbar" },
         el("input", {
           type: "search",
-          placeholder: "search title, tags, stack, source…",
+          placeholder: "search title, tags, stack, source, people…",
           value: state.q,
           oninput: (e) => {
             state.q = e.target.value;
@@ -257,10 +409,10 @@
         el(
           "div",
           { class: "chips" },
-          filter("all", "all"),
-          filter("published", "published"),
-          filter("consumed", "consumed"),
-          filter("promoted", "promoted"),
+          statusChip("all", "all"),
+          statusChip("published", "published"),
+          statusChip("consumed", "consumed"),
+          statusChip("promoted", "promoted"),
         ),
       ),
       state.error ? el("p", { class: "error" }, state.error) : "",
@@ -274,12 +426,16 @@
           )
         : list.length === 0
           ? el("p", { class: "empty" }, "No guides match.")
-          : el("ul", { class: "guides" }, list.map(row)),
+          : el(
+              "ul",
+              { class: "guides" },
+              list.map((g) => row(g)),
+            ),
       el(
         "footer",
         {},
         state.me
-          ? `account ${state.me.account} · ${state.me.guides} synced (${state.me.limit} active on the free tier) · `
+          ? `${state.me.handle ? `@${state.me.handle}` : `account ${state.me.account}`} · ${state.me.guides} synced (${state.me.limit} active on the free tier)${teams.length ? "" : " · start a team: passalong team create <name>"} · `
           : "",
         el(
           "a",
@@ -290,6 +446,7 @@
               store.set(null);
               state.token = null;
               state.guides = [];
+              state.inbox = [];
               state.me = null;
               render();
             },

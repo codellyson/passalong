@@ -1,26 +1,32 @@
 // Passalong sync API + web view. A Hono app on a Worker with one D1 database.
 //
 //   POST   /v1/accounts               mint an account; the token is the account
-//   GET    /v1/me                      who am I, how many guides
-//   GET    /v1/guides?q=               list/search my guides (summaries)
-//   PUT    /v1/guides/:id              upsert a guide (body: text/markdown)
-//   GET    /v1/guides/:id              my guide as markdown
-//   PATCH  /v1/guides/:id/status       { status }
-//   DELETE /v1/guides/:id
-//   GET    /g/:id/:key                 read-only web view (share link)
-//   GET    /g/:id/:key.md              the same guide as raw markdown
+//   GET    /v1/me                      identity, teams, counts
+//   PATCH  /v1/me                      { handle, name, email }
+//   POST   /v1/teams                   { name } → create a team (you become owner)
+//   GET    /v1/teams                   teams you belong to
+//   GET    /v1/teams/:slug             one team with members (members only)
+//   POST   /v1/teams/:slug/invites     { email? } → invite link (mailed if email + BREVO key)
+//   POST   /v1/invites/:code/accept    join the team behind an invite
+//   GET    /v1/guides?q=&scope=        list/search: scope=all (default) | mine | <team slug>
+//   GET    /v1/inbox                   guides handed to you (or your teams) you have not pulled
+//   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
+//   GET    /v1/guides/:id              guide as markdown (owner or team member); records a pull
+//   PATCH  /v1/guides/:id/status       { status }  owner: any; team member: consumed/published
+//   DELETE /v1/guides/:id              owner only
+//   GET    /g/:id/:key                 read-only web view (share link); .md for raw markdown
+//   GET    /join/:code                 what an invite link lands on
 //
 // Static files (stylesheet, icons, robots.txt, 404 page) live in public/ and are served by the
 // assets layer before this Worker runs; see wrangler.jsonc.
 import { Hono } from "hono";
+import { type MailEnv, sendHandoff, sendInvite } from "./email.js";
 import { body as bodyOf, type Meta, parseMeta, STATUSES, setField } from "./guide.js";
-import { renderGuide, renderHome, renderHub } from "./render.js";
+import { renderGuide, renderHome, renderHub, renderJoin } from "./render.js";
 
-// Workers rate-limit binding (wrangler.jsonc `ratelimits`). Optional so local dev without it
-// still works.
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
-type Env = {
+type Env = MailEnv & {
   DB: D1Database;
   ASSETS: Fetcher;
   ACCOUNT_LIMIT?: RateLimiter;
@@ -29,10 +35,12 @@ type Env = {
   PUBLIC_ORIGIN?: string;
 };
 type Vars = { account: string };
+type Ctx = { env: Env; req: { url: string }; get: (k: "account") => string };
 
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 const ID_RE = /^[a-z0-9]{6,12}$/;
+const HANDLE_RE = /^[a-z0-9][a-z0-9-]{1,30}$/;
 const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 
 function rand(length: number, alphabet = ALPHABET): string {
@@ -47,9 +55,29 @@ async function sha256(s: string): Promise<string> {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+const now = () => new Date().toISOString();
+
 const err = (c: { json: (o: unknown, s: number) => Response }, status: number, message: string) =>
   c.json({ message }, status);
 
+// Share links are built from the request origin. Under `wrangler dev` a custom-domain route makes
+// requests look like they came from production, so local dev overrides it via .dev.vars.
+const origin = (c: { env: Env; req: { url: string } }) =>
+  c.env.PUBLIC_ORIGIN || new URL(c.req.url).origin;
+
+interface AccountRow {
+  id: string;
+  handle: string;
+  name: string;
+  email: string;
+}
+interface TeamRow {
+  id: string;
+  slug: string;
+  name: string;
+  created_by: string;
+  created: string;
+}
 interface GuideRow {
   id: string;
   account_id: string;
@@ -63,18 +91,92 @@ interface GuideRow {
   created: string;
   updated: string;
   pulls: number;
+  team_id: string;
+  to_account_id: string;
+}
+interface PullRow {
+  guide_id: string;
+  account_id: string;
+  via: string;
+  at: string;
+  handle: string;
 }
 
-// Share links are built from the request origin. Under `wrangler dev` a custom-domain route makes
-// requests look like they came from production, so local dev overrides it via .dev.vars.
-const origin = (c: { env: Env; req: { url: string } }) =>
-  c.env.PUBLIC_ORIGIN || new URL(c.req.url).origin;
+const shareUrl = (base: string, row: Pick<GuideRow, "id" | "share_key">) =>
+  `${base}/g/${row.id}/${row.share_key}`;
 
-const shareUrl = (origin: string, row: Pick<GuideRow, "id" | "share_key">) =>
-  `${origin}/g/${row.id}/${row.share_key}`;
+// ---- lookups ----------------------------------------------------------------------------
 
-function summary(origin: string, r: GuideRow) {
-  return {
+const db = (c: { env: Env }) => c.env.DB;
+
+async function myTeams(c: Ctx): Promise<(TeamRow & { role: string })[]> {
+  const { results } = await db(c)
+    .prepare(
+      `SELECT t.*, m.role FROM team t JOIN membership m ON m.team_id = t.id
+       WHERE m.account_id = ? ORDER BY t.created`,
+    )
+    .bind(c.get("account"))
+    .all<TeamRow & { role: string }>();
+  return results;
+}
+
+async function teamBySlug(c: Ctx, slug: string): Promise<(TeamRow & { role: string }) | null> {
+  return db(c)
+    .prepare(
+      `SELECT t.*, m.role FROM team t JOIN membership m ON m.team_id = t.id
+       WHERE t.slug = ? AND m.account_id = ?`,
+    )
+    .bind(slug, c.get("account"))
+    .first<TeamRow & { role: string }>();
+}
+
+async function accounts(c: { env: Env }, ids: string[]): Promise<Map<string, AccountRow>> {
+  const map = new Map<string, AccountRow>();
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return map;
+  const { results } = await db(c)
+    .prepare(
+      `SELECT id, handle, name, email FROM account WHERE id IN (${unique.map(() => "?").join(",")})`,
+    )
+    .bind(...unique)
+    .all<AccountRow>();
+  for (const a of results) map.set(a.id, a);
+  return map;
+}
+
+/** Last few pulls per guide, excluding the owner's own, with the puller's handle. */
+async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, PullRow[]>> {
+  const map = new Map<string, PullRow[]>();
+  if (!rows.length) return map;
+  const { results } = await db(c)
+    .prepare(
+      `SELECT p.guide_id, p.account_id, p.via, p.at, COALESCE(a.handle, '') AS handle
+       FROM pull p LEFT JOIN account a ON a.id = p.account_id
+       WHERE p.guide_id IN (${rows.map(() => "?").join(",")})
+       ORDER BY p.at DESC LIMIT 500`,
+    )
+    .bind(...rows.map((r) => r.id))
+    .all<PullRow>();
+  const owner = new Map(rows.map((r) => [r.id, r.account_id]));
+  for (const p of results) {
+    if (p.account_id && p.account_id === owner.get(p.guide_id)) continue;
+    const list = map.get(p.guide_id) || [];
+    if (list.length < 5) list.push(p);
+    map.set(p.guide_id, list);
+  }
+  return map;
+}
+
+async function summaries(c: Ctx, rows: GuideRow[]) {
+  const me = c.get("account");
+  const base = origin(c);
+  const teams = new Map((await myTeams(c)).map((t) => [t.id, t]));
+  const people = await accounts(
+    c,
+    rows.flatMap((r) => [r.account_id, r.to_account_id]),
+  );
+  const pulls = await recentPulls(c, rows);
+  return rows.map((r) => ({
     id: r.id,
     title: r.title,
     status: r.status,
@@ -84,8 +186,18 @@ function summary(origin: string, r: GuideRow) {
     tags: JSON.parse(r.tags) as string[],
     stack_assumptions: JSON.parse(r.stack) as string[],
     pulls: r.pulls,
-    url: shareUrl(origin, r),
-  };
+    url: shareUrl(base, r),
+    mine: r.account_id === me,
+    from: people.get(r.account_id)?.handle || "",
+    team: teams.get(r.team_id)?.slug || "",
+    to: people.get(r.to_account_id)?.handle || "",
+    for_me: r.to_account_id === me,
+    pulled_by: (pulls.get(r.id) || []).map((p) => ({
+      handle: p.handle,
+      via: p.via,
+      at: p.at,
+    })),
+  }));
 }
 
 // ---- auth -------------------------------------------------------------------------------
@@ -118,17 +230,191 @@ app.post("/v1/accounts", async (c) => {
   const id = rand(10);
   const token = `pa_${rand(32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")}`;
   await c.env.DB.prepare("INSERT INTO account (id, token_hash, created) VALUES (?, ?, ?)")
-    .bind(id, await sha256(token), new Date().toISOString())
+    .bind(id, await sha256(token), now())
     .run();
   return c.json({ account: id, token }, 201);
 });
 
+// ---- identity ---------------------------------------------------------------------------
+
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
+  const me = await c.env.DB.prepare("SELECT id, handle, name, email FROM account WHERE id = ?")
+    .bind(account)
+    .first<AccountRow>();
   const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM guide WHERE account_id = ?")
     .bind(account)
     .first<{ n: number }>();
-  return c.json({ account, guides: n?.n ?? 0, limit: Number(c.env.FREE_SYNC_LIMIT) });
+  const teams = (await myTeams(c)).map((t) => ({ slug: t.slug, name: t.name, role: t.role }));
+  return c.json({
+    account,
+    handle: me?.handle || "",
+    name: me?.name || "",
+    email: me?.email || "",
+    teams,
+    guides: n?.n ?? 0,
+    limit: Number(c.env.FREE_SYNC_LIMIT),
+  });
+});
+
+app.patch("/v1/me", async (c) => {
+  const account = c.get("account");
+  const patch = (await c.req.json().catch(() => ({}))) as {
+    handle?: string;
+    name?: string;
+    email?: string;
+  };
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (patch.handle !== undefined) {
+    const h = patch.handle.trim().toLowerCase().replace(/^@/, "");
+    if (!HANDLE_RE.test(h)) return err(c, 400, "handle: 2–31 chars, a–z 0–9 and dashes");
+    const taken = await c.env.DB.prepare("SELECT id FROM account WHERE handle = ? AND id <> ?")
+      .bind(h, account)
+      .first();
+    if (taken) return err(c, 409, `handle @${h} is taken`);
+    sets.push("handle = ?");
+    binds.push(h);
+  }
+  if (patch.name !== undefined) {
+    sets.push("name = ?");
+    binds.push(patch.name.trim().slice(0, 80));
+  }
+  if (patch.email !== undefined) {
+    const e = patch.email.trim().toLowerCase();
+    if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return err(c, 400, "email does not look valid");
+    sets.push("email = ?");
+    binds.push(e);
+  }
+  if (!sets.length) return err(c, 400, "nothing to update: send handle, name, or email");
+  await c.env.DB.prepare(`UPDATE account SET ${sets.join(", ")} WHERE id = ?`)
+    .bind(...binds, account)
+    .run();
+  const me = await c.env.DB.prepare("SELECT id, handle, name, email FROM account WHERE id = ?")
+    .bind(account)
+    .first<AccountRow>();
+  return c.json(me);
+});
+
+// ---- teams ------------------------------------------------------------------------------
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 30);
+}
+
+app.post("/v1/teams", async (c) => {
+  const account = c.get("account");
+  const { name } = (await c.req.json().catch(() => ({}))) as { name?: string };
+  const clean = (name || "").trim().slice(0, 60);
+  if (clean.length < 2) return err(c, 400, "team needs a name");
+  let slug = slugify(clean);
+  if (slug.length < 2) return err(c, 400, "team name needs some letters or digits");
+  for (let i = 2; i < 50; i++) {
+    const taken = await c.env.DB.prepare("SELECT id FROM team WHERE slug = ?").bind(slug).first();
+    if (!taken) break;
+    slug = `${slugify(clean)}-${i}`;
+  }
+  const id = rand(10);
+  const t = now();
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      "INSERT INTO team (id, slug, name, created_by, created) VALUES (?, ?, ?, ?, ?)",
+    ).bind(id, slug, clean, account, t),
+    c.env.DB.prepare(
+      "INSERT INTO membership (team_id, account_id, role, joined) VALUES (?, ?, 'owner', ?)",
+    ).bind(id, account, t),
+  ]);
+  return c.json({ id, slug, name: clean, role: "owner" }, 201);
+});
+
+app.get("/v1/teams", async (c) => {
+  const teams = await myTeams(c);
+  return c.json({ teams: teams.map((t) => ({ slug: t.slug, name: t.name, role: t.role })) });
+});
+
+app.get("/v1/teams/:slug", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  const { results: members } = await c.env.DB.prepare(
+    `SELECT a.handle, a.name, m.role, m.joined FROM membership m JOIN account a ON a.id = m.account_id
+     WHERE m.team_id = ? ORDER BY m.joined`,
+  )
+    .bind(team.id)
+    .all<{ handle: string; name: string; role: string; joined: string }>();
+  const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM guide WHERE team_id = ?")
+    .bind(team.id)
+    .first<{ n: number }>();
+  return c.json({
+    slug: team.slug,
+    name: team.name,
+    role: team.role,
+    created: team.created,
+    members,
+    guides: n?.n ?? 0,
+  });
+});
+
+app.post("/v1/teams/:slug/invites", async (c) => {
+  const account = c.get("account");
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  const { email } = (await c.req.json().catch(() => ({}))) as { email?: string };
+  const to = (email || "").trim().toLowerCase();
+  if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return err(c, 400, "email does not look valid");
+  const code = rand(12);
+  await c.env.DB.prepare(
+    "INSERT INTO invite (code, team_id, email, created_by, created) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(code, team.id, to, account, now())
+    .run();
+  const url = `${origin(c)}/join/${code}`;
+  let mailed = false;
+  if (to) {
+    const me = (await accounts(c, [account])).get(account);
+    mailed = await sendInvite(c.env, {
+      to,
+      team: team.name,
+      by: me?.name || (me?.handle ? `@${me.handle}` : "a teammate"),
+      url,
+    });
+  }
+  return c.json({ code, url, email: to, mailed }, 201);
+});
+
+app.post("/v1/invites/:code/accept", async (c) => {
+  const account = c.get("account");
+  const code = c.req.param("code");
+  const inv = await c.env.DB.prepare(
+    "SELECT i.*, t.slug, t.name FROM invite i JOIN team t ON t.id = i.team_id WHERE i.code = ?",
+  )
+    .bind(code)
+    .first<{ team_id: string; slug: string; name: string; used_by: string }>();
+  if (!inv) return err(c, 404, "invite not found");
+  const already = await c.env.DB.prepare(
+    "SELECT role FROM membership WHERE team_id = ? AND account_id = ?",
+  )
+    .bind(inv.team_id, account)
+    .first<{ role: string }>();
+  if (!already) {
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        "INSERT INTO membership (team_id, account_id, role, joined) VALUES (?, ?, 'member', ?)",
+      ).bind(inv.team_id, account, now()),
+      c.env.DB.prepare(
+        "UPDATE invite SET used_by = ?, used = ? WHERE code = ? AND used_by = ''",
+      ).bind(account, now(), code),
+    ]);
+  }
+  return c.json({
+    slug: inv.slug,
+    name: inv.name,
+    role: already?.role || "member",
+    joined: !already,
+  });
 });
 
 // ---- guides -----------------------------------------------------------------------------
@@ -136,10 +422,27 @@ app.get("/v1/me", async (c) => {
 app.get("/v1/guides", async (c) => {
   const account = c.get("account");
   const q = (c.req.query("q") || "").trim().toLowerCase();
-  const terms = q ? q.split(/\s+/) : [];
-  let sql = "SELECT * FROM guide WHERE account_id = ?";
-  const binds: unknown[] = [account];
-  for (const t of terms) {
+  const scope = (c.req.query("scope") || "all").trim();
+  const teams = await myTeams(c);
+  const binds: unknown[] = [];
+  let where: string;
+  if (scope === "mine") {
+    where = "account_id = ?";
+    binds.push(account);
+  } else if (scope === "all") {
+    const ids = teams.map((t) => t.id);
+    where = ids.length
+      ? `(account_id = ? OR team_id IN (${ids.map(() => "?").join(",")}))`
+      : "account_id = ?";
+    binds.push(account, ...ids);
+  } else {
+    const team = teams.find((t) => t.slug === scope);
+    if (!team) return err(c, 404, `you are not in a team called "${scope}"`);
+    where = "team_id = ?";
+    binds.push(team.id);
+  }
+  let sql = `SELECT * FROM guide WHERE ${where}`;
+  for (const t of q ? q.split(/\s+/) : []) {
     sql +=
       " AND (lower(title) LIKE ? OR lower(tags) LIKE ? OR lower(stack) LIKE ? OR lower(source_context) LIKE ? OR lower(markdown) LIKE ?)";
     const like = `%${t}%`;
@@ -149,8 +452,26 @@ app.get("/v1/guides", async (c) => {
   const { results } = await c.env.DB.prepare(sql)
     .bind(...binds)
     .all<GuideRow>();
-  const base = origin(c);
-  return c.json({ guides: results.map((r) => summary(base, r)) });
+  return c.json({ guides: await summaries(c, results) });
+});
+
+// Handed to me (or to a team I'm in, by someone else) and not yet pulled by me.
+app.get("/v1/inbox", async (c) => {
+  const account = c.get("account");
+  const ids = (await myTeams(c)).map((t) => t.id);
+  const teamClause = ids.length
+    ? `OR (team_id IN (${ids.map(() => "?").join(",")}) AND to_account_id = '')`
+    : "";
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM guide
+     WHERE account_id <> ? AND status = 'published'
+       AND (to_account_id = ? ${teamClause})
+       AND id NOT IN (SELECT guide_id FROM pull WHERE account_id = ?)
+     ORDER BY created DESC LIMIT 100`,
+  )
+    .bind(account, account, ...ids, account)
+    .all<GuideRow>();
+  return c.json({ guides: await summaries(c, results) });
 });
 
 app.put("/v1/guides/:id", async (c) => {
@@ -168,11 +489,30 @@ app.put("/v1/guides/:id", async (c) => {
       ? meta.status
       : "published";
 
+  // Addressing: `team: <slug>` puts the guide in a team; `to: <handle>` hands it to a member.
+  let team: (TeamRow & { role: string }) | null = null;
+  let toAccount: AccountRow | null = null;
+  if (meta.team) {
+    team = await teamBySlug(c, String(meta.team));
+    if (!team) return err(c, 400, `you are not in a team called "${meta.team}"`);
+  }
+  if (meta.to) {
+    const handle = String(meta.to).replace(/^@/, "").toLowerCase();
+    if (!team) return err(c, 400, "`to:` needs a `team:` — a handoff goes to a teammate");
+    toAccount = await c.env.DB.prepare(
+      `SELECT a.id, a.handle, a.name, a.email FROM account a JOIN membership m ON m.account_id = a.id
+       WHERE a.handle = ? AND m.team_id = ?`,
+    )
+      .bind(handle, team.id)
+      .first<AccountRow>();
+    if (!toAccount) return err(c, 400, `@${handle} is not a member of ${team.slug}`);
+  }
+
   const existing = await c.env.DB.prepare(
-    "SELECT id, account_id, share_key, created FROM guide WHERE id = ?",
+    "SELECT id, account_id, share_key, created, to_account_id FROM guide WHERE id = ?",
   )
     .bind(id)
-    .first<Pick<GuideRow, "id" | "account_id" | "share_key" | "created">>();
+    .first<Pick<GuideRow, "id" | "account_id" | "share_key" | "created" | "to_account_id">>();
   if (existing && existing.account_id !== account)
     return err(c, 403, "that id belongs to another account");
 
@@ -197,14 +537,15 @@ app.put("/v1/guides/:id", async (c) => {
   const url = shareUrl(base, { id, share_key });
   markdown = setField(markdown, "url", url);
   if (!meta.id) markdown = setField(markdown, "id", id);
-  const now = new Date().toISOString();
-  const created = String(meta.created || existing?.created || now);
+  const t = now();
+  const created = String(meta.created || existing?.created || t);
 
   await c.env.DB.prepare(
-    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status, source_context=excluded.source_context,
-       tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated`,
+       tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated,
+       team_id=excluded.team_id, to_account_id=excluded.to_account_id`,
   )
     .bind(
       id,
@@ -217,46 +558,95 @@ app.put("/v1/guides/:id", async (c) => {
       JSON.stringify(meta.stack_assumptions),
       markdown,
       created,
-      now,
+      t,
+      team?.id || "",
+      toAccount?.id || "",
     )
     .run();
-  return c.json({ id, url, status, created: !existing }, existing ? 200 : 201);
+
+  // Notify a newly addressed teammate. Team-wide shares only land in inboxes, no mail.
+  let notified = false;
+  if (toAccount && toAccount.id !== account && existing?.to_account_id !== toAccount.id) {
+    const me = (await accounts(c, [account])).get(account);
+    notified = await sendHandoff(c.env, {
+      to: toAccount.email,
+      fromHandle: me?.handle || "someone",
+      title: String(meta.title),
+      id,
+      url,
+      team: team?.name || "",
+    });
+  }
+  return c.json(
+    {
+      id,
+      url,
+      status,
+      created: !existing,
+      team: team?.slug || "",
+      to: toAccount?.handle || "",
+      notified,
+    },
+    existing ? 200 : 201,
+  );
 });
 
-async function ownGuide(
-  c: { env: Env; get: (k: "account") => string },
+/** A guide the caller may read: their own, or one in a team they belong to. */
+async function readableGuide(
+  c: Ctx,
   id: string,
-): Promise<GuideRow | null> {
-  return c.env.DB.prepare("SELECT * FROM guide WHERE id = ? AND account_id = ?")
-    .bind(id, c.get("account"))
-    .first<GuideRow>();
+): Promise<{ row: GuideRow; owner: boolean } | null> {
+  const row = await db(c).prepare("SELECT * FROM guide WHERE id = ?").bind(id).first<GuideRow>();
+  if (!row) return null;
+  const me = c.get("account");
+  if (row.account_id === me) return { row, owner: true };
+  if (row.team_id) {
+    const m = await db(c)
+      .prepare("SELECT role FROM membership WHERE team_id = ? AND account_id = ?")
+      .bind(row.team_id, me)
+      .first();
+    if (m) return { row, owner: false };
+  }
+  return null;
+}
+
+async function recordPull(c: { env: Env }, guideId: string, account: string, via: string) {
+  await db(c).batch([
+    db(c)
+      .prepare("INSERT INTO pull (guide_id, account_id, via, at) VALUES (?, ?, ?, ?)")
+      .bind(guideId, account, via, now()),
+    db(c).prepare("UPDATE guide SET pulls = pulls + 1 WHERE id = ?").bind(guideId),
+  ]);
 }
 
 app.get("/v1/guides/:id", async (c) => {
-  const row = await ownGuide(c, c.req.param("id"));
-  if (!row) return err(c, 404, "no such guide");
-  await c.env.DB.prepare("UPDATE guide SET pulls = pulls + 1 WHERE id = ?").bind(row.id).run();
-  return c.text(row.markdown, 200, { "content-type": "text/markdown; charset=utf-8" });
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
+  await recordPull(c, found.row.id, c.get("account"), "cli");
+  return c.text(found.row.markdown, 200, { "content-type": "text/markdown; charset=utf-8" });
 });
 
 app.patch("/v1/guides/:id/status", async (c) => {
-  const row = await ownGuide(c, c.req.param("id"));
-  if (!row) return err(c, 404, "no such guide");
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, "no such guide");
   const { status } = (await c.req.json().catch(() => ({}))) as { status?: string };
   if (!status || !(STATUSES as readonly string[]).includes(status))
     return err(c, 400, `status must be one of ${STATUSES.join(", ")}`);
-  const markdown = setField(row.markdown, "status", status);
+  if (!found.owner && !["consumed", "published"].includes(status))
+    return err(c, 403, "only the author can promote or draft a guide; you can mark it consumed");
+  const markdown = setField(found.row.markdown, "status", status);
   await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
-    .bind(status, markdown, new Date().toISOString(), row.id)
+    .bind(status, markdown, now(), found.row.id)
     .run();
-  return c.json({ id: row.id, status });
+  return c.json({ id: found.row.id, status });
 });
 
 app.delete("/v1/guides/:id", async (c) => {
-  const row = await ownGuide(c, c.req.param("id"));
-  if (!row) return err(c, 404, "no such guide");
-  await c.env.DB.prepare("DELETE FROM guide WHERE id = ?").bind(row.id).run();
-  return c.json({ id: row.id, deleted: true });
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, "no such guide");
+  if (!found.owner) return err(c, 403, "only the author can remove a guide");
+  await c.env.DB.prepare("DELETE FROM guide WHERE id = ?").bind(found.row.id).run();
+  return c.json({ id: found.row.id, deleted: true });
 });
 
 // ---- share links ------------------------------------------------------------------------
@@ -290,7 +680,7 @@ async function notFoundPage(c: { env: Env; req: { url: string } }): Promise<Resp
 app.get("/g/:id/:key{.+\\.md}", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key").replace(/\.md$/, ""));
   if (!row) return c.text("no such guide", 404);
-  await c.env.DB.prepare("UPDATE guide SET pulls = pulls + 1 WHERE id = ?").bind(row.id).run();
+  await recordPull(c, row.id, "", "link");
   return c.text(row.markdown, 200, {
     "content-type": "text/markdown; charset=utf-8",
     ...VIEW_HEADERS,
@@ -309,6 +699,20 @@ app.get("/g/:id/:key", async (c) => {
     pulls: row.pulls,
   });
   return c.html(html, 200, VIEW_HEADERS);
+});
+
+app.get("/join/:code", async (c) => {
+  const inv = await c.env.DB.prepare(
+    "SELECT i.code, t.name FROM invite i JOIN team t ON t.id = i.team_id WHERE i.code = ?",
+  )
+    .bind(c.req.param("code"))
+    .first<{ code: string; name: string }>();
+  if (!inv) return notFoundPage(c);
+  return c.html(
+    renderJoin({ team: inv.name, code: inv.code, url: `${origin(c)}/join/${inv.code}` }),
+    200,
+    VIEW_HEADERS,
+  );
 });
 
 app.get("/", (c) => c.html(renderHome(), 200, VIEW_HEADERS));

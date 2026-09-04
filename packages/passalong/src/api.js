@@ -1,5 +1,5 @@
 // Client for the hosted sync API (apps/api). Everything here is optional: with no token the
-// CLI is a purely local tool, and every function throws a NotLoggedIn the CLI turns into a hint.
+// CLI is a purely local tool, and every function throws an ApiError the CLI turns into a hint.
 import { readConfig } from "./store.js";
 
 export const DEFAULT_API = "https://passalong.kreativekorna.com";
@@ -54,12 +54,28 @@ async function call(path, { method = "GET", body, auth = true, raw = false } = {
   return raw ? res.text() : res.json();
 }
 
+const q = (params) => {
+  const s = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+  return s ? `?${s}` : "";
+};
+
 /** Mint a fresh account and return its token. No email, no password: the token is the account. */
 export const createAccount = () => call("/v1/accounts", { method: "POST", auth: false });
 export const me = () => call("/v1/me");
+export const updateMe = (patch) => call("/v1/me", { method: "PATCH", body: patch });
+
+export const teams = () => call("/v1/teams");
+export const team = (slug) => call(`/v1/teams/${encodeURIComponent(slug)}`);
+export const createTeam = (name) => call("/v1/teams", { method: "POST", body: { name } });
+export const invite = (slug, email = "") =>
+  call(`/v1/teams/${encodeURIComponent(slug)}/invites`, { method: "POST", body: { email } });
+export const join = (code) =>
+  call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
+
 export const publish = (id, markdown) =>
   call(`/v1/guides/${id}`, { method: "PUT", body: markdown });
-export const list = (q = "") => call(`/v1/guides${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+export const list = (query = "", scope = "") => call(`/v1/guides${q({ q: query, scope })}`);
+export const inbox = () => call("/v1/inbox");
 export const get = (id) => call(`/v1/guides/${id}`, { raw: true });
 export const setStatus = (id, status) =>
   call(`/v1/guides/${id}/status`, { method: "PATCH", body: { status } });

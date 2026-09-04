@@ -12,8 +12,10 @@ first, because the package's default API URL points at it.
 | CLI + MCP | npm `passalong`, binary `passalong` | `packages/passalong/package.json` |
 | Default API URL | `DEFAULT_API` in `packages/passalong/src/api.js` | must match the route above |
 
-No secrets are needed. Accounts are bearer tokens minted by the API itself; only their SHA-256
-hashes are stored.
+Accounts are bearer tokens minted by the API itself; only their SHA-256 hashes are stored.
+One optional secret: `BREVO_API_KEY` (`wrangler secret put BREVO_API_KEY` in `apps/api`) turns
+on handoff and invite emails from `EMAIL_FROM` (a var in `wrangler.jsonc`, must be a verified
+Brevo sender). Without it, handoffs still land in inboxes; nothing is mailed.
 
 ## Preflight (run before every deploy)
 

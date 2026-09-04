@@ -114,7 +114,7 @@ Pricing note: this is deliberately a team-monetized product. The solo tier is th
 
 - **M0 - Capture spike (1 to 2 weeks):** prototype the session-to-guide distillation as a Claude Code skill. Success = you personally use it for real transfers between your own projects and the drafts need only light trimming.
 - **M1 - Solo loop (3 to 4 weeks):** CLI (share, pull, list), local store, hosted sync, personal MCP server, thin web view. Success = you stop pasting context between your own sessions.
-- **M2 - Team layer:** workspaces, invites, addressed handoffs, team MCP endpoint. Success = one external team (Khaime is the obvious candidate) uses it for a real cross-person transfer weekly.
+- **M2 - Team layer** (built 2026-09-04; success criterion still open): workspaces, invites, addressed handoffs, team MCP endpoint. Success = one external team (Khaime is the obvious candidate) uses it for a real cross-person transfer weekly.
 - **M3 - Public launch:** landing page, docs, Show HN / dev community launch, free and team tiers live.
 
 ## 14. Success metrics

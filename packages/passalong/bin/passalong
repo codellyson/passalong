@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Passalong CLI. Few flags on purpose: the defaults are the product.
 //
-//   passalong share [file]        publish a guide (newest draft, or a scaffold you edit) → id + link
+//   passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
-//   passalong list [query]        your guides, local and synced
+//   passalong inbox               guides handed to you that you have not pulled yet
+//   passalong list [query]        your guides and your teams', local and synced
 //   passalong open <id> [--print] view a guide in the browser (or the terminal)
 //   passalong hub                 open your synced guides in the browser
 //   passalong done <id>           mark consumed: implemented on the receiving side
@@ -11,6 +12,12 @@
 //   passalong rm <id>             delete a guide locally and from sync
 //   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
 //   passalong login [token]       create an account, or attach this machine to an existing one
+//   passalong me [--handle H] [--name N] [--email E]   who you are to teammates
+//   passalong team                current team and its members
+//   passalong team create <name>  start a team (you become its owner)
+//   passalong team invite [email] make an invite link (mailed when an email is given)
+//   passalong team join <link|code>  accept an invite
+//   passalong team use <slug>     switch the current team
 //   passalong setup               install the Claude Code capture skill + register the MCP server
 //   passalong mcp                 run the MCP server over stdio
 import { execFileSync, spawnSync } from "node:child_process";
@@ -53,16 +60,30 @@ function edit(path) {
 }
 
 function openInBrowser(url) {
-  const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  const cmd =
+    process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
   spawnSync(cmd, [url], { stdio: "ignore", shell: process.platform === "win32" });
 }
 
 function relDate(iso) {
   if (!iso) return "";
   const d = (Date.now() - new Date(iso).getTime()) / 864e5;
-  if (d < 1) return "today";
+  if (d < 1 / 24) return "just now";
+  if (d < 1) return `${Math.floor(d * 24)}h ago`;
   if (d < 30) return `${Math.floor(d)}d ago`;
   return iso.slice(0, 10);
+}
+
+function guideLine(r) {
+  const who = r.team ? `  ${r.team}${r.to ? `/@${r.to}` : ""}${r.mine ? "" : ` from @${r.from || "?"}`}` : "";
+  const tags = r.tags?.length ? `  #${r.tags.join(" #")}` : "";
+  let pulled = "";
+  if (r.mine && r.pulled_by?.length) {
+    const p = r.pulled_by[0];
+    pulled = `  ← ${p.handle ? `@${p.handle}` : "link"} ${relDate(p.at)}${r.pulled_by.length > 1 ? ` +${r.pulled_by.length - 1}` : ""}`;
+  }
+  const nudge = r.mine && r.status === "published" && r.pulls >= 3 ? "  ★ promote?" : "";
+  return `${r.id}  ${r.status.padEnd(9)} ${relDate(r.created).padEnd(10)} ${r.title}${who}${tags}${pulled}${nudge}`;
 }
 
 const commands = {
@@ -79,15 +100,23 @@ const commands = {
         path = store.draftPath(new Date().toISOString().replace(/[:.]/g, "-"));
         writeFileSync(path, scaffold());
         fromDrafts = true;
-        if (!tty) die(`no draft to share; scaffolded ${path} — fill it in and run \`passalong share ${path}\``);
+        if (!tty)
+          die(`no draft to share; scaffolded ${path} — fill it in and run \`passalong share ${path}\``);
       }
     }
     if (!existsSync(path)) die(`no such file: ${path}`);
     if (tty && !f["no-edit"]) edit(path);
-    const { guide, url, synced, path: saved } = await passalong.share(readFileSync(path, "utf8")).catch((e) => die(e.message));
+    const to = typeof f.to === "string" ? f.to : undefined;
+    const { guide, url, synced, notified, path: saved } = await passalong
+      .share(readFileSync(path, "utf8"), { to })
+      .catch((e) => die(e.message));
     if (fromDrafts) store.removeDraft(path);
     console.log(guide.meta.id);
     console.error(`shared "${guide.meta.title}" → ${saved}`);
+    if (guide.meta.team)
+      console.error(
+        `handed to ${guide.meta.team}${guide.meta.to ? `/@${guide.meta.to}${notified ? " (emailed)" : " (in their inbox)"}` : " (team inbox)"}`,
+      );
     if (synced) console.error(`link: ${url}`);
     else console.error("not synced (run `passalong login` to sync across machines)");
   },
@@ -99,14 +128,22 @@ const commands = {
     console.error(`\npulled from ${from} → ${path}`);
   },
 
+  async inbox() {
+    const rows = await passalong.inbox().catch((e) => die(e.message));
+    if (!rows.length) return console.error("inbox empty — nothing handed to you that you haven't pulled");
+    for (const r of rows) console.log(guideLine(r));
+    console.error(`\n${rows.length} waiting. Pull one with: passalong pull <id>`);
+  },
+
   async list(f) {
-    const rows = await passalong.list(f._.join(" "));
+    const scope = typeof f.team === "string" ? f.team : f.mine ? "mine" : "";
+    const rows = await passalong.list(f._.join(" "), { scope });
     if (rows.warning) console.error(`warning: ${rows.warning}`);
-    if (!rows.length) return console.error("no guides yet — run `passalong share` after your next finished piece of work");
-    for (const r of rows) {
-      const tags = r.tags?.length ? `  #${r.tags.join(" #")}` : "";
-      console.log(`${r.id}  ${r.status.padEnd(9)} ${relDate(r.created).padEnd(10)} ${r.title}${tags}`);
-    }
+    if (!rows.length)
+      return console.error(
+        "no guides yet — run `passalong share` after your next finished piece of work",
+      );
+    for (const r of rows) console.log(guideLine(r));
   },
 
   async open(f) {
@@ -122,7 +159,8 @@ const commands = {
   },
 
   async hub() {
-    if (!api.loggedIn()) die("not logged in — run `passalong login` first (the hub shows synced guides)");
+    if (!api.loggedIn())
+      die("not logged in — run `passalong login` first (the hub shows synced guides)");
     // The token rides in the URL fragment: the browser never sends it to the server, and the
     // page moves it into localStorage and scrubs the address bar on load.
     const url = `${api.baseUrl()}/hub#token=${encodeURIComponent(api.token())}`;
@@ -178,6 +216,79 @@ const commands = {
     console.error("Attach other machines with:");
     console.error(`  passalong login ${token}`);
     console.error("(the token is the account — keep it private)");
+    console.error("Give teammates a name to address you by: passalong me --handle <you>");
+  },
+
+  async me(f) {
+    const patch = {};
+    for (const k of ["handle", "name", "email"]) if (typeof f[k] === "string") patch[k] = f[k];
+    const who = Object.keys(patch).length
+      ? await api.updateMe(patch).then(api.me).catch((e) => die(e.message))
+      : await api.me().catch((e) => die(e.message));
+    console.log(`account  ${who.account}`);
+    console.log(`handle   ${who.handle ? `@${who.handle}` : "(none — set one: passalong me --handle <you>)"}`);
+    if (who.name) console.log(`name     ${who.name}`);
+    if (who.email) console.log(`email    ${who.email}`);
+    console.log(`guides   ${who.guides} synced (${who.limit} active on the free tier)`);
+    const current = store.readConfig().team;
+    console.log(
+      `teams    ${who.teams.length ? who.teams.map((t) => `${t.slug}${t.slug === current ? "*" : ""} (${t.role})`).join(", ") : "(none — passalong team create <name>)"}`,
+    );
+  },
+
+  async team(f) {
+    const [sub, ...rest] = f._;
+    const cfg = store.readConfig();
+    if (!sub) {
+      if (!cfg.team) {
+        const { teams } = await api.teams().catch((e) => die(e.message));
+        if (!teams.length) return console.error("no team yet — passalong team create <name>");
+        return console.error(`you are in ${teams.map((t) => t.slug).join(", ")}; pick one: passalong team use <slug>`);
+      }
+      const t = await api.team(cfg.team).catch((e) => die(e.message));
+      console.log(`${t.name} (${t.slug}) — ${t.members.length} member${t.members.length === 1 ? "" : "s"}, ${t.guides} guide${t.guides === 1 ? "" : "s"}`);
+      for (const m of t.members)
+        console.log(`  ${m.handle ? `@${m.handle}` : "(no handle)"}${m.name ? `  ${m.name}` : ""}  ${m.role}  joined ${relDate(m.joined)}`);
+      return;
+    }
+    if (sub === "create") {
+      const name = rest.join(" ") || die("usage: passalong team create <name>");
+      const t = await api.createTeam(name).catch((e) => die(e.message));
+      store.writeConfig({ team: t.slug });
+      console.error(`team ${t.name} created as "${t.slug}" — now current. Invite people: passalong team invite [email]`);
+      return;
+    }
+    if (sub === "invite") {
+      const slug = cfg.team || die("no current team — passalong team use <slug>");
+      const inv = await api.invite(slug, rest[0] || "").catch((e) => die(e.message));
+      console.log(inv.url);
+      console.error(
+        inv.email
+          ? inv.mailed
+            ? `emailed ${inv.email}`
+            : `not emailed (mail is not configured on the server) — send ${inv.email} the link above`
+          : "send this link; they run: passalong team join <link>",
+      );
+      return;
+    }
+    if (sub === "join") {
+      const ref = rest[0] || die("usage: passalong team join <link|code>");
+      const code = ref.includes("/") ? ref.split("/").filter(Boolean).pop() : ref;
+      const r = await api.join(code).catch((e) => die(e.message));
+      store.writeConfig({ team: r.slug });
+      console.error(`${r.joined ? "joined" : "already in"} ${r.name} (${r.slug}) — now current`);
+      const who = await api.me().catch(() => null);
+      if (who && !who.handle) console.error("teammates address you by handle: passalong me --handle <you>");
+      return;
+    }
+    if (sub === "use") {
+      const slug = rest[0] || die("usage: passalong team use <slug>");
+      await api.team(slug).catch((e) => die(e.message));
+      store.writeConfig({ team: slug });
+      console.error(`current team: ${slug}`);
+      return;
+    }
+    die("usage: passalong team [create <name> | invite [email] | join <link> | use <slug>]");
   },
 
   async setup() {
@@ -186,15 +297,21 @@ const commands = {
     cpSync(join(PKG, "skill"), skillDir, { recursive: true });
     console.error(`installed Claude Code skill → ${skillDir}`);
     try {
-      execFileSync("claude", ["mcp", "add", "--scope", "user", "passalong", "--", "passalong", "mcp"], { stdio: "pipe" });
+      execFileSync("claude", ["mcp", "add", "--scope", "user", "passalong", "--", "passalong", "mcp"], {
+        stdio: "pipe",
+      });
       console.error("registered MCP server: claude mcp add passalong -- passalong mcp");
     } catch (err) {
       const msg = String(err.stderr || err.message);
       if (/already exists/i.test(msg)) console.error("MCP server already registered");
-      else console.error(`could not register MCP server automatically (${msg.trim()}).\n  run: claude mcp add passalong -- passalong mcp`);
+      else
+        console.error(
+          `could not register MCP server automatically (${msg.trim()}).\n  run: claude mcp add passalong -- passalong mcp`,
+        );
     }
-    if (!api.loggedIn()) console.error("sync is off; run `passalong login` when you want guides to follow you across machines");
-    console.error("done. In Claude Code, say \"pass this along\" at the end of a task, or run /passalong-capture.");
+    if (!api.loggedIn())
+      console.error("sync is off; run `passalong login` when you want guides to follow you across machines");
+    console.error('done. In Claude Code, say "pass this along" at the end of a task, or run /passalong-capture.');
   },
 
   async mcp() {

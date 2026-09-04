@@ -40,6 +40,8 @@
     "ENVIRONMENT": "production",
     // Free tier: how many published/promoted guides one account may keep synced.
     // Local guides are unlimited; this only gates the hosted copy.
-    "FREE_SYNC_LIMIT": "25"
+    "FREE_SYNC_LIMIT": "25",
+    // Sender for handoff/invite mail; only used when the BREVO_API_KEY secret is set.
+    "EMAIL_FROM": "no-reply@passalong.kreativekorna.com"
   }
 }
