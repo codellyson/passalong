@@ -100,6 +100,11 @@ export async function pull(ref, { cwd = process.cwd(), write = true } = {}) {
   if (write) {
     const dir = join(cwd, ".passalong");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    // A pulled guide carries its own share URL in the frontmatter, and that URL needs no account
+    // to read. Committing this directory would publish the guide to anyone who can see the repo,
+    // so the directory ignores itself. Delete this file if you do want guides in the repo.
+    const ignore = join(dir, ".gitignore");
+    if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
     path = join(dir, `${guide.meta.id}.md`);
     writeFileSync(path, serialize(guide));
   }

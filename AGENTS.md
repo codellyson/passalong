@@ -86,6 +86,9 @@ pnpm -C apps/api db:migrate:remote && pnpm -C apps/api run deploy
 - `/hub` is the only page allowed to run script (`HUB_HEADERS` in `index.ts`); it is a static
   `public/hub.js` talking to `/v1/*` with the token from `localStorage`. `passalong hub` passes the
   token in the URL fragment, which the page stores and scrubs on load.
+- A pulled guide carries its own **share URL** in the frontmatter, and that URL needs no account
+  to read. `pull` therefore drops a self-ignoring `.gitignore` (`*`) in `./.passalong/`: committing
+  that directory would publish the guide to anyone who can see the repo. Don't "helpfully" remove it.
 - `passalong share` opens `$EDITOR` only at a TTY. Agents and scripts pass a file and get no editor.
 - The CLI prints the guide id (and pulled markdown) on **stdout** and everything else on stderr,
   so `ID=$(passalong share draft.md)` works.
