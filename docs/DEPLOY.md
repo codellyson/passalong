@@ -56,8 +56,8 @@ Migrations are forward-only; write a new migration rather than editing an applie
 
 ## 2. npm package
 
-First release (0.1.0) was published 2026-09-04 by hand. The npm account has 2FA, so a manual
-publish needs `--otp=<code>` from the authenticator; the CI path needs an Automation token.
+0.1.0 was published by hand (2FA: `npm publish --otp=<code>`). From 0.2.0 releases go through
+the tag-triggered workflow below; manual publishing is the fallback.
 
 ```sh
 cd packages/passalong
@@ -101,7 +101,8 @@ One-time setup:
    are sufficient; no local deploy is required.
 
 `.github/workflows/release.yml` publishes `passalong` to npm when a `v*` tag is pushed and the
-tag matches `packages/passalong/package.json`. It needs `NPM_TOKEN` (an npm Automation token):
+tag matches `packages/passalong/package.json`. It authenticates with npm trusted publishing (OIDC), configured on npmjs.com for this repo and
+workflow file, so no npm token is stored anywhere:
 
 ```sh
 cd packages/passalong && npm version patch && git push && git push --tags

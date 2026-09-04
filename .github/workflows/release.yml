@@ -4,7 +4,9 @@
 #   cd packages/passalong && npm version patch   # bumps package.json, commits, tags vX.Y.Z
 #   git push && git push --tags
 #
-# Needs NPM_TOKEN (an npm "Automation" token, so it works without 2FA prompts).
+# Auth is npm trusted publishing (OIDC): npm trusts this repo + this workflow file, GitHub mints
+# a short-lived identity token per run, and provenance is attached automatically. No NPM_TOKEN.
+# Requires npm ≥ 11.5.1, newer than the one bundled with Node 22, hence the upgrade step.
 name: release
 
 on:
@@ -13,11 +15,11 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: npm
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v6
@@ -26,6 +28,7 @@ jobs:
           node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest && npm --version
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C packages/passalong test
       - name: Tag must match package version
@@ -34,5 +37,3 @@ jobs:
           [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != package v$v" >&2; exit 1; }
       - name: Publish
         run: cd packages/passalong && npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
