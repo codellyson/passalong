@@ -41,6 +41,7 @@
 
   const state = {
     token: store.get(),
+    signedIn: false, // proven by /v1/me succeeding, whether by cookie or token
     me: null,
     guides: [],
     board: null, // the four queues from /v1/board
@@ -53,19 +54,26 @@
     error: null,
     invite: null,
     editing: false,
+    mode: "login", // login | signup | forgot
+    authError: null,
+    notice: null,
+    tokens: [],
+    newToken: null, // shown once, right after minting
     meError: null, // identity-form errors belong beside the identity form, not in the page slot
     typed: null, // a rejected handle stays in the field instead of snapping back
   };
 
+  // Two ways to be signed in: a pasted token (CLI users) or the session cookie set by logging in.
+  // The cookie rides along on its own, so the header only appears when a token is actually held.
   async function api(path, init = {}) {
-    const res = await fetch(path, {
-      ...init,
-      headers: { authorization: `Bearer ${state.token}`, ...(init.headers || {}) },
-    });
+    const headers = { ...(init.headers || {}) };
+    if (state.token) headers.authorization = `Bearer ${state.token}`;
+    const res = await fetch(path, { ...init, headers });
     if (res.status === 401) {
       store.set(null);
       state.token = null;
-      throw new Error("token rejected");
+      state.signedIn = false;
+      throw new Error("signed out");
     }
     if (!res.ok) {
       let message = res.statusText;
@@ -80,12 +88,15 @@
   async function load() {
     state.error = null;
     try {
-      const [me, list, board, activity] = await Promise.all([
+      const [me, list, board, activity, tokens] = await Promise.all([
         api("/v1/me"),
         api(`/v1/guides?scope=${encodeURIComponent(state.scope)}`),
         api("/v1/board"),
         api("/v1/notifications?limit=30"),
+        api("/v1/tokens"),
       ]);
+      state.signedIn = true;
+      state.tokens = tokens.tokens;
       state.me = me;
       state.guides = list.guides;
       state.board = board;
@@ -96,7 +107,8 @@
           ? await api(`/v1/teams/${encodeURIComponent(state.scope)}`)
           : null;
     } catch (e) {
-      state.error = e.message;
+      // Not being signed in is a state, not an error to shout about.
+      state.error = e.message === "signed out" ? null : e.message;
     }
     render();
   }
@@ -324,37 +336,136 @@
     );
   }
 
-  const createAccount = () =>
-    act(async () => {
-      const res = await fetch("/v1/accounts", { method: "POST" });
-      if (!res.ok)
-        throw new Error(
-          (await res.json().catch(() => ({}))).message || "could not create an account",
-        );
-      const { token } = await res.json();
-      state.token = token;
-      store.set(token);
-      await load();
-    });
+  async function auth(path, body) {
+    state.authError = null;
+    state.notice = null;
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+      return await res.json();
+    } catch (e) {
+      state.authError = e.message;
+      render();
+      return null;
+    }
+  }
+
+  // Signing in replaces any pasted token: the cookie is now the credential, and leaving a stale
+  // bearer header in storage would keep authenticating as whoever that token belongs to.
+  async function signedInAs() {
+    store.set(null);
+    state.token = null;
+    await load();
+  }
 
   function signIn() {
+    const tab = (mode, label) =>
+      el(
+        "button",
+        {
+          class: `chip${state.mode === mode ? " on" : ""}`,
+          onclick: () => {
+            state.mode = mode;
+            state.authError = null;
+            state.notice = null;
+            render();
+          },
+        },
+        label,
+      );
+
+    const fields = [
+      el(
+        "label",
+        {},
+        "Email",
+        el("input", { name: "email", type: "email", required: "required", autocomplete: "email" }),
+      ),
+      state.mode === "forgot"
+        ? ""
+        : el(
+            "label",
+            {},
+            "Password",
+            el("input", {
+              name: "password",
+              type: "password",
+              required: "required",
+              minlength: state.mode === "signup" ? "10" : null,
+              autocomplete: state.mode === "signup" ? "new-password" : "current-password",
+            }),
+            state.mode === "signup" ? el("span", { class: "muted" }, "at least 10 characters") : "",
+          ),
+    ];
+
+    const submit = async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const email = f.email.value.trim();
+      if (state.mode === "forgot") {
+        const out = await auth("/v1/auth/forgot", { email });
+        if (out) {
+          state.notice = "If that address has an account, a reset link is on its way.";
+          render();
+        }
+        return;
+      }
+      const path = state.mode === "signup" ? "/v1/auth/signup" : "/v1/auth/login";
+      if (await auth(path, { email, password: f.password.value })) await signedInAs();
+    };
+
     return el(
       "section",
       { class: "signin" },
-      el("h2", {}, "Connect this browser"),
+      el("h2", {}, "Sign in"),
+      el(
+        "div",
+        { class: "chips" },
+        tab("login", "sign in"),
+        tab("signup", "create account"),
+        tab("forgot", "forgot password"),
+      ),
+      el(
+        "form",
+        { class: "join", onsubmit: submit },
+        fields,
+        el(
+          "button",
+          { class: "primary", type: "submit" },
+          state.mode === "signup"
+            ? "Create account"
+            : state.mode === "forgot"
+              ? "Email me a link"
+              : "Sign in",
+        ),
+        state.authError ? el("p", { class: "error" }, state.authError) : "",
+        state.notice ? el("p", { class: "muted" }, state.notice) : "",
+      ),
+
+      el("h2", {}, "Other ways in"),
       el(
         "p",
         {},
-        "Paste your account token. It stays in this browser and is only ever sent to this host. ",
-        "The CLI prints it with ",
+        "Been sent an invite? Opening the link makes your account and joins the team in one step.",
+      ),
+      invitePaste("invite link"),
+      el(
+        "p",
+        {},
+        "Or paste an API token — the CLI prints one with ",
         el("code", {}, "passalong login"),
-        ", or open the hub straight from the terminal with ",
+        ", and ",
         el("code", {}, "passalong hub"),
-        ".",
+        " opens this page already signed in.",
       ),
       el(
         "form",
         {
+          class: "invite-paste",
           onsubmit: (e) => {
             e.preventDefault();
             const t = $("input", e.target).value.trim();
@@ -365,32 +476,15 @@
           },
         },
         el("input", {
+          class: "grow",
           type: "password",
           placeholder: "pa_…",
           autocomplete: "off",
           spellcheck: "false",
         }),
-        el("button", { type: "submit" }, "Connect"),
+        el("button", { class: "btn", type: "submit" }, "Use token"),
       ),
       state.error ? el("p", { class: "error" }, state.error) : "",
-      el("h2", {}, "Or start here"),
-      el(
-        "p",
-        {},
-        "Been sent an invite? Opening the link makes your account and joins the team in one step.",
-      ),
-      invitePaste("invite link"),
-      el(
-        "p",
-        {},
-        "No invite, no terminal? ",
-        el("button", { class: "btn", onclick: createAccount }, "Create an account"),
-        el(
-          "span",
-          { class: "muted" },
-          " — it will be empty until a teammate hands you something, or you install the CLI and write your first guide.",
-        ),
-      ),
     );
   }
 
@@ -620,6 +714,153 @@
     );
   }
 
+  const mintToken = (name) =>
+    act(async () => {
+      state.newToken = await api("/v1/tokens", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      state.tokens = (await api("/v1/tokens")).tokens;
+    });
+
+  const revokeToken = (t) => {
+    if (!confirm(`Revoke "${t.name}"? Anything using it stops working immediately.`)) return;
+    act(async () => {
+      await api(`/v1/tokens/${t.id}`, { method: "DELETE" });
+      state.tokens = (await api("/v1/tokens")).tokens;
+    });
+  };
+
+  // Tokens are for the CLI and MCP servers. They are listed here because a credential you cannot
+  // see is a credential you cannot revoke.
+  function tokensPanel() {
+    return el(
+      "section",
+      { class: "tokens" },
+      el(
+        "div",
+        { class: "head" },
+        el("h2", {}, `API tokens · ${state.tokens.length}`),
+        el(
+          "button",
+          {
+            class: "btn",
+            onclick: () => {
+              const name = prompt("What is this token for? (e.g. laptop, work MacBook)");
+              if (name?.trim()) mintToken(name.trim());
+            },
+          },
+          "new token",
+        ),
+      ),
+      el(
+        "p",
+        { class: "muted" },
+        "For ",
+        el("code", {}, "passalong login <token>"),
+        " and MCP servers. Your password never goes near the CLI.",
+      ),
+      state.newToken
+        ? el(
+            "div",
+            { class: "newtoken" },
+            el("p", {}, el("b", {}, "Copy it now — this is the only time it is shown.")),
+            el("code", {}, state.newToken.token),
+            el(
+              "button",
+              { class: "btn", onclick: (e) => copy(state.newToken.token, e.target) },
+              "copy",
+            ),
+            el(
+              "button",
+              {
+                class: "btn",
+                onclick: () => {
+                  state.newToken = null;
+                  render();
+                },
+              },
+              "done",
+            ),
+          )
+        : "",
+      state.tokens.length
+        ? el(
+            "ul",
+            { class: "members" },
+            state.tokens.map((t) =>
+              el(
+                "li",
+                {},
+                el("b", {}, t.name),
+                el(
+                  "span",
+                  { class: "muted" },
+                  ` · made ${rel(t.created)} · ${t.last_used ? `last used ${rel(t.last_used)}` : "never used"} `,
+                ),
+                el("button", { class: "btn danger", onclick: () => revokeToken(t) }, "revoke"),
+              ),
+            ),
+          )
+        : el("p", { class: "muted" }, "None yet."),
+    );
+  }
+
+  const setPassword = (email, password) =>
+    act(async () => {
+      await api("/v1/auth/password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      // The server rotated the session; a pasted token is no longer how this browser gets in.
+      store.set(null);
+      state.token = null;
+      await load();
+    });
+
+  /** An account created by `passalong login` or an invite has no way to sign in yet. */
+  function claim() {
+    if (!state.me || state.me.has_password) return "";
+    return el(
+      "section",
+      { class: "identity needed" },
+      el("h2", {}, "Add a way to sign in"),
+      el(
+        "p",
+        { class: "muted" },
+        "This account only exists as a token. Set an email and password and you can sign in from any browser — and recover it if the token is lost.",
+      ),
+      el(
+        "form",
+        {
+          onsubmit: (e) => {
+            e.preventDefault();
+            const f = e.target;
+            setPassword(f.email.value.trim(), f.password.value);
+          },
+        },
+        el("input", {
+          name: "email",
+          type: "email",
+          required: "required",
+          placeholder: "email",
+          value: state.me.email || "",
+        }),
+        el("input", {
+          name: "password",
+          type: "password",
+          required: "required",
+          minlength: "10",
+          placeholder: "password (10+ characters)",
+          autocomplete: "new-password",
+        }),
+        el("button", { class: "primary", type: "submit" }, "Save"),
+      ),
+    );
+  }
+
   function teamPanel() {
     const t = state.team;
     if (!t) return "";
@@ -701,6 +942,7 @@
     return el(
       "section",
       { class: "hub" },
+      claim(),
       identity(),
       board(),
       activityBox(),
@@ -723,6 +965,7 @@
         ),
       ),
       teamPanel(),
+      tokensPanel(),
       state.guides.length ? el("h2", { class: "all" }, "All guides") : "",
       el(
         "div",
@@ -795,19 +1038,26 @@
           "a",
           {
             href: "#",
-            onclick: (e) => {
+            onclick: async (e) => {
               e.preventDefault();
+              // End the session server-side too, otherwise "sign out" only forgets locally.
+              await fetch("/v1/auth/logout", { method: "POST" }).catch(() => {});
               store.set(null);
-              state.token = null;
-              state.guides = [];
-              state.board = null;
-              state.activity = [];
-              state.unread = 0;
-              state.me = null;
+              Object.assign(state, {
+                token: null,
+                signedIn: false,
+                guides: [],
+                board: null,
+                activity: [],
+                unread: 0,
+                tokens: [],
+                newToken: null,
+                me: null,
+              });
               render();
             },
           },
-          "disconnect this browser",
+          "sign out",
         ),
       ),
     );
@@ -815,7 +1065,7 @@
 
   function render() {
     const root = $("#app");
-    root.replaceChildren(state.token ? hub() : signIn());
+    root.replaceChildren(state.signedIn ? hub() : signIn());
     const q = $(".toolbar input", root);
     if (q && document.activeElement !== q && state.q) {
       q.focus();
@@ -823,6 +1073,7 @@
     }
   }
 
+  // A session cookie is invisible from here, so the only way to know is to ask.
   render();
-  if (state.token) load();
+  load();
 })();

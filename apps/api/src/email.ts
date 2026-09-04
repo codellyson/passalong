@@ -125,6 +125,18 @@ export function sendVerdict(
   );
 }
 
+/** The one mail that is a credential. Short-lived, single use, and never says who asked. */
+export function sendReset(env: MailEnv, o: { to: string; url: string }) {
+  return sendMail(env, o.to, "Reset your Passalong password", [
+    "Someone asked to reset the password on this Passalong account.",
+    "",
+    `  ${o.url}`,
+    "",
+    "The link works once and expires in an hour. If it was not you, ignore this — nothing has",
+    "changed, and whoever asked cannot see whether this address has an account.",
+  ]);
+}
+
 export function sendInvite(env: MailEnv, o: { to: string; team: string; by: string; url: string }) {
   // The link comes first and alone. Whoever opens this may never have seen a terminal — a
   // tester, a designer — and an install command above the link reads as "this is not for you".

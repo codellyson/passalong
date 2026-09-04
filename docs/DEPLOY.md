@@ -12,7 +12,10 @@ first, because the package's default API URL points at it.
 | CLI + MCP | npm `passalong`, binary `passalong` | `packages/passalong/package.json` |
 | Default API URL | `DEFAULT_API` in `packages/passalong/src/api.js` | must match the route above |
 
-Accounts are bearer tokens minted by the API itself; only their SHA-256 hashes are stored.
+Accounts are email + password, with an HttpOnly session cookie for the hub and named, revocable
+bearer tokens for the CLI and MCP servers. Only SHA-256 hashes are stored — of tokens, session ids
+and reset codes alike. `POST /v1/accounts` still mints an anonymous, unclaimed account for
+`passalong login` and invite links.
 
 **Mail.** Handoff, pull, consumed and invite emails go through Cloudflare Email Service via the
 `send_email` binding (`EMAIL` in `wrangler.jsonc`). There is no API key — the binding is the
@@ -36,6 +39,12 @@ credential — but two things must be true, or every send fails silently:
 
 Nothing else depends on this: every mail is a delivery of a `notification` row that exists either
 way, so with mail off the hub, `passalong activity` and the MCP `activity` tool still work.
+
+**Migration 0005 rewrote how identity works** and runs against live data. It was tested locally
+against a seeded pre-auth database: accounts, guides, teams, memberships and notifications all
+survive, and every existing `account.token_hash` becomes a row in `token` named "CLI (existing)",
+so tokens people already hold keep working. If you ever need to re-test that, seed a database from
+migrations 0001–0004 first — running 0005 against an empty one proves nothing.
 
 ## Preflight (run before every deploy)
 
@@ -62,6 +71,7 @@ Verify:
 curl -s https://passalong.kreativekorna.com/health                 # {"ok":true}
 curl -s -o /dev/null -w '%{http_code}\n' https://passalong.kreativekorna.com/g/abcdefgh/wrongkey0000000000000000   # 404
 curl -s -X POST https://passalong.kreativekorna.com/v1/accounts    # 201 with a token
+curl -s -o /dev/null -w '%{http_code}\n' https://passalong.kreativekorna.com/v1/tokens   # 401 unauthenticated
 ```
 
 Then switch your own machine from the local Worker to production:

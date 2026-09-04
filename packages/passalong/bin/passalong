@@ -15,7 +15,7 @@
 //   passalong promote <id>        mark promoted: graduated into a reusable reference
 //   passalong rm <id>             delete a guide locally and from sync
 //   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
-//   passalong login [token]       create an account, or attach this machine to an existing one
+//   passalong login [token]       create an account, or attach this machine with a token from your hub
 //   passalong me [--handle H] [--name N] [--email E]   who you are to teammates
 //   passalong team                current team and its members
 //   passalong team create <name>  start a team (you become its owner)
@@ -272,8 +272,9 @@ const commands = {
     console.error(`account ${account} created on ${api.baseUrl()}. Sync is on.`);
     console.error("Attach other machines with:");
     console.error(`  passalong login ${token}`);
-    console.error("(the token is the account — keep it private)");
+    console.error("(keep it private — it is a credential, not a password)");
     console.error("Give teammates a name to address you by: passalong me --handle <you>");
+    console.error(`Add an email and password so you can sign in and recover it: ${api.baseUrl()}/hub`);
   },
 
   async me(f) {

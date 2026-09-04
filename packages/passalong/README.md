@@ -39,7 +39,7 @@ passalong done <id>           mark consumed: implemented on the receiving side
 passalong promote <id>        mark promoted: graduated into a reusable reference
 passalong rm <id>             delete a guide locally and from sync
 passalong export [dir]        dump every guide as plain markdown
-passalong login [token]       create an account, or attach this machine to an existing one
+passalong login [token]       create an account, or attach this machine with a token from your hub
 passalong me [--handle H] [--name N] [--email E]   who you are to teammates
 passalong team                current team and its members
 passalong team create <name>  start a team (you become its owner)
@@ -69,6 +69,11 @@ passalong activity                      # back on your side: it landed, and who 
 A receiver who tries the work reports back with `passalong works <id>` or `passalong broken <id> <why>`.
 That is separate from `done`, which means *implemented*: a verdict means it actually runs, a failing
 one has to say why, and the author sees it on their board and in their inbox.
+
+Sign in at [the hub](https://passalong.kreativekorna.com/hub) with an email and password, and mint
+an API token there for the CLI and MCP servers — named, revocable, and shown once. Your password
+never goes near the terminal. `passalong login` with no arguments still makes an account without
+any of that; add an email and password later to be able to sign in from a browser and recover it.
 
 Not everyone who receives a guide implements it. Every guide page has a **Verify** view
 (`?view=verify`) that leads with Problem, Verification and Gotchas and folds the implementation

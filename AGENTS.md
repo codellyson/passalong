@@ -33,8 +33,19 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   (strings and string lists only). `passalong export` must always be a complete backup.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
-- **Accounts are tokens.** `POST /v1/accounts` mints one; only its SHA-256 lands in D1. There is
-  no email or password in v1; that is the v2 team layer.
+- **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-
+  HMAC-SHA256 via WebCrypto — a Worker has no bcrypt). The hub authenticates with an HttpOnly
+  session cookie; the CLI and MCP servers send a bearer token from the `token` table, which is
+  named, revocable and records `last_used`. One middleware accepts either, so routes never care
+  which. `POST /v1/accounts` still mints an **anonymous** account for `passalong login` and invite
+  links — an account nobody has claimed yet; `POST /v1/auth/password` claims it. Everything secret
+  is stored as a SHA-256: tokens, session ids and reset codes are all bearer credentials.
+- **`account.token_hash` is retired, not gone.** Dropping it needs a table rebuild (SQLite refuses
+  DROP COLUMN on a UNIQUE column), and that rebuild is unsafe here: every child table references
+  `account(id)`, mostly `ON DELETE CASCADE`, so `DROP TABLE account` either deletes every guide and
+  membership or fails on `team.created_by`, which has no cascade. `PRAGMA defer_foreign_keys` does
+  not save it — D1 rolls the whole migration back. Both were tested. Inserts write a `retired:`
+  marker that can never equal a SHA-256; nothing reads the column.
 - **Status lifecycle**: draft → published → consumed → promoted. The server stores status both in
   the `guide.status` column and inside the markdown (`setField`) so a pulled `.md` is truthful.
 - **Teams (M2).** `team`/`membership`/`invite`/`pull` tables (migration 0002). A guide's

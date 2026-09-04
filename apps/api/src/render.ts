@@ -4,7 +4,7 @@ import { type Meta, verifyLayout } from "./guide.js";
 
 // Bump when public/styles.css changes: _headers lets browsers cache it for an hour, and a stale
 // stylesheet silently breaks new pages (the hub shipped unstyled to anyone who had visited).
-const STYLES = "/styles.css?v=9";
+const STYLES = "/styles.css?v=10";
 
 const esc = (s: string) =>
   s.replace(
@@ -172,6 +172,27 @@ passalong team join ${esc(o.url)}</code></pre>
   return page({
     title: `Join ${o.team}`,
     description: `Invitation to the ${o.team} team on Passalong.`,
+    noindex: true,
+    inner,
+  });
+}
+
+/**
+ * Setting a new password from an emailed link. The code rides in the fragment, exactly like the
+ * hub's token: fragments are not sent to the server, so the credential never lands in a log.
+ */
+export function renderReset(): string {
+  const inner = `
+<header>
+  ${BRAND}
+  <h1>Choose a new password</h1>
+  <div class="meta"><span>the link works once, and for an hour</span></div>
+</header>
+<div id="reset"><noscript><p>This page needs JavaScript.</p></noscript></div>
+<script src="/reset.js" defer></script>`;
+  return page({
+    title: "Reset your password",
+    description: "Set a new Passalong password.",
     noindex: true,
     inner,
   });

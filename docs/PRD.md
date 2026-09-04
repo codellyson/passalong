@@ -93,7 +93,7 @@ Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`wor
 
 - **No lock-in.** Guides are plain markdown. `passalong export` dumps everything. Deleting your account leaves you with all your content.
 - **Local-first spirit.** The CLI works against a local store; sync is the hosted layer. Solo usage should feel like a local tool that happens to sync.
-- **Zero-friction start.** Install, `passalong share`, done. Account required only when sync/team enters the picture (this is the one deliberate deviation from pure no-account, since transfer across machines inherently needs a rail).
+- **Zero-friction start.** Install, `passalong share`, done. Account required only when sync/team enters the picture (this is the one deliberate deviation from pure no-account, since transfer across machines inherently needs a rail). Updated 2026-09-05: email + password sign-in exists for people who arrive through a browser, but the CLI still mints an anonymous account with no email, no password and no forms. Both kinds of account are the same account; one has simply been claimed.
 - **Agent-native.** Every feature must answer: can an agent do this without a human clicking through a UI?
 
 ## 11. Monetization

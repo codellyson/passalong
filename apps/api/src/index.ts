@@ -1,6 +1,15 @@
 // Passalong sync API + web view. A Hono app on a Worker with one D1 database.
 //
-//   POST   /v1/accounts               mint an account; the token is the account
+//   POST   /v1/accounts               mint an anonymous account + its first token
+//   POST   /v1/auth/signup             { email, password } → account + session cookie
+//   POST   /v1/auth/login              { email, password } → session cookie
+//   POST   /v1/auth/logout             end this session
+//   POST   /v1/auth/password           { email?, password } claim an account, or change it
+//   POST   /v1/auth/forgot             { email } → emailed reset link (always answers the same)
+//   POST   /v1/auth/reset              { code, password } → new password + session
+//   GET    /v1/tokens                  CLI/MCP credentials on this account
+//   POST   /v1/tokens                  { name } → a new token, shown once
+//   DELETE /v1/tokens/:id              revoke one
 //   GET    /v1/me                      identity, teams, counts
 //   PATCH  /v1/me                      { handle, name, email }
 //   POST   /v1/teams                   { name } → create a team (you become owner)
@@ -20,16 +29,31 @@
 //   DELETE /v1/guides/:id              owner only
 //   GET    /g/:id/:key                 read-only web view (share link); .md for raw markdown
 //   GET    /join/:code                 what an invite link lands on
+//   GET    /reset                      set a new password from an emailed link
 //
 // Static files (stylesheet, icons, robots.txt, 404 page) live in public/ and are served by the
 // assets layer before this Worker runs; see wrangler.jsonc.
 import { Hono } from "hono";
+import {
+  clearCookie,
+  EMAIL_RE,
+  hashPassword,
+  passwordProblem,
+  rand,
+  readCookie,
+  SESSION_COOKIE,
+  sessionCookie,
+  sessionExpiry,
+  sha256,
+  verifyPassword,
+} from "./auth.js";
 import {
   type MailEnv,
   sendConsumed,
   sendHandoff,
   sendInvite,
   sendPulled,
+  sendReset,
   sendVerdict,
 } from "./email.js";
 import { body as bodyOf, type Meta, parseMeta, STATUSES, setField } from "./guide.js";
@@ -41,7 +65,7 @@ import {
   notifyAll,
   unreadCount,
 } from "./notify.js";
-import { renderGuide, renderHome, renderHub, renderJoin } from "./render.js";
+import { renderGuide, renderHome, renderHub, renderJoin, renderReset } from "./render.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -60,19 +84,9 @@ const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 const ID_RE = /^[a-z0-9]{6,12}$/;
 const HANDLE_RE = /^[a-z0-9][a-z0-9-]{1,30}$/;
-const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
-
-function rand(length: number, alphabet = ALPHABET): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(length));
-  let out = "";
-  for (const b of bytes) out += alphabet[b % alphabet.length];
-  return out;
-}
-
-async function sha256(s: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+// Ids people read out loud: no lookalike characters. Secrets use auth.ts's wider alphabet.
+const ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+const rid = (n: number) => rand(n, ID_ALPHABET);
 
 const now = () => new Date().toISOString();
 
@@ -256,23 +270,62 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
 
 // ---- auth -------------------------------------------------------------------------------
 
+// Open routes: creating an account, and the three that exist precisely because you cannot
+// authenticate yet.
+const PUBLIC = new Set([
+  "POST /v1/accounts",
+  "POST /v1/auth/signup",
+  "POST /v1/auth/login",
+  "POST /v1/auth/forgot",
+  "POST /v1/auth/reset",
+]);
+
+/** Either credential proves the same thing, so every route below is unchanged by having two. */
 app.use("/v1/*", async (c, next) => {
-  if (c.req.method === "POST" && c.req.path === "/v1/accounts") return next();
+  if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
+
   const auth = c.req.header("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!token) return err(c, 401, "missing bearer token — run `passalong login`");
-  const row = await c.env.DB.prepare("SELECT id FROM account WHERE token_hash = ?")
-    .bind(await sha256(token))
-    .first<{ id: string }>();
-  if (!row)
-    return err(
-      c,
-      401,
-      "token not recognized — run `passalong login` for a new account or paste a valid token",
-    );
-  c.set("account", row.id);
-  await next();
+  if (token) {
+    const row = await c.env.DB.prepare(
+      "SELECT id, account_id FROM token WHERE hash = ? AND revoked = ''",
+    )
+      .bind(await sha256(token))
+      .first<{ id: string; account_id: string }>();
+    if (!row) return err(c, 401, "token not recognized, or revoked — mint a new one in your hub");
+    c.set("account", row.account_id);
+    // Best effort, off the response path: knowing a token is unused is what makes it safe to
+    // revoke. `executionCtx` throws where there is none, so this never speaks for itself.
+    try {
+      c.executionCtx.waitUntil(
+        c.env.DB.prepare("UPDATE token SET last_used = ? WHERE id = ?").bind(now(), row.id).run(),
+      );
+    } catch {}
+    return next();
+  }
+
+  const sid = readCookie(c.req.header("cookie"), SESSION_COOKIE);
+  if (sid) {
+    const row = await c.env.DB.prepare(
+      "SELECT account_id FROM session WHERE hash = ? AND expires > ?",
+    )
+      .bind(await sha256(sid), now())
+      .first<{ account_id: string }>();
+    if (!row) return err(c, 401, "session expired — sign in again");
+    c.set("account", row.account_id);
+    return next();
+  }
+  return err(c, 401, "not signed in — sign in at /hub, or send a token from your hub");
 });
+
+async function startSession(c: Ctx, account: string): Promise<string> {
+  const sid = rand(40);
+  await db(c)
+    .prepare("INSERT INTO session (hash, account_id, created, expires) VALUES (?, ?, ?, ?)")
+    .bind(await sha256(sid), account, now(), sessionExpiry())
+    .run();
+  return sessionCookie(sid, c.req.url);
+}
 
 app.post("/v1/accounts", async (c) => {
   if (c.env.ACCOUNT_LIMIT) {
@@ -281,21 +334,203 @@ app.post("/v1/accounts", async (c) => {
     if (!success)
       return err(c, 429, "too many accounts created from this address; try again in a minute");
   }
-  const id = rand(10);
-  const token = `pa_${rand(32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")}`;
-  await c.env.DB.prepare("INSERT INTO account (id, token_hash, created) VALUES (?, ?, ?)")
-    .bind(id, await sha256(token), now())
-    .run();
+  const id = rid(10);
+  const token = `pa_${rand(32)}`;
+  await c.env.DB.batch([
+    // token_hash is the retired identity column: NOT NULL UNIQUE, read by nothing. See 0005.
+    c.env.DB.prepare("INSERT INTO account (id, created, token_hash) VALUES (?, ?, ?)").bind(
+      id,
+      now(),
+      `retired:${rid(24)}`,
+    ),
+    c.env.DB.prepare(
+      "INSERT INTO token (id, account_id, name, hash, created) VALUES (?, ?, ?, ?, ?)",
+    ).bind(rid(10), id, "first token", await sha256(token), now()),
+  ]);
   return c.json({ account: id, token }, 201);
+});
+
+// ---- signing in -------------------------------------------------------------------------
+
+const cred = async (c: { req: { json: () => Promise<unknown> } }) => {
+  const b = (await c.req.json().catch(() => ({}))) as { email?: string; password?: string };
+  return { email: (b.email || "").trim().toLowerCase(), password: b.password || "" };
+};
+
+/** Same shape whatever went wrong: which half of a login failed is not the caller's business. */
+const BAD_LOGIN = "email or password is wrong";
+
+app.post("/v1/auth/signup", async (c) => {
+  if (c.env.ACCOUNT_LIMIT) {
+    const ip = c.req.header("cf-connecting-ip") || "unknown";
+    const { success } = await c.env.ACCOUNT_LIMIT.limit({ key: ip });
+    if (!success) return err(c, 429, "too many sign-ups from this address; try again in a minute");
+  }
+  const { email, password } = await cred(c);
+  if (!EMAIL_RE.test(email)) return err(c, 400, "that does not look like an email address");
+  const problem = passwordProblem(password);
+  if (problem) return err(c, 400, problem);
+  const taken = await c.env.DB.prepare("SELECT id FROM account WHERE email = ?")
+    .bind(email)
+    .first();
+  if (taken) return err(c, 409, "an account already uses that email — sign in instead");
+
+  const id = rid(10);
+  await c.env.DB.prepare(
+    "INSERT INTO account (id, created, email, password_hash, token_hash) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(id, now(), email, await hashPassword(password), `retired:${rid(24)}`)
+    .run();
+  return c.json({ account: id, email }, 201, { "set-cookie": await startSession(c, id) });
+});
+
+app.post("/v1/auth/login", async (c) => {
+  const { email, password } = await cred(c);
+  const row = await c.env.DB.prepare(
+    "SELECT id, password_hash FROM account WHERE email = ? AND password_hash <> ''",
+  )
+    .bind(email)
+    .first<{ id: string; password_hash: string }>();
+  // Hash anyway when there is no such account, so a missing email is not faster than a wrong
+  // password.
+  const ok = row
+    ? await verifyPassword(password, row.password_hash)
+    : await verifyPassword(password, await hashPassword(rand(20)));
+  if (!row || !ok) return err(c, 401, BAD_LOGIN);
+  return c.json({ account: row.id }, 200, { "set-cookie": await startSession(c, row.id) });
+});
+
+app.post("/v1/auth/logout", async (c) => {
+  const sid = readCookie(c.req.header("cookie"), SESSION_COOKIE);
+  if (sid)
+    await c.env.DB.prepare("DELETE FROM session WHERE hash = ?")
+      .bind(await sha256(sid))
+      .run();
+  return c.json({ ok: true }, 200, { "set-cookie": clearCookie(c.req.url) });
+});
+
+/**
+ * Claiming an account, or changing the password on one. Anonymous accounts — the ones `passalong
+ * login` and invite links create — start with no email and no password; this is how they become
+ * something you can sign in to.
+ */
+app.post("/v1/auth/password", async (c) => {
+  const account = c.get("account");
+  const { email, password } = await cred(c);
+  const me = await c.env.DB.prepare("SELECT email, password_hash FROM account WHERE id = ?")
+    .bind(account)
+    .first<{ email: string; password_hash: string }>();
+  const problem = passwordProblem(password);
+  if (problem) return err(c, 400, problem);
+  const address = email || me?.email || "";
+  if (!EMAIL_RE.test(address)) return err(c, 400, "an email is needed to sign in with a password");
+  if (address !== me?.email) {
+    const taken = await c.env.DB.prepare("SELECT id FROM account WHERE email = ? AND id <> ?")
+      .bind(address, account)
+      .first();
+    if (taken) return err(c, 409, "an account already uses that email");
+  }
+  await c.env.DB.prepare("UPDATE account SET email = ?, password_hash = ? WHERE id = ?")
+    .bind(address, await hashPassword(password), account)
+    .run();
+  // Changing a password ends every other session; a stolen one should not outlive the change.
+  await c.env.DB.prepare("DELETE FROM session WHERE account_id = ?").bind(account).run();
+  return c.json({ email: address }, 200, { "set-cookie": await startSession(c, account) });
+});
+
+app.post("/v1/auth/forgot", async (c) => {
+  const { email } = await cred(c);
+  const row = await c.env.DB.prepare("SELECT id FROM account WHERE email = ? AND email <> ''")
+    .bind(email)
+    .first<{ id: string }>();
+  if (row) {
+    const code = rand(40);
+    await c.env.DB.prepare(
+      "INSERT INTO reset (hash, account_id, created, expires) VALUES (?, ?, ?, ?)",
+    )
+      .bind(
+        await sha256(code),
+        row.id,
+        now(),
+        new Date(Date.now() + 3600e3).toISOString(), // an hour is long enough to read an email
+      )
+      .run();
+    await sendReset(c.env, { to: email, url: `${origin(c)}/reset#${code}` });
+  }
+  // Always the same answer: this endpoint must not say whether an address has an account.
+  return c.json({ sent: true });
+});
+
+app.post("/v1/auth/reset", async (c) => {
+  const b = (await c.req.json().catch(() => ({}))) as { code?: string; password?: string };
+  const problem = passwordProblem(b.password || "");
+  if (problem) return err(c, 400, problem);
+  const hash = await sha256(b.code || "");
+  const row = await c.env.DB.prepare(
+    "SELECT account_id FROM reset WHERE hash = ? AND used = '' AND expires > ?",
+  )
+    .bind(hash, now())
+    .first<{ account_id: string }>();
+  if (!row) return err(c, 400, "that reset link has expired or already been used");
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE account SET password_hash = ? WHERE id = ?").bind(
+      await hashPassword(b.password as string),
+      row.account_id,
+    ),
+    c.env.DB.prepare("UPDATE reset SET used = ? WHERE hash = ?").bind(now(), hash),
+    // Whoever was signed in before the reset should not still be.
+    c.env.DB.prepare("DELETE FROM session WHERE account_id = ?").bind(row.account_id),
+  ]);
+  return c.json({ ok: true }, 200, { "set-cookie": await startSession(c, row.account_id) });
+});
+
+// ---- tokens -----------------------------------------------------------------------------
+
+// A token is a credential for one CLI or MCP server, not the account. Named so you can tell them
+// apart, and revocable so a leaked laptop does not cost you everything.
+app.get("/v1/tokens", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, name, created, last_used FROM token
+     WHERE account_id = ? AND revoked = '' ORDER BY created DESC`,
+  )
+    .bind(c.get("account"))
+    .all();
+  return c.json({ tokens: results });
+});
+
+app.post("/v1/tokens", async (c) => {
+  const { name } = (await c.req.json().catch(() => ({}))) as { name?: string };
+  const label = (name || "").trim().slice(0, 60) || "untitled";
+  const token = `pa_${rand(32)}`;
+  const id = rid(10);
+  await c.env.DB.prepare(
+    "INSERT INTO token (id, account_id, name, hash, created) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(id, c.get("account"), label, await sha256(token), now())
+    .run();
+  // The only time the plaintext exists outside the caller's machine.
+  return c.json({ id, name: label, token }, 201);
+});
+
+app.delete("/v1/tokens/:id", async (c) => {
+  const { meta } = await c.env.DB.prepare(
+    "UPDATE token SET revoked = ? WHERE id = ? AND account_id = ? AND revoked = ''",
+  )
+    .bind(now(), c.req.param("id"), c.get("account"))
+    .run();
+  if (!meta.changes) return err(c, 404, "no such token");
+  return c.json({ id: c.req.param("id"), revoked: true });
 });
 
 // ---- identity ---------------------------------------------------------------------------
 
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
-  const me = await c.env.DB.prepare("SELECT id, handle, name, email FROM account WHERE id = ?")
+  const me = await c.env.DB.prepare(
+    "SELECT id, handle, name, email, password_hash FROM account WHERE id = ?",
+  )
     .bind(account)
-    .first<AccountRow>();
+    .first<AccountRow & { password_hash: string }>();
   const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM guide WHERE account_id = ?")
     .bind(account)
     .first<{ n: number }>();
@@ -309,6 +544,9 @@ app.get("/v1/me", async (c) => {
     guides: n?.n ?? 0,
     limit: Number(c.env.FREE_SYNC_LIMIT),
     unread: await unreadCount(c.env, account),
+    // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
+    // Never the hash itself.
+    has_password: Boolean(me?.password_hash),
   });
 });
 
@@ -373,7 +611,7 @@ app.post("/v1/teams", async (c) => {
     if (!taken) break;
     slug = `${slugify(clean)}-${i}`;
   }
-  const id = rand(10);
+  const id = rid(10);
   const t = now();
   await c.env.DB.batch([
     c.env.DB.prepare(
@@ -420,7 +658,7 @@ app.post("/v1/teams/:slug/invites", async (c) => {
   const { email } = (await c.req.json().catch(() => ({}))) as { email?: string };
   const to = (email || "").trim().toLowerCase();
   if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return err(c, 400, "email does not look valid");
-  const code = rand(12);
+  const code = rid(12);
   await c.env.DB.prepare(
     "INSERT INTO invite (code, team_id, email, created_by, created) VALUES (?, ?, ?, ?, ?)",
   )
@@ -694,7 +932,7 @@ app.put("/v1/guides/:id", async (c) => {
   }
 
   const base = origin(c);
-  const share_key = existing?.share_key ?? rand(22);
+  const share_key = existing?.share_key ?? rid(22);
   const url = shareUrl(base, { id, share_key });
   markdown = setField(markdown, "url", url);
   if (!meta.id) markdown = setField(markdown, "id", id);
@@ -1048,6 +1286,7 @@ const HUB_HEADERS = {
     "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'",
 };
 app.get("/hub", (c) => c.html(renderHub(), 200, HUB_HEADERS));
+app.get("/reset", (c) => c.html(renderReset(), 200, HUB_HEADERS));
 app.get("/health", (c) => c.json({ ok: true }));
 
 app.notFound((c) =>

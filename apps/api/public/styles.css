@@ -282,21 +282,12 @@ footer {
   gap: 0.5rem;
   margin-top: 1rem;
 }
-.signin button,
 .empty pre {
   font:
     14px / 1 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
-}
-.signin button {
-  padding: 0.55rem 0.9rem;
-  border: 1px solid var(--accent);
-  border-radius: 0.4rem;
-  background: var(--accent);
-  color: var(--bg);
-  cursor: pointer;
 }
 .empty {
   color: var(--muted);
@@ -539,12 +530,19 @@ button.primary[disabled] {
   margin-bottom: 1.5rem;
 }
 .card {
-  border: 1px solid var(--line);
+  /* The urgent variants only change a colour, so it rides on custom properties. A
+     `.card.waiting h2` rule would sit above every later `.x h2` and make each one a descending
+     selector — the same trap `.identity` avoids. */
+  --edge: var(--line);
+  --head: var(--fg);
+  border: 1px solid var(--edge);
   border-radius: 0.5rem;
   padding: 0.25rem 1rem 0.75rem;
 }
-.card.waiting {
-  border-color: var(--accent);
+.card.waiting,
+.card.failing {
+  --edge: var(--accent);
+  --head: var(--accent);
 }
 .card .head {
   display: flex;
@@ -556,9 +554,7 @@ button.primary[disabled] {
 .card h2 {
   margin: 0.75rem 0 0.25rem;
   font-size: 1rem;
-}
-.card.waiting h2 {
-  color: var(--accent);
+  color: var(--head);
 }
 .card .head .muted {
   font-size: 13px;
@@ -602,9 +598,6 @@ button.primary[disabled] {
 h2.all {
   margin: 2rem 0 0.5rem;
 }
-.card.failing {
-  border-color: var(--accent);
-}
 .verdict b {
   color: var(--accent);
 }
@@ -616,4 +609,39 @@ h2.all {
 }
 .grow {
   flex: 1;
+}
+.tokens {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.25rem 1rem 1rem;
+  margin-bottom: 1.5rem;
+}
+.tokens .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.tokens h2 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+}
+.newtoken {
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.newtoken p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.newtoken code {
+  user-select: all;
+  word-break: break-all;
 }
