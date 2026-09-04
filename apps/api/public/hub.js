@@ -44,6 +44,8 @@
     me: null,
     guides: [],
     inbox: [],
+    activity: [],
+    unread: 0,
     team: null, // full team detail when a team chip is selected
     q: "",
     status: "all",
@@ -75,14 +77,17 @@
   async function load() {
     state.error = null;
     try {
-      const [me, list, inbox] = await Promise.all([
+      const [me, list, inbox, activity] = await Promise.all([
         api("/v1/me"),
         api(`/v1/guides?scope=${encodeURIComponent(state.scope)}`),
         api("/v1/inbox"),
+        api("/v1/notifications?limit=30"),
       ]);
       state.me = me;
       state.guides = list.guides;
       state.inbox = inbox.guides;
+      state.activity = activity.notifications;
+      state.unread = activity.unread;
       state.team =
         state.scope !== "all" && state.scope !== "mine"
           ? await api(`/v1/teams/${encodeURIComponent(state.scope)}`)
@@ -290,6 +295,48 @@
     );
   }
 
+  const markAllRead = () =>
+    act(async () => {
+      await api("/v1/notifications/read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      for (const n of state.activity) n.read = true;
+      state.unread = 0;
+    });
+
+  // What happened while you were away. The server renders each line so the hub, the CLI and an
+  // agent all report the same sentence.
+  function activityBox() {
+    if (!state.activity.length) return "";
+    return el(
+      "section",
+      { class: "activity" },
+      el(
+        "div",
+        { class: "head" },
+        el("h2", {}, state.unread ? `Activity · ${state.unread} new` : "Activity"),
+        state.unread ? el("button", { class: "btn", onclick: markAllRead }, "mark all read") : "",
+      ),
+      el(
+        "ul",
+        { class: "notes" },
+        state.activity.slice(0, 12).map((n) => {
+          const url = state.guides.find((g) => g.id === n.guide)?.url;
+          return el(
+            "li",
+            { class: `note${n.read ? "" : " unread"}` },
+            el("span", { class: "when" }, rel(n.at)),
+            url
+              ? el("a", { href: url, target: "_blank", rel: "noopener" }, n.text)
+              : el("span", {}, n.text),
+          );
+        }),
+      ),
+    );
+  }
+
   function teamPanel() {
     const t = state.team;
     if (!t) return "";
@@ -372,6 +419,7 @@
     return el(
       "section",
       { class: "hub" },
+      activityBox(),
       state.inbox.length
         ? el(
             "section",
@@ -447,6 +495,8 @@
               state.token = null;
               state.guides = [];
               state.inbox = [];
+              state.activity = [];
+              state.unread = 0;
               state.me = null;
               render();
             },

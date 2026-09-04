@@ -28,6 +28,7 @@ passalong login      # optional: sync guides across machines and get share links
 passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
 passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 passalong inbox               guides handed to you that you have not pulled yet
+passalong activity [--all]    what happened while you were away; clears unless --all
 passalong list [query]        your guides and your teams', local and synced
 passalong open <id> [--print] view a guide in the browser (or the terminal)
 passalong hub                 open your synced guides in the browser
@@ -59,10 +60,14 @@ passalong team invite ada@example.com   # or no email: prints a link to send you
 passalong team join <link>              # on Ada's machine
 passalong share --to khaime/ada         # hand this guide to Ada
 passalong inbox                         # on Ada's side: what was handed to you
+passalong activity                      # back on your side: it landed, and who pulled it
 ```
 
-The sender's `passalong list` and hub show who pulled each guide and when. Guides that keep
-getting pulled get a nudge to promote them into the team's small set of maintained references.
+`passalong activity` is the other half of the transfer: it tells you when someone pulled a guide
+you handed over, when they marked it consumed, and when an invite was taken up. A handoff
+addressed to a person is also emailed; a team-wide share is not, because mail nobody is
+named in is the first thing people filter out. Guides that keep getting pulled get a nudge to
+promote them into the team's small set of maintained references.
 
 ## MCP
 

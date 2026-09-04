@@ -38,10 +38,17 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
 - **Status lifecycle**: draft → published → consumed → promoted. The server stores status both in
   the `guide.status` column and inside the markdown (`setField`) so a pulled `.md` is truthful.
 - **Teams (M2).** `team`/`membership`/`invite`/`pull` tables (migration 0002). A guide's
-  `team_id` makes it readable and consumable by members; `to_account_id` addresses one member,
-  who is emailed if `BREVO_API_KEY` is set (otherwise inbox only). Only the author can promote or
-  delete. `GET /v1/inbox` = handed to me (or my teams, by others), not yet pulled by me. Every
-  pull is a `pull` row; the sender sees them as `pulled_by`. Handles are global and unique.
+  `team_id` makes it readable and consumable by members; `to_account_id` addresses one member.
+  Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),
+  not yet pulled by me. Every pull is a `pull` row; the sender sees them as `pulled_by`. Handles
+  are global and unique.
+- **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
+  to whoever should hear it: `handoff`, `shared`, `pulled`, `consumed`, `joined`. Rows first,
+  delivery second — mail is a channel over the row, so the feed works with no mailer configured.
+  A unique index on `(account_id, kind, guide_id, actor_id)` coalesces repeats (bumping `at` and
+  `times`), and mail goes out only on the first occurrence. `notify()` never throws: a
+  notification must not fail the action that caused it. `line()` in `notify.ts` is the single
+  place the wording lives — CLI, MCP and hub all print the server's `text`.
 - **Local-first.** With no token every command works offline. Sync failures on `list` degrade to
   a warning, never an error.
 - **CSP on the web view** (`default-src 'none'; style-src 'self'`) is what makes rendering owner

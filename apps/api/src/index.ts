@@ -6,10 +6,12 @@
 //   POST   /v1/teams                   { name } → create a team (you become owner)
 //   GET    /v1/teams                   teams you belong to
 //   GET    /v1/teams/:slug             one team with members (members only)
-//   POST   /v1/teams/:slug/invites     { email? } → invite link (mailed if email + BREVO key)
+//   POST   /v1/teams/:slug/invites     { email? } → invite link (mailed when an email is given)
 //   POST   /v1/invites/:code/accept    join the team behind an invite
 //   GET    /v1/guides?q=&scope=        list/search: scope=all (default) | mine | <team slug>
 //   GET    /v1/inbox                   guides handed to you (or your teams) you have not pulled
+//   GET    /v1/notifications?unread=   what happened while you were away
+//   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
 //   GET    /v1/guides/:id              guide as markdown (owner or team member); records a pull
 //   PATCH  /v1/guides/:id/status       { status }  owner: any; team member: consumed/published
@@ -20,8 +22,16 @@
 // Static files (stylesheet, icons, robots.txt, 404 page) live in public/ and are served by the
 // assets layer before this Worker runs; see wrangler.jsonc.
 import { Hono } from "hono";
-import { type MailEnv, sendHandoff, sendInvite } from "./email.js";
+import { type MailEnv, sendConsumed, sendHandoff, sendInvite, sendPulled } from "./email.js";
 import { body as bodyOf, type Meta, parseMeta, STATUSES, setField } from "./guide.js";
+import {
+  feed,
+  markRead,
+  summary as notifSummary,
+  notify,
+  notifyAll,
+  unreadCount,
+} from "./notify.js";
 import { renderGuide, renderHome, renderHub, renderJoin } from "./render.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
@@ -254,6 +264,7 @@ app.get("/v1/me", async (c) => {
     teams,
     guides: n?.n ?? 0,
     limit: Number(c.env.FREE_SYNC_LIMIT),
+    unread: await unreadCount(c.env, account),
   });
 });
 
@@ -392,7 +403,13 @@ app.post("/v1/invites/:code/accept", async (c) => {
     "SELECT i.*, t.slug, t.name FROM invite i JOIN team t ON t.id = i.team_id WHERE i.code = ?",
   )
     .bind(code)
-    .first<{ team_id: string; slug: string; name: string; used_by: string }>();
+    .first<{
+      team_id: string;
+      slug: string;
+      name: string;
+      used_by: string;
+      created_by: string;
+    }>();
   if (!inv) return err(c, 404, "invite not found");
   const already = await c.env.DB.prepare(
     "SELECT role FROM membership WHERE team_id = ? AND account_id = ?",
@@ -408,6 +425,13 @@ app.post("/v1/invites/:code/accept", async (c) => {
         "UPDATE invite SET used_by = ?, used = ? WHERE code = ? AND used_by = ''",
       ).bind(account, now(), code),
     ]);
+    // Whoever sent the invite is the one waiting to hear it was taken up.
+    await notify(c.env, {
+      to: inv.created_by,
+      kind: "joined",
+      actor_id: account,
+      team_id: inv.team_id,
+    });
   }
   return c.json({
     slug: inv.slug,
@@ -474,6 +498,29 @@ app.get("/v1/inbox", async (c) => {
   return c.json({ guides: await summaries(c, results) });
 });
 
+// ---- notifications ----------------------------------------------------------------------
+
+app.get("/v1/notifications", async (c) => {
+  const account = c.get("account");
+  // `?unread` (bare, or =1) narrows to what you have not seen; absent means the whole feed.
+  const flag = c.req.query("unread");
+  const rows = await feed(c.env, account, {
+    unread: flag !== undefined && flag !== "0" && flag !== "false",
+    limit: Number(c.req.query("limit")) || 50,
+  });
+  return c.json({
+    notifications: rows.map(notifSummary),
+    unread: await unreadCount(c.env, account),
+  });
+});
+
+app.post("/v1/notifications/read", async (c) => {
+  const { ids } = (await c.req.json().catch(() => ({}))) as { ids?: number[] };
+  const clean = (ids || []).map(Number).filter(Number.isInteger).slice(0, 200);
+  const read = await markRead(c.env, c.get("account"), clean);
+  return c.json({ read, unread: await unreadCount(c.env, c.get("account")) });
+});
+
 app.put("/v1/guides/:id", async (c) => {
   const account = c.get("account");
   const id = c.req.param("id");
@@ -509,10 +556,12 @@ app.put("/v1/guides/:id", async (c) => {
   }
 
   const existing = await c.env.DB.prepare(
-    "SELECT id, account_id, share_key, created, to_account_id FROM guide WHERE id = ?",
+    "SELECT id, account_id, share_key, created, team_id, to_account_id FROM guide WHERE id = ?",
   )
     .bind(id)
-    .first<Pick<GuideRow, "id" | "account_id" | "share_key" | "created" | "to_account_id">>();
+    .first<
+      Pick<GuideRow, "id" | "account_id" | "share_key" | "created" | "team_id" | "to_account_id">
+    >();
   if (existing && existing.account_id !== account)
     return err(c, 403, "that id belongs to another account");
 
@@ -564,18 +613,52 @@ app.put("/v1/guides/:id", async (c) => {
     )
     .run();
 
-  // Notify a newly addressed teammate. Team-wide shares only land in inboxes, no mail.
+  // Tell whoever the guide just became relevant to. Re-publishing an unchanged address is not a
+  // new event, so only a *newly* addressed person or a newly shared team hears anything.
   let notified = false;
-  if (toAccount && toAccount.id !== account && existing?.to_account_id !== toAccount.id) {
+  const addressed =
+    toAccount && toAccount.id !== account && existing?.to_account_id !== toAccount.id;
+  const newlyShared = team && existing?.team_id !== team.id;
+  if (addressed || newlyShared) {
     const me = (await accounts(c, [account])).get(account);
-    notified = await sendHandoff(c.env, {
-      to: toAccount.email,
-      fromHandle: me?.handle || "someone",
-      title: String(meta.title),
-      id,
-      url,
-      team: team?.name || "",
-    });
+    const fromHandle = me?.handle || "someone";
+    if (addressed && toAccount) {
+      await notify(c.env, {
+        to: toAccount.id,
+        kind: "handoff",
+        guide_id: id,
+        actor_id: account,
+        team_id: team?.id,
+        // A handoff to a named person is the one event worth an email: it is addressed work.
+        mail: async () => {
+          notified = await sendHandoff(c.env, {
+            to: toAccount.email,
+            fromHandle,
+            title: String(meta.title),
+            id,
+            url,
+            team: team?.name || "",
+          });
+          return notified;
+        },
+      });
+    }
+    // A team-wide share reaches the whole team's feed, but nobody's inbox: it is addressed to
+    // no one in particular, and that is exactly the mail people learn to filter out.
+    if (newlyShared && team) {
+      const { results } = await c.env.DB.prepare(
+        "SELECT account_id FROM membership WHERE team_id = ? AND account_id <> ?",
+      )
+        .bind(team.id, account)
+        .all<{ account_id: string }>();
+      const others = results.map((m) => m.account_id).filter((mid) => mid !== toAccount?.id);
+      await notifyAll(c.env, others, {
+        kind: "shared",
+        guide_id: id,
+        actor_id: account,
+        team_id: team.id,
+      });
+    }
   }
   return c.json(
     {
@@ -610,19 +693,49 @@ async function readableGuide(
   return null;
 }
 
-async function recordPull(c: { env: Env }, guideId: string, account: string, via: string) {
+/**
+ * Record a pull and tell the author it landed — the other half of the transfer, and the one
+ * question a sender actually has. `account` is '' for an anonymous share-link read.
+ */
+async function recordPull(
+  c: { env: Env; req: { url: string } },
+  row: GuideRow,
+  account: string,
+  via: string,
+) {
   await db(c).batch([
     db(c)
       .prepare("INSERT INTO pull (guide_id, account_id, via, at) VALUES (?, ?, ?, ?)")
-      .bind(guideId, account, via, now()),
-    db(c).prepare("UPDATE guide SET pulls = pulls + 1 WHERE id = ?").bind(guideId),
+      .bind(row.id, account, via, now()),
+    db(c).prepare("UPDATE guide SET pulls = pulls + 1 WHERE id = ?").bind(row.id),
   ]);
+  if (row.account_id === account) return; // pulling your own guide on another machine
+  const people = await accounts(c, [account, row.account_id]);
+  await notify(c.env, {
+    to: row.account_id,
+    kind: "pulled",
+    guide_id: row.id,
+    actor_id: account,
+    team_id: row.team_id,
+    // Only a named person's pull is worth an inbox. An anonymous link read has no "who" to
+    // report and anything can open a URL, so it stays in the feed.
+    mail: account
+      ? () =>
+          sendPulled(c.env, {
+            to: people.get(row.account_id)?.email || "",
+            byHandle: people.get(account)?.handle || "",
+            title: row.title,
+            id: row.id,
+            url: shareUrl(origin(c), row),
+          })
+      : undefined,
+  });
 }
 
 app.get("/v1/guides/:id", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
-  await recordPull(c, found.row.id, c.get("account"), "cli");
+  await recordPull(c, found.row, c.get("account"), "cli");
   return c.text(found.row.markdown, 200, { "content-type": "text/markdown; charset=utf-8" });
 });
 
@@ -638,6 +751,25 @@ app.patch("/v1/guides/:id/status", async (c) => {
   await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
     .bind(status, markdown, now(), found.row.id)
     .run();
+  // The end of the loop: someone else shipped what you handed them.
+  if (!found.owner && status === "consumed") {
+    const account = c.get("account");
+    const people = await accounts(c, [account, found.row.account_id]);
+    await notify(c.env, {
+      to: found.row.account_id,
+      kind: "consumed",
+      guide_id: found.row.id,
+      actor_id: account,
+      team_id: found.row.team_id,
+      mail: () =>
+        sendConsumed(c.env, {
+          to: people.get(found.row.account_id)?.email || "",
+          byHandle: people.get(account)?.handle || "someone",
+          title: found.row.title,
+          id: found.row.id,
+        }),
+    });
+  }
   return c.json({ id: found.row.id, status });
 });
 
@@ -680,7 +812,7 @@ async function notFoundPage(c: { env: Env; req: { url: string } }): Promise<Resp
 app.get("/g/:id/:key{.+\\.md}", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key").replace(/\.md$/, ""));
   if (!row) return c.text("no such guide", 404);
-  await recordPull(c, row.id, "", "link");
+  await recordPull(c, row, "", "link");
   return c.text(row.markdown, 200, {
     "content-type": "text/markdown; charset=utf-8",
     ...VIEW_HEADERS,

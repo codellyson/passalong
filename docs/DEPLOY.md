@@ -13,9 +13,29 @@ first, because the package's default API URL points at it.
 | Default API URL | `DEFAULT_API` in `packages/passalong/src/api.js` | must match the route above |
 
 Accounts are bearer tokens minted by the API itself; only their SHA-256 hashes are stored.
-One optional secret: `BREVO_API_KEY` (`wrangler secret put BREVO_API_KEY` in `apps/api`) turns
-on handoff and invite emails from `EMAIL_FROM` (a var in `wrangler.jsonc`, must be a verified
-Brevo sender). Without it, handoffs still land in inboxes; nothing is mailed.
+
+**Mail.** Handoff, pull, consumed and invite emails go through Cloudflare Email Service via the
+`send_email` binding (`EMAIL` in `wrangler.jsonc`). There is no API key — the binding is the
+credential — but two things must be true, or every send fails silently:
+
+1. The domain in `EMAIL_FROM` is onboarded to Email Service, or sends fail
+   `E_SENDER_NOT_VERIFIED`. Done once, from the CLI (no dashboard needed); on a Cloudflare-hosted
+   zone the DNS records are created for you:
+
+   ```sh
+   wrangler email sending enable passalong.kreativekorna.com
+   wrangler email sending dns get passalong.kreativekorna.com   # SPF, DKIM, DMARC, bounce MX
+   wrangler email sending settings passalong.kreativekorna.com  # enabled: true
+   ```
+
+   Sending is scoped to the `passalong.` subdomain on purpose: the records live under
+   `cf-bounce.passalong…` and `_dmarc.passalong…`, so the apex domain's mail is untouched and a
+   deliverability problem here cannot spread to it.
+2. The account is on the Workers Paid plan, which is what allows sending to recipients outside the
+   account. On any plan you may mail addresses verified as Email Routing destinations, free.
+
+Nothing else depends on this: every mail is a delivery of a `notification` row that exists either
+way, so with mail off the hub, `passalong activity` and the MCP `activity` tool still work.
 
 ## Preflight (run before every deploy)
 

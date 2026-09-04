@@ -25,7 +25,8 @@ export async function serve() {
         "done, then set_guide_status consumed. When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
         "shape) and call publish_guide, with `to` as team or team/handle when it is for a teammate. " +
-        "At the start of work, inbox shows guides teammates have handed to this user. Gotchas are " +
+        "At the start of work, inbox shows guides teammates have handed to this user, and activity " +
+        "shows whether the guides they handed off have landed. Gotchas are " +
         "the highest-value section: record what failed and why.",
     },
   );
@@ -64,6 +65,30 @@ export async function serve() {
     async () => {
       try {
         return json({ guides: await passalong.inbox() });
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "activity",
+    {
+      title: "Activity",
+      description:
+        "What has happened to this user's guides and handoffs: who pulled one, who marked one " +
+        "consumed, who was handed what, who joined a team. Each item has a ready-made `text` " +
+        "line. Read-only by default — it does not clear the user's unread feed unless asked.",
+      inputSchema: {
+        all: z.boolean().default(false).describe("include what the user has already seen"),
+        mark_read: z.boolean().default(false).describe("clear the unread feed after reading"),
+      },
+    },
+    async ({ all, mark_read }) => {
+      try {
+        const res = await passalong.activity({ all });
+        if (mark_read && res.unread) await passalong.seen();
+        return json(res);
       } catch (err) {
         return fail(err);
       }

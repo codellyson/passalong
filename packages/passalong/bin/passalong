@@ -4,6 +4,7 @@
 //   passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong inbox               guides handed to you that you have not pulled yet
+//   passalong activity [--all]    what happened while you were away; clears unless --all
 //   passalong list [query]        your guides and your teams', local and synced
 //   passalong open <id> [--print] view a guide in the browser (or the terminal)
 //   passalong hub                 open your synced guides in the browser
@@ -86,6 +87,11 @@ function guideLine(r) {
   return `${r.id}  ${r.status.padEnd(9)} ${relDate(r.created).padEnd(10)} ${r.title}${who}${tags}${pulled}${nudge}`;
 }
 
+function activityLine(n) {
+  const dot = n.read ? " " : "•";
+  return `${dot} ${(n.guide || "").padEnd(8)}  ${relDate(n.at).padEnd(10)} ${n.text}`;
+}
+
 const commands = {
   async share(f) {
     let path = f._[0];
@@ -133,6 +139,20 @@ const commands = {
     if (!rows.length) return console.error("inbox empty — nothing handed to you that you haven't pulled");
     for (const r of rows) console.log(guideLine(r));
     console.error(`\n${rows.length} waiting. Pull one with: passalong pull <id>`);
+  },
+
+  async activity(f) {
+    const { notifications, unread } = await passalong.activity({ all: f.all }).catch((e) => die(e.message));
+    if (!notifications.length)
+      return console.error(
+        f.all ? "nothing has happened yet" : "nothing new — your guides and handoffs are quiet",
+      );
+    for (const n of notifications) console.log(activityLine(n));
+    const waiting = notifications.filter((n) => n.kind === "handoff" && !n.read);
+    if (waiting.length) console.error(`\nPull one with: passalong pull ${waiting[0].guide}`);
+    // Reading the feed is what marks it read: an unread count you have to clear by hand is a
+    // chore, and `--all` is there for when you want to look without clearing.
+    if (!f.all && unread) await passalong.seen().catch(() => {});
   },
 
   async list(f) {

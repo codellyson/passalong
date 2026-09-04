@@ -72,6 +72,12 @@ export const invite = (slug, email = "") =>
 export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 
+export const notifications = ({ unread = true, limit = 0 } = {}) =>
+  call(`/v1/notifications${q({ unread: unread ? "1" : "", limit: limit || "" })}`);
+/** No ids means "everything unread". */
+export const markRead = (ids = []) =>
+  call("/v1/notifications/read", { method: "POST", body: { ids } });
+
 export const publish = (id, markdown) =>
   call(`/v1/guides/${id}`, { method: "PUT", body: markdown });
 export const list = (query = "", scope = "") => call(`/v1/guides${q({ q: query, scope })}`);

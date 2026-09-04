@@ -376,3 +376,52 @@ footer {
   color: var(--accent);
   border-color: var(--accent);
 }
+.activity {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.25rem 1rem 1rem;
+  margin-bottom: 1.5rem;
+}
+.activity .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.activity h2 {
+  margin: 0.75rem 0 0.25rem;
+}
+.notes {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  font:
+    14px / 1.8 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.note {
+  color: var(--muted);
+  border: 0;
+  padding: 0;
+}
+.note a {
+  color: inherit;
+}
+.note.unread {
+  color: var(--fg);
+}
+.note.unread::marker {
+  content: "";
+}
+.note .when {
+  display: inline-block;
+  min-width: 6.5rem;
+  color: var(--muted);
+}
+.note.unread .when::before {
+  content: "• ";
+  color: var(--accent);
+}

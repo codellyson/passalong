@@ -132,6 +132,17 @@ export async function inbox() {
   return res.guides;
 }
 
+/**
+ * What happened while you were away: your guides being pulled and shipped, guides handed to you,
+ * invites taken up. Each item carries a rendered `text` line so every surface says the same thing.
+ */
+export async function activity({ all = false, limit = 50 } = {}) {
+  return api.notifications({ unread: !all, limit });
+}
+
+/** Mark notifications seen. No ids means everything unread. */
+export const seen = (ids = []) => api.markRead(ids);
+
 export function summary(g) {
   return {
     id: g.meta.id,
