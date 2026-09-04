@@ -54,13 +54,14 @@ Migrations are forward-only; write a new migration rather than editing an applie
 
 ## 2. npm package
 
-Requires `npm login` (the registry currently returns 401 for `npm whoami` on this machine).
+First release (0.1.0) was published 2026-09-04 by hand. The npm account has 2FA, so a manual
+publish needs `--otp=<code>` from the authenticator; the CI path needs an Automation token.
 
 ```sh
 cd packages/passalong
 npm pack --dry-run          # 10 files, ~14 kB: bin/, src/, skill/, README
 npm version patch           # or minor; bumps package.json (and tags once the repo is committed)
-npm publish                 # publishConfig.access is public
+npm publish --otp=<code>    # publishConfig.access is public
 ```
 
 Smoke-test the published package from a clean directory:
