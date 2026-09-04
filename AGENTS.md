@@ -42,6 +42,12 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),
   not yet pulled by me. Every pull is a `pull` row; the sender sees them as `pulled_by`. Handles
   are global and unique.
+- **Joining is web-first.** `/join/:code` mints an account, claims a handle and accepts the
+  invite in the browser (`public/join.js`), because the person opening an invite is often the one
+  who has never used the tool — a tester, a designer. The hub covers the rest of what used to need
+  a terminal: claiming or editing a handle, and creating a team. Nothing here is a new endpoint;
+  `POST /v1/accounts`, `PATCH /v1/me`, `POST /v1/invites/:code/accept` and `POST /v1/teams` already
+  existed. Keep it that way — a browser-only path that needs its own API is a second product.
 - **The board (`GET /v1/board`).** The hub's home, `passalong board`, and the MCP `board` tool are
   one endpoint: four queues defined in SQL, not in the client. Waiting = the inbox query. In
   flight = mine, addressed to a person or team, with `NOT EXISTS` a pull by anyone but me (`stale`
@@ -83,8 +89,9 @@ pnpm -C apps/api db:migrate:remote && pnpm -C apps/api run deploy
 - `node --test test/` treats the directory as a file; use bare `node --test`.
 - `public/styles.css` is browser-cached for an hour (`public/_headers`). After changing it, bump
   `STYLES` in `apps/api/src/render.ts` or returning visitors get the old sheet.
-- `/hub` is the only page allowed to run script (`HUB_HEADERS` in `index.ts`); it is a static
-  `public/hub.js` talking to `/v1/*` with the token from `localStorage`. `passalong hub` passes the
+- `/hub` and `/join/:code` are the only pages allowed to run script (`HUB_HEADERS` in
+  `index.ts`); they are static files talking to `/v1/*` with the token from `localStorage`. Guide
+  pages render markdown someone else wrote and must keep the stricter `VIEW_HEADERS`. `passalong hub` passes the
   token in the URL fragment, which the page stores and scrubs on load.
 - A pulled guide carries its own **share URL** in the frontmatter, and that URL needs no account
   to read. `pull` therefore drops a self-ignoring `.gitignore` (`*`) in `./.passalong/`: committing

@@ -52,6 +52,9 @@
     scope: "all",
     error: null,
     invite: null,
+    editing: false,
+    meError: null, // identity-form errors belong beside the identity form, not in the page slot
+    typed: null, // a rejected handle stays in the field instead of snapping back
   };
 
   async function api(path, init = {}) {
@@ -165,6 +168,107 @@
         body: "{}",
       });
     });
+
+  // "handle @x is taken" is the one error people actually hit, and it is useless at the bottom of
+  // the page, so this one reports next to the field instead of through act().
+  async function saveMe(patch) {
+    state.meError = null;
+    try {
+      state.me = {
+        ...state.me,
+        ...(await api("/v1/me", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(patch),
+        })),
+      };
+      state.editing = false;
+      state.typed = null;
+    } catch (e) {
+      state.meError = e.message;
+    }
+    render();
+  }
+
+  const createTeam = (name) =>
+    act(async () => {
+      const t = await api("/v1/teams", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      state.scope = t.slug;
+      await load();
+    });
+
+  // Without a handle you cannot be addressed — `--to team/@you` has nothing to aim at — so an
+  // account that has not claimed one is prompted rather than left to find the CLI.
+  function identity() {
+    const me = state.me;
+    if (!me) return "";
+    if (!me.handle || state.editing) {
+      return el(
+        "section",
+        { class: `identity${me.handle ? "" : " needed"}` },
+        el("h2", {}, me.handle ? "Your details" : "Claim a handle"),
+        el(
+          "p",
+          { class: "muted" },
+          me.handle
+            ? "How teammates address you, and where handoffs are mailed."
+            : "Teammates hand work to a handle. Until you claim one, nothing can be addressed to you.",
+        ),
+        el(
+          "form",
+          {
+            onsubmit: (e) => {
+              e.preventDefault();
+              const f = e.target;
+              state.typed = f.handle.value.trim();
+              saveMe({
+                handle: state.typed,
+                name: f.name.value.trim(),
+                email: f.email.value.trim(),
+              });
+            },
+          },
+          el("input", {
+            name: "handle",
+            value: state.typed ?? me.handle ?? "",
+            placeholder: "handle",
+            required: "required",
+            spellcheck: "false",
+            pattern: "[a-zA-Z0-9][a-zA-Z0-9-]{1,30}",
+            title: "2–31 characters: letters, digits and dashes",
+          }),
+          el("input", { name: "name", value: me.name || "", placeholder: "name (optional)" }),
+          el("input", {
+            name: "email",
+            type: "email",
+            value: me.email || "",
+            placeholder: "email (optional)",
+          }),
+          el("button", { class: "primary", type: "submit" }, "Save"),
+          me.handle
+            ? el(
+                "button",
+                {
+                  class: "btn",
+                  type: "button",
+                  onclick: () => {
+                    state.editing = false;
+                    render();
+                  },
+                },
+                "cancel",
+              )
+            : "",
+        ),
+        state.meError ? el("p", { class: "error" }, state.meError) : "",
+      );
+    }
+    return "";
+  }
 
   function copy(text, btn) {
     navigator.clipboard?.writeText(text).then(() => {
@@ -467,8 +571,7 @@
           : el(
               "span",
               { class: "muted" },
-              "hand a teammate a link; they run ",
-              el("code", {}, "passalong team join <link>"),
+              "hand a teammate the link; they join in the browser, no install",
             ),
       ),
     );
@@ -500,17 +603,27 @@
     return el(
       "section",
       { class: "hub" },
+      identity(),
       board(),
       activityBox(),
-      teams.length
-        ? el(
-            "div",
-            { class: "chips scopes" },
-            scopeChip("all", "everything"),
-            scopeChip("mine", "mine"),
-            teams.map((t) => scopeChip(t.slug, t.name)),
-          )
-        : "",
+      el(
+        "div",
+        { class: "chips scopes" },
+        teams.length ? scopeChip("all", "everything") : "",
+        teams.length ? scopeChip("mine", "mine") : "",
+        teams.map((t) => scopeChip(t.slug, t.name)),
+        el(
+          "button",
+          {
+            class: "chip",
+            onclick: () => {
+              const name = prompt("Name your team");
+              if (name?.trim()) createTeam(name.trim());
+            },
+          },
+          teams.length ? "+ team" : "+ start a team",
+        ),
+      ),
       teamPanel(),
       state.guides.length ? el("h2", { class: "all" }, "All guides") : "",
       el(
@@ -554,7 +667,23 @@
         "footer",
         {},
         state.me
-          ? `${state.me.handle ? `@${state.me.handle}` : `account ${state.me.account}`} · ${state.me.guides} synced (${state.me.limit} active on the free tier)${teams.length ? "" : " · start a team: passalong team create <name>"} · `
+          ? [
+              el(
+                "a",
+                {
+                  href: "#",
+                  onclick: (e) => {
+                    e.preventDefault();
+                    state.editing = true;
+                    state.meError = null;
+                    state.typed = null;
+                    render();
+                  },
+                },
+                state.me.handle ? `@${state.me.handle}` : `account ${state.me.account}`,
+              ),
+              ` · ${state.me.guides} synced (${state.me.limit} active on the free tier) · `,
+            ]
           : "",
         el(
           "a",

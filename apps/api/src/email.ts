@@ -94,13 +94,17 @@ export function sendConsumed(
 }
 
 export function sendInvite(env: MailEnv, o: { to: string; team: string; by: string; url: string }) {
+  // The link comes first and alone. Whoever opens this may never have seen a terminal — a
+  // tester, a designer — and an install command above the link reads as "this is not for you".
   return sendMail(env, o.to, `Join ${o.team} on Passalong`, [
     `${o.by} invited you to the ${o.team} team on Passalong.`,
     "",
-    "If you don't have the CLI yet:",
-    "  npm i -g passalong && passalong setup && passalong login",
+    "Open this to join. Nothing to install:",
+    `  ${o.url}`,
     "",
-    "Then join:",
-    `  passalong team join ${o.url}`,
+    "Passalong is how the team hands finished work to each other: what the problem was, how it",
+    "was solved, how to verify it, and what to watch out for.",
+    "",
+    `Prefer a terminal? npm i -g passalong && passalong team join ${o.url}`,
   ]);
 }

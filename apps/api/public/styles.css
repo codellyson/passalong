@@ -409,6 +409,76 @@ footer {
   content: "• ";
   color: var(--accent);
 }
+.identity {
+  /* The "needed" state only swaps a colour, so it rides on a custom property. A
+     `.identity.needed h2` rule would be a higher-specificity selector sitting above the plainer
+     `.card h2` further down, which is exactly the descending-specificity trap. */
+  --edge: var(--line);
+  --head: var(--fg);
+  border: 1px solid var(--edge);
+  border-radius: 0.5rem;
+  padding: 0.25rem 1rem 1rem;
+  margin-bottom: 1.5rem;
+}
+.identity.needed {
+  --edge: var(--accent);
+  --head: var(--accent);
+}
+.identity h2 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+  color: var(--head);
+}
+.identity p {
+  margin: 0 0 0.75rem;
+}
+.identity form,
+form.join {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+form.join {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 26rem;
+  margin: 1.5rem 0;
+}
+form.join label {
+  display: grid;
+  gap: 0.25rem;
+}
+form.join .muted {
+  font-size: 13px;
+}
+.identity input,
+form.join input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--code);
+  color: var(--fg);
+  font: inherit;
+}
+.identity input:focus,
+form.join input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+button.primary {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: var(--bg);
+  font: inherit;
+  cursor: pointer;
+}
+button.primary[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
 .board {
   display: grid;
   gap: 1rem;

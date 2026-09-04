@@ -82,7 +82,7 @@ when the server has mail configured).
 passalong me --handle lukman            # how teammates address you
 passalong team create Khaime            # you become owner; "khaime" is now current
 passalong team invite ada@example.com   # or no email: prints a link to send yourself
-passalong team join <link>              # on Ada's machine
+passalong team join <link>              # on Ada's machine — or she just opens the link
 passalong share --to khaime/ada         # hand this guide to Ada
 passalong inbox                         # on Ada's side: what was handed to you
 passalong activity                      # back on your side: it landed, and who pulled it

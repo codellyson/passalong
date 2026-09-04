@@ -4,7 +4,7 @@ import type { Meta } from "./guide.js";
 
 // Bump when public/styles.css changes: _headers lets browsers cache it for an hour, and a stale
 // stylesheet silently breaks new pages (the hub shipped unstyled to anyone who had visited).
-const STYLES = "/styles.css?v=5";
+const STYLES = "/styles.css?v=6";
 
 const esc = (s: string) =>
   s.replace(
@@ -129,16 +129,17 @@ export function renderJoin(o: { team: string; code: string; url: string }): stri
   <div class="meta"><span>an invite to a Passalong team</span></div>
 </header>
 <article>
-<p>Teams share transfer guides: when a teammate finishes something you need to implement, they hand it to you and it lands in your inbox, ready for your agent.</p>
-<h2>If you already have Passalong</h2>
-<pre><code>passalong team join ${esc(o.url)}</code></pre>
-<h2>If not</h2>
+<p>Teams share transfer guides: when someone finishes a piece of work you need to pick up — implement it, verify it, take it to another repo — they hand it to you and it lands in your inbox, written to be acted on.</p>
+<div id="join" data-code="${esc(o.code)}" data-team="${esc(o.team)}">
+  <noscript><p>This form needs JavaScript. The commands below do the same thing.</p></noscript>
+</div>
+<h2>Or from a terminal</h2>
 <pre><code>npm i -g passalong
-passalong setup      # Claude Code skill + MCP server
-passalong login      # your account
+passalong login                 # your account
 passalong me --handle you
 passalong team join ${esc(o.url)}</code></pre>
-</article>`;
+</article>
+<script src="/join.js" defer></script>`;
   return page({
     title: `Join ${o.team}`,
     description: `Invitation to the ${o.team} team on Passalong.`,

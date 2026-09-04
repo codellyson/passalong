@@ -904,14 +904,16 @@ app.get("/join/:code", async (c) => {
   return c.html(
     renderJoin({ team: inv.name, code: inv.code, url: `${origin(c)}/join/${inv.code}` }),
     200,
-    VIEW_HEADERS,
+    // Joining happens in the browser, so this page runs script like the hub does. It renders no
+    // user-authored markdown — only the team name — so it is not the surface the strict CSP guards.
+    HUB_HEADERS,
   );
 });
 
 app.get("/", (c) => c.html(renderHome(), 200, VIEW_HEADERS));
 
-// The hub is the one page that runs script: its own static file, talking only to this origin.
-// Guide pages keep the stricter VIEW_HEADERS.
+// The hub and the invite page run script: their own static files, talking only to this origin.
+// Guide pages, which render markdown someone else wrote, keep the stricter VIEW_HEADERS.
 const HUB_HEADERS = {
   ...VIEW_HEADERS,
   "content-security-policy":
