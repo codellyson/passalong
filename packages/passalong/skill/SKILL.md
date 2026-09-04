@@ -11,22 +11,26 @@ session's history. Write for execution, not for permanence.
 
 ## Procedure
 
-1. **Reconstruct the story from the session.** What was the problem, what was tried, what failed,
+1. **Pick the one thing to transfer.** If the user named it (`/passalong-capture <what>` or
+   "pass along the webhook fix"), that is the scope. Otherwise take the most recent completed
+   piece of work. A long session usually holds several; do not merge them, and if it is
+   genuinely unclear which one the user means, ask before writing.
+2. **Reconstruct the story from the session.** What was the problem, what was tried, what failed,
    what was decided and why, what finally worked, and how it was verified. Read the diff
    (`git diff`, `git log`) only to confirm details; the reasoning is in the transcript.
-2. **Write the guide** with the structure below. Be concrete: file paths, commands, exact error
+3. **Write the guide** with the structure below. Be concrete: file paths, commands, exact error
    strings, version numbers. Prefer a short guide with every section filled over a long one.
-3. **Mark context-specific parts** so the receiver can adapt rather than copy. Put
+4. **Mark context-specific parts** so the receiver can adapt rather than copy. Put
    `ASSUMES: <thing>. If <alternative>, <what changes>.` at the start of any step that depends on
    this repo's stack, layout, or conventions.
-4. **Save the draft** to `~/.passalong/drafts/<slug>.md` (create the directory if needed), then run:
+5. **Save the draft** to `~/.passalong/drafts/<slug>.md` (create the directory if needed), then run:
 
    ```bash
    passalong share ~/.passalong/drafts/<slug>.md --no-edit
    ```
 
    It prints the guide id on stdout and the share link on stderr.
-5. **Report** the id (and link if synced) and one line on how to use it on the other side:
+6. **Report** the id (and link if synced) and one line on how to use it on the other side:
    `passalong pull <id>` in the target repo, or "pull passalong <id>" to an agent with the Passalong MCP server.
 
 If the `passalong` command is missing, tell the user to run `npm i -g passalong && passalong setup` and
@@ -70,6 +74,8 @@ Commands to run and what they should print. Test cases. What "done" looks like.
   wrong without a specific decision. Never leave it empty.
 - **Verification must be runnable.** A command and an expected output, not "make sure it works".
 - **Every ASSUMES has an alternative.** The point is adaptation on the other side.
+- **One problem per guide.** A lesson from the same session that is not part of this fix goes in
+  its own guide (write and share it separately), not in this one's Gotchas.
 - **No session narration.** "First I looked at..." is noise. State the finding.
 - **No secrets.** Redact tokens, keys, and internal hostnames that would not apply elsewhere.
 - Title, Problem, and Steps are required; the guide will not publish without them.
