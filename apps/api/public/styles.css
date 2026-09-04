@@ -600,3 +600,9 @@ button.primary[disabled] {
 h2.all {
   margin: 2rem 0 0.5rem;
 }
+.card.failing {
+  border-color: var(--accent);
+}
+.verdict b {
+  color: var(--accent);
+}

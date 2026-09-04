@@ -151,6 +151,19 @@ export async function activity({ all = false, limit = 50 } = {}) {
   return api.notifications({ unread: !all, limit });
 }
 
+/**
+ * Report whether a guide actually works. This is the reader's answer, not the author's status:
+ * `done` says "I implemented it", a verdict says "I tried it and it holds up" — or does not.
+ * A failing verdict needs a note; "it doesn't work" without a reason helps nobody.
+ */
+export async function verdict(id, ok, note = "") {
+  if (!api.loggedIn()) throw new PassalongError("verdicts need sync — run `passalong login` first");
+  if (!ok && !note.trim())
+    throw new PassalongError("say what went wrong: passalong failed <id> <what happened>");
+  const { guide } = await resolve(id);
+  return api.verdict(guide.meta.id, ok, note.trim());
+}
+
 /** Mark notifications seen. No ids means everything unread. */
 export const seen = (ids = []) => api.markRead(ids);
 

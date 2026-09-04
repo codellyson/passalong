@@ -10,12 +10,13 @@
 //   POST   /v1/invites/:code/accept    join the team behind an invite
 //   GET    /v1/guides?q=&scope=        list/search: scope=all (default) | mine | <team slug>
 //   GET    /v1/inbox                   guides handed to you (or your teams) you have not pulled
-//   GET    /v1/board                   the four queues: waiting, in flight, landed, promote
+//   GET    /v1/board                   the queues: waiting, not working, in flight, landed, promote
 //   GET    /v1/notifications?unread=   what happened while you were away
 //   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
 //   GET    /v1/guides/:id              guide as markdown (owner or team member); records a pull
 //   PATCH  /v1/guides/:id/status       { status }  owner: any; team member: consumed/published
+//   PUT    /v1/guides/:id/verdict      { ok, note? } → does it actually work?
 //   DELETE /v1/guides/:id              owner only
 //   GET    /g/:id/:key                 read-only web view (share link); .md for raw markdown
 //   GET    /join/:code                 what an invite link lands on
@@ -23,7 +24,14 @@
 // Static files (stylesheet, icons, robots.txt, 404 page) live in public/ and are served by the
 // assets layer before this Worker runs; see wrangler.jsonc.
 import { Hono } from "hono";
-import { type MailEnv, sendConsumed, sendHandoff, sendInvite, sendPulled } from "./email.js";
+import {
+  type MailEnv,
+  sendConsumed,
+  sendHandoff,
+  sendInvite,
+  sendPulled,
+  sendVerdict,
+} from "./email.js";
 import { body as bodyOf, type Meta, parseMeta, STATUSES, setField } from "./guide.js";
 import {
   feed,
@@ -105,6 +113,13 @@ interface GuideRow {
   team_id: string;
   to_account_id: string;
 }
+interface VerdictRow {
+  guide_id: string;
+  ok: number;
+  note: string;
+  at: string;
+  handle: string;
+}
 interface PullRow {
   guide_id: string;
   account_id: string;
@@ -178,6 +193,23 @@ async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<strin
   return map;
 }
 
+/** Current verdicts per guide, newest first. One row per person, so this is everyone's answer. */
+async function verdicts(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, VerdictRow[]>> {
+  const map = new Map<string, VerdictRow[]>();
+  if (!rows.length) return map;
+  const { results } = await db(c)
+    .prepare(
+      `SELECT v.guide_id, v.ok, v.note, v.at, COALESCE(a.handle, '') AS handle
+       FROM verdict v LEFT JOIN account a ON a.id = v.account_id
+       WHERE v.guide_id IN (${rows.map(() => "?").join(",")})
+       ORDER BY v.at DESC LIMIT 200`,
+    )
+    .bind(...rows.map((r) => r.id))
+    .all<VerdictRow>();
+  for (const v of results) map.set(v.guide_id, [...(map.get(v.guide_id) || []), v]);
+  return map;
+}
+
 async function summaries(c: Ctx, rows: GuideRow[]) {
   const me = c.get("account");
   const base = origin(c);
@@ -187,6 +219,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     rows.flatMap((r) => [r.account_id, r.to_account_id]),
   );
   const pulls = await recentPulls(c, rows);
+  const said = await verdicts(c, rows);
   return rows.map((r) => ({
     id: r.id,
     title: r.title,
@@ -203,6 +236,16 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     team: teams.get(r.team_id)?.slug || "",
     to: people.get(r.to_account_id)?.handle || "",
     for_me: r.to_account_id === me,
+    // The latest word, plus whether anyone's standing verdict is still negative.
+    verdict: (said.get(r.id) || [])[0]
+      ? {
+          ok: Boolean((said.get(r.id) as VerdictRow[])[0].ok),
+          by: (said.get(r.id) as VerdictRow[])[0].handle,
+          note: (said.get(r.id) as VerdictRow[])[0].note,
+          at: (said.get(r.id) as VerdictRow[])[0].at,
+        }
+      : null,
+    failing: (said.get(r.id) || []).some((v) => !v.ok),
     pulled_by: (pulls.get(r.id) || []).map((p) => ({
       handle: p.handle,
       via: p.via,
@@ -503,14 +546,15 @@ app.get("/v1/inbox", async (c) => c.json({ guides: await summaries(c, await inbo
 
 // ---- board ------------------------------------------------------------------------------
 
-// A transfer is only finished when it lands on the other side, so the dashboard is four queues
-// rather than four numbers: what is waiting on you, what you handed over and nobody has taken
+// A transfer is only finished when it lands on the other side, so the dashboard is queues
+// rather than numbers: what is waiting on you, what you handed over and nobody has taken
 // yet, what landed and is still open, and what has been pulled enough times to be worth keeping.
 // Someone else pulling is what counts everywhere here — your own pull from another machine is
 // not the transfer landing.
 const STALE_DAYS = 7;
 const PULLED_BY_OTHERS = `EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id
      AND p.account_id <> '' AND p.account_id <> g.account_id)`;
+const FAILING = "EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id AND v.ok = 0)";
 
 app.get("/v1/board", async (c) => {
   const account = c.get("account");
@@ -519,8 +563,13 @@ app.get("/v1/board", async (c) => {
       .bind(account, ...binds)
       .all<GuideRow>();
 
-  const [waiting, flight, landed, promote] = await Promise.all([
+  const [waiting, failing, flight, landed, promote] = await Promise.all([
     inboxRows(c, 20),
+    // Someone tried your work and it does not hold up. The most actionable thing on the page.
+    mine(
+      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published' AND ${FAILING}
+       ORDER BY g.updated DESC LIMIT 20`,
+    ).then((r) => r.results),
     // Handed to a person or a team, and still untouched by anyone but you.
     mine(
       `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
@@ -531,24 +580,26 @@ app.get("/v1/board", async (c) => {
     // instead, so one guide never occupies two cards.
     mine(
       `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
-         AND g.pulls < 3 AND ${PULLED_BY_OTHERS}
+         AND g.pulls < 3 AND ${PULLED_BY_OTHERS} AND NOT ${FAILING}
        ORDER BY g.updated DESC LIMIT 20`,
     ).then((r) => r.results),
     mine(
       `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published' AND g.pulls >= 3
+         AND NOT ${FAILING}
        ORDER BY g.pulls DESC LIMIT 20`,
     ).then((r) => r.results),
   ]);
 
   // One summaries() pass over every row, then split back into buckets: the lookups it does
   // (teams, people, recent pulls) are per-call, not per-row.
-  const all = [...waiting, ...flight, ...landed, ...promote];
+  const all = [...waiting, ...failing, ...flight, ...landed, ...promote];
   const byId = new Map((await summaries(c, all)).map((s) => [s.id, s]));
   const pick = (rows: GuideRow[]) => rows.map((r) => byId.get(r.id)).filter(Boolean);
   const cutoff = Date.now() - STALE_DAYS * 864e5;
 
   return c.json({
     waiting: pick(waiting),
+    failing: pick(failing),
     in_flight: pick(flight).map((g) => ({
       ...g,
       stale: new Date(g?.created ?? 0).getTime() < cutoff,
@@ -832,6 +883,51 @@ app.patch("/v1/guides/:id/status", async (c) => {
     });
   }
   return c.json({ id: found.row.id, status });
+});
+
+// A verdict is the reader's answer to "does this work?", and the only way the sender learns that
+// their handoff did not land. Deliberately separate from status: status is the author's lifecycle
+// and holds one value, while a verdict belongs to whoever tried it and can be negative.
+const NOTE_MAX = 280;
+
+app.put("/v1/guides/:id/verdict", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
+  const account = c.get("account");
+  const body = (await c.req.json().catch(() => ({}))) as { ok?: boolean; note?: string };
+  if (typeof body.ok !== "boolean") return err(c, 400, "send { ok: true } or { ok: false }");
+  const note = (body.note || "").trim().slice(0, NOTE_MAX);
+  // One line, not a thread. Saying "it doesn't work" without saying how helps nobody, and
+  // anything longer than this is a conversation the product deliberately does not host.
+  if (!body.ok && !note) return err(c, 400, "say what went wrong: send a note with { ok: false }");
+
+  await c.env.DB.prepare(
+    `INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note, at = excluded.at`,
+  )
+    .bind(found.row.id, account, body.ok ? 1 : 0, note, now())
+    .run();
+
+  const people = await accounts(c, [account, found.row.account_id]);
+  await notify(c.env, {
+    to: found.row.account_id,
+    kind: body.ok ? "verified" : "failed",
+    guide_id: found.row.id,
+    actor_id: account,
+    team_id: found.row.team_id,
+    note,
+    mail: () =>
+      sendVerdict(c.env, {
+        to: people.get(found.row.account_id)?.email || "",
+        byHandle: people.get(account)?.handle || "",
+        title: found.row.title,
+        id: found.row.id,
+        url: shareUrl(origin(c), found.row),
+        ok: body.ok === true,
+        note,
+      }),
+  });
+  return c.json({ id: found.row.id, ok: body.ok, note });
 });
 
 app.delete("/v1/guides/:id", async (c) => {

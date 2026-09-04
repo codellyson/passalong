@@ -87,6 +87,9 @@ export const get = (id) => call(`/v1/guides/${id}`, { raw: true });
 export const setStatus = (id, status) =>
   call(`/v1/guides/${id}/status`, { method: "PATCH", body: { status } });
 export const remove = (id) => call(`/v1/guides/${id}`, { method: "DELETE" });
+/** Does it actually work? `note` is required when it does not. */
+export const verdict = (id, ok, note = "") =>
+  call(`/v1/guides/${id}/verdict`, { method: "PUT", body: { ok, note } });
 
 /** Fetch a guide by its share link (no account needed). Accepts the web URL or the .md URL. */
 export async function fetchShared(url) {

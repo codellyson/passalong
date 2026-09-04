@@ -160,6 +160,24 @@
     });
   };
 
+  // The reader's answer to "does this work?". A failure must say why — the prompt is the whole
+  // interface, because a text box here would be the first step toward a comment thread.
+  const verdict = (g, ok) => {
+    let note = "";
+    if (!ok) {
+      note = (prompt(`What went wrong with "${g.title}"?`) || "").trim();
+      if (!note) return; // cancelled, or nothing useful to say
+    }
+    act(async () => {
+      await api(`/v1/guides/${g.id}/verdict`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ok, note }),
+      });
+      await load();
+    });
+  };
+
   const makeInvite = (slug) =>
     act(async () => {
       state.invite = await api(`/v1/teams/${encodeURIComponent(slug)}/invites`, {
@@ -336,6 +354,12 @@
       ),
       el("button", { class: "btn", onclick: (e) => copy(g.url, e.target) }, "copy link"),
     ];
+    if (!g.mine) {
+      actions.push(el("button", { class: "btn", onclick: () => verdict(g, true) }, "works"));
+      actions.push(
+        el("button", { class: "btn danger", onclick: () => verdict(g, false) }, "doesn't work"),
+      );
+    }
     if (g.status !== "consumed")
       actions.push(el("button", { class: "btn", onclick: () => setStatus(g, "consumed") }, "done"));
     if (g.mine && g.status !== "promoted")
@@ -391,6 +415,15 @@
         el("span", {}, rel(g.created)),
         el("span", {}, `${g.pulls} pull${g.pulls === 1 ? "" : "s"}`),
         pulledBy(g),
+        g.verdict
+          ? el(
+              "span",
+              { class: g.failing ? "verdict bad" : "verdict" },
+              g.verdict.ok ? "verified by " : "not working — ",
+              el("b", {}, g.verdict.by ? `@${g.verdict.by}` : "someone"),
+              g.verdict.note ? `: ${g.verdict.note}` : "",
+            )
+          : "",
         g.stack_assumptions?.length
           ? el("span", {}, "assumes ", el("b", {}, g.stack_assumptions.join(", ")))
           : "",
@@ -421,6 +454,13 @@
           : el("span", {}, "from ", el("b", {}, `@${g.from || "?"}`)),
         el("span", {}, rel(g.created)),
         g.stale ? el("span", { class: "warn" }, "not picked up") : "",
+        g.failing && g.verdict
+          ? el(
+              "span",
+              { class: "warn" },
+              `${g.verdict.by ? `@${g.verdict.by}` : "someone"}: ${g.verdict.note || "no reason given"}`,
+            )
+          : "",
         g.pulls ? el("span", {}, `${g.pulls} pull${g.pulls === 1 ? "" : "s"}`) : "",
       ),
       action === "pull"
@@ -467,6 +507,7 @@
     return el(
       "div",
       { class: "board" },
+      card("failing", "Not working", "someone tried it and it does not hold up", b.failing, "link"),
       card("waiting", "Waiting on you", "handed to you, not pulled yet", b.waiting, "pull"),
       card("flight", "In flight", "handed over, nobody has taken it", b.in_flight, "link"),
       card("landed", "Landed", "someone has it and hasn't said it shipped", b.landed, "done"),

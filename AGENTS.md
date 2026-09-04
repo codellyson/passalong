@@ -42,6 +42,14 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),
   not yet pulled by me. Every pull is a `pull` row; the sender sees them as `pulled_by`. Handles
   are global and unique.
+- **Verdicts (migration 0004).** `PUT /v1/guides/:id/verdict {ok, note}` is the reader's answer to
+  "does this work?", and the only way an author learns a handoff did not land. Deliberately **not**
+  a status: `status` is the author's lifecycle, holds one value and lives inside the markdown, none
+  of which fits a judgement that belongs to the reader, can be negative, and can come from several
+  people. One row per (guide, account), so re-testing replaces your answer. A failing verdict must
+  carry a note — "it doesn't work" without a reason helps nobody — capped at 280 chars because this
+  is a verdict, not the comment thread the PRD rules out. `done` still means *implemented*;
+  `works`/`broken` mean *it actually runs*.
 - **Two views of one guide.** `/g/:id/:key` renders the author's order; `?view=verify` leads with
   Problem, Verification and Gotchas and folds the rest into a `<details>`. What leads and what
   folds lives in `verifyLayout()` in `guide.ts`, not in `render.ts` — it is a statement about the
@@ -58,7 +66,9 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
 - **The board (`GET /v1/board`).** The hub's home, `passalong board`, and the MCP `board` tool are
   one endpoint: four queues defined in SQL, not in the client. Waiting = the inbox query. In
   flight = mine, addressed to a person or team, with `NOT EXISTS` a pull by anyone but me (`stale`
-  past 7 days). Landed = the same `EXISTS` with `pulls < 3`. Worth keeping = `pulls >= 3`, which
+  past 7 days). Not working = mine with a standing failing verdict, and it is excluded from landed
+  and worth-keeping so one guide never occupies two cards. Landed = the same `EXISTS` with
+  `pulls < 3`. Worth keeping = `pulls >= 3`, which
   is why landed excludes it: one guide, one card. "Someone else pulled it" is the test everywhere
   — your own pull from another machine is not the transfer landing. The hub reloads after a status
   change rather than moving rows itself; re-deriving buckets in JS is how the two drift apart.

@@ -93,6 +93,38 @@ export function sendConsumed(
   ]);
 }
 
+/** The verdict mail. A failure is the one notification nobody should have to go looking for. */
+export function sendVerdict(
+  env: MailEnv,
+  o: {
+    to: string;
+    byHandle: string;
+    title: string;
+    id: string;
+    url: string;
+    ok: boolean;
+    note: string;
+  },
+) {
+  const who = o.byHandle ? `@${o.byHandle}` : "someone";
+  return sendMail(
+    env,
+    o.to,
+    o.ok ? `${who} verified "${o.title}"` : `${who} could not get "${o.title}" working`,
+    [
+      o.ok
+        ? `${who} tried "${o.title}" (${o.id}) and it holds up.`
+        : `${who} tried "${o.title}" (${o.id}) and it does not work.`,
+      ...(o.note ? ["", `  "${o.note}"`] : []),
+      "",
+      `  ${o.url}`,
+      ...(o.ok
+        ? []
+        : ["", "The guide is still published; fix it and share again with the same id."]),
+    ],
+  );
+}
+
 export function sendInvite(env: MailEnv, o: { to: string; team: string; by: string; url: string }) {
   // The link comes first and alone. Whoever opens this may never have seen a terminal — a
   // tester, a designer — and an install command above the link reads as "this is not for you".

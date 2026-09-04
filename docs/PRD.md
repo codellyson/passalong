@@ -77,6 +77,8 @@ Plain markdown with frontmatter. No proprietary format, fully exportable, git-fr
 
 Explicitly out of scope for v2: analytics dashboards, rich text editor, comments/threads, permissions beyond workspace membership.
 
+Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`works` / `broken` with a one-line reason) is a first-class event, separate from the guide's status. `consumed` means implemented; a verdict means it actually runs. It is capped at one line per person per guide precisely so it stays a verdict and does not become the comment thread excluded above. This also widens the persona: testers and QA receive guides, and the Verification and Gotchas sections were already written for them.
+
 ## 9. Positioning
 
 **What Passalong is not:** a wiki, a docs site, a replacement for `docs/` in a repo, a note-taking app.

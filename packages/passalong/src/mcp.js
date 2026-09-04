@@ -22,7 +22,8 @@ export async function serve() {
         `with frontmatter and the sections ${SECTIONS.join(", ")}. ` +
         "When the user references a passalong id or link, call get_guide and follow its Steps, " +
         "adapting anything marked ASSUMES to this codebase; run its Verification before declaring " +
-        "done, then set_guide_status consumed. When the user asks to pass along, hand off, or " +
+        "done, then set_guide_status consumed and verify_guide with the result. " +
+        "When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
         "shape) and call publish_guide, with `to` as team or team/handle when it is for a teammate. " +
         "At the start of work, inbox shows guides teammates have handed to this user, and activity " +
@@ -76,15 +77,42 @@ export async function serve() {
     {
       title: "Board",
       description:
-        "The state of this user's transfers as four queues: waiting on you (handed to you, not " +
-        "pulled), in flight (handed over, nobody has taken it — `stale` means it has sat for over " +
-        "a week), landed (someone has it and has not marked it consumed), and worth keeping " +
-        "(pulled enough to promote into a reference). Use it to answer 'what is outstanding?'.",
+        "The state of this user's transfers as queues: waiting on you (handed to you, not " +
+        "pulled), not working (someone gave it a failing verdict — the most urgent), in flight " +
+        "(handed over, nobody has taken it — `stale` means it has sat over a week), landed " +
+        "(someone has it and has not marked it consumed), and worth keeping (pulled enough to " +
+        "promote into a reference). Use it to answer 'what is outstanding?'.",
       inputSchema: {},
     },
     async () => {
       try {
         return json(await passalong.board());
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "verify_guide",
+    {
+      title: "Report whether a guide works",
+      description:
+        "After following a guide's Verification section, report the result. This is the only way " +
+        "the author learns their handoff did not land — `set_guide_status consumed` says it was " +
+        "implemented, this says it actually works. A failing verdict must say what went wrong.",
+      inputSchema: {
+        id: z.string().describe("passalong id"),
+        ok: z.boolean().describe("true if the Verification steps passed"),
+        note: z
+          .string()
+          .default("")
+          .describe("what went wrong (required when ok is false); one line, max 280 chars"),
+      },
+    },
+    async ({ id, ok, note }) => {
+      try {
+        return json(await passalong.verdict(id, ok, note || ""));
       } catch (err) {
         return fail(err);
       }

@@ -33,6 +33,8 @@ passalong activity [--all]    what happened while you were away; clears unless -
 passalong list [query]        your guides and your teams', local and synced
 passalong open <id> [--print] view a guide in the browser (or the terminal)
 passalong hub                 open your synced guides in the browser
+passalong works <id>          you tried it and it holds up
+passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
 passalong done <id>           mark consumed: implemented on the receiving side
 passalong promote <id>        mark promoted: graduated into a reusable reference
 passalong rm <id>             delete a guide locally and from sync
@@ -87,6 +89,10 @@ passalong share --to khaime/ada         # hand this guide to Ada
 passalong inbox                         # on Ada's side: what was handed to you
 passalong activity                      # back on your side: it landed, and who pulled it
 ```
+
+A receiver who tries the work reports back with `passalong works <id>` or `passalong broken <id> <why>`.
+That is separate from `done`, which means *implemented*: a verdict means it actually runs, a failing
+one has to say why, and the author sees it on their board and in their inbox.
 
 Not everyone who receives a guide implements it. Every guide page has a **Verify** view
 (`?view=verify`) that leads with Problem, Verification and Gotchas and folds the implementation

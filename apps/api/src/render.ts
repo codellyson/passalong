@@ -4,7 +4,7 @@ import { type Meta, verifyLayout } from "./guide.js";
 
 // Bump when public/styles.css changes: _headers lets browsers cache it for an hour, and a stale
 // stylesheet silently breaks new pages (the hub shipped unstyled to anyone who had visited).
-const STYLES = "/styles.css?v=7";
+const STYLES = "/styles.css?v=8";
 
 const esc = (s: string) =>
   s.replace(

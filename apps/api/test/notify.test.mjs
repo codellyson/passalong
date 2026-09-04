@@ -12,6 +12,7 @@ const row = (over = {}) => ({
   at: "2026-09-04T10:00:00.000Z",
   times: 1,
   read_at: "",
+  note: "",
   title: "Add Paystack webhook verification",
   actor: "bob",
   team: "khaime",
@@ -25,8 +26,21 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob shared "Add Paystack webhook verification" with khaime',
     '@bob pulled "Add Paystack webhook verification"',
     '@bob marked "Add Paystack webhook verification" consumed',
+    '@bob verified "Add Paystack webhook verification"',
+    '@bob says "Add Paystack webhook verification" does not work',
     "@bob joined khaime",
   ]);
+});
+
+test("a failing verdict carries its reason into the line", () => {
+  const r = row({ kind: "failed", note: "401 on a valid signature too" });
+  assert.equal(
+    line(r),
+    '@bob says "Add Paystack webhook verification" does not work: 401 on a valid signature too',
+  );
+  assert.equal(summary(r).note, "401 on a valid signature too");
+  // A reason is the point of the verdict; without one the line still reads.
+  assert.doesNotMatch(line(row({ kind: "failed" })), /:\s*$/);
 });
 
 test("an anonymous share-link reader is named as one", () => {
