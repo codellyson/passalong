@@ -80,3 +80,63 @@ export function setField(markdown: string, key: string, value: string): string {
 export function body(markdown: string): string {
   return split(markdown)?.body ?? markdown;
 }
+
+/**
+ * Split a body into its `## ` sections, keeping the author's order and anything written before
+ * the first heading. Deliberately not a mirror of `sections()` in packages/passalong/src/guide.js:
+ * that one is for validation and drops the preamble, which is fine when you are asking "is
+ * Problem present" and not fine when you are re-composing a page — nothing may be lost.
+ */
+export function splitSections(body: string): {
+  intro: string;
+  order: string[];
+  by: Record<string, string>;
+} {
+  const by: Record<string, string> = {};
+  const order: string[] = [];
+  let intro = "";
+  let current: string | null = null;
+  for (const line of body.split(/\r?\n/)) {
+    const h = /^##\s+(.+?)\s*$/.exec(line);
+    if (h) {
+      current = h[1];
+      if (!(current in by)) {
+        by[current] = "";
+        order.push(current);
+      }
+      continue;
+    }
+    if (current) by[current] += `${line}\n`;
+    else intro += `${line}\n`;
+  }
+  for (const k of order) by[k] = by[k].trim();
+  return { intro: intro.trim(), order, by };
+}
+
+/**
+ * A guide is written by the person who did the work, in the order they did it: problem, approach,
+ * decisions, steps, then how to check. Whoever verifies it reads for a different question — "does
+ * it do what it claims?" — so for them the last sections are the point and the steps are
+ * background. This decides what leads and what folds; turning it into HTML is render.ts's job.
+ *
+ * Everything folds rather than disappears. No view of a guide may lose part of it.
+ */
+export const VERIFY_LEAD = ["Problem", "Verification", "Gotchas"];
+
+export function verifyLayout(body: string): {
+  intro: string;
+  lead: string[];
+  folded: string[];
+  by: Record<string, string>;
+  hasVerification: boolean;
+} {
+  const { intro, order, by } = splitSections(body);
+  const lead = VERIFY_LEAD.filter((s) => by[s]);
+  return {
+    intro,
+    lead,
+    folded: order.filter((s) => !lead.includes(s)),
+    by,
+    hasVerification: Boolean(by.Verification),
+  };
+}

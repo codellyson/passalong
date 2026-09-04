@@ -1,10 +1,10 @@
 // The thin web view: one read-only page per guide, plus a landing page. No editor, no app.
 import { marked } from "marked";
-import type { Meta } from "./guide.js";
+import { type Meta, verifyLayout } from "./guide.js";
 
 // Bump when public/styles.css changes: _headers lets browsers cache it for an hour, and a stale
 // stylesheet silently breaks new pages (the hub shipped unstyled to anyone who had visited).
-const STYLES = "/styles.css?v=6";
+const STYLES = "/styles.css?v=7";
 
 const esc = (s: string) =>
   s.replace(
@@ -69,8 +69,29 @@ export interface GuideView {
   pulls: number;
 }
 
-export function renderGuide(g: GuideView): string {
-  const html = marked.parse(g.body, { async: false, gfm: true }) as string;
+const md = (s: string) => marked.parse(s, { async: false, gfm: true }) as string;
+
+// What leads and what folds is decided in guide.ts; this only turns that into HTML.
+function verifyBody(body: string): string {
+  const { intro, lead, folded, by, hasVerification } = verifyLayout(body);
+  const section = (s: string) => `<h2>${esc(s)}</h2>${md(by[s])}`;
+  const missing = hasVerification
+    ? ""
+    : `<p class="note">This guide has no <b>Verification</b> section — there is nothing here that
+       says what "working" looks like. Worth asking whoever wrote it.</p>`;
+  const rest =
+    intro || folded.length
+      ? `<details class="rest">
+  <summary>How it was built · ${folded.length ? esc(folded.join(", ")) : "notes"}</summary>
+  ${intro ? md(intro) : ""}${folded.map(section).join("")}
+</details>`
+      : "";
+  return `${missing}${lead.map(section).join("")}${rest}`;
+}
+
+export function renderGuide(g: GuideView, view: "guide" | "verify" = "guide"): string {
+  const verify = view === "verify";
+  const html = verify ? verifyBody(g.body) : md(g.body);
   const tags = g.meta.tags.map((t) => `<span class="tag">#${esc(t)}</span>`).join(" ");
   const stack = g.meta.stack_assumptions.length
     ? `<span>assumes <b>${esc(g.meta.stack_assumptions.join(", "))}</b></span>`
@@ -90,8 +111,16 @@ export function renderGuide(g: GuideView): string {
     ${tags}
   </div>
 </header>
+<nav class="views">
+  <a${verify ? "" : ' class="on" aria-current="page"'} href="${esc(g.url)}">Full guide</a>
+  <a${verify ? ' class="on" aria-current="page"' : ""} href="${esc(g.url)}?view=verify">Verify</a>
+</nav>
 <article>${html}</article>
-<div class="pull">Pull this into your context:<br><code>passalong pull ${esc(g.url)}</code><br>or paste the link to an agent with the Passalong MCP server.</div>
+${
+  verify
+    ? `<div class="pull">Checked it? Say so where it was handed to you: <a href="/hub">your hub</a> — or <code>passalong done ${esc(g.id)}</code>.</div>`
+    : `<div class="pull">Pull this into your context:<br><code>passalong pull ${esc(g.url)}</code><br>or paste the link to an agent with the Passalong MCP server.</div>`
+}
 <footer>Read-only. Edit the markdown in your own tools and <code>passalong share</code> again.</footer>`;
   return page({
     title: g.meta.title || g.id,

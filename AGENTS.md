@@ -42,6 +42,13 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),
   not yet pulled by me. Every pull is a `pull` row; the sender sees them as `pulled_by`. Handles
   are global and unique.
+- **Two views of one guide.** `/g/:id/:key` renders the author's order; `?view=verify` leads with
+  Problem, Verification and Gotchas and folds the rest into a `<details>`. What leads and what
+  folds lives in `verifyLayout()` in `guide.ts`, not in `render.ts` — it is a statement about the
+  guide model, and keeping it there is also what makes it testable (type stripping cannot import
+  `render.ts`, which resolves `./guide.js`). **No view may drop part of a guide**: everything not
+  led with is folded, including the preamble and any section nobody planned for. It is a link, not
+  a toggle, because guide pages run no script.
 - **Joining is web-first.** `/join/:code` mints an account, claims a handle and accepts the
   invite in the browser (`public/join.js`), because the person opening an invite is often the one
   who has never used the tool — a tester, a designer. The hub covers the rest of what used to need

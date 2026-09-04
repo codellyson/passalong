@@ -311,6 +311,56 @@ footer {
     monospace;
 }
 
+/* ---- guide views ---------------------------------------------------------------------- */
+
+.views {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.25rem 0 0.5rem;
+}
+.views a {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+  font:
+    13px / 1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.views a:hover {
+  color: var(--fg);
+  border-color: var(--muted);
+}
+.views a.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.note {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+  color: var(--muted);
+}
+details.rest {
+  border-top: 1px solid var(--line);
+  margin-top: 2rem;
+  padding-top: 0.75rem;
+}
+details.rest summary {
+  cursor: pointer;
+  color: var(--muted);
+  font:
+    14px / 1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+details.rest summary:hover {
+  color: var(--fg);
+}
+
 /* ---- hub: board, teams, activity ---------------------------------------------------- */
 .chips.scopes {
   margin-bottom: 1rem;

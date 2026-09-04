@@ -64,6 +64,11 @@ passalong inbox                         # on Ada's side: what was handed to you
 passalong activity                      # back on your side: it landed, and who pulled it
 ```
 
+Not everyone who receives a guide implements it. Every guide page has a **Verify** view
+(`?view=verify`) that leads with Problem, Verification and Gotchas and folds the implementation
+away — for a tester or anyone checking the work rather than doing it. Invites are accepted in the
+browser, so a teammate needs no terminal to be part of a team.
+
 `passalong activity` is the other half of the transfer: it tells you when someone pulled a guide
 you handed over, when they marked it consumed, and when an invite was taken up. A handoff
 addressed to a person is also emailed; a team-wide share is not, because mail nobody is

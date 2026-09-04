@@ -884,13 +884,18 @@ app.get("/g/:id/:key", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
   if (!row) return notFoundPage(c);
   const meta = parseMeta(row.markdown);
-  const html = renderGuide({
-    id: row.id,
-    meta,
-    body: bodyOf(row.markdown),
-    url: shareUrl(origin(c), row),
-    pulls: row.pulls,
-  });
+  // ?view=verify leads with what the reader has to check. It is a link, not a toggle, because
+  // guide pages run no script — the CSP is what makes rendering someone else's markdown safe.
+  const html = renderGuide(
+    {
+      id: row.id,
+      meta,
+      body: bodyOf(row.markdown),
+      url: shareUrl(origin(c), row),
+      pulls: row.pulls,
+    },
+    c.req.query("view") === "verify" ? "verify" : "guide",
+  );
   return c.html(html, 200, VIEW_HEADERS);
 });
 
