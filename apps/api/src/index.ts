@@ -844,6 +844,31 @@ async function recordPull(
   });
 }
 
+/**
+ * Proof a guide reached someone who never runs `pull`. Saying it works, or marking it consumed,
+ * is not something you can do without having had the guide — but for a browser-only receiver
+ * (a tester, a designer) no pull row exists, so the sender's board says "never picked up" about
+ * work that has already been checked, and the receiver's inbox never clears.
+ *
+ * No notification: the verdict or the status change is the news, and "@x pulled" alongside
+ * "@x verified" is the same fact told twice.
+ */
+async function recordReceipt(c: Ctx, row: GuideRow, via: string) {
+  const account = c.get("account");
+  if (!account || row.account_id === account) return;
+  const seen = await db(c)
+    .prepare("SELECT 1 AS n FROM pull WHERE guide_id = ? AND account_id = ?")
+    .bind(row.id, account)
+    .first();
+  if (seen) return;
+  await db(c).batch([
+    db(c)
+      .prepare("INSERT INTO pull (guide_id, account_id, via, at) VALUES (?, ?, ?, ?)")
+      .bind(row.id, account, via, now()),
+    db(c).prepare("UPDATE guide SET pulls = pulls + 1 WHERE id = ?").bind(row.id),
+  ]);
+}
+
 app.get("/v1/guides/:id", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
@@ -865,6 +890,7 @@ app.patch("/v1/guides/:id/status", async (c) => {
     .run();
   // The end of the loop: someone else shipped what you handed them.
   if (!found.owner && status === "consumed") {
+    await recordReceipt(c, found.row, "web");
     const account = c.get("account");
     const people = await accounts(c, [account, found.row.account_id]);
     await notify(c.env, {
@@ -907,6 +933,7 @@ app.put("/v1/guides/:id/verdict", async (c) => {
   )
     .bind(found.row.id, account, body.ok ? 1 : 0, note, now())
     .run();
+  await recordReceipt(c, found.row, "verdict");
 
   const people = await accounts(c, [account, found.row.account_id]);
   await notify(c.env, {

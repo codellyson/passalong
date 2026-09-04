@@ -42,6 +42,11 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),
   not yet pulled by me. Every pull is a `pull` row; the sender sees them as `pulled_by`. Handles
   are global and unique.
+- **Receipt is not only `pull`.** A browser-only receiver never runs `pull`, so a verdict or a
+  non-author `consumed` also writes a `pull` row (`via` = "verdict"/"web"), deduped per
+  (guide, account) and without the "pulled" notification — the verdict is the news. Without this a
+  guide that was read and verified still showed as never delivered on both sides: the receiver's
+  inbox never cleared and the sender's board said "not picked up".
 - **Verdicts (migration 0004).** `PUT /v1/guides/:id/verdict {ok, note}` is the reader's answer to
   "does this work?", and the only way an author learns a handoff did not land. Deliberately **not**
   a status: `status` is the author's lifecycle, holds one value and lives inside the markdown, none
@@ -113,6 +118,9 @@ pnpm -C apps/api db:migrate:remote && pnpm -C apps/api run deploy
 - A pulled guide carries its own **share URL** in the frontmatter, and that URL needs no account
   to read. `pull` therefore drops a self-ignoring `.gitignore` (`*`) in `./.passalong/`: committing
   that directory would publish the guide to anyone who can see the repo. Don't "helpfully" remove it.
+- The hub's sign-in **cannot create an account** — it only accepts a token from `passalong login`.
+  `/join/:code` is the only web way in, so today a non-developer can exist only if someone invites
+  them. Deliberate for now, but it is the reason there is no self-serve web signup.
 - `passalong share` opens `$EDITOR` only at a TTY. Agents and scripts pass a file and get no editor.
 - The CLI prints the guide id (and pulled markdown) on **stdout** and everything else on stderr,
   so `ID=$(passalong share draft.md)` works.
