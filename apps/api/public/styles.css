@@ -503,6 +503,7 @@ form.join .muted {
   font-size: 13px;
 }
 .identity input,
+.invite-paste input,
 form.join input {
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--line);
@@ -512,6 +513,7 @@ form.join input {
   font: inherit;
 }
 .identity input:focus,
+.invite-paste input:focus,
 form.join input:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -605,4 +607,13 @@ h2.all {
 }
 .verdict b {
   color: var(--accent);
+}
+.invite-paste {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+  max-width: 30rem;
+}
+.grow {
+  flex: 1;
 }

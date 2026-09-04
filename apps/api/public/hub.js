@@ -298,6 +298,45 @@
     });
   }
 
+  // An invite link is the only entry that leads anywhere for someone with no team: an account on
+  // its own has an empty hub, because guides are made by `passalong share`, not here. Accepting a
+  // pasted link is the difference between a dead end and a next step.
+  function invitePaste(label) {
+    return el(
+      "form",
+      {
+        class: "invite-paste",
+        onsubmit: (e) => {
+          e.preventDefault();
+          const raw = $("input", e.target).value.trim();
+          const code = raw.split("/").pop();
+          if (code) location.assign(`/join/${encodeURIComponent(code)}`);
+        },
+      },
+      el("input", {
+        class: "grow",
+        name: "invite",
+        placeholder: "paste an invite link",
+        "aria-label": label,
+        spellcheck: "false",
+      }),
+      el("button", { class: "btn", type: "submit" }, "Join"),
+    );
+  }
+
+  const createAccount = () =>
+    act(async () => {
+      const res = await fetch("/v1/accounts", { method: "POST" });
+      if (!res.ok)
+        throw new Error(
+          (await res.json().catch(() => ({}))).message || "could not create an account",
+        );
+      const { token } = await res.json();
+      state.token = token;
+      store.set(token);
+      await load();
+    });
+
   function signIn() {
     return el(
       "section",
@@ -334,6 +373,24 @@
         el("button", { type: "submit" }, "Connect"),
       ),
       state.error ? el("p", { class: "error" }, state.error) : "",
+      el("h2", {}, "Or start here"),
+      el(
+        "p",
+        {},
+        "Been sent an invite? Opening the link makes your account and joins the team in one step.",
+      ),
+      invitePaste("invite link"),
+      el(
+        "p",
+        {},
+        "No invite, no terminal? ",
+        el("button", { class: "btn", onclick: createAccount }, "Create an account"),
+        el(
+          "span",
+          { class: "muted" },
+          " — it will be empty until a teammate hands you something, or you install the CLI and write your first guide.",
+        ),
+      ),
     );
   }
 
@@ -696,6 +753,14 @@
             el("p", {}, "Nothing synced yet. After your next finished piece of work:"),
             el("pre", {}, el("code", {}, "passalong share")),
             el("p", {}, "or say ", el("em", {}, "“pass this along”"), " to Claude Code."),
+            teams.length
+              ? ""
+              : el(
+                  "p",
+                  {},
+                  "Waiting on someone else's work instead? Paste the invite link they sent you:",
+                ),
+            teams.length ? "" : invitePaste("invite link"),
           )
         : list.length === 0
           ? el("p", { class: "empty" }, "No guides match.")

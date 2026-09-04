@@ -4,7 +4,7 @@ import { type Meta, verifyLayout } from "./guide.js";
 
 // Bump when public/styles.css changes: _headers lets browsers cache it for an hour, and a stale
 // stylesheet silently breaks new pages (the hub shipped unstyled to anyone who had visited).
-const STYLES = "/styles.css?v=8";
+const STYLES = "/styles.css?v=9";
 
 const esc = (s: string) =>
   s.replace(
@@ -186,18 +186,31 @@ export function renderHome(): string {
 </header>
 <article>
 <p>Solve something non-trivial in one agent session. Run one command. Open a session somewhere else and the agent there already knows the whole story: the problem, the decisions, the steps, how to verify, and what went wrong along the way.</p>
-<h2>Install</h2>
+<p>A transfer has two ends, and Passalong is built for both of them.</p>
+
+<h2>If you write the guides</h2>
 <pre><code>npm i -g passalong
 passalong setup     # Claude Code skill + MCP server
 passalong login     # optional: sync across machines</code></pre>
-<h2>The loop</h2>
 <ol>
-<li>Finish work in an agent session. Say <em>"pass this along"</em>, or run <code>passalong share</code>.</li>
+<li>Finish work in an agent session. Say <em>&ldquo;pass this along&rdquo;</em>, or run <code>passalong share</code>.</li>
 <li>Review the draft, trim, publish. You get a short id and a link.</li>
 <li>In the other context: <code>passalong pull &lt;id&gt;</code>, or hand the link to an agent.</li>
 </ol>
-<p>Guides are plain markdown with frontmatter. <code>passalong export</code> dumps everything. There is nothing to lock you in.</p>
-<p>Already syncing? <a href="/hub">Open your hub</a>, or run <code>passalong hub</code>.</p>
+<p>Hand one to a teammate with <code>passalong share --to team/@them</code>. <code>passalong board</code> then tells you what is waiting on you, what you handed over that nobody has taken, what landed, and what someone says does not work.</p>
+
+<h2>If you pick them up</h2>
+<p>Testers, teammates, anyone the work gets handed to. <b>Nothing to install.</b> Open the invite link a teammate sends you, pick a handle, and guides addressed to you land in your hub.</p>
+<ul>
+<li>Every guide has a <b>Verify</b> view that leads with what to check and folds the implementation away.</li>
+<li>Two answers when you have tried it: it works, or it does not — with a reason the author sees the same day.</li>
+<li>The person who handed it over can see it landed, so nobody has to ask.</li>
+</ul>
+
+<h2>No lock-in</h2>
+<p>Guides are plain markdown with frontmatter. <code>passalong export</code> dumps everything. Deleting your account leaves you with all of your content.</p>
+
+<p>Already have an account? <a href="/hub">Open your hub</a>, or run <code>passalong hub</code>.</p>
 </article>`;
   return page({
     title: "Passalong",

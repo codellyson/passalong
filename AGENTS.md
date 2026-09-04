@@ -118,9 +118,12 @@ pnpm -C apps/api db:migrate:remote && pnpm -C apps/api run deploy
 - A pulled guide carries its own **share URL** in the frontmatter, and that URL needs no account
   to read. `pull` therefore drops a self-ignoring `.gitignore` (`*`) in `./.passalong/`: committing
   that directory would publish the guide to anyone who can see the repo. Don't "helpfully" remove it.
-- The hub's sign-in **cannot create an account** — it only accepts a token from `passalong login`.
-  `/join/:code` is the only web way in, so today a non-developer can exist only if someone invites
-  them. Deliberate for now, but it is the reason there is no self-serve web signup.
+- **An account is not the product; a team is.** Guides are only created by `share()`, which needs
+  a session — the hub has no editor by design — so a self-serve account with no team has an empty
+  hub. The sign-in therefore offers three doors in deliberate order: paste a token (CLI users),
+  paste an invite link (the only one that leads anywhere immediately), and create an account,
+  whose copy says outright that it will be empty until someone hands you something. The empty hub
+  repeats the invite paste for the same reason. Don't add a signup flow that dead-ends.
 - `passalong share` opens `$EDITOR` only at a TTY. Agents and scripts pass a file and get no editor.
 - The CLI prints the guide id (and pulled markdown) on **stdout** and everything else on stderr,
   so `ID=$(passalong share draft.md)` works.
