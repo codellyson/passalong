@@ -96,13 +96,13 @@ Migrations are forward-only; write a new migration rather than editing an applie
 
 ## 2. npm package
 
-0.1.0 was published by hand (2FA: `npm publish --otp=<code>`). From 0.2.0 releases go through
-the tag-triggered workflow below; manual publishing is the fallback.
+0.1.0 was published by hand (2FA: `npm publish --otp=<code>`). Releases now go through the
+version-triggered workflow below; manual publishing is the fallback.
 
 ```sh
 cd packages/passalong
 npm pack --dry-run          # 10 files, ~14 kB: bin/, src/, skill/, README
-npm version patch           # or minor; bumps package.json (and tags once the repo is committed)
+npm version patch --no-git-tag-version   # or minor; bumps package.json, makes no tag
 npm publish --otp=<code>    # publishConfig.access is public
 ```
 
@@ -145,22 +145,29 @@ One-time setup:
    created the custom domain and certificate itself, so the template token's zone permissions
    are sufficient; no local deploy is required.
 
-`.github/workflows/release.yml` publishes `passalong` to npm when a `v*` tag is pushed and the
-tag matches `packages/passalong/package.json`. It authenticates with npm trusted publishing (OIDC)
-rather than a stored token.
-
-**This is not configured yet.** The `v0.2.0` run (2026-09-04) failed with
-`403 OIDC permission denied for this action`, which is what npm returns when the package has no
-trusted publisher registered. Until it is set up on npmjs.com — package `passalong` → Settings →
-Trusted Publisher → GitHub Actions, owner `codellyson`, repository `passalong`, workflow
-`release.yml`, no environment — every tag push will fail the same way, and the only route is a
-manual `npm publish --otp=<code>` from a logged-in machine. Note that a tag whose release failed
-is spent: npm never saw the version, but the tag is on the remote, so the next attempt needs a new
-version number.
+`.github/workflows/release.yml` publishes `passalong` to npm. There are no release tags: it runs
+on every push to `master`, reads the version from `packages/passalong/package.json`, and asks the
+registry whether that exact version exists. If it does the job stops at the first step; if it does
+not, it publishes. Bumping the version *is* the release:
 
 ```sh
-cd packages/passalong && npm version patch && git push && git push --tags
+cd packages/passalong && npm version patch --no-git-tag-version
+git commit -am "Release the CLI at 0.2.2" && git push
 ```
+
+The registry is the source of truth for what has shipped, so nothing has to be remembered between
+runs and a re-run of an old commit cannot double-publish.
+
+**Auth is not configured yet.** The `v0.2.0` run (2026-09-04, back when this was tag-triggered)
+failed with `403 OIDC permission denied for this action` — what npm returns when a package has no
+trusted publisher registered. Until it is set up on npmjs.com — package `passalong` → Settings →
+Trusted Publisher → GitHub Actions, owner `codellyson`, repository `passalong`, workflow
+`release.yml`, no environment — every version bump will fail the same way, and the only route is a
+manual `npm publish --otp=<code>` from a logged-in machine. A version whose publish failed is not
+spent: npm never saw it, so the same number can be retried once auth works.
+
+The dangling `v0.2.0` tag on the remote is left over from the tag-triggered era and means nothing
+now; `git push origin :refs/tags/v0.2.0` removes it.
 
 ## Not yet in place
 - If the canonical host moves again, change the route, the `DEFAULT_API` constant, and `homepage`
