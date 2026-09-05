@@ -1,22 +1,27 @@
-# Publishes the CLI to npm. There are no release tags to cut by hand: master is the trigger and
-# the version in packages/passalong/package.json is the signal. Bump it in a normal commit, push,
-# and this publishes; leave it alone and the job stops at the first step. That matches how the
-# Worker already ships (ci.yml deploys every master push) instead of asking for a second ritual.
+# Stages a CLI release on npm when a `v*` tag is pushed. Nobody writes that tag by hand:
 #
-#   cd packages/passalong && npm version patch --no-git-tag-version
-#   git commit -am "…" && git push
+#   pnpm release          # patch — tests, bumps, commits, tags, pushes
+#   pnpm release minor
 #
-# Auth is npm trusted publishing (OIDC): npm trusts this repo + this workflow file, GitHub mints a
-# short-lived identity token per run, and provenance is attached automatically. No NPM_TOKEN.
-# It has to be registered on npmjs.com first — package passalong → Settings → Trusted Publisher →
-# GitHub Actions, owner codellyson, repository passalong, workflow release.yml, no environment.
+# scripts/release.mjs refuses on a dirty tree, off master, when master has diverged from the
+# remote, or when the tag or version already exists, so the tag that reaches CI always names a
+# commit that actually contains that version.
+#
+# Auth is npm trusted publishing (OIDC): npm trusts this repo + this workflow *filename*, GitHub
+# mints a short-lived identity token per run, and provenance is attached automatically. No
+# NPM_TOKEN. Registered on npmjs.com under package passalong → Settings → Trusted Publisher.
 # Without it npm answers `403 OIDC permission denied for this action`.
+#
+# That registration is stage-only — npm's own recommendation, and the default since 2026-09: CI
+# may stage a version but not make it live. So this ends at `npm stage publish` and a person
+# finishes it with `npm stage approve <stage-id>` (2FA), or the Staged Packages tab on npmjs.com.
+# Staging needs no 2FA, which is what lets it run unattended.
 # Requires npm >= 11.5.1, newer than the one bundled with Node 22, hence the upgrade step.
 name: release
 
 on:
   push:
-    branches: [master]
+    tags: ["v*"]
 
 permissions:
   contents: read
@@ -28,36 +33,60 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # The registry is the source of truth for what has shipped, so nothing has to be remembered
-      # between runs: if this exact version is already there, the rest of the job is skipped.
+      - name: Tag must match the package version
+        run: |
+          v="$(node -p "require('./packages/passalong/package.json').version")"
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || {
+            echo "tag ${GITHUB_REF_NAME} names a commit whose package is v$v" >&2; exit 1; }
+
+      # The registry, not this workflow, decides what has already shipped — so re-running a run
+      # whose stage was already approved exits clean instead of erroring on a version conflict.
+      # A merely *staged* version is not published yet, so it correctly still counts as new.
       - name: Is this version already on npm?
         id: check
         run: |
           v="$(node -p "require('./packages/passalong/package.json').version")"
           if npm view "passalong@$v" version >/dev/null 2>&1; then
-            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "stage=false" >> "$GITHUB_OUTPUT"
             echo "passalong@$v is already published — nothing to do." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-            echo "passalong@$v is new — publishing." >> "$GITHUB_STEP_SUMMARY"
+            echo "stage=true" >> "$GITHUB_OUTPUT"
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v6
-        if: steps.check.outputs.publish == 'true'
+        if: steps.check.outputs.stage == 'true'
       - uses: actions/setup-node@v5
-        if: steps.check.outputs.publish == 'true'
+        if: steps.check.outputs.stage == 'true'
         with:
           node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest && npm --version
-        if: steps.check.outputs.publish == 'true'
+        if: steps.check.outputs.stage == 'true'
       - run: pnpm install --frozen-lockfile
-        if: steps.check.outputs.publish == 'true'
+        if: steps.check.outputs.stage == 'true'
       - run: pnpm -C packages/passalong test
-        if: steps.check.outputs.publish == 'true'
+        if: steps.check.outputs.stage == 'true'
 
-      - name: Publish
-        if: steps.check.outputs.publish == 'true'
-        run: cd packages/passalong && npm publish
+      - name: Stage the publish
+        if: steps.check.outputs.stage == 'true'
+        run: cd packages/passalong && npm stage publish
+
+      # A staged version is invisible to `npm install` until someone approves it, so the run has
+      # to say so — otherwise a green tick reads as "shipped".
+      - name: How to finish it
+        if: steps.check.outputs.stage == 'true'
+        run: |
+          {
+            echo "### passalong@${{ steps.check.outputs.version }} is staged, not live"
+            echo
+            echo "Approve it to publish — 2FA either way:"
+            echo
+            echo '```sh'
+            echo 'npm stage list passalong'
+            echo 'npm stage approve <stage-id>'
+            echo '```'
+            echo
+            echo "Or npmjs.com → passalong → Staged Packages → Approve."
+          } >> "$GITHUB_STEP_SUMMARY"

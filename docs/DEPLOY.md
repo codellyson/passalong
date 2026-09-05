@@ -165,10 +165,23 @@ exists, so re-running a run that already published exits clean rather than faili
 
 **Auth** is npm trusted publishing (OIDC), registered on npmjs.com under package `passalong` →
 Settings → Trusted Publisher → GitHub Actions, owner `codellyson`, repository `passalong`, workflow
-`release.yml`, no environment, with **Allow `npm publish`** ticked (leaving it unticked permits
-only `npm stage publish`, which needs a human to promote each release on npmjs.com). npm answers
-`403 OIDC permission denied for this action` when that registration is missing — which is what the
-`v0.2.0` and 2026-09-05 runs failed on.
+`release.yml`, no environment, **stage-only** (Allow `npm publish` unticked). npm answers
+`403 OIDC permission denied for this action` when the registration is missing or when the workflow
+attempts something it is not allowed — which is what the `v0.2.0` and the three 2026-09-05 runs
+failed on.
+
+Stage-only means CI never makes a version live. `npm stage publish` uploads it; a maintainer then
+approves, with 2FA:
+
+```sh
+npm stage list passalong
+npm stage view <stage-id>      # or `npm stage download <stage-id>` to inspect the tarball
+npm stage approve <stage-id>   # `npm stage reject <stage-id>` to bin it
+```
+
+or on npmjs.com → `passalong` → **Staged Packages** → Approve. Staging itself needs no 2FA, which
+is what lets CI do it unattended. A green release run therefore means *staged*, not *shipped* —
+the run's summary says so, because a green tick otherwise reads as published.
 
 The dangling `v0.2.0` tag on the remote points at a commit whose `DEFAULT_API` still reads
 kreativekorna and never published; `git push origin :refs/tags/v0.2.0` removes it.
