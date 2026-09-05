@@ -40,6 +40,42 @@ public one, for agents *using* Passalong rather than changing it.
     (the Worker serves it via the `ASSETS` binding for unmatched routes), and `_headers` for
     cache and security headers on those files.
   - `scripts/icons.mjs` — regenerates the PNG icons from the mark in `favicon.svg`. Pure Node.
+- `apps/web` — Nuxt 4 on a Cloudflare Worker. **Being ported to; not yet live.** It takes over
+  every page a person looks at, leaving `apps/api` the machine half (`/v1/*`, a guide's raw `.md`,
+  its OG card). Ported so far: `/`, `/reset`, `/join/:code`, `/hub`. Still to come: `/g/:id/:key`.
+  Until the cutover it deploys only to `passalong-web.codellyson.workers.dev` — its
+  `wrangler.jsonc` declares no `routes` on purpose, so `passalong.dev` is untouched. Deployed by
+  hand; CI only builds it.
+  - `shared/csp.ts` — `VIEW_HEADERS` and the scripted-page policy, moved out of `index.ts`.
+    `server/plugins/csp.ts` stamps a per-request nonce on every inline `<script>` the renderer
+    emits and writes the matching header. **This is why the scripted pages need a nonce and
+    apps/api did not:** apps/api loaded one external file and had no inline script anywhere (the
+    reason Preact was vendored), while Nuxt emits a `window.__NUXT__.config` bootstrap that
+    `script-src 'self'` refuses — the page renders and then hydration dies. `'unsafe-inline'`
+    would allow any injected script, which is the thing the header exists to prevent.
+    `experimental.entryImportMap: false` removes the other inline script, the import map.
+  - `server/routes/v1/[...].ts` — proxies `/v1/*` to `apps/api` while the two halves sit on
+    different origins, so the browser only ever sees one origin and the page code needs no CORS
+    and no cookie `Domain`. **This is the file the cutover replaces** with a direct Hono mount;
+    nothing in the pages changes.
+  - `app/composables/useHub.ts` — the hub's state and every mutation, which `App()` in the old
+    `hub.js` held in closures. Components read it directly rather than having `api` and `reload`
+    threaded three levels down. Status changes still **reload rather than patch state by hand**:
+    the board's buckets are defined in SQL, and guessing them on the client is how the two drift.
+  - `app/utils/form.ts` — `field(form, name)` reads a named input through `form.elements`.
+    **Never `form.fieldName`**: `name`, `action`, `method` and friends are properties of
+    HTMLFormElement itself, so a field called any of those silently reads the form's own property.
+    The join form was submitting an empty name until the typecheck caught it.
+  - The hub's `<noscript>` goes in through `useHead`, not the template. A browser with script
+    *enabled* parses the contents of `<noscript>` as plain text while Vue's server render emits it
+    as markup, so hydration finds a text node where it expected a `<p>` — a real mismatch, and one
+    that only shows up in the dev console.
+  - `scripts/probe.sh` — the port's load-bearing assumption, asserted against a deployed `/`:
+    that a route can be served with no script at all (`noScripts`) and with the stylesheet as a
+    `<link>` rather than an inline `<style>` (`features.inlineStyles: false`). Guide pages render
+    markdown a stranger wrote and that CSP is the product's one real security property — if this
+    stops passing, `/g/**` cannot move. `nuxt dev` cannot answer it; only a built, deployed
+    response can.
 
 ## Contracts
 

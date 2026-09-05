@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "passalong-web",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-08-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  // Nuxt's build writes the client bundle and anything from public/ here. Unlike apps/api this
+  // directory is generated, so nothing in it is committed.
+  "assets": {
+    "directory": ".output/public",
+    "binding": "ASSETS"
+  },
+
+  // The same database apps/api binds, because both halves are the same product and, after the
+  // cutover, this is the only Worker that binds it at all. Nothing here writes: the one query is
+  // an invite code to its team name, for the page an invite link lands on.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "passalong",
+      // An identifier, not a secret: it names the database, not who may use it.
+      "database_id": "1c3e3932-242d-4e7f-ae3e-09c598b6a5ca",
+      "migrations_dir": "../api/migrations"
+    }
+  ],
+
+  // No `routes`. This deploys to workers.dev only, on purpose: passalong.dev stays on the Worker
+  // in apps/api until the port is finished and cut over deliberately.
+  "workers_dev": true
+}

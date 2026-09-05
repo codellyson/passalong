@@ -28,10 +28,19 @@ jobs:
         run: pnpm lint
       - name: Typecheck
         run: pnpm -C apps/api lint
+      - name: Typecheck web
+        run: pnpm -C apps/web lint
       - name: Test
         run: pnpm -r test
       - name: Worker dry run
         run: pnpm -C apps/api deploy:check
+      # apps/web is not deployed from CI yet: it lives on workers.dev until the port is cut over,
+      # and is released by hand. Building it here still catches a break before that happens, and
+      # the dry run needs the build output to exist.
+      - name: Web build
+        run: pnpm -C apps/web build
+      - name: Web dry run
+        run: pnpm -C apps/web deploy:check
       # Jobs can't read secrets in their `if`, so surface "is deploy configured" as an output.
       # Until the token is set, pushes to master run the checks and skip the deploy cleanly.
       - id: cf
