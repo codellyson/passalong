@@ -395,10 +395,16 @@
               name: "password",
               type: "password",
               required: "required",
-              minlength: state.mode === "signup" ? "10" : null,
+              minlength: state.mode === "signup" ? "12" : null,
               autocomplete: state.mode === "signup" ? "new-password" : "current-password",
             }),
-            state.mode === "signup" ? el("span", { class: "muted" }, "at least 10 characters") : "",
+            state.mode === "signup"
+              ? el(
+                  "span",
+                  { class: "muted" },
+                  "at least 12 characters, and not one from a breach list",
+                )
+              : "",
           ),
     ];
 
@@ -852,8 +858,8 @@
           name: "password",
           type: "password",
           required: "required",
-          minlength: "10",
-          placeholder: "password (10+ characters)",
+          minlength: "12",
+          placeholder: "password (12+ characters)",
           autocomplete: "new-password",
         }),
         el("button", { class: "primary", type: "submit" }, "Save"),

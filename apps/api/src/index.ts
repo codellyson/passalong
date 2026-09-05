@@ -39,6 +39,7 @@ import {
   decoyHash,
   EMAIL_RE,
   hashPassword,
+  isBreached,
   passwordProblem,
   rand,
   readCookie,
@@ -361,6 +362,15 @@ const cred = async (c: { req: { json: () => Promise<unknown> } }) => {
 /** Same shape whatever went wrong: which half of a login failed is not the caller's business. */
 const BAD_LOGIN = "email or password is wrong";
 
+/** Every place a password is set runs the same two checks: long enough, and not already public. */
+async function passwordRefusal(password: string): Promise<string | null> {
+  const problem = passwordProblem(password);
+  if (problem) return problem;
+  if (await isBreached(password))
+    return "that password appears in a public breach list — please pick another";
+  return null;
+}
+
 app.post("/v1/auth/signup", async (c) => {
   if (c.env.ACCOUNT_LIMIT) {
     const ip = c.req.header("cf-connecting-ip") || "unknown";
@@ -369,8 +379,8 @@ app.post("/v1/auth/signup", async (c) => {
   }
   const { email, password } = await cred(c);
   if (!EMAIL_RE.test(email)) return err(c, 400, "that does not look like an email address");
-  const problem = passwordProblem(password);
-  if (problem) return err(c, 400, problem);
+  const refusal = await passwordRefusal(password);
+  if (refusal) return err(c, 400, refusal);
   const taken = await c.env.DB.prepare("SELECT id FROM account WHERE email = ?")
     .bind(email)
     .first();
@@ -419,8 +429,8 @@ app.post("/v1/auth/password", async (c) => {
   const me = await c.env.DB.prepare("SELECT email, password_hash FROM account WHERE id = ?")
     .bind(account)
     .first<{ email: string; password_hash: string }>();
-  const problem = passwordProblem(password);
-  if (problem) return err(c, 400, problem);
+  const refusal = await passwordRefusal(password);
+  if (refusal) return err(c, 400, refusal);
   const address = email || me?.email || "";
   if (!EMAIL_RE.test(address)) return err(c, 400, "an email is needed to sign in with a password");
   if (address !== me?.email) {
@@ -462,8 +472,8 @@ app.post("/v1/auth/forgot", async (c) => {
 
 app.post("/v1/auth/reset", async (c) => {
   const b = (await c.req.json().catch(() => ({}))) as { code?: string; password?: string };
-  const problem = passwordProblem(b.password || "");
-  if (problem) return err(c, 400, problem);
+  const refusal = await passwordRefusal(b.password || "");
+  if (refusal) return err(c, 400, refusal);
   const hash = await sha256(b.code || "");
   const row = await c.env.DB.prepare(
     "SELECT account_id FROM reset WHERE hash = ? AND used = '' AND expires > ?",

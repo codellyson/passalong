@@ -40,6 +40,13 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   which. `POST /v1/accounts` still mints an **anonymous** account for `passalong login` and invite
   links — an account nobody has claimed yet; `POST /v1/auth/password` claims it. Everything secret
   is stored as a SHA-256: tokens, session ids and reset codes are all bearer credentials.
+- **Password strength does the work the KDF cannot.** The Workers runtime caps PBKDF2 at 100,000
+  iterations (above that: `NotSupportedError`, and only on the real edge — local workerd allows it,
+  which is how a broken sign-in shipped once). That is below current OWASP guidance, so the
+  compensating controls are a 12-character minimum and a Have I Been Pwned range check on every
+  password set. The check sends five hex characters of the password's SHA-1 and matches suffixes
+  locally, and **fails open**: someone else's outage must not block a sign-up. Verify anything
+  runtime-policed with `wrangler dev --remote` — but note it writes to *production* D1.
 - **`account.token_hash` is retired, not gone.** Dropping it needs a table rebuild (SQLite refuses
   DROP COLUMN on a UNIQUE column), and that rebuild is unsafe here: every child table references
   `account(id)`, mostly `ON DELETE CASCADE`, so `DROP TABLE account` either deletes every guide and

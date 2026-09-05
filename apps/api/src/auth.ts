@@ -22,7 +22,7 @@ const ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
  */
 const ITERATIONS = 100_000;
 
-export const MIN_PASSWORD = 10;
+export const MIN_PASSWORD = 12;
 
 export function rand(length: number, alphabet = ALPHABET): string {
   const bytes = crypto.getRandomValues(new Uint8Array(length));
@@ -96,6 +96,46 @@ export function passwordProblem(password: string): string | null {
 }
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// ---- breached passwords ------------------------------------------------------------------
+
+/**
+ * Is this password in a public breach corpus? Checked against Have I Been Pwned's Pwned Passwords
+ * range API, which is built so the password never leaves: we SHA-1 it locally, send only the first
+ * five hex characters of that hash, and get back every suffix sharing that prefix — some hundreds
+ * of them — to match ourselves. They learn a bucket, not a password.
+ *
+ * This matters more here than the iteration count does. The runtime caps PBKDF2 at 100,000, so
+ * what actually decides whether a stolen hash falls is whether the password was guessable at all,
+ * and "already in a breach list" is the most guessable a password can be.
+ *
+ * `fetchImpl` is a seam for tests. Failures fail *open*: a rejected sign-up because someone else's
+ * API is down is a worse outcome than a weak password getting through.
+ */
+export async function isBreached(password: string, fetchImpl = fetch): Promise<boolean> {
+  if (!password) return false;
+  try {
+    const digest = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(password));
+    const sha1 = [...new Uint8Array(digest)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase();
+    const [prefix, suffix] = [sha1.slice(0, 5), sha1.slice(5)];
+    const res = await fetchImpl(`https://api.pwnedpasswords.com/range/${prefix}`, {
+      headers: { "add-padding": "true" }, // uniform response sizes, so length leaks nothing
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return false;
+    const body = await res.text();
+    for (const line of body.split("\n")) {
+      const [hash, count] = line.trim().split(":");
+      if (hash === suffix && Number(count) > 0) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 // ---- sessions ---------------------------------------------------------------------------
 

@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   clearCookie,
   hashPassword,
+  isBreached,
   passwordProblem,
   readCookie,
   sessionCookie,
@@ -44,10 +45,59 @@ test("garbage in the hash column fails closed", async () => {
 });
 
 test("password rules are about length, not character zoos", () => {
-  assert.match(passwordProblem("short"), /at least 10/);
-  assert.match(passwordProblem("          "), /only spaces/);
+  assert.match(passwordProblem("short"), /at least 12/);
+  assert.match(passwordProblem(" ".repeat(14)), /only spaces/);
   assert.match(passwordProblem("x".repeat(201)), /too long/);
   assert.equal(passwordProblem("a-brand-new-passphrase"), null);
+});
+
+// SHA-1("password") = 5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8. The API is asked for the first
+// five characters only and answers with every suffix in that bucket.
+const PREFIX = "5BAA6";
+const SUFFIX = "1E4C9B93F3F0682250B6CF8331B7EE68FD8";
+
+const stub = (body, ok = true) => {
+  const calls = [];
+  const fn = async (url, init) => {
+    calls.push({ url, init });
+    return { ok, text: async () => body };
+  };
+  fn.calls = calls;
+  return fn;
+};
+
+test("a breached password is recognised, and only its hash prefix is sent", async () => {
+  const fetchImpl = stub(`0018A45C4D1DEF81644B54AB7F969B88D65:1\r\n${SUFFIX}:9659365\r\n`);
+  assert.equal(await isBreached("password", fetchImpl), true);
+  const [{ url }] = fetchImpl.calls;
+  assert.equal(url, `https://api.pwnedpasswords.com/range/${PREFIX}`);
+  assert.equal(
+    new URL(url).pathname,
+    `/range/${PREFIX}`,
+    "the request is the prefix, nothing more",
+  );
+  assert.ok(!url.includes(SUFFIX), "the rest of the hash never leaves this machine");
+  assert.equal(PREFIX.length, 5);
+});
+
+test("a password absent from the bucket passes", async () => {
+  assert.equal(
+    await isBreached("password", stub("0018A45C4D1DEF81644B54AB7F969B88D65:1\r\n")),
+    false,
+  );
+  // A suffix present but never actually seen is not a breach.
+  assert.equal(await isBreached("password", stub(`${SUFFIX}:0\r\n`)), false);
+});
+
+test("the check fails open, because someone else's outage must not block a sign-up", async () => {
+  assert.equal(await isBreached("password", stub("", false)), false);
+  assert.equal(
+    await isBreached("password", async () => {
+      throw new Error("network down");
+    }),
+    false,
+  );
+  assert.equal(await isBreached("", stub(`${SUFFIX}:1`)), false, "no password, no call");
 });
 
 test("the session cookie cannot be read by script and is https-only in production", () => {

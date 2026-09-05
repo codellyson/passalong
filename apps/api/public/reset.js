@@ -61,10 +61,14 @@
                 name: "password",
                 type: "password",
                 required: "required",
-                minlength: "10",
+                minlength: "12",
                 autocomplete: "new-password",
               }),
-              el("span", { class: "muted" }, "at least 10 characters"),
+              el(
+                "span",
+                { class: "muted" },
+                "at least 12 characters, and not one from a breach list",
+              ),
             ),
             el(
               "button",

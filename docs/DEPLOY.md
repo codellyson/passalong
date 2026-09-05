@@ -46,6 +46,10 @@ survive, and every existing `account.token_hash` becomes a row in `token` named 
 so tokens people already hold keep working. If you ever need to re-test that, seed a database from
 migrations 0001–0004 first — running 0005 against an empty one proves nothing.
 
+`wrangler dev --remote` runs the Worker on Cloudflare's real runtime against **production D1**.
+It is the only way to catch runtime restrictions that local `workerd` does not enforce — the
+PBKDF2 iteration cap was found this way — but anything it writes is real. Clean up after yourself.
+
 ## Preflight (run before every deploy)
 
 ```sh
