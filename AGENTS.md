@@ -4,6 +4,11 @@ Passalong hands a finished implementation from one context (repo, machine, agent
 to another as a **transfer guide**: markdown with frontmatter that an agent can act on directly.
 The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source of intent.
 
+This file is the **conventions**: the rules and the sharp edges, and it is what to read first.
+Reference material lives beside it — `docs/wiki/` has the schema, the `/v1` surface, the auth
+model, how the web view stays safe, and how releases work. `apps/api/public/llms.txt` is the
+public one, for agents *using* Passalong rather than changing it.
+
 ## Layout
 
 - `packages/passalong` — the `passalong` CLI and the MCP server. Plain ESM JavaScript, no build step,

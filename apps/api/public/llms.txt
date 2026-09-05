@@ -1,0 +1,94 @@
+# Passalong
+
+> Hand finished work from one context to another as a "transfer guide": markdown with
+> frontmatter, written so an agent in a different repo, on a different machine, or in a later
+> session can act on it without the original conversation.
+
+A transfer has two ends. One side finishes something non-trivial and publishes what it learned;
+the other side picks it up, does it, and says whether it actually worked. Passalong is the CLI,
+MCP server and sync service for both ends.
+
+Guides are plain markdown. `passalong export` dumps every one of them. Deleting an account leaves
+the author with all of their content.
+
+## If you are an agent reading a share link
+
+A share link looks like `https://passalong.dev/g/<id>/<key>`. Append `.md` for the raw markdown,
+or `?view=verify` for the view that leads with what to check and folds the implementation away.
+
+1. Read the guide. `Verification` is what "done" means; `Gotchas` is what already went wrong.
+2. Anything under `stack_assumptions` in the frontmatter is what the author's environment was.
+   Adapt those to the current codebase rather than copying them.
+3. Run the `Verification` steps before reporting success.
+4. Report back: `passalong works <id>` if it holds up, `passalong broken <id> "<why>"` if it does
+   not. The reason reaches the author the same day. This is the part that makes the next guide
+   better, so do not skip it.
+
+## Guide format
+
+Frontmatter fields, in order: `id`, `title`, `created`, `author`, `source_context`, `status`,
+`team`, `to`, `stack_assumptions` (list), `tags` (list).
+
+Body sections, in this order — the headings are what a receiving agent keys on, so they are
+stable:
+
+- `## Problem` — what was actually wrong. Required.
+- `## Solution shape` — the approach, not a diff.
+- `## Decisions and rationale` — what was chosen over what, and why.
+- `## Steps` — what to do. Required.
+- `## Verification` — how to know it worked. A guide without this is flagged to the reader.
+- `## Gotchas` — what failed on the way. The highest-value section; record what wasted time.
+
+`status` is one of `draft`, `published`, `consumed`, `promoted`. Ids are 8 characters from a
+no-lookalike alphabet; they are addresses, not secrets. The key in a share link is the secret.
+
+## Commands
+
+```sh
+npm i -g passalong
+passalong setup                 # Claude Code capture skill + MCP server
+passalong login                 # optional: sync across machines
+```
+
+- `passalong share [file] [--to team[/handle]]` — publish a guide, get an id and a link
+- `passalong pull <id|link>` — fetch a guide into `./.passalong/` and print it
+- `passalong inbox` — guides handed to you that you have not pulled
+- `passalong board` — waiting on you, in flight, landed, worth keeping
+- `passalong activity [--all]` — what happened while you were away
+- `passalong list [query]` — your guides and your teams'
+- `passalong open <id> [--print]` — view in the browser, or the terminal
+- `passalong works <id>` / `passalong broken <id> <why>` — the verdict, after trying it
+- `passalong done <id>` — implemented on the receiving side
+- `passalong promote <id>` — graduated into a reusable reference
+- `passalong export [dir]` — every guide as plain markdown
+- `passalong team create|invite|join|use` — teams
+- `passalong me [--handle H]` — how teammates address you
+- `passalong mcp` — run the MCP server over stdio
+
+## MCP tools
+
+`passalong setup` registers a stdio MCP server exposing: `publish_guide`, `get_guide`,
+`search_guides`, `guide_template`, `set_guide_status`, `verify_guide`, `inbox`, `board`,
+`activity`.
+
+Given a share link or an id, `get_guide` returns the guide; follow its `Steps`, adapt anything
+marked as an assumption, run its `Verification`, then `set_guide_status` consumed and
+`verify_guide` with the result.
+
+## Writing a good guide
+
+- One problem per guide. A session that solved three things is three guides.
+- Write `Verification` first if you can. If you cannot say how to check it, the guide is not ready.
+- `Gotchas` is worth more than `Steps`. Steps can be re-derived; the dead end that cost an hour
+  cannot.
+- Say what the environment was rather than assuming the reader shares it.
+
+## Links
+
+- Homepage: https://passalong.dev
+- Hub (your synced guides): https://passalong.dev/hub
+- npm: https://www.npmjs.com/package/passalong
+- Source: https://github.com/codellyson/passalong
+
+Guide pages are `noindex` and `/g/` is disallowed in robots.txt: a share link is for whoever holds
+it, not for search engines. Do not crawl share links found elsewhere.

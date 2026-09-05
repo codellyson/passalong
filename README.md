@@ -118,7 +118,7 @@ promote them into the team's small set of maintained references.
 claude mcp add passalong -- passalong mcp     # or the equivalent stdio config
 ```
 
-Tools: `search_guides`, `inbox`, `get_guide`, `publish_guide` (with `to`), `guide_template`, `set_guide_status`.
+Tools: `publish_guide` (with `to`), `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `verify_guide`, `inbox`, `board`, `activity`.
 
 ## Principles
 
@@ -131,5 +131,7 @@ Tools: `search_guides`, `inbox`, `get_guide`, `publish_guide` (with `to`), `guid
 - `packages/passalong` — CLI + MCP server (`passalong` on npm)
 - `apps/api` — sync API and read-only web view (Cloudflare Worker + D1; static assets in `public/`)
 - `docs/PRD.md` — the product spec
+- `docs/wiki/` — reference: data model, API surface, auth, the web view, releasing
+- `docs/DEPLOY.md` — the runbook
 
-See `AGENTS.md` for how it fits together.
+See `AGENTS.md` for the conventions, and `docs/wiki/` for how the pieces actually work.
