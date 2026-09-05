@@ -13,8 +13,12 @@
 #   sh scripts/probe.sh https://passalong-web.<subdomain>.workers.dev [path]
 #
 # It runs against the landing page by default — a real page under the real route rule, rather than
-# a fixture that could drift from one. `nuxt dev` cannot answer any of this: a development build
-# ships scripts and inlines styles whatever the config says.
+# a fixture that could drift from one. Pass a path to check another, e.g. a guide page:
+#
+#   sh scripts/probe.sh https://passalong.dev /g/<id>/<key>
+#
+# `nuxt dev` cannot answer any of this: a development build ships scripts and inlines styles
+# whatever the config says.
 set -eu
 
 origin=${1:?usage: probe.sh <origin> [path]}
@@ -48,9 +52,11 @@ case $html in
   *) check no "stylesheet arrives as a <link>" ;;
 esac
 
-# noScripts removes the JavaScript, not the HTML: the page must still be server-rendered.
+# noScripts removes the JavaScript, not the HTML: the page must still be server-rendered. The
+# brand link is the marker because every page under this rule carries one, so the check does not
+# have to know which page it was pointed at.
 case $html in
-  *"Hand finished work"*) check ok "markup is server-rendered" ;;
+  *'class="brand"'*) check ok "markup is server-rendered" ;;
   *) check no "markup is server-rendered" ;;
 esac
 

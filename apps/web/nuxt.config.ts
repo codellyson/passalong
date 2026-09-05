@@ -2,6 +2,7 @@
 // half (`/v1/*`, the raw `.md` of a guide, its OG card) and, for now, deploys separately — phase 4
 // mounts it here so there is one origin and one deploy again.
 
+import { fileURLToPath } from "node:url";
 import { VIEW_HEADERS } from "./shared/csp";
 
 export default defineNuxtConfig({
@@ -9,6 +10,15 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: "cloudflare_module",
+  },
+
+  // The guide format is defined once, in apps/api/src/guide.ts, and mirrored from
+  // packages/passalong/src/guide.js. Both halves of the product need it — apps/api still serves a
+  // guide's raw `.md` and its OG card — so it is aliased across rather than copied, which would
+  // make a third place to keep in step. Both aliased modules are leaves with no imports of their
+  // own; the cutover merges the two trees and the alias goes away.
+  alias: {
+    "#api": fileURLToPath(new URL("../api/src", import.meta.url)),
   },
 
   runtimeConfig: {
@@ -67,6 +77,9 @@ export default defineNuxtConfig({
     // The headers are `VIEW_HEADERS` from apps/api/src/index.ts, verbatim. They move here from
     // being a hand-spread object literal on every `c.html()` call.
     "/": { noScripts: true, headers: VIEW_HEADERS },
+    // A guide page renders markdown a stranger wrote. There is no sanitiser behind this — the CSP
+    // is what makes it safe, and `noScripts` is what lets the CSP name no `script-src` at all.
+    "/g/**": { noScripts: true, headers: VIEW_HEADERS },
 
     // The hub, the invite page and the password reset run script, so their header is written per
     // response by server/plugins/csp.ts — it carries a nonce, which a route rule cannot.

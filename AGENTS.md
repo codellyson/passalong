@@ -42,7 +42,8 @@ public one, for agents *using* Passalong rather than changing it.
   - `scripts/icons.mjs` — regenerates the PNG icons from the mark in `favicon.svg`. Pure Node.
 - `apps/web` — Nuxt 4 on a Cloudflare Worker. **Being ported to; not yet live.** It takes over
   every page a person looks at, leaving `apps/api` the machine half (`/v1/*`, a guide's raw `.md`,
-  its OG card). Ported so far: `/`, `/reset`, `/join/:code`, `/hub`. Still to come: `/g/:id/:key`.
+  its OG card). **Every page is ported**: `/`, `/g/:id/:key`, `/hub`, `/join/:code`, `/reset`, and
+  the 404 (now `app/error.vue`). What is left is the cutover, below.
   Until the cutover it deploys only to `passalong-web.codellyson.workers.dev` — its
   `wrangler.jsonc` declares no `routes` on purpose, so `passalong.dev` is untouched. Deployed by
   hand; CI only builds it.
@@ -70,6 +71,21 @@ public one, for agents *using* Passalong rather than changing it.
     *enabled* parses the contents of `<noscript>` as plain text while Vue's server render emits it
     as markup, so hydration finds a text node where it expected a `<p>` — a real mismatch, and one
     that only shows up in the dev console.
+  - `#api/*` is an alias to `apps/api/src`, for the two leaf modules both halves need:
+    `guide.ts` (the format) and `analytics.ts`. Aliased rather than copied — the format is already
+    defined twice, in `packages/passalong/src/guide.js` and mirrored in `apps/api/src/guide.ts`,
+    and a third copy is one more place to forget. The alias goes away when the trees merge.
+  - **Cutover checklist**, none of it done yet: replace `server/routes/v1/[...].ts` with a direct
+    Hono mount; move `robots.txt` and `llms.txt` (and its test) out of `apps/api/public`; set
+    `APTABASE_KEY` on this Worker or `guide_viewed` silently stops counting; point the three
+    custom domains here and take them off `apps/api`; then delete `render.ts`, `public/hub.js`,
+    `public/join.js`, `public/reset.js`, `public/vendor/`, `scripts/vendor.mjs` and `_headers`.
+    `og.png` and a guide's raw `.md` stay in Hono — `workers-og` is 1.7MB of wasm behind a dynamic
+    import, and until the mount exists a guide page's unfurl image 404s on the preview host.
+  - **Local dev has two separate D1s.** `apps/web` binds its own local database through Nitro's
+    Cloudflare emulation, which is *not* the one `wrangler dev` gives `apps/api` on :8787. A guide
+    created through the proxy is invisible to the guide page's direct binding. Until the cutover,
+    check guide pages against the deployed preview, which binds the real database.
   - `scripts/probe.sh` — the port's load-bearing assumption, asserted against a deployed `/`:
     that a route can be served with no script at all (`noScripts`) and with the stylesheet as a
     `<link>` rather than an inline `<style>` (`features.inlineStyles: false`). Guide pages render
