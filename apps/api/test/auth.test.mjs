@@ -29,7 +29,9 @@ test("the same password hashes differently every time", async () => {
 test("the stored form carries its own parameters", async () => {
   const [scheme, iterations, salt, hash] = (await hashPassword("correct-horse-battery")).split("$");
   assert.equal(scheme, "pbkdf2");
-  assert.ok(Number(iterations) >= 210_000, "iterations must not silently drop");
+  // 100,000 is the Workers runtime's hard ceiling for PBKDF2, not a tuning choice. Going above it
+  // throws NotSupportedError on the edge while passing locally, so this guards both directions.
+  assert.equal(Number(iterations), 100_000);
   assert.ok(salt.length > 20 && hash.length > 20);
   // Parameters live in the record so they can be raised later without invalidating old passwords.
   assert.equal(await verifyPassword("correct-horse-battery", `pbkdf2$1000$${salt}$${hash}`), false);

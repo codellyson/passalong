@@ -10,8 +10,17 @@
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-/** OWASP's floor for PBKDF2-HMAC-SHA256 is well above this; Workers CPU time is the other side. */
-const ITERATIONS = 210_000;
+/**
+ * 100,000 is not a preference, it is the ceiling: the Workers runtime rejects anything higher with
+ * `NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not supported`. Local
+ * workerd does not enforce the cap, so this only appears on the real edge — it shipped once and
+ * broke sign-in until `wrangler dev --remote` reproduced it.
+ *
+ * That is below current OWASP guidance for PBKDF2-HMAC-SHA256, and worth knowing. The iteration
+ * count is stored inside each hash, so raising it later (or moving to another KDF) can be done
+ * per-account on next sign-in without invalidating anyone.
+ */
+const ITERATIONS = 100_000;
 
 export const MIN_PASSWORD = 10;
 
@@ -59,6 +68,17 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
 }
+
+/**
+ * A hash to check against when there is no account, so a wrong email costs the same as a wrong
+ * password. Computed once per isolate: hashing a throwaway on every failed attempt would double
+ * the work an unauthenticated caller can make us do.
+ */
+let decoy: Promise<string> | null = null;
+export const decoyHash = () => {
+  decoy ??= hashPassword(rand(24));
+  return decoy;
+};
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const [scheme, iterations, salt, hash] = stored.split("$");

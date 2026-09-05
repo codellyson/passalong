@@ -36,6 +36,7 @@
 import { Hono } from "hono";
 import {
   clearCookie,
+  decoyHash,
   EMAIL_RE,
   hashPassword,
   passwordProblem,
@@ -393,9 +394,7 @@ app.post("/v1/auth/login", async (c) => {
     .first<{ id: string; password_hash: string }>();
   // Hash anyway when there is no such account, so a missing email is not faster than a wrong
   // password.
-  const ok = row
-    ? await verifyPassword(password, row.password_hash)
-    : await verifyPassword(password, await hashPassword(rand(20)));
+  const ok = await verifyPassword(password, row ? row.password_hash : await decoyHash());
   if (!row || !ok) return err(c, 401, BAD_LOGIN);
   return c.json({ account: row.id }, 200, { "set-cookie": await startSession(c, row.id) });
 });
