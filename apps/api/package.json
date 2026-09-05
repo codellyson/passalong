@@ -18,7 +18,8 @@
     "hono": "^4.6.0",
     "htm": "^3.1.1",
     "marked": "^15.0.0",
-    "preact": "^10.29.8"
+    "preact": "^10.29.8",
+    "workers-og": "^0.0.27"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260811.1",

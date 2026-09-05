@@ -7,7 +7,7 @@ first, because the package's default API URL points at it.
 
 | Piece | Where | Config |
 | --- | --- | --- |
-| API + web view | Worker `passalong-api` on `passalong.kreativekorna.com` | `apps/api/wrangler.jsonc` |
+| API + web view | Worker `passalong-api` on `passalong.dev` (and `passalong.kreativekorna.com`) | `apps/api/wrangler.jsonc` |
 | Database | D1 `passalong` (id `2b2c58a0-…`, WEUR) | same file |
 | CLI + MCP | npm `passalong`, binary `passalong` | `packages/passalong/package.json` |
 | Default API URL | `DEFAULT_API` in `packages/passalong/src/api.js` | must match the route above |
@@ -26,9 +26,9 @@ credential — but two things must be true, or every send fails silently:
    zone the DNS records are created for you:
 
    ```sh
-   wrangler email sending enable passalong.kreativekorna.com
-   wrangler email sending dns get passalong.kreativekorna.com   # SPF, DKIM, DMARC, bounce MX
-   wrangler email sending settings passalong.kreativekorna.com  # enabled: true
+   wrangler email sending enable passalong.dev
+   wrangler email sending dns get passalong.dev   # SPF, DKIM, DMARC, bounce MX
+   wrangler email sending settings passalong.dev  # enabled: true
    ```
 
    Sending is scoped to the `passalong.` subdomain on purpose: the records live under
@@ -72,15 +72,16 @@ pnpm -C apps/api db:migrate:remote   # applies any new files in apps/api/migrati
 pnpm -C apps/api run deploy
 ```
 
-First deploy creates the `passalong.kreativekorna.com` DNS record and certificate; allow a minute.
+First deploy creates the DNS record and certificate for each route; allow a minute.
 
 Verify:
 
 ```sh
-curl -s https://passalong.kreativekorna.com/health                 # {"ok":true}
-curl -s -o /dev/null -w '%{http_code}\n' https://passalong.kreativekorna.com/g/abcdefgh/wrongkey0000000000000000   # 404
-curl -s -X POST https://passalong.kreativekorna.com/v1/accounts    # 201 with a token
-curl -s -o /dev/null -w '%{http_code}\n' https://passalong.kreativekorna.com/v1/tokens   # 401 unauthenticated
+curl -s https://passalong.dev/health                 # {"ok":true}
+curl -s https://passalong.kreativekorna.com/health   # {"ok":true} — the old host still answers
+curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/g/abcdefgh/wrongkey0000000000000000   # 404
+curl -s -X POST https://passalong.dev/v1/accounts    # 201 with a token
+curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/v1/tokens   # 401 unauthenticated
 ```
 
 Then switch your own machine from the local Worker to production:
@@ -136,7 +137,8 @@ One-time setup:
 
 1. Create an API token at <https://dash.cloudflare.com/profile/api-tokens>: start from the
    **Edit Cloudflare Workers** template and add **Account → D1 → Edit**. Scope it to this
-   account and, under Zone Resources, to `kreativekorna.com`.
+   account and, under Zone Resources, to both `passalong.dev` and `kreativekorna.com` — the
+   deploy touches a custom-domain route on each.
 2. Store it: `gh secret set CLOUDFLARE_API_TOKEN` (paste when prompted).
    `CLOUDFLARE_ACCOUNT_ID` is already set.
 3. Push to `master` (or re-run the last `ci` workflow). The first CI deploy on 2026-09-03
@@ -152,5 +154,7 @@ cd packages/passalong && npm version patch && git push && git push --tags
 ```
 
 ## Not yet in place
-- No custom-domain fallback: if `passalong.kreativekorna.com` moves, change the route, the
-  `DEFAULT_API` constant, and `homepage` in the package together.
+- If the canonical host moves again, change the route, the `DEFAULT_API` constant, and `homepage`
+  in the package together. `passalong.kreativekorna.com` is kept routed rather than redirected:
+  share keys live in the URL, so links handed out under it must keep resolving, and `origin` in
+  `src/index.ts` builds each page's links from the host it was asked on.

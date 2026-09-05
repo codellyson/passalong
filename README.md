@@ -94,7 +94,7 @@ A receiver who tries the work reports back with `passalong works <id>` or `passa
 That is separate from `done`, which means *implemented*: a verdict means it actually runs, a failing
 one has to say why, and the author sees it on their board and in their inbox.
 
-Sign in at [the hub](https://passalong.kreativekorna.com/hub) with an email and password, and mint
+Sign in at [the hub](https://passalong.dev/hub) with an email and password, and mint
 an API token there for the CLI and MCP servers — named, revocable, and shown once. Your password
 never goes near the terminal. `passalong login` with no arguments still makes an account without
 any of that; add an email and password later to be able to sign in from a browser and recover it.

@@ -61,6 +61,10 @@ function copy(text, btn) {
 // ---- shared bits ---------------------------------------------------------------------------
 
 /** An invite link is the only entry that leads anywhere for someone with no team. */
+const Brand = () => html`
+  <a class="brand" href="/"><img src="/favicon.svg" alt="" />Passalong</a>
+`;
+
 const InvitePaste = ({ label }) => html`
   <form
     class="invite-paste"
@@ -82,18 +86,34 @@ function SignIn({ onToken, onSignedIn, error }) {
   const [authError, setAuthError] = useState(null);
   const [notice, setNotice] = useState(null);
 
-  const tab = (value, label) => html`
-    <button
-      class=${`chip${mode === value ? " on" : ""}`}
-      onclick=${() => {
-        setMode(value);
-        setAuthError(null);
-        setNotice(null);
-      }}
-    >
-      ${label}
-    </button>
-  `;
+  // One screen, three modes. Each states its own purpose rather than making the reader infer it
+  // from which of three identical tabs happens to be pressed.
+  const COPY = {
+    login: {
+      title: "Sign in to Passalong",
+      lede: "Pick up work handed to you, and see what you handed over.",
+      submit: "Sign in",
+    },
+    signup: {
+      title: "Create your account",
+      lede: "Somewhere to keep the guides you publish, and to receive the ones handed to you.",
+      submit: "Create account",
+    },
+    forgot: {
+      title: "Reset your password",
+      lede: "We will email you a link. It works once, and for an hour.",
+      submit: "Email me a link",
+    },
+  }[mode];
+
+  const go = (next) => (e) => {
+    e.preventDefault();
+    setMode(next);
+    setAuthError(null);
+    setNotice(null);
+  };
+  const link = (next, label) =>
+    html`<button class="linkish" type="button" onclick=${go(next)}>${label}</button>`;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -121,60 +141,69 @@ function SignIn({ onToken, onSignedIn, error }) {
   };
 
   return html`
-    <section class="signin">
-      <h2>Sign in</h2>
-      <div class="chips">
-        ${tab("login", "sign in")}${tab("signup", "create account")}${tab("forgot", "forgot password")}
-      </div>
-      <form class="join" onsubmit=${submit}>
-        <label>
-          Email
-          <input name="email" type="email" required autocomplete="email" />
-        </label>
-        ${
-          mode !== "forgot" &&
-          html`
-          <label>
-            Password
-            <input
-              name="password"
-              type="password"
-              required
-              minlength=${mode === "signup" ? "12" : null}
-              autocomplete=${mode === "signup" ? "new-password" : "current-password"}
-            />
-            ${
-              mode === "signup" &&
-              html`<span class="muted">at least 12 characters, and not one from a breach list</span>`
-            }
-          </label>
-        `
-        }
-        <button class="primary" type="submit">
-          ${mode === "signup" ? "Create account" : mode === "forgot" ? "Email me a link" : "Sign in"}
-        </button>
-        ${authError && html`<p class="error">${authError}</p>`}
-        ${notice && html`<p class="muted">${notice}</p>`}
-      </form>
+    <section class="auth">
+      <${Brand} />
+      <h1>${COPY.title}</h1>
+      <p class="lede">${COPY.lede}</p>
 
-      <h2>Other ways in</h2>
-      <p>Been sent an invite? Opening the link makes your account and joins the team in one step.</p>
-      <${InvitePaste} label="invite link" />
-      <p>
-        Or paste an API token — the CLI prints one with <code>passalong login</code>, and
-        <code>passalong hub</code> opens this page already signed in.
-      </p>
-      <form
-        class="invite-paste"
-        onsubmit=${(e) => {
-          e.preventDefault();
-          const t = e.target.token.value.trim();
-          if (t) onToken(t);
-        }}
-      >
-        <input class="grow" name="token" type="password" placeholder="pa_…" autocomplete="off" spellcheck="false" />
-        <button class="btn" type="submit">Use token</button>
-      </form>
+      <div class="authcard">
+        <form class="join" onsubmit=${submit}>
+          <label>
+            Email
+            <input name="email" type="email" required placeholder="ada@example.com" autocomplete="email" />
+          </label>
+          ${
+            mode !== "forgot" &&
+            html`
+            <label>
+              Password
+              <input
+                name="password"
+                type="password"
+                required
+                placeholder=${mode === "signup" ? "choose a password" : "your password"}
+                autocomplete=${mode === "signup" ? "new-password" : "current-password"}
+              />
+            </label>
+          `
+          }
+          <button class="primary" type="submit">${COPY.submit}</button>
+          ${authError && html`<p class="error">${authError}</p>`}
+          ${notice && html`<p class="muted">${notice}</p>`}
+        </form>
+        <p class="auth-alt">
+          ${
+            mode === "login"
+              ? html`New here? ${link("signup", "Create an account")} · ${link("forgot", "Forgot password")}`
+              : mode === "signup"
+                ? html`Already have an account? ${link("login", "Sign in")}`
+                : html`Remembered it? ${link("login", "Sign in")}`
+          }
+        </p>
+      </div>
+
+      <details class="more">
+        <summary>Other ways in — invite link, API token</summary>
+        <p class="muted">
+          Been sent an invite? Opening the link makes your account and joins the team in one step.
+        </p>
+        <${InvitePaste} label="invite link" />
+        <p class="muted">
+          Or paste an API token — the CLI prints one with <code>passalong login</code>, and
+          <code>passalong hub</code> opens this page already signed in.
+        </p>
+        <form
+          class="invite-paste"
+          onsubmit=${(e) => {
+            e.preventDefault();
+            const t = e.target.token.value.trim();
+            if (t) onToken(t);
+          }}
+        >
+          <input class="grow" name="token" type="password" placeholder="pa_…" autocomplete="off" spellcheck="false" />
+          <button class="btn" type="submit">Use token</button>
+        </form>
+      </details>
       ${error && html`<p class="error">${error}</p>`}
     </section>
   `;
@@ -219,8 +248,7 @@ function Claim({ me, api, reload }) {
           name="password"
           type="password"
           required
-          minlength="12"
-          placeholder="password (12+ characters)"
+          placeholder="password"
           autocomplete="new-password"
         />
         <button class="primary" type="submit">Save</button>
@@ -816,6 +844,13 @@ function App() {
 
   return html`
     <section class="hub">
+      <header>
+        <${Brand} />
+        <h1>Your transfers</h1>
+        <div class="meta">
+          <span>what is waiting, in flight, and landed · <a href="/">what is Passalong?</a></span>
+        </div>
+      </header>
       <${Claim} me=${d.me} api=${api} reload=${load} />
       <${Identity} me=${d.me} editing=${editing} setEditing=${setEditing} api=${api}
                    setMe=${(me) => setD({ ...d, me })} />

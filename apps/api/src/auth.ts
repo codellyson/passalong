@@ -22,7 +22,9 @@ const ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
  */
 const ITERATIONS = 100_000;
 
-export const MIN_PASSWORD = 12;
+// NIST SP 800-63B's floor. A longer bar mostly pushes people towards a password they reuse;
+// what actually keeps weak ones out is the breach check below, not the extra four characters.
+export const MIN_PASSWORD = 8;
 
 export function rand(length: number, alphabet = ALPHABET): string {
   const bytes = crypto.getRandomValues(new Uint8Array(length));

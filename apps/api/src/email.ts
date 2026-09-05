@@ -22,7 +22,7 @@ export interface SendEmail {
 
 export type MailEnv = { EMAIL?: SendEmail; EMAIL_FROM?: string };
 
-const DEFAULT_FROM = "no-reply@passalong.kreativekorna.com";
+const DEFAULT_FROM = "no-reply@passalong.dev";
 
 /**
  * Send one plain-text mail. Never throws: a bounced or unconfigured mailer must not fail the

@@ -2,7 +2,7 @@
 // CLI is a purely local tool, and every function throws an ApiError the CLI turns into a hint.
 import { readConfig } from "./store.js";
 
-export const DEFAULT_API = "https://passalong.kreativekorna.com";
+export const DEFAULT_API = "https://passalong.dev";
 
 export class ApiError extends Error {
   constructor(status, message) {

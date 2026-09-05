@@ -28,7 +28,9 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
     preact/hooks' bare `"preact"` import to a relative path; an import map would have to be an
     inline `<script>`, which the CSP also refuses. Pages load as `<script type="module">`.
     Also served from here:
-    `styles.css` (the only stylesheet; the view's CSP refuses inline styles), `favicon.svg` and
+    `styles.css` (the only stylesheet; the view's CSP refuses inline styles), `fonts/` (two
+    variable woff2 faces the stylesheet loads, plus the `.ttf` pair the OG renderer needs —
+    satori cannot read woff2), `favicon.svg` and
     the PNG icons, `site.webmanifest`, `robots.txt` (share links are `Disallow`ed), `404.html`
     (the Worker serves it via the `ASSETS` binding for unmatched routes), and `_headers` for
     cache and security headers on those files.
@@ -124,9 +126,10 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   place the wording lives — CLI, MCP and hub all print the server's `text`.
 - **Local-first.** With no token every command works offline. Sync failures on `list` degrade to
   a warning, never an error.
-- **CSP on the web view** (`default-src 'none'; style-src 'self'`) is what makes rendering owner
-  markdown for other viewers safe. Don't loosen it to add scripts or inline styles; put styles
-  in `public/styles.css`.
+- **CSP on the web view** (`default-src 'none'; style-src 'self'; font-src 'self'`) is what makes
+  rendering owner markdown for other viewers safe. Don't loosen it to add scripts or inline
+  styles; put styles in `public/styles.css`. `font-src` is same-origin only: fonts are served
+  from `public/fonts`, never a CDN, for the same reason Preact is vendored.
 - **Guide pages are `noindex`** and `robots.txt` disallows `/g/`. The share key is the secret, so
   the page must never end up in a search index.
 
@@ -137,7 +140,7 @@ pnpm install
 pnpm -C packages/passalong test            # guide format unit tests
 pnpm -C apps/api lint                  # tsc
 pnpm -C apps/api db:migrate            # local D1 (re-run if wrangler.jsonc's database_id changes)
-pnpm dev:api                           # Worker on :8787
+pnpm dev                               # Worker on :8787
 PASSALONG_API=http://localhost:8787 PASSALONG_HOME=/tmp/rh packages/passalong/bin/passalong login
 pnpm -C apps/api db:migrate:remote && pnpm -C apps/api run deploy
 ```
@@ -149,6 +152,12 @@ pnpm -C apps/api db:migrate:remote && pnpm -C apps/api run deploy
 - `node --test test/` treats the directory as a file; use bare `node --test`.
 - `public/styles.css` is browser-cached for an hour (`public/_headers`). After changing it, bump
   `STYLES` in `apps/api/src/render.ts` or returning visitors get the old sheet.
+- The stylesheet is lint-clean under `biome check`, including `noDescendingSpecificity`. Leaf
+  overrides live in the section at the bottom; a new `.x h2`-shaped rule added mid-file will
+  usually trip that rule, and the fix is ordering, not `!important`.
+- `src/og.ts` renders each guide's unfurl card (`/g/:id/:key/og.png`). `workers-og` is ~1.7MB of
+  JS and wasm, so it is behind a dynamic `import()`: every other route would otherwise pay for it
+  on a cold start. Satori's parser does not decode HTML entities — write literal characters.
 - `/hub` and `/join/:code` are the only pages allowed to run script (`HUB_HEADERS` in
   `index.ts`); they are static files talking to `/v1/*` with the token from `localStorage`. Guide
   pages render markdown someone else wrote and must keep the stricter `VIEW_HEADERS`. `passalong hub` passes the
@@ -176,7 +185,8 @@ pnpm -C apps/api db:migrate:remote && pnpm -C apps/api run deploy
 ## Deploying
 
 `docs/DEPLOY.md` is the runbook: preflight, Worker (`db:migrate:remote` then `run deploy`; plain `pnpm deploy` is a pnpm built-in), then the
-npm package. Production host is `passalong.kreativekorna.com` (custom-domain route in
+npm package. Production host is `passalong.dev`, with `passalong.kreativekorna.com` still routed for share
+links already in circulation (custom-domain routes in
 `wrangler.jsonc`); `DEFAULT_API` in `packages/passalong/src/api.js` and `homepage` in its
 `package.json` must match it. Account creation is throttled by the `ACCOUNT_LIMIT` rate-limit
 binding (5/min per IP); the binding is optional in code so a config without it still runs.

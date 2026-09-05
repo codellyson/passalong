@@ -60,6 +60,7 @@ import {
   sendVerdict,
 } from "./email.js";
 import { body as bodyOf, type Meta, parseMeta, STATUSES, setField } from "./guide.js";
+import { canonicalRedirect } from "./hosts.js";
 import {
   feed,
   markRead,
@@ -68,6 +69,7 @@ import {
   notifyAll,
   unreadCount,
 } from "./notify.js";
+import { renderOgImage } from "./og.js";
 import { renderGuide, renderHome, renderHub, renderJoin, renderReset } from "./render.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
@@ -85,6 +87,17 @@ type Vars = { account: string };
 type Ctx = { env: Env; req: { url: string }; get: (k: "account") => string };
 
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
+
+// `www` is routed so the name resolves, but it does not serve: two hosts minting share links for
+// the same guide would split one link into two, and a key in the URL makes that worse than
+// untidy. The old kreativekorna host is deliberately *not* redirected here — links under it are
+// already in circulation, so it keeps serving. 308 preserves the method and the body.
+app.use("*", async (c, next) => {
+  const to = canonicalRedirect(c.req.url, c.req.header("host"));
+  // 308 rather than 301: the method and body survive, so a POST to www is not silently turned
+  // into a GET.
+  return to ? c.redirect(to, 308) : next();
+});
 
 const ID_RE = /^[a-z0-9]{6,12}$/;
 const HANDLE_RE = /^[a-z0-9][a-z0-9-]{1,30}$/;
@@ -1255,7 +1268,7 @@ async function shared(c: { env: Env }, id: string, key: string): Promise<GuideRo
 // come from /styles.css (a static asset), so inline styles are refused too.
 const VIEW_HEADERS = {
   "content-security-policy":
-    "default-src 'none'; style-src 'self'; img-src 'self' https: data:; manifest-src 'self'; base-uri 'none'; form-action 'none'",
+    "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' https: data:; manifest-src 'self'; base-uri 'none'; form-action 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
 };
@@ -1277,6 +1290,13 @@ app.get("/g/:id/:key{.+\\.md}", async (c) => {
     "content-type": "text/markdown; charset=utf-8",
     ...VIEW_HEADERS,
   });
+});
+
+// The unfurl card. Deliberately not counted as a pull: this is fetched by crawlers, not people.
+app.get("/g/:id/:key/og.png", async (c) => {
+  const row = await shared(c, c.req.param("id"), c.req.param("key"));
+  if (!row) return notFoundPage(c);
+  return renderOgImage(c.env, c.req.url, { id: row.id, meta: parseMeta(row.markdown) });
 });
 
 app.get("/g/:id/:key", async (c) => {
@@ -1322,7 +1342,7 @@ app.get("/", (c) => c.html(renderHome(), 200, VIEW_HEADERS));
 const HUB_HEADERS = {
   ...VIEW_HEADERS,
   "content-security-policy":
-    "default-src 'none'; script-src 'self'; script-src-elem 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'",
+    "default-src 'none'; script-src 'self'; script-src-elem 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'",
 };
 app.get("/hub", (c) => c.html(renderHub(), 200, HUB_HEADERS));
 app.get("/reset", (c) => c.html(renderReset(), 200, HUB_HEADERS));

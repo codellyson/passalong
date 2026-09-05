@@ -42,8 +42,7 @@ function Reset() {
     <form class="join" onsubmit=${submit}>
       <label>
         New password
-        <input name="password" type="password" required minlength="12" autocomplete="new-password" />
-        <span class="muted">at least 12 characters, and not one from a breach list</span>
+        <input name="password" type="password" required placeholder="choose a new password" autocomplete="new-password" />
       </label>
       <button class="primary" type="submit" disabled=${busy}>
         ${busy ? "Saving…" : "Set password"}

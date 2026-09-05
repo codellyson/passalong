@@ -45,7 +45,7 @@ test("garbage in the hash column fails closed", async () => {
 });
 
 test("password rules are about length, not character zoos", () => {
-  assert.match(passwordProblem("short"), /at least 12/);
+  assert.match(passwordProblem("short"), /at least 8/);
   assert.match(passwordProblem(" ".repeat(14)), /only spaces/);
   assert.match(passwordProblem("x".repeat(201)), /too long/);
   assert.equal(passwordProblem("a-brand-new-passphrase"), null);
@@ -101,7 +101,7 @@ test("the check fails open, because someone else's outage must not block a sign-
 });
 
 test("the session cookie cannot be read by script and is https-only in production", () => {
-  const live = sessionCookie("abc123", "https://passalong.kreativekorna.com/v1/auth/login");
+  const live = sessionCookie("abc123", "https://passalong.dev/v1/auth/login");
   assert.match(live, /^pa_session=abc123;/);
   assert.match(live, /HttpOnly/);
   assert.match(live, /SameSite=Lax/);

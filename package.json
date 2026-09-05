@@ -9,7 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev:api": "pnpm --filter @passalong/api dev",
+    "dev": "pnpm --filter @passalong/api dev",
     "test": "pnpm -r test",
     "lint": "biome check .",
     "format": "biome format --write ."
