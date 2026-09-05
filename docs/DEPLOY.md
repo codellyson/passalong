@@ -183,8 +183,11 @@ or on npmjs.com → `passalong` → **Staged Packages** → Approve. Staging its
 is what lets CI do it unattended. A green release run therefore means *staged*, not *shipped* —
 the run's summary says so, because a green tick otherwise reads as published.
 
-The dangling `v0.2.0` tag on the remote points at a commit whose `DEFAULT_API` still reads
-kreativekorna and never published; `git push origin :refs/tags/v0.2.0` removes it.
+`v0.2.2` is the first tag this flow produced, and the only one on the remote. `v0.2.0` was
+deleted on 2026-09-05: it never published, and it pointed at a commit whose `DEFAULT_API` still
+read kreativekorna — the hazard of writing a tag by hand, separately from the bump it describes,
+which is what `pnpm release` now prevents. `0.2.1` existed only as a local bump and was never
+tagged or published, so the shipped history is `0.1.0` then `0.2.2`.
 
 ## Not yet in place
 - If the canonical host moves again, change the route, the `DEFAULT_API` constant, and `homepage`
