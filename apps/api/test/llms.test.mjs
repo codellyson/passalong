@@ -56,7 +56,16 @@ test("every MCP tool the server registers is documented", () => {
   // shape is `server.registerTool(\n  "name",` — the README drifted three tools behind this list
   // before the test existed.
   const mcp = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "packages", "passalong", "src", "mcp.js"),
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "..",
+      "..",
+      "packages",
+      "passalong",
+      "src",
+      "mcp.js",
+    ),
     "utf8",
   );
   const tools = [...mcp.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((m) => m[1]);
