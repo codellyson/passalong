@@ -96,13 +96,13 @@ Migrations are forward-only; write a new migration rather than editing an applie
 
 ## 2. npm package
 
-0.1.0 was published by hand (2FA: `npm publish --otp=<code>`). Releases now go through the
-version-triggered workflow below; manual publishing is the fallback.
+0.1.0 was published by hand (2FA: `npm publish --otp=<code>`). Releases now go through
+`pnpm release` and the tag-triggered workflow below; manual publishing is the fallback.
 
 ```sh
 cd packages/passalong
-npm pack --dry-run          # 10 files, ~14 kB: bin/, src/, skill/, README
-npm version patch --no-git-tag-version   # or minor; bumps package.json, makes no tag
+npm pack --dry-run          # 10 files, ~20 kB: bin/, src/, skill/, README
+npm version patch --no-git-tag-version
 npm publish --otp=<code>    # publishConfig.access is public
 ```
 
@@ -145,29 +145,33 @@ One-time setup:
    created the custom domain and certificate itself, so the template token's zone permissions
    are sufficient; no local deploy is required.
 
-`.github/workflows/release.yml` publishes `passalong` to npm. There are no release tags: it runs
-on every push to `master`, reads the version from `packages/passalong/package.json`, and asks the
-registry whether that exact version exists. If it does the job stops at the first step; if it does
-not, it publishes. Bumping the version *is* the release:
+`.github/workflows/release.yml` publishes `passalong` to npm when a `v*` tag is pushed. Nobody
+writes that tag by hand — `pnpm release` does the whole thing:
 
 ```sh
-cd packages/passalong && npm version patch --no-git-tag-version
-git commit -am "Release the CLI at 0.2.2" && git push
+pnpm release          # patch
+pnpm release minor
 ```
 
-The registry is the source of truth for what has shipped, so nothing has to be remembered between
-runs and a re-run of an old commit cannot double-publish.
+`scripts/release.mjs` runs the package tests, bumps the version, commits, tags `vX.Y.Z` and pushes
+the branch and the tag together. It refuses first on a dirty tree, off `master`, when `master` has
+diverged from the remote, or when the tag or the version already exists — and rolls the bump back
+rather than leaving the tree edited under a name it cannot use. So the tag CI sees always names a
+commit that really contains that version. (`release`, not `publish`: `pnpm publish` is a pnpm
+built-in, the same trap as `pnpm deploy`.)
 
-**Auth is not configured yet.** The `v0.2.0` run (2026-09-04, back when this was tag-triggered)
-failed with `403 OIDC permission denied for this action` — what npm returns when a package has no
-trusted publisher registered. Until it is set up on npmjs.com — package `passalong` → Settings →
-Trusted Publisher → GitHub Actions, owner `codellyson`, repository `passalong`, workflow
-`release.yml`, no environment — every version bump will fail the same way, and the only route is a
-manual `npm publish --otp=<code>` from a logged-in machine. A version whose publish failed is not
-spent: npm never saw it, so the same number can be retried once auth works.
+CI re-checks the tag against `package.json` and asks the registry whether the version already
+exists, so re-running a run that already published exits clean rather than failing on a conflict.
 
-The dangling `v0.2.0` tag on the remote is left over from the tag-triggered era and means nothing
-now; `git push origin :refs/tags/v0.2.0` removes it.
+**Auth** is npm trusted publishing (OIDC), registered on npmjs.com under package `passalong` →
+Settings → Trusted Publisher → GitHub Actions, owner `codellyson`, repository `passalong`, workflow
+`release.yml`, no environment, with **Allow `npm publish`** ticked (leaving it unticked permits
+only `npm stage publish`, which needs a human to promote each release on npmjs.com). npm answers
+`403 OIDC permission denied for this action` when that registration is missing — which is what the
+`v0.2.0` and 2026-09-05 runs failed on.
+
+The dangling `v0.2.0` tag on the remote points at a commit whose `DEFAULT_API` still reads
+kreativekorna and never published; `git push origin :refs/tags/v0.2.0` removes it.
 
 ## Not yet in place
 - If the canonical host moves again, change the route, the `DEFAULT_API` constant, and `homepage`

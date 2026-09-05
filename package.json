@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @passalong/api dev",
+    "release": "node scripts/release.mjs",
     "test": "pnpm -r test",
     "lint": "biome check .",
     "format": "biome format --write ."
