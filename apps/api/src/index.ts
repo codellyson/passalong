@@ -1292,7 +1292,7 @@ app.get("/", (c) => c.html(renderHome(), 200, VIEW_HEADERS));
 const HUB_HEADERS = {
   ...VIEW_HEADERS,
   "content-security-policy":
-    "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'",
+    "default-src 'none'; script-src 'self'; script-src-elem 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'",
 };
 app.get("/hub", (c) => c.html(renderHub(), 200, HUB_HEADERS));
 app.get("/reset", (c) => c.html(renderReset(), 200, HUB_HEADERS));

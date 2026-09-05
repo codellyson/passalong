@@ -106,6 +106,10 @@ Smoke-test the published package from a clean directory:
 npx -y passalong@latest help
 ```
 
+The frontend has no build step, so nothing needs compiling before a deploy. `public/vendor/` is
+committed; refresh it with `pnpm -C apps/api vendor` after bumping preact or htm, and commit the
+result.
+
 `passalong setup` on a user's machine copies `skill/SKILL.md` into `~/.claude/skills/passalong-capture`
 and runs `claude mcp add passalong -- passalong mcp`, so those two paths are part of the public surface.
 

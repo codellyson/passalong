@@ -4,7 +4,7 @@ import { type Meta, verifyLayout } from "./guide.js";
 
 // Bump when public/styles.css changes: _headers lets browsers cache it for an hour, and a stale
 // stylesheet silently breaks new pages (the hub shipped unstyled to anyone who had visited).
-const STYLES = "/styles.css?v=10";
+const STYLES = "/styles.css?v=11";
 
 const esc = (s: string) =>
   s.replace(
@@ -140,7 +140,7 @@ export function renderHub(): string {
   <div class="meta"><span>what is waiting, in flight, and landed · <a href="/">what is Passalong?</a></span></div>
 </header>
 <div id="app"><noscript><p>The hub needs JavaScript. The CLI does not: <code>passalong list</code>.</p></noscript></div>
-<script src="/hub.js" defer></script>`;
+<script type="module" src="/hub.js"></script>`;
   return page({
     title: "Passalong hub",
     description: "Your synced transfer guides.",
@@ -168,7 +168,7 @@ passalong login                 # your account
 passalong me --handle you
 passalong team join ${esc(o.url)}</code></pre>
 </article>
-<script src="/join.js" defer></script>`;
+<script type="module" src="/join.js"></script>`;
   return page({
     title: `Join ${o.team}`,
     description: `Invitation to the ${o.team} team on Passalong.`,
@@ -189,7 +189,7 @@ export function renderReset(): string {
   <div class="meta"><span>the link works once, and for an hour</span></div>
 </header>
 <div id="reset"><noscript><p>This page needs JavaScript.</p></noscript></div>
-<script src="/reset.js" defer></script>`;
+<script type="module" src="/reset.js"></script>`;
   return page({
     title: "Reset your password",
     description: "Set a new Passalong password.",

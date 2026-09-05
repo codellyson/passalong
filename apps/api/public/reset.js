@@ -1,94 +1,59 @@
 // Setting a new password from an emailed link. The code arrives in the URL fragment, which
 // browsers never send to the server, so it stays out of request logs; the page reads it, uses it
 // once, and scrubs the address bar.
-(() => {
-  const app = document.getElementById("reset");
-  if (!app) return;
-  const CODE = new URLSearchParams(location.hash.slice(1)).get("code") || location.hash.slice(1);
+import { html, render, useState } from "./vendor/index.js";
+
+const CODE = (() => {
+  const hash = location.hash.slice(1);
+  const code = new URLSearchParams(hash).get("code") || hash;
   if (location.hash) history.replaceState(null, "", location.pathname);
+  return code;
+})();
 
-  const el = (tag, attrs = {}, ...children) => {
-    const n = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs)) {
-      if (k === "class") n.className = v;
-      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
-      else if (v !== null && v !== undefined) n.setAttribute(k, v);
-    }
-    for (const c of children.flat())
-      n.append(c instanceof Node ? c : document.createTextNode(String(c)));
-    return n;
-  };
+function Reset() {
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const state = { error: null, busy: false };
+  if (!CODE) {
+    return html`<p class="error">
+      This link is missing its code. Ask for a new one from the sign-in page.
+    </p>`;
+  }
 
-  async function submit(password) {
-    state.busy = true;
-    state.error = null;
-    render();
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
     try {
       const res = await fetch("/v1/auth/reset", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: CODE, password }),
+        body: JSON.stringify({ code: CODE, password: e.target.password.value }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-      // The reset signs you in, so there is nowhere to send you but in.
-      location.assign("/hub");
-    } catch (e) {
-      state.error = e.message;
-      state.busy = false;
-      render();
+      location.assign("/hub"); // the reset signs you in, so there is nowhere to send you but in
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
     }
-  }
+  };
 
-  function render() {
-    app.replaceChildren(
-      CODE
-        ? el(
-            "form",
-            {
-              class: "join",
-              onsubmit: (e) => {
-                e.preventDefault();
-                submit(e.target.password.value);
-              },
-            },
-            el(
-              "label",
-              {},
-              "New password",
-              el("input", {
-                name: "password",
-                type: "password",
-                required: "required",
-                minlength: "12",
-                autocomplete: "new-password",
-              }),
-              el(
-                "span",
-                { class: "muted" },
-                "at least 12 characters, and not one from a breach list",
-              ),
-            ),
-            el(
-              "button",
-              { class: "primary", type: "submit", ...(state.busy ? { disabled: "disabled" } : {}) },
-              state.busy ? "Saving…" : "Set password",
-            ),
-            state.error ? el("p", { class: "error" }, state.error) : "",
-            el(
-              "p",
-              { class: "muted" },
-              "Every other session on this account is signed out when the password changes.",
-            ),
-          )
-        : el(
-            "p",
-            { class: "error" },
-            "This link is missing its code. Ask for a new one from the sign-in page.",
-          ),
-    );
-  }
+  return html`
+    <form class="join" onsubmit=${submit}>
+      <label>
+        New password
+        <input name="password" type="password" required minlength="12" autocomplete="new-password" />
+        <span class="muted">at least 12 characters, and not one from a breach list</span>
+      </label>
+      <button class="primary" type="submit" disabled=${busy}>
+        ${busy ? "Saving…" : "Set password"}
+      </button>
+      ${error && html`<p class="error">${error}</p>`}
+      <p class="muted">
+        Every other session on this account is signed out when the password changes.
+      </p>
+    </form>
+  `;
+}
 
-  render();
-})();
+render(html`<${Reset} />`, document.getElementById("reset"));

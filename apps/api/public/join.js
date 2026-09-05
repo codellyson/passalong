@@ -3,182 +3,134 @@
 // chat — so the terminal cannot be on the critical path. Three calls, no password: mint an
 // account, claim a handle, accept the invite. The CLI instructions stay on the page for people
 // who would rather.
-//
-// Deliberately standalone: it shares no code with hub.js because a build step would buy less
-// than it costs, and this file must stay small enough to read in one sitting.
-(() => {
-  const KEY = "passalong.token";
-  const app = document.getElementById("join");
-  if (!app) return;
-  const CODE = app.dataset.code;
-  const TEAM = app.dataset.team;
+import { html, render, useEffect, useState } from "./vendor/index.js";
 
-  const el = (tag, attrs = {}, ...children) => {
-    const n = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs)) {
-      if (k === "class") n.className = v;
-      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
-      else if (v !== null && v !== undefined) n.setAttribute(k, v);
+const KEY = "passalong.token";
+const root = document.getElementById("join");
+const CODE = root.dataset.code;
+const TEAM = root.dataset.team;
+
+const token = {
+  get() {
+    try {
+      return localStorage.getItem(KEY);
+    } catch {
+      return null;
     }
-    for (const c of children.flat())
-      n.append(c instanceof Node ? c : document.createTextNode(String(c)));
-    return n;
-  };
-
-  const token = {
-    get() {
-      try {
-        return localStorage.getItem(KEY);
-      } catch {
-        return null;
-      }
-    },
-    set(t) {
-      try {
-        localStorage.setItem(KEY, t);
-      } catch {
-        // A browser with storage blocked can still join; it just cannot stay signed in.
-      }
-    },
-  };
-
-  async function call(path, { method = "GET", body, auth = true } = {}) {
-    const headers = {};
-    if (auth) headers.authorization = `Bearer ${token.get()}`;
-    if (body !== undefined) headers["content-type"] = "application/json";
-    const res = await fetch(path, { method, headers, body: body && JSON.stringify(body) });
-    if (!res.ok) {
-      let message = res.statusText;
-      try {
-        message = (await res.json()).message || message;
-      } catch {}
-      throw new Error(message);
+  },
+  set(t) {
+    try {
+      localStorage.setItem(KEY, t);
+    } catch {
+      // A browser with storage blocked can still join; it just cannot stay signed in.
     }
-    return res.json();
+  },
+};
+
+async function call(path, { method = "GET", body, auth = true } = {}) {
+  const headers = {};
+  if (auth) headers.authorization = `Bearer ${token.get()}`;
+  if (body !== undefined) headers["content-type"] = "application/json";
+  const res = await fetch(path, { method, headers, body: body && JSON.stringify(body) });
+  if (!res.ok) {
+    throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
   }
+  return res.json();
+}
 
-  const state = { me: null, busy: false, error: null, done: false };
+function Join() {
+  const [me, setMe] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Someone already signed in gets their handle filled in rather than an empty form.
+  useEffect(() => {
+    if (token.get())
+      call("/v1/me")
+        .then(setMe)
+        .catch(() => {});
+  }, []);
 
   // An account is minted once and kept, so a rejected handle is retried against the same account
   // rather than leaving a trail of empty ones behind.
-  async function ensureAccount() {
-    if (token.get() && state.me) return;
+  async function account() {
+    if (me) return me;
     if (token.get()) {
       try {
-        state.me = await call("/v1/me");
-        return;
+        return await call("/v1/me");
       } catch {
         // Stale or foreign token: start fresh rather than dead-end the invite.
       }
     }
     const minted = await call("/v1/accounts", { method: "POST", auth: false });
     token.set(minted.token);
-    state.me = await call("/v1/me");
+    return call("/v1/me");
   }
 
-  async function join(handle, name, email) {
-    state.busy = true;
-    state.error = null;
-    render();
+  const submit = async (e) => {
+    e.preventDefault();
+    // Read the form before touching state. Any setState re-renders, and a re-render resets the
+    // inputs to whatever the new state says — which is how the handle silently went missing.
+    const f = e.target;
+    const typed = {
+      handle: f.handle.value.trim(),
+      name: f.name.value.trim(),
+      email: f.email.value.trim(),
+    };
+    setBusy(true);
+    setError(null);
     try {
-      await ensureAccount();
+      const who = await account();
+      setMe(who);
       const patch = {};
-      if (handle && handle !== state.me.handle) patch.handle = handle;
-      if (name) patch.name = name;
-      if (email) patch.email = email;
-      if (Object.keys(patch).length)
-        state.me = await call("/v1/me", { method: "PATCH", body: patch });
+      if (typed.handle && typed.handle !== who.handle) patch.handle = typed.handle;
+      if (typed.name) patch.name = typed.name;
+      if (typed.email) patch.email = typed.email;
+      if (Object.keys(patch).length) setMe(await call("/v1/me", { method: "PATCH", body: patch }));
       await call(`/v1/invites/${encodeURIComponent(CODE)}/accept`, { method: "POST" });
-      state.done = true;
-      render();
       location.assign("/hub");
-    } catch (e) {
-      state.error = e.message;
-      state.busy = false;
-      render();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
     }
-  }
+  };
 
-  function form() {
-    const known = state.me?.handle;
-    return el(
-      "form",
-      {
-        class: "join",
-        onsubmit: (e) => {
-          e.preventDefault();
-          const f = e.target;
-          join(f.handle.value.trim(), f.name.value.trim(), f.email.value.trim());
-        },
-      },
-      el(
-        "label",
-        {},
-        "Your handle",
-        el("input", {
-          name: "handle",
-          value: known || "",
-          placeholder: "ada",
-          required: "required",
-          autocomplete: "username",
-          spellcheck: "false",
-          pattern: "[a-zA-Z0-9][a-zA-Z0-9-]{1,30}",
-          title: "2–31 characters: letters, digits and dashes",
-        }),
-        el(
-          "span",
-          { class: "muted" },
-          `how teammates address you: passalong share --to <team>/@you`,
-        ),
-      ),
-      el(
-        "label",
-        {},
-        "Your name ",
-        el("span", { class: "muted" }, "optional"),
-        el("input", { name: "name", placeholder: "Ada Lovelace", autocomplete: "name" }),
-      ),
-      el(
-        "label",
-        {},
-        "Email ",
-        el("span", { class: "muted" }, "optional"),
-        el("input", {
-          name: "email",
-          type: "email",
-          placeholder: "ada@example.com",
-          autocomplete: "email",
-        }),
-        el("span", { class: "muted" }, "only used to tell you when something is handed to you"),
-      ),
-      el(
-        "button",
-        { class: "primary", type: "submit", ...(state.busy ? { disabled: "disabled" } : {}) },
-        state.busy ? "Joining…" : state.done ? "Joined" : `Join ${TEAM}`,
-      ),
-      state.error ? el("p", { class: "error" }, state.error) : "",
-      el(
-        "p",
-        { class: "muted" },
-        "No password. Your account is a token this browser keeps; ",
-        el("code", {}, "passalong login"),
-        " moves it to a terminal later if you want one.",
-      ),
-    );
-  }
+  return html`
+    <form class="join" onsubmit=${submit}>
+      <label>
+        Your handle
+        <input
+          name="handle"
+          key=${me?.handle || "new"}
+          defaultValue=${me?.handle || ""}
+          placeholder="ada"
+          required
+          autocomplete="username"
+          spellcheck="false"
+          pattern="[a-zA-Z0-9][a-zA-Z0-9-]{1,30}"
+          title="2–31 characters: letters, digits and dashes"
+        />
+        <span class="muted">how teammates address you: passalong share --to ${"<team>"}/@you</span>
+      </label>
+      <label>
+        Your name <span class="muted">optional</span>
+        <input name="name" placeholder="Ada Lovelace" autocomplete="name" />
+      </label>
+      <label>
+        Email <span class="muted">optional</span>
+        <input name="email" type="email" placeholder="ada@example.com" autocomplete="email" />
+        <span class="muted">only used to tell you when something is handed to you</span>
+      </label>
+      <button class="primary" type="submit" disabled=${busy}>
+        ${busy ? "Joining…" : `Join ${TEAM}`}
+      </button>
+      ${error && html`<p class="error">${error}</p>`}
+      <p class="muted">
+        No password. Your account is a token this browser keeps;
+        <code>passalong login</code> moves it to a terminal later if you want one.
+      </p>
+    </form>
+  `;
+}
 
-  function render() {
-    app.replaceChildren(form());
-  }
-
-  // Someone already signed in gets their handle filled in rather than an empty form.
-  if (token.get()) {
-    call("/v1/me")
-      .then((me) => {
-        state.me = me;
-        render();
-      })
-      .catch(() => {});
-  }
-  render();
-})();
+render(html`<${Join} />`, root);
