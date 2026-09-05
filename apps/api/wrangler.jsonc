@@ -6,27 +6,15 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 
-  // Static files (stylesheet, icons, robots.txt, 404 page) are served straight from the edge,
-  // before the Worker runs; anything not in public/ falls through to the Hono app. The binding
-  // lets the app serve 404.html itself for unmatched routes.
-  "assets": {
-    "directory": "./public",
-    "binding": "ASSETS",
-    "not_found_handling": "none",
-    "html_handling": "none"
-  },
-
-  // Three hosts. `passalong.dev` is canonical. `www.passalong.dev` is routed only so it resolves —
-  // the Worker redirects it to the apex (`canonicalRedirect` in src/hosts.ts) rather than serving
-  // it, so it never becomes a second identity minting share links. `passalong.kreativekorna.com`
-  // does serve, because share links were already handed out under it and their keys live in the
-  // URL. Share links are built from the request host (`origin` in src/index.ts), so each serving
-  // host stays internally consistent. Wrangler creates the DNS records on deploy.
-  "routes": [
-    { "pattern": "passalong.dev", "custom_domain": true },
-    { "pattern": "www.passalong.dev", "custom_domain": true },
-    { "pattern": "passalong.kreativekorna.com", "custom_domain": true }
-  ],
+  // **No routes, no assets, and this Worker is no longer deployed.** At the cutover its Hono app
+  // became a module that apps/web mounts (apps/web/server/middleware/1.api.ts), so `/v1/*`,
+  // `/health` and the two machine routes are served from there — on the same origin as the pages,
+  // which is what lets the session cookie and the bearer token keep working unchanged. The three
+  // custom domains moved to apps/web/wrangler.jsonc, and `public/` moved with them: the `ASSETS`
+  // binding `src/og.ts` reads its fonts through is apps/web's now.
+  //
+  // This file stays because `wrangler d1 migrations` reads it — that is the only thing that still
+  // does. `pnpm dev` runs apps/web, which serves this app mounted.
 
   // Account creation is the only unauthenticated write. Per-IP throttle so a script cannot
   // fill the account table; `namespace_id` just has to be unique within this account.

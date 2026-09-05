@@ -10,6 +10,16 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: "cloudflare_module",
+
+    // The mounted API renders each guide's unfurl card with `workers-og`, which is satori and
+    // resvg compiled to wasm. Without this the bundler tries to parse the .wasm as JavaScript and
+    // the build dies on the first byte. It stays behind the dynamic import it already had in
+    // apps/api, so only /g/:id/:key/og.png pays for ~1.7MB on a cold start.
+    //
+    // That renderer also reads `public/fonts/instrument-sans-{400,600}.ttf` through the ASSETS
+    // binding. Nothing else does — satori cannot read woff2, and the stylesheet loads the variable
+    // woff2 — so the pair looks unused and is not. Deleting it returns 500 on every unfurl card.
+    experimental: { wasm: true },
   },
 
   // The guide format is defined once, in apps/api/src/guide.ts, and mirrored from

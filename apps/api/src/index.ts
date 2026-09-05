@@ -27,12 +27,19 @@
 //   PATCH  /v1/guides/:id/status       { status }  owner: any; team member: consumed/published
 //   PUT    /v1/guides/:id/verdict      { ok, note? } → does it actually work?
 //   DELETE /v1/guides/:id              owner only
-//   GET    /g/:id/:key                 read-only web view (share link); .md for raw markdown
-//   GET    /join/:code                 what an invite link lands on
-//   GET    /reset                      set a new password from an emailed link
+//   GET    /g/:id/:key.md              a guide's raw markdown (share link); records a pull
+//   GET    /g/:id/:key/og.png          the unfurl card for that link
+//   GET    /health                     what CI waits on after a deploy
 //
-// Static files (stylesheet, icons, robots.txt, 404 page) live in public/ and are served by the
-// assets layer before this Worker runs; see wrangler.jsonc.
+// **This app is not deployed on its own.** apps/web mounts it — see
+// apps/web/server/middleware/1.api.ts — so everything above is served from the Nuxt Worker, on the
+// same origin as the pages. That is what lets one middleware accept either credential without the
+// browser ever making a cross-origin call.
+//
+// Every page a person looks at is apps/web's: `/`, the guide page at `/g/:id/:key`, `/hub`,
+// `/join/:code`, `/reset`, and the 404. What is left here is the machine surface, plus the two
+// `/g/**` routes that stayed because a crawler and an agent fetch them, not a browser — and
+// because `workers-og` is ~1.7MB of wasm that only the card should ever pay for.
 import { Hono } from "hono";
 import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
@@ -59,8 +66,7 @@ import {
   sendReset,
   sendVerdict,
 } from "./email.js";
-import { body as bodyOf, type Meta, parseMeta, STATUSES, setField } from "./guide.js";
-import { canonicalRedirect } from "./hosts.js";
+import { type Meta, parseMeta, STATUSES, setField } from "./guide.js";
 import {
   feed,
   markRead,
@@ -70,7 +76,6 @@ import {
   unreadCount,
 } from "./notify.js";
 import { renderOgImage } from "./og.js";
-import { renderGuide, renderHome, renderHub, renderJoin, renderReset } from "./render.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -88,16 +93,10 @@ type Ctx = { env: Env; req: { url: string }; get: (k: "account") => string };
 
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
-// `www` is routed so the name resolves, but it does not serve: two hosts minting share links for
-// the same guide would split one link into two, and a key in the URL makes that worse than
-// untidy. The old kreativekorna host is deliberately *not* redirected here — links under it are
-// already in circulation, so it keeps serving. 308 preserves the method and the body.
-app.use("*", async (c, next) => {
-  const to = canonicalRedirect(c.req.url, c.req.header("host"));
-  // 308 rather than 301: the method and body survive, so a POST to www is not silently turned
-  // into a GET.
-  return to ? c.redirect(to, 308) : next();
-});
+// The `www` → apex redirect used to be the first middleware here. It now lives in
+// apps/web/server/middleware/0.canonical.ts, because this app only ever sees `/v1/*`, `/health`
+// and the two machine routes — a page request to www would never have reached it. `hosts.ts` and
+// its test stay put; only the caller moved.
 
 const ID_RE = /^[a-z0-9]{6,12}$/;
 const HANDLE_RE = /^[a-z0-9][a-z0-9-]{1,30}$/;
@@ -268,38 +267,37 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   );
   const pulls = await recentPulls(c, rows);
   const said = await verdicts(c, rows);
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    status: r.status,
-    created: r.created,
-    updated: r.updated,
-    source_context: r.source_context,
-    tags: JSON.parse(r.tags) as string[],
-    stack_assumptions: JSON.parse(r.stack) as string[],
-    pulls: r.pulls,
-    url: shareUrl(base, r),
-    mine: r.account_id === me,
-    from: people.get(r.account_id)?.handle || "",
-    team: teams.get(r.team_id)?.slug || "",
-    to: people.get(r.to_account_id)?.handle || "",
-    for_me: r.to_account_id === me,
+  return rows.map((r) => {
+    const heard = said.get(r.id) || [];
     // The latest word, plus whether anyone's standing verdict is still negative.
-    verdict: (said.get(r.id) || [])[0]
-      ? {
-          ok: Boolean((said.get(r.id) as VerdictRow[])[0].ok),
-          by: (said.get(r.id) as VerdictRow[])[0].handle,
-          note: (said.get(r.id) as VerdictRow[])[0].note,
-          at: (said.get(r.id) as VerdictRow[])[0].at,
-        }
-      : null,
-    failing: (said.get(r.id) || []).some((v) => !v.ok),
-    pulled_by: (pulls.get(r.id) || []).map((p) => ({
-      handle: p.handle,
-      via: p.via,
-      at: p.at,
-    })),
-  }));
+    const latest = heard[0];
+    return {
+      id: r.id,
+      title: r.title,
+      status: r.status,
+      created: r.created,
+      updated: r.updated,
+      source_context: r.source_context,
+      tags: JSON.parse(r.tags) as string[],
+      stack_assumptions: JSON.parse(r.stack) as string[],
+      pulls: r.pulls,
+      url: shareUrl(base, r),
+      mine: r.account_id === me,
+      from: people.get(r.account_id)?.handle || "",
+      team: teams.get(r.team_id)?.slug || "",
+      to: people.get(r.to_account_id)?.handle || "",
+      for_me: r.to_account_id === me,
+      verdict: latest
+        ? { ok: Boolean(latest.ok), by: latest.handle, note: latest.note, at: latest.at }
+        : null,
+      failing: heard.some((v) => !v.ok),
+      pulled_by: (pulls.get(r.id) || []).map((p) => ({
+        handle: p.handle,
+        via: p.via,
+        at: p.at,
+      })),
+    };
+  });
 }
 
 // ---- auth -------------------------------------------------------------------------------
@@ -1263,24 +1261,15 @@ async function shared(c: { env: Env }, id: string, key: string): Promise<GuideRo
     .first<GuideRow>();
 }
 
-// Guides are the owner's own markdown, but a share link is viewed by other people. The CSP
-// turns anything script-shaped in that markdown inert instead of trusting a sanitizer. Styles
-// come from /styles.css (a static asset), so inline styles are refused too.
+// A guide's raw markdown is the owner's own text, but a share link is fetched by other people —
+// and by agents. The CSP turns anything script-shaped in it inert instead of trusting a sanitizer.
+// The same header on the rendered page now comes from apps/web's route rules (shared/csp.ts).
 const VIEW_HEADERS = {
   "content-security-policy":
     "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' https: data:; manifest-src 'self'; base-uri 'none'; form-action 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
 };
-
-// The 404 page is a static asset, so unmatched routes hand it back with the right status.
-async function notFoundPage(c: { env: Env; req: { url: string } }): Promise<Response> {
-  const asset = await c.env.ASSETS.fetch(new URL("/404.html", c.req.url));
-  return new Response(asset.body, {
-    status: 404,
-    headers: { "content-type": "text/html; charset=utf-8", ...VIEW_HEADERS },
-  });
-}
 
 app.get("/g/:id/:key{.+\\.md}", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key").replace(/\.md$/, ""));
@@ -1293,64 +1282,21 @@ app.get("/g/:id/:key{.+\\.md}", async (c) => {
 });
 
 // The unfurl card. Deliberately not counted as a pull: this is fetched by crawlers, not people.
+// A miss answers with a bare 404 rather than the 404 *page* — this endpoint returns an image, and
+// its caller is an unfurler that will never render HTML.
 app.get("/g/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
-  if (!row) return notFoundPage(c);
+  if (!row) return c.text("no such guide", 404, VIEW_HEADERS);
   return renderOgImage(c.env, c.req.url, { id: row.id, meta: parseMeta(row.markdown) });
 });
 
-app.get("/g/:id/:key", async (c) => {
-  const row = await shared(c, c.req.param("id"), c.req.param("key"));
-  if (!row) return notFoundPage(c);
-  const meta = parseMeta(row.markdown);
-  // ?view=verify leads with what the reader has to check. It is a link, not a toggle, because
-  // guide pages run no script — the CSP is what makes rendering someone else's markdown safe.
-  count(c, "guide_viewed", { view: c.req.query("view") === "verify" ? "verify" : "guide" });
-  const html = renderGuide(
-    {
-      id: row.id,
-      meta,
-      body: bodyOf(row.markdown),
-      url: shareUrl(origin(c), row),
-      pulls: row.pulls,
-    },
-    c.req.query("view") === "verify" ? "verify" : "guide",
-  );
-  return c.html(html, 200, VIEW_HEADERS);
-});
-
-app.get("/join/:code", async (c) => {
-  const inv = await c.env.DB.prepare(
-    "SELECT i.code, t.name FROM invite i JOIN team t ON t.id = i.team_id WHERE i.code = ?",
-  )
-    .bind(c.req.param("code"))
-    .first<{ code: string; name: string }>();
-  if (!inv) return notFoundPage(c);
-  return c.html(
-    renderJoin({ team: inv.name, code: inv.code, url: `${origin(c)}/join/${inv.code}` }),
-    200,
-    // Joining happens in the browser, so this page runs script like the hub does. It renders no
-    // user-authored markdown — only the team name — so it is not the surface the strict CSP guards.
-    HUB_HEADERS,
-  );
-});
-
-app.get("/", (c) => c.html(renderHome(), 200, VIEW_HEADERS));
-
-// The hub and the invite page run script: their own static files, talking only to this origin.
-// Guide pages, which render markdown someone else wrote, keep the stricter VIEW_HEADERS.
-const HUB_HEADERS = {
-  ...VIEW_HEADERS,
-  "content-security-policy":
-    "default-src 'none'; script-src 'self'; script-src-elem 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'",
-};
-app.get("/hub", (c) => c.html(renderHub(), 200, HUB_HEADERS));
-app.get("/reset", (c) => c.html(renderReset(), 200, HUB_HEADERS));
 app.get("/health", (c) => c.json({ ok: true }));
 
-app.notFound((c) =>
-  c.req.path.startsWith("/v1/") ? err(c, 404, "no such route") : notFoundPage(c),
-);
+// Every route this app serves is machine-facing now, so a miss is JSON rather than a page. The
+// pages — `/`, `/g/:id/:key`, `/hub`, `/join/:code`, `/reset` and the 404 itself — are Nuxt's,
+// and a request that matches none of the routes above never reaches here: apps/web's middleware
+// only hands over `/v1/*`, `/health` and the two machine routes.
+app.notFound((c) => err(c, 404, "no such route"));
 
 app.onError((e, c) => {
   console.error(e);

@@ -4,21 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
     "test": "node --test",
     "lint": "tsc --noEmit -p tsconfig.json",
     "db:migrate": "wrangler d1 migrations apply passalong --local",
-    "db:migrate:remote": "wrangler d1 migrations apply passalong --remote",
-    "deploy:check": "wrangler deploy --dry-run",
-    "icons": "node scripts/icons.mjs",
-    "vendor": "node scripts/vendor.mjs"
+    "db:migrate:remote": "wrangler d1 migrations apply passalong --remote"
   },
   "dependencies": {
     "hono": "^4.6.0",
-    "htm": "^3.1.1",
-    "marked": "^15.0.0",
-    "preact": "^10.29.8",
     "workers-og": "^0.0.27"
   },
   "devDependencies": {

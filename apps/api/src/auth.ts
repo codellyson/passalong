@@ -67,7 +67,10 @@ export async function hashPassword(password: string): Promise<string> {
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  // The lengths are equal and `i` is in range, so both reads are defined. The assertions are for
+  // `noUncheckedIndexedAccess` and compile away — nothing here may grow a branch, or the compare
+  // stops being constant-time.
+  for (let i = 0; i < a.length; i++) diff |= (a[i] as number) ^ (b[i] as number);
   return diff === 0;
 }
 
