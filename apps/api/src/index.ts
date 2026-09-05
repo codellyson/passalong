@@ -34,6 +34,7 @@
 // Static files (stylesheet, icons, robots.txt, 404 page) live in public/ and are served by the
 // assets layer before this Worker runs; see wrangler.jsonc.
 import { Hono } from "hono";
+import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
   clearCookie,
   decoyHash,
@@ -71,14 +72,15 @@ import { renderGuide, renderHome, renderHub, renderJoin, renderReset } from "./r
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
-type Env = MailEnv & {
-  DB: D1Database;
-  ASSETS: Fetcher;
-  ACCOUNT_LIMIT?: RateLimiter;
-  FREE_SYNC_LIMIT: string;
-  ENVIRONMENT: string;
-  PUBLIC_ORIGIN?: string;
-};
+type Env = MailEnv &
+  AnalyticsEnv & {
+    DB: D1Database;
+    ASSETS: Fetcher;
+    ACCOUNT_LIMIT?: RateLimiter;
+    FREE_SYNC_LIMIT: string;
+    ENVIRONMENT: string;
+    PUBLIC_ORIGIN?: string;
+  };
 type Vars = { account: string };
 type Ctx = { env: Env; req: { url: string }; get: (k: "account") => string };
 
@@ -91,6 +93,23 @@ const ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const rid = (n: number) => rand(n, ID_ALPHABET);
 
 const now = () => new Date().toISOString();
+
+/**
+ * Fire an analytics event off the response path. Categorical props only — see analytics.ts for
+ * why nothing identifying is allowed through here.
+ */
+function count(
+  c: { env: Env; executionCtx?: { waitUntil(p: Promise<unknown>): void } },
+  name: string,
+  props: Props = {},
+) {
+  try {
+    // Accessing executionCtx throws where there is none, which is why this is inside the try.
+    c.executionCtx?.waitUntil(track(c.env, name, props));
+  } catch {
+    // No execution context (tests, some local paths): drop it rather than block.
+  }
+}
 
 const err = (c: { json: (o: unknown, s: number) => Response }, status: number, message: string) =>
   c.json({ message }, status);
@@ -349,6 +368,7 @@ app.post("/v1/accounts", async (c) => {
       "INSERT INTO token (id, account_id, name, hash, created) VALUES (?, ?, ?, ?, ?)",
     ).bind(rid(10), id, "first token", await sha256(token), now()),
   ]);
+  count(c, "account_created", { kind: "anonymous" });
   return c.json({ account: id, token }, 201);
 });
 
@@ -392,6 +412,7 @@ app.post("/v1/auth/signup", async (c) => {
   )
     .bind(id, now(), email, await hashPassword(password), `retired:${rid(24)}`)
     .run();
+  count(c, "account_created", { kind: "password" });
   return c.json({ account: id, email }, 201, { "set-cookie": await startSession(c, id) });
 });
 
@@ -630,6 +651,7 @@ app.post("/v1/teams", async (c) => {
       "INSERT INTO membership (team_id, account_id, role, joined) VALUES (?, ?, 'owner', ?)",
     ).bind(id, account, t),
   ]);
+  count(c, "team_created");
   return c.json({ id, slug, name: clean, role: "owner" }, 201);
 });
 
@@ -716,6 +738,7 @@ app.post("/v1/invites/:code/accept", async (c) => {
         "UPDATE invite SET used_by = ?, used = ? WHERE code = ? AND used_by = ''",
       ).bind(account, now(), code),
     ]);
+    count(c, "member_joined");
     // Whoever sent the invite is the one waiting to hear it was taken up.
     await notify(c.env, {
       to: inv.created_by,
@@ -1019,6 +1042,10 @@ app.put("/v1/guides/:id", async (c) => {
       });
     }
   }
+  count(c, existing ? "guide_updated" : "guide_shared", {
+    addressed: Boolean(toAccount),
+    team: Boolean(team),
+  });
   return c.json(
     {
       id,
@@ -1068,6 +1095,7 @@ async function recordPull(
       .bind(row.id, account, via, now()),
     db(c).prepare("UPDATE guide SET pulls = pulls + 1 WHERE id = ?").bind(row.id),
   ]);
+  count(c as { env: Env }, "guide_pulled", { via, own: row.account_id === account });
   if (row.account_id === account) return; // pulling your own guide on another machine
   const people = await accounts(c, [account, row.account_id]);
   await notify(c.env, {
@@ -1201,6 +1229,7 @@ app.put("/v1/guides/:id/verdict", async (c) => {
         note,
       }),
   });
+  count(c, "verdict_given", { ok: body.ok });
   return c.json({ id: found.row.id, ok: body.ok, note });
 });
 
@@ -1256,6 +1285,7 @@ app.get("/g/:id/:key", async (c) => {
   const meta = parseMeta(row.markdown);
   // ?view=verify leads with what the reader has to check. It is a link, not a toggle, because
   // guide pages run no script — the CSP is what makes rendering someone else's markdown safe.
+  count(c, "guide_viewed", { view: c.req.query("view") === "verify" ? "verify" : "guide" });
   const html = renderGuide(
     {
       id: row.id,

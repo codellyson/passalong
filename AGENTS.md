@@ -47,6 +47,13 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   which. `POST /v1/accounts` still mints an **anonymous** account for `passalong login` and invite
   links — an account nobody has claimed yet; `POST /v1/auth/password` claims it. Everything secret
   is stored as a SHA-256: tokens, session ids and reset codes are all bearer credentials.
+- **Analytics are sent from the Worker, never the browser** (`src/analytics.ts`). A share link is
+  `/g/:id/:key` where the key is the secret, and every web analytics SDK reports the page URL — the
+  obvious integration would have posted users' share keys to a third party. Guide pages also run no
+  script, and that CSP is the product's one real security property. So: **event names and
+  categorical props only**. Never an id, handle, email, team name, guide title or URL fragment. The
+  session id is the current hour, so nothing points back at a person. `count()` in `index.ts` fires
+  events through `waitUntil`; with `APTABASE_KEY` unset nothing is sent, which is the state in dev.
 - **Password strength does the work the KDF cannot.** The Workers runtime caps PBKDF2 at 100,000
   iterations (above that: `NotSupportedError`, and only on the real edge — local workerd allows it,
   which is how a broken sign-in shipped once). That is below current OWASP guidance, so the

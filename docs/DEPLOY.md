@@ -50,6 +50,11 @@ migrations 0001–0004 first — running 0005 against an empty one proves nothin
 It is the only way to catch runtime restrictions that local `workerd` does not enforce — the
 PBKDF2 iteration cap was found this way — but anything it writes is real. Clean up after yourself.
 
+**Analytics.** `APTABASE_KEY` is a Worker secret (`wrangler secret put APTABASE_KEY` in
+`apps/api`). Unset, nothing is sent — dev and anyone else's deployment stay silent. Events go
+straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no browser involvement,
+deliberately. See the rule about what may go in a prop in AGENTS.md before adding an event.
+
 ## Preflight (run before every deploy)
 
 ```sh
