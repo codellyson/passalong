@@ -1,0 +1,29 @@
+{
+  "name": "@passalong/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "lint": "nuxt typecheck",
+    "deploy": "wrangler deploy",
+    "deploy:check": "wrangler deploy --dry-run"
+  },
+  "dependencies": {
+    "marked": "^15",
+    "nuxt": "^4.5.2",
+    "vue": "^3.5.42",
+    "vue-router": "^5.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260811.1",
+    "@types/node": "^26.4.1",
+    "typescript": "^5.7.0",
+    "vue-tsc": "^3.3.11",
+    "wrangler": "^4.0.0"
+  }
+}

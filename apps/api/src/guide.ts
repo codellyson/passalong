@@ -28,7 +28,9 @@ function scalar(raw: string): string {
 
 export function split(markdown: string): { front: string; body: string } | null {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(markdown);
-  return m ? { front: m[1], body: m[2] } : null;
+  // Both groups are mandatory in the pattern, so a match means both are strings. The assertions
+  // are for `noUncheckedIndexedAccess`, which cannot know that; they compile away.
+  return m ? { front: m[1] as string, body: m[2] as string } : null;
 }
 
 export function parseMeta(markdown: string): Meta {
@@ -39,13 +41,13 @@ export function parseMeta(markdown: string): Meta {
   for (const line of parts.front.split(/\r?\n/)) {
     const item = /^\s+-\s*(.*)$/.exec(line);
     if (item && listKey) {
-      (meta[listKey] as string[]).push(scalar(item[1]));
+      (meta[listKey] as string[]).push(scalar(item[1] as string));
       continue;
     }
     const kv = /^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/.exec(line);
     if (!kv) continue;
-    const [, key, rest] = kv;
-    const r = rest.trim();
+    const key = kv[1] as string;
+    const r = (kv[2] as string).trim();
     if (r === "" && LIST_FIELDS.has(key)) {
       meta[key] = [];
       listKey = key;
@@ -99,7 +101,7 @@ export function splitSections(body: string): {
   for (const line of body.split(/\r?\n/)) {
     const h = /^##\s+(.+?)\s*$/.exec(line);
     if (h) {
-      current = h[1];
+      current = h[1] as string;
       if (!(current in by)) {
         by[current] = "";
         order.push(current);
@@ -109,7 +111,7 @@ export function splitSections(body: string): {
     if (current) by[current] += `${line}\n`;
     else intro += `${line}\n`;
   }
-  for (const k of order) by[k] = by[k].trim();
+  for (const k of order) by[k] = (by[k] as string).trim();
   return { intro: intro.trim(), order, by };
 }
 

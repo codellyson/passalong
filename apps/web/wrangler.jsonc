@@ -1,0 +1,62 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "passalong-web",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-08-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  // Nuxt's build writes the client bundle and anything from public/ here. Unlike apps/api this
+  // directory is generated, so nothing in it is committed.
+  "assets": {
+    "directory": ".output/public",
+    "binding": "ASSETS"
+  },
+
+  // Account creation is the only unauthenticated write. Per-IP throttle so a script cannot fill
+  // the account table. The namespace id is carried over from apps/api rather than renumbered, so
+  // the limit does not reset to empty at the cutover.
+  "ratelimits": [
+    { "name": "ACCOUNT_LIMIT", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } }
+  ],
+
+  // Outbound mail (handoffs, pulls, invites) through Cloudflare Email Service. No API key: the
+  // binding is the credential. EMAIL_FROM's domain must be onboarded to Email Service, and
+  // sending to addresses outside the account needs the Workers Paid plan.
+  "send_email": [{ "name": "EMAIL" }],
+
+  // The product's one database. Both halves used to bind it; now only this Worker does.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "passalong",
+      // An identifier, not a secret: it names the database, not who may use it.
+      "database_id": "1c3e3932-242d-4e7f-ae3e-09c598b6a5ca",
+      "migrations_dir": "../api/migrations"
+    }
+  ],
+
+  "vars": {
+    "ENVIRONMENT": "production",
+    // Free tier: how many published/promoted guides one account may keep synced.
+    // Local guides are unlimited; this only gates the hosted copy.
+    "FREE_SYNC_LIMIT": "25",
+    // Sender for handoff/invite mail. Must be on a domain onboarded to Email Service.
+    "EMAIL_FROM": "no-reply@passalong.dev"
+  },
+
+  // Three hosts, moved here from apps/api at the cutover. `passalong.dev` is canonical.
+  // `www.passalong.dev` is routed only so it resolves — server/middleware/0.canonical.ts redirects
+  // it to the apex rather than serving it, so it never becomes a second identity minting share
+  // links. `passalong.kreativekorna.com` does serve, because share links were already handed out
+  // under it and their keys live in the URL. Share links are built from the request host, so each
+  // serving host stays internally consistent.
+  "routes": [
+    { "pattern": "passalong.dev", "custom_domain": true },
+    { "pattern": "www.passalong.dev", "custom_domain": true },
+    { "pattern": "passalong.kreativekorna.com", "custom_domain": true }
+  ],
+
+  // Kept so a deploy can be checked on the preview host before anyone hits it on the real one.
+  "workers_dev": true
+}

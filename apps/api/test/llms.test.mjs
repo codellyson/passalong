@@ -8,8 +8,10 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { STATUSES, VERIFY_LEAD } from "../src/guide.ts";
 
+// llms.txt moved to apps/web with the rest of what a browser or a crawler fetches; the test stays
+// here because what it pins llms.txt against — STATUSES and VERIFY_LEAD — is defined here.
 const llms = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "public", "llms.txt"),
+  join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web", "public", "llms.txt"),
   "utf8",
 );
 
