@@ -146,8 +146,17 @@ One-time setup:
    are sufficient; no local deploy is required.
 
 `.github/workflows/release.yml` publishes `passalong` to npm when a `v*` tag is pushed and the
-tag matches `packages/passalong/package.json`. It authenticates with npm trusted publishing (OIDC), configured on npmjs.com for this repo and
-workflow file, so no npm token is stored anywhere:
+tag matches `packages/passalong/package.json`. It authenticates with npm trusted publishing (OIDC)
+rather than a stored token.
+
+**This is not configured yet.** The `v0.2.0` run (2026-09-04) failed with
+`403 OIDC permission denied for this action`, which is what npm returns when the package has no
+trusted publisher registered. Until it is set up on npmjs.com — package `passalong` → Settings →
+Trusted Publisher → GitHub Actions, owner `codellyson`, repository `passalong`, workflow
+`release.yml`, no environment — every tag push will fail the same way, and the only route is a
+manual `npm publish --otp=<code>` from a logged-in machine. Note that a tag whose release failed
+is spent: npm never saw the version, but the tag is on the remote, so the next attempt needs a new
+version number.
 
 ```sh
 cd packages/passalong && npm version patch && git push && git push --tags
