@@ -54,6 +54,12 @@ The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source
   categorical props only**. Never an id, handle, email, team name, guide title or URL fragment. The
   session id is the current hour, so nothing points back at a person. `count()` in `index.ts` fires
   events through `waitUntil`; with `APTABASE_KEY` unset nothing is sent, which is the state in dev.
+- **Aptabase's ingest answers 200 to almost anything** — a bogus key, a malformed key, no key at
+  all — so a successful response proves nothing and the dashboard is the only evidence an event
+  landed. Two traps cost an afternoon: the endpoint is `/api/v0/event` (**singular**, one object),
+  because the `/api/v0/events` batch form in their wiki silently dropped everything; and
+  `sessionId` is read as a timestamp, so anything that parses as old is rejected with "Session is
+  too old". Both are pinned by tests in `test/analytics.test.mjs`.
 - **Password strength does the work the KDF cannot.** The Workers runtime caps PBKDF2 at 100,000
   iterations (above that: `NotSupportedError`, and only on the real edge — local workerd allows it,
   which is how a broken sign-in shipped once). That is below current OWASP guidance, so the
