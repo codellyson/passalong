@@ -38,10 +38,12 @@ export default defineEventHandler(async (event) => {
   if (env) event.waitUntil(track(env, "guide_viewed", { view }));
 
   const body = bodyOf(row.markdown);
+  const { html, outline } = renderBody(body, view);
   return {
     id: row.id,
     meta: parseMeta(row.markdown),
-    html: renderBody(body, view),
+    html,
+    outline,
     description: summarize(body),
     shareKey: row.share_key,
     pulls: row.pulls,

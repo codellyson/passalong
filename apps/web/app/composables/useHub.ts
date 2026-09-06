@@ -154,16 +154,21 @@ export function useHub() {
   };
 
   /**
-   * The reader's answer to "does this work?". A failure must say why — the prompt is the whole
-   * interface, because a text box here would be the first step toward a comment thread.
+   * The reader's answer to "does this work?", and the only way a sender learns their handoff did
+   * not land. A failure must say why.
+   *
+   * The note used to be collected by `prompt()`, which put the highest-value moment in the product
+   * in an unstyled OS dialog that showed no character limit, offered no way back once dismissed,
+   * and — on a blank submit — cancelled silently. It is a form on the row now. The cap is still
+   * the server's (280), and the shape is still two answers and one note: what makes this not a
+   * comment thread is the endpoint, not the widget.
    */
-  const onVerdict = (g: Guide, ok: boolean) => {
-    let note = "";
-    if (!ok) {
-      note = (prompt(`What went wrong with "${g.title}"?`) || "").trim();
-      if (!note) return;
-    }
-    return guarded(() => api(`/v1/guides/${g.id}/verdict`, json("PUT", { ok, note })));
+  const onVerdict = (g: Guide, ok: boolean, note = "") => {
+    const said = note.trim().slice(0, 280);
+    // The server answers a noteless failure with a 400. Not sending it is the same rule, said
+    // before the round trip rather than after.
+    if (!ok && !said) return;
+    return guarded(() => api(`/v1/guides/${g.id}/verdict`, json("PUT", { ok, note: said })));
   };
 
   const readAll = () => guarded(() => api("/v1/notifications/read", json("POST")));
