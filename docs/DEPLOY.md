@@ -60,19 +60,27 @@ deliberately. See the rule about what may go in a prop in AGENTS.md before addin
 ```sh
 pnpm install
 pnpm -r test                    # CLI + API unit tests
-pnpm -C apps/api lint           # tsc
+pnpm -C apps/api lint           # tsc over the mounted app
+pnpm -C apps/web lint           # vue-tsc over the pages, and apps/api through the mount
 pnpm lint                       # biome
-pnpm -C apps/api deploy:check   # wrangler dry run: bindings, assets, routes
+pnpm -C apps/web build          # the dry run needs the build output to exist
+pnpm -C apps/web deploy:check   # wrangler dry run: bindings, assets, routes
 ```
 
 ## 1. Worker
 
+There is one Worker: **`apps/web`**. It serves every page and mounts the Hono app from `apps/api`,
+which is not deployed on its own. Migrations still live with the schema in `apps/api`.
+
 ```sh
 pnpm -C apps/api db:migrate:remote   # applies any new files in apps/api/migrations
-pnpm -C apps/api run deploy
+pnpm -C apps/web build
+pnpm -C apps/web run deploy          # plain `pnpm deploy` is a pnpm built-in — use `run`
 ```
 
-First deploy creates the DNS record and certificate for each route; allow a minute.
+CI does all of this on a push to master, so a manual deploy is only for when you are bypassing it.
+
+First deploy of a route creates the DNS record and certificate; allow a minute.
 
 Verify:
 
@@ -82,7 +90,20 @@ curl -s https://passalong.kreativekorna.com/health   # {"ok":true} — the old h
 curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/g/abcdefgh/wrongkey0000000000000000   # 404
 curl -s -X POST https://passalong.dev/v1/accounts    # 201 with a token
 curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/v1/tokens   # 401 unauthenticated
+curl -sI https://www.passalong.dev/ | head -1        # 308 to the apex
 ```
+
+Both halves now live in one Worker, so `/health` passing no longer implies the pages render. Check
+a page, and check that guide pages still carry the CSP that makes them safe:
+
+```sh
+sh apps/web/scripts/probe.sh https://passalong.dev
+sh apps/web/scripts/probe.sh https://passalong.dev /g/<id>/<key>
+```
+
+If either probe fails, **stop and roll back** — a guide page that ships script has lost the one
+property that makes rendering someone else's markdown safe. Rolling back is
+`npx wrangler rollback` in `apps/web`.
 
 Then switch your own machine from the local Worker to production:
 
@@ -112,9 +133,8 @@ Smoke-test the published package from a clean directory:
 npx -y passalong@latest help
 ```
 
-The frontend has no build step, so nothing needs compiling before a deploy. `public/vendor/` is
-committed; refresh it with `pnpm -C apps/api vendor` after bumping preact or htm, and commit the
-result.
+The frontend is built by Nuxt, so `pnpm -C apps/web build` has to run before the deploy (CI does
+this). Nothing about the build output is committed.
 
 `passalong setup` on a user's machine copies `skill/SKILL.md` into `~/.claude/skills/passalong-capture`
 and runs `claude mcp add passalong -- passalong mcp`, so those two paths are part of the public surface.

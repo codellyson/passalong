@@ -7,10 +7,14 @@ The full runbook is [`docs/DEPLOY.md`](../DEPLOY.md). This page is the shape and
 
 ## The Worker
 
-Every push to `master` runs `.github/workflows/ci.yml`: checks, then remote D1 migrations, then
-`wrangler deploy`, then a smoke test against `/health` on **both** serving hosts — `passalong.dev`
-and `passalong.kreativekorna.com`. Checking both is what keeps "the old host still works" an
-enforced property rather than an assumption.
+Every push to `master` runs `.github/workflows/ci.yml`: checks, then remote D1 migrations, then a
+Nuxt build and `wrangler deploy` of **`apps/web`**, then a smoke test. `apps/api` is not deployed —
+`apps/web` mounts it — so there is one deploy for both halves.
+
+The smoke test hits `/health` on **both** serving hosts (`passalong.dev` and
+`passalong.kreativekorna.com`), which keeps "the old host still works" an enforced property rather
+than an assumption, and then checks a page and `/v1/me` on the apex. That second part exists
+because one Worker now serves both halves: `/health` passing no longer implies the pages render.
 
 Locally: `pnpm dev` (not `pnpm run dev` — but note `pnpm deploy` *is* a pnpm built-in, so that one
 must be `pnpm run deploy`).

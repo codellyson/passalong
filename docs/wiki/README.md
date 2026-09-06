@@ -8,7 +8,7 @@ why is it shaped like that", which is different from what the other docs cover:
 | [`AGENTS.md`](../../AGENTS.md) | Conventions and sharp edges. Read it first; it is the rules. |
 | `docs/wiki/` (here) | Reference: schema, routes, auth model, the web view, releasing. |
 | [`docs/DEPLOY.md`](../DEPLOY.md) | The runbook. What to run, in what order, to ship. |
-| [`apps/api/public/llms.txt`](../../apps/api/public/llms.txt) | Public. For agents *using* the product, not changing it. |
+| [`apps/web/public/llms.txt`](../../apps/web/public/llms.txt) | Public. For agents *using* the product, not changing it. |
 
 These pages describe behaviour that is defined in code. Where they disagree with the source, the
 source wins — and the page is a bug. Each one names the file it describes so that is checkable.

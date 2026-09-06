@@ -1,6 +1,6 @@
 # Architecture
 
-Three pieces, one database.
+Three pieces, one database, **one deployed Worker**.
 
 ```
 packages/passalong/          the CLI and the MCP server. Plain ESM, no build step.
@@ -12,27 +12,45 @@ packages/passalong/          the CLI and the MCP server. Plain ESM, no build ste
   src/capture.js            turning a session into a draft
   skill/SKILL.md            the Claude Code capture skill, installed by `passalong setup`
 
-apps/api/                    a Hono Worker on Cloudflare, one D1 database
+apps/api/                    the Hono app. NOT deployed on its own — apps/web mounts it.
   src/index.ts              every route; the header comment is the API surface
   src/guide.ts              the format again, server side (parse, validate, verify layout)
   src/auth.ts               PBKDF2, tokens, sessions, breach check
-  src/render.ts             HTML for the landing, the hub shell, guide pages, join, reset
-  src/og.ts                 the per-guide unfurl card
+  src/og.ts                 the per-guide unfurl card (satori + resvg, wasm)
   src/hosts.ts              which hostnames serve and which redirect
   src/notify.ts             the notification feed
   src/email.ts              outbound mail through the Email Service binding
   src/analytics.ts          product events, sent from the Worker
-  public/                   static assets, served before the Worker runs
   migrations/               D1 schema, applied in order
+
+apps/web/                    Nuxt 4 on Cloudflare. The Worker that is actually deployed.
+  app/pages/                /, /g/[id]/[key], /hub, /join/[code], /reset
+  app/components/hub/       the hub, which used to be one 931-line file
+  app/composables/useHub.ts its state and every mutation
+  server/middleware/        0.canonical.ts (www → apex), 1.api.ts (the mount)
+  server/api/               the page-facing endpoints: one guide, one invite
+  server/utils/guide-html.ts markdown → HTML, server-side only
+  shared/csp.ts             the two response policies
+  public/                   static assets, served before the Worker runs
 ```
+
+## One Worker, two halves
+
+`apps/web` is the deployment. `server/middleware/1.api.ts` hands `/v1/*`, `/health` and the two
+machine routes on a share link (`/g/:id/:key.md`, `/g/:id/:key/og.png`) to the Hono app, and lets
+everything else fall through to Nuxt.
+
+Same origin is the point, not an accident: the hub authenticates with an HttpOnly session cookie
+and the CLI with a bearer token, and one middleware accepts either. Split them across two hosts and
+that needs CORS on thirty routes and a cookie `Domain` — so the split does not exist.
 
 ## Why the CLI has no build step
 
-The source in `packages/passalong/src` is the code that runs. `htm` tagged templates need no
-transpiling, so the hub's frontend has the same property. One less thing to rot, and a guide about
-this repo can tell you to read a file rather than a bundle. Preact and htm are vendored into
-`public/vendor/` by `scripts/vendor.mjs` rather than pulled from a CDN, because the hub's CSP is
-`script-src 'self'`.
+The source in `packages/passalong/src` is the code that runs. One less thing to rot, and a guide
+about this repo can tell you to read a file rather than a bundle. The web app does have a build,
+and gets three things from it that the old hand-written HTML had to do by hand: a content hash on
+the stylesheet, `.vue` files instead of template strings, and a typecheck that has already caught
+bugs the string templates could not have.
 
 ## Local-first
 

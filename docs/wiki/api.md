@@ -57,7 +57,7 @@ trusting clients to report it. Keep it in mind when adding caching or prefetchin
 | `GET /g/:id/:key` | The read-only guide view. `?view=verify` leads with `Verification`. |
 | `GET /g/:id/:key.md` | Raw markdown. Also records a pull. |
 | `GET /g/:id/:key/og.png` | The unfurl card. Deliberately does **not** record a pull — crawlers, not people. |
-| `GET /hub` | The hub shell; everything dynamic is `/hub.js` against `/v1/*` |
+| `GET /hub` | Your transfers, teams and tokens; talks to `/v1/*` |
 | `GET /join/:code` | Where an invite link lands |
 | `GET /reset` | Set a new password from an emailed link |
 | `GET /health` | `{"ok":true}` — what CI smoke-tests |
@@ -65,7 +65,14 @@ trusting clients to report it. Keep it in mind when adding caching or prefetchin
 Guide pages are `noindex` and `/g/` is disallowed in `robots.txt`. The share key is the secret, so
 the page must never reach an index.
 
+**Who serves what.** All of these are one Worker (`apps/web`), but not one router. The Hono app in
+`apps/api` handles `/v1/*`, `/health`, `/g/:id/:key.md` and `/g/:id/:key/og.png`; everything else is
+a Nuxt page. `apps/web/server/middleware/1.api.ts` decides, by path, and a miss there falls through
+to Nuxt rather than becoming Hono's 404.
+
 ## Errors
 
-`err(c, status, message)` for a JSON error; unmatched `/v1/*` is a 404 JSON, anything else is the
-static `404.html` with the view headers. `app.onError` logs and returns a 500 without detail.
+`err(c, status, message)` for a JSON error, and every route the Hono app still owns is
+machine-facing, so a miss there is JSON. Pages get Nuxt's error page (`app/error.vue`), which leads
+with the case that actually happens: a share link whose key did not survive the trip.
+`app.onError` logs and returns a 500 without detail.
