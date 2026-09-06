@@ -836,6 +836,11 @@ const STALE_DAYS = 7;
 const PULLED_BY_OTHERS = `EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id
      AND p.account_id <> '' AND p.account_id <> g.account_id)`;
 const FAILING = "EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id AND v.ok = 0)";
+// Addressed to someone and still untouched by them. Named because the buckets below are tested in
+// order and the first match wins (DESIGN_BRIEF §2), so the later ones have to say what they are
+// not: each query carries the negation of every bucket above it rather than trusting the reader —
+// or the CLI, or the agent tool — to apply the order themselves.
+const IN_FLIGHT = `(g.to_account_id <> '' OR g.team_id <> '') AND NOT ${PULLED_BY_OTHERS}`;
 
 app.get("/v1/board", async (c) => {
   const account = c.get("account");
@@ -851,22 +856,31 @@ app.get("/v1/board", async (c) => {
       `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published' AND ${FAILING}
        ORDER BY g.updated DESC LIMIT 20`,
     ).then((r) => r.results),
-    // Handed to a person or a team, and still untouched by anyone but you.
+    // Handed to a person or a team, and still untouched by anyone but you. A failed verdict wins
+    // over "nobody has it yet": a verdict usually implies a pull row, but one left by the guide's
+    // own author does not (recordReceipt skips itself), so without this guard a self-verdict of
+    // { ok: false } on an unpulled guide would fill a card here and in `failing` at the same time.
     mine(
       `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
-         AND (g.to_account_id <> '' OR g.team_id <> '') AND NOT ${PULLED_BY_OTHERS}
+         AND ${IN_FLIGHT} AND NOT ${FAILING}
        ORDER BY g.created ASC LIMIT 20`,
     ).then((r) => r.results),
     // Someone has it and has not said it shipped. Guides past the promote line are shown there
-    // instead, so one guide never occupies two cards.
+    // instead, so one guide never occupies two cards. Being pulled by someone else is itself the
+    // negation of `in_flight`, so this needs no separate guard against it.
     mine(
       `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
          AND g.pulls < 3 AND ${PULLED_BY_OTHERS} AND NOT ${FAILING}
        ORDER BY g.updated DESC LIMIT 20`,
     ).then((r) => r.results),
+    // Pulled enough to be worth keeping. `pulls` counts your own pulls and anonymous link reads
+    // too, so a guide you fetched three times on three machines reaches the promote line while
+    // still being in flight — the earlier bucket, and the truer one. Excluding `in_flight` rather
+    // than demanding a pull by someone else is what keeps an unaddressed guide, which no bucket
+    // above claims, on the board at all.
     mine(
       `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published' AND g.pulls >= 3
-         AND NOT ${FAILING}
+         AND NOT (${IN_FLIGHT}) AND NOT ${FAILING}
        ORDER BY g.pulls DESC LIMIT 20`,
     ).then((r) => r.results),
   ]);
