@@ -104,10 +104,7 @@ export function boardStates(board: Board | null): Map<string, GuideState> {
   put(board.waiting, STATES.waiting);
   put(board.failing, STATES.failing);
   put(board.in_flight, STATES.flight);
-  // Two buckets, one state. `promote` is `landed` with three or more pulls, and the pull count is
-  // already printed on the row.
   put(board.landed, STATES.landed);
-  put(board.promote, STATES.landed);
   return out;
 }
 

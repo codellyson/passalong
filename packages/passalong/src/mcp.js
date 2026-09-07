@@ -79,9 +79,8 @@ export async function serve() {
       description:
         "The state of this user's transfers as queues: waiting on you (handed to you, not " +
         "pulled), not working (someone gave it a failing verdict — the most urgent), in flight " +
-        "(handed over, nobody has taken it — `stale` means it has sat over a week), landed " +
-        "(someone has it and has not marked it consumed), and worth keeping (pulled enough to " +
-        "promote into a reference). Use it to answer 'what is outstanding?'.",
+        "(handed over, nobody has taken it — `stale` means it has sat over a week), and landed " +
+        "(someone else has it). Use it to answer 'what is outstanding?'.",
       inputSchema: {},
     },
     async () => {

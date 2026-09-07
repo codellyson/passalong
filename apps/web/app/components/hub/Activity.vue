@@ -17,9 +17,7 @@ const activity = computed(() => data.value.activity);
 const onBoard = computed(() => {
   const b = data.value.board;
   if (!b) return new Set<string>();
-  return new Set(
-    [...b.waiting, ...b.failing, ...b.in_flight, ...b.landed, ...b.promote].map((g) => g.id),
-  );
+  return new Set([...b.waiting, ...b.failing, ...b.in_flight, ...b.landed].map((g) => g.id));
 });
 
 const news = computed(() =>

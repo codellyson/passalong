@@ -849,7 +849,7 @@ app.get("/v1/board", async (c) => {
       .bind(account, ...binds)
       .all<GuideRow>();
 
-  const [waiting, failing, flight, landed, promote] = await Promise.all([
+  const [waiting, failing, flight, landed] = await Promise.all([
     inboxRows(c, 20),
     // Someone tried your work and it does not hold up. The most actionable thing on the page.
     mine(
@@ -865,29 +865,20 @@ app.get("/v1/board", async (c) => {
          AND ${IN_FLIGHT} AND NOT ${FAILING}
        ORDER BY g.created ASC LIMIT 20`,
     ).then((r) => r.results),
-    // Someone has it and has not said it shipped. Guides past the promote line are shown there
-    // instead, so one guide never occupies two cards. Being pulled by someone else is itself the
-    // negation of `in_flight`, so this needs no separate guard against it.
+    // Someone else has it. This used to stop at three pulls, above which a guide moved to a
+    // "worth keeping" queue of its own — but that was a counter with a bucket around it, and it
+    // meant something nobody acts on. The pull count is on the row; being pulled by someone else
+    // is itself the negation of `in_flight`, so this needs no separate guard against it.
     mine(
       `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
-         AND g.pulls < 3 AND ${PULLED_BY_OTHERS} AND NOT ${FAILING}
+         AND ${PULLED_BY_OTHERS} AND NOT ${FAILING}
        ORDER BY g.updated DESC LIMIT 20`,
-    ).then((r) => r.results),
-    // Pulled enough to be worth keeping. `pulls` counts your own pulls and anonymous link reads
-    // too, so a guide you fetched three times on three machines reaches the promote line while
-    // still being in flight — the earlier bucket, and the truer one. Excluding `in_flight` rather
-    // than demanding a pull by someone else is what keeps an unaddressed guide, which no bucket
-    // above claims, on the board at all.
-    mine(
-      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published' AND g.pulls >= 3
-         AND NOT (${IN_FLIGHT}) AND NOT ${FAILING}
-       ORDER BY g.pulls DESC LIMIT 20`,
     ).then((r) => r.results),
   ]);
 
   // One summaries() pass over every row, then split back into buckets: the lookups it does
   // (teams, people, recent pulls) are per-call, not per-row.
-  const all = [...waiting, ...failing, ...flight, ...landed, ...promote];
+  const all = [...waiting, ...failing, ...flight, ...landed];
   const byId = new Map((await summaries(c, all)).map((s) => [s.id, s]));
   const pick = (rows: GuideRow[]) => rows.map((r) => byId.get(r.id)).filter(Boolean);
   const cutoff = Date.now() - STALE_DAYS * 864e5;
@@ -900,7 +891,10 @@ app.get("/v1/board", async (c) => {
       stale: new Date(g?.created ?? 0).getTime() < cutoff,
     })),
     landed: pick(landed),
-    promote: pick(promote),
+    // Kept, always empty, for one release. `passalong board` in the published CLI reads
+    // `b.promote.length` with no guard, so dropping the key outright makes an installed 0.1.0
+    // throw rather than degrade. It goes when the CLI's own removal ships.
+    promote: [] as ReturnType<typeof pick>,
     unread: await unreadCount(c.env, account),
   });
 });

@@ -156,10 +156,8 @@ const commands = {
       `${g.title}  ${g.verdict?.by ? `@${g.verdict.by}` : "someone"}: ${g.verdict?.note || "no reason given"}`);
     queue("In flight", "handed over, nobody has taken it", b.in_flight, (g) =>
       `${g.title}  to ${g.team}${g.to ? `/@${g.to}` : ""}${g.stale ? "  ← not picked up" : ""}`);
-    queue("Landed", "someone has it and hasn't said it shipped", b.landed, (g) => `${g.title}  ${g.pulls} pull${g.pulls === 1 ? "" : "s"}`);
-    queue("Worth keeping", "pulled enough to graduate into a reference", b.promote, (g) => `${g.title}  ${g.pulls} pulls`);
-    const total =
-      b.waiting.length + b.failing.length + b.in_flight.length + b.landed.length + b.promote.length;
+    queue("Landed", "someone else has it", b.landed, (g) => `${g.title}  ${g.pulls} pull${g.pulls === 1 ? "" : "s"}`);
+    const total = b.waiting.length + b.failing.length + b.in_flight.length + b.landed.length;
     if (!total) console.error("nothing in flight — every transfer is closed");
     else if (b.unread) console.error(`\n${b.unread} new: passalong activity`);
   },

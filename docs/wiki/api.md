@@ -41,7 +41,7 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `PUT /v1/guides/:id/verdict` | account | `{ ok, note? }` |
 | `DELETE /v1/guides/:id` | **owner only** | |
 | `GET /v1/inbox` | account | Handed to you or your teams, not yet pulled |
-| `GET /v1/board` | account | The queues: waiting, not working, in flight, landed, promote |
+| `GET /v1/board` | account | The queues: waiting, not working, in flight, landed |
 | `GET /v1/notifications?unread=` | account | |
 | `POST /v1/notifications/read` | account | `{ ids? }` — everything unread when `ids` is omitted |
 

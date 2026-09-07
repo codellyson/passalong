@@ -72,7 +72,7 @@ const word = (n: number) => WORDS[n] ?? String(n);
 const handed = computed(() => {
   const b = data.value.board;
   if (!b) return 0;
-  return b.failing.length + b.in_flight.length + b.landed.length + b.promote.length;
+  return b.failing.length + b.in_flight.length + b.landed.length;
 });
 
 const standing = computed(() => {

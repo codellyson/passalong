@@ -42,10 +42,8 @@ const KINDS: Kind[] = [
     stripe: "border-l-warn",
     action: "link",
   },
-  // `landed` and `promote` are one state here: both mean someone else has it. The pull count is
-  // on the row, which is all "worth keeping" ever said.
   {
-    from: ["landed", "promote"],
+    from: ["landed"],
     label: "landed",
     note: "someone else has it",
     badge: "bg-ok-soft text-ok",
@@ -72,9 +70,7 @@ const rows = computed<{ g: Guide; kind: Kind }[]>(() =>
 );
 
 /** Said once, under the heading, so the badges below do not have to explain themselves. */
-const landedEmpty = computed(
-  () => !!board.value && !board.value.landed?.length && !board.value.promote?.length,
-);
+const landedEmpty = computed(() => !!board.value && !board.value.landed?.length);
 </script>
 
 <template>
