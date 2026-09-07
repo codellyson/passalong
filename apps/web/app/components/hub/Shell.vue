@@ -33,7 +33,7 @@ useHead({
   ],
 });
 
-const { data, signedIn, scope, error, adoptToken, setToken, load, signOut } = useHub();
+const { data, signedIn, expired, scope, error, adoptToken, setToken, load, signOut } = useHub();
 const route = useRoute();
 
 // Nothing is fetched during SSR: neither credential is visible from the server, so the first
@@ -61,6 +61,16 @@ function onSignedIn() {
 }
 
 const waiting = computed(() => data.value.board?.waiting.length ?? 0);
+
+/** Warn before the limit bites, not after: the share that fails happens in a terminal. */
+const full = computed(() => {
+  const me = data.value.me;
+  return Boolean(me && me.limit && me.guides >= me.limit);
+});
+const nearLimit = computed(() => {
+  const me = data.value.me;
+  return Boolean(me && me.limit && me.guides >= me.limit * 0.8);
+});
 
 // Counting is the whole point of it: the pages below say which guides, this says how much there is
 // to care about before you have read anything. Small numbers are spelled out because it is a
@@ -98,7 +108,13 @@ const tabs = computed(() => [
   <!-- Wider than the 46rem the rest of the product reads at. That measure is right for a guide
        and wrong for a board: this is the one surface that is scanned rather than read. -->
   <main class="max-w-[54rem]">
-    <HubSignIn v-if="!signedIn" :error="error" @token="onToken" @signed-in="onSignedIn" />
+    <HubSignIn
+      v-if="!signedIn"
+      :error="error"
+      :expired="expired"
+      @token="onToken"
+      @signed-in="onSignedIn"
+    />
 
     <section v-else class="hub">
       <!-- The rule under the tab bar is the one this page needs, so the header gives up its own. -->
@@ -133,7 +149,35 @@ const tabs = computed(() => [
         </NuxtLink>
       </nav>
 
-      <p v-if="error" class="error">{{ error }}</p>
+      <!-- A failed call used to be one red sentence, with no way to tell whether the page you are
+           looking at is stale and nothing to do about it but reload. -->
+      <div
+        v-if="error"
+        class="mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3"
+      >
+        <div class="min-w-0 grow basis-64">
+          <p class="m-0 font-ui text-sm font-semibold text-danger">That did not go through</p>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">
+            {{ error }} — what you can see may be out of date.
+          </p>
+        </div>
+        <button class="btn outline danger sm" @click="load()">Try again</button>
+        <button class="btn sm" @click="error = null">Dismiss</button>
+      </div>
+
+      <!-- The free tier stops `passalong share` server-side. Saying so here is the only warning
+           anyone gets before the next share fails from a terminal. -->
+      <p
+        v-if="nearLimit"
+        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
+      >
+        <b class="text-fg">{{ data.me?.guides }} of {{ data.me?.limit }} synced guides used.</b>
+        <template v-if="full">
+          The next <code>passalong share</code> will be refused — remove one you no longer need.
+        </template>
+        <template v-else>The free tier stops at this number.</template>
+        <NuxtLink to="/hub/guides">See what is synced</NuxtLink>
+      </p>
 
       <slot />
 

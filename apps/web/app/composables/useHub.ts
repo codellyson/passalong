@@ -37,6 +37,12 @@ export function useHub() {
   const data = useState<HubData>("hub:data", () => ({ ...EMPTY }));
   const scope = useState("hub:scope", () => "all");
   const error = useState<string | null>("hub:error", () => null);
+  /**
+   * A 401 after you were already signed in. It is a different event from arriving signed out —
+   * the same screen appears either way, and without this it appears with no explanation at all,
+   * which reads as the app having forgotten you for no reason.
+   */
+  const expired = useState("hub:expired", () => false);
   const editing = useState("hub:editing", () => false);
 
   /**
@@ -68,6 +74,7 @@ export function useHub() {
     if (token.value) headers.authorization = `Bearer ${token.value}`;
     const res = await fetch(path, { ...init, headers });
     if (res.status === 401) {
+      expired.value = signedIn.value;
       setToken(null);
       signedIn.value = false;
       throw new Error("signed out");
@@ -93,7 +100,10 @@ export function useHub() {
     const call = async <T>(path: string): Promise<T> => {
       const headers: Record<string, string> = t ? { authorization: `Bearer ${t}` } : {};
       const res = await fetch(path, { headers });
-      if (res.status === 401) throw new Error("signed out");
+      if (res.status === 401) {
+        expired.value = signedIn.value;
+        throw new Error("signed out");
+      }
       if (!res.ok) {
         const failed = (await res.json().catch(() => ({}))) as { message?: string };
         throw new Error(failed.message || res.statusText);
@@ -124,6 +134,7 @@ export function useHub() {
         team,
       };
       signedIn.value = true;
+      expired.value = false;
     } catch (e) {
       // Not being signed in is a state, not an error to shout about.
       signedIn.value = false;
@@ -187,6 +198,7 @@ export function useHub() {
   }
 
   async function signOut() {
+    expired.value = false;
     // End the session server-side too, otherwise "sign out" only forgets locally.
     await fetch("/v1/auth/logout", { method: "POST" }).catch(() => {});
     setToken(null);
@@ -201,6 +213,7 @@ export function useHub() {
   return {
     token,
     signedIn,
+    expired,
     data,
     scope,
     error,

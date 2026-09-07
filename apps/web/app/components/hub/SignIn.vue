@@ -8,7 +8,7 @@
   account will be empty until someone hands you something.
 -->
 <script setup lang="ts">
-defineProps<{ error: string | null }>();
+defineProps<{ error: string | null; expired?: boolean }>();
 const emit = defineEmits<{ token: [string]; signedIn: [] }>();
 
 type Mode = "login" | "signup" | "forgot";
@@ -86,8 +86,17 @@ function useToken(e: Event) {
 <template>
   <section class="auth">
     <AppBrand />
-    <h1>{{ copyFor.title }}</h1>
-    <p class="lede">{{ copyFor.lede }}</p>
+    <h1>{{ expired ? "Signed out" : copyFor.title }}</h1>
+    <p class="lede">{{ expired ? "Your session ended. Sign in and you are back where you were." : copyFor.lede }}</p>
+
+    <!-- Arriving signed out and being signed out mid-session look identical otherwise, and the
+         second one reads as the app having forgotten you for no reason. -->
+    <p
+      v-if="expired"
+      class="mx-auto mb-4 max-w-sm rounded-2 border border-warn bg-warn-soft px-4 py-2.5 font-ui text-sm text-muted"
+    >
+      Nothing was lost — guides live on the server, not in this tab.
+    </p>
 
     <div class="authcard">
       <form class="join" @submit.prevent="submit">
