@@ -624,15 +624,18 @@ input[name="token"],
 }
 
 /* ---- hub ------------------------------------------------------------------------------------ */
+/* Search and the cuts are the same operation — narrow the list — so they stack instead of
+   competing for one line. Side by side, every chip added took width from the field, and with five
+   of them the field was below the width of its own placeholder: it could not show its own label. */
 .hub .toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--s-3);
-  align-items: center;
   margin-bottom: var(--s-5);
 }
+/* No flex basis: in a grid the field is simply the row's width, and a basis left over from the
+   flex version would have been read as a height. */
 .hub input[type="search"] {
-  flex: 1 1 16rem;
+  width: 100%;
 }
 .chips.scopes {
   margin-bottom: var(--s-4);

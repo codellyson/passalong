@@ -120,7 +120,7 @@ const tabs = computed(() => [
       <!-- The rule under the tab bar is the one this page needs, so the header gives up its own. -->
       <header class="mb-3 border-b-0 pb-0">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <AppBrand />
+          <AppBrand to="/hub" />
           <HubScopes />
         </div>
         <h1>{{ heading }}</h1>

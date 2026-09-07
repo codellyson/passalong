@@ -93,12 +93,7 @@ const visible = computed(() => {
     <!-- No controls until there is something to control: on a fresh account this was a search box
          and four filter chips all reading zero, above a line saying nothing is synced. -->
     <div v-if="data.guides.length" class="toolbar">
-      <input
-        v-model="q"
-        type="search"
-        class="min-w-64 grow"
-        placeholder="search title, tags, stack, repo"
-      />
+      <input v-model="q" type="search" placeholder="search title, tags, stack, repo" />
       <div class="chips">
         <button
           v-for="c in CUTS"
