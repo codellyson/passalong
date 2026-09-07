@@ -111,8 +111,18 @@ const visible = computed(() => {
     <p v-else-if="!visible.length" class="empty">No guides match.</p>
     <template v-else>
       <!-- Not `overflow-hidden`: the rounded corners were clipping each row's overflow menu, which
-           is absolutely positioned inside the row. The rows round their own outer corners instead. -->
-      <ul class="m-0 list-none rounded-3 border border-line p-0">
+           is absolutely positioned inside the row. The rows round their own outer corners instead,
+           at the list's radius minus its border so the curves are concentric.
+
+           The list carries the rows' own fill as well. Two rounded shapes painted separately have
+           two antialiased edges, and where they meet along the curve the pixels blend to whatever
+           is behind — with a transparent list that is the page, and it reads as a faint second arc
+           at each corner. Filling the list means the seam blends into the same colour.
+
+           No left border either: each row draws its own 3px stripe there, and a container border
+           behind it made the left edge two parallel lines and visibly heavier than the other
+           three. The stripe is the edge. -->
+      <ul class="m-0 list-none rounded-3 border border-l-0 border-line bg-raised p-0">
         <HubGuideRow v-for="r in visible" :key="r.g.id" :g="r.g" :state="r.state" />
       </ul>
       <p class="mt-3 font-ui text-sm text-muted">

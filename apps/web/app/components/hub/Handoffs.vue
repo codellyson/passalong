@@ -87,7 +87,12 @@ const landedEmpty = computed(
       <span class="text-sm text-muted">sorted by what needs you</span>
     </div>
 
-    <ul v-if="rows.length" class="m-0 list-none overflow-hidden rounded-3 border border-line p-0">
+    <!-- No left border: each row's 3px stripe is the left edge. A container border behind it
+           made that side two parallel lines and visibly heavier than the other three. -->
+      <ul
+        v-if="rows.length"
+        class="m-0 list-none overflow-hidden rounded-3 border border-l-0 border-line bg-raised p-0"
+      >
       <HubHandoffRow v-for="r in rows" :key="r.g.id" :g="r.g" :kind="r.kind" />
     </ul>
     <p v-else class="m-0 text-sm text-muted">

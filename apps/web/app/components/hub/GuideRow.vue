@@ -50,8 +50,11 @@ const verdict = computed(() => {
 </script>
 
 <template>
+  <!-- The row's corner radius is the list's minus its border, because the row sits a pixel inside
+       it. Matching them exactly leaves the row's fill short of the border on the curve, and the
+       page shows through as a faint second arc at each corner. -->
   <li
-    class="flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-l-[3px] border-t-line border-r-0 border-b-0 bg-raised px-4 py-3.5 first:rounded-t-3 first:border-t-0 last:rounded-b-3"
+    class="flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-l-[3px] border-t-line border-r-0 border-b-0 bg-raised px-4 py-3.5 first:rounded-t-[calc(var(--r-3)-1px)] first:border-t-0 last:rounded-b-[calc(var(--r-3)-1px)]"
     :class="state?.stripe ?? 'border-l-line'"
   >
     <div class="min-w-0 flex-1 basis-72">

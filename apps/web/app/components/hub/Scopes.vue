@@ -17,13 +17,17 @@ const teams = computed(() => data.value.me?.teams || []);
   <div v-if="teams.length" class="chips scopes">
     <button :class="['chip', { on: scope === 'all' }]" @click="scope = 'all'">everything</button>
     <button :class="['chip', { on: scope === 'mine' }]" @click="scope = 'mine'">mine</button>
+    <!-- The slug, not the name you typed. The slug is what the server disambiguated it to, what
+         `--to` takes, and what every row prints — a chip reading "kreative-korna" that filters to
+         guides labelled "kreative-korna-3" is a different string for the same thing. In the code
+         face for the same reason: it is an identifier, not a label. -->
     <button
       v-for="t in teams"
       :key="t.slug"
-      :class="['chip', { on: scope === t.slug }]"
+      :class="['chip', 'font-code', { on: scope === t.slug }]"
       @click="scope = t.slug"
     >
-      {{ t.name }}
+      {{ t.slug }}
     </button>
   </div>
 </template>
