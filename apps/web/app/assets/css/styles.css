@@ -756,11 +756,6 @@ details.more summary:hover {
   text-align: left;
   font-size: var(--t-sm);
 }
-.error {
-  color: var(--danger);
-  font-size: var(--t-sm);
-  margin: 0;
-}
 
 /* ---- board ------------------------------------------------------------------------------------
    Nothing here. The board — the waiting lane and the handoff list — is the one region of the app

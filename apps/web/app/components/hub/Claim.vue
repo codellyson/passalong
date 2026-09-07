@@ -44,6 +44,6 @@ async function submit(e: Event) {
       />
       <button class="primary" type="submit">Save</button>
     </form>
-    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="error" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger">{{ error }}</p>
   </section>
 </template>

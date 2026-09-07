@@ -105,6 +105,6 @@ async function submit(e: Event) {
       </div>
     </form>
 
-    <p v-if="error && !onHandle" class="error">{{ error }}</p>
+    <p v-if="error && !onHandle" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger">{{ error }}</p>
   </div>
 </template>
