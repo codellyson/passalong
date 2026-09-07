@@ -50,11 +50,13 @@ const verdict = computed(() => {
 </script>
 
 <template>
-  <!-- The row's corner radius is the list's minus its border, because the row sits a pixel inside
-       it. Matching them exactly leaves the row's fill short of the border on the curve, and the
-       page shows through as a faint second arc at each corner. -->
+  <!-- Two things about the edges. The corner radius is the list's minus its border, because the
+       row sits a pixel inside it — matching them exactly leaves the fill short of the border on
+       the curve. And the separator between rows is an inset shadow rather than a top border: a
+       1px border mitres against the 3px stripe, taking a diagonal bite out of the left edge at
+       every row boundary. A shadow starts inside the border box, so the stripe runs unbroken. -->
   <li
-    class="flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-l-[3px] border-t-line border-r-0 border-b-0 bg-raised px-4 py-3.5 first:rounded-t-[calc(var(--r-3)-1px)] first:border-t-0 last:rounded-b-[calc(var(--r-3)-1px)]"
+    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-l-[3px] border-t-0 border-r-0 border-b-0 shadow-[inset_0_1px_0_var(--line)] first:shadow-none bg-raised px-4 py-3.5 first:rounded-t-[calc(var(--r-3)-1px)] last:rounded-b-[calc(var(--r-3)-1px)]"
     :class="state?.stripe ?? 'border-l-line'"
   >
     <div class="min-w-0 flex-1 basis-72">

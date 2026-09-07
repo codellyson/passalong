@@ -20,8 +20,10 @@ const pulledBy = computed(() =>
 </script>
 
 <template>
+  <!-- The separator is an inset shadow, not a top border: a border mitres against the 3px stripe
+       and bites a diagonal notch out of the left edge at every row boundary. -->
   <li
-    class="flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-l-[3px] border-t-line border-b-0 border-r-0 bg-raised px-4 py-3.5 first:border-t-0"
+    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] bg-raised px-4 py-3.5 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
     :class="kind.stripe"
   >
     <div class="min-w-0 flex-1 basis-64">
