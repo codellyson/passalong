@@ -102,10 +102,23 @@ export async function renderOgImage(
   base: string,
   g: { id: string; meta: Meta },
 ): Promise<Response> {
-  const [{ ImageResponse }, fonts] = await Promise.all([
-    import("workers-og"),
+  // `workers-og` is workerd-only: its yoga and resvg wasm declare imports that only that runtime
+  // supplies, so `import()` fails outright under Node with "Cannot find package 'a'" — a message
+  // that says nothing about the cause. Nitro's `experimental.wasm` bundles both files for the
+  // deployed Worker, so this route works there and cannot work under `nuxt dev`. To see a card
+  // locally, build and serve the output on workerd:
+  //
+  //     pnpm --filter @passalong/web build
+  //     npx wrangler dev .output/server/index.mjs --assets .output/public
+  const [og, fonts] = await Promise.all([
+    import("workers-og").catch((e) => {
+      throw new Error(
+        `unfurl renderer unavailable — workers-og needs workerd, not this runtime (${(e as Error).message})`,
+      );
+    }),
     loadFonts(env, base),
   ]);
+  const { ImageResponse } = og;
   const img = new ImageResponse(card({ title: g.meta.title || g.id, id: g.id, meta: g.meta }), {
     width: 1200,
     height: 630,

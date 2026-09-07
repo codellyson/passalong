@@ -30,7 +30,7 @@ In the age of AI agents, an implementation guide is no longer documentation. It 
 2. **Capture.** Run `passalong share`. The CLI (or an agent skill/hook) distills the session into a draft transfer guide: problem, solution shape, decisions and rationale, concrete steps with context-specific parts flagged, and verification steps.
 3. **Trim and publish.** Developer reviews the draft, cuts noise, publishes. The guide gets a short ID and is synced.
 4. **Pull on the other side.** In the receiving context, run `passalong pull <id>` or let the receiving agent fetch it via the Passalong MCP server. The guide lands in the agent's context and the agent implements, adapting the flagged context-specific parts.
-5. **Close.** Optionally mark the guide as consumed. Guides that keep getting pulled can be promoted to a reusable reference.
+5. **Close.** Say whether it worked. That verdict is the close — an author lifecycle on top of it (`consumed`, `promoted`) was cut, because it said the same thing twice and the pull count already reports how well-travelled a guide is.
 
 The demo moment: solve a bug in service A, run one command, open a session in service B, and the agent there already knows the whole story.
 
@@ -41,7 +41,7 @@ Plain markdown with frontmatter. No proprietary format, fully exportable, git-fr
 **Frontmatter:**
 - id, title, created, author
 - source_context: repo/product where it originated
-- status: draft, published, consumed, promoted
+- status: draft, published (`consumed` and `promoted` are legacy: accepted, never set)
 - stack_assumptions: e.g. Postgres, Next.js 15, Paystack v2 API
 - tags
 

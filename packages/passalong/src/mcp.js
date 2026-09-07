@@ -222,8 +222,9 @@ export async function serve() {
     {
       title: "Set guide status",
       description:
-        "Mark a guide consumed (implemented on the receiving side) or promoted (a reusable reference). " +
-        "Only the author can promote.",
+        "Deprecated — prefer verify_guide. Marks a guide consumed or promoted, an author lifecycle " +
+        "nothing reads any more: the board reports where a transfer is and the verdict reports " +
+        "whether it worked. Kept so existing callers do not break. Only the author can promote.",
       inputSchema: { id: z.string(), status: z.enum(["published", "consumed", "promoted"]) },
     },
     async ({ id, status }) => {

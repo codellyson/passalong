@@ -35,8 +35,8 @@ passalong open <id> [--print] view a guide in the browser (or the terminal)
 passalong hub                 open your synced guides in the browser
 passalong works <id>          you tried it and it holds up
 passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
-passalong done <id>           mark consumed: implemented on the receiving side
-passalong promote <id>        mark promoted: graduated into a reusable reference
+passalong done <id>           deprecated: mark consumed
+passalong promote <id>        deprecated: mark promoted
 passalong rm <id>             delete a guide locally and from sync
 passalong export [dir]        dump every guide as plain markdown
 passalong login [token]       create an account, or attach this machine with a token from your hub

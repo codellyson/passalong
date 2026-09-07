@@ -2,6 +2,15 @@
 // patch a field in place without disturbing the rest of the document. The full format lives in
 // packages/passalong/src/guide.js; this mirrors its parsing rules for strings and string lists.
 
+/**
+ * A guide is a draft or it is published. `consumed` and `promoted` are legacy: they were an author
+ * lifecycle laid over a transfer that already reports itself — `consumed` duplicated the verdict,
+ * and `promoted` was a pull count with a name. Nothing sets them any more.
+ *
+ * They stay in this list because they are *accepted*, not produced. The value lives in frontmatter
+ * inside markdown files in other people's repositories, and `validate()` rejects a status it does
+ * not know — so removing them here would make a guide shared a month ago fail to re-share today.
+ */
 export const STATUSES = ["draft", "published", "consumed", "promoted"] as const;
 export type Status = (typeof STATUSES)[number];
 
