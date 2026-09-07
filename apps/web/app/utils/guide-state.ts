@@ -31,7 +31,7 @@ export interface GuideState {
   badge: string;
   stripe: string;
   /** The one action the row leads with. Everything else is behind the row's overflow. */
-  action: "pull" | "verdict" | "reason" | "link" | "open";
+  action: "pull" | "verdict" | "open-urgent" | "link" | "open";
   /** Someone is blocked, or something is rotting. Drives the "needs attention" filter. */
   attention: boolean;
 }
@@ -68,7 +68,7 @@ const STATES = {
     label: "not working",
     badge: S.danger,
     stripe: "border-l-danger",
-    action: "reason",
+    action: "open-urgent",
     attention: true,
   },
   flight: {

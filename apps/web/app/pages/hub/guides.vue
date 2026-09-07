@@ -40,6 +40,11 @@ const CUTS = [
   { key: "attention", label: "needs attention" },
   { key: "theirs", label: "handed to you" },
   { key: "mine", label: "yours" },
+  // Not a lifecycle filter. `consumed` and `promoted` are deprecated, so filtering on them would
+  // ask about a field nothing sets any more. This asks the question someone actually has — which
+  // of these is nothing happening to — and it is where the free-tier warning sends you when it
+  // says to remove one you no longer need.
+  { key: "idle", label: "not in transit" },
 ];
 
 interface Row {
@@ -52,6 +57,7 @@ const inCut = (r: Row, key: string) => {
   if (key === "attention") return Boolean(r.state?.attention || r.g.stale);
   if (key === "theirs") return !r.g.mine;
   if (key === "mine") return r.g.mine;
+  if (key === "idle") return !r.state;
   return true;
 };
 

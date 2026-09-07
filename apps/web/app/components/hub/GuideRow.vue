@@ -113,13 +113,16 @@ const verdict = computed(() => {
       >
         copy pull
       </button>
+      <!-- Labelled "read the reason" until the reason moved onto the row two lines above it, at
+           which point the button led where the eye had just been. It keeps the danger outline:
+           the row is still the urgent one, and opening it is still the only move. -->
       <a
-        v-else-if="state?.action === 'reason'"
+        v-else-if="state?.action === 'open-urgent'"
         :href="g.url"
         target="_blank"
         rel="noopener"
         class="btn outline danger sm"
-      >read the reason</a>
+      >open</a>
       <button
         v-else-if="state?.action === 'link'"
         class="btn sm"
