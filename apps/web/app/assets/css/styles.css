@@ -765,13 +765,10 @@ details.more summary:hover {
    `--warn` and `--danger` tokens above, bridged into utility names by assets/css/tailwind.css. */
 
 /* ---- teams, activity, tokens ---------------------------------------------------------------- */
-.identity form,
-form.join {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  align-items: center;
-}
+/* The form on the three screens outside the hub — sign in, reset, join. They were written before
+   the hub had a field pattern; this is that pattern, so a labelled field looks the same wherever
+   it appears. `form.join` was declared twice here, flex and then grid, and the flex one had never
+   applied to anything since the identity form it also named was rebuilt from utilities. */
 form.join {
   display: grid;
   gap: var(--s-4);
@@ -781,8 +778,8 @@ form.join {
 form.join label {
   display: grid;
   gap: var(--s-2);
-  font-size: var(--t-sm);
-  font-weight: 500;
+  font: 500 var(--t-sm) / 1.4 var(--font-sans);
+  color: var(--fg);
 }
 
 .identity p {

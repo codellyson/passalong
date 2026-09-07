@@ -93,7 +93,7 @@ function useToken(e: Event) {
          second one reads as the app having forgotten you for no reason. -->
     <p
       v-if="expired"
-      class="mx-auto mb-4 max-w-sm rounded-2 border border-warn bg-warn-soft px-4 py-2.5 font-ui text-sm text-muted"
+      class="mx-auto mb-5 max-w-sm rounded-2 border border-warn bg-warn-soft px-3 py-2.5 font-ui text-sm text-muted"
     >
       Nothing was lost — guides live on the server, not in this tab.
     </p>
@@ -120,9 +120,22 @@ function useToken(e: Event) {
             :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'"
           />
         </label>
-        <button class="primary" type="submit">{{ copyFor.submit }}</button>
-        <p v-if="authError" class="error">{{ authError }}</p>
-        <p v-if="notice" class="muted">{{ notice }}</p>
+        <button class="btn primary" type="submit">{{ copyFor.submit }}</button>
+
+        <!-- The same treatments the hub uses: a refusal is a danger block, a "we sent it" is not
+             a refusal and should not be red. Both were one unstyled line. -->
+        <p
+          v-if="authError"
+          class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger"
+        >
+          {{ authError }}
+        </p>
+        <p
+          v-if="notice"
+          class="m-0 rounded-2 border border-ok bg-ok-soft px-3 py-2.5 font-ui text-sm text-ok"
+        >
+          {{ notice }}
+        </p>
       </form>
       <p class="auth-alt">
         <template v-if="mode === 'login'">
@@ -164,6 +177,13 @@ function useToken(e: Event) {
         <button class="btn" type="submit">Use token</button>
       </form>
     </details>
-    <p v-if="error" class="error">{{ error }}</p>
+    <!-- Not the form's error: this is a failed load, which on this screen means a token that was
+         refused. -->
+    <p
+      v-if="error"
+      class="mx-auto mt-4 max-w-sm rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger"
+    >
+      {{ error }}
+    </p>
   </section>
 </template>
