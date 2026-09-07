@@ -21,6 +21,8 @@ export interface Heading {
   id: string;
   /** Set for the six sections a transfer guide is made of, so they can be typeset as themselves. */
   kind?: string;
+  /** Verify only: this heading is in the part of the guide the view moved below the lead. */
+  then?: boolean;
 }
 
 /**
@@ -100,17 +102,26 @@ function makeRenderer(into: Heading[], slug: (s: string) => string) {
  * The verify view. What leads and what folds is decided in guide.ts — the rule about what a
  * verifier sees is part of the guide model, not of how it is drawn — and this only turns that
  * into HTML.
+ *
+ * The rest of the guide used to sit inside a <details>. It does not any more: a disclosure is the
+ * one interactive element this page is allowed, and spending it here bought nothing — the contents
+ * rail could not link into a closed one, and a reader arriving from a teammate's link had to find
+ * and press a control before they could see two thirds of the document. It is one page now, in two
+ * parts, and the rail addresses both.
  */
-function verifyBody(body: string, into: Heading[], slug: (s: string) => string): string {
-  const md = makeRenderer([], slug);
+function verifyBody(body: string, into: Heading[], slug: (s: string) => string) {
   const { intro, lead, folded, by, hasVerification } = verifyLayout(body);
 
-  const section = (s: string, collect: boolean) => {
+  // Two renderers, two sinks: the h3s inside a section belong to whichever half that section is
+  // in, and the rail groups them that way.
+  const restOutline: Heading[] = [];
+  const mdLead = makeRenderer(into, slug);
+  const mdRest = makeRenderer(restOutline, slug);
+
+  const section = (s: string, md: (m: string) => string, sink: Heading[]) => {
     const id = slug(s);
     const kind = KINDS[s.toLowerCase()];
-    // Only the leading sections reach the rail. The folded ones are behind a disclosure, and a
-    // contents entry that jumps into something closed is a link that appears to do nothing.
-    if (collect) into.push({ level: 2, text: s, id, kind });
+    sink.push({ level: 2, text: s, id, kind });
     const attr = kind ? ` data-kind="${kind}"` : "";
     return `<h2 id="${esc(id)}"${attr}>${esc(s)}</h2>${md(by[s] as string)}`;
   };
@@ -119,36 +130,42 @@ function verifyBody(body: string, into: Heading[], slug: (s: string) => string):
     ? ""
     : `<p class="note">This guide has no <b>Verification</b> section — there is nothing here that
        says what "working" looks like. Worth asking whoever wrote it.</p>`;
-  // Built before the fold, because the rail is assembled in the order these run and the fold is
-  // the last thing on the page.
-  const leadHtml = lead.map((s) => section(s, true)).join("");
 
-  // The fold gets a rail entry of its own. Linking to the <details> lands on its summary, which
-  // is visible and is the control that opens it — unlike a link to a heading inside it. Without
-  // this, a guide written with none of the canonical section names has an empty contents rail on
-  // this view, because everything it contains is folded.
-  let rest = "";
-  if (intro || folded.length) {
-    const id = slug("How it was built");
-    into.push({ level: 2, text: "How it was built", id });
-    rest = `<details class="rest" id="${esc(id)}">
-  <summary>How it was built · ${folded.length ? esc(folded.join(", ")) : "notes"}</summary>
-  ${intro ? md(intro) : ""}${folded.map((s) => section(s, false)).join("")}
-</details>`;
-  }
-  return `${missing}${leadHtml}${rest}`;
+  const html = missing + lead.map((s) => section(s, mdLead, into)).join("");
+  const restHtml =
+    (intro ? mdRest(intro) : "") + folded.map((s) => section(s, mdRest, restOutline)).join("");
+
+  for (const h of restOutline) h.then = true;
+  into.push(...restOutline);
+
+  return { html, restHtml, lead, rest: folded };
 }
 
 /** The body as HTML, plus the outline the contents rail is built from. */
-export function renderBody(
-  body: string,
-  view: "guide" | "verify",
-): { html: string; outline: Heading[] } {
+export interface Rendered {
+  html: string;
+  outline: Heading[];
+  /**
+   * Verify only. The sections the view moved below the lead, kept separate so the page can say
+   * what it did between the two halves rather than running them together silently.
+   */
+  rest?: { html: string; names: string[] };
+  /** Verify only: which sections lead, and how many the guide has in total. */
+  cut?: { lead: string[]; total: number };
+}
+
+export function renderBody(body: string, view: "guide" | "verify"): Rendered {
   const outline: Heading[] = [];
   const slug = slugger();
-  const html =
-    view === "verify" ? verifyBody(body, outline, slug) : makeRenderer(outline, slug)(body);
-  return { html, outline };
+  if (view !== "verify") return { html: makeRenderer(outline, slug)(body), outline };
+
+  const { html, restHtml, lead, rest } = verifyBody(body, outline, slug);
+  return {
+    html,
+    outline,
+    rest: restHtml ? { html: restHtml, names: rest } : undefined,
+    cut: { lead, total: lead.length + rest.length },
+  };
 }
 
 /** The first paragraph-ish run of the body, for the description meta. */

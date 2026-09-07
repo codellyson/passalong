@@ -12,16 +12,45 @@ const me = computed(() => data.value.me);
 /** Shown once, on creation. The server stores a SHA-256, so there is no second chance. */
 const fresh = ref<{ token: string } | null>(null);
 
-async function mint() {
-  const name = prompt("What is this token for? (e.g. laptop, work MacBook)");
-  if (!name?.trim()) return;
-  fresh.value = await api<{ token: string }>("/v1/tokens", json("POST", { name: name.trim() }));
-  await load();
+/**
+ * Naming a token used to be a `prompt()`. In a browser that does not support one — an embedded
+ * webview, a preview pane, anything with dialogs blocked — it throws, the promise rejects
+ * unhandled, and the button silently does nothing at all. A field on the page cannot fail that way.
+ */
+const naming = ref(false);
+const name = ref("");
+const field = ref<HTMLInputElement | null>(null);
+const busy = ref(false);
+
+/** Which token is being revoked. Destructive, so it asks in place rather than acting. */
+const revoking = ref<string | null>(null);
+
+async function ask() {
+  naming.value = true;
+  name.value = "";
+  await nextTick();
+  field.value?.focus();
 }
 
-async function revoke(t: { id: string; name: string }) {
-  if (!confirm(`Revoke "${t.name}"? Anything using it stops working immediately.`)) return;
-  await api(`/v1/tokens/${t.id}`, { method: "DELETE" });
+async function mint() {
+  if (!name.value.trim() || busy.value) return;
+  busy.value = true;
+  try {
+    fresh.value = await api<{ token: string }>(
+      "/v1/tokens",
+      json("POST", { name: name.value.trim() }),
+    );
+    naming.value = false;
+    name.value = "";
+    await load();
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function revoke(id: string) {
+  revoking.value = null;
+  await api(`/v1/tokens/${id}`, { method: "DELETE" });
   await load();
 }
 
@@ -44,13 +73,13 @@ const head =
           class="min-w-0 flex-1 overflow-x-auto rounded-1 border border-line-strong bg-raised px-3 py-2 font-code text-sm whitespace-nowrap text-fg"
         >{{ fresh.token }}</code>
         <button
-          class="cursor-pointer rounded-1 border border-accent bg-accent px-3 py-2 font-ui text-sm font-semibold whitespace-nowrap text-accent-fg transition-colors hover:bg-accent-hover"
+          class="btn primary sm"
           @click="copy(fresh.token, $event.currentTarget)"
         >
           copy token
         </button>
         <button
-          class="cursor-pointer rounded-1 border border-line-strong px-3 py-2 font-ui text-sm font-medium text-fg transition-colors hover:border-muted hover:bg-surface"
+          class="btn sm"
           @click="fresh = null"
         >
           done
@@ -75,25 +104,42 @@ const head =
             {{ t.last_used ? rel(t.last_used) : "never used" }}
           </td>
           <td :class="cell" class="text-right">
-            <button
-              class="cursor-pointer rounded-1 border border-line-strong px-3 py-1.5 font-ui text-sm font-medium text-fg transition-colors hover:border-danger hover:bg-danger-soft hover:text-danger"
-              @click="revoke(t)"
-            >
-              revoke
-            </button>
+            <!-- Two taps to break something, and the second one says what breaks. -->
+            <template v-if="revoking === t.id">
+              <span class="mr-2 font-ui text-sm text-muted">Anything using it stops working.</span>
+              <button class="btn outline danger sm" @click="revoke(t.id)">Revoke it</button>
+              <button class="btn sm ml-2" @click="revoking = null">Cancel</button>
+            </template>
+            <button v-else class="btn destructive sm" @click="revoking = t.id">revoke</button>
           </td>
         </tr>
       </tbody>
     </table>
     <p v-else class="m-0 font-ui text-sm text-muted">None yet.</p>
 
-    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-      <button
-        class="cursor-pointer rounded-1 border border-line-strong px-3 py-2 font-ui text-sm font-medium text-fg transition-colors hover:border-muted hover:bg-surface"
-        @click="mint"
-      >
-        + new token
+    <form v-if="naming" class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="mint">
+      <div class="grow basis-64">
+        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="token-name">
+          What is this token for?
+        </label>
+        <input
+          id="token-name"
+          ref="field"
+          v-model="name"
+          class="w-full"
+          placeholder="laptop, work MacBook, CI"
+          required
+        />
+      </div>
+      <button class="btn primary sm" type="submit" :disabled="busy || !name.trim()">
+        {{ busy ? "Creating…" : "Create token" }}
       </button>
+      <button class="btn sm" type="button" @click="naming = false">Cancel</button>
+    </form>
+
+    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <button v-if="!naming" class="btn sm" @click="ask"><AppIcon name="plus" />new token</button>
+      <span v-else />
       <span v-if="me" class="font-ui text-sm text-muted">
         {{ plural(tokens.length, "active token") }} ·
         {{ me.guides }} of {{ me.limit }} synced guides used on the free tier

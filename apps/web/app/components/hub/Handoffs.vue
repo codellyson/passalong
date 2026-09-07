@@ -10,7 +10,8 @@
 import type { Board, Guide } from "~/types/hub";
 
 export interface Kind {
-  key: keyof Omit<Board, "waiting">;
+  /** The board buckets this state is drawn from — `landed` covers two. */
+  from: (keyof Omit<Board, "waiting">)[];
   label: string;
   /** Why this bucket exists — a tooltip on the badge, since it is the same sentence on every row
       and printing it eight times is how the old cards read as noise. */
@@ -19,14 +20,14 @@ export interface Kind {
   stripe: string;
   /** The one action worth offering. `open` is the answer for a failed guide: the reason is already
       printed on the row, so the only move left is to go and look at the guide itself. */
-  action: "open" | "link" | "done" | "promote";
+  action: "open" | "link";
 }
 
 // Tested in this order, and the first bucket to claim a guide keeps it — the order is the priority
 // the whole lane is sorted by.
 const KINDS: Kind[] = [
   {
-    key: "failing",
+    from: ["failing"],
     label: "not working",
     note: "someone tried it and it does not hold up",
     badge: "bg-danger-soft text-danger",
@@ -34,28 +35,22 @@ const KINDS: Kind[] = [
     action: "open",
   },
   {
-    key: "in_flight",
+    from: ["in_flight"],
     label: "in flight",
     note: "handed over, nobody has taken it",
     badge: "bg-warn-soft text-warn",
     stripe: "border-l-warn",
     action: "link",
   },
+  // `landed` and `promote` are one state here: both mean someone else has it. The pull count is
+  // on the row, which is all "worth keeping" ever said.
   {
-    key: "landed",
+    from: ["landed", "promote"],
     label: "landed",
-    note: "someone has it and hasn't said it shipped",
-    badge: "bg-surface text-muted",
-    stripe: "border-l-line-strong",
-    action: "done",
-  },
-  {
-    key: "promote",
-    label: "worth keeping",
-    note: "pulled enough to graduate into a reference",
+    note: "someone else has it",
     badge: "bg-ok-soft text-ok",
     stripe: "border-l-ok",
-    action: "promote",
+    action: "open",
   },
 ];
 
@@ -71,7 +66,9 @@ const board = computed(() => data.value.board);
  * only be this component quietly disagreeing with the CLI and the agent tool, which never had one.
  */
 const rows = computed<{ g: Guide; kind: Kind }[]>(() =>
-  KINDS.flatMap((kind) => (board.value?.[kind.key] ?? []).map((g) => ({ g, kind }))),
+  KINDS.flatMap((kind) =>
+    kind.from.flatMap((bucket) => (board.value?.[bucket] ?? []).map((g) => ({ g, kind }))),
+  ),
 );
 
 /** Said once, under the heading, so the badges below do not have to explain themselves. */

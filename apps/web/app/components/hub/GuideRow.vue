@@ -11,31 +11,23 @@
 import type { Guide } from "~/types/hub";
 import type { GuideState } from "~/utils/guide-state";
 
-const props = defineProps<{ g: Guide; state: GuideState }>();
-
-const { onStatus } = useHub();
+const props = defineProps<{ g: Guide; state: GuideState | null }>();
 
 const judging = ref(false);
 
 const pull = computed(() => `passalong pull ${props.g.id}`);
 
-const ghost =
-  "cursor-pointer rounded-1 border border-line-strong px-3 py-2 font-ui text-sm font-medium text-fg no-underline whitespace-nowrap transition-colors hover:border-muted hover:bg-surface";
-
 /** The tail of the first line: the one fact that explains the badge. */
 const tail = computed(() => {
   const g = props.g;
-  switch (props.state.key) {
+  switch (props.state?.key) {
     case "waiting":
     case "flight":
-    case "stale":
       return "not pulled yet";
-    case "works":
-      return "you said it works";
     case "unjudged":
       return "nobody has said whether it worked";
-    case "unsent":
-      return "addressed to nobody";
+    case undefined:
+      return g.mine && !g.team ? "addressed to nobody" : "";
     default:
       return g.pulls ? plural(g.pulls, "pull") : "";
   }
@@ -59,21 +51,28 @@ const verdict = computed(() => {
 
 <template>
   <li
-    class="flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-l-[3px] border-t-line border-r-0 border-b-0 bg-raised px-4 py-3.5 first:border-t-0"
-    :class="state.stripe"
+    class="flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-l-[3px] border-t-line border-r-0 border-b-0 bg-raised px-4 py-3.5 first:rounded-t-3 first:border-t-0 last:rounded-b-3"
+    :class="state?.stripe ?? 'border-l-line'"
   >
     <div class="min-w-0 flex-1 basis-72">
       <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-ui text-sm text-muted">
+        <!-- No badge when nothing is in transit: a guide shared with nobody, or closed out. -->
         <span
+          v-if="state"
           class="rounded-1 px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase"
           :class="state.badge"
         >{{ state.label }}</span>
-        <span v-if="g.mine">to <b class="font-medium text-fg">{{ g.team }}{{ g.to ? ` / @${g.to}` : "" }}</b></span>
-        <span v-else>
+        <!-- Three cases, not two. A guide of yours that went to a team says where it went; one
+             handed to you says who from; and one you shared with nobody says neither, because the
+             tail after the date already says "addressed to nobody". Collapsing the third into the
+             second printed "from @?" on your own guides. -->
+        <span v-if="g.mine && g.team">to <b class="font-medium text-fg">{{ g.team }}{{ g.to ? ` / @${g.to}` : "" }}</b></span>
+        <span v-else-if="!g.mine">
           from <b class="font-medium text-fg">@{{ g.from || "?" }}</b>
           <template v-if="g.team"> in {{ g.team }}</template>
         </span>
         <span>{{ rel(g.created) }}</span>
+        <span v-if="g.stale" class="font-medium text-warn">· over a week</span>
         <span v-if="tail">· {{ tail }}</span>
       </div>
 
@@ -104,42 +103,35 @@ const verdict = computed(() => {
 
     <div class="flex shrink-0 items-center gap-2">
       <button
-        v-if="state.action === 'pull'"
-        class="cursor-pointer rounded-1 border border-accent bg-accent px-3 py-2 font-ui text-sm font-semibold whitespace-nowrap text-accent-fg transition-colors hover:bg-accent-hover"
+        v-if="state?.action === 'pull'"
+        class="btn primary sm"
         :title="pull"
         @click="copy(pull, $event.currentTarget)"
       >
         copy pull
       </button>
       <a
-        v-else-if="state.action === 'reason'"
+        v-else-if="state?.action === 'reason'"
         :href="g.url"
         target="_blank"
         rel="noopener"
-        class="cursor-pointer rounded-1 border border-danger px-3 py-2 font-ui text-sm font-semibold whitespace-nowrap text-danger no-underline transition-colors hover:bg-danger-soft"
+        class="btn outline danger sm"
       >read the reason</a>
       <button
-        v-else-if="state.action === 'link'"
-        :class="ghost"
+        v-else-if="state?.action === 'link'"
+        class="btn sm"
         @click="copy(g.url, $event.currentTarget)"
       >
         copy link
       </button>
       <button
-        v-else-if="state.action === 'promote'"
-        class="cursor-pointer rounded-1 border border-transparent bg-ok-soft px-3 py-2 font-ui text-sm font-semibold whitespace-nowrap text-ok transition-colors hover:border-ok"
-        @click="onStatus(g, 'promoted')"
-      >
-        promote
-      </button>
-      <button
-        v-else-if="state.action === 'verdict'"
-        class="cursor-pointer rounded-1 border border-warn px-3 py-2 font-ui text-sm font-semibold whitespace-nowrap text-warn transition-colors hover:bg-warn-soft"
+        v-else-if="state?.action === 'verdict'"
+        class="btn outline warn sm"
         @click="judging = !judging"
       >
         did it work?
       </button>
-      <a v-else :href="g.url" target="_blank" rel="noopener" :class="ghost">open</a>
+      <a v-else :href="g.url" target="_blank" rel="noopener" class="btn sm">open</a>
 
       <HubRowMenu :g="g" @verdict="judging = true" />
     </div>

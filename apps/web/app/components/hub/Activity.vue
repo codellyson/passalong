@@ -40,7 +40,7 @@ const urlFor = (id: string | null) =>
       </h2>
       <button
         v-if="data.unread"
-        class="cursor-pointer rounded-1 border border-line-strong px-3 py-1.5 font-ui text-sm font-medium text-fg transition-colors hover:border-muted hover:bg-surface"
+        class="btn sm"
         @click="readAll"
       >
         mark all read

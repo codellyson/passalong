@@ -326,8 +326,17 @@ that assumes otherwise cannot be built.
 > Fonts link or any CDN will be blocked by the browser, silently. Today's two variable faces total
 > about 80KB; a new face has to be self-hosted and subset, and there is not room for many.
 
-- **One stylesheet.** No component CSS, no utility framework. It is currently ~1,200 lines and
-  lint-clean under a no-descending-specificity rule, so the cascade is deliberately ordered.
+- **Two stylesheets, one built file.** `styles.css` is the product's stylesheet — ~1,280 lines, no
+  component CSS, ordered so the cascade reads top to bottom. `tailwind.css` is the entry point: it
+  imports `styles.css` into a cascade layer, then Tailwind v4's utilities into a later one, and
+  bridges colour, type, radius, font and shadow to the custom properties already in `styles.css` so
+  a token still has one definition. Tailwind's preflight is deliberately not imported — it would
+  reset the element defaults every surface here relies on. Two consequences worth knowing: the
+  layering is what lets a utility override a rule in `styles.css` (unlayered CSS outranks layered
+  CSS whatever the source order), and the build still emits a single hashed file from our own
+  origin, so `style-src 'self'` is unaffected. The board, the guide list, settings and the guide
+  page's chrome are built from utilities; the guide *body*, the shared button and menu recipes and
+  every other surface are classes in `styles.css`.
 - **Light and dark, both first-class**, driven by system preference. There is no toggle today.
 - **Board buckets are server-defined.** Five of them, one guide in exactly one. Redesign them freely;
   redefining them is an API change.

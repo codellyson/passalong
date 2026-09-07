@@ -143,15 +143,16 @@ export function useHub() {
     }
   }
 
-  // Both of these move a guide between queues, so reload rather than patch state by hand: the
-  // board's buckets are defined in SQL, and guessing them here is how the two drift apart.
-  const onStatus = (g: Guide, next: string) =>
-    guarded(() => api(`/v1/guides/${g.id}/status`, json("PATCH", { status: next })));
+  // Nothing in the hub sets a guide's status any more. `consumed` duplicated the verdict and
+  // `promoted` was a pull counter with a button, so both left the interface; the endpoint and the
+  // CLI's `passalong done` / `passalong promote` are untouched, which is why this is phase one.
 
-  const onRemove = (g: Guide) => {
-    if (!confirm(`Remove "${g.title}" from sync? Local copies are untouched.`)) return;
-    return guarded(() => api(`/v1/guides/${g.id}`, { method: "DELETE" }));
-  };
+  /**
+   * Removal is confirmed by the component, in the page. `confirm()` did it before, which meant the
+   * only thing standing between a guide and deletion was a dialog the browser is free not to
+   * support — and when it does not, the call throws and the button appears to do nothing.
+   */
+  const onRemove = (g: Guide) => guarded(() => api(`/v1/guides/${g.id}`, { method: "DELETE" }));
 
   /**
    * The reader's answer to "does this work?", and the only way a sender learns their handoff did
@@ -173,12 +174,13 @@ export function useHub() {
 
   const readAll = () => guarded(() => api("/v1/notifications/read", json("POST")));
 
-  async function createTeam() {
-    const name = prompt("Name your team");
-    if (!name?.trim()) return;
+  async function createTeam(name: string) {
+    const named = name.trim();
+    if (!named) return;
     try {
-      const t = await api<{ slug: string }>("/v1/teams", json("POST", { name: name.trim() }));
+      const t = await api<{ slug: string }>("/v1/teams", json("POST", { name: named }));
       if (t) scope.value = t.slug;
+      await load();
     } catch (e) {
       error.value = (e as Error).message;
     }
@@ -209,7 +211,6 @@ export function useHub() {
     api,
     json,
     load,
-    onStatus,
     onRemove,
     onVerdict,
     readAll,

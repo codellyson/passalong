@@ -58,7 +58,7 @@ function send() {
       </p>
       <div class="flex flex-wrap gap-2">
         <button class="btn primary" @click="worked">it worked</button>
-        <button class="btn danger" @click="askWhy">it doesn't</button>
+        <button class="btn outline danger" @click="askWhy">it doesn't</button>
         <button class="btn" @click="emit('done')">not now</button>
       </div>
     </template>

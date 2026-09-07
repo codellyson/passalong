@@ -66,7 +66,7 @@ const waiting = computed(() => data.value.board?.waiting ?? []);
             :href="g.url"
             target="_blank"
             rel="noopener"
-            class="cursor-pointer rounded-1 border border-line-strong px-3 py-2.5 font-ui text-sm font-medium text-fg no-underline transition-colors hover:border-muted hover:bg-surface"
+            class="btn sm"
           >open</a>
         </div>
       </article>

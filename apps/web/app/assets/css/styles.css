@@ -319,10 +319,18 @@ footer a:hover {
 }
 
 /* ---- buttons --------------------------------------------------------------------------------
-   `.btn` is a button and `.chip` is a filter toggle. They used to be one rule, which is why a
-   tab bar, a destructive action and a filter all looked identical. Three button weights now:
-   filled (`.primary`) for the one action a view is about, tonal (`.tonal`, `.nudge`) for the
-   next tier, ghost (bare `.btn`) for everything else. */
+   `.btn` is a button and `.chip` is a filter toggle. They used to be one rule, which is why a tab
+   bar, a destructive action and a filter all looked identical.
+
+   Four weights: filled (`.primary`) for the one action a view is about, tonal (`.tonal`) and
+   outlined (`.outline`) for the next tier, ghost (bare `.btn`) for everything else. Two sizes on
+   top of the default: `.sm` for a button sitting inside a row, `.icon` for one whose label is a
+   single glyph.
+
+   Weight and colour are separate. A treatment reads `--tone`, and `.ok` / `.warn` / `.danger` set
+   nothing but that pair — so "promote" is `btn tonal ok` and "read the reason" is `btn outline
+   danger`, and neither one invents a colour. This is why the semantic tokens exist; before them
+   every one of these was the brand accent. */
 .btn,
 button.primary,
 .btn.primary {
@@ -337,6 +345,8 @@ button.primary,
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
+  --tone: var(--accent);
+  --tone-soft: var(--accent-soft);
   transition:
     background-color var(--motion) ease,
     border-color var(--motion) ease,
@@ -353,6 +363,41 @@ button.primary,
   background: var(--surface);
   border-color: var(--muted);
 }
+
+/* Sizes. A row of guides is mostly text, and a button at full padding inside one is most of a
+   line tall. */
+.btn.sm {
+  padding: var(--s-2) var(--s-3);
+}
+.btn.icon {
+  padding: var(--s-2);
+  line-height: 1;
+  font-weight: 600;
+  color: var(--muted);
+}
+.btn.icon:hover {
+  color: var(--fg);
+}
+.btn.lg {
+  font-size: var(--t-body);
+  padding: var(--s-3) var(--s-5);
+  border-radius: var(--r-2);
+}
+
+/* Colour, set apart from weight: these say which, not how loud. */
+.btn.ok {
+  --tone: var(--ok);
+  --tone-soft: var(--ok-soft);
+}
+.btn.warn {
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
+}
+.btn.danger {
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
+}
+
 /* Filled: one per view. */
 button.primary,
 .btn.primary {
@@ -368,37 +413,100 @@ button.primary:hover,
   border-color: var(--accent-hover);
   color: var(--accent-fg);
 }
-button.primary[disabled] {
+button.primary[disabled],
+.btn.primary[disabled] {
   opacity: 0.55;
   cursor: default;
   box-shadow: none;
 }
-/* Tonal: reads as accent without competing with the filled one. */
+/* Tonal: reads as its tone without competing with the filled one. */
 .btn.tonal,
 .btn.nudge {
-  background: var(--accent-soft);
+  background: var(--tone-soft);
   border-color: transparent;
-  color: var(--accent);
+  color: var(--tone);
   font-weight: 600;
 }
 .btn.tonal:hover,
 .btn.nudge:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--tone-soft);
+  border-color: var(--tone);
+  color: var(--tone);
 }
-.btn.danger {
+/* Outlined: the same weight as tonal, for a tone that should not carry a fill until you reach
+   for it. */
+.btn.outline {
+  background: transparent;
+  border-color: var(--tone);
+  color: var(--tone);
+  font-weight: 600;
+}
+.btn.outline:hover {
+  background: var(--tone-soft);
+  border-color: var(--tone);
+  color: var(--tone);
+}
+/* Destructive: a normal button until you are on it. It used to be muted at rest, which read as
+   disabled — the one thing a button that deletes something must not look like. */
+.btn.destructive:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ---- menus -----------------------------------------------------------------------------------
+   The overflow behind a row, and the one behind a team. Both were the same twelve utilities
+   written twice. */
+.menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  margin-top: var(--s-1);
+  width: 14rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: var(--s-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-2);
+}
+.menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--fg);
+  font: var(--t-sm) / 1.4 var(--font-sans);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.menu-item:hover {
+  background: var(--surface);
+}
+.menu-item.destructive {
+  color: var(--danger);
+}
+.menu-item.destructive:hover {
+  background: var(--danger-soft);
+}
+.menu-note {
+  margin: var(--s-1) 0 0;
+  padding: 0 var(--s-2);
+  font: var(--t-xs) / 1.4 var(--font-sans);
   color: var(--muted);
 }
-.btn.danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: transparent;
-}
-.btn.lg {
-  font-size: var(--t-body);
-  padding: var(--s-3) var(--s-5);
-  border-radius: var(--r-2);
+.menu-rule {
+  height: 1px;
+  margin: var(--s-1) 0;
+  background: var(--line);
 }
 
 /* Filter toggles. Pill-shaped so they never read as actions. */
@@ -572,9 +680,6 @@ input[name="token"],
 .status.consumed {
   color: var(--muted);
 }
-.status.promoted::before {
-  content: "\2605\00a0";
-}
 
 /* ---- the sign-in screen ----------------------------------------------------------------------
    `/hub` serves this and the hub itself, so this state carries its own brand and heading. The
@@ -711,9 +816,17 @@ form.join label {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+/* Drawn, not typed: a bullet character is a different size and baseline in every font, and this
+   one has to line up with a row of timestamps. */
 .note.unread .when::before {
-  content: "\2022\00a0";
-  color: var(--accent);
+  content: "";
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+  margin-right: var(--s-2);
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 0.1em;
 }
 
 .invite-paste {
@@ -872,7 +985,15 @@ form.join label {
   color: var(--muted);
 }
 .showcase .folded::before {
-  content: "\25b8\00a0";
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: var(--s-2);
+  border-left: 5px solid currentcolor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  vertical-align: 0.05em;
 }
 
 .steps {
@@ -1103,6 +1224,17 @@ article.prose details.rest {
 article.prose details.rest > summary {
   cursor: pointer;
   font: 500 var(--t-sm) / 1.5 var(--font-sans);
+  color: var(--muted);
+}
+
+/* The seam in the verify view: the point where the guide stops being re-ordered and goes back to
+   the author's own sequence. Set apart from the prose because it is the page talking, not the
+   guide. */
+article.prose .handover {
+  margin: var(--s-7) 0 var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+  font: var(--t-sm) / 1.6 var(--font-sans);
   color: var(--muted);
 }
 

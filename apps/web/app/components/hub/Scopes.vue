@@ -1,21 +1,22 @@
 <!--
-  Whose guides you are looking at. It filters the list and picks which team the settings page
-  administers, and it is rendered on those two pages only: the board reads `/v1/board`, which is
-  not scoped, so on that page these buttons would have been decoration.
+  Whose guides you are looking at. Only the guide list is actually scoped — the board reads
+  `/v1/board`, which is not — so on the other two pages these are a filter you can set and see the
+  effect of one tab over.
+
+  Making a team is not here. It lives on settings, next to the list of the teams you are in, where
+  the thing being added is in view.
 -->
 <script setup lang="ts">
-defineProps<{ create?: boolean }>();
-
-const { data, scope, createTeam } = useHub();
+const { data, scope } = useHub();
 const teams = computed(() => data.value.me?.teams || []);
 </script>
 
 <template>
-  <div class="chips scopes">
-    <template v-if="teams.length">
-      <button :class="['chip', { on: scope === 'all' }]" @click="scope = 'all'">everything</button>
-      <button :class="['chip', { on: scope === 'mine' }]" @click="scope = 'mine'">mine</button>
-    </template>
+  <!-- Nothing to say when there is one scope: an empty chip row in the masthead reads as something
+       that failed to load. -->
+  <div v-if="teams.length" class="chips scopes">
+    <button :class="['chip', { on: scope === 'all' }]" @click="scope = 'all'">everything</button>
+    <button :class="['chip', { on: scope === 'mine' }]" @click="scope = 'mine'">mine</button>
     <button
       v-for="t in teams"
       :key="t.slug"
@@ -23,9 +24,6 @@ const teams = computed(() => data.value.me?.teams || []);
       @click="scope = t.slug"
     >
       {{ t.name }}
-    </button>
-    <button v-if="create" class="chip" @click="createTeam">
-      {{ teams.length ? "+ team" : "+ start a team" }}
     </button>
   </div>
 </template>

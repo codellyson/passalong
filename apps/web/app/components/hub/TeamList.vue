@@ -13,6 +13,26 @@ const { data, api, json, scope, createTeam } = useHub();
 const router = useRouter();
 
 const teams = computed(() => data.value.me?.teams || []);
+
+// Same reason as the token name: a `prompt()` throws where dialogs are blocked, and the button
+// then does nothing with no explanation.
+const naming = ref(false);
+const name = ref("");
+const field = ref<HTMLInputElement | null>(null);
+
+async function ask() {
+  naming.value = true;
+  name.value = "";
+  await nextTick();
+  field.value?.focus();
+}
+
+async function make() {
+  if (!name.value.trim()) return;
+  await createTeam(name.value);
+  naming.value = false;
+  name.value = "";
+}
 const details = ref<TeamDetail[]>([]);
 const open = ref<string | null>(null);
 
@@ -51,9 +71,6 @@ function guides(t: TeamDetail) {
   scope.value = t.slug;
   router.push("/hub/guides");
 }
-
-const item =
-  "flex w-full cursor-pointer items-center rounded-1 border-0 bg-transparent px-2 py-1.5 text-left font-ui text-sm text-fg hover:bg-surface";
 </script>
 
 <template>
@@ -73,27 +90,23 @@ const item =
 
         <div class="relative flex shrink-0 items-center gap-2">
           <button
-            class="cursor-pointer rounded-1 border border-line-strong px-3 py-2 font-ui text-sm font-medium whitespace-nowrap text-fg transition-colors hover:border-muted hover:bg-surface"
+            class="btn sm"
             @click="invite(t, $event.currentTarget)"
           >
             copy invite link
           </button>
           <button
-            class="cursor-pointer rounded-1 border border-line-strong px-2.5 py-2 font-ui text-sm leading-none font-semibold text-muted transition-colors hover:border-muted hover:text-fg"
+            class="btn icon"
             :aria-expanded="open === t.slug"
             aria-haspopup="menu"
             @click="open = open === t.slug ? null : t.slug"
           >
-            ⋯
+            <AppIcon name="more" />
           </button>
-          <div
-            v-if="open === t.slug"
-            class="absolute top-full right-0 z-20 mt-1 flex w-52 flex-col gap-0.5 rounded-2 border border-line-strong bg-raised p-1.5 shadow-lift"
-            @keydown.esc="open = null"
-          >
-            <button :class="item" @click="guides(t)">see this team's guides</button>
-            <button :class="item" @click="copy(t.slug, $event.currentTarget)">copy team slug</button>
-            <p class="mt-1 mb-0 px-2 font-ui text-xs text-muted">
+          <div v-if="open === t.slug" class="menu" @keydown.esc="open = null">
+            <button class="menu-item" @click="guides(t)">see this team's guides</button>
+            <button class="menu-item" @click="copy(t.slug, $event.currentTarget)">copy team slug</button>
+            <p class="menu-note">
               {{ plural(t.guides, "guide") }} shared here
             </p>
           </div>
@@ -105,11 +118,16 @@ const item =
       No team yet. A team is who you can hand work to.
     </p>
 
-    <button
-      class="mt-3 cursor-pointer rounded-1 border border-line-strong px-3 py-2 font-ui text-sm font-medium text-fg transition-colors hover:border-muted hover:bg-surface"
-      @click="createTeam"
-    >
-      + new team
-    </button>
+    <form v-if="naming" class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="make">
+      <div class="grow basis-64">
+        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="team-name">
+          Name your team
+        </label>
+        <input id="team-name" ref="field" v-model="name" class="w-full" placeholder="kreative-korna" required />
+      </div>
+      <button class="btn primary sm" type="submit" :disabled="!name.trim()">Create team</button>
+      <button class="btn sm" type="button" @click="naming = false">Cancel</button>
+    </form>
+    <button v-else class="btn sm mt-3" @click="ask"><AppIcon name="plus" />new team</button>
   </div>
 </template>

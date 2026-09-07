@@ -48,6 +48,17 @@ const facts = computed(() =>
   ].filter((f) => f.value),
 );
 
+/** "Problem, Verification and Gotchas" — a list a sentence can contain. */
+const sentence = (names: string[]) =>
+  names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+
+const cut = computed(() => guide.value?.cut);
+const rest = computed(() => guide.value?.rest);
+
+/** The rail in two groups: what this view put first, and what it moved below. */
+const contents = computed(() => outline.value.filter((h) => !h.then));
+const then = computed(() => outline.value.filter((h) => h.then));
+
 const views = computed(() => [
   { label: "Full guide", href: url.value, on: view.value !== "verify" },
   {
@@ -80,10 +91,10 @@ usePage({
     <aside class="md:sticky md:top-8 md:self-start md:py-8">
       <AppBrand />
 
-      <nav v-if="outline.length" class="mt-6">
+      <nav v-if="contents.length" class="mt-6">
         <p :class="rail">Contents</p>
         <ul class="m-0 mt-2 list-none p-0">
-          <li v-for="h in outline" :key="h.id" :class="h.level === 3 ? 'pl-3' : ''">
+          <li v-for="h in contents" :key="h.id" :class="h.level === 3 ? 'pl-3' : ''">
             <a
               :href="`#${h.id}`"
               class="block py-0.5 font-ui text-sm no-underline hover:text-accent"
@@ -93,6 +104,20 @@ usePage({
                 'text-ok': h.kind === 'verification',
                 'text-warn': h.kind === 'gotchas',
               }"
+            >{{ h.text }}</a>
+          </li>
+        </ul>
+      </nav>
+
+      <!-- The rest of the guide is on the same page, so it is addressed by the same rail. The
+           heading is what says these are not the sections this view leads with. -->
+      <nav v-if="then.length" class="mt-6">
+        <p :class="rail">Then</p>
+        <ul class="m-0 mt-2 list-none p-0">
+          <li v-for="h in then" :key="h.id" :class="h.level === 3 ? 'pl-3' : ''">
+            <a
+              :href="`#${h.id}`"
+              class="block py-0.5 font-ui text-sm text-muted no-underline hover:text-accent"
             >{{ h.text }}</a>
           </li>
         </ul>
@@ -140,18 +165,44 @@ usePage({
         </div>
       </header>
 
+      <!-- Verify re-orders someone else's document, and a reader who does not know that is
+           reading a guide whose author appears to have started in the middle. It says so, in the
+           only place it can be read before the reordering takes effect. -->
+      <div
+        v-if="cut"
+        class="mb-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 rounded-2 border border-accent bg-accent-soft px-4 py-3"
+      >
+        <div class="min-w-0 grow basis-72">
+          <p :class="rail" class="text-accent">
+            {{ cut.lead.length ? `Verify · ${cut.lead.length} of ${cut.total} sections first` : "Verify" }}
+          </p>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">
+            <template v-if="cut.lead.length">
+              {{ sentence(cut.lead) }} lead. Everything else follows below, never dropped.
+            </template>
+            <template v-else>
+              Nothing in this guide is named like a section Verify leads with, so it reads in the
+              author's order.
+            </template>
+          </p>
+        </div>
+        <a :href="url" class="font-ui text-sm whitespace-nowrap">read in the author's order</a>
+      </div>
+
       <!-- eslint-disable-next-line vue/no-v-html -- see server/utils/guide-html.ts: the CSP is what
            makes this safe, and it is checked by scripts/probe.sh against a deployed response. -->
-      <article class="prose" v-html="guide.html" />
+      <article class="prose">
+        <div v-html="guide.html" />
 
-      <div v-if="view === 'verify'" class="pull">
-        <b class="block font-ui text-sm text-fg">Checked it?</b>
-        <p class="mt-1 mb-0 font-ui text-sm text-muted">
-          Say so where it was handed to you: <a href="/hub">your hub</a>, or
-          <code>passalong done {{ guide.id }}</code>.
+        <p v-if="rest" class="handover">
+          Everything below is the rest of the guide, in the author's order:
+          {{ rest.names.join(", ").toLowerCase() }}.
         </p>
-      </div>
-      <div v-else class="pull">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <div v-if="rest" v-html="rest.html" />
+      </article>
+
+      <div class="pull">
         <b class="block font-ui text-sm text-fg">Pull this into your context</b>
         <p class="mt-1 mb-0 font-ui text-sm text-muted">
           Select the line — a guide page runs no script, so there is no copy button.
