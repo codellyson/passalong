@@ -447,7 +447,11 @@ app.use("/v1/*", async (c, next) => {
     )
       .bind(await sha256(token))
       .first<{ id: string; account_id: string }>();
-    if (!row) return err(c, 401, "token not recognized, or revoked — mint a new one in your hub");
+    if (!row) {
+      return c.req.path === "/v1/mcp"
+        ? unauthorizedResource(origin(c), "invalid_token", "token not recognized, or revoked")
+        : err(c, 401, "token not recognized, or revoked — mint a new one in your hub");
+    }
     c.set("account", row.account_id);
     // Best effort, off the response path: knowing a token is unused is what makes it safe to
     // revoke. `executionCtx` throws where there is none, so this never speaks for itself.
@@ -469,6 +473,12 @@ app.use("/v1/*", async (c, next) => {
     if (!row) return err(c, 401, "session expired — sign in again");
     c.set("account", row.account_id);
     return next();
+  }
+  // A client with no credential at all is the ordinary first request to an MCP endpoint. Answering
+  // it with a bare 401 tells it only that it was refused; answering with the challenge tells it
+  // which authorization server can fix that, which is the whole point of publishing the metadata.
+  if (c.req.path === "/v1/mcp") {
+    return unauthorizedResource(origin(c), "invalid_request", "authorization required");
   }
   return err(c, 401, "not signed in — sign in at /hub, or send a token from your hub");
 });

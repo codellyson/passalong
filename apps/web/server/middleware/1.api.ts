@@ -17,9 +17,25 @@ import api from "#api/index";
 
 const MACHINE_ROUTE = /^\/g\/[^/]+\/[^/]+(?:\.md|\/og\.png)$/;
 
+/**
+ * OAuth's own surfaces, which are Hono's too.
+ *
+ * `/.well-known/*` is where a client looks before it has a credential, and `/oauth/authorize` is
+ * where it sends the browser — both answered by the mounted app. `/oauth/consent` is deliberately
+ * not here: that one is a page, because approving a grant is something a person reads.
+ */
+const OAUTH_ROUTE = /^\/(?:\.well-known\/oauth-[a-z-]+(?:\/.*)?|oauth\/authorize)$/;
+
 export default defineEventHandler(async (event) => {
   const path = event.path.split("?")[0] as string;
-  if (path !== "/health" && !path.startsWith("/v1/") && !MACHINE_ROUTE.test(path)) return;
+  if (
+    path !== "/health" &&
+    !path.startsWith("/v1/") &&
+    !MACHINE_ROUTE.test(path) &&
+    !OAUTH_ROUTE.test(path)
+  ) {
+    return;
+  }
 
   const cf = event.context.cloudflare as
     | { env?: Record<string, unknown>; context?: ExecutionContext }
