@@ -161,3 +161,28 @@ test("a bucket that refuses leaves the rows for tomorrow", async () => {
   assert.deepEqual(await sweepOrphans(env), { swept: 0, deferred: 1 });
   assert.equal(rowsDeleted, false, "rows must survive a bucket failure");
 });
+
+test("a guide can arrive as itself or wrapped in JSON", async () => {
+  // The route reads the body one of two ways depending on content-type. An agent platform that
+  // builds calls from the OpenAPI document can only send JSON, so without the wrapper the one
+  // route that publishes anything is the one route those agents cannot reach.
+  // Checked against the source because the Hono app is not importable from a test — see the note
+  // in hosts.ts. Matched in pieces rather than as one line: the formatter decides where the line
+  // breaks go, and a test that fails when biome wraps a line is testing the formatter.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  for (const piece of [
+    "const sentJson =",
+    "content-type",
+    '=== "application/json"',
+    'typeof wrapper?.markdown === "string"',
+  ]) {
+    assert.ok(src.includes(piece), `the JSON body branch should still contain: ${piece}`);
+  }
+
+  const { openapi } = await import("../src/openapi.ts");
+  const doc = openapi("https://passalong.dev");
+  const body = doc.paths["/v1/guides/{id}"].put.requestBody.content;
+  assert.ok(body["application/json"], "the schema must offer a JSON body");
+  assert.ok(body["text/markdown"], "and keep the markdown one the CLI sends");
+  assert.deepEqual(body["application/json"].schema.required, ["markdown"]);
+});

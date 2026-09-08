@@ -1305,8 +1305,30 @@ app.put("/v1/guides/:id", async (c) => {
   const account = c.get("account");
   const id = c.req.param("id");
   if (!ID_RE.test(id)) return err(c, 400, "invalid guide id");
-  let markdown = await c.req.text();
-  if (!markdown.trim()) return err(c, 400, "empty body; send the guide as text/markdown");
+  // The document, either as itself or wrapped in JSON.
+  //
+  // `text/markdown` is the honest shape and what the CLI sends: the guide *is* the body. But an
+  // agent platform that builds its calls from an OpenAPI document — a ChatGPT action, Gemini
+  // function calling — only knows how to send JSON, so without this the one route that publishes
+  // anything is the one route those agents cannot reach.
+  const sentJson =
+    (c.req.header("content-type") || "").split(";")[0]?.trim() === "application/json";
+  let markdown = "";
+  if (sentJson) {
+    const wrapper = await c.req.json<{ markdown?: unknown }>().catch(() => null);
+    if (typeof wrapper?.markdown === "string") markdown = wrapper.markdown;
+  } else {
+    markdown = await c.req.text();
+  }
+  if (!markdown.trim()) {
+    return err(
+      c,
+      400,
+      sentJson
+        ? 'empty guide; send {"markdown": "---\\ntitle: ...\\n---\\n\\n## Problem ..."}'
+        : 'empty body; send the guide as text/markdown, or JSON as {"markdown": "..."}',
+    );
+  }
   if (markdown.length > 512 * 1024) return err(c, 413, "guide is over 512KB");
   const meta: Meta = parseMeta(markdown);
   if (meta.id && meta.id !== id) return err(c, 400, "frontmatter id does not match the URL");

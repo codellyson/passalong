@@ -98,6 +98,10 @@ export default defineNuxtConfig({
     // A guide page renders markdown a stranger wrote. There is no sanitiser behind this — the CSP
     // is what makes it safe, and `noScripts` is what lets the CSP name no `script-src` at all.
     "/g/**": { noScripts: true, headers: VIEW_HEADERS },
+    // Setup instructions: prose, a few code blocks, nothing interactive. It gets the same
+    // treatment as the landing rather than the hub's nonce, because a page that needs no script
+    // should not ship a policy that allows one.
+    "/connect": { noScripts: true, headers: VIEW_HEADERS },
 
     // The hub, the invite page and the password reset run script, so their header is written per
     // response by server/plugins/csp.ts — it carries a nonce, which a route rule cannot.

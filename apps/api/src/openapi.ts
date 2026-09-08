@@ -168,7 +168,24 @@ export function openapi(origin: string) {
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
-            content: { "text/markdown": { schema: { type: "string" } } },
+            content: {
+              // JSON first, because the tools that read this document can only send JSON. The
+              // markdown body is what the CLI uses and stays the honest shape: the guide is the
+              // body.
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["markdown"],
+                  properties: {
+                    markdown: {
+                      type: "string",
+                      description: "The whole document, frontmatter first.",
+                    },
+                  },
+                },
+              },
+              "text/markdown": { schema: { type: "string" } },
+            },
           },
           responses: {
             200: { description: "Updated." },

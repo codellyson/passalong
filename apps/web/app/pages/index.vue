@@ -125,6 +125,7 @@ passalong login     # sync across machines</code></pre>
       </p>
       <div class="cta">
         <a class="btn primary lg" href="/hub">Open your hub</a>
+        <a class="btn lg" href="/connect">Connect your tools</a>
         <a class="btn lg" href="https://www.npmjs.com/package/passalong">passalong on npm</a>
       </div>
     </section>
