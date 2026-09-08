@@ -47,6 +47,13 @@ export interface Guide {
   stack_assumptions: string[];
   pulled_by?: Pull[];
   verdict?: Verdict | null;
+  /** The report this issue belongs to, when it is one — see migrations/0006_reports.sql. */
+  report?: string;
+  report_title?: string;
+  /** "bug" or "transfer"; absent means transfer. */
+  kind?: string;
+  area?: string;
+  severity?: string;
   /** Set by the board's SQL, not worked out here — see the note on `load()`. */
   failing?: boolean;
   stale?: boolean;

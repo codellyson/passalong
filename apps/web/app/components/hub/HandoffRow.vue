@@ -11,6 +11,14 @@ import type { Guide } from "~/types/hub";
 import type { Kind } from "./Handoffs.vue";
 
 const props = defineProps<{ g: Guide; kind: Kind }>();
+/** A bug carries how badly it is broken; a transfer guide has nothing to say here. */
+const severityTone: Record<string, string> = {
+  s1: "bg-danger-soft text-danger",
+  s2: "bg-warn-soft text-warn",
+  s3: "bg-accent-soft text-accent",
+  s4: "bg-surface text-muted",
+};
+
 /** Who has it, for the person who handed it over. Nobody else is shown the list. */
 const pulledBy = computed(() =>
   props.g.pulled_by?.length
@@ -40,12 +48,19 @@ const pulledBy = computed(() =>
         <span>{{ rel(g.created) }}</span>
       </div>
 
-      <a
-        :href="g.url"
-        target="_blank"
-        rel="noopener"
-        class="mt-2 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-      >{{ g.title || g.id }}</a>
+      <div class="mt-2 flex items-start gap-2">
+        <span
+          v-if="g.severity"
+          class="mt-0.5 shrink-0 rounded-pill px-2 py-0.5 font-code text-[11px] uppercase"
+          :class="severityTone[g.severity] || 'bg-surface text-muted'"
+        >{{ g.severity }}</span>
+        <a
+          :href="g.url"
+          target="_blank"
+          rel="noopener"
+          class="block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
+        >{{ g.title || g.id }}</a>
+      </div>
 
       <p v-if="g.failing && g.verdict" class="mt-2 mb-0 text-sm text-danger">
         <b class="font-semibold">{{ g.verdict.by ? `@${g.verdict.by}` : "someone" }} says it does not work.</b>
@@ -56,7 +71,10 @@ const pulledBy = computed(() =>
            the title with nothing to say where one fact ended and the next began. The repo it came
            out of is the only one of them that runs long, so it is the one that gives — truncated
            here, in full on hover and on the guide itself. -->
-      <div class="mt-3 flex items-center gap-x-3 text-xs text-muted">
+      <!-- One line where there is room for one. On a phone a fourth fact (the report it was filed
+           with) has nowhere to go, and nowrap put it off the edge of the card rather than
+           truncating — so below `sm` the tail wraps instead. -->
+      <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted sm:flex-nowrap">
         <span v-if="g.team" class="shrink-0">to <b class="font-medium text-fg">{{ g.team }}{{ g.to ? ` / @${g.to}` : "" }}</b></span>
         <code class="shrink-0 font-code">{{ g.id }}</code>
         <span
@@ -65,6 +83,11 @@ const pulledBy = computed(() =>
           :title="g.source_context"
         >{{ g.source_context }}</span>
         <span v-if="pulledBy" class="shrink-0">pulled by {{ pulledBy }}</span>
+        <NuxtLink
+          v-if="g.report"
+          :to="`/hub/report/${g.report}`"
+          class="max-w-full shrink-0 truncate sm:max-w-[10rem]"
+        >{{ g.report_title || "in a report" }}</NuxtLink>
       </div>
     </div>
 

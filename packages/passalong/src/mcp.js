@@ -6,10 +6,41 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { SECTIONS, template } from "./guide.js";
+import * as api from "./api.js";
+import { AREAS, BUG_SECTIONS, parse, SECTIONS, template } from "./guide.js";
 import * as passalong from "./passalong.js";
 
 const text = (s) => ({ content: [{ type: "text", text: s }] });
+
+/**
+ * The rest of the report this issue came from.
+ *
+ * A QA pass files six bugs at once, and they arrive in an inbox as six unrelated guides — which
+ * is how the same root cause gets fixed three times, or how someone fixes one of a pair and calls
+ * the sweep done. Naming the siblings costs one request and only happens for a guide that has a
+ * parent. A failure here is not worth failing the pull over: the issue itself is what was asked
+ * for, and it is already in hand.
+ */
+async function related(meta) {
+  if (!meta.report) return "";
+  try {
+    const { report } = await api.report(meta.report);
+    const others = (report.areas || [])
+      .flatMap((a) => a.issues.map((i) => ({ ...i, area: a.area })))
+      .filter((i) => i.id !== meta.id);
+    if (!others.length) return "";
+    const lines = others.map(
+      (i) => `  ${i.id}  [${i.severity || "--"}] ${i.area || "no area"} — ${i.title}`,
+    );
+    return (
+      `\n\n<!-- passalong: filed with ${others.length} other issue${others.length === 1 ? "" : "s"}` +
+      `${report.title ? ` in "${report.title}"` : ""}. Fix only this one unless asked; the others are\n` +
+      `${lines.join("\n")}\n-->`
+    );
+  } catch {
+    return "";
+  }
+}
 const json = (data) => text(JSON.stringify(data, null, 2));
 const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError: true });
 
@@ -18,11 +49,20 @@ export async function serve() {
     { name: "passalong", version: "0.2.0" },
     {
       instructions:
-        "Passalong hands finished implementations between contexts as transfer guides: markdown " +
-        `with frontmatter and the sections ${SECTIONS.join(", ")}. ` +
-        "When the user references a passalong id or link, call get_guide and follow its Steps, " +
-        "adapting anything marked ASSUMES to this codebase; run its Verification before declaring " +
-        "done, then set_guide_status consumed and verify_guide with the result. " +
+        "Passalong hands work between contexts as guides: markdown with frontmatter, in two " +
+        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — the two ask " +
+        "for opposite behaviour.\n" +
+        `kind: transfer (or absent) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +
+        "Follow its Steps, adapting anything marked ASSUMES to this codebase; run its " +
+        "Verification before declaring done, then verify_guide with the result.\n" +
+        `kind: bug is a defect to FIX here. Sections: ${BUG_SECTIONS.join(", ")}. ` +
+        "It has no Steps and nothing in it is a procedure to apply: Reproduce is how to see the " +
+        "bug and running it produces the bug, Verification is the behaviour that should have " +
+        "happened. Fix the defect, then check Verification and verify_guide with the result — " +
+        "ok true once the behaviour it describes actually holds. A bug report is not broken " +
+        "because you reproduced it. " +
+        "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
+        "file_bugs with all of them at once; each becomes a guide someone can take on its own. " +
         "When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
         "shape) and call publish_guide, with `to` as team or team/handle when it is for a teammate. " +
@@ -161,7 +201,20 @@ export async function serve() {
     async ({ ref, cwd }) => {
       try {
         const { markdown, path, from } = await passalong.pull(ref, { cwd: cwd || process.cwd() });
-        return text(`${markdown}\n\n<!-- passalong: ${from}; written to ${path} -->`);
+        // The heading text is what an agent keys on, and a bug's headings look enough like a
+        // transfer guide's to be followed by one that never opened the frontmatter. So the kind
+        // is stated in front of the document, in the imperative, every time.
+        const meta = parse(markdown).meta;
+        const lead =
+          meta.kind === "bug"
+            ? "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
+              "— those steps produce the defect. Fix what Problem describes, then check " +
+              "Verification and answer with verify_guide.\n\n"
+            : "";
+        const siblings = await related(meta);
+        return text(
+          `${lead}${markdown}${siblings}\n\n<!-- passalong: ${from}; written to ${path} -->`,
+        );
       } catch (err) {
         return fail(err);
       }
@@ -173,7 +226,8 @@ export async function serve() {
     {
       title: "Publish guide",
       description:
-        "Publish a transfer guide from markdown (frontmatter + sections). Missing id, created, " +
+        "Publish a guide from markdown (frontmatter + sections) — a transfer guide by default, or " +
+        "a single bug with `kind: bug`; use file_bugs for more than one. Missing id, created, " +
         'author, and source_context are filled in. `to` addresses it to a team ("khaime") or a ' +
         'teammate ("khaime/lukman"), who is notified. Returns the id and share link.',
       inputSchema: {
@@ -208,13 +262,92 @@ export async function serve() {
   );
 
   server.registerTool(
+    "file_bugs",
+    {
+      title: "File bugs",
+      description:
+        "File one or more bugs you found but are not fixing, as a set. Opens a report and " +
+        "publishes each issue as its own guide — its own id, share link, and verdict — so a " +
+        "reviewer can hand any one of them to whoever fixes it. Use this after a test run, a QA " +
+        "pass, or a review that turned up defects; use publish_guide instead for work you " +
+        "finished and want repeated elsewhere. Needs sync (`passalong login`).",
+      inputSchema: {
+        title: z
+          .string()
+          .optional()
+          .describe('what the sweep was, e.g. "Checkout regression pass, 8 Sep build"'),
+        environment: z
+          .string()
+          .optional()
+          .describe("production, staging or development — where you saw these"),
+        to: z.string().optional().describe("team slug, or team/handle for a specific teammate"),
+        issues: z
+          .array(
+            z.object({
+              title: z.string().describe("what is broken, in one line"),
+              problem: z
+                .string()
+                .describe(
+                  "what is broken and what it stops someone doing; the error if there is one",
+                ),
+              reproduce: z
+                .string()
+                .describe(
+                  "numbered steps that show the bug — these produce it, they are not a fix",
+                ),
+              verification: z
+                .string()
+                .optional()
+                .describe(
+                  "the behaviour that should have happened, as something a fixer can check",
+                ),
+              gotchas: z
+                .string()
+                .optional()
+                .describe("anything already ruled out, or that made it hard to pin down"),
+              area: z
+                .string()
+                .optional()
+                .describe(`which surface it is on — known: ${AREAS.map((a) => a.slug).join(", ")}`),
+              severity: z
+                .string()
+                .optional()
+                .describe("s1 blocker, s2 major, s3 minor, s4 cosmetic (default s3)"),
+            }),
+          )
+          .min(1)
+          .describe("one entry per defect; file them together rather than one call each"),
+        cwd: z.string().optional().describe("directory the bugs were found in"),
+      },
+    },
+    async ({ title, environment, to, issues, cwd }) => {
+      try {
+        const filed = await passalong.fileBugs(
+          { title: title || "", environment: environment || "", issues },
+          { cwd: cwd || process.cwd(), to },
+        );
+        return json(filed);
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "guide_template",
     {
       title: "Guide template",
-      description: "The empty transfer guide skeleton with guidance comments for each section.",
-      inputSchema: {},
+      description:
+        "The empty guide skeleton with guidance comments for each section. `kind: bug` gives the " +
+        "bug report skeleton instead, which has a Reproduce section and no Steps.",
+      inputSchema: {
+        kind: z
+          .enum(["transfer", "bug"])
+          .optional()
+          .describe("transfer (default) for finished work to repeat; bug for a defect to fix"),
+      },
     },
-    async () => text(template()),
+    async ({ kind }) => text(template(kind === "bug" ? { kind: "bug" } : {})),
   );
 
   server.registerTool(

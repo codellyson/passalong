@@ -34,6 +34,9 @@ const KINDS: Record<string, string> = {
   "solution shape": "solution",
   "decisions and rationale": "decisions",
   steps: "steps",
+  // A bug report's repro. Named apart from `steps` on purpose: an agent executes Steps, and
+  // these produce the defect. See BUG_SECTIONS in packages/passalong/src/guide.js.
+  reproduce: "reproduce",
   verification: "verification",
   gotchas: "gotchas",
 };

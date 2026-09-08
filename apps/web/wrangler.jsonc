@@ -26,6 +26,13 @@
   "send_email": [{ "name": "EMAIL" }],
 
   // The product's one database. Both halves used to bind it; now only this Worker does.
+  "r2_buckets": [
+    {
+      "binding": "SHOTS",
+      "bucket_name": "passalong-shots"
+    }
+  ],
+
   "d1_databases": [
     {
       "binding": "DB",

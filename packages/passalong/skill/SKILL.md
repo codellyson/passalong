@@ -39,6 +39,27 @@ session's history. Write for execution, not for permanence.
 If the `passalong` command is missing, tell the user to run `npm i -g passalong && passalong setup` and
 still write the draft file so nothing is lost.
 
+## Two kinds of guide
+
+`kind:` in the frontmatter says what a guide is for, and the receiver behaves differently for
+each. Absent means `transfer`, which is what every guide written before bug reports existed is.
+
+| kind | what it is | what the receiver does |
+| --- | --- | --- |
+| `transfer` (default) | finished work to repeat somewhere else | follows the **Steps** |
+| `bug` | a defect to fix where it is | fixes it — **Reproduce** shows the problem, it is not a procedure to apply |
+
+To file bugs you found but are not fixing, call `file_bugs` with all of them in one call — it
+opens a report and publishes each issue as its own guide, so any one of them can be handed to
+whoever fixes it. `publish_guide` is for a single guide: work you finished and want repeated, or
+one bug on its own.
+
+A bug has no `## Steps` and publishing one with a Steps section is refused. That is the whole
+reason the kinds are separate: "follow its Steps" is what the MCP server tells every agent that
+pulls a guide, and steps that reproduce a defect are the one list that must never be run as a
+remedy — an agent that follows them reproduces the bug, checks the Verification, finds it false
+because the bug is real, and reports that the guide does not work.
+
 ## Guide structure
 
 ```markdown
@@ -71,6 +92,34 @@ Commands to run and what they should print. Test cases. What "done" looks like.
 - What failed along the way, the exact error, and why. What looked right but wasn't.
 ```
 
+## Bug structure
+
+```markdown
+---
+title: <what is broken, in one line: "Undo leaves section drag handles dead">
+kind: bug
+severity: <s1 blocker | s2 major | s3 minor | s4 cosmetic>
+area: <which surface it is on>
+report: <the report id, when it was filed with others>
+status: published
+tags: [bug, <2 to 4 more>]
+---
+
+> **Bug report.** The steps under Reproduce show the problem — they are not a fix to apply. Fix what Problem describes, then check Verification.
+
+## Problem
+What is broken and what it stops someone doing. The observable symptom, and the error if there is one.
+
+## Reproduce
+1. The steps that show the bug. These produce the defect — they are not a fix to apply.
+
+## Verification
+The behaviour that should have happened, as something the fixer can check.
+
+## Gotchas
+- Anything already ruled out, or that made it hard to pin down.
+```
+
 ## Quality bar
 
 - **Gotchas is the highest-value section.** If nothing went wrong, say what would have gone
@@ -82,3 +131,7 @@ Commands to run and what they should print. Test cases. What "done" looks like.
 - **No session narration.** "First I looked at..." is noise. State the finding.
 - **No secrets.** Redact tokens, keys, and internal hostnames that would not apply elsewhere.
 - Title, Problem, and Steps are required; the guide will not publish without them.
+- For a bug: title, Problem and **Reproduce**. Never a Steps section — see the two kinds above.
+- The line above Problem is written by `file_bugs` and the hub's form. It is in the document, not
+  added by whatever served it, so an agent that fetched the share link over plain HTTP — with no
+  MCP server and no knowledge of Passalong — still reads what the document is before acting on it.

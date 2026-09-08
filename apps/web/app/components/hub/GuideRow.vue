@@ -42,6 +42,14 @@ const pulledBy = computed(() =>
     : null,
 );
 
+/** A bug carries how badly it is broken; a transfer guide has nothing to say here. */
+const severityTone: Record<string, string> = {
+  s1: "bg-danger-soft text-danger",
+  s2: "bg-warn-soft text-warn",
+  s3: "bg-accent-soft text-accent",
+  s4: "bg-surface text-muted",
+};
+
 /** Printed in full on the row. It is the most valuable thing the product produces. */
 const verdict = computed(() => {
   const v = props.g.verdict;
@@ -83,12 +91,21 @@ const verdict = computed(() => {
         <span v-if="tail">· {{ tail }}</span>
       </div>
 
-      <a
-        :href="g.url"
-        target="_blank"
-        rel="noopener"
-        class="mt-2 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-      >{{ g.title || g.id }}</a>
+      <div class="mt-2 flex items-start gap-2">
+        <!-- Before the title, because how badly it is broken is what decides whether you read the
+             rest of the row. -->
+        <span
+          v-if="g.severity"
+          class="mt-0.5 shrink-0 rounded-pill px-2 py-0.5 font-code text-[11px] uppercase"
+          :class="severityTone[g.severity] || 'bg-surface text-muted'"
+        >{{ g.severity }}</span>
+        <a
+          :href="g.url"
+          target="_blank"
+          rel="noopener"
+          class="block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
+        >{{ g.title || g.id }}</a>
+      </div>
 
       <p
         v-if="verdict"
@@ -114,6 +131,13 @@ const verdict = computed(() => {
           >assumes {{ g.stack_assumptions.join(", ") }}</span>
         </template>
         <template v-if="pulledBy"><span>·</span><span>pulled by {{ pulledBy }}</span></template>
+        <!-- The one thing a row cannot say on its own: it was filed with others. -->
+        <template v-if="g.report">
+          <span>·</span>
+          <NuxtLink :to="`/hub/report/${g.report}`" class="max-w-[12rem] truncate">
+            {{ g.report_title || "part of a report" }}
+          </NuxtLink>
+        </template>
         <span v-for="t in g.tags || []" :key="t">#{{ t }}</span>
       </div>
     </div>

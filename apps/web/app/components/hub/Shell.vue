@@ -100,6 +100,9 @@ const standing = computed(() => {
 const tabs = computed(() => [
   { to: "/hub", label: "Board", count: waiting.value || null },
   { to: "/hub/guides", label: "All guides", count: data.value.guides.length || null },
+  // The one tab that is a verb. Everything else here is a place; this is the thing you came to do
+  // when what you have is a list of bugs rather than a guide you already wrote somewhere else.
+  { to: "/hub/report", label: "Report a bug", count: null },
   { to: "/hub/settings", label: "Settings", count: null },
 ]);
 </script>
