@@ -351,9 +351,21 @@ const PUBLIC = new Set([
   "POST /v1/auth/reset",
 ]);
 
+/**
+ * Reading one screenshot, which cannot be in `PUBLIC` because the path carries an id.
+ *
+ * A screenshot is evidence inside a guide, and a guide travels as markdown to anyone holding its
+ * share key. An image behind a login does not render in the document it was pasted into — it
+ * renders as a broken image, for the reader the evidence was for. The id is the secret, which is
+ * the same bargain the share key already makes.
+ */
+const publicShot = (method: string, path: string) =>
+  method === "GET" && /^\/v1\/shots\/[a-z0-9]+$/.test(path);
+
 /** Either credential proves the same thing, so every route below is unchanged by having two. */
 app.use("/v1/*", async (c, next) => {
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
+  if (publicShot(c.req.method, c.req.path)) return next();
 
   const auth = c.req.header("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";

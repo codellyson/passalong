@@ -1,5 +1,6 @@
 // Runs on Node 22.18+ with built-in type stripping (`node --test`).
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { body, parseMeta, setField, split } from "../src/guide.ts";
 
@@ -45,4 +46,17 @@ test("setField on a document with no frontmatter creates one", () => {
   const out = setField("## Problem\nx", "id", "abcd2345");
   assert.equal(parseMeta(out).id, "abcd2345");
   assert.equal(body(out).trim(), "## Problem\nx");
+});
+
+test("a screenshot is readable with its id alone", async () => {
+  // The route the auth middleware forgot. Evidence lives inside a guide, and a guide travels as
+  // markdown to anyone holding its share key: an image that 401s renders as a broken image for
+  // exactly the reader it was attached for. Production found this; a signed-in browser hid it.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const guard = /const publicShot = \(method: string, path: string\) =>\s*method === "GET" && (\/[^;]+\/)\.test\(path\)/.exec(src);
+  assert.ok(guard, "the public-shot exception is gone from the auth middleware");
+  const re = new RegExp(guard[1].slice(1, -1));
+  assert.ok(re.test("/v1/shots/jjeqrdsg9eam"));
+  assert.ok(!re.test("/v1/shots"));
+  assert.ok(!re.test("/v1/guides/abc12345"));
 });
