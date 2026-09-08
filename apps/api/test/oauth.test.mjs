@@ -51,11 +51,22 @@ test("comparison does not stop at the first wrong character", () => {
   assert.equal(timingSafeEqual("", ""), true);
 });
 
-test("discovery says only what this server actually supports", () => {
+test("discovery says only what this server actually supports", async () => {
   const meta = authorizationServerMetadata("https://passalong.dev");
   assert.equal(meta.issuer, "https://passalong.dev");
   assert.equal(meta.authorization_endpoint, "https://passalong.dev/oauth/authorize");
-  assert.equal(meta.token_endpoint, "https://passalong.dev/oauth/token");
+  // This assertion encoded the bug rather than catching it: it asserted the URL the metadata
+  // claimed instead of the URL the route is served at, and production answered 404. Both endpoints
+  // are checked against the paths in index.ts now.
+  assert.equal(meta.token_endpoint, "https://passalong.dev/v1/oauth/token");
+  assert.equal(meta.revocation_endpoint, "https://passalong.dev/v1/oauth/revoke");
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  for (const endpoint of [meta.token_endpoint, meta.revocation_endpoint]) {
+    const path = endpoint.replace("https://passalong.dev", "");
+    assert.ok(src.includes(`app.post("${path}"`), `nothing serves ${path}`);
+  }
+  assert.ok(src.includes('app.get("/oauth/authorize"'), "nothing serves the authorize endpoint");
   // S256 only. Advertising `plain` would invite a client to use it, and it protects nothing.
   assert.deepEqual(meta.code_challenge_methods_supported, ["S256"]);
   assert.deepEqual(meta.response_types_supported, ["code"]);

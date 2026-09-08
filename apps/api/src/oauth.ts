@@ -42,8 +42,11 @@ export interface OAuthClientRow {
 export function authorizationServerMetadata(origin: string) {
   return {
     issuer: origin,
+    // The browser-facing half has a plain path because a person sees it in an address bar; the
+    // machine-facing half lives under /v1/ with the rest of the API. Advertising anything other
+    // than where the routes actually are is a 404 a client cannot diagnose.
     authorization_endpoint: `${origin}/oauth/authorize`,
-    token_endpoint: `${origin}/oauth/token`,
+    token_endpoint: `${origin}/v1/oauth/token`,
     // Both, because a connector may be configured either way and the secret is optional here.
     token_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
     grant_types_supported: ["authorization_code", "refresh_token"],
@@ -51,7 +54,7 @@ export function authorizationServerMetadata(origin: string) {
     // S256 only. `plain` is in the spec and is not worth supporting: it protects nothing.
     code_challenge_methods_supported: ["S256"],
     scopes_supported: [MCP_SCOPE],
-    revocation_endpoint: `${origin}/oauth/revoke`,
+    revocation_endpoint: `${origin}/v1/oauth/revoke`,
     service_documentation: `${origin}/connect`,
   };
 }

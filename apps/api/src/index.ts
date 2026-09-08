@@ -369,6 +369,9 @@ const PUBLIC = new Set([
   // The token endpoint proves the client to itself, with PKCE or a client secret. It cannot sit
   // behind the credential it exists to issue.
   "POST /v1/oauth/token",
+  // RFC 7009: a client handing a credential back must never be refused for not having one. Being
+  // told no here would leave the token live, which is the opposite of what was asked for.
+  "POST /v1/oauth/revoke",
   "POST /v1/accounts",
   "POST /v1/auth/signup",
   "POST /v1/auth/login",
