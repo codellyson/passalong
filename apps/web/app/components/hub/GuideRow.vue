@@ -29,7 +29,9 @@ const tail = computed(() => {
     case undefined:
       return g.mine && !g.team ? "addressed to nobody" : "";
     default:
-      return g.pulls ? plural(g.pulls, "pull") : "";
+      // Not when the tail below names who pulled it: "1 pull" and "pulled by @someone" are one
+      // fact, and the row was saying it twice.
+      return g.pulls && !pulledBy.value ? plural(g.pulls, "pull") : "";
   }
 });
 
@@ -56,7 +58,7 @@ const verdict = computed(() => {
        1px border mitres against the 3px stripe, taking a diagonal bite out of the left edge at
        every row boundary. A shadow starts inside the border box, so the stripe runs unbroken. -->
   <li
-    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-l-[3px] border-t-0 border-r-0 border-b-0 shadow-[inset_0_1px_0_var(--line)] first:shadow-none bg-raised px-4 py-3.5 first:rounded-t-[calc(var(--r-3)-1px)] last:rounded-b-[calc(var(--r-3)-1px)]"
+    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-l-[3px] border-t-0 border-r-0 border-b-0 shadow-[inset_0_1px_0_var(--line)] first:shadow-none bg-raised px-4 py-4 first:rounded-t-[calc(var(--r-3)-1px)] last:rounded-b-[calc(var(--r-3)-1px)]"
     :class="state?.stripe ?? 'border-l-line'"
   >
     <div class="min-w-0 flex-1 basis-72">
@@ -85,21 +87,31 @@ const verdict = computed(() => {
         :href="g.url"
         target="_blank"
         rel="noopener"
-        class="mt-1.5 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
+        class="mt-2 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
       >{{ g.title || g.id }}</a>
 
       <p
         v-if="verdict"
-        class="mt-1.5 mb-0 border-l-2 border-l-danger py-0.5 pl-2 font-ui text-sm text-danger"
+        class="mt-2 mb-0 border-l-2 border-l-danger py-0.5 pl-2 font-ui text-sm text-danger"
       >
         {{ verdict }}
       </p>
 
-      <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 font-code text-xs text-muted">
+      <!-- The two facts that run to a sentence — the repo and the stack — are capped rather than
+           left to wrap, which turned the tail into a four-line grey paragraph under the title with
+           nothing to say where one fact ended. Both are on hover and on the guide itself. -->
+      <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-code text-xs text-muted">
         <span>{{ g.id }}</span>
-        <template v-if="g.source_context"><span>·</span><span>{{ g.source_context }}</span></template>
+        <template v-if="g.source_context">
+          <span>·</span>
+          <span class="max-w-[14rem] truncate" :title="g.source_context">{{ g.source_context }}</span>
+        </template>
         <template v-if="g.stack_assumptions?.length">
-          <span>·</span><span>assumes {{ g.stack_assumptions.join(", ") }}</span>
+          <span>·</span>
+          <span
+            class="max-w-[14rem] truncate"
+            :title="g.stack_assumptions.join(', ')"
+          >assumes {{ g.stack_assumptions.join(", ") }}</span>
         </template>
         <template v-if="pulledBy"><span>·</span><span>pulled by {{ pulledBy }}</span></template>
         <span v-for="t in g.tags || []" :key="t">#{{ t }}</span>

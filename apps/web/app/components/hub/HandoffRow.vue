@@ -23,7 +23,7 @@ const pulledBy = computed(() =>
   <!-- The separator is an inset shadow, not a top border: a border mitres against the 3px stripe
        and bites a diagonal notch out of the left edge at every row boundary. -->
   <li
-    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] bg-raised px-4 py-3.5 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
+    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] bg-raised px-4 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
     :class="kind.stripe"
   >
     <div class="min-w-0 flex-1 basis-64">
@@ -33,7 +33,9 @@ const pulledBy = computed(() =>
           :class="kind.badge"
           :title="kind.note"
         >{{ kind.label }}</span>
-        <span v-if="g.pulls">{{ plural(g.pulls, "pull") }}</span>
+        <!-- Only when nobody is named below it. "1 pull" and "pulled by @someone" are one fact,
+             and printing both put the badge, the count and the name all saying "landed". -->
+        <span v-if="g.pulls && !pulledBy">{{ plural(g.pulls, "pull") }}</span>
         <span v-if="g.stale" class="font-medium text-warn">stale · over a week</span>
         <span>{{ rel(g.created) }}</span>
       </div>
@@ -42,19 +44,27 @@ const pulledBy = computed(() =>
         :href="g.url"
         target="_blank"
         rel="noopener"
-        class="mt-1.5 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
+        class="mt-2 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
       >{{ g.title || g.id }}</a>
 
-      <p v-if="g.failing && g.verdict" class="mt-1.5 mb-0 text-sm text-danger">
+      <p v-if="g.failing && g.verdict" class="mt-2 mb-0 text-sm text-danger">
         <b class="font-semibold">{{ g.verdict.by ? `@${g.verdict.by}` : "someone" }} says it does not work.</b>
         {{ g.verdict.note || "No reason given." }}
       </p>
 
-      <div class="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted">
-        <span v-if="g.team">to <b class="font-medium text-fg">{{ g.team }}{{ g.to ? ` / @${g.to}` : "" }}</b></span>
-        <code class="font-code">{{ g.id }}</code>
-        <span v-if="g.source_context" class="font-code">{{ g.source_context }}</span>
-        <span v-if="pulledBy">pulled by {{ pulledBy }}</span>
+      <!-- One line, always. Left to wrap, these four ran into a three-line grey paragraph under
+           the title with nothing to say where one fact ended and the next began. The repo it came
+           out of is the only one of them that runs long, so it is the one that gives — truncated
+           here, in full on hover and on the guide itself. -->
+      <div class="mt-3 flex items-center gap-x-3 text-xs text-muted">
+        <span v-if="g.team" class="shrink-0">to <b class="font-medium text-fg">{{ g.team }}{{ g.to ? ` / @${g.to}` : "" }}</b></span>
+        <code class="shrink-0 font-code">{{ g.id }}</code>
+        <span
+          v-if="g.source_context"
+          class="min-w-0 flex-1 truncate font-code"
+          :title="g.source_context"
+        >{{ g.source_context }}</span>
+        <span v-if="pulledBy" class="shrink-0">pulled by {{ pulledBy }}</span>
       </div>
     </div>
 
