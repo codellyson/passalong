@@ -165,3 +165,15 @@ test("bugGuide leaves out the sections it has nothing for", () => {
   assert.ok(!/## Gotchas/.test(g.body));
   assert.deepEqual(validate(g), []);
 });
+
+test("a bug says what it is inside the document", () => {
+  const md = bugGuide({ title: "t", problem: "p", reproduce: "1. x" });
+  // Not added by the route that serves it: `api.byLink` fetches share links through the .md
+  // endpoint and re-serialises what it gets, so anything decorated on there would be written to
+  // disk and published back on the next share. In the body it survives the round trip.
+  assert.match(md, /^> \*\*Bug report\.\*\*/m);
+  assert.ok(md.indexOf("Bug report.") < md.indexOf("## Problem"));
+  const roundTripped = serialize(parse(md));
+  assert.match(roundTripped, /^> \*\*Bug report\.\*\*/m);
+  assert.deepEqual(validate(parse(md)), []);
+});

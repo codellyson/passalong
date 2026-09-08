@@ -11,6 +11,11 @@
  */
 import { AREAS, SEVERITIES } from "#api/guide";
 
+/** Kept in step with `BUG_LEAD` in packages/passalong/src/guide.js. */
+const BUG_LEAD =
+  "> **Bug report.** The steps under Reproduce show the problem \u2014 they are not a fix to " +
+  "apply. Fix what Problem describes, then check Verification.";
+
 export interface Shot {
   /** Empty until the upload answers — the hub's CSP is `img-src 'self'`, so there is no local
       preview to show in the meantime. */
@@ -156,6 +161,10 @@ export function issueMarkdown(
   front.push(`tags: [${tags.map(quote).join(", ")}]`);
 
   const body: string[] = [];
+
+  // The same line the CLI's `bugGuide()` writes, for the same reason: a share link is plain
+  // markdown any agent can fetch, and the route serving it must not decorate the document.
+  body.push(BUG_LEAD);
 
   body.push("## Problem");
   const described = htmlToMarkdown(issue.html);

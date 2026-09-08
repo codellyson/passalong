@@ -73,6 +73,17 @@ export const SEVERITIES = [
  */
 export const BUG_SECTIONS = ["Problem", "Reproduce", "Verification", "Gotchas"];
 
+/**
+ * One line at the top of every bug, saying what the document is.
+ *
+ * `kind: bug` in the frontmatter is the machine-readable answer and `Reproduce` is a heading no
+ * one executes by mistake, but neither is a sentence. This is, and it is inside the document, so
+ * it reaches a reader that fetched a share link over plain HTTP and has never heard of Passalong.
+ */
+export const BUG_LEAD =
+  "> **Bug report.** The steps under Reproduce show the problem \u2014 they are not a fix to " +
+  "apply. Fix what Problem describes, then check Verification.";
+
 /** The sections a guide of this kind presents, in order. */
 export function sectionsFor(kind) {
   return kind === "bug" ? BUG_SECTIONS : SECTIONS;
@@ -304,6 +315,15 @@ export function bugGuide({
   status = "published",
 } = {}) {
   const body = [
+    // Written into the document, not added by whatever served it.
+    //
+    // get_guide says this in front of the markdown, but that only reaches an MCP client. A share
+    // link is plain markdown any agent can fetch over HTTP, and the route that serves it cannot
+    // decorate the response: `api.byLink` pulls guides *through* that route and re-serialises what
+    // it gets, so anything added there would be written to disk and published back on the next
+    // share. A line in the body survives that round trip unchanged and reaches every reader.
+    BUG_LEAD,
+    "",
     "## Problem",
     problem.trim() || "_No description given._",
     "",

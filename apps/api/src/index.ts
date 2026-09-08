@@ -76,6 +76,7 @@ import {
   unreadCount,
 } from "./notify.js";
 import { renderOgImage } from "./og.js";
+import { openapi } from "./openapi.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -340,6 +341,9 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
 // Open routes: creating an account, and the three that exist precisely because you cannot
 // authenticate yet.
 const PUBLIC = new Set([
+  // A description of the API is not a use of it, and an agent platform fetches this before it has
+  // anywhere to put a credential.
+  "GET /v1/openapi.json",
   "POST /v1/accounts",
   "POST /v1/auth/signup",
   "POST /v1/auth/login",
@@ -1637,6 +1641,15 @@ app.get("/g/:id/:key/og.png", async (c) => {
   if (!row) return c.text("no such guide", 404, VIEW_HEADERS);
   return renderOgImage(c.env, c.req.url, { id: row.id, meta: parseMeta(row.markdown) });
 });
+
+/**
+ * The API, described for agents that only speak HTTP — a ChatGPT action, Gemini function calling,
+ * anything that cannot run `passalong mcp` because that is a local process. See openapi.ts for
+ * what it deliberately leaves out.
+ */
+app.get("/v1/openapi.json", (c) =>
+  c.json(openapi(origin(c)), 200, { "cache-control": "public, max-age=300" }),
+);
 
 app.get("/health", (c) => c.json({ ok: true }));
 

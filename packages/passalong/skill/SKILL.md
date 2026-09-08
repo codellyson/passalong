@@ -105,6 +105,8 @@ status: published
 tags: [bug, <2 to 4 more>]
 ---
 
+> **Bug report.** The steps under Reproduce show the problem — they are not a fix to apply. Fix what Problem describes, then check Verification.
+
 ## Problem
 What is broken and what it stops someone doing. The observable symptom, and the error if there is one.
 
@@ -130,3 +132,6 @@ The behaviour that should have happened, as something the fixer can check.
 - **No secrets.** Redact tokens, keys, and internal hostnames that would not apply elsewhere.
 - Title, Problem, and Steps are required; the guide will not publish without them.
 - For a bug: title, Problem and **Reproduce**. Never a Steps section — see the two kinds above.
+- The line above Problem is written by `file_bugs` and the hub's form. It is in the document, not
+  added by whatever served it, so an agent that fetched the share link over plain HTTP — with no
+  MCP server and no knowledge of Passalong — still reads what the document is before acting on it.
