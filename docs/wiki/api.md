@@ -63,6 +63,27 @@ a document the CLI would accept. A report is the parent that keeps a set togethe
 A report you cannot see answers 404, not 403: which reports an account has is not something a
 status code should confirm.
 
+## MCP over HTTP
+
+`POST /v1/mcp` is the same MCP server the CLI runs over stdio, served at an address for assistants
+that add outside tools as remote servers. Streamable HTTP, stateless, `enableJsonResponse` — every
+tool is a request and a response, so there is no session to keep and no Durable Object to keep it
+in, and a fresh server per request is correct on a runtime that may hand the next one to a
+different isolate.
+
+It sits under `/v1/` so the credential middleware has already run: the bearer token that
+authenticates everything else authenticates this. It does **not** run an OAuth flow, so a client
+that will only authenticate that way cannot connect.
+
+The tools reimplement nothing — each is a name, a description and a schema mapped onto a route
+above, dispatched back through the app with the caller's header. Eight of them: `search_guides`,
+`get_guide`, `inbox`, `board`, `publish_guide`, `verify_guide`, `file_bugs`, `get_report`. The stdio
+server has two more that touch a working directory, which a hosted server does not have.
+
+`src/mcp-http.ts` takes its vocabulary as an argument rather than importing `./guide.js`: a sibling
+imported that way makes the module unloadable under Node's type stripping, which is what keeps the
+app itself untestable. Passing it in is what buys the tests in `test/mcp-http.test.mjs`.
+
 ## Describing the API
 
 `GET /v1/openapi.json` (public) describes this surface for agents that only speak HTTP — a ChatGPT

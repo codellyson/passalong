@@ -85,6 +85,11 @@ public one, for agents *using* Passalong rather than changing it.
 
 - **Guides are plain markdown.** Never introduce a field the frontmatter parser can't round-trip
   (strings and string lists only). `passalong export` must always be a complete backup.
+- **The MCP server is served two ways and implemented once.** `packages/passalong/src/mcp.js` is
+  stdio, for anything that can run a process; `apps/api/src/mcp-http.ts` is the same tools at
+  `POST /v1/mcp`, for assistants that add remote servers. The HTTP one owns no logic — each tool
+  dispatches back through the app's own routes with the caller's bearer token, so a rule lives in
+  the route and nowhere else. Stateless on purpose: nothing subscribes, so nothing needs a session.
 - **A guide has a kind, and the two ask opposite things of whoever receives one.** `transfer`
   (or absent — every guide written before migration 0007 is one) is finished work to repeat:
   follow its `Steps`. `bug` is a defect to fix where it is. A bug's repro goes under `## Reproduce`

@@ -101,9 +101,13 @@ marked as an assumption, run its `Verification`, then
 one report. Each issue becomes a guide with its own id, share link and verdict, so any of them can
 be handed to whoever fixes it. Send them in one call rather than one call each.
 
-If you cannot run a local MCP server, everything above is HTTP: `GET /v1/openapi.json` describes
-the API for a ChatGPT action or Gemini function calling, and a share link's `.md` needs no account
-at all.
+The same server is also hosted, for assistants that add remote MCP servers rather than running
+one: `https://passalong.dev/v1/mcp`, Streamable HTTP, authenticated with a bearer token. It carries
+eight of these tools — everything except the ones that touch a working directory. A local server is
+still better where you can run one: it works offline and knows which repo you are in.
+
+Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for Gemini
+function calling or a script, and a share link's `.md` needs no account at all.
 
 ## Writing a good guide
 
