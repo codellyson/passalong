@@ -49,11 +49,45 @@ function scalar(raw) {
   return v;
 }
 
+/**
+ * Split a flow sequence's inner text on the commas *between* items, not the ones inside them.
+ * `quote()` wraps any value containing a comma, so a plain `split(",")` tears those items apart —
+ * and the pieces keep their stray quotes, because `scalar()` only unwraps a value quoted at both
+ * ends. Serialising a list and parsing it back has to return the same list.
+ */
+function items(inner) {
+  const out = [];
+  let buf = "";
+  let quoted = null;
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i];
+    if (quoted) {
+      // `quote()` escapes an inner double quote as \", which does not close the value.
+      if (c === "\\" && quoted === '"' && inner[i + 1] === '"') {
+        buf += c + inner[i + 1];
+        i++;
+        continue;
+      }
+      buf += c;
+      if (c === quoted) quoted = null;
+      continue;
+    }
+    if (c === '"' || c === "'") quoted = c;
+    if (c === ",") {
+      out.push(buf);
+      buf = "";
+      continue;
+    }
+    buf += c;
+  }
+  out.push(buf);
+  return out;
+}
+
 function inlineList(raw) {
   const inner = raw.trim().slice(1, -1).trim();
   if (inner === "") return [];
-  return inner
-    .split(",")
+  return items(inner)
     .map(scalar)
     .filter((s) => s !== "");
 }
@@ -65,7 +99,9 @@ export function parseFrontmatter(text) {
   let listKey = null;
   for (const line of lines) {
     if (line.trim() === "" || line.trim().startsWith("#")) continue;
-    const item = /^\s+-\s*(.*)$/.exec(line);
+    // YAML lets a block sequence sit flush with its key, so the indent is optional. Requiring it
+    // dropped `- item` lines silently: they match no key either, and the field stayed empty.
+    const item = /^\s*-\s*(.*)$/.exec(line);
     if (item && listKey) {
       meta[listKey].push(scalar(item[1]));
       continue;

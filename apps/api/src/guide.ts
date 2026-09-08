@@ -35,6 +35,41 @@ function scalar(raw: string): string {
   return v;
 }
 
+/**
+ * Split a flow sequence's inner text on the commas *between* items, not the ones inside them. The
+ * writer quotes any value containing a comma, so splitting on every comma tears those items apart —
+ * and the pieces keep their stray quotes, because `scalar()` only unwraps a value quoted at both
+ * ends. Mirrors `items()` in packages/passalong/src/guide.js.
+ */
+function items(inner: string): string[] {
+  const out: string[] = [];
+  let buf = "";
+  let quoted: string | null = null;
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i] as string;
+    if (quoted) {
+      // An inner double quote is written as \", which does not close the value.
+      if (c === "\\" && quoted === '"' && inner[i + 1] === '"') {
+        buf += c + inner[i + 1];
+        i++;
+        continue;
+      }
+      buf += c;
+      if (c === quoted) quoted = null;
+      continue;
+    }
+    if (c === '"' || c === "'") quoted = c;
+    if (c === ",") {
+      out.push(buf);
+      buf = "";
+      continue;
+    }
+    buf += c;
+  }
+  out.push(buf);
+  return out;
+}
+
 export function split(markdown: string): { front: string; body: string } | null {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(markdown);
   // Both groups are mandatory in the pattern, so a match means both are strings. The assertions
@@ -48,7 +83,9 @@ export function parseMeta(markdown: string): Meta {
   if (!parts) return meta;
   let listKey: string | null = null;
   for (const line of parts.front.split(/\r?\n/)) {
-    const item = /^\s+-\s*(.*)$/.exec(line);
+    // YAML lets a block sequence sit flush with its key, so the indent is optional. Requiring it
+    // dropped `- item` lines silently: they match no key either, and the field stayed empty.
+    const item = /^\s*-\s*(.*)$/.exec(line);
     if (item && listKey) {
       (meta[listKey] as string[]).push(scalar(item[1] as string));
       continue;
@@ -62,7 +99,7 @@ export function parseMeta(markdown: string): Meta {
       listKey = key;
     } else if (r.startsWith("[") && r.endsWith("]")) {
       const inner = r.slice(1, -1).trim();
-      meta[key] = inner ? inner.split(",").map(scalar).filter(Boolean) : [];
+      meta[key] = inner ? items(inner).map(scalar).filter(Boolean) : [];
       listKey = null;
     } else {
       meta[key] = LIST_FIELDS.has(key) ? [scalar(r)] : scalar(r);

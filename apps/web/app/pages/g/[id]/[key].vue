@@ -37,15 +37,24 @@ const list = (v: Field) => (Array.isArray(v) ? v : v ? [v] : []);
 
 const created = computed(() => str(meta.value?.created).slice(0, 10));
 
-/** The four facts worth a label. Anything empty drops out rather than printing a blank column. */
+/**
+ * The facts worth a label. Anything empty drops out rather than printing a blank column.
+ *
+ * `out of` and `assumes` are sentences where the rest are a word or two, so they are marked wide
+ * and take a row to themselves. Sharing the strip's 9rem columns equally turned either of them
+ * into a twenty-line ribbon that set the height of the whole block and pushed the guide below the
+ * fold. They come last so the reading order is the placement order.
+ */
 const facts = computed(() =>
   [
     { label: "id", value: guide.value?.id, mono: true },
     { label: "from", value: str(meta.value?.author), mono: false },
+    { label: "shared", value: created.value, mono: false },
     { label: "out of", value: str(meta.value?.source_context), mono: true },
     { label: "assumes", value: list(meta.value?.stack_assumptions).join(" · "), mono: false },
-    { label: "shared", value: created.value, mono: false },
-  ].filter((f) => f.value),
+  ]
+    .filter((f) => f.value)
+    .map((f) => ({ ...f, wide: (f.value ?? "").length > 40 })),
 );
 
 /** "Problem, Verification and Gotchas" — a list a sentence can contain. */
@@ -151,7 +160,7 @@ usePage({
         <dl
           class="mt-4 mb-0 grid gap-x-6 gap-y-3 border-t border-b border-line py-3 [grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))]"
         >
-          <div v-for="f in facts" :key="f.label">
+          <div v-for="f in facts" :key="f.label" :class="f.wide ? '[grid-column:1/-1]' : ''">
             <dt :class="rail">{{ f.label }}</dt>
             <dd
               class="m-0 mt-0.5 text-sm text-fg"
