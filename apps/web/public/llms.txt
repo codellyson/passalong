@@ -16,6 +16,8 @@ the author with all of their content.
 A share link looks like `https://passalong.dev/g/<id>/<key>`. Append `.md` for the raw markdown,
 or `?view=verify` for the view that leads with what to check and folds the implementation away.
 
+0. Check `kind` in the frontmatter first. `bug` and `transfer` ask for opposite things — see
+   "Two kinds of guide" below. Absent means `transfer`.
 1. Read the guide. `Verification` is what "done" means; `Gotchas` is what already went wrong.
 2. Anything under `stack_assumptions` in the frontmatter is what the author's environment was.
    Adapt those to the current codebase rather than copying them.
@@ -24,10 +26,25 @@ or `?view=verify` for the view that leads with what to check and folds the imple
    not. The reason reaches the author the same day. This is the part that makes the next guide
    better, so do not skip it.
 
+## Two kinds of guide
+
+`kind:` in the frontmatter says what a guide is for. The two ask for opposite behaviour, so read
+it before acting on anything.
+
+- `kind: transfer` (or absent) — finished work to repeat here. Follow its `Steps`.
+- `kind: bug` — a defect to fix where it is. It has no `Steps` and nothing in it is a procedure to
+  apply: `Reproduce` is how to see the bug and running it produces the bug, `Verification` is the
+  behaviour that should have happened. Fix the defect, then check `Verification` and report back.
+  A bug report is not broken because you reproduced it.
+
+Bugs are often filed in sets. `report:` names the parent a set was filed under; `GET /v1/reports/
+<id>` returns the rest of it. Fix only the issue you were given unless you were asked for more.
+
 ## Guide format
 
-Frontmatter fields, in order: `id`, `title`, `created`, `author`, `source_context`, `status`,
-`team`, `to`, `stack_assumptions` (list), `tags` (list).
+Frontmatter fields, in order: `id`, `title`, `kind`, `created`, `author`, `source_context`,
+`status`, `team`, `to`, `stack_assumptions` (list), `tags` (list). Bugs also carry `report`,
+`area` and `severity` (`s1` blocker to `s4` cosmetic).
 
 Body sections, in this order — the headings are what a receiving agent keys on, so they are
 stable:
@@ -38,6 +55,10 @@ stable:
 - `## Steps` — what to do. Required.
 - `## Verification` — how to know it worked. A guide without this is flagged to the reader.
 - `## Gotchas` — what failed on the way. The highest-value section; record what wasted time.
+
+A bug uses `## Problem`, `## Reproduce`, `## Verification` and `## Gotchas` instead. `Reproduce`
+rather than `Steps` is deliberate and load-bearing: `Steps` is the heading an agent is told to
+execute, and steps that produce a defect are the one list that must never be run as a remedy.
 
 `status` is `draft` or `published`. (`consumed` and `promoted` are legacy: still accepted on
 existing guides, no longer set.) Ids are 8 characters from a
@@ -68,13 +89,21 @@ passalong login                 # optional: sync across machines
 
 ## MCP tools
 
-`passalong setup` registers a stdio MCP server exposing: `publish_guide`, `get_guide`,
+`passalong setup` registers a stdio MCP server exposing: `publish_guide`, `file_bugs`, `get_guide`,
 `search_guides`, `guide_template`, `set_guide_status`, `verify_guide`, `inbox`, `board`,
 `activity`.
 
 Given a share link or an id, `get_guide` returns the guide; follow its `Steps`, adapt anything
 marked as an assumption, run its `Verification`, then
 `verify_guide` with the result.
+
+`file_bugs` files defects you found but are not fixing — from a test run, a QA pass, a review — as
+one report. Each issue becomes a guide with its own id, share link and verdict, so any of them can
+be handed to whoever fixes it. Send them in one call rather than one call each.
+
+If you cannot run a local MCP server, everything above is HTTP: `GET /v1/openapi.json` describes
+the API for a ChatGPT action or Gemini function calling, and a share link's `.md` needs no account
+at all.
 
 ## Writing a good guide
 
