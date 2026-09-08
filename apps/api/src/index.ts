@@ -85,6 +85,17 @@ import {
   notifyAll,
   unreadCount,
 } from "./notify.js";
+import {
+  authorizationServerMetadata,
+  errorRedirect,
+  MCP_SCOPE,
+  type OAuthClientRow,
+  pkceMatches,
+  protectedResourceMetadata,
+  redirectAllowed,
+  timingSafeEqual,
+} from "./oauth.js";
+import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
 import { SHOT_TYPES, shotKey } from "./shots.js";
@@ -355,6 +366,9 @@ const PUBLIC = new Set([
   // A description of the API is not a use of it, and an agent platform fetches this before it has
   // anywhere to put a credential.
   "GET /v1/openapi.json",
+  // The token endpoint proves the client to itself, with PKCE or a client secret. It cannot sit
+  // behind the credential it exists to issue.
+  "POST /v1/oauth/token",
   "POST /v1/accounts",
   "POST /v1/auth/signup",
   "POST /v1/auth/login",
@@ -373,6 +387,26 @@ const PUBLIC = new Set([
 const publicShot = (method: string, path: string) =>
   method === "GET" && /^\/v1\/shots\/[a-z0-9]+$/.test(path);
 
+/**
+ * A 401 that says which authorization server can fix it.
+ *
+ * RFC 9728: without this header a client that has no token knows only that it was refused. With
+ * it, it can find the metadata, discover the endpoints and start a flow — which is what turns the
+ * MCP endpoint into something a connector can be pointed at rather than something that has to be
+ * explained.
+ */
+function unauthorizedResource(base: string, error: string, description: string): Response {
+  return new Response(JSON.stringify({ message: description }), {
+    status: 401,
+    headers: {
+      "content-type": "application/json",
+      "www-authenticate":
+        `Bearer realm="passalong", error="${error}", error_description="${description}", ` +
+        `resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+    },
+  });
+}
+
 /** Either credential proves the same thing, so every route below is unchanged by having two. */
 app.use("/v1/*", async (c, next) => {
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
@@ -380,6 +414,33 @@ app.use("/v1/*", async (c, next) => {
 
   const auth = c.req.header("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+
+  // An OAuth access token, held by a connector rather than pasted by a person. It reaches what its
+  // scope names and nothing else — which is the whole reason a connector gets one of these instead
+  // of a copy of your API token.
+  if (token.startsWith("pa_at_")) {
+    const grant = await grantFor(c.env.DB, token);
+    if (!grant) return unauthorizedResource(origin(c), "invalid_token", "token expired or revoked");
+    if (grant.scope !== MCP_SCOPE || c.req.path !== "/v1/mcp") {
+      return unauthorizedResource(
+        origin(c),
+        "insufficient_scope",
+        `this grant reaches ${grant.scope} only`,
+      );
+    }
+    c.executionCtx.waitUntil(
+      c.env.DB.prepare("UPDATE oauth_token SET last_used = ? WHERE access_hash = ?")
+        .bind(now(), grant.access_hash)
+        .run()
+        .then(
+          () => {},
+          () => {},
+        ),
+    );
+    c.set("account", grant.account_id);
+    return next();
+  }
+
   if (token) {
     const row = await c.env.DB.prepare(
       "SELECT id, account_id FROM token WHERE hash = ? AND revoked = ''",
@@ -1785,6 +1846,272 @@ app.all("/v1/mcp", async (c) => {
     },
     vocabulary,
   );
+});
+
+// ---- oauth ---------------------------------------------------------------------------------
+
+/**
+ * Discovery. Both documents are public and neither is a use of the API: a client reads them before
+ * it has any credential at all, which is the point.
+ */
+app.get("/.well-known/oauth-authorization-server", (c) =>
+  c.json(authorizationServerMetadata(origin(c)), 200, { "cache-control": "public, max-age=300" }),
+);
+app.get("/.well-known/oauth-protected-resource", (c) =>
+  c.json(protectedResourceMetadata(origin(c)), 200, { "cache-control": "public, max-age=300" }),
+);
+// Some clients look for the resource document beneath the resource's own path rather than at the
+// host root. Answering both costs one line and saves a support conversation.
+app.get("/.well-known/oauth-protected-resource/v1/mcp", (c) =>
+  c.json(protectedResourceMetadata(origin(c)), 200, { "cache-control": "public, max-age=300" }),
+);
+
+/**
+ * Where the client sends the person, and where the person says yes.
+ *
+ * This route does not render the consent screen — /oauth/consent does, as a page, because it needs
+ * the session cookie and a person reading it. What happens here is only validation: refuse an
+ * unusable request outright, and hand a usable one to the page with everything it needs.
+ *
+ * The redirect_uri is checked before anything is bounced back to it. Sending an error to an
+ * unregistered address is how an authorization server becomes an open redirector.
+ */
+app.get("/oauth/authorize", async (c) => {
+  const q = c.req.query();
+  const client = q.client_id
+    ? await c.env.DB.prepare("SELECT * FROM oauth_client WHERE id = ? AND revoked = ''")
+        .bind(q.client_id)
+        .first<OAuthClientRow>()
+    : null;
+  if (!client) return c.text("unknown client_id", 400);
+  if (!redirectAllowed(client.redirect_uri, q.redirect_uri)) {
+    return c.text("redirect_uri does not match the one registered for this client", 400);
+  }
+  const redirect = q.redirect_uri || client.redirect_uri;
+
+  if (q.response_type !== "code") {
+    return c.redirect(
+      errorRedirect(redirect, q.state, "unsupported_response_type", "only `code` is supported"),
+    );
+  }
+  if (!q.code_challenge || (q.code_challenge_method || "plain") !== "S256") {
+    return c.redirect(
+      errorRedirect(redirect, q.state, "invalid_request", "PKCE with S256 is required"),
+    );
+  }
+  const url = new URL(`${origin(c)}/oauth/consent`);
+  for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
+  url.searchParams.set("redirect_uri", redirect);
+  url.searchParams.set("client_name", client.name || client.id);
+  return c.redirect(url.toString(), 302);
+});
+
+/**
+ * The person approved. Mint the code.
+ *
+ * Session cookie only — never a bearer token. Approving a grant is something a person does in a
+ * browser, and accepting an API token here would let one credential silently mint another.
+ */
+app.post("/v1/oauth/approve", async (c) => {
+  const account = c.get("account");
+  type Approval = {
+    client_id?: string;
+    redirect_uri?: string;
+    state?: string;
+    code_challenge?: string;
+  };
+  const body = await c.req.json<Approval>().catch(() => ({}) as Approval);
+  const client = body.client_id
+    ? await c.env.DB.prepare("SELECT * FROM oauth_client WHERE id = ? AND revoked = ''")
+        .bind(body.client_id)
+        .first<OAuthClientRow>()
+    : null;
+  if (!client) return err(c, 400, "unknown client_id");
+  if (!redirectAllowed(client.redirect_uri, body.redirect_uri)) {
+    return err(c, 400, "redirect_uri does not match the one registered");
+  }
+  if (!body.code_challenge) return err(c, 400, "PKCE with S256 is required");
+
+  const code = await issueCode(c.env.DB, {
+    client_id: client.id,
+    account_id: account,
+    challenge: body.code_challenge,
+    method: "S256",
+    redirect_uri: body.redirect_uri || client.redirect_uri,
+    scope: MCP_SCOPE,
+  });
+  const url = new URL(body.redirect_uri || client.redirect_uri);
+  url.searchParams.set("code", code);
+  if (body.state) url.searchParams.set("state", body.state);
+  count(c, "oauth_granted", {});
+  return c.json({ redirect: url.toString() });
+});
+
+/**
+ * Code for tokens, or refresh for tokens.
+ *
+ * Public. The client proves itself here with PKCE, or with its secret if it was given one — which
+ * is why this is the one `/v1/*` path outside the credential middleware.
+ */
+app.post("/v1/oauth/token", async (c) => {
+  const form = await c.req.parseBody().catch(() => ({}) as Record<string, string>);
+  const field = (name: string) => String((form as Record<string, unknown>)[name] ?? "");
+
+  // client_secret_basic puts the credentials in the header; client_secret_post puts them in the
+  // body; a public client sends only its id. All three end up as the same two values.
+  let clientId = field("client_id");
+  let clientSecret = field("client_secret");
+  const basic = c.req.header("authorization") || "";
+  if (basic.startsWith("Basic ")) {
+    const [id, secret] = atob(basic.slice(6)).split(":");
+    clientId = decodeURIComponent(id || "");
+    clientSecret = decodeURIComponent(secret || "");
+  }
+
+  const client = clientId
+    ? await c.env.DB.prepare("SELECT * FROM oauth_client WHERE id = ? AND revoked = ''")
+        .bind(clientId)
+        .first<OAuthClientRow>()
+    : null;
+  if (!client) return c.json({ error: "invalid_client" }, 401);
+  if (client.secret_hash && !timingSafeEqual(client.secret_hash, await sha256(clientSecret))) {
+    return c.json({ error: "invalid_client" }, 401);
+  }
+
+  const grantType = field("grant_type");
+
+  if (grantType === "refresh_token") {
+    const presented = field("refresh_token");
+    const row = await c.env.DB.prepare(
+      "SELECT * FROM oauth_token WHERE refresh_hash = ? AND client_id = ?",
+    )
+      .bind(await sha256(presented), client.id)
+      .first<{ access_hash: string; account_id: string; scope: string }>();
+    if (!row) return c.json({ error: "invalid_grant" }, 400);
+    // Rotation: the old pair goes as the new one is written, so a refresh token is worth one use.
+    return c.json(
+      await issueTokens(
+        c.env.DB,
+        { client_id: client.id, account_id: row.account_id, scope: row.scope },
+        row.access_hash,
+      ),
+    );
+  }
+
+  if (grantType !== "authorization_code") {
+    return c.json({ error: "unsupported_grant_type" }, 400);
+  }
+
+  const row = await c.env.DB.prepare("SELECT * FROM oauth_code WHERE code = ?")
+    .bind(await sha256(field("code")))
+    .first<{
+      code: string;
+      client_id: string;
+      account_id: string;
+      challenge: string;
+      redirect_uri: string;
+      scope: string;
+      expires: string;
+      redeemed: string;
+    }>();
+  if (!row || row.client_id !== client.id) return c.json({ error: "invalid_grant" }, 400);
+  if (row.redeemed || row.expires <= now()) return c.json({ error: "invalid_grant" }, 400);
+  if (field("redirect_uri") && !timingSafeEqual(row.redirect_uri, field("redirect_uri"))) {
+    return c.json({ error: "invalid_grant" }, 400);
+  }
+  if (!(await pkceMatches(field("code_verifier"), row.challenge))) {
+    return c.json({ error: "invalid_grant", error_description: "PKCE verification failed" }, 400);
+  }
+
+  // Spent before the tokens exist: a code that races itself redeems once.
+  await c.env.DB.prepare("UPDATE oauth_code SET redeemed = ? WHERE code = ? AND redeemed = ''")
+    .bind(now(), row.code)
+    .run();
+  count(c, "oauth_token_issued", {});
+  return c.json(
+    await issueTokens(c.env.DB, {
+      client_id: client.id,
+      account_id: row.account_id,
+      scope: row.scope,
+    }),
+  );
+});
+
+/** Hand a token back. Public, per RFC 7009: a client giving up a credential should never be told no. */
+app.post("/v1/oauth/revoke", async (c) => {
+  const form = await c.req.parseBody().catch(() => ({}) as Record<string, string>);
+  const token = String((form as Record<string, unknown>).token ?? "");
+  if (token) {
+    const hash = await sha256(token);
+    await c.env.DB.prepare("DELETE FROM oauth_token WHERE access_hash = ? OR refresh_hash = ?")
+      .bind(hash, hash)
+      .run();
+  }
+  return c.body(null, 200);
+});
+
+/** The clients you have registered, and what each one is currently holding. */
+app.get("/v1/oauth/clients", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT c.id, c.name, c.redirect_uri, c.created, c.secret_hash <> '' AS confidential,
+            (SELECT COUNT(*) FROM oauth_token t WHERE t.client_id = c.id) AS grants
+     FROM oauth_client c WHERE c.account_id = ? AND c.revoked = '' ORDER BY c.created DESC`,
+  )
+    .bind(c.get("account"))
+    .all();
+  return c.json({ clients: results });
+});
+
+/**
+ * Register a connector.
+ *
+ * The secret is optional and the default is not to have one: a public client with PKCE is the
+ * better shape when the "client" is a configuration form in somebody else's product. When one is
+ * asked for it is shown once, like every other credential here.
+ */
+app.post("/v1/oauth/clients", async (c) => {
+  const account = c.get("account");
+  type NewClient = { name?: string; redirect_uri?: string; confidential?: boolean };
+  const body = await c.req.json<NewClient>().catch(() => ({}) as NewClient);
+  const redirect = String(body.redirect_uri || "").trim();
+  if (!/^https:\/\/[^\s]+$/.test(redirect)) {
+    return err(c, 400, "redirect_uri must be an https URL — copy it from the connector's form");
+  }
+  const id = `pa_client_${rid(20)}`;
+  const secret = body.confidential ? `pa_cs_${rid(40)}` : "";
+  await c.env.DB.prepare(
+    `INSERT INTO oauth_client (id, account_id, name, secret_hash, redirect_uri, created)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      id,
+      account,
+      String(body.name || "").slice(0, 60),
+      secret ? await sha256(secret) : "",
+      redirect,
+      now(),
+    )
+    .run();
+  // Shown once. There is no route that returns it again.
+  return c.json({ client: { id, secret, redirect_uri: redirect } }, 201);
+});
+
+app.delete("/v1/oauth/clients/:id", async (c) => {
+  const id = c.req.param("id");
+  const owned = await c.env.DB.prepare(
+    "SELECT id FROM oauth_client WHERE id = ? AND account_id = ?",
+  )
+    .bind(id, c.get("account"))
+    .first<{ id: string }>();
+  if (!owned) return err(c, 404, "no such client");
+  // Revoke the client and everything it holds: a connector you have removed should stop working
+  // now, not in an hour when its access token happens to expire.
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE oauth_client SET revoked = ? WHERE id = ?").bind(now(), id),
+    c.env.DB.prepare("DELETE FROM oauth_token WHERE client_id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM oauth_code WHERE client_id = ?").bind(id),
+  ]);
+  return c.json({ id, revoked: true });
 });
 
 app.get("/health", (c) => c.json({ ok: true }));

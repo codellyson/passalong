@@ -51,6 +51,9 @@ const blurb = "mt-1 mb-0 font-ui text-sm text-muted";
         </p>
       </div>
       <HubTokens />
+      <!-- Connectors sit with tokens because they answer the same question — what else can act as
+           me — and differ only in who holds the credential and how much it reaches. -->
+      <HubConnectors />
     </section>
   </HubShell>
 </template>
