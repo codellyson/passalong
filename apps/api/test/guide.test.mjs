@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { body, parseMeta, setField, split } from "../src/guide.ts";
+import { body, parseMeta, setField, shotIds, split } from "../src/guide.ts";
 
 const DOC = `---
 id: k3mq2xa7
@@ -62,4 +62,16 @@ test("a screenshot is readable with its id alone", async () => {
   assert.ok(re.test("/v1/shots/jjeqrdsg9eam"));
   assert.ok(!re.test("/v1/shots"));
   assert.ok(!re.test("/v1/guides/abc12345"));
+});
+
+test("a document says which screenshots belong to it", () => {
+  const md = [
+    "![one](https://passalong.dev/v1/shots/jjeqrdsg9eam)",
+    "![again, same shot](https://passalong.dev/v1/shots/jjeqrdsg9eam)",
+    "![two](http://localhost:3006/v1/shots/abc123def456)",
+    "not a shot: https://passalong.dev/v1/guides/k3mq2xa7",
+    "not a shot either: /v1/shots/",
+  ].join("\n\n");
+  assert.deepEqual(shotIds(md), ["jjeqrdsg9eam", "abc123def456"]);
+  assert.deepEqual(shotIds("nothing here"), []);
 });

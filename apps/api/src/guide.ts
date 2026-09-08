@@ -118,6 +118,21 @@ function items(inner: string): string[] {
   return out;
 }
 
+/**
+ * The screenshots a document points at, by id.
+ *
+ * The document is the source of truth for which evidence belongs to which guide, the same way it
+ * already is for the title and the tags. An upload happens before the guide it will belong to
+ * exists — a tester drops a screenshot into a form they have not submitted — so the link cannot be
+ * made at upload time, and asking each client to report its own attachments would mean the CLI,
+ * the hub and anything else all had to remember to. Reading it back out of the markdown means
+ * whatever wrote the document gets this for free.
+ */
+export function shotIds(markdown: string): string[] {
+  const found = markdown.matchAll(/\/v1\/shots\/([a-z0-9]{6,16})\b/g);
+  return [...new Set([...found].map((m) => m[1] as string))];
+}
+
 export function split(markdown: string): { front: string; body: string } | null {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(markdown);
   // Both groups are mandatory in the pattern, so a match means both are strings. The assertions

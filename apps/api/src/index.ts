@@ -66,7 +66,7 @@ import {
   sendReset,
   sendVerdict,
 } from "./email.js";
-import { type Meta, parseMeta, STATUSES, setField, slug } from "./guide.js";
+import { type Meta, parseMeta, STATUSES, setField, shotIds, slug } from "./guide.js";
 import {
   feed,
   markRead,
@@ -840,6 +840,54 @@ const SHOT_TYPES: Record<string, string> = {
 };
 const SHOT_MAX = 5 * 1024 * 1024;
 
+/**
+ * Point a document's screenshots at it, and let go of any it no longer carries.
+ *
+ * Run on every write, because the document is what decides. `account_id` in the WHERE is the load
+ * bearing part: without it, naming someone else's shot id in your own markdown would claim their
+ * image, and deleting your guide would then delete it.
+ */
+async function claimShots(c: Ctx, account: string, guide: string, markdown: string) {
+  const ids = shotIds(markdown);
+  const holes = ids.map(() => "?").join(",");
+  const statements = ids.length
+    ? [
+        c.env.DB.prepare(
+          `UPDATE shot SET guide_id = ? WHERE account_id = ? AND id IN (${holes})`,
+        ).bind(guide, account, ...ids),
+        // An edit that drops an image releases it. It becomes an orphan rather than being
+        // deleted here: the same upload can be referenced by a second guide, and a write is the
+        // wrong moment to decide nobody wants a file.
+        c.env.DB.prepare(
+          `UPDATE shot SET guide_id = '' WHERE guide_id = ? AND id NOT IN (${holes})`,
+        ).bind(guide, ...ids),
+      ]
+    : [c.env.DB.prepare("UPDATE shot SET guide_id = '' WHERE guide_id = ?").bind(guide)];
+  await c.env.DB.batch(statements);
+}
+
+/**
+ * Take a guide's evidence with it.
+ *
+ * R2 first: a bucket object with no row is invisible to everything and costs storage, while a row
+ * with no object is a broken image on a page. If the delete half-fails, the second failure mode is
+ * the one that is still recoverable.
+ */
+async function dropShots(c: Ctx, guide: string) {
+  const { results } = await c.env.DB.prepare("SELECT id, type FROM shot WHERE guide_id = ?")
+    .bind(guide)
+    .all<{ id: string; type: string }>();
+  if (!results.length) return;
+  const bucket = c.env.SHOTS;
+  if (bucket) {
+    await bucket.delete(results.map((r) => `${r.id}.${SHOT_TYPES[r.type] || "png"}`)).catch(() => {
+      // The rows go anyway. An object nothing points at is waste; a row pointing at nothing
+      // that is gone would be worse.
+    });
+  }
+  await c.env.DB.prepare("DELETE FROM shot WHERE guide_id = ?").bind(guide).run();
+}
+
 app.post("/v1/shots", async (c) => {
   const account = c.get("account");
   const bucket = c.env.SHOTS;
@@ -1370,6 +1418,8 @@ app.put("/v1/guides/:id", async (c) => {
     )
     .run();
 
+  await claimShots(c, account, id, markdown);
+
   // Tell whoever the guide just became relevant to. Re-publishing an unchanged address is not a
   // new event, so only a *newly* addressed person or a newly shared team hears anything.
   let notified = false;
@@ -1612,6 +1662,9 @@ app.delete("/v1/guides/:id", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, "no such guide");
   if (!found.owner) return err(c, 403, "only the author can remove a guide");
+  // Before the guide, so a failure leaves the guide to try again rather than orphaning its
+  // evidence with nothing left pointing at it.
+  await dropShots(c, found.row.id);
   await c.env.DB.prepare("DELETE FROM guide WHERE id = ?").bind(found.row.id).run();
   return c.json({ id: found.row.id, deleted: true });
 });
