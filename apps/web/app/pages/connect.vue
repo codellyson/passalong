@@ -1,10 +1,15 @@
 <!--
   How to reach Passalong from whatever you already work in.
 
-  There are two rails and the difference is transport, not vendor: anything that can run a local
-  process gets the MCP server, and anything that can only call an endpoint gets the HTTP API and
-  the OpenAPI document that describes it. Until this page existed the second group had a schema and
-  no instructions, which is a page for machines and none for the person setting it up.
+  Two rails, and the difference is transport rather than vendor: anything that can run a local
+  process gets the MCP server, and anything that speaks HTTP gets the API and the document
+  describing it. Until this page existed the second group had a schema and no instructions, which
+  is a page for machines and none for the person setting it up.
+
+  ChatGPT is in neither group. It adds tools as *remote* MCP servers, reached over a URL, and this
+  product's MCP server is stdio — so the page says so plainly rather than offering steps that end
+  at a dialog with nothing to paste into it. It was worse than that briefly: this page first
+  shipped with instructions for the custom-GPT Actions flow, which no longer exists.
 
   Script-free, like the landing and the guide view — its route rule is `noScripts` with the strict
   CSP. Nothing here is interactive, so nothing here needs to be.
@@ -13,7 +18,7 @@
 usePage({
   title: "Connect Passalong",
   description:
-    "Use Passalong from ChatGPT, Gemini, Claude Code, Cursor or any MCP client — what each one can do, and how to set it up.",
+    "Use Passalong from Claude Code, Cursor, Gemini or any HTTP client — what each one can do, and how to set it up.",
 });
 </script>
 
@@ -24,44 +29,36 @@ usePage({
       <h1>Connect it to what you already use.</h1>
       <p class="lede">
         Two ways in, and the difference is how your tool talks rather than whose tool it is.
-        Anything that can run a local process gets the MCP server and every tool. Anything that can
-        only call an endpoint — ChatGPT, Gemini — reads the API from a document and gets most of
-        them.
+        Anything that can run a local process gets the MCP server and every tool. Anything that
+        speaks HTTP gets the API and the document that describes it. A hosted assistant that only
+        connects to <i>remote</i> MCP servers — ChatGPT — cannot reach either one yet.
       </p>
     </header>
 
     <div class="two">
       <section class="panel">
-        <h2>ChatGPT</h2>
+        <h2>ChatGPT — not yet</h2>
         <p>
-          ChatGPT connects to APIs, not to local processes, so it reads the OpenAPI document rather
-          than running <code>passalong mcp</code>.
+          ChatGPT adds outside tools as <b>MCP servers</b>, and it connects to them over a URL.
+          Passalong's MCP server runs over stdio: it talks to a process on your own machine, which
+          is why editors and terminal agents can use it and a hosted product cannot.
         </p>
-        <ol>
-          <li>In ChatGPT: <b>Explore GPTs → Create → Configure → Create new action</b>.</li>
-          <li>
-            Choose <b>Import from URL</b> and paste
-            <code>https://passalong.dev/v1/openapi.json</code>.
-          </li>
-          <li>
-            Under <b>Authentication</b> pick <b>API Key</b>, auth type <b>Bearer</b>, and paste a
-            token from <a href="/hub/settings">your hub</a>. Tokens are named and revocable; mint
-            one for this and revoke it if the GPT changes hands.
-          </li>
-          <li>Ask it <i>“what’s in my passalong inbox?”</i> to check it took.</li>
-        </ol>
         <p>
-          It can search and read guides, read your inbox and board, publish a guide, open a bug
-          report and give a verdict. It cannot attach a screenshot: that endpoint takes raw image
-          bytes, which an action has no way to send.
+          So there is nothing to paste into that dialog today. What is missing is a remote MCP
+          endpoint on this server — not a setting.
+        </p>
+        <p>
+          Until then, the API below is reachable from anything that can make an HTTP request,
+          including a script you run beside ChatGPT.
         </p>
       </section>
 
       <section class="panel">
-        <h2>Gemini, and anything else that calls HTTP</h2>
+        <h2>Gemini, scripts, anything that calls HTTP</h2>
         <p>
-          The same document describes the API for Gemini function calling, an internal script, or
-          anything that speaks HTTP and a bearer token.
+          <code>/v1/openapi.json</code> describes the API for Gemini function calling, an internal
+          script, or anything that speaks HTTP and a bearer token. Mint one in
+          <a href="/hub/settings">your hub</a>; they are named and revocable.
         </p>
         <pre><code>curl -H "authorization: Bearer $TOKEN" \
   https://passalong.dev/v1/inbox</code></pre>
