@@ -4,7 +4,16 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as api from "./api.js";
 import { context } from "./capture.js";
-import { ID_RE, parse, STATUSES, serialize, stamp, stripPlaceholders, validate } from "./guide.js";
+import {
+  bugGuide,
+  ID_RE,
+  parse,
+  STATUSES,
+  serialize,
+  stamp,
+  stripPlaceholders,
+  validate,
+} from "./guide.js";
 import * as store from "./store.js";
 
 export class PassalongError extends Error {}
@@ -55,6 +64,56 @@ export async function share(markdown, { cwd = process.cwd(), to } = {}) {
   }
   const path = store.save(guide);
   return { guide, path, url, synced, notified };
+}
+
+/**
+ * File a set of bugs as one report.
+ *
+ * The report is opened first because each issue's frontmatter names it, and the issues go up one
+ * at a time — a partial failure that has filed three of five should say which three, since the
+ * three that landed are real guides someone can already act on.
+ *
+ * Unlike `share()`, this needs sync: a report is a server-side parent, and there is nothing local
+ * for a set to belong to. One bug on its own does not — that is just `share()` with a bug
+ * document, and it works offline like any other guide.
+ */
+export async function fileBugs(
+  { title = "", environment = "", issues = [] },
+  { cwd = process.cwd(), to } = {},
+) {
+  if (!issues.length) throw new PassalongError("a report needs at least one issue");
+  if (!api.loggedIn())
+    throw new PassalongError("filing a report needs sync — run `passalong login` first");
+  const target = parseTarget(to);
+  const { report } = await api.createReport({
+    title,
+    environment,
+    team: target.team || "",
+    to: target.to || "",
+  });
+
+  const filed = [];
+  try {
+    for (const issue of issues) {
+      const markdown = bugGuide({ ...issue, report: report.id, environment });
+      const { guide, url } = await share(markdown, { cwd, to });
+      filed.push({
+        id: guide.meta.id,
+        title: guide.meta.title,
+        area: guide.meta.area || "",
+        severity: guide.meta.severity || "",
+        url,
+      });
+    }
+  } catch (err) {
+    if (!filed.length) throw err;
+    throw new PassalongError(
+      `filed ${filed.length} of ${issues.length} issues (${filed
+        .map((f) => f.id)
+        .join(", ")}) before failing: ${err.message}`,
+    );
+  }
+  return { report: { id: report.id, title, environment }, issues: filed };
 }
 
 /** Resolve a reference (id, share URL, or local file path) to a guide. */

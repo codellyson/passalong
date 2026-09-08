@@ -20,9 +20,57 @@ export interface Meta {
   status?: string;
   source_context?: string;
   url?: string;
+  /**
+   * What this guide is for: "bug" or "transfer" (the default, and what an absent value means).
+   * The receiving agent behaves differently for each — see KINDS in packages/passalong/src/guide.js.
+   */
+  kind?: string;
+  /** The report this guide is one issue of — see migrations/0006_reports.sql. */
+  report?: string;
+  /** Where the issue is, inside its report. Free text on purpose; see `AREAS`. */
+  area?: string;
+  severity?: string;
   tags: string[];
   stack_assumptions: string[];
   [key: string]: string | string[] | undefined;
+}
+
+/**
+ * The product areas a bug report offers, and the order it offers them in.
+ *
+ * Offered, not enforced. The server stores whatever slug an issue carries, the same way it
+ * *accepts* statuses it no longer produces: a team that ships a sixth surface should be able to
+ * file against it that afternoon, not after a deploy. This list is what the browser puts in a
+ * menu, and what turns a slug back into words.
+ */
+export const AREAS = [
+  { slug: "web", label: "Web App", code: "WEB" },
+  { slug: "mobile", label: "Mobile App", code: "MOB" },
+  { slug: "storefront", label: "Storefront Editor", code: "SFE" },
+  { slug: "landing", label: "Landing Page", code: "LND" },
+  { slug: "auth", label: "Auth Page", code: "AUTH" },
+] as const;
+
+/**
+ * How badly it is broken. Four, because a fifth is always an argument about the fourth.
+ *
+ * This is the reporter's judgement and it stays theirs — unlike a verdict, which belongs to
+ * whoever tried the fix. Same accept-anything rule as `AREAS`.
+ */
+export const SEVERITIES = [
+  { slug: "s1", label: "Blocker", note: "nobody can get past it" },
+  { slug: "s2", label: "Major", note: "a real task cannot be finished" },
+  { slug: "s3", label: "Minor", note: "wrong, with a way around it" },
+  { slug: "s4", label: "Cosmetic", note: "it looks wrong" },
+] as const;
+
+/** A slug we are willing to store: short, lowercase, no punctuation to smuggle. */
+export function slug(raw: unknown, max = 32): string {
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    .slice(0, max);
 }
 
 const LIST_FIELDS = new Set(["tags", "stack_assumptions"]);

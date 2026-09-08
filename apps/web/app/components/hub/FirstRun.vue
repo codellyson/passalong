@@ -111,6 +111,21 @@ async function claim(e: Event) {
         </form>
       </li>
 
+      <!-- The way in for everyone who does not have a terminal.
+           This screen used to offer exactly one next step — install the CLI and run it — which
+           told a tester, a designer or anyone else invited to a team that the product was not for
+           them. Filing bugs needs nothing installed, so it is offered first and without a step
+           number: it is not part of the sequence, it is the other door. -->
+      <div class="mb-6 rounded-3 border border-line bg-raised p-4">
+        <b class="block font-ui text-base font-semibold text-fg">Found a bug? Report it</b>
+        <p class="mt-1.5 mb-0 font-ui text-sm text-muted">
+          Nothing to install. Group everything from a testing pass into one report — screenshots,
+          steps, how bad each one is — and hand it to your team. Each issue becomes something one
+          person can pick up and answer for.
+        </p>
+        <NuxtLink to="/hub/report" class="btn primary mt-3">Report a bug</NuxtLink>
+      </div>
+
       <!-- Step two: hand something over. Dimmed until the first is done, because a guide shared
            before you have a handle cannot be addressed to you. -->
       <li class="relative pl-10" :class="claimed ? '' : 'opacity-60'">

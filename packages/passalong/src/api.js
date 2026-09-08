@@ -83,6 +83,10 @@ export const publish = (id, markdown) =>
   call(`/v1/guides/${id}`, { method: "PUT", body: markdown });
 export const list = (query = "", scope = "") => call(`/v1/guides${q({ q: query, scope })}`);
 export const inbox = () => call("/v1/inbox");
+/** Open a report for a set of issues to be filed under. */
+export const createReport = (body) => call("/v1/reports", { method: "POST", body });
+/** One report and the issues filed under it, grouped by product area. */
+export const report = (id) => call(`/v1/reports/${encodeURIComponent(id)}`);
 export const get = (id) => call(`/v1/guides/${id}`, { raw: true });
 export const setStatus = (id, status) =>
   call(`/v1/guides/${id}/status`, { method: "PATCH", body: { status } });

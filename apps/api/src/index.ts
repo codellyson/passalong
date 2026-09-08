@@ -66,7 +66,7 @@ import {
   sendReset,
   sendVerdict,
 } from "./email.js";
-import { type Meta, parseMeta, STATUSES, setField } from "./guide.js";
+import { type Meta, parseMeta, STATUSES, setField, slug } from "./guide.js";
 import {
   feed,
   markRead,
@@ -83,6 +83,9 @@ type Env = MailEnv &
   AnalyticsEnv & {
     DB: D1Database;
     ASSETS: Fetcher;
+    /** Screenshot bytes. Optional: a deployment without the bucket refuses uploads and serves
+        every other route exactly as before. */
+    SHOTS?: R2Bucket;
     ACCOUNT_LIMIT?: RateLimiter;
     FREE_SYNC_LIMIT: string;
     ENVIRONMENT: string;
@@ -159,6 +162,20 @@ interface GuideRow {
   pulls: number;
   team_id: string;
   to_account_id: string;
+  report_id: string;
+  area: string;
+  severity: string;
+  kind: string;
+}
+interface ReportRow {
+  id: string;
+  account_id: string;
+  title: string;
+  environment: string;
+  team_id: string;
+  to_account_id: string;
+  created: string;
+  updated: string;
 }
 interface VerdictRow {
   guide_id: string;
@@ -267,6 +284,18 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   );
   const pulls = await recentPulls(c, rows);
   const said = await verdicts(c, rows);
+  // A row that belongs to a report says so by name, not by id: "part of Pre-release sweep" is a
+  // link someone follows, and a bare eight characters is not.
+  const reportIds = [...new Set(rows.map((r) => r.report_id).filter(Boolean))];
+  const reportTitles = new Map<string, string>();
+  if (reportIds.length) {
+    const { results } = await c.env.DB.prepare(
+      `SELECT id, title FROM report WHERE id IN (${reportIds.map(() => "?").join(",")})`,
+    )
+      .bind(...reportIds)
+      .all<{ id: string; title: string }>();
+    for (const row of results) reportTitles.set(row.id, row.title);
+  }
   return rows.map((r) => {
     const heard = said.get(r.id) || [];
     // The latest word, plus whether anyone's standing verdict is still negative.
@@ -287,6 +316,12 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       team: teams.get(r.team_id)?.slug || "",
       to: people.get(r.to_account_id)?.handle || "",
       for_me: r.to_account_id === me,
+      report: r.report_id || "",
+      report_title: reportTitles.get(r.report_id) || "",
+      area: r.area || "",
+      severity: r.severity || "",
+      // Empty means transfer, which is what every guide written before bug reports existed is.
+      kind: r.kind || "transfer",
       verdict: latest
         ? { ok: Boolean(latest.ok), by: latest.handle, note: latest.note, at: latest.at }
         : null,
@@ -768,6 +803,291 @@ app.post("/v1/invites/:code/accept", async (c) => {
 
 // ---- guides -----------------------------------------------------------------------------
 
+// ---- evidence ---------------------------------------------------------------------------
+
+/**
+ * A screenshot, stored so a guide can point at it.
+ *
+ * Evidence has to outlive the browser tab it was dropped into: a guide travels as markdown, an
+ * image in markdown is a URL, and a `blob:` URL is meaningless to everyone but the person who
+ * made it. So the bytes go in R2 and the issue's markdown carries `![alt](<origin>/v1/shots/id)`,
+ * which the guide page already renders as a figure and its CSP already allows.
+ *
+ * The upload is raw bytes with a content-type, not multipart: there is one file per request and
+ * parsing a multipart body to find it would be work in service of nothing.
+ */
+const SHOT_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+const SHOT_MAX = 5 * 1024 * 1024;
+
+app.post("/v1/shots", async (c) => {
+  const account = c.get("account");
+  const bucket = c.env.SHOTS;
+  if (!bucket) return err(c, 501, "this deployment has no screenshot storage configured");
+
+  const type = (c.req.header("content-type") || "").split(";")[0]?.trim() || "";
+  const ext = SHOT_TYPES[type];
+  if (!ext) return err(c, 415, `screenshots must be ${Object.keys(SHOT_TYPES).join(", ")}`);
+
+  const body = await c.req.arrayBuffer();
+  if (!body.byteLength) return err(c, 400, "empty upload");
+  if (body.byteLength > SHOT_MAX) return err(c, 413, "screenshots are capped at 5MB");
+
+  const id = rid(12);
+  await bucket.put(`${id}.${ext}`, body, { httpMetadata: { contentType: type } });
+  await c.env.DB.prepare(
+    "INSERT INTO shot (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, '', ?, ?, ?, ?)",
+  )
+    .bind(
+      id,
+      account,
+      String(c.req.header("x-shot-name") || "").slice(0, 120),
+      type,
+      body.byteLength,
+      now(),
+    )
+    .run();
+  return c.json(
+    { shot: { id, url: `${origin(c)}/v1/shots/${id}`, type, bytes: body.byteLength } },
+    201,
+  );
+});
+
+/**
+ * Served to anyone with the link, like the guide that embeds it. The id is the secret — a guide's
+ * share key is the same bargain, and an image behind a login is an image that does not render in
+ * the markdown the guide was pasted into.
+ */
+app.get("/v1/shots/:id", async (c) => {
+  const bucket = c.env.SHOTS;
+  const id = c.req.param("id");
+  if (!bucket || !/^[a-z0-9]{6,16}$/.test(id)) return c.notFound();
+  const row = await c.env.DB.prepare("SELECT type FROM shot WHERE id = ?")
+    .bind(id)
+    .first<{ type: string }>();
+  if (!row) return c.notFound();
+  const object = await bucket.get(`${id}.${SHOT_TYPES[row.type] || "png"}`);
+  if (!object) return c.notFound();
+  return new Response(object.body, {
+    headers: {
+      "content-type": row.type,
+      "cache-control": "public, max-age=31536000, immutable",
+      "content-security-policy": "default-src 'none'; sandbox",
+      "x-content-type-options": "nosniff",
+    },
+  });
+});
+
+// ---- reports ----------------------------------------------------------------------------
+
+/**
+ * A report is a parent, and deliberately little else: a title, an environment, and who it went
+ * to. Everything a reader acts on lives on the issues, because an issue is a guide and the whole
+ * product already knows what to do with one.
+ *
+ * It exists at all for two reasons a tag could not cover: a set handed over together should
+ * arrive together, and "6 issues across 3 areas" should survive one of them being fixed.
+ */
+app.post("/v1/reports", async (c) => {
+  const account = c.get("account");
+  const body = await c.req
+    .json<{
+      title?: string;
+      environment?: string;
+      team?: string;
+      to?: string;
+    }>()
+    .catch(() => ({}) as Record<string, string>);
+
+  let team: (TeamRow & { role: string }) | null = null;
+  let toAccount: AccountRow | null = null;
+  if (body.team) {
+    team = await teamBySlug(c, String(body.team));
+    if (!team) return err(c, 400, `you are not in a team called "${body.team}"`);
+  }
+  if (body.to) {
+    const handle = String(body.to).replace(/^@/, "").toLowerCase();
+    if (!team) return err(c, 400, "`to` needs a `team` — a report goes to a teammate");
+    toAccount = await c.env.DB.prepare(
+      `SELECT a.id, a.handle, a.name, a.email FROM account a JOIN membership m ON m.account_id = a.id
+       WHERE a.handle = ? AND m.team_id = ?`,
+    )
+      .bind(handle, team.id)
+      .first<AccountRow>();
+    if (!toAccount) return err(c, 400, `@${handle} is not a member of ${team.slug}`);
+  }
+
+  const id = rid(8);
+  const t = now();
+  await c.env.DB.prepare(
+    `INSERT INTO report (id, account_id, title, environment, team_id, to_account_id, created, updated)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      id,
+      account,
+      String(body.title || "").slice(0, 200),
+      slug(body.environment, 16),
+      team?.id || "",
+      toAccount?.id || "",
+      t,
+      t,
+    )
+    .run();
+  return c.json(
+    { report: { id, title: body.title || "", environment: slug(body.environment, 16) } },
+    201,
+  );
+});
+
+/** One report and its issues, grouped the way they were filed. */
+app.get("/v1/reports/:id", async (c) => {
+  const account = c.get("account");
+  const id = c.req.param("id");
+  if (!ID_RE.test(id)) return err(c, 400, "invalid report id");
+  const row = await c.env.DB.prepare("SELECT * FROM report WHERE id = ?")
+    .bind(id)
+    .first<ReportRow>();
+  // A report you cannot see is one that does not exist: which reports an account has is not
+  // something a 403 should confirm.
+  if (!row) return err(c, 404, "no such report");
+  const mine = row.account_id === account;
+  const teams = await myTeams(c);
+  const shared = row.team_id && teams.some((t) => t.id === row.team_id);
+  if (!mine && !shared) return err(c, 404, "no such report");
+
+  const { results } = await c.env.DB.prepare(
+    "SELECT * FROM guide WHERE report_id = ? ORDER BY area, created",
+  )
+    .bind(id)
+    .all<GuideRow>();
+  return c.json({ report: await reportSummary(c, row, results) });
+});
+
+/**
+ * The report's own fields, after the fact. Its issues are guides and are updated as guides; this
+ * is only the parent — the title someone gave the sweep, and who it is for.
+ */
+app.patch("/v1/reports/:id", async (c) => {
+  const account = c.get("account");
+  const id = c.req.param("id");
+  if (!ID_RE.test(id)) return err(c, 400, "invalid report id");
+  const row = await c.env.DB.prepare("SELECT * FROM report WHERE id = ?")
+    .bind(id)
+    .first<ReportRow>();
+  if (!row || row.account_id !== account) return err(c, 404, "no such report");
+
+  const body = await c.req
+    .json<{ title?: string; environment?: string; team?: string; to?: string }>()
+    .catch(() => ({}) as Record<string, string>);
+
+  let team_id = row.team_id;
+  let to_account_id = row.to_account_id;
+  if (body.team !== undefined) {
+    if (!body.team) {
+      team_id = "";
+      to_account_id = "";
+    } else {
+      const team = await teamBySlug(c, String(body.team));
+      if (!team) return err(c, 400, `you are not in a team called "${body.team}"`);
+      team_id = team.id;
+    }
+  }
+  if (body.to !== undefined) {
+    const handle = String(body.to).replace(/^@/, "").toLowerCase();
+    if (!handle) to_account_id = "";
+    else {
+      if (!team_id) return err(c, 400, "`to` needs a `team` — a report goes to a teammate");
+      const person = await c.env.DB.prepare(
+        `SELECT a.id, a.handle, a.name, a.email FROM account a JOIN membership m ON m.account_id = a.id
+         WHERE a.handle = ? AND m.team_id = ?`,
+      )
+        .bind(handle, team_id)
+        .first<AccountRow>();
+      if (!person) return err(c, 400, `@${handle} is not on that team`);
+      to_account_id = person.id;
+    }
+  }
+
+  await c.env.DB.prepare(
+    "UPDATE report SET title = ?, environment = ?, team_id = ?, to_account_id = ?, updated = ? WHERE id = ?",
+  )
+    .bind(
+      body.title === undefined ? row.title : String(body.title).slice(0, 200),
+      body.environment === undefined ? row.environment : slug(body.environment, 16),
+      team_id,
+      to_account_id,
+      now(),
+      id,
+    )
+    .run();
+  return c.body(null, 204);
+});
+
+/** Every report I filed, newest first, each with its counts. */
+app.get("/v1/reports", async (c) => {
+  const account = c.get("account");
+  const { results } = await c.env.DB.prepare(
+    "SELECT * FROM report WHERE account_id = ? ORDER BY created DESC LIMIT 50",
+  )
+    .bind(account)
+    .all<ReportRow>();
+  if (!results.length) return c.json({ reports: [] });
+  const ids = results.map((r) => r.id);
+  const { results: issues } = await c.env.DB.prepare(
+    `SELECT * FROM guide WHERE report_id IN (${ids.map(() => "?").join(",")})`,
+  )
+    .bind(...ids)
+    .all<GuideRow>();
+  const reports = [];
+  for (const row of results) {
+    reports.push(
+      await reportSummary(
+        c,
+        row,
+        issues.filter((g) => g.report_id === row.id),
+      ),
+    );
+  }
+  return c.json({ reports });
+});
+
+/**
+ * The shape both report routes answer with. Areas are a GROUP BY, not a table — the grouping is
+ * derived from the issues every time, so removing the last issue in an area removes the area.
+ */
+async function reportSummary(c: Ctx, row: ReportRow, issues: GuideRow[]) {
+  const teams = new Map((await myTeams(c)).map((t) => [t.id, t]));
+  const people = await accounts(c, [row.account_id, row.to_account_id]);
+  const summarised = await summaries(c, issues);
+  const areas = new Map<string, typeof summarised>();
+  for (const issue of summarised) {
+    const key = issue.area || "";
+    const bucket = areas.get(key);
+    if (bucket) bucket.push(issue);
+    else areas.set(key, [issue]);
+  }
+  return {
+    id: row.id,
+    title: row.title,
+    environment: row.environment,
+    created: row.created,
+    updated: row.updated,
+    mine: row.account_id === c.get("account"),
+    from: people.get(row.account_id)?.handle || "",
+    team: teams.get(row.team_id)?.slug || "",
+    to: people.get(row.to_account_id)?.handle || "",
+    issues: summarised.length,
+    open: summarised.filter((i) => i.status === "draft").length,
+    failing: summarised.filter((i) => i.failing).length,
+    areas: [...areas].map(([area, list]) => ({ area, issues: list })),
+  };
+}
+
 app.get("/v1/guides", async (c) => {
   const account = c.get("account");
   const q = (c.req.query("q") || "").trim().toLowerCase();
@@ -956,6 +1276,21 @@ app.put("/v1/guides/:id", async (c) => {
     if (!toAccount) return err(c, 400, `@${handle} is not a member of ${team.slug}`);
   }
 
+  // A report is the parent of a set of issues, and it is addressed as a unit: an issue can only
+  // join a report the same account owns. Everything else about the issue — its own share key, its
+  // own pull, its own verdict — is untouched by having a parent, which is the point of making an
+  // issue a guide rather than a row inside one.
+  let report: ReportRow | null = null;
+  if (meta.report) {
+    const wanted = String(meta.report);
+    if (!ID_RE.test(wanted)) return err(c, 400, "`report:` is not a valid report id");
+    report = await c.env.DB.prepare("SELECT * FROM report WHERE id = ?")
+      .bind(wanted)
+      .first<ReportRow>();
+    if (!report) return err(c, 400, `no report called "${wanted}"`);
+    if (report.account_id !== account) return err(c, 403, "that report belongs to another account");
+  }
+
   const existing = await c.env.DB.prepare(
     "SELECT id, account_id, share_key, created, team_id, to_account_id FROM guide WHERE id = ?",
   )
@@ -991,11 +1326,12 @@ app.put("/v1/guides/:id", async (c) => {
   const created = String(meta.created || existing?.created || t);
 
   await c.env.DB.prepare(
-    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, report_id, area, severity, kind)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status, source_context=excluded.source_context,
        tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated,
-       team_id=excluded.team_id, to_account_id=excluded.to_account_id`,
+       team_id=excluded.team_id, to_account_id=excluded.to_account_id,
+       report_id=excluded.report_id, area=excluded.area, severity=excluded.severity, kind=excluded.kind`,
   )
     .bind(
       id,
@@ -1011,6 +1347,10 @@ app.put("/v1/guides/:id", async (c) => {
       t,
       team?.id || "",
       toAccount?.id || "",
+      report?.id || "",
+      slug(meta.area),
+      slug(meta.severity, 8),
+      slug(meta.kind, 16) === "bug" ? "bug" : "",
     )
     .run();
 

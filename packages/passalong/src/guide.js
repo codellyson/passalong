@@ -15,6 +15,18 @@ import { randomBytes } from "node:crypto";
  */
 export const STATUSES = ["draft", "published", "consumed", "promoted"];
 
+/**
+ * What a guide is for. The receiving agent behaves completely differently depending on the
+ * answer, so it is a field rather than something inferred from the body.
+ *
+ *   transfer  work that is finished here and should be repeated there — follow the Steps
+ *   bug       something broken there — do NOT follow anything; fix it
+ *
+ * A guide with no `kind` is a transfer guide: every guide written before this existed is one,
+ * and defaulting the other way would turn them all into bug reports.
+ */
+export const KINDS = ["transfer", "bug"];
+
 // Body sections in the order a guide should present them. The heading text is what the
 // receiving agent keys on, so keep these stable.
 export const SECTIONS = [
@@ -25,6 +37,49 @@ export const SECTIONS = [
   "Verification",
   "Gotchas",
 ];
+
+/**
+ * The product areas a bug report offers, mirrored in apps/api/src/guide.ts the same way this
+ * file's parsing rules are.
+ *
+ * Offered, not enforced: nothing rejects an area that is not on this list. A team that ships a
+ * sixth surface should be able to file against it that afternoon rather than after a release, so
+ * this is what a menu shows and what turns a slug back into words — not a gate.
+ */
+export const AREAS = [
+  { slug: "web", label: "Web App" },
+  { slug: "mobile", label: "Mobile App" },
+  { slug: "storefront", label: "Storefront Editor" },
+  { slug: "landing", label: "Landing Page" },
+  { slug: "auth", label: "Auth Page" },
+];
+
+/** How badly it is broken. Same accept-anything rule as AREAS. */
+export const SEVERITIES = [
+  { slug: "s1", label: "Blocker" },
+  { slug: "s2", label: "Major" },
+  { slug: "s3", label: "Minor" },
+  { slug: "s4", label: "Cosmetic" },
+];
+
+/**
+ * A bug report's sections. The repro is under `Reproduce`, never `Steps`.
+ *
+ * That distinction is the whole reason `kind` exists. `Steps` is an instruction to execute —
+ * "follow its Steps" is what the MCP server tells every agent that pulls a guide — and steps that
+ * reproduce a defect are the one list that must never be run as a remedy. An agent handed a bug
+ * with its repro under `Steps` will faithfully reproduce the bug, check the Verification, find it
+ * false because the bug is real, and report that the guide does not work.
+ */
+export const BUG_SECTIONS = ["Problem", "Reproduce", "Verification", "Gotchas"];
+
+/** The sections a guide of this kind presents, in order. */
+export function sectionsFor(kind) {
+  return kind === "bug" ? BUG_SECTIONS : SECTIONS;
+}
+
+/** The sections it cannot be published without. */
+const REQUIRED = { transfer: ["Problem", "Steps"], bug: ["Problem", "Reproduce"] };
 
 // Fields that hold a list of strings. Everything else is a plain string.
 const LIST_FIELDS = new Set(["stack_assumptions", "tags"]);
@@ -133,6 +188,7 @@ function quote(v) {
 const META_ORDER = [
   "id",
   "title",
+  "kind",
   "created",
   "author",
   "source_context",
@@ -141,6 +197,11 @@ const META_ORDER = [
   "to",
   "stack_assumptions",
   "tags",
+  // Bug reports only. `report` is the parent a set of issues was filed under; the other two are
+  // where it is and how badly it is broken.
+  "report",
+  "area",
+  "severity",
 ];
 
 export function serializeFrontmatter(meta) {
@@ -196,9 +257,16 @@ export function validate({ meta, body }) {
   if (meta.status && !STATUSES.includes(meta.status)) {
     errors.push(`status must be one of ${STATUSES.join(", ")}`);
   }
+  const kind = meta.kind || "transfer";
+  if (!KINDS.includes(kind)) errors.push(`kind must be one of ${KINDS.join(", ")}`);
   const have = sections(body);
-  for (const s of ["Problem", "Steps"]) {
+  for (const s of REQUIRED[kind] || REQUIRED.transfer) {
     if (!have[s]) errors.push(`missing "## ${s}" section`);
+  }
+  // A bug whose repro sits under `Steps` is the failure mode `kind` exists to prevent, and it is
+  // worth catching at publish rather than letting an agent discover it by reproducing the bug.
+  if (kind === "bug" && have.Steps) {
+    errors.push('a bug uses "## Reproduce", not "## Steps" — an agent executes Steps');
   }
   if (body.includes("<!-- passalong:")) errors.push("template placeholders are still in the body");
   return errors;
@@ -215,8 +283,54 @@ export function stamp(guide, defaults = {}) {
   return { meta, body: guide.body };
 }
 
+/**
+ * One bug, as the guide it becomes.
+ *
+ * This is the filing shape: fields in, a valid document out, so nothing that files a bug has to
+ * remember which heading the repro goes under. The hub's form assembles its own because it has
+ * more to say — a device string, screenshots, and a rich text field it converts — but the section
+ * names and the order are these, and `validate()` is the thing both answer to.
+ */
+export function bugGuide({
+  title = "",
+  problem = "",
+  reproduce = "",
+  verification = "",
+  gotchas = "",
+  severity = "s3",
+  area = "",
+  report = "",
+  environment = "",
+  status = "published",
+} = {}) {
+  const body = [
+    "## Problem",
+    problem.trim() || "_No description given._",
+    "",
+    "## Reproduce",
+    reproduce.trim() || "_Not recorded — the description above is what there is._",
+  ];
+  // Both are optional and both are worse than absent when empty: a Verification heading with
+  // nothing under it says nobody knows what fixed looks like, on the section a fixer reads first.
+  if (verification.trim()) body.push("", "## Verification", verification.trim());
+  if (gotchas.trim()) body.push("", "## Gotchas", gotchas.trim());
+
+  const meta = {
+    title,
+    kind: "bug",
+    status,
+    tags: ["bug", environment, area].filter(Boolean),
+  };
+  if (report) meta.report = report;
+  if (area) meta.area = area;
+  if (severity) meta.severity = severity;
+  if (environment) meta.source_context = environment;
+  return serialize({ meta, body: body.join("\n") });
+}
+
 /** A draft with the section skeleton. Placeholders are HTML comments so they vanish when rendered. */
 export function template(meta = {}) {
+  if (meta.kind === "bug") return bugTemplate(meta);
   const body = [
     "## Problem",
     "<!-- passalong: What was broken or needed, in two or three sentences. -->",
@@ -244,6 +358,43 @@ export function template(meta = {}) {
       status: "draft",
       stack_assumptions: [],
       tags: [],
+      ...meta,
+    },
+    body,
+  });
+}
+
+/**
+ * One bug, as a guide. Four sections and no `Steps` anywhere in it.
+ *
+ * `Verification` carries its usual meaning and does its usual job: it is what the person who
+ * fixes this runs to show they did, and it is what they are answering when they give a verdict.
+ * For a bug that is simply the behaviour that should have happened.
+ */
+function bugTemplate(meta = {}) {
+  const body = [
+    "## Problem",
+    "<!-- passalong: What is broken, and what it stops someone doing. -->",
+    "",
+    "## Reproduce",
+    "<!-- passalong: How to see it. These steps produce the bug — they are not a fix to apply. -->",
+    "",
+    "## Verification",
+    "<!-- passalong: What should happen instead, as something the fixer can check. -->",
+    "",
+    "## Gotchas",
+    "<!-- passalong: Anything already ruled out, or that made it hard to pin down. -->",
+  ].join("\n");
+  return serialize({
+    meta: {
+      title: "",
+      kind: "bug",
+      author: "",
+      source_context: "",
+      status: "draft",
+      severity: "s3",
+      stack_assumptions: [],
+      tags: ["bug"],
       ...meta,
     },
     body,

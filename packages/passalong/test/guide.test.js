@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  bugGuide,
   ID_RE,
   newId,
   parse,
@@ -101,4 +102,66 @@ test("ids are short, unambiguous, and unique enough", () => {
   const ids = new Set(Array.from({ length: 500 }, () => newId()));
   assert.equal(ids.size, 500);
   for (const id of ids) assert.match(id, /^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
+});
+
+test("a bug keeps its repro out of Steps", () => {
+  const bug = parse(template({ kind: "bug", title: "Undo kills the drag handle" }));
+  assert.equal(bug.meta.kind, "bug");
+  // `Steps` is what the MCP server tells an agent to follow. A repro under that heading is an
+  // agent reproducing the defect and then reporting the guide as broken.
+  assert.ok(!/^## Steps/m.test(bug.body), "a bug template must not contain a Steps section");
+  assert.match(bug.body, /^## Reproduce/m);
+
+  const filed = {
+    meta: { title: "t", kind: "bug" },
+    body: "## Problem\np\n## Reproduce\n1. do the thing",
+  };
+  assert.deepEqual(validate(filed), []);
+
+  const mislabelled = {
+    meta: { title: "t", kind: "bug" },
+    body: "## Problem\np\n## Reproduce\n1. x\n## Steps\n1. x",
+  };
+  assert.ok(validate(mislabelled).some((e) => /Reproduce", not "## Steps/.test(e)));
+});
+
+test("a guide with no kind is still a transfer guide", () => {
+  assert.equal(parse(SAMPLE).meta.kind, undefined);
+  assert.deepEqual(validate(parse(SAMPLE)), []);
+  // ...and a transfer guide still requires the Steps a bug refuses.
+  assert.ok(
+    validate({ meta: { title: "t" }, body: "## Problem\np\n## Reproduce\nx" }).some((e) =>
+      /## Steps/.test(e),
+    ),
+  );
+});
+
+test("bugGuide files a document the reader's rules accept", () => {
+  const md = bugGuide({
+    title: "Undo leaves section drag handles dead",
+    problem: "Every handle in the column stops responding.",
+    reproduce: "1. Drag a section\n2. Press undo",
+    verification: "Undo restores the order and the section stays draggable.",
+    severity: "s1",
+    area: "storefront",
+    report: "k4m2xq9a",
+    environment: "staging",
+  });
+  const g = parse(md);
+  assert.equal(g.meta.kind, "bug");
+  assert.equal(g.meta.report, "k4m2xq9a");
+  assert.equal(g.meta.area, "storefront");
+  assert.deepEqual(g.meta.tags, ["bug", "staging", "storefront"]);
+  assert.deepEqual(validate(g), []);
+  // The whole point: what an agent is told to execute is not in here.
+  assert.ok(!/^## Steps/m.test(g.body));
+  assert.match(g.body, /^## Reproduce/m);
+});
+
+test("bugGuide leaves out the sections it has nothing for", () => {
+  const g = parse(bugGuide({ title: "t", problem: "p", reproduce: "1. x" }));
+  // An empty Verification is worse than none — it reads as "nobody knows what fixed looks like".
+  assert.ok(!/## Verification/.test(g.body));
+  assert.ok(!/## Gotchas/.test(g.body));
+  assert.deepEqual(validate(g), []);
 });

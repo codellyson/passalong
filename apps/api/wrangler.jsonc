@@ -27,6 +27,13 @@
   // sending to addresses outside the account needs the Workers Paid plan.
   "send_email": [{ "name": "EMAIL" }],
 
+  "r2_buckets": [
+    {
+      "binding": "SHOTS",
+      "bucket_name": "passalong-shots"
+    }
+  ],
+
   "d1_databases": [
     {
       "binding": "DB",
