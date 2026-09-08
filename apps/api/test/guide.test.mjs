@@ -75,3 +75,89 @@ test("a document says which screenshots belong to it", () => {
   assert.deepEqual(shotIds(md), ["jjeqrdsg9eam", "abc123def456"]);
   assert.deepEqual(shotIds("nothing here"), []);
 });
+
+test("the sweep only takes unclaimed uploads, and takes their objects too", async () => {
+  const { sweepOrphans, shotKey } = await import("../src/shots.ts");
+  assert.equal(shotKey("abc123", "image/jpeg"), "abc123.jpg");
+  // An unknown type still names something, because the row is the only record of the extension
+  // and a sweep that throws leaves the bucket growing.
+  assert.equal(shotKey("abc123", "application/pdf"), "abc123.png");
+
+  const asked = [];
+  const deletedKeys = [];
+  const rows = [
+    { id: "aaaaaa111111", type: "image/png" },
+    { id: "bbbbbb222222", type: "image/webp" },
+  ];
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind(...args) {
+            asked.push({ sql, args });
+            return {
+              all: async () => ({ results: rows }),
+              run: async () => ({}),
+            };
+          },
+        };
+      },
+    },
+    SHOTS: { delete: async (keys) => deletedKeys.push(...keys) },
+  };
+
+  const { swept } = await sweepOrphans(env, { hours: 24, limit: 500 });
+  assert.equal(swept, 2);
+  assert.deepEqual(deletedKeys, ["aaaaaa111111.png", "bbbbbb222222.webp"]);
+
+  const [select, remove] = asked;
+  assert.match(select.sql, /guide_id = ''/, "only unclaimed uploads");
+  assert.match(select.sql, /created < \?/, "and only ones old enough to be abandoned");
+  const cutoff = Date.parse(select.args[0]);
+  const age = Date.now() - cutoff;
+  assert.ok(age > 23 * 3600_000 && age < 25 * 3600_000, `cutoff should be ~24h ago, was ${age}ms`);
+  assert.match(remove.sql, /^DELETE FROM shot/);
+  assert.deepEqual(remove.args, ["aaaaaa111111", "bbbbbb222222"]);
+});
+
+test("the sweep does nothing when there is nothing to take", async () => {
+  const { sweepOrphans } = await import("../src/shots.ts");
+  let deleted = false;
+  const env = {
+    DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }) }) }) },
+    SHOTS: {
+      delete: async () => {
+        deleted = true;
+      },
+    },
+  };
+  assert.deepEqual(await sweepOrphans(env), { swept: 0, deferred: 0 });
+  assert.equal(deleted, false, "an empty sweep must not touch the bucket");
+});
+
+test("a bucket that refuses leaves the rows for tomorrow", async () => {
+  const { sweepOrphans } = await import("../src/shots.ts");
+  let rowsDeleted = false;
+  const env = {
+    DB: {
+      prepare: (sql) => ({
+        bind: () => ({
+          all: async () => ({ results: [{ id: "aaaaaa111111", type: "image/png" }] }),
+          run: async () => {
+            if (/DELETE/.test(sql)) rowsDeleted = true;
+            return {};
+          },
+        }),
+      }),
+    },
+    SHOTS: {
+      delete: async () => {
+        throw new Error("R2 said no");
+      },
+    },
+  };
+  // The row is the only record that the object exists. Delete it after a failed bucket call and
+  // the file is stranded for good, because nothing will ever look for it again.
+  assert.deepEqual(await sweepOrphans(env), { swept: 0, deferred: 1 });
+  assert.equal(rowsDeleted, false, "rows must survive a bucket failure");
+});

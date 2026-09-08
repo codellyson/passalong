@@ -26,6 +26,12 @@
   "send_email": [{ "name": "EMAIL" }],
 
   // The product's one database. Both halves used to bind it; now only this Worker does.
+  // Nightly, at a minute nobody else picked. The only scheduled work this Worker does is deleting
+  // screenshots that were uploaded and never attached to a guide — see server/plugins/sweep.ts.
+  "triggers": {
+    "crons": ["17 4 * * *"]
+  },
+
   "r2_buckets": [
     {
       "binding": "SHOTS",

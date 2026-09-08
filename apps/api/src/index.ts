@@ -77,6 +77,7 @@ import {
 } from "./notify.js";
 import { renderOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
+import { SHOT_TYPES, shotKey } from "./shots.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -832,12 +833,6 @@ app.post("/v1/invites/:code/accept", async (c) => {
  * The upload is raw bytes with a content-type, not multipart: there is one file per request and
  * parsing a multipart body to find it would be work in service of nothing.
  */
-const SHOT_TYPES: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-  "image/gif": "gif",
-};
 const SHOT_MAX = 5 * 1024 * 1024;
 
 /**
@@ -880,7 +875,7 @@ async function dropShots(c: Ctx, guide: string) {
   if (!results.length) return;
   const bucket = c.env.SHOTS;
   if (bucket) {
-    await bucket.delete(results.map((r) => `${r.id}.${SHOT_TYPES[r.type] || "png"}`)).catch(() => {
+    await bucket.delete(results.map((r) => shotKey(r.id, r.type))).catch(() => {
       // The rows go anyway. An object nothing points at is waste; a row pointing at nothing
       // that is gone would be worse.
     });
@@ -902,7 +897,7 @@ app.post("/v1/shots", async (c) => {
   if (body.byteLength > SHOT_MAX) return err(c, 413, "screenshots are capped at 5MB");
 
   const id = rid(12);
-  await bucket.put(`${id}.${ext}`, body, { httpMetadata: { contentType: type } });
+  await bucket.put(shotKey(id, type), body, { httpMetadata: { contentType: type } });
   await c.env.DB.prepare(
     "INSERT INTO shot (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, '', ?, ?, ?, ?)",
   )
@@ -934,7 +929,7 @@ app.get("/v1/shots/:id", async (c) => {
     .bind(id)
     .first<{ type: string }>();
   if (!row) return c.notFound();
-  const object = await bucket.get(`${id}.${SHOT_TYPES[row.type] || "png"}`);
+  const object = await bucket.get(shotKey(id, row.type));
   if (!object) return c.notFound();
   return new Response(object.body, {
     headers: {
