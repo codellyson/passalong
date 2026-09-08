@@ -52,6 +52,24 @@ test("serialize quotes values YAML would misread", () => {
   assert.match(out, /tags: \[\]/);
 });
 
+test("a list item keeps the commas inside it", () => {
+  const meta = {
+    title: "t",
+    stack_assumptions: ["Khaime API /api/v1, Express, guards isLoggedIn + isBusinessAdmin"],
+    tags: ["b2b"],
+  };
+  const out = serialize({ meta, body: "## Problem\np\n## Steps\ns" });
+  // The writer quotes it because of the commas; the reader has to honour that rather than split on
+  // them, or three assumptions come back as five fragments with stray quotes attached.
+  assert.match(out, /stack_assumptions: \["Khaime API/);
+  assert.deepEqual(parse(out).meta.stack_assumptions, meta.stack_assumptions);
+});
+
+test("a block list parses flush with its key", () => {
+  const g = parse(SAMPLE.replace("  - paystack\n  - webhooks", "- paystack\n- webhooks"));
+  assert.deepEqual(g.meta.tags, ["paystack", "webhooks"]);
+});
+
 test("sections keys on ## headings", () => {
   const s = sections(parse(SAMPLE).body);
   assert.deepEqual(Object.keys(s), ["Problem", "Steps", "Verification"]);
