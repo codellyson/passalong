@@ -29,7 +29,8 @@ for querying. When they disagree, the markdown is the truth.
 short enough to read aloud — and is not secret on its own. A share link is `/g/<id>/<key>`, so
 knowing an id gets you nothing.
 
-`status` is `draft | published | consumed | promoted`. `to_account_id` set means it was handed to
+`status` is `draft | published`. `consumed` and `promoted` are legacy — still accepted, because
+the value lives in markdown people already published, but nothing sets them. `to_account_id` set means it was handed to
 one person; `team_id` means it went to a team.
 
 ## team, membership, invite
@@ -50,7 +51,8 @@ One row per fetch. `account_id` is `''` for an anonymous share-link reader — t
 not a bug, and reporting has to survive it. `via` records how it was reached (link, CLI, MCP).
 
 `guide.pulls` is the running count, kept alongside so a list query does not have to aggregate.
-This is what the promote nudge reads: a guide pulled repeatedly is a candidate for `promoted`.
+The pull count is reported on the row. It used to drive a separate "worth keeping" queue and a
+`promoted` status; both are gone — a counter is not a state.
 
 ## verdict
 

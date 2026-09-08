@@ -170,10 +170,10 @@ async function submit(e: Event) {
           <input name="email" type="email" placeholder="ada@example.com" autocomplete="email" />
           <span class="muted">only used to tell you when something is handed to you</span>
         </label>
-        <button class="primary" type="submit" :disabled="busy">
+        <button class="btn primary" type="submit" :disabled="busy">
           {{ busy ? "Joining…" : `Join ${team}` }}
         </button>
-        <p v-if="error" class="error">{{ error }}</p>
+        <p v-if="error" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger">{{ error }}</p>
         <p class="muted">
           No password. Your account is a token this browser keeps;
           <code>passalong login</code> moves it to a terminal later if you want one.

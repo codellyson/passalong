@@ -58,8 +58,13 @@ async function submit(e: Event) {
       <div class="meta"><span>the link works once, and for an hour</span></div>
     </header>
 
-    <p v-if="mounted && !code" class="error">
-      This link is missing its code. Ask for a new one from the sign-in page.
+    <!-- The same block the hub and the sign-in screen use for a refusal. A bare red line at the
+         product's least forgiving moment — a link that cannot work — read like a stray caption. -->
+    <p
+      v-if="mounted && !code"
+      class="mb-5 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger"
+    >
+      This link is missing its code. <a href="/hub">Ask for a new one from the sign-in page.</a>
     </p>
 
     <form v-else class="join" @submit.prevent="submit">
@@ -73,10 +78,10 @@ async function submit(e: Event) {
           autocomplete="new-password"
         />
       </label>
-      <button class="primary" type="submit" :disabled="busy">
+      <button class="btn primary" type="submit" :disabled="busy">
         {{ busy ? "Saving…" : "Set password" }}
       </button>
-      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="error" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger">{{ error }}</p>
       <p class="muted">
         Every other session on this account is signed out when the password changes.
       </p>

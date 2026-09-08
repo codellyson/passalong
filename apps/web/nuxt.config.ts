@@ -3,6 +3,7 @@
 // mounts it here so there is one origin and one deploy again.
 
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import { VIEW_HEADERS } from "./shared/csp";
 
 export default defineNuxtConfig({
@@ -41,7 +42,14 @@ export default defineNuxtConfig({
   // public/ gets it a content hash and an immutable cache header, which is what retires the
   // hand-bumped `STYLES = "/styles.css?v=15"` in apps/api/src/render.ts — a stale sheet once
   // shipped the hub unstyled to anyone who had visited before.
-  css: ["~/assets/css/styles.css"],
+  // One entry, two sheets: tailwind.css imports styles.css into a cascade layer and adds the
+  // utilities the board is built from. Loading them as two entries here instead would put the
+  // product's stylesheet outside every layer, where it silently outranks all of them — see the
+  // comment at the top of tailwind.css. The build hashes the result, so it stays one self-hosted
+  // file that `style-src 'self'` allows.
+  css: ["~/assets/css/tailwind.css"],
+
+  vite: { plugins: [tailwindcss()] },
 
   experimental: {
     // Nuxt injects an inline <script type="importmap"> to resolve the entry chunk, and an

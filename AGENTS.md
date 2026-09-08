@@ -120,7 +120,9 @@ public one, for agents *using* Passalong rather than changing it.
   membership or fails on `team.created_by`, which has no cascade. `PRAGMA defer_foreign_keys` does
   not save it — D1 rolls the whole migration back. Both were tested. Inserts write a `retired:`
   marker that can never equal a SHA-256; nothing reads the column.
-- **Status lifecycle**: draft → published → consumed → promoted. The server stores status both in
+- **Status lifecycle**: draft → published. `consumed` and `promoted` are legacy — accepted on
+  guides that already carry them, never set: the verdict says whether work landed, and the pull
+  count says how travelled it is. The server stores status both in
   the `guide.status` column and inside the markdown (`setField`) so a pulled `.md` is truthful.
 - **Teams (M2).** `team`/`membership`/`invite`/`pull` tables (migration 0002). A guide's
   `team_id` makes it readable and consumable by members; `to_account_id` addresses one member.

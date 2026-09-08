@@ -1,0 +1,69 @@
+/* Tailwind, utilities only — the second stylesheet in a product whose brief says there is one.
+   It exists because the board is now built from utilities; every other surface is still driven by
+   styles.css, and the two are kept from fighting by what this file deliberately does not import.
+
+   Preflight is left out. Tailwind's reset would take over every element default in the app — list
+   markers, heading sizes, button appearance, the border colour — and styles.css already owns all
+   of that for five other surfaces. Importing theme and utilities separately is how v4 says to opt
+   out of the reset while keeping everything else.
+
+   This file is the entry point for both sheets, and the reason is the cascade: unlayered CSS beats
+   layered CSS whatever the source order, so with styles.css loaded on its own its `a { color:
+   var(--accent) }` would outrank every `text-*` utility and the board would render entirely in
+   rust. Importing it into a layer of its own, ahead of utilities, restores the order you would
+   expect — styles.css still owns every element default, and a utility can still override one.
+   Nothing inside styles.css changes rank relative to the rest of styles.css. */
+@layer theme, base, app, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "./styles.css" layer(app);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Scan the app directory only. Left to itself Tailwind walks the whole repo, which here means the
+   CLI package, the API and the docs — none of which have a class attribute in them. */
+@source "../..";
+
+/* The token bridge. Every value below points at a custom property already defined in styles.css,
+   so there is still one place to change a colour, and `inline` means a utility compiles to
+   `var(--fg)` rather than a chain of two variables. Names are the reason this works: Tailwind
+   reads `--color-*`, `--text-*`, `--radius-*`, `--font-*` and `--shadow-*` as theme namespaces, so
+   `--ok` bridges to `--color-ok` without either name colliding with the other file's. Spacing is
+   not bridged: Tailwind's 0.25rem step already is this product's 4px scale, so `p-4` is `--s-4`. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-hover: var(--accent-hover);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --text-xs: var(--t-xs);
+  --text-sm: var(--t-sm);
+  --text-base: var(--t-body);
+  --text-h3: var(--t-h3);
+  --text-h2: var(--t-h2);
+
+  --radius-1: var(--r-1);
+  --radius-2: var(--r-2);
+  --radius-3: var(--r-3);
+  --radius-pill: var(--r-pill);
+
+  /* `--font-sans` would be circular — styles.css defines that name itself — so the interface face
+     is reached under a different one. Most elements inherit it from body regardless; buttons and
+     inputs are the ones that need it said out loud. */
+  --font-ui: var(--font-sans);
+  --font-code: var(--font-mono);
+
+  --shadow-raise: var(--shadow-1);
+  --shadow-lift: var(--shadow-2);
+}

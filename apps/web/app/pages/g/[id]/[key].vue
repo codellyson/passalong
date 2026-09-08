@@ -5,6 +5,11 @@
   re-shared. The page runs no script at all — its route rule is `noScripts` and its CSP names no
   `script-src`, which is what makes rendering someone else's markdown safe. Nothing here may
   become interactive without giving that up.
+
+  Which is why the rail on the left is a list of links and the views are three URLs. `position:
+  sticky` keeps it in view with no scroll handler, but nothing can highlight the section you are
+  currently looking at — that needs a scroll listener, and this page will never have one. The
+  colour in the contents is what kind of section it is, not where you are.
 -->
 <script setup lang="ts">
 const route = useRoute();
@@ -21,6 +26,7 @@ if (!guide.value) throw createError({ statusCode: 404, statusMessage: "no such g
 /** Share links are built from the host that served them, so each serving host stays consistent. */
 const url = computed(() => `${useRequestURL().origin}/g/${id.value}/${guide.value?.shareKey}`);
 const meta = computed(() => guide.value?.meta);
+const outline = computed(() => guide.value?.outline || []);
 
 // Frontmatter is hand-editable, and `Meta`'s index signature says as much: any field may come
 // back as a scalar or a list. `parseMeta` already normalises the two list fields, but nothing
@@ -30,6 +36,40 @@ const str = (v: Field) => (Array.isArray(v) ? v.join(", ") : v || "");
 const list = (v: Field) => (Array.isArray(v) ? v : v ? [v] : []);
 
 const created = computed(() => str(meta.value?.created).slice(0, 10));
+
+/** The four facts worth a label. Anything empty drops out rather than printing a blank column. */
+const facts = computed(() =>
+  [
+    { label: "id", value: guide.value?.id, mono: true },
+    { label: "from", value: str(meta.value?.author), mono: false },
+    { label: "out of", value: str(meta.value?.source_context), mono: true },
+    { label: "assumes", value: list(meta.value?.stack_assumptions).join(" · "), mono: false },
+    { label: "shared", value: created.value, mono: false },
+  ].filter((f) => f.value),
+);
+
+/** "Problem, Verification and Gotchas" — a list a sentence can contain. */
+const sentence = (names: string[]) =>
+  names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+
+const cut = computed(() => guide.value?.cut);
+const rest = computed(() => guide.value?.rest);
+
+/** The rail in two groups: what this view put first, and what it moved below. */
+const contents = computed(() => outline.value.filter((h) => !h.then));
+const then = computed(() => outline.value.filter((h) => h.then));
+
+const views = computed(() => [
+  { label: "Full guide", href: url.value, on: view.value !== "verify" },
+  {
+    label: "Verify — the short cut",
+    href: `${url.value}?view=verify`,
+    on: view.value === "verify",
+  },
+  { label: "Markdown source", href: `${url.value}.md`, on: false },
+]);
+
+const rail = "font-ui text-xs font-semibold tracking-widest text-muted uppercase";
 
 usePage({
   title: str(meta.value?.title) || id.value,
@@ -45,49 +85,137 @@ usePage({
 </script>
 
 <template>
-  <main v-if="guide">
-    <header>
+  <main v-if="guide" class="max-w-[64rem] md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10">
+    <!-- Sticky with no script: the rail scrolls with the document until it reaches the top and
+         then stays. On a narrow screen it is just the top of the page. -->
+    <aside class="md:sticky md:top-8 md:self-start md:py-8">
       <AppBrand />
-      <h1>{{ str(meta?.title) || guide.id }}</h1>
-      <div class="meta">
-        <span>id <b>{{ guide.id }}</b></span>
-        <span class="status">{{ str(meta?.status) }}</span>
-        <span v-if="meta?.source_context">from <b>{{ str(meta.source_context) }}</b></span>
-        <span v-if="meta?.author">by <b>{{ str(meta.author) }}</b></span>
-        <span v-if="created">{{ created }}</span>
-        <span v-if="list(meta?.stack_assumptions).length">
-          assumes <b>{{ list(meta?.stack_assumptions).join(", ") }}</b>
-        </span>
-        <span v-for="t in list(meta?.tags)" :key="t" class="tag">#{{ t }}</span>
+
+      <nav v-if="contents.length" class="mt-6">
+        <p :class="rail">Contents</p>
+        <ul class="m-0 mt-2 list-none p-0">
+          <li v-for="h in contents" :key="h.id" :class="h.level === 3 ? 'pl-3' : ''">
+            <a
+              :href="`#${h.id}`"
+              class="block py-0.5 font-ui text-sm no-underline hover:text-accent"
+              :class="{
+                'text-muted': !h.kind,
+                'text-fg': h.kind && h.kind !== 'verification' && h.kind !== 'gotchas',
+                'text-ok': h.kind === 'verification',
+                'text-warn': h.kind === 'gotchas',
+              }"
+            >{{ h.text }}</a>
+          </li>
+        </ul>
+      </nav>
+
+      <!-- The rest of the guide is on the same page, so it is addressed by the same rail. The
+           heading is what says these are not the sections this view leads with. -->
+      <nav v-if="then.length" class="mt-6">
+        <p :class="rail">Then</p>
+        <ul class="m-0 mt-2 list-none p-0">
+          <li v-for="h in then" :key="h.id" :class="h.level === 3 ? 'pl-3' : ''">
+            <a
+              :href="`#${h.id}`"
+              class="block py-0.5 font-ui text-sm text-muted no-underline hover:text-accent"
+            >{{ h.text }}</a>
+          </li>
+        </ul>
+      </nav>
+
+      <nav class="mt-6">
+        <p :class="rail">Views</p>
+        <ul class="m-0 mt-2 list-none p-0">
+          <li v-for="v in views" :key="v.label">
+            <a
+              :href="v.href"
+              :aria-current="v.on ? 'page' : undefined"
+              class="block border-l-2 py-0.5 pl-2 font-ui text-sm no-underline"
+              :class="v.on ? 'border-l-accent font-semibold text-fg' : 'border-l-transparent text-muted hover:text-fg'"
+            >{{ v.label }}</a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <div class="min-w-0 md:py-8">
+      <header class="mb-6 border-b-0 pb-0">
+        <h1 class="mt-0">{{ str(meta?.title) || guide.id }}</h1>
+
+        <p v-if="guide.pulls" class="mt-2 mb-0 font-ui text-sm text-muted">
+          pulled {{ guide.pulls }}×
+        </p>
+
+        <!-- Labelled, because the difference between the repo it came out of and the stack it
+             assumes is not something a reader should have to infer from two grey strings. -->
+        <dl
+          class="mt-4 mb-0 grid gap-x-6 gap-y-3 border-t border-b border-line py-3 [grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))]"
+        >
+          <div v-for="f in facts" :key="f.label">
+            <dt :class="rail">{{ f.label }}</dt>
+            <dd
+              class="m-0 mt-0.5 text-sm text-fg"
+              :class="f.mono ? 'font-code' : 'font-ui'"
+            >{{ f.value }}</dd>
+          </div>
+        </dl>
+
+        <div v-if="list(meta?.tags).length" class="mt-3 flex flex-wrap gap-2">
+          <span v-for="t in list(meta?.tags)" :key="t" class="tag">#{{ t }}</span>
+        </div>
+      </header>
+
+      <!-- Verify re-orders someone else's document, and a reader who does not know that is
+           reading a guide whose author appears to have started in the middle. It says so, in the
+           only place it can be read before the reordering takes effect. -->
+      <div
+        v-if="cut"
+        class="mb-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 rounded-2 border border-accent bg-accent-soft px-4 py-3"
+      >
+        <div class="min-w-0 grow basis-72">
+          <p :class="rail" class="text-accent">
+            {{ cut.lead.length ? `Verify · ${cut.lead.length} of ${cut.total} sections first` : "Verify" }}
+          </p>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">
+            <template v-if="cut.lead.length">
+              {{ sentence(cut.lead) }} lead. Everything else follows below, never dropped.
+            </template>
+            <template v-else>
+              Nothing in this guide is named like a section Verify leads with, so it reads in the
+              author's order.
+            </template>
+          </p>
+        </div>
+        <a :href="url" class="font-ui text-sm whitespace-nowrap">read in the author's order</a>
       </div>
-    </header>
 
-    <!-- Links, not a toggle: this page runs no script, so switching views is a navigation. -->
-    <nav class="views">
-      <a :class="{ on: view !== 'verify' }" :aria-current="view !== 'verify' ? 'page' : undefined" :href="url">
-        Full guide
-      </a>
-      <a :class="{ on: view === 'verify' }" :aria-current="view === 'verify' ? 'page' : undefined" :href="`${url}?view=verify`">
-        Verify
-      </a>
-    </nav>
+      <!-- eslint-disable-next-line vue/no-v-html -- see server/utils/guide-html.ts: the CSP is what
+           makes this safe, and it is checked by scripts/probe.sh against a deployed response. -->
+      <article class="prose">
+        <div v-html="guide.html" />
 
-    <!-- eslint-disable-next-line vue/no-v-html -- see server/utils/guide-html.ts: the CSP is what
-         makes this safe, and it is checked by scripts/probe.sh against a deployed response. -->
-    <article class="prose" v-html="guide.html" />
+        <p v-if="rest" class="handover">
+          Everything below is the rest of the guide, in the author's order:
+          {{ rest.names.join(", ").toLowerCase() }}.
+        </p>
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <div v-if="rest" v-html="rest.html" />
+      </article>
 
-    <div v-if="view === 'verify'" class="pull">
-      Checked it? Say so where it was handed to you: <a href="/hub">your hub</a> — or
-      <code>passalong done {{ guide.id }}</code>.
+      <div class="pull">
+        <b class="block font-ui text-sm text-fg">Pull this into your context</b>
+        <p class="mt-1 mb-0 font-ui text-sm text-muted">
+          Select the line — a guide page runs no script, so there is no copy button.
+        </p>
+        <code class="line">passalong pull {{ url }}</code>
+        <p class="mt-2 mb-0 font-ui text-sm text-muted">
+          Or append <code>.md</code> to this URL for the markdown source.
+        </p>
+      </div>
+
+      <footer>
+        Read-only. Edit the markdown in your own tools and <code>passalong share</code> again.
+      </footer>
     </div>
-    <div v-else class="pull">
-      Pull this into your context:<br />
-      <code>passalong pull {{ url }}</code><br />
-      or paste the link to an agent with the Passalong MCP server.
-    </div>
-
-    <footer>
-      Read-only. Edit the markdown in your own tools and <code>passalong share</code> again.
-    </footer>
   </main>
 </template>

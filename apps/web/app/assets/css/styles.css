@@ -73,6 +73,14 @@
   --accent-fg: #fffaf7;
   --accent-soft: #f7e7de;
   --danger: #ab2f21;
+  /* Semantic status, deliberately separate from the brand accent. A failed transfer and a
+     well-travelled one were both painted `--accent` before, which is most of why the board read as
+     one undifferentiated colour. Rust stays the brand; these three carry meaning. */
+  --danger-soft: #f7e0dc;
+  --ok: #3f6b45;
+  --ok-soft: #e2ecdd;
+  --warn: #8a5a08;
+  --warn-soft: #f6e8cd;
   --code: #f4f2ec;
   --shadow-1: 0 1px 2px rgb(28 27 25 / 0.04), 0 1px 3px rgb(28 27 25 / 0.06);
   --shadow-2: 0 2px 4px rgb(28 27 25 / 0.04), 0 8px 24px rgb(28 27 25 / 0.07);
@@ -91,6 +99,11 @@
     --accent-fg: #1a1410;
     --accent-soft: #33241c;
     --danger: #e0705e;
+    --danger-soft: #34201c;
+    --ok: #86c493;
+    --ok-soft: #1e2a20;
+    --warn: #dfae5f;
+    --warn-soft: #2e2619;
     --code: #1e1c18;
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3);
     --shadow-2: 0 2px 4px rgb(0 0 0 / 0.25), 0 8px 24px rgb(0 0 0 / 0.35);
@@ -306,10 +319,18 @@ footer a:hover {
 }
 
 /* ---- buttons --------------------------------------------------------------------------------
-   `.btn` is a button and `.chip` is a filter toggle. They used to be one rule, which is why a
-   tab bar, a destructive action and a filter all looked identical. Three button weights now:
-   filled (`.primary`) for the one action a view is about, tonal (`.tonal`, `.nudge`) for the
-   next tier, ghost (bare `.btn`) for everything else. */
+   `.btn` is a button and `.chip` is a filter toggle. They used to be one rule, which is why a tab
+   bar, a destructive action and a filter all looked identical.
+
+   Four weights: filled (`.primary`) for the one action a view is about, tonal (`.tonal`) and
+   outlined (`.outline`) for the next tier, ghost (bare `.btn`) for everything else. Two sizes on
+   top of the default: `.sm` for a button sitting inside a row, `.icon` for one whose label is a
+   single glyph.
+
+   Weight and colour are separate. A treatment reads `--tone`, and `.ok` / `.warn` / `.danger` set
+   nothing but that pair — so "promote" is `btn tonal ok` and "read the reason" is `btn outline
+   danger`, and neither one invents a colour. This is why the semantic tokens exist; before them
+   every one of these was the brand accent. */
 .btn,
 button.primary,
 .btn.primary {
@@ -324,6 +345,8 @@ button.primary,
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
+  --tone: var(--accent);
+  --tone-soft: var(--accent-soft);
   transition:
     background-color var(--motion) ease,
     border-color var(--motion) ease,
@@ -340,6 +363,41 @@ button.primary,
   background: var(--surface);
   border-color: var(--muted);
 }
+
+/* Sizes. A row of guides is mostly text, and a button at full padding inside one is most of a
+   line tall. */
+.btn.sm {
+  padding: var(--s-2) var(--s-3);
+}
+.btn.icon {
+  padding: var(--s-2);
+  line-height: 1;
+  font-weight: 600;
+  color: var(--muted);
+}
+.btn.icon:hover {
+  color: var(--fg);
+}
+.btn.lg {
+  font-size: var(--t-body);
+  padding: var(--s-3) var(--s-5);
+  border-radius: var(--r-2);
+}
+
+/* Colour, set apart from weight: these say which, not how loud. */
+.btn.ok {
+  --tone: var(--ok);
+  --tone-soft: var(--ok-soft);
+}
+.btn.warn {
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
+}
+.btn.danger {
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
+}
+
 /* Filled: one per view. */
 button.primary,
 .btn.primary {
@@ -355,37 +413,100 @@ button.primary:hover,
   border-color: var(--accent-hover);
   color: var(--accent-fg);
 }
-button.primary[disabled] {
+button.primary[disabled],
+.btn.primary[disabled] {
   opacity: 0.55;
   cursor: default;
   box-shadow: none;
 }
-/* Tonal: reads as accent without competing with the filled one. */
+/* Tonal: reads as its tone without competing with the filled one. */
 .btn.tonal,
 .btn.nudge {
-  background: var(--accent-soft);
+  background: var(--tone-soft);
   border-color: transparent;
-  color: var(--accent);
+  color: var(--tone);
   font-weight: 600;
 }
 .btn.tonal:hover,
 .btn.nudge:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--tone-soft);
+  border-color: var(--tone);
+  color: var(--tone);
 }
-.btn.danger {
+/* Outlined: the same weight as tonal, for a tone that should not carry a fill until you reach
+   for it. */
+.btn.outline {
+  background: transparent;
+  border-color: var(--tone);
+  color: var(--tone);
+  font-weight: 600;
+}
+.btn.outline:hover {
+  background: var(--tone-soft);
+  border-color: var(--tone);
+  color: var(--tone);
+}
+/* Destructive: a normal button until you are on it. It used to be muted at rest, which read as
+   disabled — the one thing a button that deletes something must not look like. */
+.btn.destructive:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ---- menus -----------------------------------------------------------------------------------
+   The overflow behind a row, and the one behind a team. Both were the same twelve utilities
+   written twice. */
+.menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  margin-top: var(--s-1);
+  width: 14rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: var(--s-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-2);
+}
+.menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--fg);
+  font: var(--t-sm) / 1.4 var(--font-sans);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.menu-item:hover {
+  background: var(--surface);
+}
+.menu-item.destructive {
+  color: var(--danger);
+}
+.menu-item.destructive:hover {
+  background: var(--danger-soft);
+}
+.menu-note {
+  margin: var(--s-1) 0 0;
+  padding: 0 var(--s-2);
+  font: var(--t-xs) / 1.4 var(--font-sans);
   color: var(--muted);
 }
-.btn.danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: transparent;
-}
-.btn.lg {
-  font-size: var(--t-body);
-  padding: var(--s-3) var(--s-5);
-  border-radius: var(--r-2);
+.menu-rule {
+  height: 1px;
+  margin: var(--s-1) 0;
+  background: var(--line);
 }
 
 /* Filter toggles. Pill-shaped so they never read as actions. */
@@ -460,9 +581,6 @@ input[name="token"],
 
 /* ---- panels ---------------------------------------------------------------------------------
    One raised surface, shared by every boxed region. These were five near-identical border rules. */
-.card,
-.team,
-.activity,
 .tokens,
 .identity,
 .panel {
@@ -473,13 +591,6 @@ input[name="token"],
   padding: var(--s-2) var(--s-5) var(--s-5);
   margin-bottom: var(--s-5);
 }
-.card {
-  padding-bottom: var(--s-4);
-  margin-bottom: 0;
-}
-.card .head,
-.team .head,
-.activity .head,
 .tokens .head,
 .identity .head,
 .panel .head {
@@ -489,9 +600,6 @@ input[name="token"],
   gap: var(--s-3);
   flex-wrap: wrap;
 }
-.card h2,
-.team h2,
-.activity h2,
 .tokens h2,
 .identity h2,
 .panel h2 {
@@ -499,36 +607,35 @@ input[name="token"],
   font-size: var(--t-h3);
   color: var(--head, var(--fg));
 }
-.card .head .muted,
 .tokens .head .muted {
   font-size: var(--t-sm);
 }
 
-/* The urgent variants only swap two colours, so they ride on custom properties. A
-   `.card.waiting h2` rule would sit above every later `.x h2` and make each one a descending
+/* The urgent variant only swaps two colours, so it rides on custom properties. An
+   `.identity.needed h2` rule would sit above every later `.x h2` and make each one a descending
    selector — the trap this file is written to avoid. */
-.card,
 .identity {
   --edge: var(--line);
   --head: var(--fg);
 }
-.card.waiting,
-.card.failing,
 .identity.needed {
   --edge: var(--accent);
   --head: var(--accent);
 }
 
 /* ---- hub ------------------------------------------------------------------------------------ */
+/* Search and the cuts are the same operation — narrow the list — so they stack instead of
+   competing for one line. Side by side, every chip added took width from the field, and with five
+   of them the field was below the width of its own placeholder: it could not show its own label. */
 .hub .toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--s-3);
-  align-items: center;
   margin-bottom: var(--s-5);
 }
+/* No flex basis: in a grid the field is simply the row's width, and a basis left over from the
+   flex version would have been read as a height. */
 .hub input[type="search"] {
-  flex: 1 1 16rem;
+  width: 100%;
 }
 .chips.scopes {
   margin-bottom: var(--s-4);
@@ -575,9 +682,6 @@ input[name="token"],
 .guide.consumed .title,
 .status.consumed {
   color: var(--muted);
-}
-.status.promoted::before {
-  content: "\2605\00a0";
 }
 
 /* ---- the sign-in screen ----------------------------------------------------------------------
@@ -652,92 +756,17 @@ details.more summary:hover {
   text-align: left;
   font-size: var(--t-sm);
 }
-.error {
-  color: var(--danger);
-  font-size: var(--t-sm);
-  margin: 0;
-}
 
-/* ---- board --------------------------------------------------------------------------------- */
-.board {
-  display: grid;
-  gap: var(--s-4);
-  align-items: start;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-  margin-bottom: var(--s-5);
-}
-.card-rows {
-  list-style: none;
-  padding: 0;
-  margin: var(--s-3) 0 0;
-}
-.card-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--s-1) var(--s-3);
-  align-items: baseline;
-  padding: var(--s-3) 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-}
-.card-row:first-child {
-  border-top: 0;
-  padding-top: var(--s-1);
-}
-.card-row .card-title {
-  color: var(--fg);
-  text-decoration: none;
-  font-weight: 600;
-}
-.card-row .card-title:hover {
-  color: var(--accent);
-}
-.card-row .meta {
-  grid-column: 1;
-}
-.card-row .btn {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
-}
-.card-row .warn,
-.card-row.stale .card-title {
-  color: var(--accent);
-}
-h2.all {
-  margin: var(--s-6) 0 var(--s-3);
-}
-.verdict b,
-.pulled b {
-  color: var(--accent);
-}
+/* ---- board ------------------------------------------------------------------------------------
+   Nothing here. The board — the waiting lane and the handoff list — is the one region of the app
+   built from Tailwind utilities, in app/components/hub/. Its semantic colours are the `--ok`,
+   `--warn` and `--danger` tokens above, bridged into utility names by assets/css/tailwind.css. */
 
 /* ---- teams, activity, tokens ---------------------------------------------------------------- */
-.members {
-  list-style: none;
-  padding: 0;
-  margin: var(--s-2) 0 var(--s-3);
-  font-size: var(--t-sm);
-  line-height: 1.8;
-}
-.invite {
-  display: inline-flex;
-  gap: var(--s-2);
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: var(--t-sm);
-}
-.invite code,
-.newtoken code {
-  user-select: all;
-}
-.identity form,
-form.join {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  align-items: center;
-}
+/* The form on the three screens outside the hub — sign in, reset, join. They were written before
+   the hub had a field pattern; this is that pattern, so a labelled field looks the same wherever
+   it appears. `form.join` was declared twice here, flex and then grid, and the flex one had never
+   applied to anything since the identity form it also named was rebuilt from utilities. */
 form.join {
   display: grid;
   gap: var(--s-4);
@@ -747,8 +776,8 @@ form.join {
 form.join label {
   display: grid;
   gap: var(--s-2);
-  font-size: var(--t-sm);
-  font-weight: 500;
+  font: 500 var(--t-sm) / 1.4 var(--font-sans);
+  color: var(--fg);
 }
 
 .identity p {
@@ -782,9 +811,17 @@ form.join label {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+/* Drawn, not typed: a bullet character is a different size and baseline in every font, and this
+   one has to line up with a row of timestamps. */
 .note.unread .when::before {
-  content: "\2022\00a0";
-  color: var(--accent);
+  content: "";
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+  margin-right: var(--s-2);
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 0.1em;
 }
 
 .invite-paste {
@@ -797,78 +834,13 @@ form.join label {
   flex: 1;
   min-width: 0;
 }
-.newtoken {
-  border: 1px solid var(--accent);
-  background: var(--accent-soft);
-  border-radius: var(--r-2);
-  padding: var(--s-4);
-  margin: var(--s-3) 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  align-items: center;
-}
-.newtoken p {
-  flex-basis: 100%;
-  margin: 0;
-  font-size: var(--t-sm);
-}
-.newtoken code {
-  word-break: break-all;
-}
 
 /* ---- guide views ---------------------------------------------------------------------------- */
-.views {
-  display: inline-flex;
-  gap: var(--s-1);
-  margin: var(--s-4) 0 var(--s-5);
-  padding: var(--s-1);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-2);
-}
-.views a {
-  padding: var(--s-2) var(--s-4);
-  border-radius: var(--r-1);
-  color: var(--muted);
-  text-decoration: none;
-  font: 500 var(--t-sm) / 1.4 var(--font-sans);
-  transition:
-    background-color var(--motion) ease,
-    color var(--motion) ease;
-}
-.views a:hover {
-  color: var(--fg);
-}
-.views a.on {
-  background: var(--surface-raised);
-  color: var(--fg);
-  box-shadow: var(--shadow-1);
-}
-.note {
-  color: var(--muted);
-}
-
-details.rest {
-  border-top: 1px solid var(--line);
-  margin-top: var(--s-6);
-  padding-top: var(--s-4);
-}
-details.rest summary {
-  cursor: pointer;
-  color: var(--muted);
-  font: 500 var(--t-sm) / 1.6 var(--font-sans);
-  font-family: var(--font-sans);
-}
-details.rest summary:hover {
-  color: var(--fg);
-}
-
 .pull {
   margin-top: var(--s-7);
   padding: var(--s-4) var(--s-5);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
   border-radius: var(--r-2);
   font: var(--t-sm) / 1.7 var(--font-sans);
 }
@@ -877,6 +849,18 @@ details.rest summary:hover {
   padding: 0;
   user-select: all;
   font-size: var(--t-sm);
+}
+/* The command, as its own line to select. There is no copy button and there cannot be one, so the
+   least this can do is be a single unambiguous target. */
+.pull code.line {
+  display: block;
+  margin-top: var(--s-3);
+  padding: var(--s-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  overflow-x: auto;
+  white-space: pre;
 }
 
 /* ---- landing --------------------------------------------------------------------------------
@@ -996,7 +980,15 @@ details.rest summary:hover {
   color: var(--muted);
 }
 .showcase .folded::before {
-  content: "\25b8\00a0";
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: var(--s-2);
+  border-left: 5px solid currentcolor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  vertical-align: 0.05em;
 }
 
 .steps {
@@ -1039,7 +1031,8 @@ details.rest summary:hover {
 .two {
   display: grid;
   gap: var(--s-5);
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  /* `min()` so a viewport narrower than the track does not push the board out of the page. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
   margin-bottom: var(--s-8);
   align-items: start;
 }
@@ -1088,24 +1081,156 @@ details.rest summary:hover {
    adjusts. Keeping these last is what stops the file from growing descending-specificity pairs,
    where a later, plainer selector silently loses to an earlier, sharper one. */
 
-/* Guide bodies, and only guide bodies, are set in the serif: they are long-form prose someone
-   reads end to end. Interface chrome stays in the sans. */
+/* ---- guide prose -------------------------------------------------------------------------------
+   The body of a guide is the only long-form reading in the product, and the only place set in the
+   serif. Everything below styles HTML that came out of `marked`, from markdown a stranger wrote —
+   so it is written against the elements markdown can produce, not against one nice-looking guide.
+
+   The six canonical sections are marked by the renderer with `data-kind`. Only two are typeset
+   differently: Verification is what you check the work against, Gotchas is what bites you. The
+   rest are the author's argument and read as prose. A section nobody planned for carries no
+   attribute and renders as a plain heading, which is the whole point of doing it this way. */
 article.prose {
   font-family: var(--font-serif);
   font-size: 1.125rem;
   line-height: 1.65;
+  max-width: 40rem;
 }
 
-article.prose h1,
-article.prose h2,
+/* Headings are serif too. They used to be sans, which read as interface chrome interrupting the
+   document rather than as its structure. */
+article.prose h2 {
+  font-size: 1.55rem;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  margin: var(--s-7) 0 var(--s-3);
+}
 article.prose h3 {
-  font-family: var(--font-sans);
-  letter-spacing: -0.018em;
+  font-size: 1.2rem;
+  line-height: 1.3;
+  margin: var(--s-5) 0 var(--s-2);
+}
+/* An author reaching for an h4 is usually naming a case rather than opening a section — "if CI
+   still flakes" — so it is set as a label that cannot compete with the structure above it.
+
+   Only h4. Someone who writes h5 and h6 is nesting deliberately, and giving all three the same
+   treatment would flatten three levels of their outline into one look. */
+article.prose h4 {
+  font: 600 var(--t-xs) / 1.4 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin: var(--s-5) 0 var(--s-2);
+}
+article.prose h5,
+article.prose h6 {
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  margin: var(--s-4) 0 var(--s-2);
 }
 
-article.prose code,
+article.prose h2[data-kind="verification"],
+article.prose h2[data-kind="gotchas"] {
+  border-left: 3px solid var(--line-strong);
+  padding-left: var(--s-4);
+  margin-left: calc(-1 * (var(--s-4) + 3px));
+}
+article.prose h2[data-kind="verification"] {
+  border-left-color: var(--ok);
+}
+article.prose h2[data-kind="gotchas"] {
+  border-left-color: var(--warn);
+}
+
+article.prose p {
+  margin: 0 0 var(--s-4);
+}
+article.prose a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+/* Inline code is a thing you type, in a paragraph you read. The tint says which words are
+   literal; a code block is a different animal and keeps the recessed fill. */
+article.prose :not(pre) > code {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: var(--r-1);
+}
 article.prose pre {
-  font-family: var(--font-mono);
+  background: var(--code);
+  margin: var(--s-4) 0;
+}
+article.prose ol,
+article.prose ul {
+  margin: 0 0 var(--s-4);
+}
+article.prose li {
+  margin: var(--s-2) 0;
+}
+article.prose blockquote {
+  font-style: italic;
+  margin: var(--s-4) 0;
+}
+
+/* Markdown has no caption syntax, so a standalone image's alt text becomes one — see figures() in
+   server/utils/guide-html.ts. Guides carry screenshots of the thing that was broken. */
+article.prose figure {
+  margin: var(--s-5) 0;
+}
+article.prose figure img {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+}
+article.prose figcaption {
+  margin-top: var(--s-2);
+  font: var(--t-sm) / 1.5 var(--font-sans);
+  color: var(--muted);
+}
+
+/* Tables are reference, not reading: sans, and ruled rather than boxed. */
+article.prose table {
+  font-family: var(--font-sans);
+  margin: var(--s-4) 0;
+}
+article.prose th {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  padding: 0 var(--s-4) var(--s-2) 0;
+  font: 600 var(--t-xs) / 1.4 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+article.prose td {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: var(--s-3) var(--s-4) var(--s-3) 0;
+  vertical-align: top;
+}
+
+/* The verify view's fold. Everything it hides is still in the document. */
+article.prose details.rest {
+  margin: var(--s-6) 0;
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-4);
+}
+article.prose details.rest > summary {
+  cursor: pointer;
+  font: 500 var(--t-sm) / 1.5 var(--font-sans);
+  color: var(--muted);
+}
+
+/* The seam in the verify view: the point where the guide stops being re-ordered and goes back to
+   the author's own sequence. Set apart from the prose because it is the page talking, not the
+   guide. */
+article.prose .handover {
+  margin: var(--s-7) 0 var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+  font: var(--t-sm) / 1.6 var(--font-sans);
+  color: var(--muted);
 }
 
 article.prose .note,
@@ -1113,10 +1238,6 @@ article.prose .note,
   border-left: 2px solid var(--accent);
   padding-left: var(--s-4);
   color: var(--muted);
-}
-
-.verdict.bad b {
-  color: var(--danger);
 }
 
 .two .panel > h2 {

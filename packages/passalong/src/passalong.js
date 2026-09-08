@@ -139,7 +139,7 @@ export async function inbox() {
 
 /**
  * The state of your transfers as four queues: waiting on you, in flight (handed over, untouched),
- * landed (someone has it, not closed), and worth keeping (pulled enough to promote). Needs sync.
+ * and landed (someone else has it). Needs sync.
  */
 export const board = () => api.board();
 

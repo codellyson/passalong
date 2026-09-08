@@ -37,11 +37,11 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `PUT /v1/guides/:id` | owner | Body is `text/markdown`, not JSON. The markdown is the record; `team`/`to` are read from its frontmatter. |
 | `GET /v1/guides/:id` | owner or team member | Returns markdown. **Records a pull.** |
 | `GET /v1/guides?q=&scope=` | account | `scope=all` (default) `| mine | <team slug>` |
-| `PATCH /v1/guides/:id/status` | owner: any status; team member: `consumed` or `published` only | A member can say they used it; only the author can promote or unpublish |
+| `PATCH /v1/guides/:id/status` | owner: any status; team member: `consumed` or `published` only | Deprecated — prefer the verdict. Nothing in the hub calls it; the CLI's `done`/`promote` and the MCP `set_guide_status` still do |
 | `PUT /v1/guides/:id/verdict` | account | `{ ok, note? }` |
 | `DELETE /v1/guides/:id` | **owner only** | |
 | `GET /v1/inbox` | account | Handed to you or your teams, not yet pulled |
-| `GET /v1/board` | account | The queues: waiting, not working, in flight, landed, promote |
+| `GET /v1/board` | account | The queues: waiting, not working, in flight, landed |
 | `GET /v1/notifications?unread=` | account | |
 | `POST /v1/notifications/read` | account | `{ ids? }` — everything unread when `ids` is omitted |
 

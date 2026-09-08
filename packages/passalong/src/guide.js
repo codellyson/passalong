@@ -4,6 +4,15 @@
 // lists of strings, so a deliberately tiny parser covers it and stays readable when hand-edited.
 import { randomBytes } from "node:crypto";
 
+/**
+ * A guide is a draft or it is published. `consumed` and `promoted` are legacy: they were an author
+ * lifecycle laid over a transfer that already reports itself — `consumed` duplicated the verdict,
+ * and `promoted` was a pull count with a name. Nothing sets them any more.
+ *
+ * They stay in this list because they are *accepted*, not produced. The value lives in frontmatter
+ * inside markdown files in other people's repositories, and `validate()` rejects a status it does
+ * not know — so removing them here would make a guide shared a month ago fail to re-share today.
+ */
 export const STATUSES = ["draft", "published", "consumed", "promoted"];
 
 // Body sections in the order a guide should present them. The heading text is what the

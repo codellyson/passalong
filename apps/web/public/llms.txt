@@ -39,7 +39,8 @@ stable:
 - `## Verification` — how to know it worked. A guide without this is flagged to the reader.
 - `## Gotchas` — what failed on the way. The highest-value section; record what wasted time.
 
-`status` is one of `draft`, `published`, `consumed`, `promoted`. Ids are 8 characters from a
+`status` is `draft` or `published`. (`consumed` and `promoted` are legacy: still accepted on
+existing guides, no longer set.) Ids are 8 characters from a
 no-lookalike alphabet; they are addresses, not secrets. The key in a share link is the secret.
 
 ## Commands
@@ -72,7 +73,7 @@ passalong login                 # optional: sync across machines
 `activity`.
 
 Given a share link or an id, `get_guide` returns the guide; follow its `Steps`, adapt anything
-marked as an assumption, run its `Verification`, then `set_guide_status` consumed and
+marked as an assumption, run its `Verification`, then
 `verify_guide` with the result.
 
 ## Writing a good guide

@@ -58,7 +58,8 @@ export interface Board {
   waiting: Guide[];
   in_flight: Guide[];
   landed: Guide[];
-  promote: Guide[];
+  /** Always empty. A compatibility shim for the published CLI — see the note in /v1/board. */
+  promote?: Guide[];
 }
 
 export interface Note {
