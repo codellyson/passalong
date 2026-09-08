@@ -53,7 +53,10 @@ test("a screenshot is readable with its id alone", async () => {
   // markdown to anyone holding its share key: an image that 401s renders as a broken image for
   // exactly the reader it was attached for. Production found this; a signed-in browser hid it.
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
-  const guard = /const publicShot = \(method: string, path: string\) =>\s*method === "GET" && (\/[^;]+\/)\.test\(path\)/.exec(src);
+  const guard =
+    /const publicShot = \(method: string, path: string\) =>\s*method === "GET" && (\/[^;]+\/)\.test\(path\)/.exec(
+      src,
+    );
   assert.ok(guard, "the public-shot exception is gone from the auth middleware");
   const re = new RegExp(guard[1].slice(1, -1));
   assert.ok(re.test("/v1/shots/jjeqrdsg9eam"));
