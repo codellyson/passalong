@@ -67,3 +67,19 @@ test("discovery says only what this server actually supports", () => {
   assert.deepEqual(resource.authorization_servers, ["https://passalong.dev"]);
   assert.deepEqual(resource.scopes_supported, ["mcp"]);
 });
+
+test("only a signed-in person can approve a connector", async () => {
+  // Checked against the source because the app is not importable from a test. The middleware
+  // accepts an API token or a session cookie, so `c.get("account")` alone would let a token mint a
+  // connector grant — a credential creating a longer-lived credential, which is exactly what a
+  // consent flow is for.
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const approve = src.slice(src.indexOf('app.post("/v1/oauth/approve"'));
+  const handler = approve.slice(0, approve.indexOf("\napp."));
+  assert.match(handler, /readCookie\(c\.req\.header\("cookie"\), SESSION_COOKIE\)/);
+  assert.ok(
+    handler.indexOf("SESSION_COOKIE") < handler.indexOf('c.get("account")'),
+    "the session check must come before the account is trusted",
+  );
+});

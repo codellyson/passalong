@@ -1913,6 +1913,17 @@ app.get("/oauth/authorize", async (c) => {
  * browser, and accepting an API token here would let one credential silently mint another.
  */
 app.post("/v1/oauth/approve", async (c) => {
+  // Session cookie only, checked here rather than assumed: the middleware above accepts either
+  // credential, so without this an API token could mint a connector grant — one credential
+  // quietly creating another, longer-lived one, which is the laundering this whole flow exists to
+  // prevent. Approving is something a person does in a browser.
+  if (!readCookie(c.req.header("cookie"), SESSION_COOKIE)) {
+    return err(
+      c,
+      403,
+      "approve a connector while signed in to your hub — a token cannot grant one",
+    );
+  }
   const account = c.get("account");
   type Approval = {
     client_id?: string;
