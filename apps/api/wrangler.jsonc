@@ -45,6 +45,14 @@
   ],
 
   "vars": {
+    // The host every link the app mints points at, whichever host served the request.
+    //
+    // `origin()` used to fall back to the request's own origin, so `passalong.kreativekorna.com`
+    // minted share links, invite links, reset links and screenshot URLs under itself — which is
+    // the same problem the www route exists to avoid, one guide with two links and a share key in
+    // each. The old host keeps serving what was handed out before the move; it no longer creates
+    // anything new.
+    "PUBLIC_ORIGIN": "https://passalong.dev",
     "ENVIRONMENT": "production",
     // Free tier: how many published/promoted guides one account may keep synced.
     // Local guides are unlimited; this only gates the hosted copy.

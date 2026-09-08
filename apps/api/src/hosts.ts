@@ -3,7 +3,10 @@
 // `passalong.dev` is canonical. `www.passalong.dev` is routed so the name resolves, but serving it
 // would mint a second share link for every guide — and a share key lives in the URL, so one link
 // becoming two is a real problem rather than an untidy one. `passalong.kreativekorna.com` does
-// serve: links under it were handed out before the move and have to keep resolving.
+// serve: links under it were handed out before the move and have to keep resolving. It no longer
+// *mints* anything, though — `PUBLIC_ORIGIN` names the apex, so a guide shared from either host
+// gets one link and it is the canonical one. Serving an old link and creating a new one under the
+// same name are different jobs, and only the first is worth keeping.
 const WWW = "www.passalong.dev";
 const APEX = "https://passalong.dev";
 
