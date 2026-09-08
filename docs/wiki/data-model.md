@@ -20,7 +20,7 @@ an account without a handle is prompted for one.
 ## guide
 
 `id`, `account_id`, `share_key`, `title`, `status`, `source_context`, `tags`, `stack`, `markdown`,
-`created`, `updated`, `pulls`, `team_id`, `to_account_id`
+`created`, `updated`, `pulls`, `team_id`, `to_account_id`, `kind`, `report_id`, `area`, `severity`
 
 The markdown is the guide; the columns beside it are a denormalised index of its frontmatter, kept
 for querying. When they disagree, the markdown is the truth.
@@ -29,9 +29,40 @@ for querying. When they disagree, the markdown is the truth.
 short enough to read aloud — and is not secret on its own. A share link is `/g/<id>/<key>`, so
 knowing an id gets you nothing.
 
+`kind` is `bug` or empty, and empty means `transfer` — every guide written before migration 0007
+is one, and defaulting the other way would have turned the whole table into bug reports. The last
+three are a bug's own: which report it was filed under, which product surface it is on, and how
+badly it is broken (`s1` blocker to `s4` cosmetic). All four are denormalised from frontmatter like
+everything else here.
+
 `status` is `draft | published`. `consumed` and `promoted` are legacy — still accepted, because
 the value lives in markdown people already published, but nothing sets them. `to_account_id` set means it was handed to
 one person; `team_id` means it went to a team.
+
+## report
+
+`id`, `account_id`, `title`, `environment`, `team_id`, `to_account_id`, `created`, `updated`
+
+A set of bugs filed together, and deliberately little else — everything a reader acts on lives on
+the issues, because an issue is a guide and the product already knows what to do with one. It
+exists for two reasons a tag could not cover: a set handed over together should arrive together,
+and "6 issues across 3 areas" should survive one of them being fixed.
+
+Product area is **not** here. It is a column on `guide`, so the grouping inside a report is derived
+from its issues every time and an area with nothing left in it stops existing.
+
+## shot
+
+`id`, `account_id`, `guide_id`, `name`, `type`, `bytes`, `created`
+
+A screenshot attached as evidence. The bytes are in R2 under `<id>.<ext>`; this row is the only
+record of which extension that was, which is why a failed bucket delete must not delete the row —
+nothing would ever look for the file again.
+
+`guide_id` is written on every guide write, from the shot URLs in that guide's markdown, and is
+empty until some document names it. Deleting a guide deletes its shots and their objects. An
+upload nobody ever referenced is swept nightly once it is a day old — claiming happens minutes
+after upload at worst, so a shorter window would race a tester who is still typing.
 
 ## team, membership, invite
 

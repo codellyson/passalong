@@ -122,8 +122,13 @@ pasted into Slack or a DM, so the unfurl card is the first thing most people see
 
 `apps/api/src/hosts.ts` decides which hostnames serve. `passalong.dev` is canonical; `www` 308s to
 it; `passalong.kreativekorna.com` still serves, because share keys live in the URL and links handed
-out under the old host must keep resolving. Share links are built from the host that served them, so
-each serving host stays internally consistent.
+out under the old host must keep resolving.
+
+Serving an old link and creating a new one are different jobs, and only the first is worth keeping.
+`origin()` used to build each link from the host that served it, which meant the old host minted
+share links, invites, resets and screenshot URLs under its own name — one guide with two links,
+each carrying a key, which is exactly what the `www` redirect exists to prevent. `PUBLIC_ORIGIN`
+now names the apex, so both hosts produce the same link and only the apex appears in anything new.
 
 The redirect runs from `apps/web/server/middleware/0.canonical.ts`, not from Hono. It had to move
 there at the cutover: the mounted app only ever sees `/v1/*`, `/health` and the two machine routes,

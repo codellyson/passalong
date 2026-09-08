@@ -45,6 +45,35 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `GET /v1/notifications?unread=` | account | |
 | `POST /v1/notifications/read` | account | `{ ids? }` — everything unread when `ids` is omitted |
 
+## Bug reports
+
+A bug is a guide with `kind: bug` in its frontmatter, filed through the same `PUT /v1/guides/:id`
+as everything else — there is no second write path, so an issue filed from the hub is byte-for-byte
+a document the CLI would accept. A report is the parent that keeps a set together.
+
+| Route | Access | Notes |
+| --- | --- | --- |
+| `POST /v1/reports` | account | `{ title?, environment?, team?, to? }` → an id for each issue's `report:` frontmatter |
+| `GET /v1/reports/:id` | owner or team member | The report and its issues, grouped by product area |
+| `PATCH /v1/reports/:id` | owner | Title, environment, and who it went to |
+| `GET /v1/reports` | account | Yours, newest first, with counts |
+| `POST /v1/shots` | account | Raw image bytes with a content-type — png, jpeg, webp, gif, ≤5MB. Not multipart: one file per request. |
+| `GET /v1/shots/:id` | **anyone with the id** | Like the guide that embeds it. An image behind a login renders as a broken image in the document it was pasted into. |
+
+A report you cannot see answers 404, not 403: which reports an account has is not something a
+status code should confirm.
+
+## Describing the API
+
+`GET /v1/openapi.json` (public) describes this surface for agents that only speak HTTP — a ChatGPT
+action, Gemini function calling — since `passalong mcp` is stdio and reaches only things that can
+run a local process. `servers[0].url` comes from `origin()` — the apex, since `PUBLIC_ORIGIN`
+names it — which is why it is served rather than committed as a file: a document naming the wrong
+host produces calls that 404 with no explanation.
+
+It deliberately omits signup, login, password reset and token management. An action schema is a
+list of things you are inviting a model to call.
+
 `GET /v1/guides/:id` recording a pull is the one side effect on a GET in this API. It is
 deliberate: a pull is the event the author needs to see, and making it a separate call would mean
 trusting clients to report it. Keep it in mind when adding caching or prefetching.
@@ -60,6 +89,8 @@ trusting clients to report it. Keep it in mind when adding caching or prefetchin
 | `GET /hub` | Your transfers, teams and tokens; talks to `/v1/*` |
 | `GET /join/:code` | Where an invite link lands |
 | `GET /reset` | Set a new password from an emailed link |
+| `GET /hub/report` | File a set of bugs; the one authoring surface in the product |
+| `GET /hub/report/:id` | One report and its issues |
 | `GET /health` | `{"ok":true}` — what CI smoke-tests |
 
 Guide pages are `noindex` and `/g/` is disallowed in `robots.txt`. The share key is the secret, so

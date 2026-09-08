@@ -85,6 +85,25 @@ public one, for agents *using* Passalong rather than changing it.
 
 - **Guides are plain markdown.** Never introduce a field the frontmatter parser can't round-trip
   (strings and string lists only). `passalong export` must always be a complete backup.
+- **A guide has a kind, and the two ask opposite things of whoever receives one.** `transfer`
+  (or absent — every guide written before migration 0007 is one) is finished work to repeat:
+  follow its `Steps`. `bug` is a defect to fix where it is. A bug's repro goes under `## Reproduce`
+  and **never** `## Steps`, because `Steps` is the heading the MCP server tells every agent to
+  follow — a repro under it means an agent reproduces the defect, checks the Verification, finds it
+  false because the bug is real, and reports the guide as broken. `validate()` refuses a bug with a
+  Steps section, and the document itself carries a line saying what it is, because the route
+  serving a share link cannot add one: `api.byLink` pulls through that route and re-serialises what
+  it gets, so anything decorated on there would be written to disk and published back.
+- **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
+  people can take and answer for separately — one document holding six has one verdict, and "four
+  of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is
+  a `GROUP BY`, so a sixth surface costs a value rather than a migration.
+- **Screenshots are claimed by the document that names them.** A shot is uploaded before the guide
+  exists, so `shot.guide_id` is written on every guide write from the URLs in the markdown
+  (`shotIds()`), never by the client. The `account_id` in that WHERE is load-bearing: without it,
+  naming someone else's shot id in your markdown would claim their image, and deleting your guide
+  would delete it. Deleting a guide takes its shots; a nightly cron sweeps uploads no guide ever
+  claimed.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-
@@ -243,7 +262,9 @@ ships scripts and inlines styles whatever the config says.
 `apps/web`** — `pnpm -C apps/api db:migrate:remote` then `pnpm -C apps/web run deploy` (plain
 `pnpm deploy` is a pnpm built-in). apps/api is not deployed; it is mounted. Production host is
 `passalong.dev`, with `passalong.kreativekorna.com` still routed for share links already in
-circulation (custom-domain routes in `apps/web/wrangler.jsonc`); `DEFAULT_API` in
+circulation (custom-domain routes in `apps/web/wrangler.jsonc`). The old host serves but no longer
+*names* anything: `PUBLIC_ORIGIN` fixes every link the app mints — share, invite, reset, screenshot
+— to the apex, so one guide has one link whichever host it was shared from. `DEFAULT_API` in
 `packages/passalong/src/api.js` and `homepage` in its `package.json` must match it.
 `APTABASE_KEY` is a secret on the **web** Worker now; without it `track()` returns early and every
 event is silently dropped. Account creation is throttled by the `ACCOUNT_LIMIT` rate-limit

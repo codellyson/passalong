@@ -7,8 +7,10 @@ first, because the package's default API URL points at it.
 
 | Piece | Where | Config |
 | --- | --- | --- |
-| API + web view | Worker `passalong-api` on `passalong.dev` (and `passalong.kreativekorna.com`) | `apps/api/wrangler.jsonc` |
-| Database | D1 `passalong` (id `2b2c58a0-…`, WEUR) | same file |
+| API + web view | Worker `passalong-web` on `passalong.dev` (and `passalong.kreativekorna.com`) | `apps/web/wrangler.jsonc` |
+| Database | D1 `passalong` (id `2b2c58a0-…`, WEUR) | binding in `apps/web`, migrations in `apps/api` |
+| Screenshots | R2 `passalong-shots` — evidence attached to bug reports | `apps/web/wrangler.jsonc` |
+| Nightly sweep | cron `17 4 * * *` → `apps/web/server/plugins/sweep.ts` | same file |
 | CLI + MCP | npm `passalong`, binary `passalong` | `packages/passalong/package.json` |
 | Default API URL | `DEFAULT_API` in `packages/passalong/src/api.js` | must match the route above |
 
@@ -68,6 +70,13 @@ pnpm -C apps/web deploy:check   # wrangler dry run: bindings, assets, routes
 ```
 
 ## 1. Worker
+
+**One-time, before the first deploy that carries them:** the R2 bucket must exist, or wrangler
+refuses the deploy on an unresolvable binding rather than failing later at runtime.
+
+```sh
+npx wrangler r2 bucket create passalong-shots
+```
 
 There is one Worker: **`apps/web`**. It serves every page and mounts the Hono app from `apps/api`,
 which is not deployed on its own. Migrations still live with the schema in `apps/api`.
@@ -210,7 +219,8 @@ which is what `pnpm release` now prevents. `0.2.1` existed only as a local bump 
 tagged or published, so the shipped history is `0.1.0` then `0.2.2`.
 
 ## Not yet in place
-- If the canonical host moves again, change the route, the `DEFAULT_API` constant, and `homepage`
-  in the package together. `passalong.kreativekorna.com` is kept routed rather than redirected:
-  share keys live in the URL, so links handed out under it must keep resolving, and `origin` in
-  `src/index.ts` builds each page's links from the host it was asked on.
+- If the canonical host moves again, change the route, the `PUBLIC_ORIGIN` var, the `DEFAULT_API`
+  constant, and `homepage` in the package together. `passalong.kreativekorna.com` is kept routed
+  rather than redirected: share keys live in the URL, so links handed out under it must keep
+  resolving. It no longer mints anything, though — `origin()` in `src/index.ts` returns
+  `PUBLIC_ORIGIN` when it is set, so both hosts name the apex and one guide keeps one link.
