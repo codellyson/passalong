@@ -211,7 +211,14 @@ const detailed = computed(() =>
 
       <!-- Optional, and folded away unless it has something in it. Everything under here makes a
            bug easier to fix; none of it should stand between a tester and filing the next one. -->
-      <details class="border-t border-dashed border-line pt-3" :open="detailed">
+      <!-- The three zero widths are load-bearing. `border-dashed` sets border-style on all four
+           sides, and this app layers Tailwind's theme and utilities over its own base without
+           preflight — so nothing has zeroed border-width, and the other three sides fall back to
+           the initial `medium`, drawing a 3px dashed box nobody asked for. -->
+      <details
+        class="border-t border-r-0 border-b-0 border-l-0 border-dashed border-line pt-3"
+        :open="detailed"
+      >
         <summary class="cursor-pointer font-ui text-xs font-semibold tracking-wide text-muted uppercase hover:text-fg">
           Repro detail
         </summary>

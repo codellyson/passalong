@@ -22,6 +22,25 @@
   font-display: swap;
 }
 
+/* ---- border reset --------------------------------------------------------------------------
+   The one rule this file borrows from Tailwind's preflight, which the app does not otherwise
+   load: tailwind.css imports the theme and the utilities over this stylesheet and skips the rest
+   of preflight, so nothing had zeroed border widths.
+
+   Without it, any border utility that sets a style without a width — `border-dashed` on its own,
+   or `border-t` on an element whose other sides are untouched — exposes the CSS initial width,
+   which is `medium`, which is 3px. That shipped as a dashed box around the repro fields nobody
+   asked for and nothing in the markup asked for either.
+
+   Every rule below sets `border` in full, so zeroing the initial width changes nothing that is
+   already here; it only stops the utilities from drawing edges by accident. */
+*,
+::before,
+::after {
+  border-width: 0;
+  border-style: solid;
+}
+
 /* ---- tokens --------------------------------------------------------------------------------
    Everything below composes from these. Spacing is a 4px scale, so cards, rows and buttons
    share one rhythm instead of the sixteen ad-hoc values this file used to carry. */
