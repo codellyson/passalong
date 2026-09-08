@@ -10,8 +10,10 @@
     "db:migrate:remote": "wrangler d1 migrations apply passalong --remote"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "hono": "^4.6.0",
-    "workers-og": "^0.0.27"
+    "workers-og": "^0.0.27",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260811.1",

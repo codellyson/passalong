@@ -66,7 +66,17 @@ import {
   sendReset,
   sendVerdict,
 } from "./email.js";
-import { type Meta, parseMeta, STATUSES, setField, shotIds, slug } from "./guide.js";
+import {
+  AREAS,
+  type Meta,
+  parseMeta,
+  SEVERITIES,
+  STATUSES,
+  setField,
+  shotIds,
+  slug,
+} from "./guide.js";
+import { handleMcp } from "./mcp-http.js";
 import {
   feed,
   markRead,
@@ -1732,6 +1742,50 @@ app.get("/g/:id/:key/og.png", async (c) => {
 app.get("/v1/openapi.json", (c) =>
   c.json(openapi(origin(c)), 200, { "cache-control": "public, max-age=300" }),
 );
+
+/**
+ * The MCP server at an address.
+ *
+ * `passalong mcp` is stdio and reaches only what can run a local process. This is the same tools
+ * over HTTP, for assistants that add outside tools as remote servers.
+ *
+ * It sits under `/v1/` so the credential middleware above has already run: the bearer token that
+ * authenticates every other call authenticates this one, and a tool never sees a request the API
+ * would have refused. Each tool then dispatches back through this same app carrying that header,
+ * so there is one implementation of every rule and it is the route.
+ */
+app.all("/v1/mcp", async (c) => {
+  if (c.req.method !== "POST") {
+    // No session and no server-initiated messages, so there is nothing for a GET stream or a
+    // DELETE to do. Say which method works rather than answering an empty stream.
+    return c.json({ message: "POST JSON-RPC to this endpoint" }, 405, { allow: "POST" });
+  }
+  const authorization = c.req.header("authorization") || "";
+  const base = origin(c);
+  const vocabulary = {
+    areas: AREAS.map((a) => a.slug).join(", "),
+    severities: SEVERITIES.map((s) => `${s.slug} ${s.label.toLowerCase()}`).join(", "),
+  };
+  return handleMcp(
+    c.req.raw,
+    async (method, path, body) => {
+      const res = await app.fetch(
+        new Request(`${base}${path}`, {
+          method,
+          headers: {
+            authorization,
+            ...(body === undefined ? {} : { "content-type": "application/json" }),
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        }),
+        c.env,
+        c.executionCtx,
+      );
+      return { status: res.status, text: await res.text() };
+    },
+    vocabulary,
+  );
+});
 
 app.get("/health", (c) => c.json({ ok: true }));
 
