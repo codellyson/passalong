@@ -1,7 +1,7 @@
 // The team channel: which events reach it, what it sends, and which URLs it refuses.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { announce, channelBody, line, post, webhookAllowed } from "../src/notify.ts";
+import { announce, channelBody, chatCard, line, post, webhookAllowed } from "../src/notify.ts";
 
 test("only URLs worth posting a secret to are accepted", () => {
   assert.equal(webhookAllowed("https://hooks.slack.com/services/T0/B0/xxxx"), true);
@@ -250,5 +250,124 @@ test("a refusal is recorded, and recovery clears it", async () => {
     assert.equal(healthy.writes.length, 0, "a healthy channel costs no writes");
   } finally {
     healthy.restore();
+  }
+});
+
+// ---- the card a Google Chat room gets ----------------------------------------------------
+
+const GCHAT = "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t";
+const facts = (over = {}) => ({
+  kind: "handoff",
+  text: '@lukman handed you "Invoice creation fails" in khaime / @hybee1',
+  title: "Invoice creation fails: integer overflow in invoice_number sequence allocator",
+  url: "https://passalong.dev/g/jvj2vckm/r9pfeum5h9kgwbwkh2wju8",
+  ...over,
+});
+
+test("Chat gets a card, because Chat is the one room that cannot make its own", () => {
+  const body = channelBody(GCHAT, "the sentence", facts());
+  assert.equal(body.text, "the sentence", "the line stays: it is the phone's notification");
+  assert.ok(Array.isArray(body.cardsV2));
+  const card = body.cardsV2[0].card;
+  assert.match(card.header.title, /Invoice creation fails/);
+  assert.match(card.header.subtitle, /@lukman handed you/);
+  const buttons = card.sections[0].widgets.at(-1).buttonList.buttons;
+  assert.equal(buttons[0].onClick.openLink.url, facts().url);
+  assert.equal(buttons[0].text, "Open the guide");
+});
+
+test("everywhere else is left alone — they unfurl, or they do not take cards", () => {
+  assert.deepEqual(channelBody("https://hooks.slack.com/services/x", "hi", facts()), {
+    text: "hi",
+  });
+  assert.deepEqual(channelBody("https://discord.com/api/webhooks/1/x", "hi", facts()), {
+    content: "hi",
+  });
+  // Google refuses a payload carrying a field it does not know, and a refused post is a silent
+  // one — so nothing but Chat may ever be handed a cardsV2.
+  for (const url of ["https://hooks.slack.com/x", "https://example.com/hook"]) {
+    assert.ok(!("cardsV2" in channelBody(url, "hi", facts())));
+  }
+});
+
+test("the reason gets its own paragraph, and the tone gets the button", () => {
+  const card = chatCard(
+    facts({ kind: "failed", note: "the flag it tells you to set does not exist on this version" }),
+  )[0].card;
+  const [first, second] = card.sections[0].widgets;
+  assert.match(first.textParagraph.text, /<i>the flag it tells you/);
+  // #ab2f21. A failed verdict is the one thing in the room that should not look like everything
+  // else in it.
+  assert.deepEqual(second.buttonList.buttons[0].color, {
+    r: 0.671,
+    g: 0.184,
+    b: 0.129,
+    alpha: 1,
+  });
+  const ok = chatCard(facts({ kind: "verified" }))[0].card.sections[0].widgets[0];
+  assert.equal(ok.buttonList.buttons[0].color.g, 0.42, "a verdict that holds up is green");
+});
+
+test("a title somebody typed cannot become markup", () => {
+  const card = chatCard(facts({ title: "Fix <b>bold</b> & the <script> tag" }))[0].card;
+  assert.ok(!card.header.title.includes("<b>"), "Chat renders a subset of HTML in card text");
+  assert.match(card.header.title, /&lt;b&gt;bold&lt;\/b&gt; &amp; the &lt;script&gt;/);
+});
+
+test("a long title is cut on a word, not mid-way through one", () => {
+  const long = `${"word ".repeat(40)}end`;
+  const title = chatCard(facts({ title: long }))[0].card.header.title;
+  assert.ok(title.length <= 121, `header was ${title.length}`);
+  assert.match(title, /word…$/, "the ellipsis lands after a whole word");
+});
+
+test("no card where a card would be worse than a sentence", () => {
+  assert.equal(chatCard(facts({ title: "" })), null, "an event with no guide behind it");
+  assert.equal(
+    chatCard(facts({ url: "", note: "" })),
+    null,
+    "a header with nothing under it is a heading pretending to be a card",
+  );
+  // And the body still goes out, so the room hears about it either way.
+  assert.deepEqual(channelBody(GCHAT, "@bo joined khaime", facts({ title: "" })), {
+    text: "@bo joined khaime",
+  });
+});
+
+test("a room with a card is not also sent the naked URL it replaced", async () => {
+  const h = harness(GCHAT);
+  try {
+    await announce(h.env, {
+      kind: "failed",
+      team_id: "t1",
+      text: '@ada says "Fix the payment link" does not work',
+      title: "Fix the payment link",
+      note: "every B2B invoice email fell through to app.khaime.com",
+      url: "https://passalong.dev/g/abc12345/key",
+    });
+    const { body } = h.posts[0];
+    assert.ok(!body.text.includes("https://"), "the button is the link now");
+    assert.equal(
+      body.cardsV2[0].card.sections[0].widgets.at(-1).buttonList.buttons[0].onClick.openLink.url,
+      "https://passalong.dev/g/abc12345/key",
+    );
+  } finally {
+    h.restore();
+  }
+});
+
+test("a room without a card still gets the link spelled out", async () => {
+  const h = harness("https://hooks.slack.com/services/T0/B0/xxxx");
+  try {
+    await announce(h.env, {
+      kind: "failed",
+      team_id: "t1",
+      text: "@ada says it does not work",
+      title: "Fix the payment link",
+      url: "https://passalong.dev/g/abc12345/key",
+    });
+    assert.match(h.posts[0].body.text, /https:\/\/passalong\.dev\/g\/abc12345\/key/);
+  } finally {
+    h.restore();
   }
 });

@@ -110,6 +110,10 @@ export interface Announcement {
   text: string;
   /** The guide's share link, when the event is about one. */
   url?: string;
+  /** The guide's title, for a room that can render a card rather than a line. */
+  title?: string;
+  /** Somebody's own words, when the event carries any. */
+  note?: string;
 }
 
 /**
@@ -148,20 +152,134 @@ export function webhookAllowed(url: string): boolean {
  * So the host decides, and an address we do not recognise gets both spellings, which is the same
  * gamble as before but only where there is nothing better to go on.
  */
-export function channelBody(url: string, text: string): Record<string, string> {
+export function channelBody(url: string, text: string, facts?: CardFacts): Record<string, unknown> {
   let host = "";
   try {
     host = new URL(url).hostname;
   } catch {
     return { text, content: text };
   }
-  if (host === "chat.googleapis.com") return { text };
+  if (host === "chat.googleapis.com") {
+    // Chat is the one room that cannot preview a link on its own, so it is the one that gets the
+    // card built for it. `text` stays: it is what a phone shows in the notification, and what the
+    // message reads as where a card cannot render.
+    const card = facts && chatCard(facts);
+    return card ? { text, cardsV2: card } : { text };
+  }
   if (host.endsWith("slack.com")) return { text };
   if (host === "discord.com" || host === "discordapp.com" || host.endsWith(".discord.com")) {
     return { content: text };
   }
   return { text, content: text };
 }
+
+// ---- the card a Google Chat room gets ---------------------------------------------------
+//
+// Chat does not unfurl a link the way Slack does: previews there come from a Chat app that
+// registers URL patterns and answers a message event, and what a team connects here is an incoming
+// webhook — so nothing on the other end ever reads the page's `og:` tags. And nothing should: the
+// share key in a guide's URL *is* its authorisation, `robots.txt` disallows `/g/` for exactly that
+// reason, and an unfurl means handing that key to somebody else's fetcher to cache.
+//
+// So the card is built from what we already know rather than scraped from a page nobody is allowed
+// to read. No image either — the room's avatar is already the mark, and the only image worth adding
+// would be the one that leaks the key.
+//
+// It lives here for the same reason `line()` does: one place decides how an event reads, whichever
+// surface is showing it. (It also cannot live next door — this module is imported by two test
+// files, and a value import of a sibling `.ts` is what Node's type stripping cannot resolve.)
+
+export interface CardFacts {
+  kind: string;
+  /** The sentence every other surface shows, used as the card's subtitle. */
+  text: string;
+  /** The guide's title. The card's headline, when the event is about a guide. */
+  title?: string;
+  /** Somebody's own words — a verdict's reason, a decline's. Never paraphrased. */
+  note?: string;
+  url?: string;
+}
+
+/** Chat renders a small HTML subset in card text, so anything a person typed is escaped first. */
+export function escChat(s: unknown): string {
+  return String(s ?? "").replace(/[&<>]/g, (c) => `&${{ "&": "amp", "<": "lt", ">": "gt" }[c]};`);
+}
+
+/**
+ * What kind of news this is, as the button's colour. The hub's semantic tokens, converted —
+ * Chat takes floats, not hex.
+ */
+const TONES: Record<string, { r: number; g: number; b: number }> = {
+  // #ab2f21 — someone tried it and it does not hold up.
+  failed: { r: 0.671, g: 0.184, b: 0.129 },
+  // #8a5a08 — handed back, so it has stopped moving and only its author can restart it.
+  declined: { r: 0.541, g: 0.353, b: 0.031 },
+  // #3f6b45 — it worked, or somebody has it.
+  verified: { r: 0.247, g: 0.42, b: 0.271 },
+  taken: { r: 0.247, g: 0.42, b: 0.271 },
+};
+/** #b5451b, the brand. Everything that is neither good news nor bad. */
+const BRAND = { r: 0.71, g: 0.271, b: 0.106 };
+
+const MAX_TITLE = 120;
+
+/** A guide title is a line, not a paragraph, and a card header does not wrap generously. */
+function clip(s: string, max = MAX_TITLE): string {
+  const one = s.trim().replace(/\s+/g, " ");
+  if (one.length <= max) return one;
+  const cut = one.slice(0, max);
+  const at = cut.lastIndexOf(" ");
+  return `${(at > max * 0.6 ? cut.slice(0, at) : cut).trimEnd()}…`;
+}
+
+type Widget = Record<string, unknown>;
+
+/**
+ * One card, or null when there is nothing to build one from.
+ *
+ * Null rather than an empty card on purpose: an event with no guide behind it (somebody joining a
+ * team) is a sentence, and a sentence in a card with no title and no button is a worse sentence.
+ */
+export function chatCard(a: CardFacts): Record<string, unknown>[] | null {
+  if (!a.title) return null;
+  const widgets: Widget[] = [];
+  if (a.note) {
+    widgets.push({ textParagraph: { text: `<i>${escChat(clip(a.note, 280))}</i>` } });
+  }
+  if (a.url) {
+    widgets.push({
+      buttonList: {
+        buttons: [
+          {
+            text: "Open the guide",
+            onClick: { openLink: { url: a.url } },
+            color: { ...(TONES[a.kind] ?? BRAND), alpha: 1 },
+          },
+        ],
+      },
+    });
+  }
+  // A card with a header and nothing under it is a heading pretending to be a card.
+  if (!widgets.length) return null;
+  return [
+    {
+      cardId: `passalong-${a.kind}`,
+      card: {
+        header: { title: escChat(clip(a.title)), subtitle: escChat(clip(a.text, 200)) },
+        sections: [{ widgets }],
+      },
+    },
+  ];
+}
+
+/** Whether this room renders the card, and so does not need the URL spelled out under the line. */
+const cards = (url: string) => {
+  try {
+    return new URL(url).hostname === "chat.googleapis.com";
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Post one event to a team's channel, once.
@@ -189,6 +307,7 @@ export async function post(
   env: NotifyEnv,
   channel: ChannelRow,
   text: string,
+  facts?: CardFacts,
 ): Promise<{ ok: boolean; status: number; error: string }> {
   let status = 0;
   let error = "";
@@ -196,7 +315,7 @@ export async function post(
     const res = await fetch(channel.url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(channelBody(channel.url, text)),
+      body: JSON.stringify(channelBody(channel.url, text, facts)),
       // A channel that has been deleted should not hold up the write that triggered this, and a
       // redirect to somewhere else is not somewhere this was meant to go.
       redirect: "manual",
@@ -236,9 +355,20 @@ export async function announce(env: NotifyEnv, a: Announcement): Promise<void> {
       .bind(a.team_id, MAX_CHANNELS)
       .all<ChannelRow>();
     if (!results.length) return;
-    const body = a.url ? `${a.text}\n${a.url}` : a.text;
-    // In parallel, and one channel's failure never withholds the line from the others.
-    const sent = await Promise.all(results.map((channel) => post(env, channel, body)));
+    // The line a room without cards gets, link and all. A room that renders the card gets the
+    // sentence alone, because the button is already the link and a naked URL under a card is the
+    // thing the card was built to replace.
+    const line = a.url ? `${a.text}\n${a.url}` : a.text;
+    const facts: CardFacts = {
+      kind: a.kind,
+      text: a.text,
+      title: a.title,
+      note: a.note,
+      url: a.url,
+    };
+    const sent = await Promise.all(
+      results.map((channel) => post(env, channel, cards(channel.url) ? a.text : line, facts)),
+    );
     for (const [i, result] of sent.entries()) {
       if (!result.ok) console.error("announce", a.kind, results[i]?.id, result.error);
     }

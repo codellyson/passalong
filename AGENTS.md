@@ -192,6 +192,15 @@ public one, for agents *using* Passalong rather than changing it.
   CLI: `take`/`pass` for the ack, `works`/`broken` for the verdict, `done` to archive. A signal that
   exists in only two of them is one a third of the product's users cannot send, and the mail that
   tells someone what to do next can only name commands that exist.
+- **Google Chat gets a card; nothing else does.** Chat cannot unfurl a link — previews there come
+  from a Chat app registering URL patterns, and a team connects an incoming webhook — so `chatCard()`
+  in `notify.ts` builds the preview from what we already know. It must stay built rather than
+  scraped: the share key in a guide's URL is its authorisation, `robots.txt` disallows `/g/` for
+  that reason, and an unfurl hands the key to somebody else's fetcher to cache. No image on the
+  card for the same reason. Only bedrock `cardsV2` fields, and only for `chat.googleapis.com` —
+  Google refuses a payload carrying a field it does not know, and a refused post is a silent one.
+  The card lives in `notify.ts` beside `line()`, and has to: two test files import that module, and
+  a value import of a sibling `.ts` is what Node's type stripping cannot resolve.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-

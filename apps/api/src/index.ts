@@ -1977,6 +1977,7 @@ app.put("/v1/guides/:id", async (c) => {
         kind,
         team_id: team.id,
         text: line({ kind, actor: fromHandle, title: String(meta.title), team: where, times: 1 }),
+        title: String(meta.title),
         url,
       });
     }
@@ -2191,8 +2192,11 @@ app.put("/v1/guides/:id/verdict", async (c) => {
       title: found.row.title,
       team: "",
       times: 1,
-      note,
     }),
+    title: found.row.title,
+    // Set apart rather than run into the sentence: a failure's reason is the only part anyone
+    // reads twice, and in a card it gets its own paragraph.
+    note,
     url: shareUrl(origin(c), found.row),
   });
   count(c, "verdict_given", { ok: body.ok });
@@ -2251,8 +2255,9 @@ app.put("/v1/guides/:id/ack", async (c) => {
       title: found.row.title,
       team: "",
       times: 1,
-      note,
     }),
+    title: found.row.title,
+    note,
     url: shareUrl(origin(c), found.row),
   });
   count(c, "guide_acked", { taken: body.taken });
