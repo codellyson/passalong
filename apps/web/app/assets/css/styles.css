@@ -3,8 +3,9 @@
    reason: `font-src 'self'` allows this origin and nothing else. */
 
 /* ---- fonts ---------------------------------------------------------------------------------
-   Two variable faces, latin subset, ~80KB together. Instrument Sans carries the interface;
-   Source Serif carries guide prose, where the reading is long and a serif earns its place.
+   Three variable faces, latin subset, ~120KB together. Instrument Sans carries the interface;
+   Source Serif carries guide prose, where the reading is long and a serif earns its place;
+   JetBrains Mono carries everything the machine wrote — ids, tags, commands, code.
    `swap` so a slow font never blanks the text — the fallback metrics below are close enough
    that the swap does not jump the layout. */
 @font-face {
@@ -18,6 +19,21 @@
   font-family: "Source Serif 4";
   src: url("/fonts/source-serif-4-var.woff2") format("woff2-variations");
   font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+/* The third face, and the one that was missing.
+   `--font-mono` used to be a system stack — SF Mono here, Cascadia there, something else again on
+   Linux — which meant the two carefully chosen faces sat beside one nobody had chosen, changing
+   per machine. It carries ids, tags, meta lines, commands and code, so it is a large part of what
+   anyone actually looks at.
+   JetBrains Mono because the constraint is small sizes: tags and meta run at 13px, and its brief
+   was reading code at exactly that scale — a tall x-height, low contrast, and 0/O and 1/l drawn
+   apart. OFL, variable weight like the other two, latin subset at 40KB. */
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono-var.woff2") format("woff2-variations");
+  font-weight: 100 800;
   font-style: normal;
   font-display: swap;
 }
@@ -49,7 +65,8 @@
 
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Source Serif 4", Georgia, "Iowan Old Style", serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", monospace;
+  /* The system stack stays as the fallback, so a slow font never leaves this text unrendered. */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", monospace;
 
   /* Type. The display step is fluid so the hero fills a phone and a laptop equally. */
   --t-display: clamp(2.25rem, 1.2rem + 4.6vw, 3.5rem);
