@@ -73,8 +73,10 @@ import {
   SEVERITIES,
   STATUSES,
   setField,
+  setList,
   shotIds,
   slug,
+  tagList,
 } from "./guide.js";
 import { handleMcp } from "./mcp-http.js";
 import {
@@ -334,7 +336,9 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       created: r.created,
       updated: r.updated,
       source_context: r.source_context,
-      tags: JSON.parse(r.tags) as string[],
+      // Normalised on the way out as well as the way in: a guide stored before there was a rule
+      // has its old spelling in the column until its author publishes it again.
+      tags: tagList(JSON.parse(r.tags)),
       stack_assumptions: JSON.parse(r.stack) as string[],
       pulls: r.pulls,
       url: shareUrl(base, r),
@@ -1615,6 +1619,10 @@ app.put("/v1/guides/:id", async (c) => {
   const url = shareUrl(base, { id, share_key });
   markdown = setField(markdown, "url", url);
   if (!meta.id) markdown = setField(markdown, "id", id);
+  // `parseMeta` already normalised what it read, so this writes the one style back into the
+  // document the author will pull again. It is a no-op when they already agree, which is every
+  // publish after the first.
+  markdown = setList(markdown, "tags", meta.tags);
   const t = now();
   const created = String(meta.created || existing?.created || t);
 

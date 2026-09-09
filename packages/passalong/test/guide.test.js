@@ -177,3 +177,29 @@ test("a bug says what it is inside the document", () => {
   assert.match(roundTripped, /^> \*\*Bug report\.\*\*/m);
   assert.deepEqual(validate(parse(md)), []);
 });
+
+test("tags are one style at both ends of the module", () => {
+  const md = `---
+id: aa
+title: "One"
+tags:
+  - additional_information
+  - Custom Fields
+  - custom--fields
+---
+
+## Problem
+x
+`;
+  const doc = parse(md);
+  assert.deepEqual(
+    doc.meta.tags,
+    ["additional-information", "custom-fields"],
+    "read normalised, and the two spellings of one idea are now one tag",
+  );
+  assert.match(
+    serialize(doc),
+    /^tags: \[additional-information, custom-fields\]$/m,
+    "and written back that way, so the document the author pulls agrees",
+  );
+});

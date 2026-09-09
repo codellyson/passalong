@@ -73,6 +73,34 @@ export function slug(raw: unknown, max = 32): string {
     .slice(0, max);
 }
 
+/**
+ * One tag, in the one style tags are written in: lowercase, words joined by a hyphen.
+ *
+ * Nothing used to normalise them, so `custom-fields` and `additional_information` sat on the same
+ * card and the same idea could exist twice under two spellings. A tag is a controlled vocabulary
+ * and not prose — the point of it is that two people who mean the same thing write the same
+ * string — so the reader picks the style rather than the typist.
+ *
+ * Hyphen because that is what nearly every tag already used, and because a tag reads as one word
+ * with a `#` in front of it, which is how the rest of the world writes them.
+ */
+export function tag(raw: unknown): string {
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 32)
+    .replace(/^-+|-+$/g, "");
+}
+
+/** A guide's tags: normalised, emptied of blanks, and deduped once two spellings become one. */
+export function tagList(raw: unknown): string[] {
+  const list = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
+  return [...new Set(list.map(tag).filter(Boolean))];
+}
+
 const LIST_FIELDS = new Set(["tags", "stack_assumptions"]);
 
 function scalar(raw: string): string {
@@ -169,6 +197,10 @@ export function parseMeta(markdown: string): Meta {
       listKey = null;
     }
   }
+  // Tags are normalised as they are read, not only as they are written. Guides published before
+  // there was a rule are still stored as they were typed, and re-spelling them in the document is
+  // something only their author can do — every surface that reads one shows one style meanwhile.
+  meta.tags = tagList(meta.tags);
   return meta;
 }
 
@@ -185,6 +217,40 @@ export function setField(markdown: string, key: string, value: string): string {
     ? parts.front.replace(re, `${key}: ${quote(value)}`)
     : `${parts.front}\n${key}: ${quote(value)}`;
   return `---\n${front}\n---\n${parts.body}`;
+}
+
+/**
+ * Set one list frontmatter field, as a flow sequence.
+ *
+ * Anything the key was carrying goes, including a block sequence written under it — leaving those
+ * `- item` lines behind would orphan them under whatever key came next. Unchanged input comes back
+ * untouched, so publishing a document that is already in the right shape does not rewrite it.
+ */
+export function setList(markdown: string, key: string, values: string[]): string {
+  const parts = split(markdown);
+  const line = values.length ? `${key}: [${values.map(quote).join(", ")}]` : `${key}: []`;
+  if (!parts) return markdown;
+
+  const out: string[] = [];
+  let dropping = false;
+  let found = false;
+  for (const l of parts.front.split(/\r?\n/)) {
+    if (dropping) {
+      if (/^\s*-\s/.test(l)) continue;
+      dropping = false;
+    }
+    if (new RegExp(`^${key}:`).test(l)) {
+      out.push(line);
+      found = true;
+      dropping = true;
+      continue;
+    }
+    out.push(l);
+  }
+  if (!found) out.push(line);
+
+  const front = out.join("\n");
+  return front === parts.front ? markdown : `---\n${front}\n---\n${parts.body}`;
 }
 
 /** Everything after the frontmatter, for rendering. */

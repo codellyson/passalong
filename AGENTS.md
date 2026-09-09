@@ -129,6 +129,13 @@ public one, for agents *using* Passalong rather than changing it.
   opens a form is labelled with the same words as the menu item that opens it. Any button that
   wears an icon **and** calls `copy()` needs `<span data-label>` around its text: `copy()` swaps
   that element, and swapping the button's own `textContent` would eat the icon for good.
+- **Tags are a controlled vocabulary, so they are normalised at both ends.** `tag()`/`tagList()`
+  (in `apps/api/src/guide.ts`, mirrored in `packages/passalong/src/guide.js`) lowercase a tag and
+  join its words with a hyphen. `parseMeta`/`parseFrontmatter` normalise what they read and the
+  publish path writes the result back into the document with `setList`, so a guide written before
+  there was a rule reads as one style everywhere immediately and stores as one style the next time
+  its author publishes it. That two-ended shape is deliberate: re-spelling the markdown is the
+  author's to do, and there is no SQL migration that can rewrite frontmatter inside a document.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-

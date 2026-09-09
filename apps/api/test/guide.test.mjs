@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { body, parseMeta, setField, shotIds, split } from "../src/guide.ts";
+import { body, parseMeta, setField, setList, shotIds, split, tag, tagList } from "../src/guide.ts";
 
 const DOC = `---
 id: k3mq2xa7
@@ -185,4 +185,49 @@ test("a guide can arrive as itself or wrapped in JSON", async () => {
   assert.ok(body["application/json"], "the schema must offer a JSON body");
   assert.ok(body["text/markdown"], "and keep the markdown one the CLI sends");
   assert.deepEqual(body["application/json"].schema.required, ["markdown"]);
+});
+
+test("tags come back in one style, however they were typed", () => {
+  assert.deepEqual(
+    tagList(["Custom Fields", "additional_information", "#bug", "", "  ", "custom--fields"]),
+    ["custom-fields", "additional-information", "bug"],
+    "one style, blanks dropped, and two spellings of one idea collapse to one tag",
+  );
+  assert.equal(tag("a".repeat(40)), "a".repeat(32), "capped");
+  assert.equal(tag("-lead-and-trail-"), "lead-and-trail");
+  assert.equal(tag("!!!"), "", "a tag made only of punctuation is not a tag");
+  assert.deepEqual(tagList(undefined), []);
+  assert.deepEqual(tagList("one_tag"), ["one-tag"], "a scalar is a list of one");
+});
+
+test("parseMeta normalises the tags it reads, so old guides read as new ones", () => {
+  const meta = parseMeta("---\nid: aa\ntags: [Custom Fields, additional_information]\n---\n\nx\n");
+  assert.deepEqual(meta.tags, ["custom-fields", "additional-information"]);
+});
+
+test("setList replaces a block sequence rather than orphaning its items", () => {
+  const md =
+    "---\nid: aa\ntags:\n  - additional_information\n  - Custom Fields\nstatus: published\n---\n\n## Problem\nx\n";
+  const out = setList(md, "tags", parseMeta(md).tags);
+  assert.match(out, /^tags: \[additional-information, custom-fields\]$/m);
+  assert.ok(!out.includes("- Custom Fields"), "the old items must not be left behind");
+  assert.match(out, /^status: published$/m, "and the key after them must survive");
+  assert.match(out, /## Problem/, "the body is untouched");
+});
+
+test("setList leaves a document that already says the right thing alone", () => {
+  const md = "---\nid: aa\ntags: [bug, hub]\n---\n\n## Problem\nx\n";
+  assert.equal(setList(md, "tags", ["bug", "hub"]), md, "publishing twice must not rewrite it");
+});
+
+test("setList appends the field when the document has none", () => {
+  const out = setList("---\nid: aa\n---\n\nx\n", "tags", ["bug"]);
+  assert.match(out, /^tags: \[bug\]$/m);
+  assert.deepEqual(parseMeta(out).tags, ["bug"]);
+});
+
+test("an empty list is written as one, not left as the old value", () => {
+  const out = setList("---\nid: aa\ntags: [bug]\n---\n\nx\n", "tags", []);
+  assert.match(out, /^tags: \[\]$/m);
+  assert.deepEqual(parseMeta(out).tags, []);
 });

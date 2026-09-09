@@ -93,6 +93,31 @@ export function sectionsFor(kind) {
 const REQUIRED = { transfer: ["Problem", "Steps"], bug: ["Problem", "Reproduce"] };
 
 // Fields that hold a list of strings. Everything else is a plain string.
+/**
+ * One tag, in the one style tags are written in: lowercase, words joined by a hyphen.
+ *
+ * Nothing used to normalise them, so `custom-fields` and `additional_information` could sit on the
+ * same guide and the same idea exist twice under two spellings. A tag is a controlled vocabulary,
+ * not prose — its whole value is that two people who mean the same thing write the same string.
+ * Mirrors `tag()` in apps/api/src/guide.ts.
+ */
+export function tag(raw) {
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 32)
+    .replace(/^-+|-+$/g, "");
+}
+
+/** A guide's tags: normalised, emptied of blanks, deduped once two spellings become one. */
+export function tagList(raw) {
+  const list = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
+  return [...new Set(list.map(tag).filter(Boolean))];
+}
+
 const LIST_FIELDS = new Set(["stack_assumptions", "tags"]);
 
 // IDs are short enough to type and say out loud. 8 chars from a 31-letter alphabet with the
@@ -187,6 +212,9 @@ export function parseFrontmatter(text) {
     }
   }
   for (const k of LIST_FIELDS) if (meta[k] === undefined) meta[k] = [];
+  // Both ends of this module: what it reads and what it writes are in one style, so a guide
+  // written before there was a rule comes back normalised and goes out normalised.
+  meta.tags = tagList(meta.tags);
   return meta;
 }
 
@@ -222,7 +250,7 @@ export function serializeFrontmatter(meta) {
   ];
   const out = [];
   for (const key of keys) {
-    const v = meta[key];
+    const v = key === "tags" ? tagList(meta[key]) : meta[key];
     if (Array.isArray(v)) {
       out.push(v.length ? `${key}: [${v.map(quote).join(", ")}]` : `${key}: []`);
     } else {
