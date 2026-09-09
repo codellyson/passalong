@@ -100,7 +100,13 @@ const standing = computed(() => {
 
 const tabs = computed(() => [
   { to: "/hub", label: "Board", count: waiting.value || null },
-  { to: "/hub/guides", label: "All guides", count: data.value.guides.length || null },
+  {
+    to: "/hub/guides",
+    // Archived ones are on a shelf inside that page, not in this number: the count is meant to
+    // say how much there is to look at, and the point of archiving is that there is less.
+    label: "All guides",
+    count: data.value.guides.filter((g) => g.status !== "consumed").length || null,
+  },
   // The one tab that is a verb. Everything else here is a place; this is the thing you came to do
   // when what you have is a list of bugs rather than a guide you already wrote somewhere else.
   { to: "/hub/report", label: "Report a bug", count: null },
@@ -180,7 +186,7 @@ const tabs = computed(() => [
       >
         <b class="text-fg">{{ data.me?.guides }} of {{ data.me?.limit }} synced guides used.</b>
         <template v-if="full">
-          The next <code>passalong share</code> will be refused — remove one you no longer need.
+          The next <code>passalong share</code> will be refused — archive one you are done with.
         </template>
         <template v-else>The free tier stops at this number.</template>
         <NuxtLink to="/hub/guides">See what is synced</NuxtLink>

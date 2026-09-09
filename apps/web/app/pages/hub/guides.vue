@@ -40,11 +40,12 @@ const CUTS = [
   { key: "attention", label: "needs attention" },
   { key: "theirs", label: "handed to you" },
   { key: "mine", label: "yours" },
-  // Not a lifecycle filter. `consumed` and `promoted` are deprecated, so filtering on them would
-  // ask about a field nothing sets any more. This asks the question someone actually has — which
-  // of these is nothing happening to — and it is where the free-tier warning sends you when it
-  // says to remove one you no longer need.
+  // Not a lifecycle filter. This asks the question someone actually has — which of these is
+  // nothing happening to — and it is where the free-tier warning sends you.
   { key: "idle", label: "not in transit" },
+  // The shelf. Archived guides are out of every other cut, including "all", because an archive
+  // that still shows you everything is not an archive; this is how you find one again.
+  { key: "archived", label: "archived" },
 ];
 
 interface Row {
@@ -52,7 +53,12 @@ interface Row {
   state: GuideState | null;
 }
 
+/** Off the board and out of the free tier's count. Everything but the shelf itself hides them. */
+const isArchived = (r: Row) => r.g.status === "consumed";
+
 const inCut = (r: Row, key: string) => {
+  if (key === "archived") return isArchived(r);
+  if (isArchived(r)) return false;
   // `stale` is an age rather than a state, so it earns attention from the guide, not the badge.
   if (key === "attention") return Boolean(r.state?.attention || r.g.stale);
   if (key === "theirs") return !r.g.mine;

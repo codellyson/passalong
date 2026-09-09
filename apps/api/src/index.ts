@@ -104,6 +104,7 @@ import {
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
+import { COUNTED, isFull, limitFor } from "./quota.js";
 import { SHOT_TYPES, shotKey } from "./shots.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
@@ -746,9 +747,7 @@ app.get("/v1/me", async (c) => {
   )
     .bind(account)
     .first<AccountRow & { password_hash: string }>();
-  const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM guide WHERE account_id = ?")
-    .bind(account)
-    .first<{ n: number }>();
+  const room = await quota(c, account);
   const teams = (await myTeams(c)).map((t) => ({ slug: t.slug, name: t.name, role: t.role }));
   return c.json({
     account,
@@ -756,14 +755,37 @@ app.get("/v1/me", async (c) => {
     name: me?.name || "",
     email: me?.email || "",
     teams,
-    guides: n?.n ?? 0,
-    limit: Number(c.env.FREE_SYNC_LIMIT),
+    // What is counted, not what exists: an archived guide takes up no room, so a warning drawn
+    // from a total would have told people to delete things that were already out of the way.
+    guides: room.used,
+    limit: room.limit,
     unread: await unreadCount(c.env, account),
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.
     has_password: Boolean(me?.password_hash),
   });
 });
+
+/**
+ * What this account has used of the free tier, and its ceiling.
+ *
+ * One function, two callers — `/v1/me`, which draws the warning, and the publish path, which
+ * refuses the share. They were separate queries counting different things, so the interface
+ * warned at a number the server did not enforce.
+ */
+async function quota(c: Ctx, account: string): Promise<{ used: number; limit: number }> {
+  const marks = COUNTED.map(() => "?").join(", ");
+  const row = await c.env.DB.prepare(
+    `SELECT (SELECT COUNT(*) FROM guide WHERE account_id = ? AND status IN (${marks})) AS used,
+            (SELECT sync_limit FROM account WHERE id = ?) AS own`,
+  )
+    .bind(account, ...COUNTED, account)
+    .first<{ used: number; own: number }>();
+  return {
+    used: row?.used ?? 0,
+    limit: limitFor(row?.own, c.env.FREE_SYNC_LIMIT),
+  };
+}
 
 app.patch("/v1/me", async (c) => {
   const account = c.get("account");
@@ -1599,17 +1621,13 @@ app.put("/v1/guides/:id", async (c) => {
     return err(c, 403, "that id belongs to another account");
 
   if (!existing) {
-    const limit = Number(c.env.FREE_SYNC_LIMIT) || 25;
-    const active = await c.env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM guide WHERE account_id = ? AND status IN ('published','promoted')",
-    )
-      .bind(account)
-      .first<{ n: number }>();
-    if ((active?.n ?? 0) >= limit) {
+    const room = await quota(c, account);
+    if (isFull(room.used, room.limit)) {
       return err(
         c,
         402,
-        `free tier keeps ${limit} active synced guides; mark some consumed (passalong done <id>) or remove them`,
+        `free tier keeps ${room.limit} active synced guides; archive some in the hub (or ` +
+          "`passalong done <id>`) to make room, or remove them",
       );
     }
   }

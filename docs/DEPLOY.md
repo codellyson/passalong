@@ -154,6 +154,24 @@ and runs `claude mcp add passalong -- passalong mcp`, so those two paths are par
   naming question in the PRD is still open: Passalong, Handoff, Baton, JustPassalong).
 - The free-tier cap is `FREE_SYNC_LIMIT` in `wrangler.jsonc`; account creation is throttled to
   5 per IP per minute via the `ACCOUNT_LIMIT` rate-limit binding.
+
+### Raising one account's limit
+
+`FREE_SYNC_LIMIT` moves the ceiling for everybody and only at a deploy. `account.sync_limit` moves
+it for one person, immediately, with nothing to ship — zero means "not set", so the deployment's
+default applies:
+
+```bash
+pnpm -C apps/api exec wrangler d1 execute passalong --remote \
+  --command "UPDATE account SET sync_limit = 200 WHERE handle = 'someone'"
+```
+
+Put it back on the default with `sync_limit = 0`. Only guides that are `published` or `promoted`
+count against it, so archiving in the hub is what makes room — see `COUNTED` in
+`apps/api/src/quota.ts`, which is the one definition both the warning and the refusal read.
+
+There is no plan or subscription behind this. When there is, a plan resolves to a number and this
+is the column it lands in.
 - Observability is on with full sampling; `wrangler tail` streams logs.
 
 ## Continuous deploy

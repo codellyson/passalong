@@ -178,9 +178,25 @@ export function useHub() {
     }
   }
 
-  // Nothing in the hub sets a guide's status any more. `consumed` duplicated the verdict and
-  // `promoted` was a pull counter with a button, so both left the interface; the endpoint and the
-  // CLI's `passalong done` / `passalong promote` are untouched, which is why this is phase one.
+  /**
+   * Archive a guide, or put it back.
+   *
+   * `consumed` left the interface once because it meant "I implemented it", which is the reader's
+   * judgement and the verdict already owns it. It is back with the other meaning it always had:
+   * off my board. That is not a judgement, it is shelf space — and shelf space is exactly what the
+   * free tier counts, so archiving is what makes room without deleting anything.
+   *
+   * Offered to the author only. A non-owner marking a guide consumed still means "I shipped what
+   * you handed me" and sends the author a receipt; that path belongs to the CLI and MCP, and
+   * putting it in this menu is what conflated the two meanings the first time.
+   */
+  const onArchive = (g: Guide, archived: boolean) =>
+    guarded(() =>
+      api(
+        `/v1/guides/${g.id}/status`,
+        json("PATCH", { status: archived ? "consumed" : "published" }),
+      ),
+    );
 
   /**
    * Removal is confirmed by the component, in the page. `confirm()` did it before, which meant the
@@ -249,6 +265,7 @@ export function useHub() {
     api,
     json,
     load,
+    onArchive,
     onRemove,
     onVerdict,
     readAll,

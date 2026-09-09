@@ -142,6 +142,17 @@ public one, for agents *using* Passalong rather than changing it.
   edge. Severity is named (`Blocker`, `Minor`) rather than coded (`s1`, `s3`) wherever it is shown
   to a reader, in the list and in the report editor both, and `severityTone()`/`severityLabel()`
   in `app/utils/report.ts` are the only copies of that lookup.
+- **The free tier is counted in one place.** `apps/api/src/quota.ts` holds `COUNTED` (the statuses
+  that occupy room), `limitFor()` (per-account `sync_limit` beats `FREE_SYNC_LIMIT`, zero means
+  unset) and `isFull()`; `quota()` in index.ts is the only query, and both `/v1/me` and the publish
+  refusal read it. They were separate before and disagreed — the banner counted every guide the
+  account had and warned people at a number the server was not enforcing.
+- **`consumed` means archived, not implemented.** It left the hub once for meaning "I implemented
+  it", which is the reader's judgement and belongs to the verdict. It is the author's shelf: off
+  the board, out of the free tier's count, reversible, and hidden from every cut on the guides page
+  except `archived`. The hub offers it to the author only — a non-owner marking a guide consumed
+  still sends the author a "someone shipped this" receipt, and putting that in the same menu item
+  is what conflated the two meanings the first time.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-

@@ -9,7 +9,10 @@ import type { Guide } from "~/types/hub";
 const props = defineProps<{ g: Guide }>();
 const emit = defineEmits<{ verdict: [] }>();
 
-const { onRemove } = useHub();
+const { onArchive, onRemove } = useHub();
+
+/** Archived is a shelf, not a verdict: the guide is off the board and off the free tier's count. */
+const archived = computed(() => props.g.status === "consumed");
 
 const open = ref(false);
 /** Removal asks in the menu it was chosen from. `confirm()` threw where dialogs are blocked. */
@@ -65,6 +68,15 @@ function run(work: () => void) {
 
       <div class="menu-rule" />
       <template v-if="g.mine">
+        <!-- Above the destructive one, and offered first, because it is what most people reaching
+             for "remove" actually want: the guide out of the way, not gone. It is also the only
+             way under the free tier's ceiling that does not throw the guide away. -->
+        <button v-if="archived" class="menu-item" @click="run(() => onArchive(g, false))">
+          put it back on the board
+        </button>
+        <button v-else class="menu-item" @click="run(() => onArchive(g, true))">
+          archive it
+        </button>
         <button v-if="!confirming" class="menu-item destructive" @click="confirming = true">
           remove from sync
         </button>

@@ -1,0 +1,14 @@
+-- A limit one account can be given, without moving it for everybody.
+--
+-- `FREE_SYNC_LIMIT` is a Worker-wide var: raising it for the one person who needs more raises it
+-- for every account on the deployment, and only at a deploy. This is the per-account override —
+-- set it and that account's ceiling moves immediately, with no code change and nothing to ship.
+--
+-- Zero means "no override": the env default applies. That is deliberately not NULL, because the
+-- read is `sync_limit || fallback` in one expression and a NULL would have to be handled twice.
+-- It also means a limit of zero cannot be expressed, which is correct — an account that may keep
+-- nothing synced is a suspension, and suspending an account is not a number.
+--
+-- There is no plan or subscription behind this yet. When there is, a plan resolves to a number
+-- and this is the column it lands in.
+ALTER TABLE account ADD COLUMN sync_limit INTEGER NOT NULL DEFAULT 0;

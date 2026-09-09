@@ -86,6 +86,12 @@ const verdict = computed(() => {
           class="rounded-pill px-2 py-0.5 text-xs font-semibold tracking-wide uppercase"
           :class="state.badge"
         >{{ state.label }}</span>
+        <!-- Only visible on the shelf, where every row is archived and would otherwise look like
+             a row that is simply having nothing happen to it. -->
+        <span
+          v-if="g.status === 'consumed'"
+          class="rounded-pill bg-surface px-2 py-0.5 text-xs font-semibold tracking-wide text-muted uppercase"
+        >archived</span>
         <!-- A bug carries how badly it is broken; a transfer guide has nothing to say here. It
              sits with the other pill rather than in front of the title, because a fact only some
              rows have must not decide where every row's title starts. Named rather than coded:
