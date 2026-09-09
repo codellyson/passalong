@@ -7,6 +7,7 @@
 //   declined  someone said it is not theirs, and why — the one that needs re-homing
 //   pulled    someone pulled your guide — the transfer landed
 //   consumed  the receiver marked your guide done
+//   reopened  and put it back — the other half of that pair, which used to happen in silence
 //   verified  someone tried it and it holds up
 //   failed    someone tried it and it does not — the one people need to see today
 //   joined    someone accepted your invite
@@ -23,6 +24,7 @@ export const KINDS = [
   "declined",
   "pulled",
   "consumed",
+  "reopened",
   "verified",
   "failed",
   "joined",
@@ -317,6 +319,8 @@ export function line(
       return `${who} pulled ${title}${more}`;
     case "consumed":
       return `${who} marked ${title} consumed`;
+    case "reopened":
+      return `${who} put ${title} back on your board`;
     case "verified":
       return `${who} verified ${title}${note}`;
     case "failed":

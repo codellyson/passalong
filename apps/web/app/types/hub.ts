@@ -47,6 +47,11 @@ export interface Guide {
   stack_assumptions: string[];
   pulled_by?: Pull[];
   verdict?: Verdict | null;
+  /**
+   * You were named, rather than being in the team it was shared with. Someone writing your handle
+   * chose you; a team drop chose nobody, and the inbox sorts on the difference.
+   */
+  for_me?: boolean;
   /** Who said they are on it, and who passed it back with a reason. See migrations/0013_acks.sql. */
   taken_by?: string[];
   declined?: Declined[];

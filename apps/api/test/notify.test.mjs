@@ -28,6 +28,7 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob passed on "Add Paystack webhook verification"',
     '@bob pulled "Add Paystack webhook verification"',
     '@bob marked "Add Paystack webhook verification" consumed',
+    '@bob put "Add Paystack webhook verification" back on your board',
     '@bob verified "Add Paystack webhook verification"',
     '@bob says "Add Paystack webhook verification" does not work',
     "@bob joined khaime",

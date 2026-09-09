@@ -1479,9 +1479,12 @@ async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
        -- Passing on something takes it off your board and puts it back on its author's. Saying
        -- "on it" does not: you still owe the work, so it stays where you will see it.
        AND id NOT IN (SELECT guide_id FROM ack WHERE account_id = ? AND taken = 0)
-     ORDER BY created DESC LIMIT ?`,
+     -- Named beats dropped. Someone writing your handle chose you; a guide shared with a team you
+     -- happen to be in chose nobody, and sorting both by age alone buried the one addressed to you
+     -- under whatever else the team published today.
+     ORDER BY CASE WHEN to_account_id = ? THEN 0 ELSE 1 END, created DESC LIMIT ?`,
   )
-    .bind(account, account, ...ids, account, account, limit)
+    .bind(account, account, ...ids, account, account, account, limit)
     .all<GuideRow>();
   return results;
 }
@@ -1903,6 +1906,18 @@ app.patch("/v1/guides/:id/status", async (c) => {
   await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
     .bind(status, markdown, now(), found.row.id)
     .run();
+  // Anything a person who is not the author does to a guide, its author hears about. Archiving
+  // told them and un-archiving did not, which is the asymmetry that let a guide move on somebody
+  // else's say-so in silence.
+  if (!found.owner && status === "published") {
+    await notify(c.env, {
+      to: found.row.account_id,
+      kind: "reopened",
+      guide_id: found.row.id,
+      actor_id: c.get("account"),
+      team_id: found.row.team_id,
+    });
+  }
   // The end of the loop: someone else shipped what you handed them.
   if (!found.owner && status === "consumed") {
     await recordReceipt(c, found.row, "web");

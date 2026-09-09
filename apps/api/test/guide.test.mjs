@@ -231,3 +231,34 @@ test("an empty list is written as one, not left as the old value", () => {
   assert.match(out, /^tags: \[\]$/m);
   assert.deepEqual(parseMeta(out).tags, []);
 });
+
+test("nothing a stranger does to your guide happens in silence", async () => {
+  // Checked against the source because the Hono app is not importable from a test — see the note
+  // in hosts.ts. What is pinned is the rule, not the wording: every mutation a person who is not
+  // the author can reach has to tell the author. `reopened` is here because it did not, and a
+  // guide moved off somebody's board on another person's say-so without a word.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  for (const [route, kind] of [
+    ["/v1/guides/:id/verdict", /kind: body\.ok \? "verified" : "failed"/],
+    ["/v1/guides/:id/ack", /kind,/],
+    ["/v1/guides/:id/status", /kind: "reopened"/],
+    ["/v1/guides/:id/status", /kind: "consumed"/],
+  ]) {
+    const at = src.indexOf(`"${route}"`);
+    assert.ok(at > 0, `${route} should still exist`);
+    const body = src.slice(at, at + 4000);
+    assert.match(body, /await notify\(c\.env/, `${route} must tell the author something happened`);
+    assert.match(body, kind, `${route} must tell them what`);
+  }
+});
+
+test("a named handoff outranks one dropped on a team", async () => {
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("async function inboxRows");
+  const body = src.slice(at, at + 1600);
+  assert.match(
+    body,
+    /ORDER BY CASE WHEN to_account_id = \? THEN 0 ELSE 1 END, created DESC/,
+    "someone writing your handle chose you; a team drop chose nobody",
+  );
+});

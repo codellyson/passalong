@@ -51,6 +51,10 @@ const toggle = (g: Guide) => {
           >{{ severityLabel(g.severity) }}</span>
           <code class="rounded-1 border border-line bg-surface px-2 py-0.5 font-code text-xs text-fg">{{ g.id }}</code>
           <span>from <b class="font-medium text-fg">@{{ g.from || "?" }}</b> · {{ rel(g.created) }}</span>
+          <!-- This lane holds both, and they are not the same ask: these cards are ordered so the
+               ones that named you come first, so the card says which kind it is. -->
+          <span v-if="g.for_me" class="font-medium text-accent">to you by name</span>
+          <span v-else-if="g.team" class="text-muted">to {{ g.team }}</span>
         </div>
 
         <a

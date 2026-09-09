@@ -118,6 +118,9 @@ const verdict = computed(() => {
           from <b class="font-medium text-fg">@{{ g.from || "?" }}</b>
           <template v-if="g.team"> in {{ g.team }}</template>
         </span>
+        <!-- Being named is not the same as being in the room it was shared with, and the inbox
+             sorts on that difference — so the row has to say which one this is. -->
+        <span v-if="!g.mine && g.for_me" class="font-medium text-accent">· to you by name</span>
         <span>{{ rel(g.created) }}</span>
         <span v-if="g.stale" class="font-medium text-warn">· over a week</span>
         <span v-if="tail">· {{ tail }}</span>
