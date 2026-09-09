@@ -297,15 +297,16 @@ test("the reason gets its own paragraph, and the tone gets the button", () => {
   const [first, second] = card.sections[0].widgets;
   assert.match(first.textParagraph.text, /<i>the flag it tells you/);
   // #ab2f21. A failed verdict is the one thing in the room that should not look like everything
-  // else in it.
+  // else in it. The names are google.type.Color's, spelled out: `r`/`g`/`b` is refused whole with
+  // a 400, which is silent, which is a room that stops hearing anything at all.
   assert.deepEqual(second.buttonList.buttons[0].color, {
-    r: 0.671,
-    g: 0.184,
-    b: 0.129,
+    red: 0.671,
+    green: 0.184,
+    blue: 0.129,
     alpha: 1,
   });
   const ok = chatCard(facts({ kind: "verified" }))[0].card.sections[0].widgets[0];
-  assert.equal(ok.buttonList.buttons[0].color.g, 0.42, "a verdict that holds up is green");
+  assert.equal(ok.buttonList.buttons[0].color.green, 0.42, "a verdict that holds up is green");
 });
 
 test("a title somebody typed cannot become markup", () => {
@@ -369,5 +370,49 @@ test("a room without a card still gets the link spelled out", async () => {
     assert.match(h.posts[0].body.text, /https:\/\/passalong\.dev\/g\/abc12345\/key/);
   } finally {
     h.restore();
+  }
+});
+
+test("nothing in the card carries a field name Chat does not know", () => {
+  // Google refuses a payload whole for one unrecognised key, and the refusal is silent. So the
+  // shape is pinned by name against the Chat API's own vocabulary, top to bottom.
+  const card = chatCard(facts({ kind: "failed", note: "why" }))[0];
+  assert.deepEqual(Object.keys(card).sort(), ["card", "cardId"]);
+  assert.deepEqual(Object.keys(card.card).sort(), ["header", "sections"]);
+  assert.deepEqual(Object.keys(card.card.header).sort(), ["subtitle", "title"]);
+  assert.deepEqual(Object.keys(card.card.sections[0]).sort(), ["widgets"]);
+
+  const [para, buttons] = card.card.sections[0].widgets;
+  assert.deepEqual(Object.keys(para), ["textParagraph"]);
+  assert.deepEqual(Object.keys(para.textParagraph), ["text"]);
+  assert.deepEqual(Object.keys(buttons), ["buttonList"]);
+
+  const button = buttons.buttonList.buttons[0];
+  assert.deepEqual(Object.keys(button).sort(), ["color", "onClick", "text"]);
+  assert.deepEqual(Object.keys(button.onClick), ["openLink"]);
+  assert.deepEqual(Object.keys(button.onClick.openLink), ["url"]);
+  assert.deepEqual(Object.keys(button.color).sort(), ["alpha", "blue", "green", "red"]);
+});
+
+test("a refusal records what was refused, not just that it was", async () => {
+  const seen = [];
+  const env = {
+    DB: {
+      prepare(sql) {
+        return { bind: (...a) => ({ run: async () => seen.push({ sql, a }) }) };
+      },
+    },
+  };
+  const real = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response('{ "error": { "message": "Cannot find field: r" } }', { status: 400 });
+  try {
+    const r = await post(env, { id: "c1", url: GCHAT, failures: 0 }, "hi", facts());
+    assert.equal(r.ok, false);
+    assert.match(r.error, /refused with 400: .*Cannot find field: r/);
+    assert.ok(r.error.length <= 200, "it is read back into the hub, so it is capped");
+    assert.match(seen[0].sql, /last_error = \?/);
+  } finally {
+    globalThis.fetch = real;
   }
 });

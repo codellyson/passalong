@@ -209,17 +209,28 @@ export function escChat(s: unknown): string {
  * What kind of news this is, as the button's colour. The hub's semantic tokens, converted —
  * Chat takes floats, not hex.
  */
-const TONES: Record<string, { r: number; g: number; b: number }> = {
+/**
+ * The field names are Google's `google.type.Color`, spelled out: `red`, `green`, `blue`, `alpha`.
+ *
+ * They were `r`, `g`, `b` for a day, which Chat answered with a flat 400 on every post — a payload
+ * carrying a field it does not know is refused whole, and a refused post is a silent one, so the
+ * room simply went quiet. Nothing in a name like `r` says which API it belongs to; nothing in a
+ * 400 says which field was wrong. That is what the response body below is now recorded for.
+ */
+type Color = { red: number; green: number; blue: number; alpha: number };
+const tone = (red: number, green: number, blue: number): Color => ({ red, green, blue, alpha: 1 });
+
+const TONES: Record<string, Color> = {
   // #ab2f21 — someone tried it and it does not hold up.
-  failed: { r: 0.671, g: 0.184, b: 0.129 },
+  failed: tone(0.671, 0.184, 0.129),
   // #8a5a08 — handed back, so it has stopped moving and only its author can restart it.
-  declined: { r: 0.541, g: 0.353, b: 0.031 },
+  declined: tone(0.541, 0.353, 0.031),
   // #3f6b45 — it worked, or somebody has it.
-  verified: { r: 0.247, g: 0.42, b: 0.271 },
-  taken: { r: 0.247, g: 0.42, b: 0.271 },
+  verified: tone(0.247, 0.42, 0.271),
+  taken: tone(0.247, 0.42, 0.271),
 };
 /** #b5451b, the brand. Everything that is neither good news nor bad. */
-const BRAND = { r: 0.71, g: 0.271, b: 0.106 };
+const BRAND = tone(0.71, 0.271, 0.106);
 
 const MAX_TITLE = 120;
 
@@ -253,7 +264,7 @@ export function chatCard(a: CardFacts): Record<string, unknown>[] | null {
           {
             text: "Open the guide",
             onClick: { openLink: { url: a.url } },
-            color: { ...(TONES[a.kind] ?? BRAND), alpha: 1 },
+            color: TONES[a.kind] ?? BRAND,
           },
         ],
       },
@@ -322,7 +333,16 @@ export async function post(
       signal: AbortSignal.timeout(5000),
     });
     status = res.status;
-    if (!res.ok) error = `refused with ${res.status}`;
+    if (!res.ok) {
+      // The status alone is not a diagnosis. Chat answers a malformed card with a 400 that names
+      // the offending field — "Cannot find field: r" — and throwing that away cost a day of a room
+      // being quiet with `refused with 400` as the only evidence. It is read back into the hub, so
+      // it is capped and it is the provider's own words rather than anything of ours.
+      const said = await res.text().catch(() => "");
+      error = said
+        ? `refused with ${res.status}: ${said.replace(/\s+/g, " ").slice(0, 160)}`
+        : `refused with ${res.status}`;
+    }
   } catch (err) {
     error = (err as Error).message || "did not answer";
   }
