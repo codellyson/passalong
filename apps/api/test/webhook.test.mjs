@@ -1,7 +1,7 @@
 // The team channel: which events reach it, what it sends, and which URLs it refuses.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { announce, channelBody, line, webhookAllowed } from "../src/notify.ts";
+import { announce, channelBody, line, post, webhookAllowed } from "../src/notify.ts";
 
 test("only URLs worth posting a secret to are accepted", () => {
   assert.equal(webhookAllowed("https://hooks.slack.com/services/T0/B0/xxxx"), true);
@@ -20,11 +20,26 @@ test("only URLs worth posting a secret to are accepted", () => {
 });
 
 /** A database and a fetch, both just enough to watch what announce() does. */
-function harness(webhook, { ok = true } = {}) {
+function harness(urls, { ok = true } = {}) {
+  const list = (Array.isArray(urls) ? urls : urls ? [urls] : []).map((url, i) => ({
+    id: `c${i}`,
+    url,
+    failures: 0,
+  }));
   const posts = [];
+  const writes = [];
   const env = {
     DB: {
-      prepare: () => ({ bind: () => ({ first: async () => ({ webhook_url: webhook }) }) }),
+      prepare: (sql) => ({
+        bind: (...args) => ({
+          all: async () => ({ results: list }),
+          first: async () => ({ n: list.length }),
+          run: async () => {
+            writes.push({ sql, args });
+            return {};
+          },
+        }),
+      }),
     },
   };
   const original = globalThis.fetch;
@@ -35,6 +50,7 @@ function harness(webhook, { ok = true } = {}) {
   return {
     env,
     posts,
+    writes,
     restore: () => {
       globalThis.fetch = original;
     },
@@ -154,4 +170,79 @@ test("a Google Chat webhook URL is accepted as it actually comes", () => {
     "https://chat.googleapis.com/v1/spaces/AAQAtBk_zVI/messages" +
     "?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=8Kx2yQ-1mS3nR7pV0wZbC4dE6fG9hJkLmN";
   assert.equal(webhookAllowed(url), true);
+});
+
+test("every channel a team has gets the line", async () => {
+  const h = harness([
+    "https://chat.googleapis.com/v1/spaces/A/messages?key=k&token=t",
+    "https://hooks.slack.com/services/T0/B0/x",
+    "https://discord.com/api/webhooks/1/a",
+  ]);
+  try {
+    await announce(h.env, { kind: "failed", team_id: "t1", text: "it does not work" });
+    assert.equal(h.posts.length, 3, "one post per channel");
+    // Each in its own dialect, decided per destination rather than sent to all three alike.
+    assert.deepEqual(h.posts[0].body, { text: "it does not work" });
+    assert.deepEqual(h.posts[1].body, { text: "it does not work" });
+    assert.deepEqual(h.posts[2].body, { content: "it does not work" });
+  } finally {
+    h.restore();
+  }
+});
+
+test("one dead channel does not withhold the line from the others", async () => {
+  const seen = [];
+  const list = [
+    { id: "dead", url: "https://dead.test/hook", failures: 0 },
+    { id: "live", url: "https://live.test/hook", failures: 0 },
+  ];
+  const env = {
+    DB: {
+      prepare: () => ({
+        bind: () => ({ all: async () => ({ results: list }), run: async () => ({}) }),
+      }),
+    },
+  };
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    seen.push(String(url));
+    if (String(url).includes("dead")) throw new Error("connection refused");
+    return { ok: true, status: 200 };
+  };
+  try {
+    await assert.doesNotReject(() => announce(env, { kind: "failed", team_id: "t1", text: "x" }));
+    assert.ok(
+      seen.some((u) => u.includes("live")),
+      "the live channel still heard it",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a refusal is recorded, and recovery clears it", async () => {
+  const failing = harness("https://example.test/hook", { ok: false });
+  try {
+    const result = await post(
+      failing.env,
+      { id: "c0", url: "https://example.test/hook", failures: 0 },
+      "x",
+    );
+    assert.equal(result.ok, false);
+    // A webhook revoked on the other end fails silently forever unless the refusal is written down.
+    assert.match(failing.writes[0].sql, /failures = failures \+ 1/);
+  } finally {
+    failing.restore();
+  }
+
+  const healthy = harness("https://example.test/hook");
+  try {
+    await post(healthy.env, { id: "c0", url: "https://example.test/hook", failures: 3 }, "x");
+    assert.match(healthy.writes[0].sql, /failures = 0/);
+    healthy.writes.length = 0;
+    await post(healthy.env, { id: "c0", url: "https://example.test/hook", failures: 0 }, "x");
+    assert.equal(healthy.writes.length, 0, "a healthy channel costs no writes");
+  } finally {
+    healthy.restore();
+  }
 });

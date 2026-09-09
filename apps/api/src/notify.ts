@@ -160,25 +160,79 @@ export function channelBody(url: string, text: string): Record<string, string> {
  * Separate from `notify()` on purpose: that is per recipient, and a team-wide share calls it once
  * per member. A channel told the same thing four times is a channel nobody reads.
  */
-export async function announce(env: NotifyEnv, a: Announcement): Promise<void> {
-  if (!ANNOUNCED.has(a.kind) || !a.team_id) return;
+/** How many channels one team's event will fan out to. A bound, not a policy. */
+const MAX_CHANNELS = 8;
+
+export interface ChannelRow {
+  id: string;
+  url: string;
+  failures: number;
+}
+
+/**
+ * Post one line to one channel, and remember whether it worked.
+ *
+ * The remembering is the point: a webhook revoked on the other end fails silently forever,
+ * because this is fire-and-forget by design. Recording the refusal is what lets the settings
+ * screen say "this one has been failing" instead of a team slowly noticing the quiet.
+ */
+export async function post(
+  env: NotifyEnv,
+  channel: ChannelRow,
+  text: string,
+): Promise<{ ok: boolean; status: number; error: string }> {
+  let status = 0;
+  let error = "";
   try {
-    const row = await env.DB.prepare("SELECT webhook_url FROM team WHERE id = ?")
-      .bind(a.team_id)
-      .first<{ webhook_url: string }>();
-    const url = row?.webhook_url;
-    if (!url) return;
-    const body = a.url ? `${a.text}\n${a.url}` : a.text;
-    const res = await fetch(url, {
+    const res = await fetch(channel.url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(channelBody(url, body)),
+      body: JSON.stringify(channelBody(channel.url, text)),
       // A channel that has been deleted should not hold up the write that triggered this, and a
       // redirect to somewhere else is not somewhere this was meant to go.
       redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) console.error("announce", a.kind, res.status);
+    status = res.status;
+    if (!res.ok) error = `refused with ${res.status}`;
+  } catch (err) {
+    error = (err as Error).message || "did not answer";
+  }
+
+  // Written only when the state changes, so a healthy channel costs no writes at all.
+  try {
+    if (error) {
+      await env.DB.prepare(
+        "UPDATE team_channel SET failures = failures + 1, last_error = ? WHERE id = ?",
+      )
+        .bind(error.slice(0, 200), channel.id)
+        .run();
+    } else if (channel.failures > 0) {
+      await env.DB.prepare("UPDATE team_channel SET failures = 0, last_error = '' WHERE id = ?")
+        .bind(channel.id)
+        .run();
+    }
+  } catch {
+    // Bookkeeping about a delivery is not worth failing over either.
+  }
+  return { ok: !error, status, error };
+}
+
+export async function announce(env: NotifyEnv, a: Announcement): Promise<void> {
+  if (!ANNOUNCED.has(a.kind) || !a.team_id) return;
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT id, url, failures FROM team_channel WHERE team_id = ? ORDER BY created LIMIT ?",
+    )
+      .bind(a.team_id, MAX_CHANNELS)
+      .all<ChannelRow>();
+    if (!results.length) return;
+    const body = a.url ? `${a.text}\n${a.url}` : a.text;
+    // In parallel, and one channel's failure never withholds the line from the others.
+    const sent = await Promise.all(results.map((channel) => post(env, channel, body)));
+    for (const [i, result] of sent.entries()) {
+      if (!result.ok) console.error("announce", a.kind, results[i]?.id, result.error);
+    }
   } catch (err) {
     // Same rule as a notification: never worth failing the action that caused it.
     console.error("announce", a.kind, (err as Error).message);

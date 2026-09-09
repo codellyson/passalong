@@ -79,13 +79,13 @@ import {
 import { handleMcp } from "./mcp-http.js";
 import {
   announce,
-  channelBody,
   feed,
   line,
   markRead,
   summary as notifSummary,
   notify,
   notifyAll,
+  post,
   unreadCount,
   webhookAllowed,
 } from "./notify.js";
@@ -853,6 +853,9 @@ app.get("/v1/teams/:slug", async (c) => {
   const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM guide WHERE team_id = ?")
     .bind(team.id)
     .first<{ n: number }>();
+  const chCount = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM team_channel WHERE team_id = ?")
+    .bind(team.id)
+    .first<{ n: number }>();
   return c.json({
     slug: team.slug,
     name: team.name,
@@ -860,54 +863,98 @@ app.get("/v1/teams/:slug", async (c) => {
     created: team.created,
     members,
     guides: n?.n ?? 0,
-    // Whether, not what. The URL is the credential for that room, so it is written and never read
-    // back — the settings screen only needs to know there is one.
-    webhook: Boolean((team as TeamRow & { webhook_url?: string }).webhook_url),
+    channels: chCount?.n ?? 0,
   });
 });
 
 /**
- * The team's channel. Owners only.
+ * A team's channels. Owners only, because a channel is a credential for a room.
  *
- * A webhook URL *is* the credential — anyone holding it can post into that room — so it is only
- * ever written, never read back. The response says whether one is set, which is the only thing the
- * settings screen needs to know.
+ * The URL is never read back — anyone holding it can post there, so it is written and then only
+ * ever named. What the screen gets instead is whether each one is currently failing, which is the
+ * question a list of channels actually has to answer.
  */
-app.patch("/v1/teams/:slug", async (c) => {
+app.get("/v1/teams/:slug/channels", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
   if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's channel");
-  const body = await c.req
-    .json<{ webhook_url?: string }>()
-    .catch(() => ({}) as { webhook_url?: string });
-
-  const url = String(body.webhook_url ?? "").trim();
-  if (url && !webhookAllowed(url)) {
-    return err(c, 400, "the channel URL must be https, with no credentials in it");
-  }
-  await c.env.DB.prepare("UPDATE team SET webhook_url = ? WHERE id = ?").bind(url, team.id).run();
-  return c.json({ slug: team.slug, webhook: Boolean(url) });
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, name, created, failures, last_error, substr(url, 1, 40) AS hint
+     FROM team_channel WHERE team_id = ? ORDER BY created`,
+  )
+    .bind(team.id)
+    .all();
+  // A leading fragment, not the URL: enough to tell two channels apart at a glance, far short of
+  // enough to post to either.
+  return c.json({
+    channels: results.map((r) => {
+      const row = r as Record<string, unknown>;
+      const hint = String(row.hint || "");
+      let host = "";
+      try {
+        host = new URL(`${hint}`).hostname;
+      } catch {
+        host = "";
+      }
+      return { ...row, hint: undefined, host };
+    }),
+  });
 });
 
-/** Post a line to the team's channel so someone can see it arrive. Owners only. */
-app.post("/v1/teams/:slug/channel-test", async (c) => {
+app.post("/v1/teams/:slug/channels", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
   if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only an owner can test the team's channel");
-  const row = await c.env.DB.prepare("SELECT webhook_url FROM team WHERE id = ?")
+  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's channels");
+  const body = await c.req
+    .json<{ name?: string; url?: string }>()
+    .catch(() => ({}) as { name?: string; url?: string });
+
+  const url = String(body.url ?? "").trim();
+  if (!webhookAllowed(url)) {
+    return err(c, 400, "the channel URL must be https, with no credentials in it");
+  }
+  const { n } = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM team_channel WHERE team_id = ?")
     .bind(team.id)
-    .first<{ webhook_url: string }>();
-  if (!row?.webhook_url) return err(c, 400, "no channel set for this team");
-  const text = `Passalong is connected to ${team.slug}. Verdicts and handoffs will arrive here.`;
-  const res = await fetch(row.webhook_url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(channelBody(row.webhook_url, text)),
-    redirect: "manual",
-    signal: AbortSignal.timeout(5000),
-  }).catch(() => null);
+    .first<{ n: number }>()) ?? { n: 0 };
+  if (n >= 8) return err(c, 400, "a team keeps up to 8 channels; remove one first");
+
+  const id = rid(12);
+  await c.env.DB.prepare(
+    "INSERT INTO team_channel (id, team_id, name, url, created, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+  )
+    .bind(id, team.id, String(body.name || "").slice(0, 60), url, now(), c.get("account"))
+    .run();
+  return c.json({ channel: { id, name: body.name || "" } }, 201);
+});
+
+app.delete("/v1/teams/:slug/channels/:id", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's channels");
+  const { meta } = await c.env.DB.prepare("DELETE FROM team_channel WHERE id = ? AND team_id = ?")
+    .bind(c.req.param("id"), team.id)
+    .run();
+  if (!meta.changes) return err(c, 404, "no such channel");
+  return c.json({ id: c.req.param("id"), removed: true });
+});
+
+/** Post a line to one channel so someone can watch it arrive. Owners only. */
+app.post("/v1/teams/:slug/channels/:id/test", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only an owner can test the team's channels");
+  const channel = await c.env.DB.prepare(
+    "SELECT id, url, failures FROM team_channel WHERE id = ? AND team_id = ?",
+  )
+    .bind(c.req.param("id"), team.id)
+    .first<{ id: string; url: string; failures: number }>();
+  if (!channel) return err(c, 404, "no such channel");
+  const result = await post(
+    c.env,
+    channel,
+    `Passalong is connected to ${team.slug}. Verdicts and handoffs will arrive here.`,
+  );
   // The channel's own answer, because "it did not arrive" is otherwise unattributable.
-  return c.json({ delivered: Boolean(res?.ok), status: res?.status ?? 0 });
+  return c.json({ delivered: result.ok, status: result.status, error: result.error });
 });
 
 app.post("/v1/teams/:slug/invites", async (c) => {

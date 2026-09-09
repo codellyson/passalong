@@ -112,12 +112,7 @@ function guides(t: TeamDetail) {
 
         <!-- Owners only: the channel is a credential for a room, and changing it is not something
              a member should be able to do quietly. -->
-        <HubTeamChannel
-          v-if="t.role === 'owner'"
-          :team="t"
-          :set="Boolean(t.webhook)"
-          @changed="t.webhook = $event"
-        />
+        <HubTeamChannel v-if="t.role === 'owner'" :team="t" />
       </li>
     </ul>
 
