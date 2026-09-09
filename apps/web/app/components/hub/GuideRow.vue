@@ -113,7 +113,12 @@ const verdict = computed(() => {
              handed to you says who from; and one you shared with nobody says neither, because the
              tail after the date already says "addressed to nobody". Collapsing the third into the
              second printed "from @?" on your own guides. -->
-        <span v-if="g.mine && g.team">to <b class="font-medium text-fg">{{ g.team }}{{ g.to ? ` / @${g.to}` : "" }}</b></span>
+        <span v-if="g.mine && g.team">
+          to
+          <b class="font-medium text-fg">
+            {{ g.team }}{{ g.to ? ` / @${g.to}` : g.to_group ? ` / #${g.to_group}` : "" }}
+          </b>
+        </span>
         <span v-else-if="!g.mine">
           from <b class="font-medium text-fg">@{{ g.from || "?" }}</b>
           <template v-if="g.team"> in {{ g.team }}</template>
@@ -121,6 +126,11 @@ const verdict = computed(() => {
         <!-- Being named is not the same as being in the room it was shared with, and the inbox
              sorts on that difference — so the row has to say which one this is. -->
         <span v-if="!g.mine && g.for_me" class="font-medium text-accent">· to you by name</span>
+        <!-- Being one of the people asked is its own answer to "why is this in my lane", and it is
+             not the same as being in the team it was shared with. -->
+        <span v-else-if="!g.mine && g.to_group" class="font-medium text-accent">
+          · to #{{ g.to_group }}
+        </span>
         <span>{{ rel(g.created) }}</span>
         <span v-if="g.stale" class="font-medium text-warn">· over a week</span>
         <span v-if="tail">· {{ tail }}</span>

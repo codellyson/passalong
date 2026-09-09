@@ -65,7 +65,8 @@ export async function serve() {
         "file_bugs with all of them at once; each becomes a guide someone can take on its own. " +
         "When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
-        "shape) and call publish_guide, with `to` as team or team/handle when it is for a teammate. " +
+        "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or "
+        + "team/#group for the people who do a thing. " +
         "At the start of work, inbox shows guides teammates have handed to this user, and activity " +
         "shows whether the guides they handed off have landed. Gotchas are " +
         "the highest-value section: record what failed and why.",
@@ -259,7 +260,10 @@ export async function serve() {
         'teammate ("khaime/lukman"), who is notified. Returns the id and share link.',
       inputSchema: {
         markdown: z.string().describe("full guide markdown; start from guide_template"),
-        to: z.string().optional().describe("team slug, or team/handle for a specific teammate"),
+        to: z
+          .string()
+          .optional()
+          .describe("team slug, team/@handle for one teammate, or team/#group for a set of them"),
         cwd: z
           .string()
           .optional()
@@ -307,7 +311,10 @@ export async function serve() {
           .string()
           .optional()
           .describe("production, staging or development — where you saw these"),
-        to: z.string().optional().describe("team slug, or team/handle for a specific teammate"),
+        to: z
+          .string()
+          .optional()
+          .describe("team slug, team/@handle for one teammate, or team/#group for a set of them"),
         issues: z
           .array(
             z.object({

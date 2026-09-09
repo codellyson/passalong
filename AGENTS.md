@@ -172,6 +172,15 @@ public one, for agents *using* Passalong rather than changing it.
   did not, so a guide could move off somebody's board on another person's say-so without a word;
   the pinning test in `apps/api/test/guide.test.mjs` walks the routes a non-owner can reach and
   fails if one stops telling them.
+- **Three addresses, and the inbox ranks them.** `to:` inside a `team:` is `@handle` (one person),
+  `#group` (the people who do a thing, `team_group` + `group_member`), or absent (the whole team).
+  The lane orders handle, then group, then team drop — and every surface showing it says which
+  kind each guide is, because the order is only honest if the reason for it is visible. Two rules
+  follow from a group being more than one person: the team-wide clause must exclude both narrower
+  addresses (or a `#frontend` handoff lands on everyone anyway), and one member acking `taken`
+  clears it from the others' lanes — never from the lane of someone named by handle, who was asked
+  personally and whose ask nobody else can answer. A group is an address, not a permission: it
+  holds only people already in the team, and it has no roles.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-

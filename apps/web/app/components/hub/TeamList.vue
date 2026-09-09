@@ -112,6 +112,9 @@ function guides(t: TeamDetail) {
 
         <!-- Owners only: the channel is a credential for a room, and changing it is not something
              a member should be able to do quietly. -->
+        <!-- Groups first: who is in this team and how they are addressed is what somebody came
+             here to change. A channel is where the news goes, which is the later question. -->
+        <HubTeamGroups v-if="t.role === 'owner'" :team="t" />
         <HubTeamChannel v-if="t.role === 'owner'" :team="t" />
       </li>
     </ul>

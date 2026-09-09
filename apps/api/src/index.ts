@@ -77,6 +77,7 @@ import {
   setList,
   shotIds,
   slug,
+  tag,
   tagList,
 } from "./guide.js";
 import { handleMcp } from "./mcp-http.js";
@@ -193,6 +194,8 @@ interface GuideRow {
   pulls: number;
   team_id: string;
   to_account_id: string;
+  /** A group inside the team, when the guide was handed to one. See migrations/0014_groups.sql. */
+  to_group_id: string;
   report_id: string;
   area: string;
   severity: string;
@@ -346,6 +349,18 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   const pulls = await recentPulls(c, rows);
   const said = await verdicts(c, rows);
   const answered = await acks(c, rows);
+  // One lookup for the page, not one per row. A guide handed to a group has to say which one, or
+  // its row reads as a team-wide share and nobody treats it as theirs.
+  const groupIds = [...new Set(rows.map((r) => r.to_group_id).filter(Boolean))];
+  const groups = new Map<string, string>();
+  if (groupIds.length) {
+    const { results } = await c.env.DB.prepare(
+      `SELECT id, slug FROM team_group WHERE id IN (${groupIds.map(() => "?").join(",")})`,
+    )
+      .bind(...groupIds)
+      .all<{ id: string; slug: string }>();
+    for (const g of results) groups.set(g.id, g.slug);
+  }
   // A row that belongs to a report says so by name, not by id: "part of Pre-release sweep" is a
   // link someone follows, and a bare eight characters is not.
   const reportIds = [...new Set(rows.map((r) => r.report_id).filter(Boolean))];
@@ -381,6 +396,9 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       from: people.get(r.account_id)?.handle || "",
       team: teams.get(r.team_id)?.slug || "",
       to: people.get(r.to_account_id)?.handle || "",
+      // The group it was handed to, by name. A deleted group keeps its id on the row rather than
+      // rewriting history to say it went nowhere, so this can be empty while the id is not.
+      to_group: groups.get(r.to_group_id) || "",
       for_me: r.to_account_id === me,
       report: r.report_id || "",
       report_title: reportTitles.get(r.report_id) || "",
@@ -1026,6 +1044,130 @@ app.post("/v1/teams/:slug/channels/:id/test", async (c) => {
   return c.json({ delivered: result.ok, status: result.status, error: result.error });
 });
 
+/**
+ * A team's groups: the people who do a thing, addressable as one.
+ *
+ * Readable by any member, because everyone needs to know who `#frontend` is before handing
+ * something to it. Changed by owners only, for the same reason the member list is theirs — an
+ * address that anyone can redirect is not an address.
+ */
+app.get("/v1/teams/:slug/groups", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  const { results } = await c.env.DB.prepare(
+    `SELECT g.id, g.slug, g.name, g.created, COALESCE(a.handle, '') AS handle
+     FROM team_group g
+     LEFT JOIN group_member gm ON gm.group_id = g.id
+     LEFT JOIN account a ON a.id = gm.account_id
+     WHERE g.team_id = ? ORDER BY g.slug, a.handle`,
+  )
+    .bind(team.id)
+    .all<{ id: string; slug: string; name: string; created: string; handle: string }>();
+  // One row per membership comes back; the screen wants one row per group with its people on it.
+  const byId = new Map<
+    string,
+    { id: string; slug: string; name: string; created: string; members: string[] }
+  >();
+  for (const r of results) {
+    const g = byId.get(r.id) ?? {
+      id: r.id,
+      slug: r.slug,
+      name: r.name,
+      created: r.created,
+      members: [],
+    };
+    if (r.handle) g.members.push(r.handle);
+    byId.set(r.id, g);
+  }
+  return c.json({ groups: [...byId.values()] });
+});
+
+app.post("/v1/teams/:slug/groups", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's groups");
+  const body = await c.req
+    .json<{ slug?: string; name?: string }>()
+    .catch(() => ({}) as { slug?: string; name?: string });
+  // The same normalisation a tag gets, because this is written by hand in frontmatter and two
+  // spellings of one group is two addresses that look like one.
+  const wanted = tag(body.slug ?? "");
+  if (!wanted) return err(c, 400, "a group needs a name: letters, digits and hyphens");
+  const { n } = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM team_group WHERE team_id = ?")
+    .bind(team.id)
+    .first<{ n: number }>()) ?? { n: 0 };
+  if (n >= 20) return err(c, 400, "a team keeps up to 20 groups; remove one first");
+  const id = rid(12);
+  const made = await c.env.DB.prepare(
+    "INSERT INTO team_group (id, team_id, slug, name, created) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+  )
+    .bind(id, team.id, wanted, String(body.name || "").slice(0, 60), now())
+    .run();
+  if (!made.meta.changes) return err(c, 409, `${team.slug} already has a group called #${wanted}`);
+  return c.json({ group: { id, slug: wanted, name: body.name || "", members: [] } }, 201);
+});
+
+/**
+ * Replace a group's membership in one call.
+ *
+ * Set semantics rather than add/remove: "who is in #frontend" is a list somebody edits, and two
+ * endpoints racing over one list is how a person ends up half-added.
+ */
+app.put("/v1/teams/:slug/groups/:id/members", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's groups");
+  const group = await c.env.DB.prepare("SELECT id FROM team_group WHERE id = ? AND team_id = ?")
+    .bind(c.req.param("id"), team.id)
+    .first<{ id: string }>();
+  if (!group) return err(c, 404, "no such group");
+  const body = await c.req
+    .json<{ handles?: string[] }>()
+    .catch(() => ({}) as { handles?: string[] });
+  const handles = [
+    ...new Set((body.handles ?? []).map((h: string) => String(h).replace(/^@/, "").toLowerCase())),
+  ].slice(0, 100);
+
+  // Only people already in the team. A group is a subset of a team, never a way into one.
+  const found = handles.length
+    ? (
+        await c.env.DB.prepare(
+          `SELECT a.id, a.handle FROM account a JOIN membership m ON m.account_id = a.id
+           WHERE m.team_id = ? AND a.handle IN (${handles.map(() => "?").join(",")})`,
+        )
+          .bind(team.id, ...handles)
+          .all<{ id: string; handle: string }>()
+      ).results
+    : [];
+  const missing = handles.filter((h) => !found.some((f) => f.handle === h));
+  if (missing.length)
+    return err(c, 400, `not in ${team.slug}: ${missing.map((h) => `@${h}`).join(", ")}`);
+
+  const writes = [c.env.DB.prepare("DELETE FROM group_member WHERE group_id = ?").bind(group.id)];
+  for (const f of found) {
+    writes.push(
+      c.env.DB.prepare("INSERT INTO group_member (group_id, account_id) VALUES (?, ?)").bind(
+        group.id,
+        f.id,
+      ),
+    );
+  }
+  await c.env.DB.batch(writes);
+  return c.json({ id: group.id, members: found.map((f) => f.handle) });
+});
+
+app.delete("/v1/teams/:slug/groups/:id", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's groups");
+  // Guides already handed to it keep the id: the row says who it went to, and rewriting history
+  // to say it went to nobody is a worse answer than naming a group that no longer exists.
+  await c.env.DB.prepare("DELETE FROM team_group WHERE id = ? AND team_id = ?")
+    .bind(c.req.param("id"), team.id)
+    .run();
+  return c.json({ id: c.req.param("id"), deleted: true });
+});
+
 app.post("/v1/teams/:slug/invites", async (c) => {
   const account = c.get("account");
   const team = await teamBySlug(c, c.req.param("slug"));
@@ -1468,23 +1610,39 @@ app.get("/v1/guides", async (c) => {
 async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
   const account = c.get("account");
   const ids = (await myTeams(c)).map((t) => t.id);
+  // Three addresses reach you, and they are not the same ask:
+  //
+  //   to_account_id = you        somebody wrote your handle
+  //   to_group_id in your groups somebody addressed the people who do a thing, and you are one
+  //   team, addressed to nobody  it was put in a room you are in
+  //
+  // The team clause has to exclude both of the others, or a guide handed to #frontend would also
+  // land on every other member of the team as if it had been shared with all of them.
   const teamClause = ids.length
-    ? `OR (team_id IN (${ids.map(() => "?").join(",")}) AND to_account_id = '')`
+    ? `OR (team_id IN (${ids.map(() => "?").join(",")}) AND to_account_id = '' AND to_group_id = '')`
     : "";
+  const MY_GROUPS = "SELECT group_id FROM group_member WHERE account_id = ?";
   const { results } = await c.env.DB.prepare(
     `SELECT * FROM guide
      WHERE account_id <> ? AND status = 'published'
-       AND (to_account_id = ? ${teamClause})
+       AND (to_account_id = ? OR (to_group_id <> '' AND to_group_id IN (${MY_GROUPS})) ${teamClause})
        AND id NOT IN (SELECT guide_id FROM pull WHERE account_id = ?)
        -- Passing on something takes it off your board and puts it back on its author's. Saying
        -- "on it" does not: you still owe the work, so it stays where you will see it.
        AND id NOT IN (SELECT guide_id FROM ack WHERE account_id = ? AND taken = 0)
+       -- Somebody else took it. That only clears a guide addressed to more than one person: when
+       -- a group or a team was asked, one person saying "I'm on it" is the answer for all of them,
+       -- and leaving it in everyone else's lane is how five people each assume it is theirs. A
+       -- guide with your handle on it was asked of you, and nobody else answering ends that.
+       AND (to_account_id = ?
+            OR id NOT IN (SELECT guide_id FROM ack WHERE taken = 1 AND account_id <> ?))
      -- Named beats dropped. Someone writing your handle chose you; a guide shared with a team you
-     -- happen to be in chose nobody, and sorting both by age alone buried the one addressed to you
-     -- under whatever else the team published today.
-     ORDER BY CASE WHEN to_account_id = ? THEN 0 ELSE 1 END, created DESC LIMIT ?`,
+     -- happen to be in chose nobody, and a group sits between the two — so the lane reads in that
+     -- order rather than by age alone, which buried what was addressed to you under the rest.
+     ORDER BY CASE WHEN to_account_id = ? THEN 0 WHEN to_group_id <> '' THEN 1 ELSE 2 END,
+              created DESC LIMIT ?`,
   )
-    .bind(account, account, ...ids, account, account, account, limit)
+    .bind(account, account, account, ...ids, account, account, account, account, account, limit)
     .all<GuideRow>();
   return results;
 }
@@ -1632,16 +1790,31 @@ app.put("/v1/guides/:id", async (c) => {
     team = await teamBySlug(c, String(meta.team));
     if (!team) return err(c, 400, `you are not in a team called "${meta.team}"`);
   }
+  // `to:` names either a person or a group, and the sigil says which: `@ada` is one teammate,
+  // `#frontend` is the people who do a thing. Both need a `team:` — an address is only meaningful
+  // inside the room it belongs to.
+  let toGroup: { id: string; slug: string } | null = null;
   if (meta.to) {
-    const handle = String(meta.to).replace(/^@/, "").toLowerCase();
+    const raw = String(meta.to).trim();
     if (!team) return err(c, 400, "`to:` needs a `team:` — a handoff goes to a teammate");
-    toAccount = await c.env.DB.prepare(
-      `SELECT a.id, a.handle, a.name, a.email FROM account a JOIN membership m ON m.account_id = a.id
-       WHERE a.handle = ? AND m.team_id = ?`,
-    )
-      .bind(handle, team.id)
-      .first<AccountRow>();
-    if (!toAccount) return err(c, 400, `@${handle} is not a member of ${team.slug}`);
+    if (raw.startsWith("#")) {
+      const wanted = tag(raw.slice(1));
+      toGroup = await c.env.DB.prepare(
+        "SELECT id, slug FROM team_group WHERE slug = ? AND team_id = ?",
+      )
+        .bind(wanted, team.id)
+        .first<{ id: string; slug: string }>();
+      if (!toGroup) return err(c, 400, `${team.slug} has no group called #${wanted}`);
+    } else {
+      const handle = raw.replace(/^@/, "").toLowerCase();
+      toAccount = await c.env.DB.prepare(
+        `SELECT a.id, a.handle, a.name, a.email FROM account a JOIN membership m ON m.account_id = a.id
+         WHERE a.handle = ? AND m.team_id = ?`,
+      )
+        .bind(handle, team.id)
+        .first<AccountRow>();
+      if (!toAccount) return err(c, 400, `@${handle} is not a member of ${team.slug}`);
+    }
   }
 
   // A report is the parent of a set of issues, and it is addressed as a unit: an issue can only
@@ -1660,11 +1833,14 @@ app.put("/v1/guides/:id", async (c) => {
   }
 
   const existing = await c.env.DB.prepare(
-    "SELECT id, account_id, share_key, created, team_id, to_account_id FROM guide WHERE id = ?",
+    "SELECT id, account_id, share_key, created, team_id, to_account_id, to_group_id FROM guide WHERE id = ?",
   )
     .bind(id)
     .first<
-      Pick<GuideRow, "id" | "account_id" | "share_key" | "created" | "team_id" | "to_account_id">
+      Pick<
+        GuideRow,
+        "id" | "account_id" | "share_key" | "created" | "team_id" | "to_account_id" | "to_group_id"
+      >
     >();
   if (existing && existing.account_id !== account)
     return err(c, 403, "that id belongs to another account");
@@ -1694,11 +1870,11 @@ app.put("/v1/guides/:id", async (c) => {
   const created = String(meta.created || existing?.created || t);
 
   await c.env.DB.prepare(
-    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, report_id, area, severity, kind)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status, source_context=excluded.source_context,
        tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated,
-       team_id=excluded.team_id, to_account_id=excluded.to_account_id,
+       team_id=excluded.team_id, to_account_id=excluded.to_account_id, to_group_id=excluded.to_group_id,
        report_id=excluded.report_id, area=excluded.area, severity=excluded.severity, kind=excluded.kind`,
   )
     .bind(
@@ -1715,6 +1891,7 @@ app.put("/v1/guides/:id", async (c) => {
       t,
       team?.id || "",
       toAccount?.id || "",
+      toGroup?.id || "",
       report?.id || "",
       slug(meta.area),
       slug(meta.severity, 8),
@@ -1729,8 +1906,9 @@ app.put("/v1/guides/:id", async (c) => {
   let notified = false;
   const addressed =
     toAccount && toAccount.id !== account && existing?.to_account_id !== toAccount.id;
+  const handedToGroup = toGroup && existing?.to_group_id !== toGroup.id;
   const newlyShared = team && existing?.team_id !== team.id;
-  if (addressed || newlyShared) {
+  if (addressed || handedToGroup || newlyShared) {
     const me = (await accounts(c, [account])).get(account);
     const fromHandle = me?.handle || "someone";
     if (addressed && toAccount) {
@@ -1754,6 +1932,22 @@ app.put("/v1/guides/:id", async (c) => {
         },
       });
     }
+    // A group is addressed work for each of its people, so each of them is told the way a named
+    // person is — the same `handoff`, not the team's `shared`. No mail: one guide reaching six
+    // inboxes is six emails, and a group exists precisely because the sender does not know which
+    // of them will take it.
+    if (handedToGroup && toGroup) {
+      const { results } = await c.env.DB.prepare(
+        "SELECT account_id FROM group_member WHERE group_id = ? AND account_id <> ?",
+      )
+        .bind(toGroup.id, account)
+        .all<{ account_id: string }>();
+      await notifyAll(
+        c.env,
+        results.map((m) => m.account_id),
+        { kind: "handoff", guide_id: id, actor_id: account, team_id: team?.id },
+      );
+    }
     // A team-wide share reaches the whole team's feed, but nobody's inbox: it is addressed to
     // no one in particular, and that is exactly the mail people learn to filter out.
     if (newlyShared && team) {
@@ -1771,16 +1965,18 @@ app.put("/v1/guides/:id", async (c) => {
       });
     }
     if (team) {
+      // The room hears who it went to, in the words it was addressed with: a handle, a #group, or
+      // the team itself. "handed you" is right for the first two — somebody was asked.
+      const kind = toAccount || toGroup ? "handoff" : "shared";
+      const where = toAccount
+        ? `${team.slug} / @${toAccount.handle}`
+        : toGroup
+          ? `${team.slug} / #${toGroup.slug}`
+          : team.slug;
       await announce(c.env, {
-        kind: toAccount ? "handoff" : "shared",
+        kind,
         team_id: team.id,
-        text: line({
-          kind: toAccount ? "handoff" : "shared",
-          actor: fromHandle,
-          title: String(meta.title),
-          team: toAccount ? `${team.slug} / @${toAccount.handle}` : team.slug,
-          times: 1,
-        }),
+        text: line({ kind, actor: fromHandle, title: String(meta.title), team: where, times: 1 }),
         url,
       });
     }
@@ -1796,7 +1992,7 @@ app.put("/v1/guides/:id", async (c) => {
       status,
       created: !existing,
       team: team?.slug || "",
-      to: toAccount?.handle || "",
+      to: toAccount?.handle || (toGroup ? `#${toGroup.slug}` : ""),
       notified,
     },
     existing ? 200 : 201,

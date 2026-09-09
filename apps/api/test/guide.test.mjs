@@ -252,13 +252,44 @@ test("nothing a stranger does to your guide happens in silence", async () => {
   }
 });
 
-test("a named handoff outranks one dropped on a team", async () => {
+test("the inbox ranks a handle over a group over a team drop", async () => {
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   const at = src.indexOf("async function inboxRows");
-  const body = src.slice(at, at + 1600);
+  const body = src.slice(at, at + 3000);
   assert.match(
     body,
-    /ORDER BY CASE WHEN to_account_id = \? THEN 0 ELSE 1 END, created DESC/,
-    "someone writing your handle chose you; a team drop chose nobody",
+    /ORDER BY CASE WHEN to_account_id = \? THEN 0 WHEN to_group_id <> '' THEN 1 ELSE 2 END/,
+    "a handle chose you, a group chose the people who do a thing, a team drop chose nobody",
   );
+});
+
+test("a group address does not also land on everyone else in the team", async () => {
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("async function inboxRows");
+  const body = src.slice(at, at + 3000);
+  assert.match(
+    body,
+    /AND to_account_id = '' AND to_group_id = ''/,
+    "the team-wide clause must exclude both of the narrower addresses",
+  );
+  assert.match(
+    body,
+    /SELECT group_id FROM group_member WHERE account_id = \?/,
+    "a group guide reaches the people in that group",
+  );
+});
+
+test("somebody else taking it clears a shared ask, never one with your name on it", async () => {
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("async function inboxRows");
+  const body = src.slice(at, at + 3000);
+  assert.match(
+    body,
+    /SELECT guide_id FROM ack WHERE taken = 1 AND account_id <> \?/,
+    "one person answering a group is the answer for the group",
+  );
+  // The escape hatch beside it is the load-bearing half: without it, a teammate taking something
+  // addressed to you by name would quietly clear it off your board.
+  const clause = body.slice(body.indexOf("AND (to_account_id = ?"));
+  assert.match(clause.slice(0, 200), /to_account_id = \?/);
 });

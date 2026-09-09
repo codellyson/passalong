@@ -42,6 +42,13 @@ const GUIDE = {
     from: { type: "string", description: "Handle of whoever shared it." },
     team: { type: "string" },
     to: { type: "string", description: "Handle it was addressed to, if anyone." },
+    to_group: {
+      type: "string",
+      description:
+        "Group inside the team it was handed to, if any. Reaches every member; the first to " +
+        "take it clears it from the others.",
+    },
+    for_me: { type: "boolean", description: "You were named, rather than being in the team." },
     source_context: { type: "string" },
     tags: { type: "array", items: { type: "string" } },
     stack_assumptions: { type: "array", items: { type: "string" } },

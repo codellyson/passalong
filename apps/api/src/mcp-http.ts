@@ -216,7 +216,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       inputSchema: {
         title: z.string().optional().describe('what the sweep was, e.g. "Checkout pass, 8 Sep"'),
         environment: z.string().optional().describe("production, staging or development"),
-        to: z.string().optional().describe("team slug, or team/handle for a teammate"),
+        to: z
+          .string()
+          .optional()
+          .describe("team slug, team/@handle for one teammate, or team/#group for a set of them"),
         issues: z
           .array(
             z.object({

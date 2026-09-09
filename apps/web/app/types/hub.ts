@@ -52,6 +52,8 @@ export interface Guide {
    * chose you; a team drop chose nobody, and the inbox sorts on the difference.
    */
   for_me?: boolean;
+  /** The group inside the team it was handed to, by name. Empty when it went to a person or all. */
+  to_group?: string;
   /** Who said they are on it, and who passed it back with a reason. See migrations/0013_acks.sql. */
   taken_by?: string[];
   declined?: Declined[];

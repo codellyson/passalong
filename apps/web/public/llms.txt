@@ -46,6 +46,11 @@ Frontmatter fields, in order: `id`, `title`, `kind`, `created`, `author`, `sourc
 `status`, `team`, `to`, `stack_assumptions` (list), `tags` (list). Bugs also carry `report`,
 `area` and `severity` (`s1` blocker to `s4` cosmetic).
 
+`to:` is who is being asked, inside the `team:` it names. `@handle` asks one person and outranks
+everything else in their inbox; `#group` asks the people who do a thing, reaches every one of them,
+and the first to say they are on it takes it off the others' boards; leaving `to:` off shares with
+the whole team, which asks nobody in particular.
+
 Body sections, in this order — the headings are what a receiving agent keys on, so they are
 stable:
 

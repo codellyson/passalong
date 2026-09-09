@@ -54,6 +54,7 @@ const toggle = (g: Guide) => {
           <!-- This lane holds both, and they are not the same ask: these cards are ordered so the
                ones that named you come first, so the card says which kind it is. -->
           <span v-if="g.for_me" class="font-medium text-accent">to you by name</span>
+          <span v-else-if="g.to_group" class="font-medium text-accent">to #{{ g.to_group }}</span>
           <span v-else-if="g.team" class="text-muted">to {{ g.team }}</span>
         </div>
 

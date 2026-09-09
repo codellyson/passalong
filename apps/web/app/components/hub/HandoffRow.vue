@@ -68,7 +68,12 @@ const pulledBy = computed(() =>
            with) has nowhere to go, and nowrap put it off the edge of the card rather than
            truncating — so below `sm` the tail wraps instead. -->
       <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted sm:flex-nowrap">
-        <span v-if="g.team" class="shrink-0">to <b class="font-medium text-fg">{{ g.team }}{{ g.to ? ` / @${g.to}` : "" }}</b></span>
+        <span v-if="g.team" class="shrink-0">
+          to
+          <b class="font-medium text-fg">
+            {{ g.team }}{{ g.to ? ` / @${g.to}` : g.to_group ? ` / #${g.to_group}` : "" }}
+          </b>
+        </span>
         <code class="shrink-0 font-code">{{ g.id }}</code>
         <span v-if="g.source_context" class="min-w-0 flex-1 font-code break-words">
           <AppShorten :value="g.source_context" :max="28" />
