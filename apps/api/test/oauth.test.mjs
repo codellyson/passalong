@@ -94,3 +94,32 @@ test("only a signed-in person can approve a connector", async () => {
     "the session check must come before the account is trusted",
   );
 });
+
+test("the app's own dispatch is marked by something that cannot be sent", async () => {
+  // Source-checked, since the app is not importable. What matters is the *kind* of marker: a
+  // header saying "this is internal" would be a header anyone can send, which would turn the MCP
+  // tools' dispatch into a way to skip authentication entirely.
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  assert.match(src, /const INTERNAL = Symbol\(/, "the marker must be a symbol");
+  assert.ok(
+    !/Symbol\.for\(/.test(src),
+    "not the global registry — anything can look a symbol up in there",
+  );
+
+  // The check has to come before the credential branches, or an OAuth token's scope check refuses
+  // the tools' own calls, which is the bug this fixes.
+  const middleware = src.slice(src.indexOf('app.use("/v1/*"'));
+  const handler = middleware.slice(0, middleware.indexOf("\napp."));
+  assert.ok(
+    handler.indexOf("INTERNAL") < handler.indexOf("PUBLIC.has"),
+    "the internal check must be first",
+  );
+
+  // And the inner request must not carry the caller's credential: it is not a new request from
+  // them, and forwarding it is what re-triggered the scope check.
+  const mcp = src.slice(src.indexOf('app.all("/v1/mcp"'));
+  const route = mcp.slice(0, mcp.indexOf("\napp."));
+  assert.match(route, /asAccount\(/);
+  assert.ok(!/authorization/.test(route), "the tools' dispatch must not forward a credential");
+});

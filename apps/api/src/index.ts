@@ -391,6 +391,29 @@ const publicShot = (method: string, path: string) =>
   method === "GET" && /^\/v1\/shots\/[a-z0-9]+$/.test(path);
 
 /**
+ * How the app tells its own dispatch apart from a request off the wire.
+ *
+ * The MCP tools work by calling this app's routes — one implementation of every rule, and it is
+ * the route — but those calls are not new requests from a client. The caller was authenticated at
+ * `/v1/mcp` before any tool ran, and re-presenting their credential on the inner call meant a
+ * connector's token, scoped to the MCP endpoint, was refused by the scope check the moment a tool
+ * reached `/v1/inbox`. Which is to say: with a connector, every tool failed.
+ *
+ * A symbol on the Request object, not a header. A header can be sent by anyone; a module-local
+ * symbol cannot cross an HTTP boundary at all — the only way to have it is to be the code that put
+ * it there.
+ */
+const INTERNAL = Symbol("passalong.internal.account");
+
+type Marked = Record<symbol, unknown>;
+
+/** Dispatch a request as an account this app has already authenticated. */
+function asAccount(request: Request, account: string): Request {
+  (request as unknown as Marked)[INTERNAL] = account;
+  return request;
+}
+
+/**
  * A 401 that says which authorization server can fix it.
  *
  * RFC 9728: without this header a client that has no token knows only that it was refused. With
@@ -412,6 +435,13 @@ function unauthorizedResource(base: string, error: string, description: string):
 
 /** Either credential proves the same thing, so every route below is unchanged by having two. */
 app.use("/v1/*", async (c, next) => {
+  // The app calling itself for someone it already authenticated. Checked first, because there is
+  // nothing left to check: the credential was verified at the boundary this came from.
+  const internal = (c.req.raw as unknown as Marked)[INTERNAL];
+  if (typeof internal === "string" && internal) {
+    c.set("account", internal);
+    return next();
+  }
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
   if (publicShot(c.req.method, c.req.path)) return next();
 
@@ -1834,7 +1864,6 @@ app.all("/v1/mcp", async (c) => {
     // DELETE to do. Say which method works rather than answering an empty stream.
     return c.json({ message: "POST JSON-RPC to this endpoint" }, 405, { allow: "POST" });
   }
-  const authorization = c.req.header("authorization") || "";
   const base = origin(c);
   const vocabulary = {
     areas: AREAS.map((a) => a.slug).join(", "),
@@ -1844,14 +1873,14 @@ app.all("/v1/mcp", async (c) => {
     c.req.raw,
     async (method, path, body) => {
       const res = await app.fetch(
-        new Request(`${base}${path}`, {
-          method,
-          headers: {
-            authorization,
-            ...(body === undefined ? {} : { "content-type": "application/json" }),
-          },
-          body: body === undefined ? undefined : JSON.stringify(body),
-        }),
+        asAccount(
+          new Request(`${base}${path}`, {
+            method,
+            headers: body === undefined ? {} : { "content-type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+          }),
+          c.get("account"),
+        ),
         c.env,
         c.executionCtx,
       );
