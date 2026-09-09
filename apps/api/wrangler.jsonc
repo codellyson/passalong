@@ -58,6 +58,9 @@
     // Local guides are unlimited; this only gates the hosted copy.
     "FREE_SYNC_LIMIT": "25",
     // Sender for handoff/invite mail. Must be on a domain onboarded to Email Service.
-    "EMAIL_FROM": "no-reply@passalong.dev"
+    "EMAIL_FROM": "no-reply@passalong.dev",
+    // How the sender reads in an inbox list. Without it Gmail shows the local part, so every mail
+    // arrived from "no-reply" — the one thing the sender cannot do, rather than who it is.
+    "EMAIL_FROM_NAME": "Passalong"
   }
 }

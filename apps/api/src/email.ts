@@ -1,75 +1,14 @@
-// Transactional mail through Cloudflare Email Service: a Worker binding, no API key, no vendor
-// SDK. Optional by design — without the EMAIL binding (local dev, or before the sender domain is
-// onboarded) nothing is sent and the caller carries on, because the notification row is the
-// record and mail is only a channel over it.
+// The mail itself: six messages, each written as plain-text lines first and decorated second.
 //
-// Two setup facts that decide whether a send succeeds:
-//   - EMAIL_FROM must be on a domain onboarded to Email Service, or every send is
-//     E_SENDER_NOT_VERIFIED.
-//   - Sending to arbitrary recipients needs the Workers Paid plan. On any plan you may send to
-//     addresses verified as Email Routing destinations in the same account, free.
-
+// The text half is not a fallback nobody sees — it is what a terminal client, a screen reader in
+// plain-text mode and a spam filter all read. `mail-send.ts` is the transport under this, and
+// `mail-html.ts` is the kit the second half is built from.
 import { b, button, command, footnote, link, mono, p, quote, shell } from "./mail-html.js";
+import { type MailEnv, sendMail } from "./mail-send.js";
 
-/** The `send_email` binding. Typed here so the app does not depend on the beta type shipping. */
-export interface SendEmail {
-  send(message: {
-    from: string;
-    to: string;
-    subject: string;
-    text: string;
-    html?: string;
-  }): Promise<unknown>;
-}
+export type { MailEnv, SendEmail } from "./mail-send.js";
+export { fromLine, sendMail } from "./mail-send.js";
 
-export type MailEnv = {
-  EMAIL?: SendEmail;
-  EMAIL_FROM?: string;
-  /** The canonical host. The mark and the masthead link are absolute, as everything in a mail is. */
-  PUBLIC_ORIGIN?: string;
-};
-
-const DEFAULT_FROM = "no-reply@passalong.dev";
-
-/**
- * Send one mail, in both parts. Never throws: a bounced or unconfigured mailer must not fail the
- * request that triggered it. Returns whether it actually went out.
- *
- * The text half is not a fallback nobody sees — it is what a terminal client, a screen reader in
- * plain-text mode and a spam filter all read, and it is why every mail here is written as lines
- * first and decorated second.
- */
-export async function sendMail(
-  env: MailEnv,
-  to: string,
-  subject: string,
-  lines: string[],
-  html?: string,
-): Promise<boolean> {
-  if (!env.EMAIL || !to) return false;
-  try {
-    await env.EMAIL.send({
-      from: env.EMAIL_FROM || DEFAULT_FROM,
-      to,
-      subject,
-      text: lines.join("\n"),
-      ...(html ? { html } : {}),
-    });
-    return true;
-  } catch (e) {
-    const code = (e as { code?: string }).code || "";
-    console.error("email", code, (e as Error).message);
-    return false;
-  }
-}
-
-/**
- * Somebody handed you work. The one mail that is addressed rather than announced.
- *
- * It used to end with "mark it done when it lands: passalong done <id>", which is now the wrong
- * instruction twice over: `done` archives a guide, and what the sender is actually owed is whether
- * it worked. So the mail ends where the loop does — `works` or `broken`.
- */
 export function sendHandoff(
   env: MailEnv,
   o: { to: string; fromHandle: string; title: string; id: string; url: string; team: string },
