@@ -59,6 +59,23 @@ const GUIDE = {
         at: { type: "string", format: "date-time" },
       },
     },
+    taken_by: {
+      type: "array",
+      items: { type: "string" },
+      description: "Handles of the people who said they are on it.",
+    },
+    declined: {
+      type: "array",
+      description: "Who handed it back, and why. Only its author can re-home it.",
+      items: {
+        type: "object",
+        properties: {
+          by: { type: "string" },
+          note: { type: "string" },
+          at: { type: "string", format: "date-time" },
+        },
+      },
+    },
   },
 } as const;
 
@@ -191,6 +208,37 @@ export function openapi(origin: string) {
             200: { description: "Updated." },
             201: { description: "Created." },
             400: { description: "The document or its addressing is not valid." },
+          },
+        },
+      },
+      "/v1/guides/{id}/ack": {
+        put: {
+          operationId: "sayWhetherYouAreTakingIt",
+          summary: "Answer for a guide handed to you: are you doing it?",
+          description:
+            "The first word back, before any work. Passing must say why — `taken: false` with no " +
+            "note is refused, because an unanswered handoff is indistinguishable from an " +
+            "unnoticed one. The guide's own author is refused: there is nothing to tell yourself.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["taken"],
+                  properties: {
+                    taken: { type: "boolean" },
+                    note: { type: "string", maxLength: 280 },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: { description: "Recorded." },
+            400: { description: "Passing needs a reason." },
+            403: { description: "It is your own guide." },
           },
         },
       },
