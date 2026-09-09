@@ -17,18 +17,35 @@ usePage({
 
 <template>
   <main class="wide">
-    <header class="hero">
+    <!-- Both ways in, at the top, where someone who has been here before looks first. -->
+    <nav class="masthead">
       <AppBrand />
-      <h1>Hand finished work to another context.</h1>
+      <!-- One, not two. The hub *is* the sign-in, so a masthead offering both "Sign in" and "Open
+           your hub" was the same door twice, three buttons deep on a screen making one claim. This
+           is for the returning visitor; the claim below is for everyone else. -->
+      <span class="ways">
+        <a class="btn" href="/hub">Sign in</a>
+      </span>
+    </nav>
+
+    <header class="hero">
+      <h1>
+        You already solved this.<br>
+        Somewhere else, someone
+        <span class="turn">is about to solve it again.</span>
+      </h1>
       <p class="lede">
-        Solve something non-trivial in one agent session. Open a session somewhere else — another
-        repo, another machine, a teammate — and the agent there already knows the whole story: the
-        problem, the decisions, the steps, how to verify, and what went wrong along the way.
+        Passalong takes what an agent session just worked out — the problem, the decisions, the
+        steps, how to check it, and what went wrong on the way — and hands it to the next repo,
+        machine or teammate in a form they can act on.
       </p>
       <div class="cta">
         <a class="btn primary lg" href="/hub">Open your hub</a>
-        <span class="cta-cmd"><b>$</b><span>npm i -g passalong</span></span>
       </div>
+      <p class="reassure">
+        Free while it is small. Guides are plain markdown, and
+        <code>passalong export</code> gives you all of them.
+      </p>
     </header>
 
     <section class="showcase" aria-label="A transfer guide, as the person picking it up sees it">

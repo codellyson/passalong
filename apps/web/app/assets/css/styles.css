@@ -928,24 +928,60 @@ form.join label {
    The one page a stranger sees. It leads with what the product produces, rather than describing
    it: `.showcase` is a real guide rendered at reduced scale, built from markup because the page's
    CSP allows no images from anywhere but this origin and no script at all. */
+/* The masthead the page did not have. The mark sat alone at the top and both ways in were buried
+   in the hero, so a returning visitor — most visitors — had to read a pitch to find the door. */
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-4) 0;
+  flex-wrap: wrap;
+}
+.masthead .ways {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+/* The claim gets the room a claim needs. This was 32px from the top of the page to the mark and
+   straight into a wall; it is a screen with one sentence on it now. */
 .hero {
-  padding: var(--s-6) 0 0;
+  padding: clamp(var(--s-7), 10vh, var(--s-9)) 0 0;
   text-align: center;
 }
 .hero h1 {
-  font-size: var(--t-display);
-  line-height: 1.05;
-  letter-spacing: -0.032em;
-  font-weight: 600;
-  margin: var(--s-5) auto var(--s-4);
-  max-width: 16em;
+  /* Serif, and this is the argument the page is making: the thing this product makes is written
+     prose that someone else reads. Setting the claim in the face that carries guides says that
+     before any of the words do — and a grotesque display line says only "software". */
+  font-family: var(--font-serif);
+  font-size: clamp(2.5rem, 1.1rem + 6vw, 4.25rem);
+  line-height: 1.03;
+  letter-spacing: -0.022em;
+  font-weight: 400;
+  margin: 0 auto var(--s-5);
+  max-width: 15em;
+  text-wrap: balance;
+}
+/* The turn. The first lines state the situation; this one says what is wrong with it, and it is
+   the only italic and the only accent on the screen — one place to look. */
+.hero h1 .turn {
+  display: block;
+  font-style: italic;
+  color: var(--accent);
+}
+/* One line under the button, answering the question a button always raises. */
+.reassure {
+  margin: var(--s-4) 0 0;
+  font: var(--t-sm) / 1.5 var(--font-sans);
+  color: var(--muted);
 }
 .lede {
   font-size: clamp(1.0625rem, 1rem + 0.4vw, 1.25rem);
   line-height: 1.55;
   color: var(--muted);
   max-width: 34rem;
-  margin: 0 auto var(--s-6);
+  margin: 0 auto var(--s-7);
   text-wrap: pretty;
 }
 .cta {
@@ -955,28 +991,9 @@ form.join label {
   justify-content: center;
   flex-wrap: wrap;
 }
-.cta-cmd {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-2);
-  padding: var(--s-3) var(--s-4);
-  font: var(--t-sm) / 1 var(--font-mono);
-  color: var(--fg);
-}
-.cta-cmd b {
-  color: var(--muted);
-  font-weight: 400;
-  user-select: none;
-}
-.cta-cmd span {
-  user-select: all;
-}
 
 .showcase {
-  margin: var(--s-7) 0 var(--s-8);
+  margin: var(--s-9) 0 var(--s-8);
   background: var(--surface-raised);
   border: 1px solid var(--line);
   border-radius: var(--r-3);
