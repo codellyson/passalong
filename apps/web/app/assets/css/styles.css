@@ -128,55 +128,54 @@
   --enter: 0.18s;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
 
-  /* Colour. `--surface` is the recessed fill (code, inputs), `--surface-raised` the lifted one
-     (cards, panels). Borders alone used to carry every boundary; now fill does most of it. */
-  --bg: #fbfaf7;
-  --surface: #f4f2ec;
-  --surface-raised: #ffffff;
-  --fg: #1c1b19;
-  --muted: #6b6862;
-  --line: #e4e0d8;
-  --line-strong: #cfcabf;
-  --accent: #b5451b;
-  --accent-hover: #97390f;
-  --accent-fg: #fffaf7;
-  --accent-soft: #f7e7de;
-  --danger: #ab2f21;
+  /* Colour, as pairs. Each token names its light value and its dark one, and `color-scheme` on
+     the root decides which half applies — which is what lets a reader choose without the palette
+     existing twice. A second copy is how two themes drift: someone adds a token to one block and
+     the other keeps rendering last month's colour.
+
+     `--surface` is the recessed fill (code, inputs), `--surface-raised` the lifted one (cards,
+     panels). Borders alone used to carry every boundary; now fill does most of it. */
+  color-scheme: light dark;
+  --bg: light-dark(#fbfaf7, #14130f);
+  --surface: light-dark(#f4f2ec, #1e1c18);
+  --surface-raised: light-dark(#ffffff, #1c1a16);
+  --fg: light-dark(#1c1b19, #ece9e1);
+  --muted: light-dark(#6b6862, #9c988f);
+  --line: light-dark(#e4e0d8, #2e2b25);
+  --line-strong: light-dark(#cfcabf, #423e36);
+  --accent: light-dark(#b5451b, #f08a5b);
+  --accent-hover: light-dark(#97390f, #f7a077);
+  --accent-fg: light-dark(#fffaf7, #1a1410);
+  --accent-soft: light-dark(#f7e7de, #33241c);
+  --danger: light-dark(#ab2f21, #e0705e);
   /* Semantic status, deliberately separate from the brand accent. A failed transfer and a
      well-travelled one were both painted `--accent` before, which is most of why the board read as
      one undifferentiated colour. Rust stays the brand; these three carry meaning. */
-  --danger-soft: #f7e0dc;
-  --ok: #3f6b45;
-  --ok-soft: #e2ecdd;
-  --warn: #8a5a08;
-  --warn-soft: #f6e8cd;
-  --code: #f4f2ec;
-  --shadow-1: 0 1px 2px rgb(28 27 25 / 0.04), 0 1px 3px rgb(28 27 25 / 0.06);
-  --shadow-2: 0 2px 4px rgb(28 27 25 / 0.04), 0 8px 24px rgb(28 27 25 / 0.07);
+  --danger-soft: light-dark(#f7e0dc, #34201c);
+  --ok: light-dark(#3f6b45, #86c493);
+  --ok-soft: light-dark(#e2ecdd, #1e2a20);
+  --warn: light-dark(#8a5a08, #dfae5f);
+  --warn-soft: light-dark(#f6e8cd, #2e2619);
+  --code: light-dark(#f4f2ec, #1e1c18);
+  /* A shadow is a list rather than a colour, so the pair goes in each colour slot. The dark
+     theme's second layer is transparent because dark needs one layer where light needs two. */
+  --shadow-1:
+    0 1px 2px light-dark(rgb(28 27 25 / 0.04), rgb(0 0 0 / 0.3)),
+    0 1px 3px light-dark(rgb(28 27 25 / 0.06), transparent);
+  --shadow-2:
+    0 2px 4px light-dark(rgb(28 27 25 / 0.04), rgb(0 0 0 / 0.25)),
+    0 8px 24px light-dark(rgb(28 27 25 / 0.07), rgb(0 0 0 / 0.35));
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14130f;
-    --surface: #1e1c18;
-    --surface-raised: #1c1a16;
-    --fg: #ece9e1;
-    --muted: #9c988f;
-    --line: #2e2b25;
-    --line-strong: #423e36;
-    --accent: #f08a5b;
-    --accent-hover: #f7a077;
-    --accent-fg: #1a1410;
-    --accent-soft: #33241c;
-    --danger: #e0705e;
-    --danger-soft: #34201c;
-    --ok: #86c493;
-    --ok-soft: #1e2a20;
-    --warn: #dfae5f;
-    --warn-soft: #2e2619;
-    --code: #1e1c18;
-    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3);
-    --shadow-2: 0 2px 4px rgb(0 0 0 / 0.25), 0 8px 24px rgb(0 0 0 / 0.35);
-  }
+
+/* A choice a reader made, carried in a cookie and stamped on the root by the server. Without the
+   attribute the root keeps `light dark` and the operating system decides, which is the default and
+   the right one for anyone who has never asked. Setting `color-scheme` is the whole switch: every
+   token above reads it, and so do the form controls and scrollbars the browser draws itself. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 *,
@@ -1227,9 +1226,81 @@ form.join label {
   white-space: nowrap;
 }
 
+/* Three ways in, listed as peers. A hairline between them and a lot of space around them, because
+   the alternative — four bordered cards in a grid, which is what this page was — spends a card on
+   every block and has no emphasis left for the one that matters. */
+/* One column, centred, and every block on the page shares its axis. Left-aligned content under a
+   full-width hairline was the page wobbling: the rule spanned the container, the prose under it
+   stopped two-thirds across, and the section below was centred on the page — so the eye had three
+   axes to choose from and settled on none. Blocks may differ in width; they may not differ in
+   where their middle is. */
+.rails {
+  max-width: 46rem;
+  margin: var(--gap) auto 0;
+}
+.rails section {
+  padding: var(--s-7) 0;
+  border-top: 1px solid var(--line);
+}
+.rails section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.rails h2 {
+  margin: 0 0 var(--s-4);
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+  font-weight: 400;
+  letter-spacing: -0.018em;
+  line-height: 1.2;
+}
+.rails .eyebrow {
+  margin-bottom: var(--s-2);
+}
+.rails .say p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.rails .say p:last-child,
+.rails .say pre:last-child {
+  margin-bottom: 0;
+}
+/* The one thing on the page that is a warning rather than an instruction. */
+.caveat {
+  border-left: 2px solid var(--warn);
+  padding-left: var(--s-3);
+}
+
+/* Two definitions, not two bullets: the shape says these are terms with meanings, which is exactly
+   what the section is telling an agent to go and read. */
+.kinds {
+  margin: var(--s-6) auto;
+  max-width: 34rem;
+  text-align: left;
+}
+.kinds dt {
+  font: 500 var(--t-sm) / 1.4 var(--font-mono);
+  color: var(--accent);
+}
+.kinds dd {
+  margin: var(--s-1) 0 var(--s-4);
+  color: var(--muted);
+  font-size: var(--t-sm);
+  line-height: 1.65;
+}
+.kinds dd:last-child {
+  margin-bottom: 0;
+}
+/* Centred where the statement is centred, and left where it has to be read as a list. */
+.statement .caveat {
+  max-width: 34rem;
+  margin-inline: auto;
+  text-align: left;
+}
+
 .site-foot {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
   gap: var(--s-6) var(--s-5);
   align-items: start;
   margin-top: var(--gap);
@@ -1260,6 +1331,35 @@ form.join label {
 .site-foot .eyebrow {
   margin-bottom: var(--s-1);
 }
+/* The theme switch sits in the footer rather than pinned to a corner. A fixed control on a page
+   that runs no script is one nobody can dismiss, and this is a setting — it belongs where the
+   other settings-shaped links are. */
+.theme-pick .modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+  margin: var(--s-2) 0 0;
+}
+.theme-pick a,
+.theme-pick .here {
+  font: var(--t-sm) / 1.4 var(--font-sans);
+  text-decoration: none;
+}
+.theme-pick a {
+  color: var(--muted);
+}
+.theme-pick a:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+/* Where you are, not a link. Marked by weight and colour rather than by being unclickable alone —
+   a control whose only signal is that nothing happens is not a signal. */
+.theme-pick .here {
+  color: var(--fg);
+  font-weight: 600;
+}
+
 .site-foot .rule {
   grid-column: 1 / -1;
   margin: 0;
@@ -1268,7 +1368,7 @@ form.join label {
   font: var(--t-xs) / 1.5 var(--font-sans);
   color: var(--muted);
 }
-@media (max-width: 40rem) {
+@media (max-width: 52rem) {
   .site-foot {
     grid-template-columns: 1fr 1fr;
   }

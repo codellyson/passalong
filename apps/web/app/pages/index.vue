@@ -162,23 +162,6 @@ const guide: Line[] = [
       </p>
     </section>
 
-    <footer class="site-foot">
-      <div class="who">
-        <AppBrand />
-        <p>Finished work, handed over.<br>Between repos, machines and people.</p>
-      </div>
-      <nav>
-        <p class="eyebrow">Product</p>
-        <a href="/hub">Open your hub</a>
-        <a href="/connect">Connect your tools</a>
-        <a href="/llms.txt">For AI agents</a>
-      </nav>
-      <nav>
-        <p class="eyebrow">Elsewhere</p>
-        <a href="https://www.npmjs.com/package/passalong">passalong on npm</a>
-        <a href="https://github.com/codellyson/passalong">GitHub</a>
-      </nav>
-      <p class="rule">© 2026 Passalong · a KreativeKorna product</p>
-    </footer>
+    <AppFoot />
   </main>
 </template>
