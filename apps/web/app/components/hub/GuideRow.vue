@@ -43,14 +43,21 @@ const pulledBy = computed(() =>
 );
 
 /**
- * Three tags, then a count.
+ * Three tags, then a count you can open.
  *
  * A guide can carry six, and six pills under a title is the row reading as a wall rather than as a
- * line. Three is enough to recognise a subject; the rest are on the guide, and the count says they
- * exist so nothing looks lost.
+ * line. Three is enough to recognise a subject; the count says the others exist so nothing looks
+ * lost, and pressing it says what they are — it used to hide them in a `title` tooltip, which is
+ * delayed, unstyled and unreachable on a phone.
  */
-const shownTags = computed(() => (props.g.tags || []).slice(0, 3));
-const moreTags = computed(() => Math.max(0, (props.g.tags || []).length - 3));
+const allTags = computed(() => props.g.tags || []);
+const shownTags = computed(() => (showTags.value ? allTags.value : allTags.value.slice(0, 3)));
+const moreTags = computed(() => Math.max(0, allTags.value.length - 3));
+const showTags = ref(false);
+// A row rebound to a different guide must not keep the last one's tags open.
+watch(allTags, () => {
+  showTags.value = false;
+});
 
 /** Printed in full on the row. It is the most valuable thing the product produces. */
 const verdict = computed(() => {
@@ -146,7 +153,13 @@ const verdict = computed(() => {
           </NuxtLink>
         </template>
         <span v-for="t in shownTags" :key="t">#{{ t }}</span>
-        <span v-if="moreTags" :title="(g.tags || []).join(', ')">+{{ moreTags }}</span>
+        <button
+          v-if="moreTags"
+          type="button"
+          class="unfold"
+          :aria-expanded="showTags"
+          @click="showTags = !showTags"
+        >{{ showTags ? "fewer" : `+${moreTags}` }}</button>
       </div>
     </div>
 
