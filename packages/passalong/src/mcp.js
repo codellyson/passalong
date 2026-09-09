@@ -65,8 +65,8 @@ export async function serve() {
         "file_bugs with all of them at once; each becomes a guide someone can take on its own. " +
         "When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
-        "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or "
-        + "team/#group for the people who do a thing. " +
+        "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or " +
+        "team/#group for the people who do a thing. " +
         "At the start of work, inbox shows guides teammates have handed to this user, and activity " +
         "shows whether the guides they handed off have landed. Gotchas are " +
         "the highest-value section: record what failed and why.",
