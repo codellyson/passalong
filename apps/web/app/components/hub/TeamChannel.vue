@@ -100,71 +100,72 @@ async function test(id: string) {
 </script>
 
 <template>
-  <div class="mt-2 rounded-2 border border-line bg-surface px-3 py-2.5">
-    <p class="m-0 font-ui text-sm text-muted">
-      <template v-if="channels.length">
-        Verdicts and handoffs post to
-        {{ channels.length }} channel{{ channels.length === 1 ? "" : "s" }}.
-      </template>
-      <template v-else>
-        No channels. Verdicts reach people by mail and in their feed, but not a room.
-      </template>
-    </p>
-
-    <ul v-if="channels.length" class="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
+  <!-- No box. This sits inside a team's row, and wrapping it made a card inside a card inside a
+       section — three borders deep, on a page where nothing else has any. A hairline and an indent
+       say "belongs to the team above" without building another container to say it. -->
+  <div class="mt-2 border-t border-line pt-2 pl-3">
+    <ul v-if="channels.length" class="m-0 flex list-none flex-col gap-1 p-0">
       <li
         v-for="channel in channels"
         :key="channel.id"
-        class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-1 border border-line bg-raised px-3 py-2"
+        class="flex flex-wrap items-center gap-x-3 gap-y-1"
       >
-        <span class="font-ui text-sm font-medium text-fg">{{ channel.name || "Unnamed" }}</span>
-        <span class="font-code text-xs text-muted">{{ channel.host }}</span>
+        <span class="font-ui text-sm text-fg">{{ channel.name || channel.host }}</span>
+        <span v-if="channel.name" class="font-code text-xs text-muted">{{ channel.host }}</span>
         <!-- A revoked webhook fails silently forever, so a failing one has to say so here. -->
-        <span v-if="channel.failures" class="font-ui text-xs text-danger">
-          failing — {{ channel.last_error }} ({{ channel.failures }}×)
+        <span v-if="channel.failures" class="font-ui text-sm text-danger">
+          failing · {{ channel.last_error }}
         </span>
-        <span v-if="said[channel.id]" class="font-ui text-xs text-ok">{{ said[channel.id] }}</span>
-        <span class="ml-auto flex flex-wrap gap-2">
-          <button type="button" class="btn sm" :disabled="busy" @click="test(channel.id)">
-            Test
-          </button>
+        <span v-if="said[channel.id]" class="font-ui text-sm text-ok">{{ said[channel.id] }}</span>
+        <span class="ml-auto flex flex-wrap items-center gap-2">
+          <button class="btn sm" :disabled="busy" @click="test(channel.id)">send a test line</button>
           <template v-if="removing === channel.id">
-            <button type="button" class="btn sm destructive" @click="remove(channel.id)">
-              Remove
-            </button>
-            <button type="button" class="btn sm" @click="removing = null">Keep</button>
+            <span class="font-ui text-sm text-muted">Nothing posts there again.</span>
+            <button class="btn outline danger sm" @click="remove(channel.id)">Remove it</button>
+            <button class="btn sm" @click="removing = null">Cancel</button>
           </template>
-          <button v-else type="button" class="btn sm" @click="removing = channel.id">Remove</button>
+          <button v-else class="btn destructive sm" @click="removing = channel.id">remove</button>
         </span>
       </li>
     </ul>
+    <p v-else class="m-0 font-ui text-sm text-muted">
+      No channel — verdicts reach people by mail and in their feed, but not a room.
+    </p>
 
-    <form v-if="adding" class="mt-3 flex flex-col gap-2" @submit.prevent="add">
-      <label class="flex flex-col gap-1.5">
-        <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">Name</span>
-        <input v-model="name" type="text" placeholder="QA space" required>
-      </label>
-      <label class="flex flex-col gap-1.5">
-        <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">
-          Webhook URL
-        </span>
-        <input v-model="url" type="url" placeholder="https://chat.googleapis.com/v1/spaces/…" required>
-        <span class="font-ui text-xs text-muted">
-          An incoming webhook from Google Chat, Slack or Discord, or any address that accepts a
-          POST. In Google Chat it is <b>Manage webhooks</b> in the space's menu. It is only ever
-          written here — anyone holding it can post to that room, so it is not shown again.
-        </span>
-      </label>
-      <div class="flex gap-2">
-        <button type="submit" class="btn primary sm" :disabled="busy">
-          {{ busy ? "Adding…" : "Add channel" }}
-        </button>
-        <button type="button" class="btn sm" @click="adding = false; name = ''; url = ''">
-          Cancel
-        </button>
+    <form v-if="adding" class="mt-2 flex flex-wrap items-end gap-3" @submit.prevent="add">
+      <div class="grow basis-40">
+        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="channel-name">
+          Which room?
+        </label>
+        <input id="channel-name" v-model="name" class="w-full" placeholder="QA space" required>
       </div>
+      <div class="grow basis-72">
+        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="channel-url">
+          Webhook URL
+        </label>
+        <input
+          id="channel-url"
+          v-model="url"
+          class="w-full"
+          type="url"
+          placeholder="https://chat.googleapis.com/v1/spaces/…"
+          required
+        >
+      </div>
+      <button class="btn primary sm" type="submit" :disabled="busy || !url.trim()">
+        {{ busy ? "Adding…" : "Add channel" }}
+      </button>
+      <button class="btn sm" type="button" @click="adding = false; name = ''; url = ''">
+        Cancel
+      </button>
+      <p class="basis-full m-0 font-ui text-sm text-muted">
+        In Google Chat this is <b>Manage webhooks</b> in the space's menu. It is only ever written
+        here — anyone holding it can post to that room.
+      </p>
     </form>
-    <button v-else type="button" class="btn sm mt-2" @click="adding = true">Add a channel</button>
+    <button v-else class="btn sm mt-2" @click="adding = true">
+      <AppIcon name="plus" />new channel
+    </button>
 
     <p v-if="trouble" class="mt-2 mb-0 font-ui text-sm text-danger">{{ trouble }}</p>
   </div>

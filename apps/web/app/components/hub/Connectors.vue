@@ -31,6 +31,13 @@ const trouble = ref("");
 const fresh = ref<{ id: string; secret: string } | null>(null);
 const removing = ref<string | null>(null);
 
+// The same two class strings the tokens table uses. Credentials on one page should not be
+// presented two different ways: this section sat in nested cards while the one above it was a
+// plain table, which is what made a finished page look half-built.
+const cell = "border-0 border-b border-b-line px-0 py-2.5 align-middle";
+const head =
+  "border-0 border-b border-b-line bg-transparent px-0 py-1.5 font-ui text-xs font-semibold tracking-wide text-muted uppercase";
+
 async function load() {
   try {
     const answer = await api<{ clients: Connector[] }>("/v1/oauth/clients");
@@ -80,111 +87,99 @@ async function remove(id: string) {
 
 <template>
   <div>
-    <p class="mt-0 mb-4 font-ui text-sm text-muted">
-      It reaches the MCP endpoint and nothing else, and removing it here cuts it off immediately.
-      <NuxtLink to="/connect">How to connect one</NuxtLink>.
-    </p>
-
-    <!-- Shown once, on creation, like a token. -->
-    <div v-if="fresh" class="mb-4 rounded-3 border border-ok bg-raised p-4">
-      <p class="m-0 font-ui text-sm font-semibold text-fg">Paste these into the connector</p>
-      <dl class="mt-3 mb-0 flex flex-col gap-2">
-        <div>
-          <dt class="font-ui text-xs tracking-wide text-muted uppercase">Client ID</dt>
-          <dd class="m-0 mt-1 rounded-2 border border-line bg-surface px-3 py-2 font-code text-sm break-all select-all">
-            {{ fresh.id }}
-          </dd>
-        </div>
-        <div v-if="fresh.secret">
-          <dt class="font-ui text-xs tracking-wide text-muted uppercase">
-            Client secret — shown once
-          </dt>
-          <dd class="m-0 mt-1 rounded-2 border border-line bg-surface px-3 py-2 font-code text-sm break-all select-all">
-            {{ fresh.secret }}
-          </dd>
-        </div>
-      </dl>
-      <p class="mt-3 mb-0 font-ui text-xs text-muted">
-        <template v-if="fresh.secret">
-          There is no route that shows the secret again. Lose it and remove the connector, then make
-          another.
-        </template>
-        <template v-else>
-          No secret: this is a public client, and the proof is PKCE. Set the connector's token
-          endpoint auth method to <code>none</code>.
-        </template>
-      </p>
-      <button type="button" class="btn sm mt-3" @click="fresh = null">Done</button>
+    <!-- Shown once, the same shape and wording as a new token: the interface is holding something
+         the server cannot give back, and it says so where the value is. -->
+    <div v-if="fresh" class="mb-4 rounded-2 border border-accent bg-accent-soft p-3">
+      <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <b class="font-ui text-sm text-fg">
+          New connector<template v-if="fresh.secret"> · secret shown once</template>
+        </b>
+        <span class="font-ui text-sm text-accent">paste these into the connector</span>
+      </div>
+      <div class="flex flex-col gap-2">
+        <code
+          class="overflow-x-auto rounded-1 border border-line-strong bg-raised px-3 py-2 font-code text-sm whitespace-nowrap text-fg"
+        >{{ fresh.id }}</code>
+        <code
+          v-if="fresh.secret"
+          class="overflow-x-auto rounded-1 border border-line-strong bg-raised px-3 py-2 font-code text-sm whitespace-nowrap text-fg"
+        >{{ fresh.secret }}</code>
+      </div>
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <button class="btn primary sm" @click="copy(fresh.id, $event.currentTarget)">
+          copy client id
+        </button>
+        <button class="btn sm" @click="fresh = null">done</button>
+        <span v-if="!fresh.secret" class="font-ui text-sm text-muted">
+          no secret — set the connector's token auth method to <code class="font-code">none</code>
+        </span>
+      </div>
     </div>
 
     <p v-if="trouble" class="mb-3 font-ui text-sm text-danger">{{ trouble }}</p>
 
-    <ul v-if="clients.length" class="m-0 flex list-none flex-col gap-2 p-0">
-      <li
-        v-for="client in clients"
-        :key="client.id"
-        class="rounded-3 border border-line bg-raised px-4 py-3"
-      >
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <b class="font-ui text-sm font-semibold text-fg">{{ client.name || "Unnamed" }}</b>
-          <span class="font-code text-xs text-muted">
-            {{ client.grants }} grant{{ client.grants === 1 ? "" : "s" }}
-          </span>
-          <span v-if="client.confidential" class="font-code text-xs text-muted">· has a secret</span>
-          <span class="ml-auto flex flex-wrap items-center gap-2">
+    <table v-if="clients.length" class="w-full">
+      <thead>
+        <tr>
+          <th :class="head">Name</th>
+          <th :class="head">Client ID</th>
+          <th :class="head">Holding</th>
+          <th :class="head"><span class="sr-only">Remove</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="client in clients" :key="client.id">
+          <td :class="cell" class="font-ui text-sm font-semibold text-fg">
+            {{ client.name || "Unnamed" }}
+          </td>
+          <td :class="cell" class="pr-3 font-code text-xs break-all text-muted">{{ client.id }}</td>
+          <td :class="cell" class="font-ui text-sm text-muted">
+            {{ plural(client.grants, "grant") }}
+          </td>
+          <td :class="cell" class="text-right whitespace-nowrap">
+            <!-- Two taps to break something, and the second one says what breaks. -->
             <template v-if="removing === client.id">
-              <span class="font-ui text-sm text-muted">Cut it off now?</span>
-              <button type="button" class="btn sm destructive" @click="remove(client.id)">
-                Remove
-              </button>
-              <button type="button" class="btn sm" @click="removing = null">Keep</button>
+              <span class="mr-2 font-ui text-sm text-muted">It stops working now.</span>
+              <button class="btn outline danger sm" @click="remove(client.id)">Remove it</button>
+              <button class="btn sm ml-2" @click="removing = null">Cancel</button>
             </template>
-            <button v-else type="button" class="btn sm" @click="removing = client.id">
-              Remove
-            </button>
-          </span>
-        </div>
-        <!-- The two long opaque strings, each on its own line and each allowed to break, because
-             at no column width do they wrap well beside anything else. -->
-        <dl class="mt-2 mb-0 grid gap-x-3 gap-y-1 sm:grid-cols-[6rem_minmax(0,1fr)]">
-          <dt class="font-ui text-xs tracking-wide text-muted uppercase">Client ID</dt>
-          <dd class="m-0 font-code text-xs break-all text-fg">{{ client.id }}</dd>
-          <dt class="font-ui text-xs tracking-wide text-muted uppercase">Callback</dt>
-          <dd class="m-0 font-code text-xs break-all text-muted">{{ client.redirect_uri }}</dd>
-        </dl>
-      </li>
-    </ul>
-    <p v-else class="font-ui text-sm text-muted">No connectors yet.</p>
+            <button v-else class="btn destructive sm" @click="removing = client.id">remove</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p v-else class="m-0 font-ui text-sm text-muted">None yet.</p>
 
-    <form v-if="adding" class="mt-4 rounded-3 border border-line bg-raised p-4" @submit.prevent="create">
-      <label class="flex flex-col gap-1.5">
-        <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">Name</span>
-        <input v-model="name" type="text" placeholder="ChatGPT" required>
-      </label>
-      <label class="mt-3 flex flex-col gap-1.5">
-        <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">
-          Callback URL
-        </span>
-        <input v-model="redirect" type="url" placeholder="https://…" required>
-        <span class="font-ui text-xs text-muted">
-          Copy it from the connector's own form. It must match exactly — no wildcards, because a
-          redirect that accepts more than one address is how an authorization code walks off.
-        </span>
-      </label>
-      <label class="mt-3 flex items-start gap-2 font-ui text-sm text-muted">
-        <input v-model="confidential" type="checkbox" class="mt-1 w-auto">
-        <span>
-          Issue a client secret. Leave this off unless the connector demands one — PKCE proves the
-          exchange without a secret you have to keep in someone else's configuration.
-        </span>
-      </label>
-      <div class="mt-4 flex gap-2">
-        <button type="submit" class="btn primary" :disabled="busy">
-          {{ busy ? "Creating…" : "Create connector" }}
-        </button>
-        <button type="button" class="btn" @click="adding = false">Cancel</button>
+    <form v-if="adding" class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="create">
+      <div class="grow basis-48">
+        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="connector-name">
+          What is connecting?
+        </label>
+        <input id="connector-name" v-model="name" class="w-full" placeholder="ChatGPT" required>
       </div>
+      <div class="grow basis-72">
+        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="connector-redirect">
+          Callback URL, copied from its form
+        </label>
+        <input id="connector-redirect" v-model="redirect" class="w-full" type="url" placeholder="https://…" required>
+      </div>
+      <button class="btn primary sm" type="submit" :disabled="busy || !redirect.trim()">
+        {{ busy ? "Creating…" : "Create connector" }}
+      </button>
+      <button class="btn sm" type="button" @click="adding = false">Cancel</button>
+      <label class="basis-full font-ui text-sm text-muted">
+        <input v-model="confidential" type="checkbox" class="mr-2 w-auto">
+        issue a client secret — leave off unless the connector demands one, since PKCE proves the
+        exchange without a secret you have to keep in someone else's configuration
+      </label>
     </form>
-    <button v-else type="button" class="btn mt-4" @click="adding = true">Add a connector</button>
+
+    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <button v-if="!adding" class="btn sm" @click="adding = true">
+        <AppIcon name="plus" />new connector
+      </button>
+      <span v-else />
+      <NuxtLink to="/connect" class="font-ui text-sm">how to connect one</NuxtLink>
+    </div>
   </div>
 </template>
