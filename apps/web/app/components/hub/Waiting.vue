@@ -52,16 +52,31 @@ const waiting = computed(() => data.value.board?.waiting ?? []);
           class="text-h2 font-semibold leading-snug tracking-tight text-fg no-underline hover:text-accent"
         >{{ g.title || g.id }}</a>
 
-        <div
+        <!-- Two labelled lines, not one run-on. These are the two longest things a guide carries:
+             set inline with a `·` between them they wrapped into four lines of mono with the
+             separator stranded on a line of its own, and the card read as a wall. Each is
+             shortened to whole units and opens where it stands, and the label says which is which
+             in the same words the guide page uses. -->
+        <dl
           v-if="g.source_context || g.stack_assumptions?.length"
-          class="flex flex-wrap items-center gap-2 font-code text-xs text-muted"
+          class="m-0 flex flex-col gap-2 text-xs leading-relaxed text-muted"
         >
-          <span v-if="g.source_context">{{ g.source_context }}</span>
-          <span v-if="g.source_context && g.stack_assumptions?.length">·</span>
-          <span v-if="g.stack_assumptions?.length">{{ g.stack_assumptions.join(", ") }}</span>
-        </div>
+          <div v-if="g.source_context" class="flex gap-3">
+            <dt class="w-14 shrink-0 font-ui">out of</dt>
+            <dd class="m-0 min-w-0 font-code"><AppShorten :value="g.source_context" :max="40" /></dd>
+          </div>
+          <div v-if="g.stack_assumptions?.length" class="flex gap-3">
+            <dt class="w-14 shrink-0 font-ui">assumes</dt>
+            <dd class="m-0 min-w-0 font-code">
+              <AppShorten :value="g.stack_assumptions.join(', ')" :max="40" />
+            </dd>
+          </div>
+        </dl>
 
-        <div class="mt-0.5 flex items-center gap-2">
+        <!-- At the foot, not after the last paragraph. The grid stretches these to a common
+             height, so a card with no `out of` line used to put its command halfway up the card
+             beside a neighbour whose command was at the bottom. -->
+        <div class="mt-auto flex items-center gap-2 pt-1">
           <!-- It wears the clipboard mark like every other copy on the page, and so it no longer
                needs a tooltip to admit what it does. This could not hold an icon until copy()
                learned to swap `[data-label]` instead of the button's whole textContent. -->
