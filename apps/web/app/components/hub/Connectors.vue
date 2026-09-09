@@ -150,7 +150,7 @@ async function remove(id: string) {
     </table>
     <p v-else class="m-0 font-ui text-sm text-muted">None yet.</p>
 
-    <form v-if="adding" class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="create">
+    <form v-if="adding" class="appears mt-3 flex flex-wrap items-end gap-3" @submit.prevent="create">
       <div class="grow basis-48">
         <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="connector-name">
           What is connecting?

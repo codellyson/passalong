@@ -101,7 +101,14 @@
   --r-3: 1rem;
   --r-pill: 999px;
 
+  /* Motion. `--motion` is for something already on screen changing — a hover, a focus ring, a
+     colour. `--enter` is for something arriving, which needs slightly longer and a curve that
+     decelerates, or it reads as a jump with a delay rather than as a movement.
+     Both are small on purpose. The complaint was that nothing moved, not that anything should be
+     watched: at this length a transition is felt and not seen. */
   --motion: 0.15s;
+  --enter: 0.18s;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
 
   /* Colour. `--surface` is the recessed fill (code, inputs), `--surface-raised` the lifted one
      (cards, panels). Borders alone used to carry every boundary; now fill does most of it. */
@@ -1360,8 +1367,56 @@ details.more .invite-paste {
   }
 }
 
+/* Collapsing the variables covers transitions and misses keyframes entirely, so the entrances
+   below are stopped by name as well. Someone who has asked for less motion has asked for all of
+   it, not the half that happens to read a custom property. */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion: 0.01ms;
+    --enter: 0.01ms;
   }
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- motion ----------------------------------------------------------------------------------
+   Three things move, and nothing else does.
+
+   1. Anything that arrives — a menu, an inline form, the body of a row you just opened — rises a
+      few pixels while it fades in. Appearing instantly at full opacity is what made the interface
+      feel like a slideshow: the change happened, but nothing said a change had happened.
+   2. Anything you are pointing at settles into its hover rather than snapping.
+   3. Links take their colour over the same duration as everything else.
+
+   Deliberately not here: nothing loops, nothing animates on scroll, nothing moves that the person
+   did not just act on. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.menu,
+details[open] > *:not(summary),
+.issue-body,
+.appears {
+  animation: rise var(--enter) var(--ease-out) both;
+}
+
+/* Rows and menu items are hovered constantly; snapping between two greys reads as flicker. */
+a,
+.menu-item,
+.issue-head,
+.notes li,
+tbody tr {
+  transition:
+    background-color var(--motion) ease,
+    color var(--motion) ease,
+    border-color var(--motion) ease;
 }

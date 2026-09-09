@@ -132,7 +132,7 @@ async function test(id: string) {
       No channel — verdicts reach people by mail and in their feed, but not a room.
     </p>
 
-    <form v-if="adding" class="mt-2 flex flex-wrap items-end gap-3" @submit.prevent="add">
+    <form v-if="adding" class="appears mt-2 flex flex-wrap items-end gap-3" @submit.prevent="add">
       <div class="grow basis-40">
         <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="channel-name">
           Which room?

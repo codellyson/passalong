@@ -95,7 +95,7 @@ const detailed = computed(() =>
   <article class="border-t border-line first:border-t-0">
     <!-- The whole line is the control, so hitting anywhere on a collapsed row opens it. -->
     <div
-      class="flex cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-2.5 hover:bg-surface"
+      class="issue-head flex cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-2.5 hover:bg-surface"
       role="button"
       tabindex="0"
       :aria-expanded="issue.open"
@@ -128,7 +128,7 @@ const detailed = computed(() =>
       </span>
     </div>
 
-    <div v-if="issue.open" class="flex flex-col gap-4 px-4 pt-1 pb-5 sm:pl-10">
+    <div v-if="issue.open" class="issue-body flex flex-col gap-4 px-4 pt-1 pb-5 sm:pl-10">
       <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
         <label class="flex flex-col gap-1.5">
           <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">Issue title</span>

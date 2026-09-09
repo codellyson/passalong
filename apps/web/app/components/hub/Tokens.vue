@@ -117,7 +117,7 @@ const head =
     </table>
     <p v-else class="m-0 font-ui text-sm text-muted">None yet.</p>
 
-    <form v-if="naming" class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="mint">
+    <form v-if="naming" class="appears mt-3 flex flex-wrap items-end gap-3" @submit.prevent="mint">
       <div class="grow basis-64">
         <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="token-name">
           What is this token for?
