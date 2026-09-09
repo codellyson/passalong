@@ -181,6 +181,13 @@ public one, for agents *using* Passalong rather than changing it.
   clears it from the others' lanes — never from the lane of someone named by handle, who was asked
   personally and whose ask nobody else can answer. A group is an address, not a permission: it
   holds only people already in the team, and it has no roles.
+- **Mail is written twice, and the plain-text half is written first.** `sendMail` takes lines and
+  an optional HTML string; `mail-html.ts` builds the second from a fixed kit (`shell`, `button`,
+  `command`, `quote`, `p`, `mono`) — tables, inline styles, a system font stack, no flexbox, no
+  media queries, no SVG, and every colour stated, because Gmail on Android inverts a light mail
+  rather than reading `prefers-color-scheme`. The masthead's mark is an absolute PNG with the
+  wordmark beside it as text: images are blocked by default for a sender nobody has replied to.
+  Anything a person typed — a title, a verdict's reason — goes through `esc()` on the way in.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-
