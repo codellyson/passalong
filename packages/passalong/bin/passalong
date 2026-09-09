@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Passalong CLI. Few flags on purpose: the defaults are the product.
 //
-//   passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
+//   passalong share [file] [--to TARGET]  publish a guide → id + link
+//     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
+//     thing — quote that one, since a shell may read the # as a comment
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong inbox               guides handed to you that you have not pulled yet
 //   passalong board               waiting on you, in flight, landed, worth keeping
@@ -9,9 +11,11 @@
 //   passalong list [query]        your guides and your teams', local and synced
 //   passalong open <id> [--print] view a guide in the browser (or the terminal)
 //   passalong hub                 open your synced guides in the browser
+//   passalong take <id>           you are doing it — said before the work, so the sender stops guessing
+//   passalong pass <id> <why>     it is not yours — hands it back to its author with your reason
 //   passalong works <id>          you tried it and it holds up
 //   passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
-//   passalong done <id>           deprecated: mark consumed
+//   passalong done <id>           archive it: off your board and out of the free tier's count
 //   passalong promote <id>        deprecated: mark promoted
 //   passalong rm <id>             delete a guide locally and from sync
 //   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
@@ -211,6 +215,29 @@ const commands = {
     } else console.log(url);
   },
 
+  /**
+   * The first word back, before any of the work.
+   *
+   * Between a handoff and a pull the sender had no signal at all: an unanswered guide looks
+   * exactly like one nobody has noticed. These two are the hop the MCP tool and the hub already
+   * had and a terminal did not.
+   */
+  async take(f) {
+    const id = f._[0] || die("usage: passalong take <id>");
+    const r = await passalong.ack(id, true).catch((e) => die(e.message));
+    console.error(`${r.id} — you are on it, and the author has been told`);
+  },
+
+  async pass(f) {
+    const id = f._[0] || die("usage: passalong pass <id> <why it is not yours>");
+    const why = f._.slice(1).join(" ");
+    // Required, and the reason is the whole point: "not me" without "why" leaves the sender where
+    // the silence did, still guessing whether to re-address it, wait, or go and ask.
+    if (!why) die("say why you are passing: passalong pass <id> <why it is not yours>");
+    const r = await passalong.ack(id, false, why).catch((e) => die(e.message));
+    console.error(`${r.id} handed back — the author has been told: "${r.note}"`);
+  },
+
   async works(f) {
     const id = f._[0] || die("usage: passalong works <id>");
     const r = await passalong.verdict(id, true, f._.slice(1).join(" ")).catch((e) => die(e.message));
@@ -225,16 +252,22 @@ const commands = {
     console.error(`${r.id} reported as not working — the author has been told: "${r.note}"`);
   },
 
-  // Both of these are on the way out. They set an author lifecycle that nothing reads any more:
-  // the board reports where a transfer is, and the verdict reports whether it worked. They still
-  // work, and warn, because this package is published and removing a command is a breaking change.
+  /**
+   * Archive a guide: off your board, and out of what the free tier counts.
+   *
+   * It was deprecated for meaning "I implemented it", which is the reader's judgement and belongs
+   * to the verdict. As shelf space it has a job nothing else does — it is the only way under the
+   * sync limit that does not delete the work, and the 402 says so by name.
+   */
   async done(f) {
     const id = f._[0] || die("usage: passalong done <id>");
     const g = await passalong.setStatus(id, "consumed").catch((e) => die(e.message));
-    console.error(`${g.meta.id} marked consumed`);
-    console.error("note: `done` is deprecated — say whether it worked instead: passalong verify");
+    console.error(`${g.meta.id} archived — off your board, and it no longer counts against sync`);
   },
 
+  // Still on the way out: it sets an author lifecycle nothing reads, and the board reports pull
+  // counts on its own. It stays, and warns, because removing a command from a published package
+  // is a breaking change.
   async promote(f) {
     const id = f._[0] || die("usage: passalong promote <id>");
     const g = await passalong.setStatus(id, "promoted").catch((e) => die(e.message));

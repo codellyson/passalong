@@ -90,6 +90,7 @@ passalong login                 # optional: sync across machines
 - `passalong export [dir]` — every guide as plain markdown
 - `passalong team create|invite|join|use` — teams
 - `passalong me [--handle H]` — how teammates address you
+- `passalong take <id>` / `passalong pass <id> <why>` — whether you are doing what you were handed
 - `passalong mcp` — run the MCP server over stdio
 
 ## MCP tools

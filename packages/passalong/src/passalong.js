@@ -19,15 +19,23 @@ import * as store from "./store.js";
 export class PassalongError extends Error {}
 
 /** "team" or "team/handle" → { team, to }. */
+/**
+ * Split `--to` into a team and who inside it: "team", "team/@handle", or "team/#group".
+ *
+ * Only the `@` is stripped. The `#` is load-bearing and travels into the frontmatter as written —
+ * it is the sigil the server reads to tell a person from a group, and dropping it here would turn
+ * a handoff to six people into a lookup for a teammate who does not exist.
+ */
 export function parseTarget(to) {
   if (!to) return {};
-  const [team, handle] = String(to).split("/");
-  return { team: team.trim(), to: handle ? handle.trim().replace(/^@/, "") : undefined };
+  const [team, who] = String(to).split("/");
+  return { team: team.trim(), to: who ? who.trim().replace(/^@/, "") : undefined };
 }
 
 /**
  * Publish a guide from markdown: fill in defaults, validate, store locally, and sync when
- * logged in. `to` addresses it: "team" or "team/handle". Returns { guide, path, url, synced }.
+ * logged in. `to` addresses it: "team", "team/@handle", or "team/#group". Returns
+ * { guide, path, url, synced }.
  */
 export async function share(markdown, { cwd = process.cwd(), to } = {}) {
   const c = context(cwd);

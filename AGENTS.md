@@ -188,6 +188,10 @@ public one, for agents *using* Passalong rather than changing it.
   rather than reading `prefers-color-scheme`. The masthead's mark is an absolute PNG with the
   wordmark beside it as text: images are blocked by default for a sender nobody has replied to.
   Anything a person typed — a title, a verdict's reason — goes through `esc()` on the way in.
+- **Every answer a reader can give exists in all three places.** The hub, the MCP tools and the
+  CLI: `take`/`pass` for the ack, `works`/`broken` for the verdict, `done` to archive. A signal that
+  exists in only two of them is one a third of the product's users cannot send, and the mail that
+  tells someone what to do next can only name commands that exist.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-

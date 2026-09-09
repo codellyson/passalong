@@ -80,6 +80,11 @@ export function sendHandoff(
     "",
     `Read it: ${o.url}`,
     "",
+    "Say whether you are doing it, before you start — otherwise they cannot tell an unanswered",
+    "handoff from an unnoticed one:",
+    `  passalong take ${o.id}`,
+    `  passalong pass ${o.id} <why it is not yours>`,
+    "",
     "Pull it into the repo where you'll implement it:",
     `  passalong pull ${o.id}`,
     "",
@@ -99,10 +104,15 @@ export function sendHandoff(
       heading: o.title,
       body: [
         button("Read the guide", o.url),
-        command("pull it into your repo", `passalong pull ${o.id}`),
         p(
-          `When you have run it, say how it went — it is the only signal ${b(`@${o.fromHandle}`)} ` +
-            `gets: ${mono(`passalong works ${o.id}`)}, or ${mono("broken")} with a reason.`,
+          `Say whether you are doing it before you start — until you do, ${b(`@${o.fromHandle}`)} ` +
+            `cannot tell an unanswered handoff from an unnoticed one. One line in the hub, or ` +
+            `${mono(`passalong take ${o.id}`)}.`,
+        ),
+        command("then pull it into your repo", `passalong pull ${o.id}`),
+        p(
+          `When you have run it, say how it went — it is the only signal they get: ` +
+            `${mono(`passalong works ${o.id}`)}, or ${mono("broken")} with a reason.`,
           "#6b6862",
         ),
       ],

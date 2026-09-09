@@ -203,3 +203,13 @@ x
     "and written back that way, so the document the author pulls agrees",
   );
 });
+
+test("a group address survives being written to frontmatter and read back", () => {
+  const doc = serialize({
+    meta: { id: "aa", title: "One", team: "khaime", to: "#frontend", tags: [] },
+    body: "## Problem\nx",
+  });
+  // `#` is quoted on the way out, or YAML reads the rest of the line as a comment.
+  assert.match(doc, /^to: "#frontend"$/m);
+  assert.equal(parse(doc).meta.to, "#frontend");
+});
