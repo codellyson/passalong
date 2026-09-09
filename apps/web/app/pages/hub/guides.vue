@@ -127,8 +127,8 @@ const visible = computed(() => {
         <HubGuideRow v-for="r in visible" :key="r.g.id" :g="r.g" :state="r.state" />
       </ul>
       <p class="mt-3 font-ui text-sm text-muted">
-        Showing {{ visible.length }} of {{ rows.length }}. Ids, repos and stack assumptions live on
-        the second line; everything else is on the guide page.
+        Showing {{ visible.length }} of {{ rows.length }}. The id and the repo are on the last line;
+        what a guide assumes, and the rest of its tags, are on the guide itself.
       </p>
     </template>
   </HubShell>

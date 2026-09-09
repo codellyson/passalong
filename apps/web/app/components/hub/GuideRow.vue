@@ -50,6 +50,16 @@ const severityTone: Record<string, string> = {
   s4: "bg-surface text-muted",
 };
 
+/**
+ * Three tags, then a count.
+ *
+ * A guide can carry six, and six pills under a title is the row reading as a wall rather than as a
+ * line. Three is enough to recognise a subject; the rest are on the guide, and the count says they
+ * exist so nothing looks lost.
+ */
+const shownTags = computed(() => (props.g.tags || []).slice(0, 3));
+const moreTags = computed(() => Math.max(0, (props.g.tags || []).length - 3));
+
 /** Printed in full on the row. It is the most valuable thing the product produces. */
 const verdict = computed(() => {
   const v = props.g.verdict;
@@ -114,21 +124,18 @@ const verdict = computed(() => {
         {{ verdict }}
       </p>
 
-      <!-- The two facts that run to a sentence — the repo and the stack — are capped rather than
-           left to wrap, which turned the tail into a four-line grey paragraph under the title with
-           nothing to say where one fact ended. Both are on hover and on the guide itself. -->
+      <!-- One line, and it is reference rather than triage: what you read once you have already
+           decided this is the row you wanted.
+           `assumes` used to sit here and is gone. It is the longest thing a guide carries, it
+           truncated to "assumes Khaime API /api/v1,…" which tells nobody anything, and it is on
+           the guide page in full where a person deciding whether they can follow the steps is
+           actually looking. Tags stop at three for the same reason: a row wearing six is a row
+           nobody reads, and the rest are one click away. -->
       <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-code text-xs text-muted">
         <span>{{ g.id }}</span>
         <template v-if="g.source_context">
           <span>·</span>
-          <span class="max-w-[14rem] truncate" :title="g.source_context">{{ g.source_context }}</span>
-        </template>
-        <template v-if="g.stack_assumptions?.length">
-          <span>·</span>
-          <span
-            class="max-w-[14rem] truncate"
-            :title="g.stack_assumptions.join(', ')"
-          >assumes {{ g.stack_assumptions.join(", ") }}</span>
+          <span class="max-w-[16rem] truncate" :title="g.source_context">{{ g.source_context }}</span>
         </template>
         <template v-if="pulledBy"><span>·</span><span>pulled by {{ pulledBy }}</span></template>
         <!-- The one thing a row cannot say on its own: it was filed with others. -->
@@ -138,7 +145,8 @@ const verdict = computed(() => {
             {{ g.report_title || "part of a report" }}
           </NuxtLink>
         </template>
-        <span v-for="t in g.tags || []" :key="t">#{{ t }}</span>
+        <span v-for="t in shownTags" :key="t">#{{ t }}</span>
+        <span v-if="moreTags" :title="(g.tags || []).join(', ')">+{{ moreTags }}</span>
       </div>
     </div>
 
