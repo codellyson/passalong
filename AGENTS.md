@@ -162,6 +162,16 @@ public one, for agents *using* Passalong rather than changing it.
   the decliner's inbox and back onto its author's board as `passed`. Taking it does not: you still
   owe the work, so it stays where you will see it. Both reach the team channel, because a guide
   nobody has taken is work that has stopped moving.
+- **Being named outranks being in the room.** The inbox orders `to_account_id = you` before
+  everything else, then by age: someone writing your handle chose you, while a guide shared with a
+  team you happen to be in chose nobody, and sorting both by age alone buried the one addressed to
+  you under whatever the team published that day. Every surface showing that lane says which kind a
+  guide is, because the order is only honest if the reason for it is visible.
+- **Nothing a non-author does to a guide happens in silence.** Pull, verdict, ack, archive and
+  un-archive each notify the author. `reopened` exists because archiving told them and un-archiving
+  did not, so a guide could move off somebody's board on another person's say-so without a word;
+  the pinning test in `apps/api/test/guide.test.mjs` walks the routes a non-owner can reach and
+  fails if one stops telling them.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-
