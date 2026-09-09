@@ -42,14 +42,6 @@ const pulledBy = computed(() =>
     : null,
 );
 
-/** A bug carries how badly it is broken; a transfer guide has nothing to say here. */
-const severityTone: Record<string, string> = {
-  s1: "bg-danger-soft text-danger",
-  s2: "bg-warn-soft text-warn",
-  s3: "bg-accent-soft text-accent",
-  s4: "bg-surface text-muted",
-};
-
 /**
  * Three tags, then a count.
  *
@@ -87,6 +79,16 @@ const verdict = computed(() => {
           class="rounded-pill px-2 py-0.5 text-xs font-semibold tracking-wide uppercase"
           :class="state.badge"
         >{{ state.label }}</span>
+        <!-- A bug carries how badly it is broken; a transfer guide has nothing to say here. It
+             sits with the other pill rather than in front of the title, because a fact only some
+             rows have must not decide where every row's title starts. Named rather than coded:
+             next to "waiting on you", an `s3` was the only thing on the line you had to already
+             know to read. -->
+        <span
+          v-if="g.severity"
+          class="rounded-pill px-2 py-0.5 text-xs font-semibold tracking-wide uppercase"
+          :class="severityTone(g.severity)"
+        >{{ severityLabel(g.severity) }}</span>
         <!-- Three cases, not two. A guide of yours that went to a team says where it went; one
              handed to you says who from; and one you shared with nobody says neither, because the
              tail after the date already says "addressed to nobody". Collapsing the third into the
@@ -101,21 +103,14 @@ const verdict = computed(() => {
         <span v-if="tail">· {{ tail }}</span>
       </div>
 
-      <div class="mt-2 flex items-start gap-2">
-        <!-- Before the title, because how badly it is broken is what decides whether you read the
-             rest of the row. -->
-        <span
-          v-if="g.severity"
-          class="mt-0.5 shrink-0 rounded-pill px-2 py-0.5 font-code text-[11px] uppercase"
-          :class="severityTone[g.severity] || 'bg-surface text-muted'"
-        >{{ g.severity }}</span>
-        <a
-          :href="g.url"
-          target="_blank"
-          rel="noopener"
-          class="block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-        >{{ g.title || g.id }}</a>
-      </div>
+      <!-- Nothing precedes the title. Every row in this list has the same anatomy, so the titles
+           share one left edge and the list scans as a column. -->
+      <a
+        :href="g.url"
+        target="_blank"
+        rel="noopener"
+        class="mt-2 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
+      >{{ g.title || g.id }}</a>
 
       <p
         v-if="verdict"

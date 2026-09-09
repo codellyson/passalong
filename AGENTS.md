@@ -136,6 +136,12 @@ public one, for agents *using* Passalong rather than changing it.
   there was a rule reads as one style everywhere immediately and stores as one style the next time
   its author publishes it. That two-ended shape is deliberate: re-spelling the markdown is the
   author's to do, and there is no SQL migration that can rewrite frontmatter inside a document.
+- **Every row in a list has the same anatomy.** A fact only some rows carry — a bug's severity —
+  goes on the line of pills above the title, never in front of it: a chip that only some rows have
+  moves where their titles start, and the list stops scanning as a column. Titles share one left
+  edge. Severity is named (`Blocker`, `Minor`) rather than coded (`s1`, `s3`) wherever it is shown
+  to a reader, in the list and in the report editor both, and `severityTone()`/`severityLabel()`
+  in `app/utils/report.ts` are the only copies of that lookup.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-

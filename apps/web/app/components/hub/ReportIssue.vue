@@ -19,13 +19,6 @@ const trouble = ref("");
 const over = ref(false);
 const picker = ref<HTMLInputElement | null>(null);
 
-const severityClass: Record<string, string> = {
-  s1: "bg-danger-soft text-danger",
-  s2: "bg-warn-soft text-warn",
-  s3: "bg-accent-soft text-accent",
-  s4: "bg-surface text-muted",
-};
-
 function toggle() {
   props.issue.open = !props.issue.open;
 }
@@ -113,11 +106,12 @@ const detailed = computed(() =>
         :class="issue.title ? 'text-fg' : 'text-muted italic font-normal'"
       >{{ issue.title || "Untitled issue" }}</span>
 
+      <!-- Named, not coded, and so no tooltip: `s3` was a thing you had to already know, and the
+           same chip on the guide list says "Minor". One fact reads one way in both places. -->
       <span
-        class="shrink-0 rounded-pill px-2 py-0.5 font-code text-[11px] uppercase"
-        :class="severityClass[issue.severity] || 'bg-surface text-muted'"
-        :title="severityLabel(issue.severity)"
-      >{{ issue.severity }}</span>
+        class="shrink-0 rounded-pill px-2 py-0.5 text-xs font-semibold tracking-wide uppercase"
+        :class="severityTone(issue.severity)"
+      >{{ severityLabel(issue.severity) }}</span>
       <span v-if="issue.shots.length" class="shrink-0 font-code text-[11px] text-muted">
         {{ issue.shots.length }} shot{{ issue.shots.length === 1 ? "" : "s" }}
       </span>

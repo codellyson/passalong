@@ -11,14 +11,6 @@ import type { Guide } from "~/types/hub";
 import type { Kind } from "./Handoffs.vue";
 
 const props = defineProps<{ g: Guide; kind: Kind }>();
-/** A bug carries how badly it is broken; a transfer guide has nothing to say here. */
-const severityTone: Record<string, string> = {
-  s1: "bg-danger-soft text-danger",
-  s2: "bg-warn-soft text-warn",
-  s3: "bg-accent-soft text-accent",
-  s4: "bg-surface text-muted",
-};
-
 /** Who has it, for the person who handed it over. Nobody else is shown the list. */
 const pulledBy = computed(() =>
   props.g.pulled_by?.length
@@ -41,6 +33,13 @@ const pulledBy = computed(() =>
           :class="kind.badge"
           :title="kind.note"
         >{{ kind.label }}</span>
+        <!-- With the other pill, not in front of the title: a fact only bug rows carry must not
+             decide where every row's title starts. -->
+        <span
+          v-if="g.severity"
+          class="rounded-pill px-2 py-0.5 font-ui text-xs font-semibold uppercase tracking-wide"
+          :class="severityTone(g.severity)"
+        >{{ severityLabel(g.severity) }}</span>
         <!-- Only when nobody is named below it. "1 pull" and "pulled by @someone" are one fact,
              and printing both put the badge, the count and the name all saying "landed". -->
         <span v-if="g.pulls && !pulledBy">{{ plural(g.pulls, "pull") }}</span>
@@ -48,19 +47,13 @@ const pulledBy = computed(() =>
         <span>{{ rel(g.created) }}</span>
       </div>
 
-      <div class="mt-2 flex items-start gap-2">
-        <span
-          v-if="g.severity"
-          class="mt-0.5 shrink-0 rounded-pill px-2 py-0.5 font-code text-[11px] uppercase"
-          :class="severityTone[g.severity] || 'bg-surface text-muted'"
-        >{{ g.severity }}</span>
-        <a
-          :href="g.url"
-          target="_blank"
-          rel="noopener"
-          class="block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-        >{{ g.title || g.id }}</a>
-      </div>
+      <!-- Nothing precedes the title, so every title in the list shares one left edge. -->
+      <a
+        :href="g.url"
+        target="_blank"
+        rel="noopener"
+        class="mt-2 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
+      >{{ g.title || g.id }}</a>
 
       <p v-if="g.failing && g.verdict" class="mt-2 mb-0 text-sm text-danger">
         <b class="font-semibold">{{ g.verdict.by ? `@${g.verdict.by}` : "someone" }} says it does not work.</b>

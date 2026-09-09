@@ -69,6 +69,21 @@ export const areaCode = (slug: string) => AREAS.find((a) => a.slug === slug)?.co
 export const severityLabel = (slug: string) =>
   SEVERITIES.find((s) => s.slug === slug)?.label || slug;
 
+/**
+ * How badly it is broken, as colour. Full class strings, because Tailwind scans source text and
+ * would never find `bg-${tone}-soft`.
+ *
+ * One copy: this was written out three times, and three copies of a lookup is how two lists end up
+ * drawing the same fact two ways.
+ */
+const SEVERITY_TONE: Record<string, string> = {
+  s1: "bg-danger-soft text-danger",
+  s2: "bg-warn-soft text-warn",
+  s3: "bg-accent-soft text-accent",
+  s4: "bg-surface text-muted",
+};
+export const severityTone = (slug: string) => SEVERITY_TONE[slug] || "bg-surface text-muted";
+
 /** The CLI's alphabet and length, so an id filed here is indistinguishable from one filed there. */
 const ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 export function newId(length = 8): string {
