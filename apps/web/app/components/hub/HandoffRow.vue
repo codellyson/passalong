@@ -96,9 +96,11 @@ const pulledBy = computed(() =>
         class="btn sm"
         @click="copy(g.url, $event.currentTarget)"
       >
-        copy link
+        <AppIcon name="copy" /><span data-label>copy link</span>
       </button>
-      <a :href="g.url" target="_blank" rel="noopener" class="btn sm">open</a>
+      <a :href="g.url" target="_blank" rel="noopener" class="btn sm">
+        <AppIcon name="open" />open
+      </a>
     </div>
   </li>
 </template>

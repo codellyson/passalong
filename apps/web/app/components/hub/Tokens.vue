@@ -76,7 +76,7 @@ const head =
           class="btn primary sm"
           @click="copy(fresh.token, $event.currentTarget)"
         >
-          copy token
+          <AppIcon name="copy" /><span data-label>copy token</span>
         </button>
         <button
           class="btn sm"

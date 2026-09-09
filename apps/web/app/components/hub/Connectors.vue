@@ -107,7 +107,7 @@ async function remove(id: string) {
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button class="btn primary sm" @click="copy(fresh.id, $event.currentTarget)">
-          copy client id
+          <AppIcon name="copy" /><span data-label>copy client id</span>
         </button>
         <button class="btn sm" @click="fresh = null">done</button>
         <span v-if="!fresh.secret" class="font-ui text-sm text-muted">

@@ -90,7 +90,7 @@ function guides(t: TeamDetail) {
             class="btn sm"
             @click="invite(t, $event.currentTarget)"
           >
-            copy invite link
+            <AppIcon name="copy" /><span data-label>copy invite link</span>
           </button>
           <button
             class="btn icon"

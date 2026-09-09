@@ -155,6 +155,15 @@ const verdict = computed(() => {
       </div>
     </div>
 
+    <!-- One slot, five states, and until now five unrelated acts wearing the same button: two of
+         them copied something, two navigated, and one asked a question. Reading down the column
+         taught the hand nothing, because position and size said "the same control" while the
+         label said otherwise.
+
+         So the mark says what kind of act it is, and the colour goes on saying how urgent it is.
+         Two sheets means it goes to the clipboard, an arrow leaving a box means you end up
+         somewhere else, and a chevron means this row is about to open underneath you — the same
+         three marks, in the same order of preference, wherever a row offers an action. -->
     <div class="flex shrink-0 items-center gap-2">
       <button
         v-if="state?.action === 'pull'"
@@ -162,7 +171,7 @@ const verdict = computed(() => {
         :title="pull"
         @click="copy(pull, $event.currentTarget)"
       >
-        copy pull
+        <AppIcon name="copy" /><span data-label>copy pull</span>
       </button>
       <!-- Labelled "read the reason" until the reason moved onto the row two lines above it, at
            which point the button led where the eye had just been. It keeps the danger outline:
@@ -173,22 +182,31 @@ const verdict = computed(() => {
         target="_blank"
         rel="noopener"
         class="btn outline danger sm"
-      >open</a>
+      ><AppIcon name="open" />open</a>
       <button
         v-else-if="state?.action === 'link'"
         class="btn sm"
         @click="copy(g.url, $event.currentTarget)"
       >
-        copy link
+        <AppIcon name="copy" /><span data-label>copy link</span>
       </button>
+      <!-- "did it work?" was the one control in the column that asked rather than did, and it is
+           the only one that opens something in place instead of leaving. Now it says what pressing
+           it does — in the same words the row's overflow menu uses for the same act, because two
+           labels for one thing is the bug one level down — and the chevron turns over to show the
+           form below belongs to it. -->
       <button
         v-else-if="state?.action === 'verdict'"
         class="btn outline warn sm"
+        :aria-expanded="judging"
         @click="judging = !judging"
       >
-        did it work?
+        <AppIcon name="reveal" class="transition-transform" :class="judging ? 'rotate-180' : ''" />
+        say whether it worked
       </button>
-      <a v-else :href="g.url" target="_blank" rel="noopener" class="btn sm">open</a>
+      <a v-else :href="g.url" target="_blank" rel="noopener" class="btn sm">
+        <AppIcon name="open" />open
+      </a>
 
       <HubRowMenu :g="g" @verdict="judging = true" />
     </div>

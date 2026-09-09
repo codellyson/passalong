@@ -67,7 +67,7 @@ const waiting = computed(() => data.value.board?.waiting ?? []);
             target="_blank"
             rel="noopener"
             class="btn sm"
-          >open</a>
+          ><AppIcon name="open" />open</a>
         </div>
       </article>
     </div>

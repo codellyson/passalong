@@ -21,6 +21,12 @@ const PATHS = {
   check: "M3.5 8.5l3 3 6-7",
   /** Add. */
   plus: "M8 3.5v9M3.5 8h9",
+  /** Puts something on the clipboard: two sheets, the back one showing at the corner. */
+  copy: "M5.75 5.75h6.5v6.5h-6.5zM10.25 3.75H3.75v6.5",
+  /** Goes somewhere: a box the arrow is leaving. */
+  open: "M7.75 3.75H3.75v8.5h8.5v-4M10 3.75h2.25V6M12.25 3.75l-4.25 4.25",
+  /** Opens something below it, and turns over when it is open. */
+  reveal: "M4.5 6.5L8 10l3.5-3.5",
 } as const;
 
 /** Dots are drawn as zero-length strokes with a round cap, so their weight *is* the stroke width —

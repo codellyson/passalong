@@ -121,6 +121,14 @@ public one, for agents *using* Passalong rather than changing it.
   do not put the rest in a `title` tooltip: it is delayed, unstyled and unreachable on a phone.
   `<AppShorten>` renders the shortened value and opens it in place; a link needs no disclosure,
   because the whole thing is at the other end of it.
+- **A row's action says what kind of act it is, not just how urgent.** One slot on a card can hold
+  five different things, and position and size alone told the reader they were the same control.
+  The mark carries the kind — `copy` for the clipboard, `open` for going somewhere, `reveal` for a
+  control that opens something in place (with `aria-expanded` and a chevron that turns over) — and
+  the tone (`primary`, `outline danger`, `outline warn`) goes on carrying urgency. A control that
+  opens a form is labelled with the same words as the menu item that opens it. Any button that
+  wears an icon **and** calls `copy()` needs `<span data-label>` around its text: `copy()` swaps
+  that element, and swapping the button's own `textContent` would eat the icon for good.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-
