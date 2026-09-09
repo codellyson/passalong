@@ -91,10 +91,11 @@ async function test() {
         <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">
           Webhook URL
         </span>
-        <input v-model="url" type="url" placeholder="https://hooks.slack.com/services/…" required>
+        <input v-model="url" type="url" placeholder="https://chat.googleapis.com/v1/spaces/…" required>
         <span class="font-ui text-xs text-muted">
-          An incoming webhook from Slack or Discord, or any address that accepts a POST. It is only
-          ever written here — anyone holding it can post to that room, so it is not shown again.
+          An incoming webhook from Google Chat, Slack or Discord, or any address that accepts a
+          POST. In Google Chat it is <b>Manage webhooks</b> in the space's menu. It is only ever
+          written here — anyone holding it can post to that room, so it is not shown again.
         </span>
       </label>
       <div class="flex gap-2">

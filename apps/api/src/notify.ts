@@ -127,14 +127,38 @@ export function webhookAllowed(url: string): boolean {
 }
 
 /**
+ * The body a given channel will accept.
+ *
+ * This started as one payload carrying `text` and `content` together, on the reasoning that Slack
+ * reads the first, Discord the second, and each ignores what it does not recognise. That holds for
+ * those two and breaks on Google Chat: its webhook is a Google API endpoint, and Google API
+ * endpoints reject unknown field names outright rather than ignoring them — `Invalid JSON payload
+ * received. Unknown name "content"`. A payload that is merely tolerated by two services is not a
+ * format; it is a coincidence.
+ *
+ * So the host decides, and an address we do not recognise gets both spellings, which is the same
+ * gamble as before but only where there is nothing better to go on.
+ */
+export function channelBody(url: string, text: string): Record<string, string> {
+  let host = "";
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return { text, content: text };
+  }
+  if (host === "chat.googleapis.com") return { text };
+  if (host.endsWith("slack.com")) return { text };
+  if (host === "discord.com" || host === "discordapp.com" || host.endsWith(".discord.com")) {
+    return { content: text };
+  }
+  return { text, content: text };
+}
+
+/**
  * Post one event to a team's channel, once.
  *
  * Separate from `notify()` on purpose: that is per recipient, and a team-wide share calls it once
  * per member. A channel told the same thing four times is a channel nobody reads.
- *
- * `text` and `content` both carry the sentence because Slack reads the first and Discord reads the
- * second, and each ignores what it does not know — so one payload works for both without sniffing
- * the hostname, and a plain endpoint of your own gets both spellings.
  */
 export async function announce(env: NotifyEnv, a: Announcement): Promise<void> {
   if (!ANNOUNCED.has(a.kind) || !a.team_id) return;
@@ -148,7 +172,7 @@ export async function announce(env: NotifyEnv, a: Announcement): Promise<void> {
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: body, content: body }),
+      body: JSON.stringify(channelBody(url, body)),
       // A channel that has been deleted should not hold up the write that triggered this, and a
       // redirect to somewhere else is not somewhere this was meant to go.
       redirect: "manual",

@@ -79,6 +79,7 @@ import {
 import { handleMcp } from "./mcp-http.js";
 import {
   announce,
+  channelBody,
   feed,
   line,
   markRead,
@@ -901,7 +902,7 @@ app.post("/v1/teams/:slug/channel-test", async (c) => {
   const res = await fetch(row.webhook_url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text, content: text }),
+    body: JSON.stringify(channelBody(row.webhook_url, text)),
     redirect: "manual",
     signal: AbortSignal.timeout(5000),
   }).catch(() => null);
