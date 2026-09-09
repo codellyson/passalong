@@ -164,11 +164,17 @@ test("each channel is sent the field it accepts, not every field", () => {
 });
 
 test("a Google Chat webhook URL is accepted as it actually comes", () => {
-  // Long, with the credential in the query string rather than the path — the shape that a
-  // length cap or a "no query parameters" rule would quietly have refused.
+  // Long, with the credential in the query string rather than the path — the shape a length cap or
+  // a "no query parameters" rule would quietly have refused.
+  //
+  // The stand-in values are deliberately not key-shaped. A realistic one here was fake and still
+  // tripped GitHub's secret scanner, because `AIzaSy` followed by 33 characters *is* the format —
+  // a scanner cannot tell an invented key from a leaked one, and neither can a reviewer. What this
+  // test needs is the length and the two query parameters, not plausible contents.
   const url =
-    "https://chat.googleapis.com/v1/spaces/AAQAtBk_zVI/messages" +
-    "?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=8Kx2yQ-1mS3nR7pV0wZbC4dE6fG9hJkLmN";
+    "https://chat.googleapis.com/v1/spaces/EXAMPLE_SPACE/messages" +
+    `?key=${"k".repeat(39)}&token=${"t".repeat(43)}`;
+  assert.ok(url.length > 150, "the shape under test is a long URL");
   assert.equal(webhookAllowed(url), true);
 });
 
