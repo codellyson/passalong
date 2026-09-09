@@ -131,8 +131,8 @@ const heading = computed(() => report.value?.title || "Bug report");
       </section>
 
       <div class="flex flex-wrap gap-2">
-        <NuxtLink to="/hub/report" class="btn primary">Report more bugs</NuxtLink>
-        <NuxtLink to="/hub" class="btn">Back to the board</NuxtLink>
+        <NuxtLink to="/hub/report" class="btn primary">report more bugs</NuxtLink>
+        <NuxtLink to="/hub" class="btn">back to the board</NuxtLink>
       </div>
     </section>
 

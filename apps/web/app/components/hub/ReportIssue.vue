@@ -123,8 +123,8 @@ const detailed = computed(() =>
       </span>
 
       <span class="ml-auto flex shrink-0 gap-1" @click.stop>
-        <button type="button" class="btn sm" @click="emit('duplicate')">Duplicate</button>
-        <button type="button" class="btn sm destructive" @click="emit('remove')">Remove</button>
+        <button type="button" class="btn sm" @click="emit('duplicate')">duplicate</button>
+        <button type="button" class="btn destructive sm" @click="emit('remove')">remove</button>
       </span>
     </div>
 

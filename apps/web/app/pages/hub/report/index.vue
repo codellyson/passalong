@@ -259,9 +259,9 @@ onBeforeUnmount(() => {
         </li>
       </ul>
       <div class="mt-5 flex flex-wrap gap-2">
-        <NuxtLink :to="`/hub/report/${filed.id}`" class="btn primary">See the whole report</NuxtLink>
-        <button type="button" class="btn" @click="again">Report more bugs</button>
-        <NuxtLink to="/hub" class="btn">Back to the board</NuxtLink>
+        <NuxtLink :to="`/hub/report/${filed.id}`" class="btn primary">see the whole report</NuxtLink>
+        <button type="button" class="btn" @click="again">report more bugs</button>
+        <NuxtLink to="/hub" class="btn">back to the board</NuxtLink>
       </div>
     </section>
 
@@ -274,7 +274,7 @@ onBeforeUnmount(() => {
         class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2 border border-line bg-raised px-4 py-2.5 font-ui text-sm text-muted"
       >
         Picked up where you left off — this report was kept in this browser.
-        <button type="button" class="btn sm" @click="discardDraft">Start fresh</button>
+        <button type="button" class="btn sm" @click="discardDraft">start fresh</button>
       </p>
 
       <section class="mb-5 rounded-3 border border-line bg-raised p-4">
@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
         class="mt-4 w-full rounded-3 border border-dashed border-line-strong bg-transparent px-4 py-3 text-left font-ui text-sm text-muted hover:border-accent hover:text-accent"
         @click="addArea"
       >
-        + Add another product area
+        + another product area
       </button>
 
       <div class="mt-6 flex flex-wrap items-center gap-3 rounded-3 border border-line bg-raised px-4 py-3">

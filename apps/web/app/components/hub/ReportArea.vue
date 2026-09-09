@@ -77,9 +77,9 @@ function toggleAll() {
 
       <span class="ml-auto flex gap-1">
         <button type="button" class="btn sm" @click="toggleAll">
-          {{ anyOpen ? "Collapse all" : "Expand all" }}
+          {{ anyOpen ? "collapse all" : "expand all" }}
         </button>
-        <button type="button" class="btn sm destructive" @click="emit('remove')">Remove area</button>
+        <button type="button" class="btn sm destructive" @click="emit('remove')">remove area</button>
       </span>
     </div>
 
@@ -112,7 +112,7 @@ function toggleAll() {
         class="w-full rounded-2 border border-dashed border-line-strong bg-transparent px-3 py-2.5 text-left font-ui text-sm text-muted hover:border-accent hover:text-accent"
         @click="add"
       >
-        + Add another issue in {{ area.area ? areaLabel(area.area) : "this area" }}
+        + another issue in {{ area.area ? areaLabel(area.area) : "this area" }}
       </button>
     </div>
   </section>

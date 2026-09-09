@@ -74,7 +74,7 @@ const verdict = computed(() => {
         <!-- No badge when nothing is in transit: a guide shared with nobody, or closed out. -->
         <span
           v-if="state"
-          class="rounded-1 px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase"
+          class="rounded-pill px-2 py-0.5 text-xs font-semibold tracking-wide uppercase"
           :class="state.badge"
         >{{ state.label }}</span>
         <!-- Three cases, not two. A guide of yours that went to a team says where it went; one
