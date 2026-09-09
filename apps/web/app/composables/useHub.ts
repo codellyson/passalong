@@ -4,6 +4,8 @@
 import type { Guide, HubData, Me } from "~/types/hub";
 
 const KEY = "passalong.token";
+/** The session cookie's name, as apps/api sets it. Only its presence is ever read here. */
+const COOKIE = "pa_session";
 
 const EMPTY: HubData = {
   me: null,
@@ -43,6 +45,25 @@ export function useHub() {
    * which reads as the app having forgotten you for no reason.
    */
   const expired = useState("hub:expired", () => false);
+  /**
+   * What the server can tell before the client has asked anything.
+   *
+   * Nothing is fetched during SSR, so `signedIn` is false on the first paint and the hub used to
+   * render its signed-out screen to everyone — including people who are signed in, who then
+   * watched it be replaced. On a refresh, and on the logo, which is a full page load.
+   *
+   * The session cookie is HttpOnly, which makes it invisible to script and perfectly visible to
+   * the server: it arrives on the request. That is not proof — the session may have expired — but
+   * it is a much better guess than "signed out", and being wrong about it costs one correction
+   * instead of one every time.
+   *
+   * A pasted token lives in localStorage and the server genuinely cannot see it, so those sessions
+   * still start signed-out. Fixing that would need the token to become a cookie, which is a
+   * different decision.
+   */
+  const maybe = useState("hub:maybe", () =>
+    Boolean(import.meta.server && useRequestHeaders(["cookie"]).cookie?.includes(`${COOKIE}=`)),
+  );
   const editing = useState("hub:editing", () => false);
 
   /**
@@ -135,9 +156,12 @@ export function useHub() {
       };
       signedIn.value = true;
       expired.value = false;
+      maybe.value = false;
     } catch (e) {
       // Not being signed in is a state, not an error to shout about.
       signedIn.value = false;
+      // The cookie was there and did not hold up. Stop guessing and show the sign-in screen.
+      maybe.value = false;
       data.value = { ...EMPTY };
       const message = (e as Error).message;
       error.value = message === "signed out" ? null : message;
@@ -213,6 +237,7 @@ export function useHub() {
   return {
     token,
     signedIn,
+    maybe,
     expired,
     data,
     scope,

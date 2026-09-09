@@ -33,7 +33,8 @@ useHead({
   ],
 });
 
-const { data, signedIn, expired, scope, error, adoptToken, setToken, load, signOut } = useHub();
+const { data, signedIn, maybe, expired, scope, error, adoptToken, setToken, load, signOut } =
+  useHub();
 const route = useRoute();
 
 // Nothing is fetched during SSR: neither credential is visible from the server, so the first
@@ -111,8 +112,11 @@ const tabs = computed(() => [
   <!-- Wider than the 46rem the rest of the product reads at. That measure is right for a guide
        and wrong for a board: this is the one surface that is scanned rather than read. -->
   <main class="max-w-[54rem]">
+    <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
+         signed-out screen to someone who is signed in, and then replacing it, is a flash on every
+         refresh and every click of the logo — which is a full page load. -->
     <HubSignIn
-      v-if="!signedIn"
+      v-if="!signedIn && !maybe"
       :error="error"
       :expired="expired"
       @token="onToken"
@@ -182,7 +186,11 @@ const tabs = computed(() => [
         <NuxtLink to="/hub/guides">See what is synced</NuxtLink>
       </p>
 
-      <slot />
+      <!-- Between the guess and the answer there is no data, so the page's own empty states would
+           read as facts — "nothing is on your board yet" is a sentence, not a spinner, and it is
+           the wrong one to show someone whose board is about to appear. -->
+      <p v-if="!signedIn" class="font-ui text-sm text-muted">Loading your board…</p>
+      <slot v-else />
 
       <!-- The quota used to be repeated here. It is one line in the tokens section of settings
            now, which is where someone who has hit it is going to end up anyway. -->
