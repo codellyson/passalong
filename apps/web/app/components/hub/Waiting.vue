@@ -32,6 +32,15 @@ const waiting = computed(() => data.value.board?.waiting ?? []);
         class="flex flex-col gap-3 rounded-2 border border-line-strong border-l-[3px] border-l-accent bg-raised p-4 shadow-raise"
       >
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
+          <!-- Leading the line, the way it does on a row: this lane is the only one where a
+               blocker and a cosmetic bug sat looking identical, and it is the lane where the
+               difference decides what you pick up first. Never in front of the title — a fact
+               only some cards carry must not move where every title starts. -->
+          <span
+            v-if="g.severity"
+            class="rounded-pill px-2 py-0.5 font-ui text-xs font-semibold tracking-wide uppercase"
+            :class="severityTone(g.severity)"
+          >{{ severityLabel(g.severity) }}</span>
           <code class="rounded-1 border border-line bg-surface px-2 py-0.5 font-code text-xs text-fg">{{ g.id }}</code>
           <span>from <b class="font-medium text-fg">@{{ g.from || "?" }}</b> · {{ rel(g.created) }}</span>
         </div>
@@ -53,14 +62,14 @@ const waiting = computed(() => data.value.board?.waiting ?? []);
         </div>
 
         <div class="mt-0.5 flex items-center gap-2">
+          <!-- It wears the clipboard mark like every other copy on the page, and so it no longer
+               needs a tooltip to admit what it does. This could not hold an icon until copy()
+               learned to swap `[data-label]` instead of the button's whole textContent. -->
           <button
             class="flex flex-1 cursor-pointer items-center gap-2 rounded-1 border border-accent bg-accent px-3 py-3 text-left font-code text-sm text-accent-fg transition-colors hover:bg-accent-hover"
-            :title="`copy: passalong pull ${g.id}`"
             @click="copy(`passalong pull ${g.id}`, $event.currentTarget)"
           >
-            <!-- One text node and nothing else: copy() swaps the label to "copied" and back
-                 through textContent, which would eat any element nested in here. -->
-            $ passalong pull {{ g.id }}
+            <AppIcon name="copy" /><span data-label>$ passalong pull {{ g.id }}</span>
           </button>
           <a
             :href="g.url"
