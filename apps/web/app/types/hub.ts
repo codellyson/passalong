@@ -86,6 +86,8 @@ export interface ApiToken {
 
 export interface TeamDetail extends Team {
   guides: number;
+  /** Whether a channel is connected. Never the URL — that is the credential for the room. */
+  webhook?: boolean;
   members: { handle: string | null; name: string | null; role: string; joined: string }[];
 }
 

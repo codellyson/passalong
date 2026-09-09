@@ -85,6 +85,82 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
   }
 }
 
+/**
+ * The events a team channel wants. Not all seven.
+ *
+ * A channel is a room full of people, so the bar is "everyone here would want to know", not
+ * "someone here might". `pulled` and `consumed` are one person's progress on their own work, and a
+ * room told about every pull learns to ignore the room.
+ */
+const ANNOUNCED = new Set<Kind>(["shared", "handoff", "verified", "failed"]);
+
+export interface Announcement {
+  kind: Kind;
+  team_id: string;
+  /** The sentence, already rendered — the same one the feed, the CLI and the hub show. */
+  text: string;
+  /** The guide's share link, when the event is about one. */
+  url?: string;
+}
+
+/**
+ * Whether a URL is one this server is willing to POST to.
+ *
+ * https only, and no credentials in the address. The Worker is what makes this request, so the URL
+ * is a small instruction to fetch something on the team's behalf: `http` would put the channel's
+ * secret address on the wire in clear, and a userinfo section is a way to smuggle a credential
+ * somewhere it will be logged.
+ *
+ * Not an allowlist of Slack and Discord. Anything that accepts a POST works, and refusing the rest
+ * would only push people into building a relay.
+ */
+export function webhookAllowed(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:") return false;
+  if (parsed.username || parsed.password) return false;
+  return url.length <= 500;
+}
+
+/**
+ * Post one event to a team's channel, once.
+ *
+ * Separate from `notify()` on purpose: that is per recipient, and a team-wide share calls it once
+ * per member. A channel told the same thing four times is a channel nobody reads.
+ *
+ * `text` and `content` both carry the sentence because Slack reads the first and Discord reads the
+ * second, and each ignores what it does not know — so one payload works for both without sniffing
+ * the hostname, and a plain endpoint of your own gets both spellings.
+ */
+export async function announce(env: NotifyEnv, a: Announcement): Promise<void> {
+  if (!ANNOUNCED.has(a.kind) || !a.team_id) return;
+  try {
+    const row = await env.DB.prepare("SELECT webhook_url FROM team WHERE id = ?")
+      .bind(a.team_id)
+      .first<{ webhook_url: string }>();
+    const url = row?.webhook_url;
+    if (!url) return;
+    const body = a.url ? `${a.text}\n${a.url}` : a.text;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: body, content: body }),
+      // A channel that has been deleted should not hold up the write that triggered this, and a
+      // redirect to somewhere else is not somewhere this was meant to go.
+      redirect: "manual",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) console.error("announce", a.kind, res.status);
+  } catch (err) {
+    // Same rule as a notification: never worth failing the action that caused it.
+    console.error("announce", a.kind, (err as Error).message);
+  }
+}
+
 /** Tell several people about the same thing (a team-wide share). */
 export async function notifyAll(env: NotifyEnv, tos: string[], e: Omit<Event, "to">) {
   for (const to of tos) await notify(env, { ...e, to });

@@ -76,11 +76,8 @@ function guides(t: TeamDetail) {
 <template>
   <div>
     <ul class="m-0 flex list-none flex-col gap-3 p-0">
-      <li
-        v-for="t in details"
-        :key="t.slug"
-        class="flex flex-wrap items-start justify-between gap-3"
-      >
+      <li v-for="t in details" :key="t.slug" class="flex flex-col">
+        <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
           <p class="m-0 font-ui text-base font-semibold text-fg">{{ t.slug }}</p>
           <p class="mt-0.5 mb-0 font-ui text-sm text-muted">
@@ -111,6 +108,16 @@ function guides(t: TeamDetail) {
             </p>
           </div>
         </div>
+        </div>
+
+        <!-- Owners only: the channel is a credential for a room, and changing it is not something
+             a member should be able to do quietly. -->
+        <HubTeamChannel
+          v-if="t.role === 'owner'"
+          :team="t"
+          :set="Boolean(t.webhook)"
+          @changed="t.webhook = $event"
+        />
       </li>
     </ul>
 

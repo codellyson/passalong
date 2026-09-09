@@ -1,0 +1,11 @@
+-- M9: a team can have a channel.
+--
+-- Notifications already reach a person two ways: a row in their feed, and mail for the moments
+-- worth an inbox. Neither reaches a room. "Someone says your guide does not work" is the single
+-- most valuable thing this product produces, and it currently arrives where one person will see it
+-- eventually rather than where the team will see it now.
+--
+-- A URL, not an integration. Slack and Discord both accept a POST of JSON at a secret address, so
+-- the whole feature is a column and one fetch — and anything else that accepts a POST works too,
+-- which is the part a vendor SDK would have taken away.
+ALTER TABLE team ADD COLUMN webhook_url TEXT NOT NULL DEFAULT '';

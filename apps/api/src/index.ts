@@ -78,12 +78,15 @@ import {
 } from "./guide.js";
 import { handleMcp } from "./mcp-http.js";
 import {
+  announce,
   feed,
+  line,
   markRead,
   summary as notifSummary,
   notify,
   notifyAll,
   unreadCount,
+  webhookAllowed,
 } from "./notify.js";
 import {
   authorizationServerMetadata,
@@ -856,7 +859,54 @@ app.get("/v1/teams/:slug", async (c) => {
     created: team.created,
     members,
     guides: n?.n ?? 0,
+    // Whether, not what. The URL is the credential for that room, so it is written and never read
+    // back — the settings screen only needs to know there is one.
+    webhook: Boolean((team as TeamRow & { webhook_url?: string }).webhook_url),
   });
+});
+
+/**
+ * The team's channel. Owners only.
+ *
+ * A webhook URL *is* the credential — anyone holding it can post into that room — so it is only
+ * ever written, never read back. The response says whether one is set, which is the only thing the
+ * settings screen needs to know.
+ */
+app.patch("/v1/teams/:slug", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's channel");
+  const body = await c.req
+    .json<{ webhook_url?: string }>()
+    .catch(() => ({}) as { webhook_url?: string });
+
+  const url = String(body.webhook_url ?? "").trim();
+  if (url && !webhookAllowed(url)) {
+    return err(c, 400, "the channel URL must be https, with no credentials in it");
+  }
+  await c.env.DB.prepare("UPDATE team SET webhook_url = ? WHERE id = ?").bind(url, team.id).run();
+  return c.json({ slug: team.slug, webhook: Boolean(url) });
+});
+
+/** Post a line to the team's channel so someone can see it arrive. Owners only. */
+app.post("/v1/teams/:slug/channel-test", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only an owner can test the team's channel");
+  const row = await c.env.DB.prepare("SELECT webhook_url FROM team WHERE id = ?")
+    .bind(team.id)
+    .first<{ webhook_url: string }>();
+  if (!row?.webhook_url) return err(c, 400, "no channel set for this team");
+  const text = `Passalong is connected to ${team.slug}. Verdicts and handoffs will arrive here.`;
+  const res = await fetch(row.webhook_url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text, content: text }),
+    redirect: "manual",
+    signal: AbortSignal.timeout(5000),
+  }).catch(() => null);
+  // The channel's own answer, because "it did not arrive" is otherwise unattributable.
+  return c.json({ delivered: Boolean(res?.ok), status: res?.status ?? 0 });
 });
 
 app.post("/v1/teams/:slug/invites", async (c) => {
@@ -1597,6 +1647,20 @@ app.put("/v1/guides/:id", async (c) => {
         team_id: team.id,
       });
     }
+    if (team) {
+      await announce(c.env, {
+        kind: toAccount ? "handoff" : "shared",
+        team_id: team.id,
+        text: line({
+          kind: toAccount ? "handoff" : "shared",
+          actor: fromHandle,
+          title: String(meta.title),
+          team: toAccount ? `${team.slug} / @${toAccount.handle}` : team.slug,
+          times: 1,
+        }),
+        url,
+      });
+    }
   }
   count(c, existing ? "guide_updated" : "guide_shared", {
     addressed: Boolean(toAccount),
@@ -1784,6 +1848,21 @@ app.put("/v1/guides/:id/verdict", async (c) => {
         ok: body.ok === true,
         note,
       }),
+  });
+  // Once for the room, after once-per-person above. A failed verdict is the thing this product
+  // exists to surface, and a channel is where a team sees it today rather than eventually.
+  await announce(c.env, {
+    kind: body.ok ? "verified" : "failed",
+    team_id: found.row.team_id,
+    text: line({
+      kind: body.ok ? "verified" : "failed",
+      actor: people.get(account)?.handle || "",
+      title: found.row.title,
+      team: "",
+      times: 1,
+      note,
+    }),
+    url: shareUrl(origin(c), found.row),
   });
   count(c, "verdict_given", { ok: body.ok });
   return c.json({ id: found.row.id, ok: body.ok, note });
