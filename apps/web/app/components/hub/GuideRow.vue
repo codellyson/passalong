@@ -130,19 +130,24 @@ const verdict = computed(() => {
            truncated to "assumes Khaime API /api/v1,…" which tells nobody anything, and it is on
            the guide page in full where a person deciding whether they can follow the steps is
            actually looking. Tags stop at three for the same reason: a row wearing six is a row
-           nobody reads, and the rest are one click away. -->
+           nobody reads, and the rest are one click away.
+           What is left is shortened by unit rather than by pixel — see AppShorten. Nothing on this
+           line hides its value in a `title` tooltip any more. -->
       <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-code text-xs text-muted">
         <span>{{ g.id }}</span>
         <template v-if="g.source_context">
           <span>·</span>
-          <span class="max-w-[16rem] truncate" :title="g.source_context">{{ g.source_context }}</span>
+          <AppShorten :value="g.source_context" />
         </template>
         <template v-if="pulledBy"><span>·</span><span>pulled by {{ pulledBy }}</span></template>
         <!-- The one thing a row cannot say on its own: it was filed with others. -->
         <template v-if="g.report">
           <span>·</span>
-          <NuxtLink :to="`/hub/report/${g.report}`" class="max-w-[12rem] truncate">
-            {{ g.report_title || "part of a report" }}
+          <!-- A link needs no disclosure: the whole title is at the other end of it. It is cut on a
+               word boundary all the same, because "Hub polish, round t…" is not a shorter title,
+               it is a different one. -->
+          <NuxtLink :to="`/hub/report/${g.report}`">
+            {{ shorten(g.report_title || "part of a report", 24).text }}
           </NuxtLink>
         </template>
         <span v-for="t in shownTags" :key="t">#{{ t }}</span>

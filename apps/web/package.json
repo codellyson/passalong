@@ -9,6 +9,7 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
+    "test": "node --test test/*.test.mjs",
     "lint": "nuxt typecheck",
     "deploy": "wrangler deploy",
     "deploy:check": "wrangler deploy --dry-run"

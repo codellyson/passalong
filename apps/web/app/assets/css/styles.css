@@ -816,6 +816,25 @@ input[name="token"],
 .linkish:hover {
   color: var(--accent-hover);
 }
+/* A shortened value that can be opened. It keeps the size, family and colour of the line it sits
+   in — this is reference text, not a control — and carries a dotted underline, which is the one
+   mark that reads as "there is more here" without reading as "this does something". */
+.unfold {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.25em;
+  text-decoration-color: var(--line-strong);
+}
+.unfold:hover {
+  color: var(--fg);
+  text-decoration-color: var(--muted);
+}
 /* Invite links and API tokens are how a minority arrive, so they fold away rather than sitting
    at the same weight as the password form. */
 details.more {

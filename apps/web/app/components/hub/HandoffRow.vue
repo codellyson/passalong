@@ -69,25 +69,21 @@ const pulledBy = computed(() =>
 
       <!-- One line, always. Left to wrap, these four ran into a three-line grey paragraph under
            the title with nothing to say where one fact ended and the next began. The repo it came
-           out of is the only one of them that runs long, so it is the one that gives — truncated
-           here, in full on hover and on the guide itself. -->
+           out of is the only one of them that runs long, so it is the one that gives — shortened
+           to whole units here, openable in place, and in full on the guide itself. -->
       <!-- One line where there is room for one. On a phone a fourth fact (the report it was filed
            with) has nowhere to go, and nowrap put it off the edge of the card rather than
            truncating — so below `sm` the tail wraps instead. -->
       <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted sm:flex-nowrap">
         <span v-if="g.team" class="shrink-0">to <b class="font-medium text-fg">{{ g.team }}{{ g.to ? ` / @${g.to}` : "" }}</b></span>
         <code class="shrink-0 font-code">{{ g.id }}</code>
-        <span
-          v-if="g.source_context"
-          class="min-w-0 flex-1 truncate font-code"
-          :title="g.source_context"
-        >{{ g.source_context }}</span>
+        <span v-if="g.source_context" class="min-w-0 flex-1 font-code break-words">
+          <AppShorten :value="g.source_context" :max="28" />
+        </span>
         <span v-if="pulledBy" class="shrink-0">pulled by {{ pulledBy }}</span>
-        <NuxtLink
-          v-if="g.report"
-          :to="`/hub/report/${g.report}`"
-          class="max-w-full shrink-0 truncate sm:max-w-[10rem]"
-        >{{ g.report_title || "in a report" }}</NuxtLink>
+        <NuxtLink v-if="g.report" :to="`/hub/report/${g.report}`" class="shrink-0">
+          {{ shorten(g.report_title || "in a report", 20).text }}
+        </NuxtLink>
       </div>
     </div>
 

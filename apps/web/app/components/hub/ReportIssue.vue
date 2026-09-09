@@ -186,8 +186,11 @@ const detailed = computed(() =>
             class="relative m-0 w-32 overflow-hidden rounded-2 border border-line bg-surface"
           >
             <img :src="shot.url" :alt="shot.name" class="block h-20 w-full object-cover">
-            <figcaption class="truncate px-2 py-1 font-code text-[10px] text-muted" :title="shot.name">
-              {{ shot.name }}
+            <!-- A filename cut at a pixel loses the date and keeps "Screenshot 2026-0…", which
+                 is the one part every shot shares. Cut by unit, and openable, it keeps whichever
+                 part of the name distinguishes this shot from the one beside it. -->
+            <figcaption class="px-2 py-1 font-code text-[10px] break-words text-muted">
+              <AppShorten :value="shot.name" :max="18" />
             </figcaption>
             <button
               type="button"

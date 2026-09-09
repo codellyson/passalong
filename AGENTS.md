@@ -115,6 +115,12 @@ public one, for agents *using* Passalong rather than changing it.
   `mt-8` between sections. Half-steps are off the scale — `-1.5`, `-2.5` and `-3.5` were all in use
   and one relationship had four different values, which is what made the interface look unfinished
   before anyone could say why. `-0.5` is the one exception: 2px inside a chip is a sub-unit.
+- **Long values are shortened by unit, never by pixel.** `shorten()` (`app/utils/shorten.ts`) drops
+  whole words, then whole path segments, so what is left is a repo name or a host and not
+  `techchak-backend (https://g…`. Do not reach for `truncate` on a value a person has to read, and
+  do not put the rest in a `title` tooltip: it is delayed, unstyled and unreachable on a phone.
+  `<AppShorten>` renders the shortened value and opens it in place; a link needs no disclosure,
+  because the whole thing is at the other end of it.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-
