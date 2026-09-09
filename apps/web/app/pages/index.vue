@@ -1,11 +1,18 @@
 <!--
-  The landing page, ported from `renderHome()` in apps/api/src/render.ts.
+  The landing page.
 
-  It leads with what the product *produces* — a guide, rendered — rather than describing it in
-  paragraphs, and puts the two things a stranger can do (install it, open the hub) above the fold.
-  The `.showcase` is built from markup rather than an image or an embed because this page runs no
-  script and loads no third-party asset; its route rule is `noScripts` with the strict CSP, the
-  same pair a guide page gets.
+  What it does not have any more is a drawn browser window — three traffic-light dots, a fake
+  address bar, and a guide by a person who does not exist. A picture of software that was never
+  photographed is the tell of a template, and it was the loudest thing on the page.
+
+  What replaces it is the artifact itself. Passalong's output is a markdown file, so the page shows
+  a markdown file: no chrome, no invented screenshot, nothing claiming to be a photograph of
+  anything. The claim underneath it — plain markdown, exportable — is then something the reader has
+  already seen rather than something they are asked to believe.
+
+  Everything else is typography and space, which is all this page needs and all its CSP allows: the
+  route rule is `noScripts` with `default-src 'none'`, so there is no embed, no third-party font and
+  no script here, and there never will be.
 -->
 <script setup lang="ts">
 usePage({
@@ -13,22 +20,59 @@ usePage({
   description:
     "Hand finished work to another context. A baton pass between repos, machines, agent sessions, and teammates, in a form an agent can act on.",
 });
+
+/**
+ * A guide, as the file it actually is.
+ *
+ * Held as lines rather than one string because the three things a reader should be able to tell
+ * apart — the frontmatter a machine reads, the headings that give every guide the same shape, and
+ * the prose — are told apart by weight here, the way they would be in an editor. That is markup,
+ * not highlighting: this page runs no script, so nothing can colour it after the fact.
+ *
+ * One line per element, so a `<pre>` needs no literal newlines and cannot pick up the template's
+ * own indentation.
+ */
+type Line = { t: string; k?: "fm" | "h" };
+const guide: Line[] = [
+  { t: "---", k: "fm" },
+  { t: "id: ejdq3v8q", k: "fm" },
+  { t: "title: Backfill order totals without locking the table", k: "fm" },
+  { t: "kind: transfer", k: "fm" },
+  { t: "source_context: orders-api@main", k: "fm" },
+  { t: "stack_assumptions: [Postgres 16, Node 22]", k: "fm" },
+  { t: "tags: [migrations, backfill]", k: "fm" },
+  { t: "---", k: "fm" },
+  { t: "" },
+  { t: "## Problem", k: "h" },
+  { t: "Totals were computed per request. The obvious backfill takes" },
+  { t: "an ACCESS EXCLUSIVE lock and stalls checkout for ~40s." },
+  { t: "" },
+  { t: "## Steps", k: "h" },
+  { t: "1. Add the column nullable, no default." },
+  { t: "2. Backfill in chunks of 5,000 by primary key." },
+  { t: "3. Set NOT NULL once the tail is clean." },
+  { t: "" },
+  { t: "## Verification", k: "h" },
+  { t: "Run `pnpm verify:totals` — every row reconciles, exit 0." },
+  { t: "No lock wait over 50ms in pg_stat_activity." },
+  { t: "" },
+  { t: "## Gotchas", k: "h" },
+  { t: "Chunks under 1,000 finish slower: the planner stops using" },
+  { t: "the index and each pass reads the table." },
+];
 </script>
 
 <template>
-  <main class="wide">
-    <!-- Both ways in, at the top, where someone who has been here before looks first. -->
+  <main class="wide landing">
     <nav class="masthead">
       <AppBrand />
-      <!-- One, not two. The hub *is* the sign-in, so a masthead offering both "Sign in" and "Open
-           your hub" was the same door twice, three buttons deep on a screen making one claim. This
-           is for the returning visitor; the claim below is for everyone else. -->
-      <span class="ways">
-        <a class="btn" href="/hub">Sign in</a>
-      </span>
+      <!-- One, not two. The hub *is* the sign-in, so a masthead offering both was the same door
+           twice. This is for the returning visitor; the claim below is for everyone else. -->
+      <a class="btn" href="/hub">Sign in</a>
     </nav>
 
     <header class="hero">
+      <p class="eyebrow">Finished work, handed over</p>
       <h1>
         You already solved this.<br>
         Somewhere else, someone
@@ -39,116 +83,102 @@ usePage({
         steps, how to check it, and what went wrong on the way — and hands it to the next repo,
         machine or teammate in a form they can act on.
       </p>
-      <div class="cta">
-        <a class="btn primary lg" href="/hub">Open your hub</a>
-      </div>
-      <p class="reassure">
-        Free while it is small. Guides are plain markdown, and
-        <code>passalong export</code> gives you all of them.
+      <p class="ways">
+        <a class="go" href="/hub">Open your hub</a>
+        <a class="quiet" href="https://www.npmjs.com/package/passalong">or install the CLI</a>
       </p>
     </header>
 
-    <section class="showcase" aria-label="A transfer guide, as the person picking it up sees it">
-      <div class="bar">
-        <span class="dot" /><span class="dot" /><span class="dot" />
-        <span class="url">passalong.dev/g/ejdq3v8q · Verify</span>
-      </div>
-      <div class="body">
-        <div class="meta">
-          <span>id <b>ejdq3v8q</b></span>
-          <span class="status">published</span>
-          <span>by <b>@marta</b></span>
-          <span>assumes <b>Postgres 16, Node 22</b></span>
-          <span class="tag">#migrations</span>
-        </div>
-        <h3>Backfill order totals without locking the table</h3>
-        <div class="sc-prose">
-          <h4>Verification</h4>
-          <ol>
-            <li>Run <code>pnpm verify:totals</code> — every row reconciles, exit 0.</li>
-            <li>Check <code>pg_stat_activity</code> during the backfill: no lock waits over 50ms.</li>
-          </ol>
-          <h4>Gotchas</h4>
-          <p>
-            The obvious single <code>UPDATE</code> takes an <code>ACCESS EXCLUSIVE</code> lock and
-            stalls checkout for ~40s. Batching by primary key in chunks of 5,000 avoids it.
-          </p>
-        </div>
-        <p class="folded">How it was built · Problem, Solution shape, Decisions, Steps</p>
-      </div>
+    <!-- The artifact, not a rendering of one. Scrollable rather than wrapped: a guide is a file,
+         and a file with its lines folded in half stops looking like one. -->
+    <section class="artifact" aria-label="A transfer guide, as the file it is">
+      <pre><code><span
+        v-for="(l, i) in guide"
+        :key="i"
+        :class="l.k"
+      >{{ l.t }}</span></code></pre>
     </section>
+    <p class="under">
+      Every guide is this: plain markdown with frontmatter, in your repo and in your hub.
+      <code>passalong export</code> gives you all of them, and deleting your account leaves you
+      holding every one.
+    </p>
 
-    <h2 class="eyebrow">How a transfer works</h2>
-    <ol class="steps">
-      <li>
-        <b>Finish the work</b>
+    <section class="steps" aria-label="How a transfer works">
+      <article>
+        <p class="n">01</p>
+        <h2>Finish the work</h2>
         <p>
           In an agent session, say <em>“pass this along”</em>, or run <code>passalong share</code>.
           It distills what you just did into a guide.
         </p>
-      </li>
-      <li>
-        <b>Review and publish</b>
+      </article>
+      <article>
+        <p class="n">02</p>
+        <h2>Hand it over</h2>
         <p>
-          Trim the draft. You get a short id and a link. Hand it to a teammate with
-          <code>--to team/@them</code>.
+          Trim the draft. You get a short id and a link. Address it to a teammate with
+          <code>--to team/@them</code>, or to the people who do a thing with
+          <code>team/#group</code>.
         </p>
-      </li>
-      <li>
-        <b>Pick it up anywhere</b>
+      </article>
+      <article>
+        <p class="n">03</p>
+        <h2>Pick it up anywhere</h2>
         <p>
           Run <code>passalong pull &lt;id&gt;</code> in the other context, or paste the link to an
           agent. Nothing to install on the receiving end.
         </p>
-      </li>
-    </ol>
-
-    <div class="two">
-      <section class="panel">
-        <h2>If you write the guides</h2>
-        <pre><code>npm i -g passalong
-passalong setup     # Claude Code skill + MCP
-passalong login     # sync across machines</code></pre>
-        <p>
-          <code>passalong board</code> then tells you what is waiting on you, what you handed over
-          that nobody has taken, what landed, and what someone says does not work.
-        </p>
-      </section>
-      <section class="panel">
-        <h2>If you pick them up</h2>
-        <p>
-          Testers, teammates, anyone the work gets handed to. <b>Nothing to install.</b> Open the
-          invite link, pick a handle, and guides addressed to you land in your hub.
-        </p>
-        <ul>
-          <li>
-            Every guide has a <b>Verify</b> view that leads with what to check and folds the
-            implementation away.
-          </li>
-          <li>
-            Two answers when you have tried it: it works, or it does not — with a reason the author
-            sees the same day.
-          </li>
-          <li>The person who handed it over can see it landed, so nobody has to ask.</li>
-        </ul>
-      </section>
-    </div>
-
-    <section class="closer">
-      <h2>No lock-in</h2>
-      <p>
-        Guides are plain markdown with frontmatter. <code>passalong export</code> dumps everything.
-        Deleting your account leaves you with all of your content.
-      </p>
-      <div class="cta">
-        <a class="btn primary lg" href="/hub">Open your hub</a>
-        <a class="btn lg" href="/connect">Connect your tools</a>
-        <a class="btn lg" href="https://www.npmjs.com/package/passalong">passalong on npm</a>
-      </div>
+      </article>
     </section>
 
-    <footer>
-      Already have an account? <a href="/hub">Open your hub</a>, or run <code>passalong hub</code>.
+    <section class="statement">
+      <h2>
+        A session ends.<br>
+        <span class="turn">A guide gets picked up.</span>
+      </h2>
+      <p>
+        Whoever takes it says whether they are on it, and says whether it worked when they have run
+        it — so the person who handed it over never has to ask, and never finds out a week later
+        that nobody did.
+      </p>
+    </section>
+
+    <section class="closer">
+      <p class="eyebrow">When the next one starts</p>
+      <h2>
+        Somewhere to put<br>
+        <span class="turn">what you just worked out.</span>
+      </h2>
+      <p class="ways">
+        <a class="go" href="/hub">Open your hub</a>
+        <a class="quiet" href="/connect">or connect your tools</a>
+      </p>
+      <!-- The install line lives here rather than in a panel of its own. Writing guides takes one
+           command; reading one takes nothing at all, and that asymmetry is the product. -->
+      <p class="reassure">
+        Free while it is small. <code>npm i -g passalong</code> to write them — and nothing at all
+        to install to read one.
+      </p>
+    </section>
+
+    <footer class="site-foot">
+      <div class="who">
+        <AppBrand />
+        <p>Finished work, handed over.<br>Between repos, machines and people.</p>
+      </div>
+      <nav>
+        <p class="eyebrow">Product</p>
+        <a href="/hub">Open your hub</a>
+        <a href="/connect">Connect your tools</a>
+        <a href="/llms.txt">For AI agents</a>
+      </nav>
+      <nav>
+        <p class="eyebrow">Elsewhere</p>
+        <a href="https://www.npmjs.com/package/passalong">passalong on npm</a>
+        <a href="https://github.com/codellyson/passalong">GitHub</a>
+      </nav>
+      <p class="rule">© 2026 Passalong · a KreativeKorna product</p>
     </footer>
   </main>
 </template>

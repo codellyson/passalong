@@ -697,6 +697,42 @@ input[name="token"],
   font-size: var(--t-sm);
 }
 
+/* Two panels side by side, and one below `min()` so a viewport narrower than the track does not
+   push the page out of itself. It lived with the landing until the landing stopped having panels;
+   `/connect` is what uses it now. */
+.two {
+  display: grid;
+  gap: var(--s-5);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  margin-bottom: var(--s-8);
+  align-items: start;
+}
+.two .panel {
+  margin-bottom: 0;
+  height: 100%;
+}
+.two .panel p:last-child,
+.two .panel ul:last-child {
+  margin-bottom: 0;
+}
+.two ul {
+  padding-left: 1.15em;
+}
+.two li {
+  margin-bottom: var(--s-2);
+}
+
+/* A row of buttons under a section. The landing stopped having one — it uses links now — so this
+   belongs with the shared furniture rather than with a page that no longer needs it. `/connect`
+   is what uses it. */
+.cta {
+  display: flex;
+  gap: var(--s-3);
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 /* The urgent variant only swaps two colours, so it rides on custom properties. An
    `.identity.needed h2` rule would sit above every later `.x h2` and make each one a descending
    selector — the trap this file is written to avoid. */
@@ -969,11 +1005,26 @@ form.join label {
 }
 
 /* ---- landing --------------------------------------------------------------------------------
-   The one page a stranger sees. It leads with what the product produces, rather than describing
-   it: `.showcase` is a real guide rendered at reduced scale, built from markup because the page's
-   CSP allows no images from anywhere but this origin and no script at all. */
-/* The masthead the page did not have. The mark sat alone at the top and both ways in were buried
-   in the hero, so a returning visitor — most visitors — had to read a pitch to find the door. */
+   One page, and its whole design is typography and space. It has no images, no embed and no
+   script — the route rule is `noScripts` with `default-src 'none'` — which is a constraint only
+   until you notice it is also the brief: what this product makes is written prose, so the page
+   that sells it should be able to carry its claim in type alone.
+
+   What went: a drawn browser window with traffic-light dots and a fake address bar around a guide
+   by a person who does not exist. A picture of software that was never photographed is the tell of
+   a template. The artifact is shown as the file it is instead.
+
+   The rhythm is one section per idea with a lot of air between them, and one accent per screen —
+   the line that turns. Anything that needs a second accent is two ideas. */
+
+.landing {
+  /* Sections set their own top margin, so the page has one rhythm rather than each block
+     negotiating with its neighbours. */
+  --gap: clamp(var(--s-8), 12vh, 8.5rem);
+}
+
+/* The mark sat alone at the top and both ways in were buried in the hero, so a returning
+   visitor — most visitors — had to read a pitch to find the door. */
 .masthead {
   display: flex;
   align-items: center;
@@ -982,16 +1033,9 @@ form.join label {
   padding: var(--s-4) 0;
   flex-wrap: wrap;
 }
-.masthead .ways {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-}
 
-/* The claim gets the room a claim needs. This was 32px from the top of the page to the mark and
-   straight into a wall; it is a screen with one sentence on it now. */
 .hero {
-  padding: clamp(var(--s-7), 10vh, var(--s-9)) 0 0;
+  padding: clamp(var(--s-7), 9vh, var(--s-9)) 0 0;
   text-align: center;
 }
 .hero h1 {
@@ -1007,188 +1051,230 @@ form.join label {
   max-width: 15em;
   text-wrap: balance;
 }
-/* The turn. The first lines state the situation; this one says what is wrong with it, and it is
-   the only italic and the only accent on the screen — one place to look. */
-.hero h1 .turn {
+/* The turn: the line before it states the situation, this one says what is wrong with it. Italic
+   is the turn; the colour is separate and belongs to the hero alone. Three accent lines down one
+   page is three places to look, which is none — so the claim gets it and the sections that follow
+   make the same move in type only. */
+.turn {
   display: block;
   font-style: italic;
-  color: var(--accent);
 }
-/* One line under the button, answering the question a button always raises. */
-.reassure {
-  margin: var(--s-4) 0 0;
-  font: var(--t-sm) / 1.5 var(--font-sans);
-  color: var(--muted);
+.hero .turn {
+  color: var(--accent);
 }
 .lede {
   font-size: clamp(1.0625rem, 1rem + 0.4vw, 1.25rem);
-  line-height: 1.55;
+  line-height: 1.6;
   color: var(--muted);
   max-width: 34rem;
-  margin: 0 auto var(--s-7);
+  margin: 0 auto var(--s-6);
   text-wrap: pretty;
 }
-.cta {
+
+/* Links, not buttons. A page whose every section ends in a filled rectangle reads as a funnel; one
+   underlined word reads as a door, and the masthead already carries the button for anyone who came
+   back to sign in rather than to be convinced. */
+.ways {
   display: flex;
-  gap: var(--s-3);
-  align-items: center;
+  align-items: baseline;
   justify-content: center;
   flex-wrap: wrap;
-}
-
-.showcase {
-  margin: var(--s-9) 0 var(--s-8);
-  background: var(--surface-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--r-3);
-  box-shadow: var(--shadow-2);
-  overflow: hidden;
-}
-.showcase .bar {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  padding: var(--s-3) var(--s-4);
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  font: var(--t-xs) / 1 var(--font-mono);
-  color: var(--muted);
-}
-.showcase .dot {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  background: var(--line-strong);
-}
-.showcase .url {
-  margin-left: var(--s-2);
-  /* The faux address bar is decoration; on a narrow screen it should clip like a real one
-     rather than wrap to a second line and push the frame taller. */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.showcase .body {
-  padding: var(--s-5) var(--s-5) var(--s-6);
-}
-.showcase h3 {
-  margin: var(--s-2) 0 var(--s-3);
-  font-size: 1.375rem;
-  letter-spacing: -0.022em;
-}
-.showcase .meta {
-  margin-bottom: var(--s-4);
-  font-size: var(--t-xs);
-}
-.showcase h4 {
-  font: 600 var(--t-sm) / 1.4 var(--font-sans);
-  margin: var(--s-5) 0 var(--s-2);
-  color: var(--fg);
-}
-.showcase .sc-prose {
-  font-family: var(--font-serif);
-  font-size: var(--t-sm);
-  line-height: 1.6;
-  color: var(--fg);
-}
-.showcase .sc-prose ol {
+  gap: var(--s-2) var(--s-5);
   margin: 0;
 }
-.showcase .folded {
-  margin-top: var(--s-5);
-  padding-top: var(--s-3);
-  border-top: 1px solid var(--line);
-  font: var(--t-sm) / 1.5 var(--font-sans);
+.ways .go {
+  font: 600 1.0625rem / 1.4 var(--font-sans);
+  color: var(--fg);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.4em;
+}
+.ways .go:hover {
+  color: var(--accent);
+}
+.ways .quiet {
+  font: var(--t-sm) / 1.4 var(--font-sans);
+  color: var(--muted);
+  text-decoration: none;
+}
+.ways .quiet:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+/* The artifact. Not a rendering of a guide, not a screenshot of one: the file. */
+.artifact {
+  margin: var(--gap) 0 var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  /* The one place on this page a scrollbar is correct. A guide is a file, and a file with its
+     lines folded in half stops looking like one — so long lines scroll rather than wrap. */
+  overflow-x: auto;
+}
+.artifact pre {
+  margin: 0;
+  padding: var(--s-5) var(--s-6);
+  border: 0;
+  background: none;
+  font: 400 var(--t-sm) / 1.75 var(--font-mono);
+  color: var(--fg);
+  tab-size: 2;
+}
+/* One line each, so the block needs no literal newlines. An empty line still has to hold a line
+   box open, hence the height: a blank `display: block` collapses and the file loses its stanzas. */
+.artifact span {
+  display: block;
+  min-height: 1.75em;
+}
+/* What a machine reads, receded. It is the least interesting part of the file to a person and the
+   part that most looks like configuration, so it is the part that gets out of the way. */
+.artifact .fm {
   color: var(--muted);
 }
-.showcase .folded::before {
-  content: "";
-  display: inline-block;
-  width: 0;
-  height: 0;
-  margin-right: var(--s-2);
-  border-left: 5px solid currentcolor;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  vertical-align: 0.05em;
+/* The four headings every guide has. They are the argument this block is making — that a guide is
+   the same shape every time — so they are the only thing in it with weight. */
+.artifact .h {
+  color: var(--fg);
+  font-weight: 600;
+}
+.under {
+  max-width: 40rem;
+  margin: 0 auto;
+  font: var(--t-sm) / 1.65 var(--font-sans);
+  color: var(--muted);
+  text-align: center;
+}
+/* A command broken across two lines stops being a command you could type. */
+.under code {
+  white-space: nowrap;
 }
 
 .steps {
   display: grid;
-  gap: var(--s-5);
+  gap: var(--s-6) var(--s-5);
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  margin: var(--s-5) 0 var(--s-8);
-  padding: 0;
-  list-style: none;
-  counter-reset: step;
+  margin: var(--gap) 0 0;
 }
-.steps li {
-  margin: 0;
-  counter-increment: step;
+.steps article {
+  max-width: 22rem;
 }
-.steps li::before {
-  content: counter(step);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  margin-bottom: var(--s-3);
-  border-radius: var(--r-pill);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font: 600 var(--t-sm) / 1 var(--font-sans);
+/* A numeral, not a filled circle. The count is the only thing the number has to say, and three
+   accent discs down a page spend the accent on ordinal information. */
+.steps .n {
+  margin: 0 0 var(--s-3);
+  font: 500 var(--t-xs) / 1 var(--font-mono);
+  letter-spacing: 0.16em;
+  color: var(--muted);
 }
-.steps b {
-  display: block;
-  margin-bottom: var(--s-1);
+.steps h2 {
+  margin: 0 0 var(--s-2);
+  font: 600 1.0625rem / 1.4 var(--font-sans);
+  letter-spacing: normal;
 }
 .steps p {
   margin: 0;
   color: var(--muted);
   font-size: var(--t-sm);
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
-.two {
-  display: grid;
-  gap: var(--s-5);
-  /* `min()` so a viewport narrower than the track does not push the board out of the page. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-  margin-bottom: var(--s-8);
-  align-items: start;
+/* The claim restated as a pair, once, in the middle of the page. It carries no link and asks for
+   nothing: it is the one place the page stops selling and just says what is true. */
+.statement {
+  margin: var(--gap) auto 0;
+  max-width: 38rem;
+  text-align: center;
 }
-.two .panel {
-  margin-bottom: 0;
-  height: 100%;
+.statement h2 {
+  font-family: var(--font-serif);
+  font-size: clamp(1.75rem, 1.1rem + 3vw, 2.75rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+  margin: 0 0 var(--s-5);
+  text-wrap: balance;
 }
-
-.two .panel p:last-child,
-.two .panel ul:last-child {
-  margin-bottom: 0;
-}
-.two ul {
-  padding-left: 1.15em;
-}
-.two li {
-  margin-bottom: var(--s-2);
+.statement p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+  text-wrap: pretty;
 }
 
 .closer {
+  margin: var(--gap) auto 0;
+  max-width: 38rem;
   text-align: center;
-  padding: var(--s-7) var(--s-5);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-3);
-  margin-bottom: var(--s-6);
 }
 .closer h2 {
-  margin-top: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.75rem, 1.1rem + 3vw, 2.75rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+  margin: 0 0 var(--s-6);
+  text-wrap: balance;
 }
-.closer p {
-  max-width: 34rem;
-  margin-inline: auto;
+.reassure {
+  margin: var(--s-5) 0 0;
+  font: var(--t-sm) / 1.6 var(--font-sans);
   color: var(--muted);
+}
+.reassure code {
+  white-space: nowrap;
+}
+
+.site-foot {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--s-6) var(--s-5);
+  align-items: start;
+  margin-top: var(--gap);
+  padding-top: var(--s-6);
+  border-top: 1px solid var(--line);
+}
+.site-foot .who p {
+  margin: var(--s-3) 0 0;
+  font: var(--t-sm) / 1.6 var(--font-sans);
+  color: var(--muted);
+}
+.site-foot nav {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+.site-foot nav a {
+  font: var(--t-sm) / 1.4 var(--font-sans);
+  color: var(--muted);
+  text-decoration: none;
+}
+.site-foot nav a:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+.site-foot .eyebrow {
+  margin-bottom: var(--s-1);
+}
+.site-foot .rule {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line);
+  font: var(--t-xs) / 1.5 var(--font-sans);
+  color: var(--muted);
+}
+@media (max-width: 40rem) {
+  .site-foot {
+    grid-template-columns: 1fr 1fr;
+  }
+  .site-foot .who {
+    grid-column: 1 / -1;
+  }
 }
 .eyebrow {
   font: 600 var(--t-xs) / 1 var(--font-sans);
@@ -1392,6 +1478,9 @@ details.more .invite-paste {
     padding-left: var(--s-4);
     padding-right: var(--s-4);
   }
+  /* Centred prose is harder to read line-to-line on a narrow column, so the hero reads as a
+     paragraph here rather than as a poster. The two short serif headings further down stay
+     centred: they are two lines each, which is the length centring is for. */
   .hero {
     text-align: left;
   }
@@ -1399,7 +1488,7 @@ details.more .invite-paste {
   .lede {
     margin-inline: 0;
   }
-  .cta {
+  .hero .ways {
     justify-content: flex-start;
   }
 }
