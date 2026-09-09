@@ -79,12 +79,9 @@ async function remove(id: string) {
 </script>
 
 <template>
-  <section class="mt-8">
-    <h2 class="text-h3">Connectors</h2>
-    <p class="mt-1 mb-4 max-w-[60ch] font-ui text-sm text-muted">
-      For an assistant that adds Passalong as a remote MCP server. It gets a credential of its own
-      rather than one of your tokens: it reaches the MCP endpoint and nothing else, and removing it
-      here cuts it off immediately.
+  <div>
+    <p class="mt-0 mb-4 font-ui text-sm text-muted">
+      It reaches the MCP endpoint and nothing else, and removing it here cuts it off immediately.
       <NuxtLink to="/connect">How to connect one</NuxtLink>.
     </p>
 
@@ -94,13 +91,17 @@ async function remove(id: string) {
       <dl class="mt-3 mb-0 flex flex-col gap-2">
         <div>
           <dt class="font-ui text-xs tracking-wide text-muted uppercase">Client ID</dt>
-          <dd class="m-0 font-code text-sm break-all">{{ fresh.id }}</dd>
+          <dd class="m-0 mt-1 rounded-2 border border-line bg-surface px-3 py-2 font-code text-sm break-all select-all">
+            {{ fresh.id }}
+          </dd>
         </div>
         <div v-if="fresh.secret">
           <dt class="font-ui text-xs tracking-wide text-muted uppercase">
             Client secret — shown once
           </dt>
-          <dd class="m-0 font-code text-sm break-all">{{ fresh.secret }}</dd>
+          <dd class="m-0 mt-1 rounded-2 border border-line bg-surface px-3 py-2 font-code text-sm break-all select-all">
+            {{ fresh.secret }}
+          </dd>
         </div>
       </dl>
       <p class="mt-3 mb-0 font-ui text-xs text-muted">
@@ -118,39 +119,41 @@ async function remove(id: string) {
 
     <p v-if="trouble" class="mb-3 font-ui text-sm text-danger">{{ trouble }}</p>
 
-    <table v-if="clients.length" class="w-full">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Client ID</th>
-          <th>Sends back to</th>
-          <th>Holding</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="client in clients" :key="client.id">
-          <td>{{ client.name || "—" }}</td>
-          <td class="font-code text-xs break-all">{{ client.id }}</td>
-          <td class="font-code text-xs break-all">{{ client.redirect_uri }}</td>
-          <td class="font-code text-xs">
+    <ul v-if="clients.length" class="m-0 flex list-none flex-col gap-2 p-0">
+      <li
+        v-for="client in clients"
+        :key="client.id"
+        class="rounded-3 border border-line bg-raised px-4 py-3"
+      >
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <b class="font-ui text-sm font-semibold text-fg">{{ client.name || "Unnamed" }}</b>
+          <span class="font-code text-xs text-muted">
             {{ client.grants }} grant{{ client.grants === 1 ? "" : "s" }}
-          </td>
-          <td>
+          </span>
+          <span v-if="client.confidential" class="font-code text-xs text-muted">· has a secret</span>
+          <span class="ml-auto flex flex-wrap items-center gap-2">
             <template v-if="removing === client.id">
-              <span class="flex flex-wrap items-center gap-2 font-ui text-sm">
-                Cut it off now?
-                <button type="button" class="btn sm destructive" @click="remove(client.id)">
-                  Remove
-                </button>
-                <button type="button" class="btn sm" @click="removing = null">Keep</button>
-              </span>
+              <span class="font-ui text-sm text-muted">Cut it off now?</span>
+              <button type="button" class="btn sm destructive" @click="remove(client.id)">
+                Remove
+              </button>
+              <button type="button" class="btn sm" @click="removing = null">Keep</button>
             </template>
-            <button v-else type="button" class="btn sm" @click="removing = client.id">Remove</button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+            <button v-else type="button" class="btn sm" @click="removing = client.id">
+              Remove
+            </button>
+          </span>
+        </div>
+        <!-- The two long opaque strings, each on its own line and each allowed to break, because
+             at no column width do they wrap well beside anything else. -->
+        <dl class="mt-2 mb-0 grid gap-x-3 gap-y-1 sm:grid-cols-[6rem_minmax(0,1fr)]">
+          <dt class="font-ui text-xs tracking-wide text-muted uppercase">Client ID</dt>
+          <dd class="m-0 font-code text-xs break-all text-fg">{{ client.id }}</dd>
+          <dt class="font-ui text-xs tracking-wide text-muted uppercase">Sends back to</dt>
+          <dd class="m-0 font-code text-xs break-all text-muted">{{ client.redirect_uri }}</dd>
+        </dl>
+      </li>
+    </ul>
     <p v-else class="font-ui text-sm text-muted">No connectors yet.</p>
 
     <form v-if="adding" class="mt-4 rounded-3 border border-line bg-raised p-4" @submit.prevent="create">
@@ -183,5 +186,5 @@ async function remove(id: string) {
       </div>
     </form>
     <button v-else type="button" class="btn mt-4" @click="adding = true">Add a connector</button>
-  </section>
+  </div>
 </template>

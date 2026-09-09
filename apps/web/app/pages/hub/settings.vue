@@ -51,8 +51,20 @@ const blurb = "mt-1 mb-0 font-ui text-sm text-muted";
         </p>
       </div>
       <HubTokens />
-      <!-- Connectors sit with tokens because they answer the same question — what else can act as
-           me — and differ only in who holds the credential and how much it reaches. -->
+    </section>
+
+    <!-- Its own section, not a third child of the one above: that grid is a label column and a
+         content column, so anything appended to it lands in the 11rem label column and is crushed
+         there. Connectors sit next to tokens because they answer the same question — what else can
+         act as me — and differ in who holds the credential and how far it reaches. -->
+    <section :class="section">
+      <div>
+        <h2 :class="label">Connectors</h2>
+        <p :class="blurb">
+          For an assistant that adds Passalong as a remote MCP server. It gets a credential of its
+          own rather than one of your tokens.
+        </p>
+      </div>
       <HubConnectors />
     </section>
   </HubShell>
