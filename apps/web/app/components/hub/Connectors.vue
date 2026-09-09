@@ -149,7 +149,7 @@ async function remove(id: string) {
         <dl class="mt-2 mb-0 grid gap-x-3 gap-y-1 sm:grid-cols-[6rem_minmax(0,1fr)]">
           <dt class="font-ui text-xs tracking-wide text-muted uppercase">Client ID</dt>
           <dd class="m-0 font-code text-xs break-all text-fg">{{ client.id }}</dd>
-          <dt class="font-ui text-xs tracking-wide text-muted uppercase">Sends back to</dt>
+          <dt class="font-ui text-xs tracking-wide text-muted uppercase">Callback</dt>
           <dd class="m-0 font-code text-xs break-all text-muted">{{ client.redirect_uri }}</dd>
         </dl>
       </li>
