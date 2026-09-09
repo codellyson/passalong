@@ -35,7 +35,7 @@ const pulledBy = computed(() =>
     :class="kind.stripe"
   >
     <div class="min-w-0 flex-1 basis-64">
-      <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
         <span
           class="rounded-pill px-2 py-0.5 font-ui text-xs font-semibold uppercase tracking-wide"
           :class="kind.badge"

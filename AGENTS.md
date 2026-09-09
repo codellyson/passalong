@@ -109,6 +109,12 @@ public one, for agents *using* Passalong rather than changing it.
   naming someone else's shot id in your markdown would claim their image, and deleting your guide
   would delete it. Deleting a guide takes its shots; a nightly cron sweeps uploads no guide ever
   claimed.
+- **Spacing comes from the scale, and the relationship decides the step.** `--s-1`..`--s-9` are a
+  4px base and Tailwind's numbers are the same unit, so use them: `gap-2` for a label and its
+  control, `gap-3` for rows inside a block, `gap-4` for blocks in a column, `px-4 py-3` for a card,
+  `mt-8` between sections. Half-steps are off the scale — `-1.5`, `-2.5` and `-3.5` were all in use
+  and one relationship had four different values, which is what made the interface look unfinished
+  before anyone could say why. `-0.5` is the one exception: 2px inside a chip is a sub-unit.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-

@@ -32,7 +32,7 @@ const waiting = computed(() => data.value.board?.waiting ?? []);
         class="flex flex-col gap-3 rounded-2 border border-line-strong border-l-[3px] border-l-accent bg-raised p-4 shadow-raise"
       >
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
-          <code class="rounded-1 border border-line bg-surface px-1.5 py-0.5 font-code text-xs text-fg">{{ g.id }}</code>
+          <code class="rounded-1 border border-line bg-surface px-2 py-0.5 font-code text-xs text-fg">{{ g.id }}</code>
           <span>from <b class="font-medium text-fg">@{{ g.from || "?" }}</b> · {{ rel(g.created) }}</span>
         </div>
 
@@ -54,7 +54,7 @@ const waiting = computed(() => data.value.board?.waiting ?? []);
 
         <div class="mt-0.5 flex items-center gap-2">
           <button
-            class="flex flex-1 cursor-pointer items-center gap-2 rounded-1 border border-accent bg-accent px-3 py-2.5 text-left font-code text-sm text-accent-fg transition-colors hover:bg-accent-hover"
+            class="flex flex-1 cursor-pointer items-center gap-2 rounded-1 border border-accent bg-accent px-3 py-3 text-left font-code text-sm text-accent-fg transition-colors hover:bg-accent-hover"
             :title="`copy: passalong pull ${g.id}`"
             @click="copy(`passalong pull ${g.id}`, $event.currentTarget)"
           >

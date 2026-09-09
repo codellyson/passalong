@@ -21,7 +21,7 @@ const show = computed(
 /** The one error anyone actually hits belongs against the field that caused it. */
 const onHandle = computed(() => Boolean(error.value?.includes("handle")));
 
-const label = "block font-ui text-sm font-medium text-fg mb-1.5";
+const label = "block font-ui text-sm font-medium text-fg mb-2";
 const box = "block w-full max-w-sm";
 
 async function submit(e: Event) {
@@ -79,7 +79,7 @@ async function submit(e: Event) {
             title="2–31 characters: letters, digits and dashes"
           />
         </div>
-        <p v-if="onHandle" class="mt-1.5 mb-0 font-ui text-sm text-danger">
+        <p v-if="onHandle" class="mt-2 mb-0 font-ui text-sm text-danger">
           {{ error }}. Handles are unique across Passalong.
         </p>
       </div>
@@ -105,6 +105,6 @@ async function submit(e: Event) {
       </div>
     </form>
 
-    <p v-if="error && !onHandle" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger">{{ error }}</p>
+    <p v-if="error && !onHandle" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-3 font-ui text-sm text-danger">{{ error }}</p>
   </div>
 </template>

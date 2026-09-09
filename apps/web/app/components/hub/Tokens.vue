@@ -54,9 +54,9 @@ async function revoke(id: string) {
   await load();
 }
 
-const cell = "border-0 border-b border-b-line px-0 py-2.5 align-middle";
+const cell = "border-0 border-b border-b-line px-0 py-3 align-middle";
 const head =
-  "border-0 border-b border-b-line bg-transparent px-0 py-1.5 font-ui text-xs font-semibold tracking-wide text-muted uppercase";
+  "border-0 border-b border-b-line bg-transparent px-0 py-2 font-ui text-xs font-semibold tracking-wide text-muted uppercase";
 </script>
 
 <template>
@@ -119,7 +119,7 @@ const head =
 
     <form v-if="naming" class="appears mt-3 flex flex-wrap items-end gap-3" @submit.prevent="mint">
       <div class="grow basis-64">
-        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="token-name">
+        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="token-name">
           What is this token for?
         </label>
         <input

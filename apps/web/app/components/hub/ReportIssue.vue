@@ -95,7 +95,7 @@ const detailed = computed(() =>
   <article class="border-t border-line first:border-t-0">
     <!-- The whole line is the control, so hitting anywhere on a collapsed row opens it. -->
     <div
-      class="issue-head flex cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-2.5 hover:bg-surface"
+      class="issue-head flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface"
       role="button"
       tabindex="0"
       :aria-expanded="issue.open"
@@ -130,7 +130,7 @@ const detailed = computed(() =>
 
     <div v-if="issue.open" class="issue-body flex flex-col gap-4 px-4 pt-1 pb-5 sm:pl-10">
       <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
-        <label class="flex flex-col gap-1.5">
+        <label class="flex flex-col gap-2">
           <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">Issue title</span>
           <input
             v-model="issue.title"
@@ -139,7 +139,7 @@ const detailed = computed(() =>
             @input="emit('touch')"
           >
         </label>
-        <label class="flex flex-col gap-1.5">
+        <label class="flex flex-col gap-2">
           <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">Severity</span>
           <select v-model="issue.severity" @change="emit('touch')">
             <option v-for="s in SEVERITIES" :key="s.slug" :value="s.slug">
@@ -186,7 +186,7 @@ const detailed = computed(() =>
             class="relative m-0 w-32 overflow-hidden rounded-2 border border-line bg-surface"
           >
             <img :src="shot.url" :alt="shot.name" class="block h-20 w-full object-cover">
-            <figcaption class="truncate px-1.5 py-1 font-code text-[10px] text-muted" :title="shot.name">
+            <figcaption class="truncate px-2 py-1 font-code text-[10px] text-muted" :title="shot.name">
               {{ shot.name }}
             </figcaption>
             <button
@@ -199,7 +199,7 @@ const detailed = computed(() =>
         </div>
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex flex-col gap-2">
         <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">What happened</span>
         <HubReportEditor
           :html="issue.html"
@@ -224,26 +224,26 @@ const detailed = computed(() =>
         </summary>
         <div class="flex flex-col gap-3 pt-3">
           <div class="grid gap-3 sm:grid-cols-2">
-            <label class="flex flex-col gap-1.5">
+            <label class="flex flex-col gap-2">
               <span class="font-ui text-xs text-muted">URL or screen</span>
               <input v-model="issue.where" type="text" placeholder="/editor/sections" @input="emit('touch')">
             </label>
-            <label class="flex flex-col gap-1.5">
+            <label class="flex flex-col gap-2">
               <span class="font-ui text-xs text-muted">Device &amp; browser</span>
               <input v-model="issue.device" type="text" placeholder="Chrome 141 · macOS 15.2" @input="emit('touch')">
             </label>
           </div>
           <div class="grid gap-3 sm:grid-cols-2">
-            <label class="flex flex-col gap-1.5">
+            <label class="flex flex-col gap-2">
               <span class="font-ui text-xs text-muted">Expected — what counts as fixed</span>
               <textarea v-model="issue.expected" rows="3" placeholder="What should have happened" @input="emit('touch')" />
             </label>
-            <label class="flex flex-col gap-1.5">
+            <label class="flex flex-col gap-2">
               <span class="font-ui text-xs text-muted">Actual</span>
               <textarea v-model="issue.actual" rows="3" placeholder="What happened instead" @input="emit('touch')" />
             </label>
           </div>
-          <label class="flex flex-col gap-1.5">
+          <label class="flex flex-col gap-2">
             <span class="font-ui text-xs text-muted">Steps to reproduce</span>
             <textarea v-model="issue.steps" rows="4" placeholder="1. …&#10;2. …&#10;3. …" @input="emit('touch')" />
           </label>

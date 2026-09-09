@@ -98,7 +98,7 @@ const TOOLS = [
 
 <template>
   <div class="rounded-2 border border-line bg-raised focus-within:border-accent">
-    <div class="flex flex-wrap items-center gap-0.5 border-b border-line px-1.5 py-1">
+    <div class="flex flex-wrap items-center gap-0.5 border-b border-line px-2 py-1">
       <button
         v-for="t in TOOLS"
         :key="t.key"
@@ -115,7 +115,7 @@ const TOOLS = [
 
     <div
       ref="field"
-      class="rt min-h-28 max-h-96 overflow-y-auto px-3 py-2.5 text-sm leading-relaxed outline-none"
+      class="rt min-h-28 max-h-96 overflow-y-auto px-3 py-3 text-sm leading-relaxed outline-none"
       contenteditable="true"
       role="textbox"
       aria-multiline="true"

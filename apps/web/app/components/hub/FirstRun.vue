@@ -17,8 +17,8 @@ const claimed = computed(() => Boolean(me.value?.handle));
 const error = ref<string | null>(null);
 const saving = ref(false);
 
-const hint = "mt-1.5 mb-0 font-ui text-xs text-muted";
-const label = "block font-ui text-sm font-medium text-fg mb-1.5";
+const hint = "mt-2 mb-0 font-ui text-xs text-muted";
+const label = "block font-ui text-sm font-medium text-fg mb-2";
 
 async function claim(e: Event) {
   const f = e.target as HTMLFormElement;
@@ -118,7 +118,7 @@ async function claim(e: Event) {
            number: it is not part of the sequence, it is the other door. -->
       <div class="mb-6 rounded-3 border border-line bg-raised p-4">
         <b class="block font-ui text-base font-semibold text-fg">Found a bug? Report it</b>
-        <p class="mt-1.5 mb-0 font-ui text-sm text-muted">
+        <p class="mt-2 mb-0 font-ui text-sm text-muted">
           Nothing to install. Group everything from a testing pass into one report — screenshots,
           steps, how bad each one is — and hand it to your team. Each issue becomes something one
           person can pick up and answer for.
@@ -159,13 +159,13 @@ async function claim(e: Event) {
           </p>
           <div class="mt-3 flex items-start gap-4 border-l-[3px] border-l-warn pl-3">
             <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2.5">
+              <div class="flex items-center gap-3">
                 <span
-                  class="rounded-1 bg-warn-soft px-1.5 py-0.5 font-ui text-xs font-semibold tracking-wide text-warn uppercase"
+                  class="rounded-1 bg-warn-soft px-2 py-0.5 font-ui text-xs font-semibold tracking-wide text-warn uppercase"
                 >in flight</span>
                 <span class="h-2 w-28 rounded-pill bg-line" />
               </div>
-              <span class="mt-2.5 block h-2.5 w-3/5 rounded-pill bg-line-strong" />
+              <span class="mt-3 block h-2.5 w-3/5 rounded-pill bg-line-strong" />
               <span class="mt-2 block h-2 w-2/5 rounded-pill bg-line" />
             </div>
             <span class="h-8 w-20 shrink-0 rounded-1 border border-line" />

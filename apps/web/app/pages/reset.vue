@@ -62,7 +62,7 @@ async function submit(e: Event) {
          product's least forgiving moment — a link that cannot work — read like a stray caption. -->
     <p
       v-if="mounted && !code"
-      class="mb-5 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger"
+      class="mb-5 rounded-2 border border-danger bg-danger-soft px-3 py-3 font-ui text-sm text-danger"
     >
       This link is missing its code. <a href="/hub">Ask for a new one from the sign-in page.</a>
     </p>
@@ -81,7 +81,7 @@ async function submit(e: Event) {
       <button class="btn primary" type="submit" :disabled="busy">
         {{ busy ? "Saving…" : "Set password" }}
       </button>
-      <p v-if="error" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger">{{ error }}</p>
+      <p v-if="error" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-3 font-ui text-sm text-danger">{{ error }}</p>
       <p class="muted">
         Every other session on this account is signed out when the password changes.
       </p>

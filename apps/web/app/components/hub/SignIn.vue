@@ -93,7 +93,7 @@ function useToken(e: Event) {
          second one reads as the app having forgotten you for no reason. -->
     <p
       v-if="expired"
-      class="mx-auto mb-5 max-w-sm rounded-2 border border-warn bg-warn-soft px-3 py-2.5 font-ui text-sm text-muted"
+      class="mx-auto mb-5 max-w-sm rounded-2 border border-warn bg-warn-soft px-3 py-3 font-ui text-sm text-muted"
     >
       Nothing was lost — guides live on the server, not in this tab.
     </p>
@@ -126,13 +126,13 @@ function useToken(e: Event) {
              a refusal and should not be red. Both were one unstyled line. -->
         <p
           v-if="authError"
-          class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger"
+          class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-3 font-ui text-sm text-danger"
         >
           {{ authError }}
         </p>
         <p
           v-if="notice"
-          class="m-0 rounded-2 border border-ok bg-ok-soft px-3 py-2.5 font-ui text-sm text-ok"
+          class="m-0 rounded-2 border border-ok bg-ok-soft px-3 py-3 font-ui text-sm text-ok"
         >
           {{ notice }}
         </p>
@@ -181,7 +181,7 @@ function useToken(e: Event) {
          refused. -->
     <p
       v-if="error"
-      class="mx-auto mt-4 max-w-sm rounded-2 border border-danger bg-danger-soft px-3 py-2.5 font-ui text-sm text-danger"
+      class="mx-auto mt-4 max-w-sm rounded-2 border border-danger bg-danger-soft px-3 py-3 font-ui text-sm text-danger"
     >
       {{ error }}
     </p>

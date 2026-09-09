@@ -77,7 +77,25 @@
   --t-sm: 0.875rem;
   --t-xs: 0.8125rem;
 
-  /* Space — 4px base. */
+  /* Space — 4px base.
+
+     Tailwind's numbers are the same unit, so a component can speak this scale natively and for a
+     long time none of them did: one relationship — a label and the control under it — was written
+     four ways (gap-1.5, gap-2, gap-3, gap-4), and "a box with content in it" had six paddings.
+     Individually each looked fine; together they are what "inconsistent spacing" meant.
+
+     The relationships, decided once:
+
+       label → its control            gap-2   (8px)
+       rows inside a block            gap-3   (12px)
+       blocks stacked in a column     gap-4   (16px)
+       row padding                    px-3 py-3
+       card padding                   px-4 py-3, or p-4 for a block
+       section → section              mt-8    (32px)
+       a chip's own inset             px-2 py-0.5
+
+     Half-steps are not on this scale: 6px, 10px and 14px were all in use and are gone. `-0.5` is
+     the exception and stays — 2px inside a chip is a sub-unit, not a spacing decision. */
   --s-1: 0.25rem;
   --s-2: 0.5rem;
   --s-3: 0.75rem;

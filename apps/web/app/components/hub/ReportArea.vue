@@ -109,7 +109,7 @@ function toggleAll() {
     <div class="px-4 py-3">
       <button
         type="button"
-        class="w-full rounded-2 border border-dashed border-line-strong bg-transparent px-3 py-2.5 text-left font-ui text-sm text-muted hover:border-accent hover:text-accent"
+        class="w-full rounded-2 border border-dashed border-line-strong bg-transparent px-3 py-3 text-left font-ui text-sm text-muted hover:border-accent hover:text-accent"
         @click="add"
       >
         + another issue in {{ area.area ? areaLabel(area.area) : "this area" }}

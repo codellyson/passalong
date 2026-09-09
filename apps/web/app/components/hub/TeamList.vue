@@ -122,7 +122,7 @@ function guides(t: TeamDetail) {
 
     <form v-if="naming" class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="make">
       <div class="grow basis-64">
-        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="team-name">
+        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="team-name">
           Name your team
         </label>
         <input id="team-name" ref="field" v-model="name" class="w-full" placeholder="kreative-korna" required />

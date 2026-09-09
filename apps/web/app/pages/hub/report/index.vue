@@ -252,8 +252,8 @@ onBeforeUnmount(() => {
         <template v-if="report.team"> to {{ report.team }}<template v-if="report.to"> / @{{ report.to.replace(/^@/, "") }}</template></template>.
         Each one can be pulled and verified separately.
       </p>
-      <ul class="mt-4 mb-0 flex list-none flex-col gap-1.5 p-0">
-        <li v-for="issue in filed.issues" :key="issue.key" class="flex items-baseline gap-2.5">
+      <ul class="mt-4 mb-0 flex list-none flex-col gap-2 p-0">
+        <li v-for="issue in filed.issues" :key="issue.key" class="flex items-baseline gap-3">
           <span class="font-code text-xs text-muted">{{ issue.key }}</span>
           <a :href="issue.url" target="_blank" rel="noopener" class="font-ui text-sm">{{ issue.title }}</a>
         </li>
@@ -271,7 +271,7 @@ onBeforeUnmount(() => {
       <!-- Said once, where it answers the question "is what I typed yesterday still here?" -->
       <p
         v-if="restored"
-        class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2 border border-line bg-raised px-4 py-2.5 font-ui text-sm text-muted"
+        class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2 border border-line bg-raised px-4 py-3 font-ui text-sm text-muted"
       >
         Picked up where you left off — this report was kept in this browser.
         <button type="button" class="btn sm" @click="discardDraft">start fresh</button>
@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
 
       <section class="mb-5 rounded-3 border border-line bg-raised p-4">
         <div class="grid gap-4 sm:grid-cols-2">
-          <label class="flex flex-col gap-1.5">
+          <label class="flex flex-col gap-2">
             <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">
               Report title <span class="font-normal normal-case tracking-normal">(optional)</span>
             </span>
@@ -291,14 +291,14 @@ onBeforeUnmount(() => {
             >
           </label>
 
-          <div class="flex flex-col gap-1.5">
+          <div class="flex flex-col gap-2">
             <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">Environment</span>
             <div class="flex w-max overflow-hidden rounded-2 border border-line-strong">
               <button
                 v-for="(env, n) in ENVIRONMENTS"
                 :key="env"
                 type="button"
-                class="border-0 px-3 py-1.5 font-ui text-sm capitalize"
+                class="border-0 px-3 py-2 font-ui text-sm capitalize"
                 :class="[
                   report.environment === env ? 'bg-accent-soft text-accent font-semibold' : 'bg-raised text-muted hover:text-fg',
                   n ? 'border-l border-l-line-strong' : '',
@@ -311,7 +311,7 @@ onBeforeUnmount(() => {
 
           <!-- A report nobody is handed sits on your own board and nothing else happens. That is a
                legitimate way to use it, so the team is optional and says what it does. -->
-          <label v-if="teams.length" class="flex flex-col gap-1.5">
+          <label v-if="teams.length" class="flex flex-col gap-2">
             <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">Hand it to</span>
             <select v-model="report.team" @change="report.to = ''; touch()">
               <option value="">Nobody — keep it on my board</option>
@@ -319,7 +319,7 @@ onBeforeUnmount(() => {
             </select>
           </label>
 
-          <label v-if="report.team" class="flex flex-col gap-1.5">
+          <label v-if="report.team" class="flex flex-col gap-2">
             <span class="font-ui text-xs font-semibold tracking-wide text-muted uppercase">
               Anyone in particular
             </span>

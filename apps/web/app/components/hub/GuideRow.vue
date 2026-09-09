@@ -80,7 +80,7 @@ const verdict = computed(() => {
     :class="state?.stripe ?? 'border-l-line'"
   >
     <div class="min-w-0 flex-1 basis-72">
-      <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-ui text-sm text-muted">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 font-ui text-sm text-muted">
         <!-- No badge when nothing is in transit: a guide shared with nobody, or closed out. -->
         <span
           v-if="state"

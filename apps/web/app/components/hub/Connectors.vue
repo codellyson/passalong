@@ -34,9 +34,9 @@ const removing = ref<string | null>(null);
 // The same two class strings the tokens table uses. Credentials on one page should not be
 // presented two different ways: this section sat in nested cards while the one above it was a
 // plain table, which is what made a finished page look half-built.
-const cell = "border-0 border-b border-b-line px-0 py-2.5 align-middle";
+const cell = "border-0 border-b border-b-line px-0 py-3 align-middle";
 const head =
-  "border-0 border-b border-b-line bg-transparent px-0 py-1.5 font-ui text-xs font-semibold tracking-wide text-muted uppercase";
+  "border-0 border-b border-b-line bg-transparent px-0 py-2 font-ui text-xs font-semibold tracking-wide text-muted uppercase";
 
 async function load() {
   try {
@@ -152,13 +152,13 @@ async function remove(id: string) {
 
     <form v-if="adding" class="appears mt-3 flex flex-wrap items-end gap-3" @submit.prevent="create">
       <div class="grow basis-48">
-        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="connector-name">
+        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="connector-name">
           What is connecting?
         </label>
         <input id="connector-name" v-model="name" class="w-full" placeholder="ChatGPT" required>
       </div>
       <div class="grow basis-72">
-        <label class="mb-1.5 block font-ui text-sm font-medium text-fg" for="connector-redirect">
+        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="connector-redirect">
           Callback URL, copied from its form
         </label>
         <input id="connector-redirect" v-model="redirect" class="w-full" type="url" placeholder="https://…" required>
