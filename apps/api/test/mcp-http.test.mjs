@@ -70,6 +70,7 @@ test("every tool it lists is one an agent could act on", async () => {
   const body = await read(res);
   const names = body.result.tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
+    "ack_guide",
     "board",
     "file_bugs",
     "get_guide",
@@ -237,4 +238,28 @@ test("a failure part-way through says which issues already landed", async () => 
   const body = await read(res);
   assert.equal(body.result.isError, true);
   assert.match(body.result.content[0].text, /filed 1 of 2 issues/);
+});
+
+test("acking maps onto the route, and passing carries its reason", async () => {
+  const { call, seen } = recorder({
+    "PUT /v1/guides/k3mq2xa7/ack": { status: 200, text: '{"id":"k3mq2xa7","taken":false}' },
+  });
+  const res = await handleMcp(
+    rpc({
+      jsonrpc: "2.0",
+      id: 9,
+      method: "tools/call",
+      params: {
+        name: "ack_guide",
+        arguments: { id: "k3mq2xa7", taken: false, note: "no context on payments" },
+      },
+    }),
+    call,
+    VOCAB,
+  );
+  assert.equal(res.status, 200);
+  const sent = seen[0];
+  assert.equal(sent.method, "PUT");
+  assert.equal(sent.path, "/v1/guides/k3mq2xa7/ack");
+  assert.deepEqual(sent.body, { taken: false, note: "no context on payments" });
 });

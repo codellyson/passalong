@@ -25,6 +25,7 @@
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
 //   GET    /v1/guides/:id              guide as markdown (owner or team member); records a pull
 //   PATCH  /v1/guides/:id/status       { status }  owner: any; team member: consumed/published
+//   PUT    /v1/guides/:id/ack          { taken, note }  the reader's first word back
 //   PUT    /v1/guides/:id/verdict      { ok, note? } → does it actually work?
 //   DELETE /v1/guides/:id              owner only
 //   GET    /g/:id/:key.md              a guide's raw markdown (share link); records a pull
@@ -214,6 +215,14 @@ interface VerdictRow {
   at: string;
   handle: string;
 }
+interface AckRow {
+  guide_id: string;
+  account_id: string;
+  taken: number;
+  note: string;
+  at: string;
+  handle: string;
+}
 interface PullRow {
   guide_id: string;
   account_id: string;
@@ -304,6 +313,28 @@ async function verdicts(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, 
   return map;
 }
 
+/**
+ * Who has answered "are you doing this?", newest first, for a page of guides.
+ *
+ * Shaped exactly like `verdicts()` above because it is the same kind of fact — the reader's, not
+ * the author's, and one standing answer per person.
+ */
+async function acks(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, AckRow[]>> {
+  const map = new Map<string, AckRow[]>();
+  if (!rows.length) return map;
+  const { results } = await db(c)
+    .prepare(
+      `SELECT k.guide_id, k.account_id, k.taken, k.note, k.at, COALESCE(a.handle, '') AS handle
+       FROM ack k LEFT JOIN account a ON a.id = k.account_id
+       WHERE k.guide_id IN (${rows.map(() => "?").join(",")})
+       ORDER BY k.at DESC LIMIT 200`,
+    )
+    .bind(...rows.map((r) => r.id))
+    .all<AckRow>();
+  for (const k of results) map.set(k.guide_id, [...(map.get(k.guide_id) || []), k]);
+  return map;
+}
+
 async function summaries(c: Ctx, rows: GuideRow[]) {
   const me = c.get("account");
   const base = origin(c);
@@ -314,6 +345,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   );
   const pulls = await recentPulls(c, rows);
   const said = await verdicts(c, rows);
+  const answered = await acks(c, rows);
   // A row that belongs to a report says so by name, not by id: "part of Pre-release sweep" is a
   // link someone follows, and a bare eight characters is not.
   const reportIds = [...new Set(rows.map((r) => r.report_id).filter(Boolean))];
@@ -330,6 +362,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     const heard = said.get(r.id) || [];
     // The latest word, plus whether anyone's standing verdict is still negative.
     const latest = heard[0];
+    const answers = answered.get(r.id) || [];
+    const own = answers.find((k) => k.account_id === me);
     return {
       id: r.id,
       title: r.title,
@@ -358,6 +392,15 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
         ? { ok: Boolean(latest.ok), by: latest.handle, note: latest.note, at: latest.at }
         : null,
       failing: heard.some((v) => !v.ok),
+      // The first word back, before any work: who said they are on it, and who passed. A decline
+      // is carried in full — the reason is the whole reason to say no out loud, exactly as it is
+      // for a failing verdict.
+      taken_by: answers.filter((k) => k.taken).map((k) => k.handle || "someone"),
+      declined: answers
+        .filter((k) => !k.taken)
+        .map((k) => ({ by: k.handle, note: k.note, at: k.at })),
+      // Your own standing answer, so the row can offer the other one rather than asking again.
+      my_ack: own ? { taken: Boolean(own.taken), note: own.note, at: own.at } : null,
       pulled_by: (pulls.get(r.id) || []).map((p) => ({
         handle: p.handle,
         via: p.via,
@@ -1433,9 +1476,12 @@ async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
      WHERE account_id <> ? AND status = 'published'
        AND (to_account_id = ? ${teamClause})
        AND id NOT IN (SELECT guide_id FROM pull WHERE account_id = ?)
+       -- Passing on something takes it off your board and puts it back on its author's. Saying
+       -- "on it" does not: you still owe the work, so it stays where you will see it.
+       AND id NOT IN (SELECT guide_id FROM ack WHERE account_id = ? AND taken = 0)
      ORDER BY created DESC LIMIT ?`,
   )
-    .bind(account, account, ...ids, account, limit)
+    .bind(account, account, ...ids, account, account, limit)
     .all<GuideRow>();
   return results;
 }
@@ -1940,6 +1986,66 @@ app.put("/v1/guides/:id/verdict", async (c) => {
   });
   count(c, "verdict_given", { ok: body.ok });
   return c.json({ id: found.row.id, ok: body.ok, note });
+});
+
+/**
+ * The receiver's first word back: "on it", or "not me, and here is why".
+ *
+ * This is the hop the product had no signal for. Between handing something over and someone
+ * pulling it, the sender saw "in flight · not pulled yet" whether the receiver had queued it for
+ * Thursday or never opened it — so the only way to tell was to go and ask.
+ *
+ * Declining requires a reason for the same reason a failing verdict does: "no" without "why"
+ * leaves the sender exactly where the silence did. It is one line, not a thread.
+ */
+app.put("/v1/guides/:id/ack", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
+  const account = c.get("account");
+  // The author is not a party to this. They can see who answered; answering their own handoff
+  // would be telling themselves something they already know.
+  if (found.owner) return err(c, 403, "this is the reader's answer; your own guide has none");
+  const body = (await c.req.json().catch(() => ({}))) as { taken?: boolean; note?: string };
+  if (typeof body.taken !== "boolean")
+    return err(c, 400, "send { taken: true } to take it, or { taken: false } to pass");
+  const note = (body.note || "").trim().slice(0, NOTE_MAX);
+  if (!body.taken && !note)
+    return err(c, 400, "say why you are passing: send a note with { taken: false }");
+
+  await c.env.DB.prepare(
+    `INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(guide_id, account_id) DO UPDATE SET taken = excluded.taken, note = excluded.note, at = excluded.at`,
+  )
+    .bind(found.row.id, account, body.taken ? 1 : 0, note, now())
+    .run();
+
+  const people = await accounts(c, [account, found.row.account_id]);
+  const kind = body.taken ? "taken" : "declined";
+  await notify(c.env, {
+    to: found.row.account_id,
+    kind,
+    guide_id: found.row.id,
+    actor_id: account,
+    team_id: found.row.team_id,
+    note,
+  });
+  // And once for the room. A guide nobody has taken is the thing a channel is for: it is work
+  // that has stopped moving, and whoever picks it up is probably reading there.
+  await announce(c.env, {
+    kind,
+    team_id: found.row.team_id,
+    text: line({
+      kind,
+      actor: people.get(account)?.handle || "",
+      title: found.row.title,
+      team: "",
+      times: 1,
+      note,
+    }),
+    url: shareUrl(origin(c), found.row),
+  });
+  count(c, "guide_acked", { taken: body.taken });
+  return c.json({ id: found.row.id, taken: body.taken, note });
 });
 
 app.delete("/v1/guides/:id", async (c) => {

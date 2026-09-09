@@ -7,7 +7,7 @@
 import type { Guide } from "~/types/hub";
 
 const props = defineProps<{ g: Guide }>();
-const emit = defineEmits<{ verdict: [] }>();
+const emit = defineEmits<{ verdict: []; ack: [] }>();
 
 const { onArchive, onRemove } = useHub();
 
@@ -63,6 +63,7 @@ function run(work: () => void) {
 
       <template v-if="canJudge">
         <div class="menu-rule" />
+        <button class="menu-item" @click="run(() => emit('ack'))">say if you are taking it</button>
         <button class="menu-item" @click="run(() => emit('verdict'))">say whether it worked</button>
       </template>
 

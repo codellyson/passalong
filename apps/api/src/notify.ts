@@ -3,6 +3,8 @@
 //
 //   handoff   a guide was addressed to you by name
 //   shared    a guide landed in a team you are in
+//   taken     someone said they are on it — the first word back, before any work
+//   declined  someone said it is not theirs, and why — the one that needs re-homing
 //   pulled    someone pulled your guide — the transfer landed
 //   consumed  the receiver marked your guide done
 //   verified  someone tried it and it holds up
@@ -17,6 +19,8 @@ import type { MailEnv } from "./email.js";
 export const KINDS = [
   "handoff",
   "shared",
+  "taken",
+  "declined",
   "pulled",
   "consumed",
   "verified",
@@ -92,7 +96,10 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
  * "someone here might". `pulled` and `consumed` are one person's progress on their own work, and a
  * room told about every pull learns to ignore the room.
  */
-const ANNOUNCED = new Set<Kind>(["shared", "handoff", "verified", "failed"]);
+// A decline is here for the same reason a failed verdict is: it is work that has stopped moving
+// and somebody in the room has to pick it up. `taken` rides along because a team watching a
+// channel wants "who has this" answered where they are already looking.
+const ANNOUNCED = new Set<Kind>(["shared", "handoff", "taken", "declined", "verified", "failed"]);
 
 export interface Announcement {
   kind: Kind;
@@ -302,6 +309,10 @@ export function line(
       return `${who} handed you ${title}${r.team ? ` in ${r.team}` : ""}`;
     case "shared":
       return `${who} shared ${title} with ${r.team || "your team"}`;
+    case "taken":
+      return `${who} is on ${title}${note}`;
+    case "declined":
+      return `${who} passed on ${title}${note}`;
     case "pulled":
       return `${who} pulled ${title}${more}`;
     case "consumed":

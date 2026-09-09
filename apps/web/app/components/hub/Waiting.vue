@@ -8,8 +8,16 @@
   terminal and are not going to start now.
 -->
 <script setup lang="ts">
+import type { Guide } from "~/types/hub";
+
 const { data } = useHub();
 const waiting = computed(() => data.value.board?.waiting ?? []);
+
+/** Which card has its "are you taking it?" open. One at a time: this lane is a queue, not a form. */
+const answering = ref<string | null>(null);
+const toggle = (g: Guide) => {
+  answering.value = answering.value === g.id ? null : g.id;
+};
 </script>
 
 <template>
@@ -93,6 +101,22 @@ const waiting = computed(() => data.value.board?.waiting ?? []);
             class="btn sm"
           ><AppIcon name="open" />open</a>
         </div>
+
+        <!-- Answered here because this is the lane a receiver actually looks at. Until they have,
+             the sender cannot tell an unanswered handoff from an unnoticed one — and asking after
+             the pull command rather than before it keeps the order honest: taking it is a
+             sentence, pulling it is the work. -->
+        <template v-if="!g.my_ack">
+          <button
+            class="unfold self-start text-sm"
+            :aria-expanded="answering === g.id"
+            @click="toggle(g)"
+          >are you taking it?</button>
+          <HubAck v-if="answering === g.id" :g="g" @done="answering = null" />
+        </template>
+        <p v-else-if="g.my_ack.taken" class="m-0 font-ui text-sm text-muted">
+          You said you are on it.
+        </p>
       </article>
     </div>
   </section>

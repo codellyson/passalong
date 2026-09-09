@@ -95,6 +95,9 @@ export const remove = (id) => call(`/v1/guides/${id}`, { method: "DELETE" });
 export const verdict = (id, ok, note = "") =>
   call(`/v1/guides/${id}/verdict`, { method: "PUT", body: { ok, note } });
 
+export const ack = (id, taken, note = "") =>
+  call(`/v1/guides/${id}/ack`, { method: "PUT", body: { taken, note } });
+
 /** Fetch a guide by its share link (no account needed). Accepts the web URL or the .md URL. */
 export async function fetchShared(url) {
   const u = new URL(url);

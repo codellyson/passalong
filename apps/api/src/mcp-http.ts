@@ -161,6 +161,31 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
   );
 
   server.registerTool(
+    "ack_guide",
+    {
+      title: "Say whether you are taking it",
+      description:
+        "The first word back on a guide handed to you, before any work: take it, or pass it " +
+        "back. Passing must say why — an unanswered handoff is indistinguishable from one nobody " +
+        "has noticed, and the sender finds out in a week instead of a minute. Answer this when " +
+        "you pick up an inbox, then verify_guide once you have actually run it.",
+      inputSchema: {
+        id: z.string(),
+        taken: z.boolean().describe("true if you are doing it; false hands it back"),
+        note: z
+          .string()
+          .optional()
+          .describe("required when taken is false: why it is not yours; one line, 280 chars"),
+      },
+    },
+    async ({ id, taken, note }) =>
+      relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/ack`, {
+        taken,
+        note: note ?? "",
+      }),
+  );
+
+  server.registerTool(
     "verify_guide",
     {
       title: "Say whether it worked",

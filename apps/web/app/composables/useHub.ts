@@ -206,6 +206,15 @@ export function useHub() {
   const onRemove = (g: Guide) => guarded(() => api(`/v1/guides/${g.id}`, { method: "DELETE" }));
 
   /**
+   * The reader's first word back, before any work: taking it, or handing it back with a reason.
+   *
+   * Passing needs the reason for the same cause a failing verdict does. Without one the sender is
+   * exactly where the silence left them, which is the state this whole signal exists to end.
+   */
+  const onAck = (g: Guide, taken: boolean, note = "") =>
+    guarded(() => api(`/v1/guides/${g.id}/ack`, json("PUT", { taken, note })));
+
+  /**
    * The reader's answer to "does this work?", and the only way a sender learns their handoff did
    * not land. A failure must say why.
    *
@@ -265,6 +274,7 @@ export function useHub() {
     api,
     json,
     load,
+    onAck,
     onArchive,
     onRemove,
     onVerdict,

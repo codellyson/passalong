@@ -14,6 +14,7 @@ import type { GuideState } from "~/utils/guide-state";
 const props = defineProps<{ g: Guide; state: GuideState | null }>();
 
 const judging = ref(false);
+const answering = ref(false);
 
 const pull = computed(() => `passalong pull ${props.g.id}`);
 
@@ -21,9 +22,15 @@ const pull = computed(() => `passalong pull ${props.g.id}`);
 const tail = computed(() => {
   const g = props.g;
   switch (props.state?.key) {
+    case "unanswered":
     case "waiting":
     case "flight":
       return "not pulled yet";
+    case "taken":
+      // Who has it is the fact; "not pulled yet" was the answer to a question already answered.
+      return `${props.g.taken_by?.map((h) => `@${h}`).join(", ")} said they are on it`;
+    case "passed":
+      return "handed back";
     case "unjudged":
       return "nobody has said whether it worked";
     case undefined:
@@ -132,6 +139,16 @@ const verdict = computed(() => {
         {{ verdict }}
       </p>
 
+      <!-- Printed in full for the same reason a failing verdict is: the reason someone passed is
+           the only part that tells you what to do next. -->
+      <p
+        v-for="d in g.declined || []"
+        :key="d.at"
+        class="mt-2 mb-0 border-l-2 border-l-warn py-0.5 pl-2 font-ui text-sm text-warn"
+      >
+        {{ d.by ? `@${d.by}` : "someone" }} passed: {{ d.note }}
+      </p>
+
       <!-- One line, and it is reference rather than triage: what you read once you have already
            decided this is the row you wanted.
            `assumes` used to sit here and is gone. It is the longest thing a guide carries, it
@@ -204,6 +221,17 @@ const verdict = computed(() => {
       >
         <AppIcon name="copy" /><span data-label>copy link</span>
       </button>
+      <!-- Before pulling anything: one word about whether you are taking it. It opens in place
+           like the verdict does, so it wears the same chevron. -->
+      <button
+        v-else-if="state?.action === 'ack'"
+        class="btn primary sm"
+        :aria-expanded="answering"
+        @click="answering = !answering"
+      >
+        <AppIcon name="reveal" class="transition-transform" :class="answering ? 'rotate-180' : ''" />
+        are you taking it?
+      </button>
       <!-- "did it work?" was the one control in the column that asked rather than did, and it is
            the only one that opens something in place instead of leaving. Now it says what pressing
            it does — in the same words the row's overflow menu uses for the same act, because two
@@ -222,10 +250,11 @@ const verdict = computed(() => {
         <AppIcon name="open" />open
       </a>
 
-      <HubRowMenu :g="g" @verdict="judging = true" />
+      <HubRowMenu :g="g" @verdict="judging = true" @ack="answering = true" />
     </div>
 
-    <!-- Full width and last, so opening it pushes nothing sideways. -->
+    <!-- Full width and last, so opening either pushes nothing sideways. -->
+    <HubAck v-if="answering && !g.mine" :g="g" class="order-last" @done="answering = false" />
     <HubVerdict v-if="judging && !g.mine" :g="g" class="order-last" @done="judging = false" />
   </li>
 </template>

@@ -223,6 +223,21 @@ export async function verdict(id, ok, note = "") {
   return api.verdict(guide.meta.id, ok, note.trim());
 }
 
+/**
+ * Say whether you are taking a guide someone handed you — before doing any of it.
+ *
+ * The hop the product had no signal for: until this, a handoff nobody had answered looked exactly
+ * like one nobody had noticed. Passing needs a reason for the same cause a failing verdict does —
+ * "not me" without "why" leaves the sender where the silence did.
+ */
+export async function ack(id, taken, note = "") {
+  if (!api.loggedIn()) throw new PassalongError("acks need sync — run `passalong login` first");
+  if (!taken && !note.trim())
+    throw new PassalongError("say why you are passing: pass a note with taken=false");
+  const { guide } = await resolve(id);
+  return api.ack(guide.meta.id, taken, note.trim());
+}
+
 /** Mark notifications seen. No ids means everything unread. */
 export const seen = (ids = []) => api.markRead(ids);
 

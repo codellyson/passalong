@@ -153,6 +153,15 @@ public one, for agents *using* Passalong rather than changing it.
   except `archived`. The hub offers it to the author only — a non-owner marking a guide consumed
   still sends the author a "someone shipped this" receipt, and putting that in the same menu item
   is what conflated the two meanings the first time.
+- **An ack is the reader's first word back, and it is a row.** `PUT /v1/guides/:id/ack` takes
+  `{ taken, note }` — the same shape and the same reasoning as a verdict (migration `0004`): it
+  belongs to the reader, it can be negative, several people can each answer, and it is never in the
+  markdown, because the document is the author's while this is a fact about a transfer of it. The
+  author gets a 403: answering your own handoff tells you nothing. A decline **requires a note** —
+  "not me" without "why" leaves the sender exactly where the silence did — and takes the guide off
+  the decliner's inbox and back onto its author's board as `passed`. Taking it does not: you still
+  owe the work, so it stays where you will see it. Both reach the team channel, because a guide
+  nobody has taken is work that has stopped moving.
 - **Ids** are 8 chars from a no-lookalike alphabet; they are addresses, not secrets. The
   **share key** in the link is the secret. Owner access needs the bearer token.
 - **Accounts are not tokens any more (migration 0005).** Identity is email + password (PBKDF2-

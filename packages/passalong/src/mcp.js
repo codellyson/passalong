@@ -133,6 +133,33 @@ export async function serve() {
   );
 
   server.registerTool(
+    "ack_guide",
+    {
+      title: "Say whether you are taking it",
+      description:
+        "The first word back on a guide handed to you, before any work: take it, or pass it " +
+        "back. Passing must say why — an unanswered handoff is indistinguishable from one nobody " +
+        "has noticed, and the sender finds out in a week instead of a minute. Answer this when " +
+        "you pick up an inbox; verify_guide comes later, once you have actually run it.",
+      inputSchema: {
+        id: z.string().describe("passalong id"),
+        taken: z.boolean().describe("true if you are doing it; false hands it back"),
+        note: z
+          .string()
+          .default("")
+          .describe("why it is not yours (required when taken is false); one line, max 280 chars"),
+      },
+    },
+    async ({ id, taken, note }) => {
+      try {
+        return json(await passalong.ack(id, taken, note || ""));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "verify_guide",
     {
       title: "Report whether a guide works",

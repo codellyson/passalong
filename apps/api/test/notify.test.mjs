@@ -24,6 +24,8 @@ test("every kind renders a sentence naming who did what", () => {
   assert.deepEqual(seen, [
     '@bob handed you "Add Paystack webhook verification" in khaime',
     '@bob shared "Add Paystack webhook verification" with khaime',
+    '@bob is on "Add Paystack webhook verification"',
+    '@bob passed on "Add Paystack webhook verification"',
     '@bob pulled "Add Paystack webhook verification"',
     '@bob marked "Add Paystack webhook verification" consumed',
     '@bob verified "Add Paystack webhook verification"',
@@ -67,4 +69,15 @@ test("summary carries the rendered line and the read flag", () => {
   assert.equal(s.read, true);
   assert.equal(s.text, line(row()));
   assert.equal(summary(row()).read, false);
+});
+
+test("a decline carries its reason, because that is the whole point of saying no", () => {
+  const r = row({ kind: "declined", note: "no context on the payments side" });
+  assert.equal(
+    line(r),
+    '@bob passed on "Add Paystack webhook verification": no context on the payments side',
+  );
+  assert.equal(summary(r).note, "no context on the payments side");
+  // "on it" needs no reason, and the line must still read without one.
+  assert.equal(line(row({ kind: "taken" })), '@bob is on "Add Paystack webhook verification"');
 });

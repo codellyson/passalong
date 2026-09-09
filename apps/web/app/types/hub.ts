@@ -47,6 +47,11 @@ export interface Guide {
   stack_assumptions: string[];
   pulled_by?: Pull[];
   verdict?: Verdict | null;
+  /** Who said they are on it, and who passed it back with a reason. See migrations/0013_acks.sql. */
+  taken_by?: string[];
+  declined?: Declined[];
+  /** Your own standing answer, so a row offers the other one rather than asking again. */
+  my_ack?: { taken: boolean; note: string; at: string } | null;
   /** The report this issue belongs to, when it is one — see migrations/0006_reports.sql. */
   report?: string;
   report_title?: string;
@@ -57,6 +62,13 @@ export interface Guide {
   /** Set by the board's SQL, not worked out here — see the note on `load()`. */
   failing?: boolean;
   stale?: boolean;
+}
+
+/** Someone handing a guide back, and why. The reason is the whole reason to say no out loud. */
+export interface Declined {
+  by: string;
+  note: string;
+  at: string;
 }
 
 /** The board's buckets are defined in SQL. The hub renders them; it never derives them. */
