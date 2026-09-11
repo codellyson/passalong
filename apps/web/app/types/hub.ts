@@ -5,6 +5,8 @@ export interface Team {
   slug: string;
   name: string;
   role: string;
+  /** "free", "team" or "lapsed". A lapsed team is read-only — see apps/api/src/quota.ts. */
+  plan: string;
 }
 
 export interface Me {
@@ -122,6 +124,9 @@ export interface ApiToken {
 
 export interface TeamDetail extends Team {
   guides: number;
+  /** How many members the plan is paid for. Zero on a free plan, where seats are not the limit. */
+  seats?: number;
+  members_count?: number;
   /** How many channels are connected. Never their URLs — those are credentials for rooms. */
   channels?: number;
   members: { handle: string | null; name: string | null; role: string; joined: string }[];

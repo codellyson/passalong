@@ -2,7 +2,18 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { SETTABLE, STATUSES, body, parseMeta, setField, setList, shotIds, split, tag, tagList } from "../src/guide.ts";
+import {
+  body,
+  parseMeta,
+  SETTABLE,
+  STATUSES,
+  setField,
+  setList,
+  shotIds,
+  split,
+  tag,
+  tagList,
+} from "../src/guide.ts";
 
 const DOC = `---
 id: k3mq2xa7

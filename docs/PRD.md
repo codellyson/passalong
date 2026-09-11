@@ -105,6 +105,10 @@ Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`wor
 
 Pricing note: this is deliberately a team-monetized product. The solo tier is the distribution engine, not the revenue.
 
+Decided 2026-09-11, building it. **A seat lifts whoever sits in it.** A free member of a paid team publishes without a ceiling, and has never paid for anything — the team is what is bought, so the team is what is lifted. Seats are enforced where somebody joins rather than at checkout, because a count taken when a seat is bought drifts the first time a member leaves.
+
+**A lapsed team goes read-only, not dark.** Everything already in it stays readable, pullable and answerable; what stops is new work being addressed to it and anyone new joining. §10 promises no lock-in, and a team's guides are its members' own work — withholding them to collect a debt is exactly what that principle forbids. Verdicts and acks keep working on a lapsed team's guides for the same reason in miniature: they belong to the reader, and the reader is not the person who missed the payment.
+
 ## 12. Risks and open questions
 
 - **Capture quality.** If `passalong share` produces mediocre distillations, the loop dies. Mitigation: this is the first thing to prototype and pressure-test before building anything else.

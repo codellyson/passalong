@@ -142,6 +142,26 @@ public one, for agents *using* Passalong rather than changing it.
   edge. Severity is named (`Blocker`, `Minor`) rather than coded (`s1`, `s3`) wherever it is shown
   to a reader, in the list and in the report editor both, and `severityTone()`/`severityLabel()`
   in `app/utils/report.ts` are the only copies of that lookup.
+- **A plan belongs to a team, and an account's ceiling is derived from it — never copied onto the
+  account.** §11 sells the team, so the decision that follows is that a *free* member of a paid team
+  publishes without a ceiling: the seat lifts whoever sits in it, paid for or not. `quota()` asks
+  "is this account in a team on `plan = 'team'`?" on every read and `ceilingFor()` answers. Writing
+  the answer onto `account.sync_limit` instead would mean rewriting a row per member on every plan
+  change, membership change and failed payment — and the row that gets missed is an account still
+  unlimited after the team stopped paying. **`UNLIMITED` is `0`, not `Infinity`**: the number crosses
+  a wire, `JSON.stringify(Infinity)` is `null`, and the hub already read a falsy limit as no limit.
+  `plan` is **one column with three values** (`free`, `team`, `lapsed`) rather than a plan beside a
+  status, because `free` + `lapsed` is not a state a team can be in and two columns can store it.
+  **Lapsed is read-only, and read-only is narrower than it sounds**: what stops is work flowing *in*
+  — a guide addressed to the team, a new member joining. What must never stop is work already in
+  flight closing, so a verdict and an ack still go through: they belong to the reader, and the reader
+  is not the person who missed the payment. Reading, pulling and share links are untouched, because
+  §10 promises no lock-in and withholding a team's own work to collect a debt is the thing that
+  principle forbids. Refusals are **402, not 403** — nobody lacks permission, and the two are fixed
+  in completely different places. **Seats are counted where somebody joins**, not at checkout: a
+  count taken when a seat is bought drifts the first time a member leaves, and stays wrong
+  invisibly. An existing member re-opening their invite link is never refused, since they already
+  occupy the seat the check protects.
 - **The free tier is counted in one place.** `apps/api/src/quota.ts` holds `COUNTED` (the statuses
   that occupy room), `limitFor()` (per-account `sync_limit` beats `FREE_SYNC_LIMIT`, zero means
   unset) and `isFull()`; `quota()` in index.ts is the only query, and both `/v1/me` and the publish

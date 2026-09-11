@@ -109,7 +109,7 @@ import {
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
-import { COUNTED, isFull, limitFor } from "./quota.js";
+import { acceptsNewWork, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
 import { SHOT_TYPES, shotKey } from "./shots.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
@@ -181,6 +181,11 @@ interface TeamRow {
   name: string;
   created_by: string;
   created: string;
+  /** "free", "team" or "lapsed" — see migrations/0015_plans.sql and quota.ts. */
+  plan: string;
+  seats: number;
+  subscription_id: string;
+  plan_since: string;
 }
 interface GuideRow {
   id: string;
@@ -812,7 +817,15 @@ app.get("/v1/me", async (c) => {
     .bind(account)
     .first<AccountRow & { password_hash: string }>();
   const room = await quota(c, account);
-  const teams = (await myTeams(c)).map((t) => ({ slug: t.slug, name: t.name, role: t.role }));
+  // The plan rides along with the team it belongs to. Without it the hub would have to fetch every
+  // team to find out why a limit vanished, and the banner that explains the ceiling is drawn before
+  // any team has been opened.
+  const teams = (await myTeams(c)).map((t) => ({
+    slug: t.slug,
+    name: t.name,
+    role: t.role,
+    plan: t.plan,
+  }));
   return c.json({
     account,
     handle: me?.handle || "",
@@ -839,15 +852,20 @@ app.get("/v1/me", async (c) => {
  */
 async function quota(c: Ctx, account: string): Promise<{ used: number; limit: number }> {
   const marks = COUNTED.map(() => "?").join(", ");
+  // `paid` is the whole of the plan's effect on an individual: being in one team that is currently
+  // paying removes this account's ceiling. Asked here rather than stored on the account, so the
+  // answer cannot be stale — see ceilingFor().
   const row = await c.env.DB.prepare(
     `SELECT (SELECT COUNT(*) FROM guide WHERE account_id = ? AND status IN (${marks})) AS used,
-            (SELECT sync_limit FROM account WHERE id = ?) AS own`,
+            (SELECT sync_limit FROM account WHERE id = ?) AS own,
+            (SELECT COUNT(*) FROM membership m JOIN team t ON t.id = m.team_id
+              WHERE m.account_id = ? AND t.plan = 'team') AS paid`,
   )
-    .bind(account, ...COUNTED, account)
-    .first<{ used: number; own: number }>();
+    .bind(account, ...COUNTED, account, account)
+    .first<{ used: number; own: number; paid: number }>();
   return {
     used: row?.used ?? 0,
-    limit: limitFor(row?.own, c.env.FREE_SYNC_LIMIT),
+    limit: ceilingFor(row?.paid, row?.own, c.env.FREE_SYNC_LIMIT),
   };
 }
 
@@ -954,6 +972,12 @@ app.get("/v1/teams/:slug", async (c) => {
     members,
     guides: n?.n ?? 0,
     channels: chCount?.n ?? 0,
+    plan: team.plan,
+    // Zero seats on a free plan is not "no room" — seats are simply not what limits that team, so
+    // the client reads the plan first. Never the subscription id: it is the provider's handle on a
+    // paying customer and nothing in a browser needs it.
+    seats: team.seats,
+    members_count: members.length,
   });
 });
 
@@ -1219,6 +1243,30 @@ app.post("/v1/invites/:code/accept", async (c) => {
     .bind(inv.team_id, account)
     .first<{ role: string }>();
   if (!already) {
+    // Seats are counted where somebody joins, not where somebody pays. A count taken at checkout
+    // is a count that drifts the first time a member leaves, and the drift is invisible until it
+    // has been wrong for a month. An existing member re-opening their invite link is never
+    // refused: they already occupy the seat this is protecting.
+    const room = await c.env.DB.prepare(
+      "SELECT t.plan, t.seats, (SELECT COUNT(*) FROM membership WHERE team_id = t.id) AS members" +
+        " FROM team t WHERE t.id = ?",
+    )
+      .bind(inv.team_id)
+      .first<{ plan: string; seats: number; members: number }>();
+    if (room && !acceptsNewWork(room.plan))
+      return err(
+        c,
+        402,
+        `${inv.slug} is read-only: its subscription lapsed, so it is not taking new members. ` +
+          "Everything already in it can still be read.",
+      );
+    if (room && seatsFull(room.plan, room.seats, room.members))
+      return err(
+        c,
+        402,
+        `${inv.slug} has filled all ${room.seats} of its seats. Someone has to leave, or the team ` +
+          "needs another seat, before this invite can be accepted.",
+      );
     await c.env.DB.batch([
       c.env.DB.prepare(
         "INSERT INTO membership (team_id, account_id, role, joined) VALUES (?, ?, 'member', ?)",
@@ -1810,6 +1858,16 @@ app.put("/v1/guides/:id", async (c) => {
   if (meta.team) {
     team = await teamBySlug(c, String(meta.team));
     if (!team) return err(c, 400, `you are not in a team called "${meta.team}"`);
+    // Read-only, not closed: everything already in the team stays readable, pullable and
+    // answerable, and this is the one door that shuts. 402 rather than 403 — nobody lacks
+    // permission, the subscription lapsed, and the two are fixed in completely different places.
+    if (!acceptsNewWork(team.plan))
+      return err(
+        c,
+        402,
+        `${team.slug} is read-only: its subscription lapsed. Everything in it can still be read, ` +
+          "pulled and answered — renew to hand over anything new. Sharing without `team:` still works.",
+      );
   }
   // `to:` names either a person or a group, and the sigil says which: `@ada` is one teammate,
   // `#frontend` is the people who do a thing. Both need a `team:` — an address is only meaningful

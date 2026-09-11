@@ -63,6 +63,15 @@ function onSignedIn() {
 
 const waiting = computed(() => data.value.board?.waiting.length ?? 0);
 
+/**
+ * Teams whose subscription lapsed, so the hub says it before a terminal does.
+ *
+ * Same reasoning as the quota warning below: the refusal happens at `passalong share`, on a machine
+ * where nothing can explain itself beyond one line of stderr. This is the only place the state is
+ * visible before it bites.
+ */
+const lapsed = computed(() => (data.value.me?.teams ?? []).filter((t) => t.plan === "lapsed"));
+
 /** Warn before the limit bites, not after: the share that fails happens in a terminal. */
 const full = computed(() => {
   const me = data.value.me;
@@ -181,6 +190,20 @@ const tabs = computed(() => [
         <button class="btn outline danger sm" @click="load()">Try again</button>
         <button class="btn sm" @click="error = null">Dismiss</button>
       </div>
+
+      <!-- Read-only, and specific about which half: everything in the team can still be read and
+           answered, and only new work is refused. A banner that said "read-only" and stopped would
+           have people assuming their guides were gone. -->
+      <p
+        v-for="t in lapsed"
+        :key="t.slug"
+        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
+      >
+        <b class="text-fg">{{ t.name }} is read-only.</b>
+        Its subscription lapsed. Everything already in it can still be read, pulled and answered —
+        what stops is handing over anything new, and anyone else joining. Sharing a guide without a
+        team is unaffected.
+      </p>
 
       <!-- The free tier stops `passalong share` server-side. Saying so here is the only warning
            anyone gets before the next share fails from a terminal. -->

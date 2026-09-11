@@ -28,7 +28,7 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `GET /v1/teams` | account |
 | `GET /v1/teams/:slug` | **members only** |
 | `POST /v1/teams/:slug/invites` | members — `{ email? }`, mailed when an email is given |
-| `POST /v1/invites/:code/accept` | account |
+| `POST /v1/invites/:code/accept` | account — 402 when the team is `lapsed` or its seats are full; an existing member is never refused |
 
 ## Guides
 
