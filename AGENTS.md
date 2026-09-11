@@ -296,6 +296,20 @@ public one, for agents *using* Passalong rather than changing it.
   `GROUP BY guide_id` on purpose: `recordPull` writes a row per fetch of `/v1/guides/:id` and the
   CLI resolves an id by fetching, so `take` then `pull` leaves two rows seconds apart. The board
   wants both; a log rendering both says you pulled the same thing twice in a minute.
+- **Product-wide numbers come from `scripts/metrics.mjs`, never from a route and never from
+  Aptabase.** PRD §14's figures are about every account at once, and the API has no reader above an
+  account: an endpoint for them would have to invent an admin credential — a new way into everyone's
+  data, added so one person can read four numbers. Aptabase cannot answer them either, and that is
+  by design rather than by omission: two of the four need sequences joined on who did what, while
+  `analytics.ts` sends categorical props and never an id, because a share key in a page URL must not
+  reach a third party. So the joins happen against D1, on the operator's machine, and nothing
+  leaves it. Note which database: `--dev` reads the one Nitro manages under `.wrangler/state`, found
+  by scanning rather than hardcoded because the file is named for the `database_id`. Two of the four
+  metrics also cannot be computed as §14 originally worded them, and the script **prints the caveat
+  beside the number every run** — activation undercounts because `passalong pull` serves a local
+  copy without calling the API unless the guide has a team, and the quality proxy asked for
+  `consumed`, which changed meaning. A report that quietly substitutes a near-miss is worse than
+  one that says so.
 - **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
   to whoever should hear it: `handoff`, `shared`, `pulled`, `consumed`, `joined`. Rows first,
   delivery second — mail is a channel over the row, so the feed works with no mailer configured.
@@ -323,6 +337,7 @@ pnpm -C apps/api db:migrate             # local D1 (re-run if wrangler.jsonc's d
 pnpm dev                                # the whole thing on :3000 — pages and API
 PASSALONG_API=http://localhost:3000 PASSALONG_HOME=/tmp/rh packages/passalong/bin/passalong login
 pnpm -C apps/api db:migrate:remote && pnpm -C apps/web run deploy
+pnpm metrics --dev                      # PRD §14, read straight from D1 (--remote for production)
 ```
 
 `pnpm dev` is `nuxt dev`, and it emulates the bindings — so the mounted API answers on the same

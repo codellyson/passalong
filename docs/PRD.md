@@ -124,5 +124,15 @@ Pricing note: this is deliberately a team-monetized product. The solo tier is th
 
 - **Activation:** first `passalong share` to first `passalong pull` in a different context within 7 days.
 - **Core health:** weekly transfers per active user (share + pull pairs).
-- **Quality proxy:** percent of pulled guides marked consumed without follow-up edits to the guide.
+- **Quality proxy:** percent of pulled guides that came back with a passing verdict, and how many of those needed no follow-up edit to the guide.
 - **v2:** percent of transfers that cross a person boundary (self-transfer vs team-transfer ratio).
+
+All four are computed by `pnpm metrics --dev` (or `--remote`), which reads `guide`, `pull` and `verdict` in D1 directly.
+
+Added 2026-09-11, on making these measurable for the first time. Two notes that belong with the numbers rather than behind them.
+
+The **quality proxy** used to read "percent of pulled guides marked consumed without follow-up edits". `consumed` meant implemented when that was written and means archived now — the author's shelf — so counting it would have answered a different question than the one being asked. The verdict is what replaced it and is the better instrument anyway: the reader's judgement rather than the author's. "Without follow-up edits" survives unchanged, as `guide.updated` moving after a verdict.
+
+**Activation undercounts, and will keep undercounting.** `passalong pull` serves a guide out of the local store without calling the API unless it carries a team, so a developer pulling their own teamless guide into another repo — the v1 loop, exactly — leaves no row to count. Closing that would mean recording a pull for a fetch that never happens, which is worse than a known-low number. Read it as a floor.
+
+None of this can come from Aptabase: both per-account bullets need sequences joined on who did what, and `analytics.ts` sends categorical props and never an id, on purpose. That is why the figures come from a script against the database and not from the dashboard.
