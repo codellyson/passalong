@@ -219,8 +219,8 @@ const tabs = computed(() => [
         class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
       >
         <b class="text-fg">Syncing needs a plan.</b>
-        Nothing is synced from this account yet, and <code>passalong share</code> will be refused
-        until there is one — everything local still works.
+        <code>passalong share</code> will be refused until there is one. Anything already synced
+        stays exactly where it is, and everything local still works.
         <NuxtLink to="/hub/settings">See plans</NuxtLink>
       </p>
 

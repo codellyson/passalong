@@ -75,9 +75,13 @@ async function subscribe(provider: string) {
       You are on a seat in a paid team, so your guides already sync without a ceiling. Solo is for
       when that is no longer true.
     </p>
+    <!-- Careful with the tense: an account reaches this state by a plan lapsing as well as by
+         arriving without one, so it may well have guides already synced. Saying "nothing is synced"
+         would be false for exactly the person most likely to be reading it. -->
     <p v-else-if="sync === 'none'" class="m-0 font-ui text-sm text-muted">
-      Nothing is syncing from this account. Everything local still works —
-      <code>passalong share</code> writes to this machine with or without a plan.
+      New guides will not sync until this account is on a plan. What is already synced stays, and
+      everything local still works — <code>passalong share</code> writes to this machine with or
+      without one.
     </p>
     <p v-else class="m-0 font-ui text-sm text-muted">
       You are on the free ceiling: {{ data.me?.limit }} synced guides. Solo removes it.

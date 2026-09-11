@@ -105,7 +105,7 @@ Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`wor
 
 Built 2026-09-11: **Solo is a real plan.** Every subscription route was team-scoped and owner-only, so an individual who wanted to pay had to invent a team of one — which is also why the free tier could not be closed, since a new account had nowhere to go. `POST /v1/subscribe` buys it and `account.plan` holds it.
 
-Decided 2026-09-11: **the free tier closes to new accounts, and every account that already existed keeps it.** Migration 0016 marks them; `FREE_SIGNUP` is the switch. It still defaults to open so that closing it stays a deliberate act rather than a consequence of deploying, but the thing it was waiting on — somewhere for an individual to buy — now exists. What stays free for everybody is the local store — the CLI writes and reads guides with no account and no ceiling, which is §10 and is not a concession.
+Decided 2026-09-11: **the free tier closes to new accounts, and every account that already existed keeps it.** Migration 0016 marks them; `FREE_SIGNUP` is the switch and it is **closed** in production as of 2026-09-11, now that Solo gives an individual somewhere to buy. It still defaults to open in code, so a deployment that does not set it keeps the old behaviour rather than locking people out by omission. What stays free for everybody is the local store — the CLI writes and reads guides with no account and no ceiling, which is §10 and is not a concession.
 
 Pricing note: this is deliberately a team-monetized product. The solo tier is the distribution engine, not the revenue.
 

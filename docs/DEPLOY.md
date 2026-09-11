@@ -57,6 +57,13 @@ PBKDF2 iteration cap was found this way — but anything it writes is real. Clea
 straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no browser involvement,
 deliberately. See the rule about what may go in a prop in AGENTS.md before adding an event.
 
+**The free tier is closed.** `FREE_SIGNUP` is `"0"` in `apps/web/wrangler.jsonc`, so a new account
+syncs nothing until it is on a plan. Two things keep that from being a cliff: accounts carrying
+`grandfathered` (migration 0016, set on everyone who existed when it ran) keep `FREE_SYNC_LIMIT`,
+and the local store is untouched — `passalong share` writes to the machine with no account and no
+ceiling. Set it to `"1"` to reopen. It defaults to open in code, so a deployment that forgets the
+var keeps the old behaviour rather than locking people out by omission.
+
 **Billing.** Five Worker secrets, all optional: without them the paid tier is simply unavailable
 and every webhook is refused rather than trusted.
 
