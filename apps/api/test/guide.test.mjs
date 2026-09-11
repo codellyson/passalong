@@ -293,3 +293,11 @@ test("somebody else taking it clears a shared ask, never one with your name on i
   const clause = body.slice(body.indexOf("AND (to_account_id = ?"));
   assert.match(clause.slice(0, 200), /to_account_id = \?/);
 });
+
+test("parseMeta reads a parent, which needs no rule of its own", () => {
+  // The parser is generic, so `parent:` is read the moment the field exists in the format. This
+  // pins that it stays a plain scalar — not a list, not normalised the way tags are.
+  const m = parseMeta(`---\nid: k3mq2xa7\ntitle: One\nparent: zx9y8w42\n---\n\n## Problem\nx\n`);
+  assert.equal(m.parent, "zx9y8w42");
+  assert.equal(parseMeta(DOC).parent, undefined, "and a guide without one says nothing");
+});

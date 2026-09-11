@@ -200,6 +200,8 @@ interface GuideRow {
   area: string;
   severity: string;
   kind: string;
+  /** The guide this one came out of. See migrations/0015_lineage.sql. */
+  parent_id: string;
 }
 interface ReportRow {
   id: string;
@@ -1746,6 +1748,16 @@ app.post("/v1/notifications/read", async (c) => {
   return c.json({ read, unread: await unreadCount(c.env, c.get("account")) });
 });
 
+/**
+ * How far a chain of guides is allowed to run.
+ *
+ * A rendering limit before it is a storage one: eight hops back is already a history nobody opens,
+ * and a page that has to draw an arbitrary number of ancestors draws none of them well. It doubles
+ * as the bound on the walk that refuses cycles, which is what makes that walk safe to run against
+ * rows written before this rule existed.
+ */
+const LINEAGE_MAX = 8;
+
 app.put("/v1/guides/:id", async (c) => {
   const account = c.get("account");
   const id = c.req.param("id");
@@ -1832,6 +1844,42 @@ app.put("/v1/guides/:id", async (c) => {
     if (report.account_id !== account) return err(c, 403, "that report belongs to another account");
   }
 
+  // `parent:` is the guide this one came out of — someone pulled that, did the work, and wrote
+  // down what they learned. Unlike `report:`, a parent that does not resolve is dropped rather
+  // than refused, for three separate reasons that all land in the same place.
+  //
+  // It belongs to somebody else, so a guide you were handed before you left a team has to keep
+  // publishing after you leave. Refusing "not yours" separately from "no such guide" would turn
+  // publish into an oracle for which ids exist. And `parent:` was not a reserved field name until
+  // lineage existed, so a guide written months ago may carry one meaning something else — a value
+  // that is not an id at all is that, not a typo, and rejecting it would make somebody's own
+  // document unpublishable by them. A dropped parent costs lineage that does not apply; a refused
+  // publish costs the transfer.
+  //
+  // A self-parent is still refused: there is no reading of it that is anything but a mistake.
+  let parentId = "";
+  if (meta.parent) {
+    const wanted = String(meta.parent);
+    if (wanted === id) return err(c, 400, "a guide cannot follow itself");
+    const parent = ID_RE.test(wanted) ? await readableGuide(c, wanted) : null;
+    if (parent) {
+      // Walk up from the parent. Two things end the walk: reaching this guide, which would close a
+      // loop that every reader of the chain then follows forever, and running out of hops. The cap
+      // is a rendering limit before it is a storage one — past it the chain is a history nobody
+      // opens — and it is also what keeps this walk bounded on data that already went wrong.
+      let at = parent.row.parent_id;
+      for (let hop = 0; at && hop < LINEAGE_MAX; hop++) {
+        if (at === id) return err(c, 400, "that would make a guide its own ancestor");
+        const up = await c.env.DB.prepare("SELECT parent_id FROM guide WHERE id = ?")
+          .bind(at)
+          .first<{ parent_id: string }>();
+        at = up?.parent_id || "";
+      }
+      if (at) return err(c, 400, `a chain of guides stops at ${LINEAGE_MAX}`);
+      parentId = parent.row.id;
+    }
+  }
+
   const existing = await c.env.DB.prepare(
     "SELECT id, account_id, share_key, created, team_id, to_account_id, to_group_id FROM guide WHERE id = ?",
   )
@@ -1870,12 +1918,13 @@ app.put("/v1/guides/:id", async (c) => {
   const created = String(meta.created || existing?.created || t);
 
   await c.env.DB.prepare(
-    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind, parent_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status, source_context=excluded.source_context,
        tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated,
        team_id=excluded.team_id, to_account_id=excluded.to_account_id, to_group_id=excluded.to_group_id,
-       report_id=excluded.report_id, area=excluded.area, severity=excluded.severity, kind=excluded.kind`,
+       report_id=excluded.report_id, area=excluded.area, severity=excluded.severity, kind=excluded.kind,
+       parent_id=excluded.parent_id`,
   )
     .bind(
       id,
@@ -1896,6 +1945,7 @@ app.put("/v1/guides/:id", async (c) => {
       slug(meta.area),
       slug(meta.severity, 8),
       slug(meta.kind, 16) === "bug" ? "bug" : "",
+      parentId,
     )
     .run();
 

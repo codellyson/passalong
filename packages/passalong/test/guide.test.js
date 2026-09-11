@@ -213,3 +213,42 @@ test("a group address survives being written to frontmatter and read back", () =
   assert.match(doc, /^to: "#frontend"$/m);
   assert.equal(parse(doc).meta.to, "#frontend");
 });
+
+test("a parent survives the round trip and sits with the provenance fields", () => {
+  const doc = serialize({
+    meta: {
+      id: "k3mq2xa7",
+      title: "One",
+      source_context: "passalong@master",
+      parent: "zx9y8w42",
+      status: "published",
+      tags: [],
+    },
+    body: "## Problem\nx\n\n## Steps\ny",
+  });
+  assert.match(doc, /^parent: zx9y8w42$/m);
+  assert.equal(parse(doc).meta.parent, "zx9y8w42");
+  // Lineage is where a guide came from, so it is written next to the other answer to that —
+  // not down with `report`, which is the set a bug was filed into and a different question.
+  assert.ok(doc.indexOf("source_context") < doc.indexOf("parent"));
+  assert.ok(doc.indexOf("parent") < doc.indexOf("status"));
+});
+
+test("a parent is optional, and a malformed one is caught before publish", () => {
+  const guide = {
+    meta: { id: "k3mq2xa7", title: "One", tags: [] },
+    body: "## Problem\nx\n\n## Steps\ny",
+  };
+  assert.deepEqual(validate(guide), [], "no parent at all is the ordinary case");
+  // `parent:` was not a reserved field name until lineage existed, so a guide written before it
+  // may carry one meaning something else. Refusing the value would make that document
+  // unpublishable by its own author; the server drops a parent it cannot resolve instead.
+  assert.deepEqual(
+    validate({ ...guide, meta: { ...guide.meta, parent: "some-upstream-thing" } }),
+    [],
+    "a guide shared before lineage existed still re-shares",
+  );
+  assert.deepEqual(validate({ ...guide, meta: { ...guide.meta, parent: "k3mq2xa7" } }), [
+    "a guide cannot follow itself",
+  ]);
+});
