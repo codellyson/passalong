@@ -103,6 +103,8 @@ Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`wor
 - **Team (paid, per seat):** shared workspace, team MCP endpoint, handoff/notification flow, unlimited synced guides.
 - **Target buyer:** the eng lead or senior dev tired of re-explaining. Land via one enthusiastic dev on the free tier, expand to team.
 
+Decided 2026-09-11: **the free tier closes to new accounts, and every account that already existed keeps it.** Migration 0016 marks them; `FREE_SIGNUP` is the switch and it stays open until Solo has a purchase path, since closing it first would leave a new account able to create itself and do nothing else. What stays free for everybody is the local store — the CLI writes and reads guides with no account and no ceiling, which is §10 and is not a concession.
+
 Pricing note: this is deliberately a team-monetized product. The solo tier is the distribution engine, not the revenue.
 
 Decided 2026-09-11, building it. **A seat lifts whoever sits in it.** A free member of a paid team publishes without a ceiling, and has never paid for anything — the team is what is bought, so the team is what is lifted. Seats are enforced where somebody joins rather than at checkout, because a count taken when a seat is bought drifts the first time a member leaves.

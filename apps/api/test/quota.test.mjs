@@ -8,8 +8,8 @@ import {
   isFull,
   limitFor,
   PLANS,
+  SYNC_PLANS,
   seatsFull,
-  UNLIMITED,
 } from "../src/quota.ts";
 
 test("an account's own limit wins over the deployment's", () => {
@@ -30,12 +30,6 @@ test("a missing or unreadable env default still leaves a working ceiling", () =>
   assert.equal(limitFor(0, "-5"), 25, "and neither must a nonsense one");
 });
 
-test("full is at the limit, not past it", () => {
-  assert.equal(isFull(24, 25), false);
-  assert.equal(isFull(25, 25), true, "the 25th guide fills it; the 26th is what gets refused");
-  assert.equal(isFull(31, 25), true);
-});
-
 test("only the statuses that occupy room are counted", () => {
   assert.deepEqual([...COUNTED], ["published", "promoted"]);
   assert.ok(!COUNTED.includes("consumed"), "archiving is what makes room, so it cannot count");
@@ -44,23 +38,44 @@ test("only the statuses that occupy room are counted", () => {
 
 test("a seat lifts whoever is sitting in it, paid for or not", () => {
   // §11 sells the team, so a free member of a paid team publishes without a ceiling. One paid team
-  // is enough; being in five changes nothing.
-  assert.equal(ceilingFor(1, 0, "25"), UNLIMITED);
-  assert.equal(ceilingFor(3, 0, "25"), UNLIMITED);
-  assert.equal(ceilingFor(1, 200, "25"), UNLIMITED, "an override cannot lower it either");
+  // is enough; being in five changes nothing, and an override cannot lower it.
+  assert.equal(ceilingFor(1, 0, "25").plan, "unlimited");
+  assert.equal(ceilingFor(3, 0, "25").plan, "unlimited");
+  assert.equal(ceilingFor(1, 200, "25", 0, "0").plan, "unlimited");
 });
 
-test("a lapsed team lifts nobody, and the fall is back to their own ceiling", () => {
+test("an account that was already here keeps the ceiling it had", () => {
+  // The free tier closing is a decision about people who have not arrived yet. Doing it to accounts
+  // that have been syncing for months under a different promise is §10 with extra steps.
+  assert.deepEqual(ceilingFor(0, 0, "25", 1, "0"), { plan: "free", limit: 25 });
+  assert.equal(ceilingFor(0, 200, "25", 1, "0").limit, 200, "a personal override still applies");
+});
+
+test("a new account gets nothing once signup is closed, and the free ceiling until then", () => {
+  // The switch defaults open, because the Solo plan on the landing page has no purchase path yet:
+  // closing it first would leave a new account able to create itself and do nothing else.
+  assert.equal(ceilingFor(0, 0, "25", 0, "0").plan, "none");
+  assert.equal(ceilingFor(0, 0, "25", 0, "1").plan, "free");
+  assert.equal(ceilingFor(0, 0, "25", 0, undefined).plan, "free", "unset means still open");
+  assert.equal(ceilingFor(0, 0, "25").plan, "free", "and so does not passing it at all");
+});
+
+test("a lapsed team lifts nobody", () => {
   // The query counts only `plan = 'team'`, so a lapsed team arrives here as zero paid teams.
-  assert.equal(ceilingFor(0, 0, "25"), 25);
-  assert.equal(ceilingFor(0, 200, "25"), 200, "a personal override still applies");
+  assert.equal(ceilingFor(0, 0, "25", 1, "0").plan, "free");
 });
 
-test("unlimited is never full, at any number of guides", () => {
-  assert.equal(isFull(0, UNLIMITED), false);
-  assert.equal(isFull(10_000, UNLIMITED), false);
-  // And the ordinary ceiling still behaves exactly as it did.
-  assert.equal(isFull(25, 25), true);
+test("full is decided by the plan, never by the number alone", () => {
+  // The trap this shape exists to avoid: "no ceiling" and "may sync nothing" both carry a falsy
+  // limit, so anything testing truthiness tells the second account it is the first.
+  assert.equal(isFull(10_000, { plan: "unlimited", limit: 0 }), false);
+  assert.equal(isFull(0, { plan: "none", limit: 0 }), true, "no plan is full at zero guides");
+  assert.equal(isFull(24, { plan: "free", limit: 25 }), false);
+  assert.equal(isFull(25, { plan: "free", limit: 25 }), true);
+});
+
+test("a sync plan is one field with three values", () => {
+  assert.deepEqual([...SYNC_PLANS], ["unlimited", "free", "none"]);
 });
 
 test("seats only limit a paid team", () => {

@@ -120,7 +120,7 @@ import {
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
-import { acceptsNewWork, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
+import { acceptsNewWork, type Ceiling, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
 import { SHOT_TYPES, shotKey } from "./shots.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
@@ -133,6 +133,8 @@ type Env = MailEnv &
         every other route exactly as before. */
     SHOTS?: R2Bucket;
     ACCOUNT_LIMIT?: RateLimiter;
+    /** "0" closes the free ceiling to new accounts. Unset means it is still open — see quota.ts. */
+    FREE_SIGNUP?: string;
     /** Billing. Optional, like every other integration here: without them a deployment runs
         exactly as before and every webhook is refused rather than trusted. */
     STRIPE_WEBHOOK_SECRET?: string;
@@ -867,6 +869,9 @@ app.get("/v1/me", async (c) => {
     // from a total would have told people to delete things that were already out of the way.
     guides: room.used,
     limit: room.limit,
+    // The name, because the number alone cannot say the difference between "no ceiling" and "may
+    // sync nothing" — both of which would be a falsy `limit` to anything reading this.
+    sync: room.plan,
     unread: await unreadCount(c.env, account),
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.
@@ -881,7 +886,7 @@ app.get("/v1/me", async (c) => {
  * refuses the share. They were separate queries counting different things, so the interface
  * warned at a number the server did not enforce.
  */
-async function quota(c: Ctx, account: string): Promise<{ used: number; limit: number }> {
+async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceiling> {
   const marks = COUNTED.map(() => "?").join(", ");
   // `paid` is the whole of the plan's effect on an individual: being in one team that is currently
   // paying removes this account's ceiling. Asked here rather than stored on the account, so the
@@ -889,14 +894,15 @@ async function quota(c: Ctx, account: string): Promise<{ used: number; limit: nu
   const row = await c.env.DB.prepare(
     `SELECT (SELECT COUNT(*) FROM guide WHERE account_id = ? AND status IN (${marks})) AS used,
             (SELECT sync_limit FROM account WHERE id = ?) AS own,
+            (SELECT grandfathered FROM account WHERE id = ?) AS old,
             (SELECT COUNT(*) FROM membership m JOIN team t ON t.id = m.team_id
               WHERE m.account_id = ? AND t.plan = 'team') AS paid`,
   )
-    .bind(account, ...COUNTED, account, account)
-    .first<{ used: number; own: number; paid: number }>();
+    .bind(account, ...COUNTED, account, account, account)
+    .first<{ used: number; own: number; old: number; paid: number }>();
   return {
     used: row?.used ?? 0,
-    limit: ceilingFor(row?.paid, row?.own, c.env.FREE_SYNC_LIMIT),
+    ...ceilingFor(row?.paid, row?.own, c.env.FREE_SYNC_LIMIT, row?.old, c.env.FREE_SIGNUP),
   };
 }
 
@@ -2146,12 +2152,18 @@ app.put("/v1/guides/:id", async (c) => {
 
   if (!existing) {
     const room = await quota(c, account);
-    if (isFull(room.used, room.limit)) {
+    if (isFull(room.used, room)) {
+      // Two refusals, because they are fixed in completely different places. Being over a ceiling
+      // is solved by archiving; having no plan at all is solved by buying one, and telling somebody
+      // to "archive some" when they have nothing synced would be nonsense.
       return err(
         c,
         402,
-        `free tier keeps ${room.limit} active synced guides; archive some in the hub (or ` +
-          "`passalong done <id>`) to make room, or remove them",
+        room.plan === "none"
+          ? "syncing guides needs a plan — subscribe at /hub/settings. Everything local still " +
+              "works: `passalong share` writes to this machine with or without one."
+          : `your plan keeps ${room.limit} active synced guides; archive some in the hub (or ` +
+              "`passalong done <id>`) to make room, or remove them",
       );
     }
   }

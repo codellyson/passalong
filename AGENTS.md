@@ -198,6 +198,23 @@ public one, for agents *using* Passalong rather than changing it.
   count taken when a seat is bought drifts the first time a member leaves, and stays wrong
   invisibly. An existing member re-opening their invite link is never refused, since they already
   occupy the seat the check protects.
+- **What an account may sync is a name, not a number, and existing accounts keep what they had.**
+  `Ceiling` is `{ plan, limit }` with three plans — `unlimited` (a seat on a paid team), `free` (a
+  ceiling, and `limit` is the only case where that number means anything), `none` (no plan, nothing
+  syncs). It was one integer where `0` meant "no ceiling", which worked for two answers and cannot
+  survive a third: removing the free tier adds "may sync nothing", whose obvious encoding is also
+  zero, and **every consumer tested `me.limit` for truthiness** — so both zeroes read as unlimited
+  and the account that may sync nothing would be told it may sync everything. The hub, the CLI and
+  `isFull()` all switch on the name now. `account.grandfathered` (migration 0016) is set on every
+  row that existed when it ran: withdrawing the free tier is a decision about people who have not
+  arrived yet, and applying it to accounts that have been syncing for months under a different
+  promise is §10 with extra steps. A column rather than a created-before date, because a magic
+  timestamp is wrong everywhere at once the day the cutover moves. **`FREE_SIGNUP` defaults to
+  open** and is the cutover switch: the Solo plan on the landing page has no purchase path yet, so
+  closing it first would leave a new account able to create itself and nothing else. The publish
+  refusal is two messages, because the two states are fixed in different places — over a ceiling is
+  solved by archiving, no plan is solved by buying one, and "archive some" to somebody with nothing
+  synced is nonsense.
 - **The free tier is counted in one place.** `apps/api/src/quota.ts` holds `COUNTED` (the statuses
   that occupy room), `limitFor()` (per-account `sync_limit` beats `FREE_SYNC_LIMIT`, zero means
   unset) and `isFull()`; `quota()` in index.ts is the only query, and both `/v1/me` and the publish

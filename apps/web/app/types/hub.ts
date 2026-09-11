@@ -17,7 +17,10 @@ export interface Me {
   /** False for an account minted by `passalong login` or an invite: a token, and no way to sign in. */
   has_password: boolean;
   guides: number;
+  /** Only meaningful when `sync` is "free". See apps/api/src/quota.ts. */
   limit: number;
+  /** "unlimited" | "free" | "none" — a falsy `limit` cannot tell the first from the last. */
+  sync: string;
   teams: Team[];
 }
 

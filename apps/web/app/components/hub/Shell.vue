@@ -72,14 +72,21 @@ const waiting = computed(() => data.value.board?.waiting.length ?? 0);
  */
 const lapsed = computed(() => (data.value.me?.teams ?? []).filter((t) => t.plan === "lapsed"));
 
-/** Warn before the limit bites, not after: the share that fails happens in a terminal. */
+/**
+ * Warn before the limit bites, not after: the share that fails happens in a terminal.
+ *
+ * Keyed on the plan name rather than on the number. A falsy `limit` used to mean "no ceiling", and
+ * now an account with no plan also has no number — so truthiness alone would tell somebody who may
+ * sync nothing that they may sync everything.
+ */
+const noPlan = computed(() => data.value.me?.sync === "none");
 const full = computed(() => {
   const me = data.value.me;
-  return Boolean(me && me.limit && me.guides >= me.limit);
+  return Boolean(me && me.sync === "free" && me.guides >= me.limit);
 });
 const nearLimit = computed(() => {
   const me = data.value.me;
-  return Boolean(me && me.limit && me.guides >= me.limit * 0.8);
+  return Boolean(me && me.sync === "free" && me.guides >= me.limit * 0.8);
 });
 
 // Counting is the whole point of it: the pages below say which guides, this says how much there is
@@ -205,7 +212,19 @@ const tabs = computed(() => [
         team is unaffected.
       </p>
 
-      <!-- The free tier stops `passalong share` server-side. Saying so here is the only warning
+      <!-- No plan at all is a different sentence from being near a ceiling: there is no number to
+           be under and nothing to archive, so the only useful thing to say is where to fix it. -->
+      <p
+        v-if="noPlan"
+        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
+      >
+        <b class="text-fg">Syncing needs a plan.</b>
+        Nothing is synced from this account yet, and <code>passalong share</code> will be refused
+        until there is one — everything local still works.
+        <NuxtLink to="/hub/settings">See plans</NuxtLink>
+      </p>
+
+      <!-- The ceiling stops `passalong share` server-side. Saying so here is the only warning
            anyone gets before the next share fails from a terminal. -->
       <p
         v-if="nearLimit"
