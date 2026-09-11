@@ -63,14 +63,30 @@ function onSignedIn() {
 
 const waiting = computed(() => data.value.board?.waiting.length ?? 0);
 
-/** Warn before the limit bites, not after: the share that fails happens in a terminal. */
+/**
+ * Teams whose subscription lapsed, so the hub says it before a terminal does.
+ *
+ * Same reasoning as the quota warning below: the refusal happens at `passalong share`, on a machine
+ * where nothing can explain itself beyond one line of stderr. This is the only place the state is
+ * visible before it bites.
+ */
+const lapsed = computed(() => (data.value.me?.teams ?? []).filter((t) => t.plan === "lapsed"));
+
+/**
+ * Warn before the limit bites, not after: the share that fails happens in a terminal.
+ *
+ * Keyed on the plan name rather than on the number. A falsy `limit` used to mean "no ceiling", and
+ * now an account with no plan also has no number — so truthiness alone would tell somebody who may
+ * sync nothing that they may sync everything.
+ */
+const noPlan = computed(() => data.value.me?.sync === "none");
 const full = computed(() => {
   const me = data.value.me;
-  return Boolean(me && me.limit && me.guides >= me.limit);
+  return Boolean(me && me.sync === "free" && me.guides >= me.limit);
 });
 const nearLimit = computed(() => {
   const me = data.value.me;
-  return Boolean(me && me.limit && me.guides >= me.limit * 0.8);
+  return Boolean(me && me.sync === "free" && me.guides >= me.limit * 0.8);
 });
 
 // Counting is the whole point of it: the pages below say which guides, this says how much there is
@@ -182,7 +198,33 @@ const tabs = computed(() => [
         <button class="btn sm" @click="error = null">Dismiss</button>
       </div>
 
-      <!-- The free tier stops `passalong share` server-side. Saying so here is the only warning
+      <!-- Read-only, and specific about which half: everything in the team can still be read and
+           answered, and only new work is refused. A banner that said "read-only" and stopped would
+           have people assuming their guides were gone. -->
+      <p
+        v-for="t in lapsed"
+        :key="t.slug"
+        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
+      >
+        <b class="text-fg">{{ t.name }} is read-only.</b>
+        Its subscription lapsed. Everything already in it can still be read, pulled and answered —
+        what stops is handing over anything new, and anyone else joining. Sharing a guide without a
+        team is unaffected.
+      </p>
+
+      <!-- No plan at all is a different sentence from being near a ceiling: there is no number to
+           be under and nothing to archive, so the only useful thing to say is where to fix it. -->
+      <p
+        v-if="noPlan"
+        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
+      >
+        <b class="text-fg">Syncing needs a plan.</b>
+        <code>passalong share</code> will be refused until there is one. Anything already synced
+        stays exactly where it is, and everything local still works.
+        <NuxtLink to="/hub/settings">See plans</NuxtLink>
+      </p>
+
+      <!-- The ceiling stops `passalong share` server-side. Saying so here is the only warning
            anyone gets before the next share fails from a terminal. -->
       <p
         v-if="nearLimit"

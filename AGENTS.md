@@ -146,6 +146,92 @@ public one, for agents *using* Passalong rather than changing it.
   edge. Severity is named (`Blocker`, `Minor`) rather than coded (`s1`, `s3`) wherever it is shown
   to a reader, in the list and in the report editor both, and `severityTone()`/`severityLabel()`
   in `app/utils/report.ts` are the only copies of that lookup.
+- **The checkout is hosted, the mode is read off the key, and the webhook is what writes a plan.**
+  Both providers hand back a page of their own, because the alternative is this product handling
+  card details — which is also why there is no card form to build and no seat-change screen beyond a
+  number. `modeOf()` derives test-versus-live from the key itself rather than a setting beside it:
+  a flag somebody has to remember to flip is how a product spends three weeks taking payments that
+  were never real, and the hub badges every plan block when any configured key is a test one.
+  `POST /v1/teams/:slug/subscribe` and `PATCH /v1/teams/:slug/seats` are **owner only** and refuse a
+  seat count below the team's current membership — the seat count is what admits the next member, so
+  setting it under the current size is a refusal aimed at whoever joins next rather than at the
+  person doing it. The seats route answers with the **confirmed** count and the pending one, never
+  the asked-for figure: the subscription is the single source for what is paid for, so the hub waits
+  for the webhook rather than showing a number nothing has agreed to. Paystack cannot change
+  quantity on a running subscription at all and says so out loud, which is better than appearing to
+  succeed and quietly billing the old number. Every provider key is an optional binding: without
+  them the tier is unavailable and the hub says so, rather than offering a button that cannot work.
+- **A billing webhook is the only write in the product that no person authenticates**, so the
+  signature over the **raw** body is the entire credential. `billing.ts` reads it with
+  `c.req.text()` and verifies before anything parses: parse first and you verify a different set of
+  bytes than the one that was signed, which is the classic way this is got wrong. The module
+  **imports no sibling `.ts` on purpose** — it has to be unit-testable and a value import of a
+  sibling is what Node's type stripping cannot resolve, so `eq()` is a local copy of
+  `timingSafeEqual` rather than an import (the same reason `chatCard` lives inside notify.ts). Both
+  providers are here because the first paying teams and the Show HN ones do not reach for the same
+  processor: Stripe signs `${t}.${body}` with HMAC-SHA256 and **the timestamp is checked**, because
+  without a tolerance a captured "subscription is active" replays forever; Paystack signs the body
+  with HMAC-SHA512 and has no timestamp at all, which is survivable only because every event sets a
+  plan to a value rather than moving it by a step. Three rules in the mapping, each of which was a
+  way to get this wrong: `past_due` is **not** lapsed, since downgrading on the first failed
+  attempt makes an overnight bank decline look like a cancellation; an event that carries no seat
+  count leaves seats **untouched**, since writing zero would unseat the whole team on a payment
+  retry; and an event nobody mapped answers **200**, because an endpoint that errors on what it
+  does not care about is one the provider retries all day and then disables, taking the events that
+  do matter with it. The webhook path is public by **prefix**, not by the two exact routes: a
+  webhook aimed at the wrong URL is a real thing that happens during setup, and the middleware
+  answering it with "not signed in — sign in at /hub" sends whoever is reading the provider's
+  delivery log to a screen with nothing to do with the problem.
+- **A plan belongs to a team, and an account's ceiling is derived from it — never copied onto the
+  account.** §11 sells the team, so the decision that follows is that a *free* member of a paid team
+  publishes without a ceiling: the seat lifts whoever sits in it, paid for or not. `quota()` asks
+  "is this account in a team on `plan = 'team'`?" on every read and `ceilingFor()` answers. Writing
+  the answer onto `account.sync_limit` instead would mean rewriting a row per member on every plan
+  change, membership change and failed payment — and the row that gets missed is an account still
+  unlimited after the team stopped paying. **`UNLIMITED` is `0`, not `Infinity`**: the number crosses
+  a wire, `JSON.stringify(Infinity)` is `null`, and the hub already read a falsy limit as no limit.
+  `plan` is **one column with three values** (`free`, `team`, `lapsed`) rather than a plan beside a
+  status, because `free` + `lapsed` is not a state a team can be in and two columns can store it.
+  **Lapsed is read-only, and read-only is narrower than it sounds**: what stops is work flowing *in*
+  — a guide addressed to the team, a new member joining. What must never stop is work already in
+  flight closing, so a verdict and an ack still go through: they belong to the reader, and the reader
+  is not the person who missed the payment. Reading, pulling and share links are untouched, because
+  §10 promises no lock-in and withholding a team's own work to collect a debt is the thing that
+  principle forbids. Refusals are **402, not 403** — nobody lacks permission, and the two are fixed
+  in completely different places. **Seats are counted where somebody joins**, not at checkout: a
+  count taken when a seat is bought drifts the first time a member leaves, and stays wrong
+  invisibly. An existing member re-opening their invite link is never refused, since they already
+  occupy the seat the check protects.
+- **The same capability is sold twice, and the column says which was bought.** A seat on a paid
+  team and a Solo subscription both remove an account's ceiling; `account.plan` (migration 0017,
+  `free`/`solo`/`lapsed`) is shaped exactly like `team.plan` and holds the personal one. `solo`
+  rather than reusing `team` as the value, because a column that cannot say which was bought cannot
+  answer "why does this account have no ceiling" without going and looking at four other tables.
+  **Lapsing falls back rather than down**: a lapsed plan lands on whatever that account would have
+  had without one, which for somebody who predates the cutover is their grandfathered ceiling and
+  never zero by surprise. `POST /v1/subscribe` is the personal checkout and takes no seat count —
+  the plan is one person by definition, and a quantity field would be a way to ask a question with
+  one answer. The webhook resolves an account the same two ways it resolves a team, by
+  `subscription_id` and then by the metadata key, because a first subscription has an id nothing has
+  stored yet; checkout writes exactly one of `team` or `account` into that metadata, so the two
+  subjects can never both match.
+- **What an account may sync is a name, not a number, and existing accounts keep what they had.**
+  `Ceiling` is `{ plan, limit }` with three plans — `unlimited` (a seat on a paid team), `free` (a
+  ceiling, and `limit` is the only case where that number means anything), `none` (no plan, nothing
+  syncs). It was one integer where `0` meant "no ceiling", which worked for two answers and cannot
+  survive a third: removing the free tier adds "may sync nothing", whose obvious encoding is also
+  zero, and **every consumer tested `me.limit` for truthiness** — so both zeroes read as unlimited
+  and the account that may sync nothing would be told it may sync everything. The hub, the CLI and
+  `isFull()` all switch on the name now. `account.grandfathered` (migration 0016) is set on every
+  row that existed when it ran: withdrawing the free tier is a decision about people who have not
+  arrived yet, and applying it to accounts that have been syncing for months under a different
+  promise is §10 with extra steps. A column rather than a created-before date, because a magic
+  timestamp is wrong everywhere at once the day the cutover moves. **`FREE_SIGNUP` defaults to
+  open in code and is `"0"` in production** — it is the cutover switch: it defaults open so a deployment that forgets the var keeps the old
+  behaviour rather than locking people out by omission. The publish
+  refusal is two messages, because the two states are fixed in different places — over a ceiling is
+  solved by archiving, no plan is solved by buying one, and "archive some" to somebody with nothing
+  synced is nonsense.
 - **The free tier is counted in one place.** `apps/api/src/quota.ts` holds `COUNTED` (the statuses
   that occupy room), `limitFor()` (per-account `sync_limit` beats `FREE_SYNC_LIMIT`, zero means
   unset) and `isFull()`; `quota()` in index.ts is the only query, and both `/v1/me` and the publish
@@ -240,10 +326,22 @@ public one, for agents *using* Passalong rather than changing it.
   membership or fails on `team.created_by`, which has no cascade. `PRAGMA defer_foreign_keys` does
   not save it — D1 rolls the whole migration back. Both were tested. Inserts write a `retired:`
   marker that can never equal a SHA-256; nothing reads the column.
-- **Status lifecycle**: draft → published. `consumed` and `promoted` are legacy — accepted on
-  guides that already carry them, never set: the verdict says whether work landed, and the pull
-  count says how travelled it is. The server stores status both in
-  the `guide.status` column and inside the markdown (`setField`) so a pulled `.md` is truthful.
+- **Status lifecycle**: draft → published, with `consumed` as the author's shelf. **What is
+  accepted and what may be set are two different lists**, and `guide.ts` holds both: `STATUSES` is
+  what parses, `SETTABLE` is what a write may choose. `promoted` is in the first and not the second
+  — a guide carrying it keeps it and still re-shares, and nothing can acquire it. Shrinking
+  `STATUSES` instead would have been the obvious move and the wrong one: the value lives in
+  frontmatter inside markdown in other people's repositories, and `validate()` refuses a status it
+  does not know, so a guide shared a month ago would stop re-sharing today. Both write paths
+  enforce it and they enforce it differently, because they are asked different things: `PATCH
+  /v1/guides/:id/status` refuses `promoted` **by name**, since an installed CLI still calls it and
+  "must be one of …" reads as a typo rather than as a retirement; `PUT /v1/guides/:id` silently
+  keeps `promoted` when the stored row already had it and downgrades to `published` when it did
+  not, checked against the row rather than the markdown somebody just sent. That second check is
+  also what keeps the free tier honest — `quota.ts` counts `published` and `promoted` as the
+  statuses occupying room, so a settable `promoted` was an unlimited free tier for anyone who
+  noticed. The server stores status both in the `guide.status` column and inside the markdown
+  (`setField`) so a pulled `.md` is truthful.
 - **Teams (M2).** `team`/`membership`/`invite`/`pull` tables (migration 0002). A guide's
   `team_id` makes it readable and consumable by members; `to_account_id` addresses one member.
   Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),
@@ -300,6 +398,20 @@ public one, for agents *using* Passalong rather than changing it.
   `GROUP BY guide_id` on purpose: `recordPull` writes a row per fetch of `/v1/guides/:id` and the
   CLI resolves an id by fetching, so `take` then `pull` leaves two rows seconds apart. The board
   wants both; a log rendering both says you pulled the same thing twice in a minute.
+- **Product-wide numbers come from `scripts/metrics.mjs`, never from a route and never from
+  Aptabase.** PRD §14's figures are about every account at once, and the API has no reader above an
+  account: an endpoint for them would have to invent an admin credential — a new way into everyone's
+  data, added so one person can read four numbers. Aptabase cannot answer them either, and that is
+  by design rather than by omission: two of the four need sequences joined on who did what, while
+  `analytics.ts` sends categorical props and never an id, because a share key in a page URL must not
+  reach a third party. So the joins happen against D1, on the operator's machine, and nothing
+  leaves it. Note which database: `--dev` reads the one Nitro manages under `.wrangler/state`, found
+  by scanning rather than hardcoded because the file is named for the `database_id`. Two of the four
+  metrics also cannot be computed as §14 originally worded them, and the script **prints the caveat
+  beside the number every run** — activation undercounts because `passalong pull` serves a local
+  copy without calling the API unless the guide has a team, and the quality proxy asked for
+  `consumed`, which changed meaning. A report that quietly substitutes a near-miss is worse than
+  one that says so.
 - **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
   to whoever should hear it: `handoff`, `shared`, `pulled`, `consumed`, `joined`. Rows first,
   delivery second — mail is a channel over the row, so the feed works with no mailer configured.
@@ -327,6 +439,7 @@ pnpm -C apps/api db:migrate             # local D1 (re-run if wrangler.jsonc's d
 pnpm dev                                # the whole thing on :3000 — pages and API
 PASSALONG_API=http://localhost:3000 PASSALONG_HOME=/tmp/rh packages/passalong/bin/passalong login
 pnpm -C apps/api db:migrate:remote && pnpm -C apps/web run deploy
+pnpm metrics --dev                      # PRD §14, read straight from D1 (--remote for production)
 ```
 
 `pnpm dev` is `nuxt dev`, and it emulates the bindings — so the mounted API answers on the same

@@ -8,6 +8,7 @@
       "!**/.wrangler",
       "!**/.nuxt",
       "!**/.output",
+      "!**/.claude",
       "!apps/api/public/vendor"
     ]
   },

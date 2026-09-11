@@ -10,3 +10,6 @@ dist
 .data
 .nitro
 .cache
+# Agent scratch: launch config, and worktrees that are whole checkouts of this repo.
+# A worktree here carries its own biome.json, which biome reads as a second root config.
+.claude

@@ -31,7 +31,12 @@ const GUIDE = {
       description:
         "transfer: follow its Steps. bug: fix what Problem describes — Reproduce shows the defect and must not be run as a remedy.",
     },
-    status: { type: "string", enum: ["draft", "published", "consumed", "promoted"] },
+    status: {
+      type: "string",
+      enum: ["draft", "published", "consumed", "promoted"],
+      description:
+        "`promoted` is read-only: guides that carry it keep it, and no write can set it.",
+    },
     url: {
       type: "string",
       description: "The share link. Append `.md` for the markdown, no account needed.",

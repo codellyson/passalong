@@ -30,7 +30,7 @@
 //   PUT    /v1/guides/:id/verdict      { ok, note? } → does it actually work?
 //   DELETE /v1/guides/:id              owner only
 //   GET    /g/:id/:key.md              a guide's raw markdown (share link); records a pull
-//   GET    /g/:id/:key/og.png          the unfurl card for that link
+//   GET    /og.png                     the site's own unfurl card\n//   GET    /g/:id/:key/og.png          the unfurl card for that link
 //   GET    /health                     what CI waits on after a deploy
 //
 // **This app is not deployed on its own.** apps/web mounts it — see
@@ -60,6 +60,17 @@ import {
   verifyPassword,
 } from "./auth.js";
 import {
+  BillingError,
+  isProvider,
+  modeOf,
+  type Provider,
+  parseEvent,
+  setSeats,
+  startCheckout,
+  verifyPaystack,
+  verifyStripe,
+} from "./billing.js";
+import {
   type MailEnv,
   sendConsumed,
   sendHandoff,
@@ -72,6 +83,7 @@ import {
   AREAS,
   type Meta,
   parseMeta,
+  SETTABLE,
   SEVERITIES,
   STATUSES,
   setField,
@@ -106,9 +118,9 @@ import {
   timingSafeEqual,
 } from "./oauth.js";
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
-import { renderOgImage } from "./og.js";
+import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
-import { COUNTED, isFull, limitFor } from "./quota.js";
+import { acceptsNewWork, type Ceiling, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
 import { SHOT_TYPES, shotKey } from "./shots.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
@@ -121,6 +133,15 @@ type Env = MailEnv &
         every other route exactly as before. */
     SHOTS?: R2Bucket;
     ACCOUNT_LIMIT?: RateLimiter;
+    /** "0" closes the free ceiling to new accounts. Unset means it is still open — see quota.ts. */
+    FREE_SIGNUP?: string;
+    /** Billing. Optional, like every other integration here: without them a deployment runs
+        exactly as before and every webhook is refused rather than trusted. */
+    STRIPE_WEBHOOK_SECRET?: string;
+    STRIPE_SECRET?: string;
+    STRIPE_PRICE?: string;
+    PAYSTACK_SECRET?: string;
+    PAYSTACK_PLAN?: string;
     FREE_SYNC_LIMIT: string;
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
@@ -180,6 +201,11 @@ interface TeamRow {
   name: string;
   created_by: string;
   created: string;
+  /** "free", "team" or "lapsed" — see migrations/0015_plans.sql and quota.ts. */
+  plan: string;
+  seats: number;
+  subscription_id: string;
+  plan_since: string;
 }
 interface GuideRow {
   id: string;
@@ -465,6 +491,18 @@ const publicShot = (method: string, path: string) =>
   method === "GET" && /^\/v1\/shots\/[a-z0-9]+$/.test(path);
 
 /**
+ * Every billing webhook path, including the ones naming a provider we do not have.
+ *
+ * A prefix rather than the two exact paths in PUBLIC, because a webhook pointed at the wrong URL is
+ * a real thing that happens while somebody is setting this up, and the middleware answering it with
+ * "not signed in — sign in at /hub" sends whoever is reading the provider's delivery log to a
+ * screen that has nothing to do with the problem. Letting it through costs nothing: the route
+ * refuses an unknown provider, and a known one still has to carry a valid signature.
+ */
+const publicWebhook = (method: string, path: string) =>
+  method === "POST" && path.startsWith("/v1/billing/webhook/");
+
+/**
  * How the app tells its own dispatch apart from a request off the wire.
  *
  * The MCP tools work by calling this app's routes — one implementation of every rule, and it is
@@ -518,6 +556,7 @@ app.use("/v1/*", async (c, next) => {
   }
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
   if (publicShot(c.req.method, c.req.path)) return next();
+  if (publicWebhook(c.req.method, c.req.path)) return next();
 
   const auth = c.req.header("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
@@ -808,12 +847,20 @@ app.delete("/v1/tokens/:id", async (c) => {
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, password_hash FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, password_hash, plan FROM account WHERE id = ?",
   )
     .bind(account)
-    .first<AccountRow & { password_hash: string }>();
+    .first<AccountRow & { password_hash: string; plan: string }>();
   const room = await quota(c, account);
-  const teams = (await myTeams(c)).map((t) => ({ slug: t.slug, name: t.name, role: t.role }));
+  // The plan rides along with the team it belongs to. Without it the hub would have to fetch every
+  // team to find out why a limit vanished, and the banner that explains the ceiling is drawn before
+  // any team has been opened.
+  const teams = (await myTeams(c)).map((t) => ({
+    slug: t.slug,
+    name: t.name,
+    role: t.role,
+    plan: t.plan,
+  }));
   return c.json({
     account,
     handle: me?.handle || "",
@@ -824,6 +871,12 @@ app.get("/v1/me", async (c) => {
     // from a total would have told people to delete things that were already out of the way.
     guides: room.used,
     limit: room.limit,
+    // The name, because the number alone cannot say the difference between "no ceiling" and "may
+    // sync nothing" — both of which would be a falsy `limit` to anything reading this.
+    sync: room.plan,
+    // This account's own subscription, which is a different fact from what it may sync: a member of
+    // a paid team syncs without a ceiling and is still on `free` themselves.
+    plan: me?.plan || "free",
     unread: await unreadCount(c.env, account),
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.
@@ -838,17 +891,31 @@ app.get("/v1/me", async (c) => {
  * refuses the share. They were separate queries counting different things, so the interface
  * warned at a number the server did not enforce.
  */
-async function quota(c: Ctx, account: string): Promise<{ used: number; limit: number }> {
+async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceiling> {
   const marks = COUNTED.map(() => "?").join(", ");
+  // `paid` is the whole of the plan's effect on an individual: being in one team that is currently
+  // paying removes this account's ceiling. Asked here rather than stored on the account, so the
+  // answer cannot be stale — see ceilingFor().
   const row = await c.env.DB.prepare(
     `SELECT (SELECT COUNT(*) FROM guide WHERE account_id = ? AND status IN (${marks})) AS used,
-            (SELECT sync_limit FROM account WHERE id = ?) AS own`,
+            (SELECT sync_limit FROM account WHERE id = ?) AS own,
+            (SELECT grandfathered FROM account WHERE id = ?) AS old,
+            (SELECT plan FROM account WHERE id = ?) AS own_plan,
+            (SELECT COUNT(*) FROM membership m JOIN team t ON t.id = m.team_id
+              WHERE m.account_id = ? AND t.plan = 'team') AS paid`,
   )
-    .bind(account, ...COUNTED, account)
-    .first<{ used: number; own: number }>();
+    .bind(account, ...COUNTED, account, account, account, account)
+    .first<{ used: number; own: number; old: number; paid: number; own_plan: string }>();
   return {
     used: row?.used ?? 0,
-    limit: limitFor(row?.own, c.env.FREE_SYNC_LIMIT),
+    ...ceilingFor(
+      row?.paid,
+      row?.own,
+      c.env.FREE_SYNC_LIMIT,
+      row?.old,
+      c.env.FREE_SIGNUP,
+      row?.own_plan,
+    ),
   };
 }
 
@@ -955,6 +1022,12 @@ app.get("/v1/teams/:slug", async (c) => {
     members,
     guides: n?.n ?? 0,
     channels: chCount?.n ?? 0,
+    plan: team.plan,
+    // Zero seats on a free plan is not "no room" — seats are simply not what limits that team, so
+    // the client reads the plan first. Never the subscription id: it is the provider's handle on a
+    // paying customer and nothing in a browser needs it.
+    seats: team.seats,
+    members_count: members.length,
   });
 });
 
@@ -1220,6 +1293,30 @@ app.post("/v1/invites/:code/accept", async (c) => {
     .bind(inv.team_id, account)
     .first<{ role: string }>();
   if (!already) {
+    // Seats are counted where somebody joins, not where somebody pays. A count taken at checkout
+    // is a count that drifts the first time a member leaves, and the drift is invisible until it
+    // has been wrong for a month. An existing member re-opening their invite link is never
+    // refused: they already occupy the seat this is protecting.
+    const room = await c.env.DB.prepare(
+      "SELECT t.plan, t.seats, (SELECT COUNT(*) FROM membership WHERE team_id = t.id) AS members" +
+        " FROM team t WHERE t.id = ?",
+    )
+      .bind(inv.team_id)
+      .first<{ plan: string; seats: number; members: number }>();
+    if (room && !acceptsNewWork(room.plan))
+      return err(
+        c,
+        402,
+        `${inv.slug} is read-only: its subscription lapsed, so it is not taking new members. ` +
+          "Everything already in it can still be read.",
+      );
+    if (room && seatsFull(room.plan, room.seats, room.members))
+      return err(
+        c,
+        402,
+        `${inv.slug} has filled all ${room.seats} of its seats. Someone has to leave, or the team ` +
+          "needs another seat, before this invite can be accepted.",
+      );
     await c.env.DB.batch([
       c.env.DB.prepare(
         "INSERT INTO membership (team_id, account_id, role, joined) VALUES (?, ?, 'member', ?)",
@@ -1749,6 +1846,239 @@ app.get("/v1/log", async (c) => {
   return c.json({ log: rows.map(logSummary(origin(c), c.get("account"))) });
 });
 
+// ---- billing ----------------------------------------------------------------------------------
+
+// The provider telling us a subscription changed. It is the only write in the product that no
+// person authenticates: the signature over the raw body is the entire credential, which is why
+// `billing.ts` is unit-tested to the edges and why the body is read with `c.req.text()` here —
+// parsing first and verifying second is the classic way to verify a different set of bytes than
+// the one that was signed.
+app.post("/v1/billing/webhook/:provider", async (c) => {
+  const named = c.req.param("provider");
+  if (!isProvider(named)) return err(c, 404, "no such billing provider");
+  const provider: Provider = named;
+  const raw = await c.req.text();
+
+  let event: unknown;
+  try {
+    event =
+      provider === "stripe"
+        ? await verifyStripe(
+            raw,
+            c.req.header("stripe-signature") || "",
+            c.env.STRIPE_WEBHOOK_SECRET || "",
+          )
+        : await verifyPaystack(
+            raw,
+            c.req.header("x-paystack-signature") || "",
+            c.env.PAYSTACK_SECRET || "",
+          );
+  } catch (e) {
+    // The provider's own message, which is about our configuration and never about their payload,
+    // so there is nothing here that helps someone guess a secret.
+    return err(c, 400, e instanceof BillingError ? e.message : "could not read that webhook");
+  }
+
+  const change = parseEvent(provider, event);
+  // 200 for an event we do not act on. A webhook endpoint that errors on anything it has no opinion
+  // about is one the provider retries all day and then disables, taking the events that do matter
+  // with it.
+  if (!change) return c.json({ ok: true, applied: false });
+
+  // By subscription first, then by the team id the provider carried in metadata. The second is how
+  // a *first* subscription is ever matched: the id does not exist when we send someone to a checkout
+  // page, so until this event arrives there is nothing on the team to look it up by.
+  type TeamPlanRow = { id: string; slug: string; plan: string; seats: number };
+  // A Solo subscription belongs to a person, so it is looked up the same two ways and applied to
+  // `account` instead. Checked first only because it is the cheaper query; the two subjects are
+  // mutually exclusive, since the metadata carries exactly one of them.
+  const soloId =
+    change.account_id ||
+    (
+      await c.env.DB.prepare("SELECT id FROM account WHERE subscription_id = ?")
+        .bind(change.subscription_id)
+        .first<{ id: string }>()
+    )?.id ||
+    "";
+  if (soloId && !change.team_id) {
+    const plan = change.plan === "team" ? "solo" : change.plan;
+    const done = await c.env.DB.prepare(
+      "UPDATE account SET plan = ?, plan_since = ?, subscription_id = ? WHERE id = ?",
+    )
+      .bind(plan, now(), change.subscription_id, soloId)
+      .run();
+    if (done.meta.changes) {
+      count(c, "plan_changed", { provider, plan, subject: "account" });
+      return c.json({ ok: true, applied: true });
+    }
+  }
+
+  let team = await c.env.DB.prepare(
+    "SELECT id, slug, plan, seats FROM team WHERE subscription_id = ?",
+  )
+    .bind(change.subscription_id)
+    .first<TeamPlanRow>();
+  if (!team && change.team_id) {
+    team = await c.env.DB.prepare("SELECT id, slug, plan, seats FROM team WHERE id = ?")
+      .bind(change.team_id)
+      .first<TeamPlanRow>();
+  }
+  // Also 200, and deliberately: a subscription we have never heard of is the provider's business,
+  // not a failure of ours, and answering 4xx would have them retry something that can never work.
+  if (!team) return c.json({ ok: true, applied: false });
+
+  // Seats only move when the event carried a count. A payment failing says nothing about how many
+  // seats were bought, and writing zero there would silently unseat the whole team.
+  // The subscription id is written here and only here, which is what binds a team to the thing
+  // paying for it. Never cleared on a lapse: a lapsed team that renews is the same subscription,
+  // and forgetting it would orphan every event that follows.
+  await c.env.DB.prepare(
+    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, subscription_id = ? WHERE id = ?",
+  )
+    .bind(change.plan, change.seats ?? team.seats, now(), change.subscription_id, team.id)
+    .run();
+  count(c, "plan_changed", { provider, plan: change.plan, subject: "team" });
+  return c.json({ ok: true, applied: true });
+});
+
+// Buy Solo: a subscription that belongs to this account rather than to a team.
+//
+// The landing page has sold this since the pricing went up and nothing could buy it — every
+// subscription route was team-scoped and owner-only, so an individual who wanted to pay had to
+// invent a team of one. That is also why `FREE_SIGNUP` could not be closed: there was nowhere for a
+// new account to go.
+//
+// One seat, not a number: the plan is one person by definition, and a quantity field on it would be
+// a way to ask a question with only one answer.
+app.post("/v1/subscribe", async (c) => {
+  const account = c.get("account");
+  const { provider } = (await c.req.json().catch(() => ({}))) as { provider?: string };
+  if (!provider || !isProvider(provider)) return err(c, 400, "provider must be stripe or paystack");
+
+  const me = await c.env.DB.prepare("SELECT email, plan FROM account WHERE id = ?")
+    .bind(account)
+    .first<{ email: string; plan: string }>();
+  if (me?.plan === "solo") return err(c, 400, "this account is already on Solo");
+  if (!me?.email)
+    return err(c, 400, "add an email to your account first — the receipt has to go somewhere");
+
+  try {
+    const checkout = await startCheckout(provider, c.env, {
+      subject: { kind: "account", id: account },
+      seats: 1,
+      email: me.email,
+      returnTo: `${origin(c)}/hub/settings`,
+    });
+    count(c, "checkout_started", { provider, mode: checkout.mode, subject: "account" });
+    return c.json(checkout);
+  } catch (e) {
+    return err(
+      c,
+      502,
+      e instanceof BillingError ? e.message : "could not reach the payment provider",
+    );
+  }
+});
+
+// Start paying. Owner only, and it hands back a hosted page rather than taking a card: this product
+// does not touch card details, which is also why there is no form here to build.
+app.post("/v1/teams/:slug/subscribe", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only the team's owner can change its plan");
+  const { provider, seats } = (await c.req.json().catch(() => ({}))) as {
+    provider?: string;
+    seats?: number;
+  };
+  if (!provider || !isProvider(provider)) return err(c, 400, "provider must be stripe or paystack");
+  const wanted = Math.trunc(Number(seats)) || 0;
+  if (wanted < 1) return err(c, 400, "a subscription needs at least one seat");
+
+  const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
+    .bind(team.id)
+    .first<{ n: number }>();
+  // Buying fewer seats than the team already has would leave it instantly over its own limit, and
+  // the person who finds out is whoever tries to accept the next invite.
+  if (wanted < (members?.n ?? 0))
+    return err(
+      c,
+      400,
+      `${team.slug} already has ${members?.n} members — buy at least that many seats`,
+    );
+
+  const me = await c.env.DB.prepare("SELECT email FROM account WHERE id = ?")
+    .bind(c.get("account"))
+    .first<{ email: string }>();
+  if (!me?.email)
+    return err(c, 400, "add an email to your account first — the receipt has to go somewhere");
+
+  try {
+    const checkout = await startCheckout(provider, c.env, {
+      subject: { kind: "team", id: team.id },
+      seats: wanted,
+      email: me.email,
+      returnTo: `${origin(c)}/hub/settings`,
+    });
+    count(c, "checkout_started", { provider, mode: checkout.mode, subject: "team" });
+    return c.json(checkout);
+  } catch (e) {
+    return err(
+      c,
+      502,
+      e instanceof BillingError ? e.message : "could not reach the payment provider",
+    );
+  }
+});
+
+// Change how many seats are paid for. Owner only, and never below the number of people already in
+// the team — the seat count is what admits the next member, so setting it under the current size is
+// a refusal aimed at whoever joins next rather than at the person doing it.
+app.patch("/v1/teams/:slug/seats", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only the team's owner can change its seats");
+  if (team.plan !== "team") return err(c, 400, `${team.slug} is not on a paid plan`);
+  if (!team.subscription_id) return err(c, 400, "this team has no subscription to change");
+  const { seats } = (await c.req.json().catch(() => ({}))) as { seats?: number };
+  const wanted = Math.trunc(Number(seats)) || 0;
+  if (wanted < 1) return err(c, 400, "a subscription needs at least one seat");
+  const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
+    .bind(team.id)
+    .first<{ n: number }>();
+  if (wanted < (members?.n ?? 0))
+    return err(
+      c,
+      400,
+      `${team.slug} has ${members?.n} members — remove someone before dropping to ${wanted} seat${wanted === 1 ? "" : "s"}`,
+    );
+
+  // Stripe ids are `sub_...`; Paystack's are `SUB_...`. The subscription itself says which provider
+  // it belongs to, so nothing has to be stored twice and the two can never disagree.
+  const provider: Provider = team.subscription_id.startsWith("sub_") ? "stripe" : "paystack";
+  try {
+    await setSeats(provider, c.env, team.subscription_id, wanted);
+  } catch (e) {
+    return err(
+      c,
+      502,
+      e instanceof BillingError ? e.message : "could not reach the payment provider",
+    );
+  }
+  // The provider's webhook is what writes the number: one source for what is paid for, and it is
+  // the subscription. Answering with the asked-for figure would have the hub show a seat count
+  // nothing has confirmed yet.
+  return c.json({ ok: true, seats: team.seats, pending: wanted });
+});
+
+// What this deployment can take money with, and in which mode. No secrets, only their shape — and
+// the mode is read off the key, so it cannot disagree with the keys actually in use.
+app.get("/v1/billing", (c) =>
+  c.json({
+    stripe: modeOf(c.env.STRIPE_SECRET || ""),
+    paystack: modeOf(c.env.PAYSTACK_SECRET || ""),
+  }),
+);
+
 // ---- notifications ----------------------------------------------------------------------
 
 app.get("/v1/notifications", async (c) => {
@@ -1814,10 +2144,6 @@ app.put("/v1/guides/:id", async (c) => {
   const meta: Meta = parseMeta(markdown);
   if (meta.id && meta.id !== id) return err(c, 400, "frontmatter id does not match the URL");
   if (!meta.title) return err(c, 400, "frontmatter needs a title");
-  const status =
-    meta.status && (STATUSES as readonly string[]).includes(meta.status)
-      ? meta.status
-      : "published";
 
   // Addressing: `team: <slug>` puts the guide in a team; `to: <handle>` hands it to a member.
   let team: (TeamRow & { role: string }) | null = null;
@@ -1825,6 +2151,16 @@ app.put("/v1/guides/:id", async (c) => {
   if (meta.team) {
     team = await teamBySlug(c, String(meta.team));
     if (!team) return err(c, 400, `you are not in a team called "${meta.team}"`);
+    // Read-only, not closed: everything already in the team stays readable, pullable and
+    // answerable, and this is the one door that shuts. 402 rather than 403 — nobody lacks
+    // permission, the subscription lapsed, and the two are fixed in completely different places.
+    if (!acceptsNewWork(team.plan))
+      return err(
+        c,
+        402,
+        `${team.slug} is read-only: its subscription lapsed. Everything in it can still be read, ` +
+          "pulled and answered — renew to hand over anything new. Sharing without `team:` still works.",
+      );
   }
   // `to:` names either a person or a group, and the sigil says which: `@ada` is one teammate,
   // `#frontend` is the people who do a thing. Both need a `team:` — an address is only meaningful
@@ -1905,26 +2241,51 @@ app.put("/v1/guides/:id", async (c) => {
   }
 
   const existing = await c.env.DB.prepare(
-    "SELECT id, account_id, share_key, created, team_id, to_account_id, to_group_id FROM guide WHERE id = ?",
+    "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id FROM guide WHERE id = ?",
   )
     .bind(id)
     .first<
       Pick<
         GuideRow,
-        "id" | "account_id" | "share_key" | "created" | "team_id" | "to_account_id" | "to_group_id"
+        | "id"
+        | "account_id"
+        | "share_key"
+        | "created"
+        | "status"
+        | "team_id"
+        | "to_account_id"
+        | "to_group_id"
       >
     >();
   if (existing && existing.account_id !== account)
     return err(c, 403, "that id belongs to another account");
 
+  // Frontmatter still round-trips `promoted`, because the document is the record and a guide shared
+  // a month ago must re-share today. It cannot be acquired, though: only a guide already carrying
+  // the status keeps it, and that is read from the stored row rather than the markdown just sent.
+  const asked =
+    meta.status && (STATUSES as readonly string[]).includes(meta.status) ? meta.status : "";
+  const status =
+    asked === "promoted"
+      ? existing?.status === "promoted"
+        ? "promoted"
+        : "published"
+      : asked || "published";
+
   if (!existing) {
     const room = await quota(c, account);
-    if (isFull(room.used, room.limit)) {
+    if (isFull(room.used, room)) {
+      // Two refusals, because they are fixed in completely different places. Being over a ceiling
+      // is solved by archiving; having no plan at all is solved by buying one, and telling somebody
+      // to "archive some" when they have nothing synced would be nonsense.
       return err(
         c,
         402,
-        `free tier keeps ${room.limit} active synced guides; archive some in the hub (or ` +
-          "`passalong done <id>`) to make room, or remove them",
+        room.plan === "none"
+          ? "syncing guides needs a plan — subscribe at /hub/settings. Everything local still " +
+              "works: `passalong share` writes to this machine with or without one."
+          : `your plan keeps ${room.limit} active synced guides; archive some in the hub (or ` +
+              "`passalong done <id>`) to make room, or remove them",
       );
     }
   }
@@ -2169,8 +2530,18 @@ app.patch("/v1/guides/:id/status", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, "no such guide");
   const { status } = (await c.req.json().catch(() => ({}))) as { status?: string };
-  if (!status || !(STATUSES as readonly string[]).includes(status))
-    return err(c, 400, `status must be one of ${STATUSES.join(", ")}`);
+  // `promoted` is readable and no longer settable, so it is refused by name rather than by being
+  // missing from a list — an installed CLI still calls this, and "must be one of ..." would read
+  // as a typo rather than as a status that was retired.
+  if (status === "promoted")
+    return err(
+      c,
+      400,
+      "`promoted` was retired: a guide's pull count already says how travelled it is. " +
+        "Guides that carry it keep it.",
+    );
+  if (!status || !(SETTABLE as readonly string[]).includes(status))
+    return err(c, 400, `status must be one of ${SETTABLE.join(", ")}`);
   if (!found.owner && !["consumed", "published"].includes(status))
     return err(c, 403, "only the author can promote or draft a guide; you can mark it consumed");
   const markdown = setField(found.row.markdown, "status", status);
@@ -2381,6 +2752,11 @@ app.get("/g/:id/:key{.+\\.md}", async (c) => {
 // The unfurl card. Deliberately not counted as a pull: this is fetched by crawlers, not people.
 // A miss answers with a bare 404 rather than the 404 *page* — this endpoint returns an image, and
 // its caller is an unfurler that will never render HTML.
+// The site's own unfurl card. `/` is the page most people meet first and it had no image at all,
+// so a link to the product previewed as a bare text row — the same blank card the guide pages were
+// fixed for. Static in every sense: it takes no parameters and changes only when this code does.
+app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c)));
+
 app.get("/g/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
   if (!row) return c.text("no such guide", 404, VIEW_HEADERS);

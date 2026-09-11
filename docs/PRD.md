@@ -73,9 +73,10 @@ Plain markdown with frontmatter. No proprietary format, fully exportable, git-fr
 - Guides addressed to a person or team ("handoff to X"), with notification
 - Pull activity visible to the sender (did the transfer land?)
 - Team-wide MCP endpoint so every member's agents can search the team's guides
-- Promotion flow: transfer guides that keep getting pulled graduate into a small set of maintained references
 
 Explicitly out of scope for v2: analytics dashboards, rich text editor, comments/threads, permissions beyond workspace membership.
+
+Removed 2026-09-11: a **promotion flow** was listed here — guides that keep getting pulled graduating into a small set of maintained references. It was cut during M2 for the reason §5 already records: the pull count on a guide says how travelled it is, and an author lifecycle on top of that says the same thing twice. Nothing reads `promoted`, the board has no bucket for it, and `passalong promote` prints its own deprecation notice. The line stayed on this list after the thing it described was removed, which made a deliberate decision read as an outstanding gap.
 
 Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`works` / `broken` with a one-line reason) is a first-class event, separate from the guide's status. `consumed` means implemented; a verdict means it actually runs. It is capped at one line per person per guide precisely so it stays a verdict and does not become the comment thread excluded above. This also widens the persona: testers and QA receive guides, and the Verification and Gotchas sections were already written for them.
 
@@ -102,7 +103,15 @@ Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`wor
 - **Team (paid, per seat):** shared workspace, team MCP endpoint, handoff/notification flow, unlimited synced guides.
 - **Target buyer:** the eng lead or senior dev tired of re-explaining. Land via one enthusiastic dev on the free tier, expand to team.
 
+Built 2026-09-11: **Solo is a real plan.** Every subscription route was team-scoped and owner-only, so an individual who wanted to pay had to invent a team of one — which is also why the free tier could not be closed, since a new account had nowhere to go. `POST /v1/subscribe` buys it and `account.plan` holds it.
+
+Decided 2026-09-11: **the free tier closes to new accounts, and every account that already existed keeps it.** Migration 0016 marks them; `FREE_SIGNUP` is the switch and it is **closed** in production as of 2026-09-11, now that Solo gives an individual somewhere to buy. It still defaults to open in code, so a deployment that does not set it keeps the old behaviour rather than locking people out by omission. What stays free for everybody is the local store — the CLI writes and reads guides with no account and no ceiling, which is §10 and is not a concession.
+
 Pricing note: this is deliberately a team-monetized product. The solo tier is the distribution engine, not the revenue.
+
+Decided 2026-09-11, building it. **A seat lifts whoever sits in it.** A free member of a paid team publishes without a ceiling, and has never paid for anything — the team is what is bought, so the team is what is lifted. Seats are enforced where somebody joins rather than at checkout, because a count taken when a seat is bought drifts the first time a member leaves.
+
+**A lapsed team goes read-only, not dark.** Everything already in it stays readable, pullable and answerable; what stops is new work being addressed to it and anyone new joining. §10 promises no lock-in, and a team's guides are its members' own work — withholding them to collect a debt is exactly what that principle forbids. Verdicts and acks keep working on a lapsed team's guides for the same reason in miniature: they belong to the reader, and the reader is not the person who missed the payment.
 
 ## 12. Risks and open questions
 
@@ -123,5 +132,15 @@ Pricing note: this is deliberately a team-monetized product. The solo tier is th
 
 - **Activation:** first `passalong share` to first `passalong pull` in a different context within 7 days.
 - **Core health:** weekly transfers per active user (share + pull pairs).
-- **Quality proxy:** percent of pulled guides marked consumed without follow-up edits to the guide.
+- **Quality proxy:** percent of pulled guides that came back with a passing verdict, and how many of those needed no follow-up edit to the guide.
 - **v2:** percent of transfers that cross a person boundary (self-transfer vs team-transfer ratio).
+
+All four are computed by `pnpm metrics --dev` (or `--remote`), which reads `guide`, `pull` and `verdict` in D1 directly.
+
+Added 2026-09-11, on making these measurable for the first time. Two notes that belong with the numbers rather than behind them.
+
+The **quality proxy** used to read "percent of pulled guides marked consumed without follow-up edits". `consumed` meant implemented when that was written and means archived now — the author's shelf — so counting it would have answered a different question than the one being asked. The verdict is what replaced it and is the better instrument anyway: the reader's judgement rather than the author's. "Without follow-up edits" survives unchanged, as `guide.updated` moving after a verdict.
+
+**Activation undercounts, and will keep undercounting.** `passalong pull` serves a guide out of the local store without calling the API unless it carries a team, so a developer pulling their own teamless guide into another repo — the v1 loop, exactly — leaves no row to count. Closing that would mean recording a pull for a fetch that never happens, which is worse than a known-low number. Read it as a floor.
+
+None of this can come from Aptabase: both per-account bullets need sequences joined on who did what, and `analytics.ts` sends categorical props and never an id, on purpose. That is why the figures come from a script against the database and not from the dashboard.

@@ -5,6 +5,8 @@ export interface Team {
   slug: string;
   name: string;
   role: string;
+  /** "free", "team" or "lapsed". A lapsed team is read-only — see apps/api/src/quota.ts. */
+  plan: string;
 }
 
 export interface Me {
@@ -15,7 +17,13 @@ export interface Me {
   /** False for an account minted by `passalong login` or an invite: a token, and no way to sign in. */
   has_password: boolean;
   guides: number;
+  /** Only meaningful when `sync` is "free". See apps/api/src/quota.ts. */
   limit: number;
+  /** "unlimited" | "free" | "none" — a falsy `limit` cannot tell the first from the last. */
+  sync: string;
+  /** This account's own subscription: "free", "solo" or "lapsed". Not the same fact as `sync` — a
+      member of a paid team syncs without a ceiling and is still on `free` themselves. */
+  plan: string;
   teams: Team[];
 }
 
@@ -122,6 +130,9 @@ export interface ApiToken {
 
 export interface TeamDetail extends Team {
   guides: number;
+  /** How many members the plan is paid for. Zero on a free plan, where seats are not the limit. */
+  seats?: number;
+  members_count?: number;
   /** How many channels are connected. Never their URLs — those are credentials for rooms. */
   channels?: number;
   members: { handle: string | null; name: string | null; role: string; joined: string }[];

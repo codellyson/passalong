@@ -28,7 +28,7 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `GET /v1/teams` | account |
 | `GET /v1/teams/:slug` | **members only** |
 | `POST /v1/teams/:slug/invites` | members — `{ email? }`, mailed when an email is given |
-| `POST /v1/invites/:code/accept` | account |
+| `POST /v1/invites/:code/accept` | account — 402 when the team is `lapsed` or its seats are full; an existing member is never refused |
 
 ## Guides
 
@@ -37,11 +37,16 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `PUT /v1/guides/:id` | owner | Body is `text/markdown`, not JSON. The markdown is the record; `team`/`to` are read from its frontmatter. |
 | `GET /v1/guides/:id` | owner or team member | Returns markdown. **Records a pull.** |
 | `GET /v1/guides?q=&scope=` | account | `scope=all` (default) `| mine | <team slug>` |
-| `PATCH /v1/guides/:id/status` | owner: any status; team member: `consumed` or `published` only | Deprecated — prefer the verdict. Nothing in the hub calls it; the CLI's `done`/`promote` and the MCP `set_guide_status` still do |
+| `PATCH /v1/guides/:id/status` | owner: `draft`/`published`/`consumed`; team member: `consumed` or `published` only | Archiving, not judgement — the verdict says whether it worked. `promoted` is refused by name (400) on this route and cannot be acquired through `PUT /v1/guides/:id` either; a guide already carrying it keeps it |
 | `PUT /v1/guides/:id/verdict` | account | `{ ok, note? }` |
 | `DELETE /v1/guides/:id` | **owner only** | |
 | `GET /v1/inbox` | account | Handed to you or your teams, not yet pulled |
 | `GET /v1/board` | account | The queues: waiting, not working, in flight, landed |
+| `POST /v1/subscribe` | account — `{ provider }` → a hosted checkout URL for Solo. No seat count: the plan is one person |
+| `POST /v1/teams/:slug/subscribe` | team **owner** — `{ provider, seats }` → a hosted checkout URL. Seats may not be fewer than the team's current members |
+| `PATCH /v1/teams/:slug/seats` | team **owner** — `{ seats }`, paid plans only. Answers with the *confirmed* count and the pending one; the webhook is what writes it. Paystack cannot change quantity after a subscription starts and says so |
+| `GET /v1/billing` | account — which providers are configured and in which mode. Never a key |
+| `POST /v1/billing/webhook/:provider` | **none** — the signature over the raw body is the credential. `stripe` or `paystack`; anything else is 404. 200 with `applied: false` for an event we do not act on or a subscription we do not know |
 | `GET /v1/log?repo=&since=&limit=` | account | Your own acts, newest first. `since` is a date prefix (`2026`, `2026-09`, `2026-09-11`) and anything else is a 400 |
 | `GET /v1/notifications?unread=` | account | |
 | `POST /v1/notifications/read` | account | `{ ids? }` — everything unread when `ids` is omitted |

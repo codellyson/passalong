@@ -59,8 +59,18 @@
     // anything new.
     "PUBLIC_ORIGIN": "https://passalong.dev",
     "ENVIRONMENT": "production",
-    // Free tier: how many published/promoted guides one account may keep synced.
-    // Local guides are unlimited; this only gates the hosted copy.
+    // The free tier, closed. New accounts get no synced guides until they are on a plan; everything
+    // local still works, with no account and no ceiling, which is `docs/PRD.md` §10 and is what the
+    // landing page means by "nothing to pay until a guide leaves your machine".
+    //
+    // Accounts that existed when migration 0016 ran carry `grandfathered` and are unaffected —
+    // withdrawing the free tier is a decision about people who have not arrived yet, not something
+    // to do to somebody who has been syncing for months under a different promise.
+    //
+    // Set to "1" to reopen it. That is the whole of the switch; see `ceilingFor` in quota.ts.
+    "FREE_SIGNUP": "0",
+    // What a grandfathered account may keep synced. Still read for exactly those accounts, and for
+    // nobody else once the line above is "0". Local guides are unlimited; this gates the hosted copy.
     "FREE_SYNC_LIMIT": "25",
     // Sender for handoff/invite mail. Must be on a domain onboarded to Email Service.
     "EMAIL_FROM": "no-reply@passalong.dev",

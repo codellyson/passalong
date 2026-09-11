@@ -140,9 +140,18 @@ const head =
     <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
       <button v-if="!naming" class="btn sm" @click="ask"><AppIcon name="plus" />new token</button>
       <span v-else />
+      <!-- A seat on a paid team removes the ceiling, and the server says so by sending zero — which
+           printed here as "7 of 0 synced guides used on the free tier". There is no free tier to be
+           on and no number to be under, so the sentence changes rather than the number. -->
       <span v-if="me" class="font-ui text-sm text-muted">
         {{ plural(tokens.length, "active token") }} ·
-        {{ me.guides }} of {{ me.limit }} synced guides used on the free tier
+        <template v-if="me.sync === 'free'">
+          {{ me.guides }} of {{ me.limit }} synced guides used
+        </template>
+        <template v-else-if="me.sync === 'none'">no plan, so nothing is syncing</template>
+        <template v-else>
+          {{ plural(me.guides, "synced guide") }}, with no limit on your plan
+        </template>
       </span>
     </div>
   </div>

@@ -65,9 +65,10 @@ A bug uses `## Problem`, `## Reproduce`, `## Verification` and `## Gotchas` inst
 rather than `Steps` is deliberate and load-bearing: `Steps` is the heading an agent is told to
 execute, and steps that produce a defect are the one list that must never be run as a remedy.
 
-`status` is `draft` or `published`. (`consumed` and `promoted` are legacy: still accepted on
-existing guides, no longer set.) Ids are 8 characters from a
-no-lookalike alphabet; they are addresses, not secrets. The key in a share link is the secret.
+`status` is `draft` or `published`, and `consumed` is the author's shelf — off the board, out of
+the free tier's count, reversible. (`promoted` is retired: a guide carrying it keeps it and it
+still parses, but no write can set it.) Ids are 8 characters from a no-lookalike alphabet; they
+are addresses, not secrets. The key in a share link is the secret.
 
 ## Commands
 
@@ -88,7 +89,6 @@ passalong login                 # optional: sync across machines
 - `passalong open <id> [--print]` — view in the browser, or the terminal
 - `passalong works <id>` / `passalong broken <id> <why>` — the verdict, after trying it
 - `passalong done <id>` — implemented on the receiving side
-- `passalong promote <id>` — graduated into a reusable reference
 - `passalong export [dir]` — every guide as plain markdown
 - `passalong team create|invite|join|use` — teams
 - `passalong me [--handle H]` — how teammates address you

@@ -20,7 +20,8 @@ passalong login      # optional: sync guides across machines and get share links
 3. **Pull on the other side.** `passalong pull <id>` in the target repo, or paste the link to any
    agent with the Passalong MCP server. The guide lands in its context; it implements, adapting the
    parts marked `ASSUMES:`.
-4. **Close.** `passalong done <id>` when it landed. `passalong promote <id>` if it keeps getting pulled.
+4. **Close.** Say whether it worked: `passalong works <id>`, or `passalong broken <id> <why>`.
+   `passalong done <id>` shelves it when you are finished with it.
 
 ## Commands
 
@@ -37,7 +38,6 @@ passalong hub                 open your synced guides in the browser
 passalong works <id>          you tried it and it holds up
 passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
 passalong done <id>           deprecated: mark consumed
-passalong promote <id>        deprecated: mark promoted
 passalong rm <id>             delete a guide locally and from sync
 passalong export [dir]        dump every guide as plain markdown
 passalong login [token]       create an account, or attach this machine with a token from your hub
@@ -108,8 +108,8 @@ browser, so a teammate needs no terminal to be part of a team.
 `passalong activity` is the other half of the transfer: it tells you when someone pulled a guide
 you handed over, when they marked it consumed, and when an invite was taken up. A handoff
 addressed to a person is also emailed; a team-wide share is not, because mail nobody is
-named in is the first thing people filter out. Guides that keep getting pulled get a nudge to
-promote them into the team's small set of maintained references.
+named in is the first thing people filter out. A guide's pull count is on its row, which is how
+you see which ones keep travelling — there is nothing to mark them as, and nothing to mark.
 
 ## MCP
 
