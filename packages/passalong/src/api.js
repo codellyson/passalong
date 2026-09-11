@@ -73,6 +73,9 @@ export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 
 export const board = () => call("/v1/board");
+/** What you did, newest first. `since` is a date prefix: 2026, 2026-09, 2026-09-11. */
+export const log = ({ repo = "", since = "", limit = 0 } = {}) =>
+  call(`/v1/log${q({ repo, since, limit: limit || "" })}`);
 export const notifications = ({ unread = true, limit = 0 } = {}) =>
   call(`/v1/notifications${q({ unread: unread ? "1" : "", limit: limit || "" })}`);
 /** No ids means "everything unread". */

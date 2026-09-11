@@ -83,6 +83,7 @@ passalong login                 # optional: sync across machines
 - `passalong inbox` — guides handed to you that you have not pulled
 - `passalong board` — waiting on you, in flight, landed, worth keeping
 - `passalong activity [--all]` — what happened while you were away
+- `passalong log [repo]` — what you did, newest first, under a heading per month
 - `passalong list [query]` — your guides and your teams'
 - `passalong open <id> [--print]` — view in the browser, or the terminal
 - `passalong works <id>` / `passalong broken <id> <why>` — the verdict, after trying it
@@ -98,8 +99,8 @@ passalong login                 # optional: sync across machines
 
 `passalong setup` registers a stdio MCP server exposing: `publish_guide`, `file_bugs`,
 `start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`,
-`verify_guide`, `inbox`, `board`, `activity`. `start_guide` needs passalong 0.3 or later; an older
-install exposes the rest, so fall back to `get_guide` then `ack_guide` if it is not there.
+`verify_guide`, `inbox`, `board`, `activity`, `log`. `start_guide` needs passalong 0.3 or later; an
+older install exposes the rest, so fall back to `get_guide` then `ack_guide` if it is not there.
 
 Open a guide you mean to act on with `start_guide`, not `get_guide`. Both return the same markdown;
 `start_guide` also says you are on it, and between handing work over and hearing it worked that is
@@ -114,6 +115,12 @@ to decide it is not yours.
 handoff looks exactly like one nobody has noticed, so the sender learns in a week rather than a
 minute. Taking it leaves it on your board; passing puts it back on its author's. Taking your own
 guide does nothing: an author is not a party to their own handoff.
+
+`log` is this user's own acts, newest first — what they published, what they took delivery of, and
+every verdict and ack they gave, each with a ready-made `text` line and the guide's repo. It answers
+"what have I been working on", and it is the opposite of `activity`, which is what other people did.
+It holds what was passed along and not what was worked on: work that never became a guide has no
+entry, so do not present it as a complete record, and do not read a quiet month as an idle one.
 
 `file_bugs` files defects you found but are not fixing — from a test run, a QA pass, a review — as
 one report. Each issue becomes a guide with its own id, share link and verdict, so any of them can

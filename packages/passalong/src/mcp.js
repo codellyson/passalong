@@ -87,7 +87,9 @@ export async function serve() {
         "team/#group for the people who do a thing. " +
         "At the start of work, inbox shows guides teammates have handed to this user — open one " +
         "with start_guide — and activity " +
-        "shows whether the guides they handed off have landed. Gotchas are " +
+        "shows whether the guides they handed off have landed. When the user asks what they have " +
+        "been working on, or wants a standup or a summary of a period, call log — but say that it " +
+        "holds what they passed along and not everything they did. Gotchas are " +
         "the highest-value section: record what failed and why.",
     },
   );
@@ -146,6 +148,36 @@ export async function serve() {
     async () => {
       try {
         return json(await passalong.board());
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "log",
+    {
+      title: "What this user did",
+      description:
+        "This user's own acts on guides, newest first: what they published, what they took " +
+        "delivery of, and every verdict and ack they gave. Each item has a rendered `text` line " +
+        "and the guide's repo. Use it to answer 'what have I been working on', to write a " +
+        "standup or a weekly summary, or to find work from a repo by when it happened rather " +
+        "than by what it was called. This is the opposite of `activity`, which is what other " +
+        "people did. IMPORTANT: it records what was passed along, not what was worked on — work " +
+        "that never became a guide has no entry, so never present it as a complete record of " +
+        "this user's work, and never infer that a quiet period was an idle one.",
+      inputSchema: {
+        repo: z.string().default("").describe("narrow to guides whose source repo matches this"),
+        since: z
+          .string()
+          .default("")
+          .describe("only what happened on or after this date: 2026, 2026-09, or 2026-09-11"),
+      },
+    },
+    async ({ repo, since }) => {
+      try {
+        return json({ log: await passalong.log({ repo: repo || "", since: since || "" }) });
       } catch (err) {
         return fail(err);
       }

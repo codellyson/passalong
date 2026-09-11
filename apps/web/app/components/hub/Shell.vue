@@ -107,6 +107,10 @@ const tabs = computed(() => [
     label: "All guides",
     count: data.value.guides.filter((g) => g.status !== "consumed").length || null,
   },
+  // No count. The other two numbers say how much is waiting; a log has nothing waiting in it, and
+  // a number beside it would only ever be "how much have you done", which is the stat line this
+  // page exists without.
+  { to: "/hub/log", label: "Your log", count: null },
   // The one tab that is a verb. Everything else here is a place; this is the thing you came to do
   // when what you have is a list of bugs rather than a guide you already wrote somewhere else.
   { to: "/hub/report", label: "Report a bug", count: null },

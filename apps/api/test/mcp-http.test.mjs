@@ -76,6 +76,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "get_guide",
     "get_report",
     "inbox",
+    "log",
     "publish_guide",
     "search_guides",
     "verify_guide",

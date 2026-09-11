@@ -292,6 +292,42 @@ export function openapi(origin: string) {
           responses: { 200: { description: "The board." } },
         },
       },
+      "/v1/log": {
+        get: {
+          operationId: "log",
+          summary: "What you did, newest first.",
+          description:
+            "Your own acts on guides — published, pulled, and the verdicts and acks you gave — " +
+            "each with a rendered `text` line and the guide's repo. The opposite of " +
+            "notifications, which is what other people did. It records what was passed along, " +
+            "not what was worked on: work that never became a guide has no entry here.",
+          parameters: [
+            {
+              name: "repo",
+              in: "query",
+              schema: { type: "string" },
+              description: "Narrow to guides whose source repo matches.",
+            },
+            {
+              name: "since",
+              in: "query",
+              schema: { type: "string" },
+              description:
+                "On or after a date: `2026`, `2026-09`, `2026-09-11`, or a full ISO instant.",
+            },
+            {
+              name: "limit",
+              in: "query",
+              schema: { type: "integer" },
+              description: "Up to 200; 100 by default.",
+            },
+          ],
+          responses: {
+            200: { description: "The log." },
+            400: { description: "`since` is not a date." },
+          },
+        },
+      },
       "/v1/reports": {
         get: {
           operationId: "listReports",
