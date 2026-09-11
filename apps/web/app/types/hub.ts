@@ -21,6 +21,9 @@ export interface Me {
   limit: number;
   /** "unlimited" | "free" | "none" — a falsy `limit` cannot tell the first from the last. */
   sync: string;
+  /** This account's own subscription: "free", "solo" or "lapsed". Not the same fact as `sync` — a
+      member of a paid team syncs without a ceiling and is still on `free` themselves. */
+  plan: string;
   teams: Team[];
 }
 

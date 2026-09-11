@@ -198,6 +198,19 @@ public one, for agents *using* Passalong rather than changing it.
   count taken when a seat is bought drifts the first time a member leaves, and stays wrong
   invisibly. An existing member re-opening their invite link is never refused, since they already
   occupy the seat the check protects.
+- **The same capability is sold twice, and the column says which was bought.** A seat on a paid
+  team and a Solo subscription both remove an account's ceiling; `account.plan` (migration 0017,
+  `free`/`solo`/`lapsed`) is shaped exactly like `team.plan` and holds the personal one. `solo`
+  rather than reusing `team` as the value, because a column that cannot say which was bought cannot
+  answer "why does this account have no ceiling" without going and looking at four other tables.
+  **Lapsing falls back rather than down**: a lapsed plan lands on whatever that account would have
+  had without one, which for somebody who predates the cutover is their grandfathered ceiling and
+  never zero by surprise. `POST /v1/subscribe` is the personal checkout and takes no seat count —
+  the plan is one person by definition, and a quantity field would be a way to ask a question with
+  one answer. The webhook resolves an account the same two ways it resolves a team, by
+  `subscription_id` and then by the metadata key, because a first subscription has an id nothing has
+  stored yet; checkout writes exactly one of `team` or `account` into that metadata, so the two
+  subjects can never both match.
 - **What an account may sync is a name, not a number, and existing accounts keep what they had.**
   `Ceiling` is `{ plan, limit }` with three plans — `unlimited` (a seat on a paid team), `free` (a
   ceiling, and `limit` is the only case where that number means anything), `none` (no plan, nothing

@@ -42,6 +42,7 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `DELETE /v1/guides/:id` | **owner only** | |
 | `GET /v1/inbox` | account | Handed to you or your teams, not yet pulled |
 | `GET /v1/board` | account | The queues: waiting, not working, in flight, landed |
+| `POST /v1/subscribe` | account — `{ provider }` → a hosted checkout URL for Solo. No seat count: the plan is one person |
 | `POST /v1/teams/:slug/subscribe` | team **owner** — `{ provider, seats }` → a hosted checkout URL. Seats may not be fewer than the team's current members |
 | `PATCH /v1/teams/:slug/seats` | team **owner** — `{ seats }`, paid plans only. Answers with the *confirmed* count and the pending one; the webhook is what writes it. Paystack cannot change quantity after a subscription starts and says so |
 | `GET /v1/billing` | account — which providers are configured and in which mode. Never a key |

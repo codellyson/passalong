@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  ACCOUNT_PLANS,
   acceptsNewWork,
   COUNTED,
   ceilingFor,
@@ -99,4 +100,22 @@ test("read-only stops work coming in and nothing else", () => {
 test("a plan is one column with three values", () => {
   // `free` + `lapsed` is not a state a team can be in, and two columns could store it.
   assert.deepEqual([...PLANS], ["free", "team", "lapsed"]);
+});
+
+test("Solo lifts the account that bought it, with no team involved", () => {
+  // Two ways to have bought the same capability. A seat on a paid team and a Solo subscription
+  // differ in who pays and in nothing else this function cares about.
+  assert.equal(ceilingFor(0, 0, "25", 0, "0", "solo").plan, "unlimited");
+  assert.equal(ceilingFor(0, 0, "25", 0, "1", "solo").plan, "unlimited");
+});
+
+test("a lapsed Solo plan falls back rather than down to nothing", () => {
+  // Lapsing is not a punishment: it lands on whatever this account would have had without a plan,
+  // which for somebody who predates the cutover is their grandfathered ceiling.
+  assert.equal(ceilingFor(0, 0, "25", 1, "0", "lapsed").plan, "free");
+  assert.equal(ceilingFor(0, 0, "25", 0, "0", "lapsed").plan, "none");
+});
+
+test("an account plan is one field with three values", () => {
+  assert.deepEqual([...ACCOUNT_PLANS], ["free", "solo", "lapsed"]);
 });

@@ -117,6 +117,7 @@ test("an active Stripe subscription is a paid team, with its seat count", () => 
     plan: "team",
     seats: 4,
     team_id: undefined,
+    account_id: undefined,
     reason: "stripe customer.subscription.updated active",
   });
 });
@@ -209,4 +210,23 @@ test("the mode is read off the key, never configured beside it", () => {
   assert.equal(modeOf("sk_test_abc"), "test");
   assert.equal(modeOf("sk_live_abc"), "live");
   assert.equal(modeOf(""), "unset");
+});
+
+test("a Solo subscription names the account, and a team one names the team", () => {
+  // Exactly one of the two is ever set, because checkout writes exactly one metadata key. The
+  // webhook picks its subject off whichever arrived, which is how a first subscription — one whose
+  // id nothing has stored yet — is matched at all.
+  const solo = fromStripe({
+    type: "customer.subscription.created",
+    data: { object: { id: "sub_s", status: "active", metadata: { account: "acc_1" } } },
+  });
+  assert.equal(solo?.account_id, "acc_1");
+  assert.equal(solo?.team_id, undefined);
+
+  const team = fromPaystack({
+    event: "subscription.create",
+    data: { subscription_code: "SUB_t", metadata: { team: "t_1" } },
+  });
+  assert.equal(team?.team_id, "t_1");
+  assert.equal(team?.account_id, undefined);
 });

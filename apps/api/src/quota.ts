@@ -60,10 +60,9 @@ export interface Ceiling {
  * rather than about a plan: an account that existed before the free tier was withdrawn keeps the
  * ceiling it had. See migrations/0016_grandfather.sql.
  *
- * `freeSignup` is the cutover switch and it defaults to open. New accounts keep the free ceiling
- * until there is something for an individual to buy — the Solo plan on the landing page has no
- * purchase path yet, and closing this first would leave a new account able to create itself and
- * nothing else. Set `FREE_SIGNUP=0` the day Solo ships.
+ * `freeSignup` is the cutover switch and it still defaults to open, so that closing it stays a
+ * deliberate act rather than a consequence of deploying. Solo now has a purchase path, which was
+ * the thing it was waiting on.
  */
 export function ceilingFor(
   paidTeams: unknown,
@@ -71,8 +70,14 @@ export function ceilingFor(
   fallback: unknown,
   grandfathered: unknown = 0,
   freeSignup: unknown = "1",
+  ownPlan: unknown = "free",
 ): Ceiling {
-  if (Number(paidTeams) > 0) return { plan: "unlimited", limit: 0 };
+  // Two ways to have bought the same capability, and either is enough. A seat on a paid team and a
+  // Solo subscription differ in who pays and in nothing else that matters here.
+  if (Number(paidTeams) > 0 || String(ownPlan ?? "free") === "solo")
+    return { plan: "unlimited", limit: 0 };
+  // A lapsed plan is not a punishment: it falls through to whatever this account would have had
+  // without one, which for somebody who predates the cutover is their grandfathered ceiling.
   const open = String(freeSignup ?? "1") !== "0";
   if (Number(grandfathered) > 0 || open)
     return { plan: "free", limit: limitFor(override, fallback) };
@@ -89,6 +94,10 @@ export function isFull(used: number, ceiling: Ceiling): boolean {
 /** The three plans a team can be on. One column, because `free` + `lapsed` is not a real state. */
 export const PLANS = ["free", "team", "lapsed"] as const;
 export type Plan = (typeof PLANS)[number];
+
+/** The same three for one person. `solo` rather than `team` so the column says which was bought. */
+export const ACCOUNT_PLANS = ["free", "solo", "lapsed"] as const;
+export type AccountPlan = (typeof ACCOUNT_PLANS)[number];
 
 /**
  * Whether new work may be addressed to a team.

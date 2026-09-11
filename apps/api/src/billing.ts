@@ -68,6 +68,8 @@ export interface PlanChange {
    * it, and the first event is what binds the two together.
    */
   team_id?: string;
+  /** The account, when what was bought is a Solo plan. Exactly one of these two is ever set. */
+  account_id?: string;
   /** For the audit line in a log, never shown to a user. */
   reason: string;
 }
@@ -141,8 +143,9 @@ export function fromStripe(event: unknown): PlanChange | null {
   };
   const object = e.data?.object ?? {};
   const id = String(object.id ?? "");
-  const team_id =
-    String((object.metadata as Record<string, string> | undefined)?.team ?? "") || undefined;
+  const meta = (object.metadata ?? {}) as Record<string, string>;
+  const team_id = String(meta.team ?? "") || undefined;
+  const account_id = String(meta.account ?? "") || undefined;
   const quantity = Number(
     (object.quantity as number) ??
       (object.items as { data?: { quantity?: number }[] })?.data?.[0]?.quantity ??
@@ -161,6 +164,7 @@ export function fromStripe(event: unknown): PlanChange | null {
           plan: "team",
           seats,
           team_id,
+          account_id,
           reason: `stripe ${e.type} ${status}`,
         };
       if (status === "canceled" || status === "unpaid")
@@ -168,6 +172,7 @@ export function fromStripe(event: unknown): PlanChange | null {
           subscription_id: id,
           plan: "lapsed",
           team_id,
+          account_id,
           reason: `stripe ${e.type} ${status}`,
         };
       return null;
@@ -177,6 +182,7 @@ export function fromStripe(event: unknown): PlanChange | null {
         subscription_id: id,
         plan: "lapsed",
         team_id,
+        account_id,
         reason: "stripe subscription deleted",
       };
     default:
@@ -189,8 +195,9 @@ export function fromPaystack(event: unknown): PlanChange | null {
   const e = event as { event?: string; data?: Record<string, unknown> };
   const data = e.data ?? {};
   const id = String(data.subscription_code ?? data.id ?? "");
-  const team_id =
-    String((data.metadata as Record<string, string> | undefined)?.team ?? "") || undefined;
+  const meta = (data.metadata ?? {}) as Record<string, string>;
+  const team_id = String(meta.team ?? "") || undefined;
+  const account_id = String(meta.account ?? "") || undefined;
   const seatsRaw = Number((data.quantity as number) ?? Number.NaN);
   const seats = Number.isFinite(seatsRaw) && seatsRaw > 0 ? Math.trunc(seatsRaw) : undefined;
   switch (e.event) {
@@ -269,18 +276,27 @@ async function call(url: string, secret: string, body: unknown, method = "POST")
  * Start a subscription, and hand back where to send the person.
  *
  * Both providers are asked for a hosted page rather than a card form, because the alternative is
- * this product handling card details — which it will not do. `team` rides along in metadata so the
- * first webhook can find its way home; see `PlanChange.team_id`.
+ * this product handling card details — which it will not do.
+ *
+ * The subject rides along in metadata under its own key, `team` or `account`, which is how the
+ * first webhook about a new subscription finds its way home: the subscription id does not exist
+ * when somebody is sent to a checkout page, so until that event arrives there is nothing stored to
+ * look it up by. See `PlanChange.team_id` and `PlanChange.account_id`.
  */
 export async function startCheckout(
   provider: Provider,
   keys: BillingKeys,
   {
-    teamId,
+    subject,
     seats,
     email,
     returnTo,
-  }: { teamId: string; seats: number; email: string; returnTo: string },
+  }: {
+    subject: { kind: "team" | "account"; id: string };
+    seats: number;
+    email: string;
+    returnTo: string;
+  },
 ): Promise<Checkout> {
   if (provider === "stripe") {
     const secret = keys.STRIPE_SECRET || "";
@@ -294,7 +310,7 @@ export async function startCheckout(
       "line_items[0][quantity]": String(seats),
       success_url: `${returnTo}?billing=done`,
       cancel_url: `${returnTo}?billing=cancelled`,
-      "subscription_data[metadata][team]": teamId,
+      [`subscription_data[metadata][${subject.kind}]`]: subject.id,
       customer_email: email,
     });
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
@@ -324,7 +340,7 @@ export async function startCheckout(
     plan,
     quantity: seats,
     callback_url: `${returnTo}?billing=done`,
-    metadata: { team: teamId },
+    metadata: { [subject.kind]: subject.id },
   });
   const data = (body.data ?? {}) as Record<string, unknown>;
   return {

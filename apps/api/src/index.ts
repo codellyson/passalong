@@ -845,10 +845,10 @@ app.delete("/v1/tokens/:id", async (c) => {
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, password_hash FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, password_hash, plan FROM account WHERE id = ?",
   )
     .bind(account)
-    .first<AccountRow & { password_hash: string }>();
+    .first<AccountRow & { password_hash: string; plan: string }>();
   const room = await quota(c, account);
   // The plan rides along with the team it belongs to. Without it the hub would have to fetch every
   // team to find out why a limit vanished, and the banner that explains the ceiling is drawn before
@@ -872,6 +872,9 @@ app.get("/v1/me", async (c) => {
     // The name, because the number alone cannot say the difference between "no ceiling" and "may
     // sync nothing" — both of which would be a falsy `limit` to anything reading this.
     sync: room.plan,
+    // This account's own subscription, which is a different fact from what it may sync: a member of
+    // a paid team syncs without a ceiling and is still on `free` themselves.
+    plan: me?.plan || "free",
     unread: await unreadCount(c.env, account),
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.
@@ -895,14 +898,22 @@ async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceilin
     `SELECT (SELECT COUNT(*) FROM guide WHERE account_id = ? AND status IN (${marks})) AS used,
             (SELECT sync_limit FROM account WHERE id = ?) AS own,
             (SELECT grandfathered FROM account WHERE id = ?) AS old,
+            (SELECT plan FROM account WHERE id = ?) AS own_plan,
             (SELECT COUNT(*) FROM membership m JOIN team t ON t.id = m.team_id
               WHERE m.account_id = ? AND t.plan = 'team') AS paid`,
   )
-    .bind(account, ...COUNTED, account, account, account)
-    .first<{ used: number; own: number; old: number; paid: number }>();
+    .bind(account, ...COUNTED, account, account, account, account)
+    .first<{ used: number; own: number; old: number; paid: number; own_plan: string }>();
   return {
     used: row?.used ?? 0,
-    ...ceilingFor(row?.paid, row?.own, c.env.FREE_SYNC_LIMIT, row?.old, c.env.FREE_SIGNUP),
+    ...ceilingFor(
+      row?.paid,
+      row?.own,
+      c.env.FREE_SYNC_LIMIT,
+      row?.old,
+      c.env.FREE_SIGNUP,
+      row?.own_plan,
+    ),
   };
 }
 
@@ -1876,6 +1887,30 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
   // a *first* subscription is ever matched: the id does not exist when we send someone to a checkout
   // page, so until this event arrives there is nothing on the team to look it up by.
   type TeamPlanRow = { id: string; slug: string; plan: string; seats: number };
+  // A Solo subscription belongs to a person, so it is looked up the same two ways and applied to
+  // `account` instead. Checked first only because it is the cheaper query; the two subjects are
+  // mutually exclusive, since the metadata carries exactly one of them.
+  const soloId =
+    change.account_id ||
+    (
+      await c.env.DB.prepare("SELECT id FROM account WHERE subscription_id = ?")
+        .bind(change.subscription_id)
+        .first<{ id: string }>()
+    )?.id ||
+    "";
+  if (soloId && !change.team_id) {
+    const plan = change.plan === "team" ? "solo" : change.plan;
+    const done = await c.env.DB.prepare(
+      "UPDATE account SET plan = ?, plan_since = ?, subscription_id = ? WHERE id = ?",
+    )
+      .bind(plan, now(), change.subscription_id, soloId)
+      .run();
+    if (done.meta.changes) {
+      count(c, "plan_changed", { provider, plan, subject: "account" });
+      return c.json({ ok: true, applied: true });
+    }
+  }
+
   let team = await c.env.DB.prepare(
     "SELECT id, slug, plan, seats FROM team WHERE subscription_id = ?",
   )
@@ -1900,8 +1935,47 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
   )
     .bind(change.plan, change.seats ?? team.seats, now(), change.subscription_id, team.id)
     .run();
-  count(c, "plan_changed", { provider, plan: change.plan });
+  count(c, "plan_changed", { provider, plan: change.plan, subject: "team" });
   return c.json({ ok: true, applied: true });
+});
+
+// Buy Solo: a subscription that belongs to this account rather than to a team.
+//
+// The landing page has sold this since the pricing went up and nothing could buy it — every
+// subscription route was team-scoped and owner-only, so an individual who wanted to pay had to
+// invent a team of one. That is also why `FREE_SIGNUP` could not be closed: there was nowhere for a
+// new account to go.
+//
+// One seat, not a number: the plan is one person by definition, and a quantity field on it would be
+// a way to ask a question with only one answer.
+app.post("/v1/subscribe", async (c) => {
+  const account = c.get("account");
+  const { provider } = (await c.req.json().catch(() => ({}))) as { provider?: string };
+  if (!provider || !isProvider(provider)) return err(c, 400, "provider must be stripe or paystack");
+
+  const me = await c.env.DB.prepare("SELECT email, plan FROM account WHERE id = ?")
+    .bind(account)
+    .first<{ email: string; plan: string }>();
+  if (me?.plan === "solo") return err(c, 400, "this account is already on Solo");
+  if (!me?.email)
+    return err(c, 400, "add an email to your account first — the receipt has to go somewhere");
+
+  try {
+    const checkout = await startCheckout(provider, c.env, {
+      subject: { kind: "account", id: account },
+      seats: 1,
+      email: me.email,
+      returnTo: `${origin(c)}/hub/settings`,
+    });
+    count(c, "checkout_started", { provider, mode: checkout.mode, subject: "account" });
+    return c.json(checkout);
+  } catch (e) {
+    return err(
+      c,
+      502,
+      e instanceof BillingError ? e.message : "could not reach the payment provider",
+    );
+  }
 });
 
 // Start paying. Owner only, and it hands back a hosted page rather than taking a card: this product
@@ -1938,12 +2012,12 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
 
   try {
     const checkout = await startCheckout(provider, c.env, {
-      teamId: team.id,
+      subject: { kind: "team", id: team.id },
       seats: wanted,
       email: me.email,
       returnTo: `${origin(c)}/hub/settings`,
     });
-    count(c, "checkout_started", { provider, mode: checkout.mode });
+    count(c, "checkout_started", { provider, mode: checkout.mode, subject: "team" });
     return c.json(checkout);
   } catch (e) {
     return err(
