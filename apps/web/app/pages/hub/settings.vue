@@ -16,6 +16,8 @@ usePage({
 const section = "grid gap-x-8 gap-y-4 border-t border-line py-6 md:grid-cols-[11rem_1fr]";
 const label = "m-0 font-ui text-base font-semibold text-fg";
 const blurb = "mt-1 mb-0 font-ui text-sm text-muted";
+
+const { data } = useHub();
 </script>
 
 <template>
@@ -32,6 +34,19 @@ const blurb = "mt-1 mb-0 font-ui text-sm text-muted";
         <p :class="blurb">Your handle is how a teammate addresses a transfer to you.</p>
       </div>
       <HubIdentity bare />
+    </section>
+
+    <!-- Above Teams, because it is the one thing on this page that costs money, and listed per
+         team rather than for whichever one is in scope: somebody arriving to pay should not have
+         to narrow the page first to find the section named after what they came to do. -->
+    <section v-if="data.me?.teams.length" :class="section">
+      <div>
+        <h2 :class="label">Plan</h2>
+        <p :class="blurb">What each team is paying for, and what that buys its members.</p>
+      </div>
+      <div class="flex flex-col gap-6">
+        <HubPlan v-for="t in data.me.teams" :key="t.slug" :slug="t.slug" />
+      </div>
     </section>
 
     <section :class="section">

@@ -57,6 +57,32 @@ PBKDF2 iteration cap was found this way — but anything it writes is real. Clea
 straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no browser involvement,
 deliberately. See the rule about what may go in a prop in AGENTS.md before adding an event.
 
+**Billing.** Five Worker secrets, all optional: without them the paid tier is simply unavailable
+and every webhook is refused rather than trusted.
+
+| Secret | What it is |
+| --- | --- |
+| `STRIPE_SECRET` | API key. `sk_test_…` or `sk_live_…` |
+| `STRIPE_PRICE` | The recurring price id the subscription is for |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_…`, from the endpoint you register |
+| `PAYSTACK_SECRET` | API key, which is **also** the webhook signing key |
+| `PAYSTACK_PLAN` | The plan code the subscription is for |
+
+**Test mode is not a setting.** It is read off the key (`modeOf` in `billing.ts`), so it cannot
+disagree with the keys actually in use — configure test keys and the hub badges every plan block
+"test mode — no real money moves". A mode flag beside the key is how a product spends three weeks
+taking payments that were never real.
+
+Register the webhook endpoints as `https://passalong.dev/v1/billing/webhook/stripe` and
+`…/paystack`. Stripe needs `customer.subscription.created`, `.updated` and `.deleted`; Paystack
+needs `subscription.create`, `subscription.disable` and `invoice.payment_failed`. Anything else is
+answered 200 and ignored, so subscribing to more is harmless.
+
+To exercise this locally, put the test keys in `apps/web/.dev.vars` (gitignored) and point the
+provider's CLI forwarder at `http://localhost:3000/v1/billing/webhook/<provider>`. Note the
+webhook, not the checkout, is what writes a plan — so a subscription only takes effect once the
+event arrives.
+
 ## Preflight (run before every deploy)
 
 ```sh

@@ -10,6 +10,7 @@ import {
   fromPaystack,
   fromStripe,
   isProvider,
+  modeOf,
   PROVIDERS,
   parseEvent,
   verifyPaystack,
@@ -115,6 +116,7 @@ test("an active Stripe subscription is a paid team, with its seat count", () => 
     subscription_id: "sub_1",
     plan: "team",
     seats: 4,
+    team_id: undefined,
     reason: "stripe customer.subscription.updated active",
   });
 });
@@ -179,4 +181,32 @@ test("the provider is a closed set", () => {
     parseEvent("paystack", { event: "subscription.disable", data: { id: 1 } })?.plan,
     "lapsed",
   );
+});
+
+test("the team rides along in metadata, which is how a first subscription is matched", () => {
+  // Nothing on the team points at the subscription until this event arrives — the id does not exist
+  // when somebody is sent to a checkout page — so without the metadata the very first webhook about
+  // a new subscription could never find its way home.
+  assert.equal(
+    fromStripe({
+      type: "customer.subscription.created",
+      data: { object: { id: "sub_new", status: "active", metadata: { team: "t_abc" } } },
+    })?.team_id,
+    "t_abc",
+  );
+  assert.equal(
+    fromPaystack({
+      event: "subscription.create",
+      data: { subscription_code: "SUB_new", metadata: { team: "t_abc" } },
+    })?.team_id,
+    "t_abc",
+  );
+});
+
+test("the mode is read off the key, never configured beside it", () => {
+  // A `mode` setting somebody has to remember to flip is how a product spends three weeks quietly
+  // taking test payments.
+  assert.equal(modeOf("sk_test_abc"), "test");
+  assert.equal(modeOf("sk_live_abc"), "live");
+  assert.equal(modeOf(""), "unset");
 });

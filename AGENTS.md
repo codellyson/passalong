@@ -142,6 +142,21 @@ public one, for agents *using* Passalong rather than changing it.
   edge. Severity is named (`Blocker`, `Minor`) rather than coded (`s1`, `s3`) wherever it is shown
   to a reader, in the list and in the report editor both, and `severityTone()`/`severityLabel()`
   in `app/utils/report.ts` are the only copies of that lookup.
+- **The checkout is hosted, the mode is read off the key, and the webhook is what writes a plan.**
+  Both providers hand back a page of their own, because the alternative is this product handling
+  card details — which is also why there is no card form to build and no seat-change screen beyond a
+  number. `modeOf()` derives test-versus-live from the key itself rather than a setting beside it:
+  a flag somebody has to remember to flip is how a product spends three weeks taking payments that
+  were never real, and the hub badges every plan block when any configured key is a test one.
+  `POST /v1/teams/:slug/subscribe` and `PATCH /v1/teams/:slug/seats` are **owner only** and refuse a
+  seat count below the team's current membership — the seat count is what admits the next member, so
+  setting it under the current size is a refusal aimed at whoever joins next rather than at the
+  person doing it. The seats route answers with the **confirmed** count and the pending one, never
+  the asked-for figure: the subscription is the single source for what is paid for, so the hub waits
+  for the webhook rather than showing a number nothing has agreed to. Paystack cannot change
+  quantity on a running subscription at all and says so out loud, which is better than appearing to
+  succeed and quietly billing the old number. Every provider key is an optional binding: without
+  them the tier is unavailable and the hub says so, rather than offering a button that cannot work.
 - **A billing webhook is the only write in the product that no person authenticates**, so the
   signature over the **raw** body is the entire credential. `billing.ts` reads it with
   `c.req.text()` and verifies before anything parses: parse first and you verify a different set of

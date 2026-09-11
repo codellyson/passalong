@@ -62,8 +62,11 @@ import {
 import {
   BillingError,
   isProvider,
+  modeOf,
   type Provider,
   parseEvent,
+  setSeats,
+  startCheckout,
   verifyPaystack,
   verifyStripe,
 } from "./billing.js";
@@ -133,7 +136,10 @@ type Env = MailEnv &
     /** Billing. Optional, like every other integration here: without them a deployment runs
         exactly as before and every webhook is refused rather than trusted. */
     STRIPE_WEBHOOK_SECRET?: string;
+    STRIPE_SECRET?: string;
+    STRIPE_PRICE?: string;
     PAYSTACK_SECRET?: string;
+    PAYSTACK_PLAN?: string;
     FREE_SYNC_LIMIT: string;
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
@@ -1860,23 +1866,136 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
   // with it.
   if (!change) return c.json({ ok: true, applied: false });
 
-  const team = await c.env.DB.prepare(
+  // By subscription first, then by the team id the provider carried in metadata. The second is how
+  // a *first* subscription is ever matched: the id does not exist when we send someone to a checkout
+  // page, so until this event arrives there is nothing on the team to look it up by.
+  type TeamPlanRow = { id: string; slug: string; plan: string; seats: number };
+  let team = await c.env.DB.prepare(
     "SELECT id, slug, plan, seats FROM team WHERE subscription_id = ?",
   )
     .bind(change.subscription_id)
-    .first<{ id: string; slug: string; plan: string; seats: number }>();
+    .first<TeamPlanRow>();
+  if (!team && change.team_id) {
+    team = await c.env.DB.prepare("SELECT id, slug, plan, seats FROM team WHERE id = ?")
+      .bind(change.team_id)
+      .first<TeamPlanRow>();
+  }
   // Also 200, and deliberately: a subscription we have never heard of is the provider's business,
   // not a failure of ours, and answering 4xx would have them retry something that can never work.
   if (!team) return c.json({ ok: true, applied: false });
 
   // Seats only move when the event carried a count. A payment failing says nothing about how many
   // seats were bought, and writing zero there would silently unseat the whole team.
-  await c.env.DB.prepare("UPDATE team SET plan = ?, seats = ?, plan_since = ? WHERE id = ?")
-    .bind(change.plan, change.seats ?? team.seats, now(), team.id)
+  // The subscription id is written here and only here, which is what binds a team to the thing
+  // paying for it. Never cleared on a lapse: a lapsed team that renews is the same subscription,
+  // and forgetting it would orphan every event that follows.
+  await c.env.DB.prepare(
+    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, subscription_id = ? WHERE id = ?",
+  )
+    .bind(change.plan, change.seats ?? team.seats, now(), change.subscription_id, team.id)
     .run();
   count(c, "plan_changed", { provider, plan: change.plan });
   return c.json({ ok: true, applied: true });
 });
+
+// Start paying. Owner only, and it hands back a hosted page rather than taking a card: this product
+// does not touch card details, which is also why there is no form here to build.
+app.post("/v1/teams/:slug/subscribe", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only the team's owner can change its plan");
+  const { provider, seats } = (await c.req.json().catch(() => ({}))) as {
+    provider?: string;
+    seats?: number;
+  };
+  if (!provider || !isProvider(provider)) return err(c, 400, "provider must be stripe or paystack");
+  const wanted = Math.trunc(Number(seats)) || 0;
+  if (wanted < 1) return err(c, 400, "a subscription needs at least one seat");
+
+  const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
+    .bind(team.id)
+    .first<{ n: number }>();
+  // Buying fewer seats than the team already has would leave it instantly over its own limit, and
+  // the person who finds out is whoever tries to accept the next invite.
+  if (wanted < (members?.n ?? 0))
+    return err(
+      c,
+      400,
+      `${team.slug} already has ${members?.n} members — buy at least that many seats`,
+    );
+
+  const me = await c.env.DB.prepare("SELECT email FROM account WHERE id = ?")
+    .bind(c.get("account"))
+    .first<{ email: string }>();
+  if (!me?.email)
+    return err(c, 400, "add an email to your account first — the receipt has to go somewhere");
+
+  try {
+    const checkout = await startCheckout(provider, c.env, {
+      teamId: team.id,
+      seats: wanted,
+      email: me.email,
+      returnTo: `${origin(c)}/hub/settings`,
+    });
+    count(c, "checkout_started", { provider, mode: checkout.mode });
+    return c.json(checkout);
+  } catch (e) {
+    return err(
+      c,
+      502,
+      e instanceof BillingError ? e.message : "could not reach the payment provider",
+    );
+  }
+});
+
+// Change how many seats are paid for. Owner only, and never below the number of people already in
+// the team — the seat count is what admits the next member, so setting it under the current size is
+// a refusal aimed at whoever joins next rather than at the person doing it.
+app.patch("/v1/teams/:slug/seats", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (team.role !== "owner") return err(c, 403, "only the team's owner can change its seats");
+  if (team.plan !== "team") return err(c, 400, `${team.slug} is not on a paid plan`);
+  if (!team.subscription_id) return err(c, 400, "this team has no subscription to change");
+  const { seats } = (await c.req.json().catch(() => ({}))) as { seats?: number };
+  const wanted = Math.trunc(Number(seats)) || 0;
+  if (wanted < 1) return err(c, 400, "a subscription needs at least one seat");
+  const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
+    .bind(team.id)
+    .first<{ n: number }>();
+  if (wanted < (members?.n ?? 0))
+    return err(
+      c,
+      400,
+      `${team.slug} has ${members?.n} members — remove someone before dropping to ${wanted} seat${wanted === 1 ? "" : "s"}`,
+    );
+
+  // Stripe ids are `sub_...`; Paystack's are `SUB_...`. The subscription itself says which provider
+  // it belongs to, so nothing has to be stored twice and the two can never disagree.
+  const provider: Provider = team.subscription_id.startsWith("sub_") ? "stripe" : "paystack";
+  try {
+    await setSeats(provider, c.env, team.subscription_id, wanted);
+  } catch (e) {
+    return err(
+      c,
+      502,
+      e instanceof BillingError ? e.message : "could not reach the payment provider",
+    );
+  }
+  // The provider's webhook is what writes the number: one source for what is paid for, and it is
+  // the subscription. Answering with the asked-for figure would have the hub show a seat count
+  // nothing has confirmed yet.
+  return c.json({ ok: true, seats: team.seats, pending: wanted });
+});
+
+// What this deployment can take money with, and in which mode. No secrets, only their shape — and
+// the mode is read off the key, so it cannot disagree with the keys actually in use.
+app.get("/v1/billing", (c) =>
+  c.json({
+    stripe: modeOf(c.env.STRIPE_SECRET || ""),
+    paystack: modeOf(c.env.PAYSTACK_SECRET || ""),
+  }),
+);
 
 // ---- notifications ----------------------------------------------------------------------
 

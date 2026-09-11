@@ -349,7 +349,11 @@ const commands = {
     console.log(`handle   ${who.handle ? `@${who.handle}` : "(none — set one: passalong me --handle <you>)"}`);
     if (who.name) console.log(`name     ${who.name}`);
     if (who.email) console.log(`email    ${who.email}`);
-    console.log(`guides   ${who.guides} synced (${who.limit} active on the free tier)`);
+    // A seat on a paid team removes the ceiling, and the server says so by sending zero. Printing
+    // it would read as a limit of none allowed rather than none imposed.
+    console.log(
+      `guides   ${who.guides} synced${who.limit ? ` (${who.limit} active on the free tier)` : " (no limit on your plan)"}`,
+    );
     const current = store.readConfig().team;
     console.log(
       `teams    ${who.teams.length ? who.teams.map((t) => `${t.slug}${t.slug === current ? "*" : ""} (${t.role})`).join(", ") : "(none — passalong team create <name>)"}`,
