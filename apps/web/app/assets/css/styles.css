@@ -1227,6 +1227,75 @@ form.join label {
   margin: 0 0 var(--s-6);
   text-wrap: balance;
 }
+/* What it costs. Centred heading on the page's one axis, then the two tiers as columns under a
+   hairline — no borders, no fills, no "most popular" flag. Two of anything in boxes is a comparison
+   table, and a comparison table is what a page writes when it has more to say about the other
+   product than about its own.
+
+   The figure is serif and large because it is the answer somebody scrolled here for; everything
+   under it is the same muted body the steps use, so the number is the only thing that changes
+   size. */
+.pricing {
+  margin: var(--gap) auto 0;
+  max-width: 44rem;
+  text-align: center;
+}
+.pricing h2 {
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+  font-weight: 400;
+  letter-spacing: -0.018em;
+  line-height: 1.2;
+  margin: 0 0 var(--s-7);
+  text-wrap: balance;
+}
+.tiers {
+  display: grid;
+  gap: var(--s-6) var(--s-7);
+  /* One column below the point where two would each be narrower than their own figure. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  text-align: left;
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-6);
+}
+.tiers h3 {
+  margin: 0 0 var(--s-2);
+  font: 500 var(--t-xs) / 1 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tiers .figure {
+  margin: 0 0 var(--s-3);
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+/* The period sits under the amount rather than beside it: "$6 per seat, per month" on one line puts
+   the small print at the same baseline as the number and makes both harder to read. */
+.tiers .figure span {
+  display: block;
+  margin-top: var(--s-2);
+  font: var(--t-sm) / 1.4 var(--font-sans);
+  color: var(--muted);
+  letter-spacing: normal;
+}
+.tiers p:last-child {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-sm);
+  line-height: 1.65;
+}
+/* The one sentence on this page that is a reason to buy rather than a description of what is
+   bought, so it is the one thing here that takes the foreground colour. */
+.tiers b {
+  color: var(--fg);
+  font-weight: 500;
+}
+
 .reassure {
   margin: var(--s-5) 0 0;
   font: var(--t-sm) / 1.6 var(--font-sans);

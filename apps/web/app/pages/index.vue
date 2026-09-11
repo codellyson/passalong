@@ -22,6 +22,21 @@ usePage({
 });
 
 /**
+ * The seat price, and the only number on this page nobody can derive from the code.
+ *
+ * §11 of the PRD sets the shape — per seat, teams are the revenue, the solo tier is distribution —
+ * and names no figure, so there is nothing in this repository to read it from. It lives here as one
+ * constant rather than inline in the markup, so the price is changed in one place and cannot end up
+ * stated two different ways on the same page.
+ *
+ * SET THIS BEFORE THE PAGE IS PUBLIC.
+ */
+const SEAT = { amount: "$6", period: "per seat, per month" };
+
+/** What the free tier actually holds, so the page and `quota.ts` cannot drift apart. */
+const FREE_SYNCED = 25;
+
+/**
  * A guide, as the file it actually is.
  *
  * Held as lines rather than one string because the three things a reader should be able to tell
@@ -144,6 +159,41 @@ const guide: Line[] = [
       </p>
     </section>
 
+    <!-- Two tiers as peers under one hairline, not two bordered cards side by side. A card on every
+         block is what `/connect` was fixed for: it spends the emphasis evenly and leaves none for
+         the thing that matters, which here is the last line of the team column. -->
+    <section class="pricing" aria-label="What it costs">
+      <p class="eyebrow">What it costs</p>
+      <h2>
+        Free until a team needs it.<br>
+        <span class="turn">Then it is per seat.</span>
+      </h2>
+
+      <div class="tiers">
+        <article>
+          <h3>Solo</h3>
+          <p class="figure">Free</p>
+          <p>
+            Every guide you write, on your machine, with no ceiling and no account.
+            {{ FREE_SYNCED }} of them kept in sync across your machines, and an MCP endpoint of your
+            own. No card, and no clock running.
+          </p>
+        </article>
+
+        <article>
+          <h3>Team</h3>
+          <p class="figure">
+            {{ SEAT.amount }}<span>{{ SEAT.period }}</span>
+          </p>
+          <p>
+            A shared workspace, handoffs addressed to a person or to the people who do a thing, a
+            team MCP endpoint every member's agents can search, and no limit on synced guides —
+            <b>for everyone in the team, including the members who never paid for a seat.</b>
+          </p>
+        </article>
+      </div>
+    </section>
+
     <section class="closer">
       <p class="eyebrow">When the next one starts</p>
       <h2>
@@ -157,8 +207,7 @@ const guide: Line[] = [
       <!-- The install line lives here rather than in a panel of its own. Writing guides takes one
            command; reading one takes nothing at all, and that asymmetry is the product. -->
       <p class="reassure">
-        Free while it is small. <code>npm i -g passalong</code> to write them — and nothing at all
-        to install to read one.
+        <code>npm i -g passalong</code> to write them — and nothing at all to install to read one.
       </p>
     </section>
 
