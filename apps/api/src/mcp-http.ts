@@ -142,6 +142,34 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
   );
 
   server.registerTool(
+    "log",
+    {
+      title: "What this user did",
+      description:
+        "This user's own acts on guides, newest first: published, pulled, and every verdict and " +
+        "ack they gave, each with a rendered `text` line and the guide's repo. Use it for 'what " +
+        "have I been working on', a standup, or finding work by when it happened. The opposite " +
+        "of activity, which is what other people did. IMPORTANT: it records what was passed " +
+        "along, not what was worked on — work that never became a guide has no entry, so never " +
+        "present it as a complete record, and never read a quiet period as an idle one.",
+      inputSchema: {
+        repo: z.string().optional().describe("narrow to guides whose source repo matches this"),
+        since: z
+          .string()
+          .optional()
+          .describe("only what happened on or after: 2026, 2026-09, or 2026-09-11"),
+      },
+    },
+    async ({ repo, since }) => {
+      const query = new URLSearchParams();
+      if (repo) query.set("repo", repo);
+      if (since) query.set("since", since);
+      const suffix = query.toString();
+      return relay(call, "GET", `/v1/log${suffix ? `?${suffix}` : ""}`);
+    },
+  );
+
+  server.registerTool(
     "publish_guide",
     {
       title: "Publish guide",

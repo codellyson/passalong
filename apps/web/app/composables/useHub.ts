@@ -1,7 +1,7 @@
 // The hub's state and everything that mutates it — what `App()` in apps/api/public/hub.js held in
 // closures. It is a composable rather than props threaded through eight components because the
 // same `api` and `reload` were being handed down three levels; the state itself is unchanged.
-import type { Guide, HubData, Me } from "~/types/hub";
+import type { Guide, HubData, LogEntry, Me } from "~/types/hub";
 
 const KEY = "passalong.token";
 /** The session cookie's name, as apps/api sets it. Only its presence is ever read here. */
@@ -12,6 +12,7 @@ const EMPTY: HubData = {
   guides: [],
   board: null,
   activity: [],
+  log: [],
   unread: 0,
   tokens: [],
   team: null,
@@ -134,11 +135,15 @@ export function useHub() {
 
     error.value = null;
     try {
-      const [me, list, board, activity, tokens] = await Promise.all([
+      // The log is loaded with the rest rather than by its own page, for the reason status changes
+      // reload rather than patch: one load is the shape here, and a second fetch pattern for one
+      // page is a second thing to keep in step. It is a window, not everything — /hub/log says so.
+      const [me, list, board, activity, log, tokens] = await Promise.all([
         call<HubData["me"]>("/v1/me"),
         call<{ guides: Guide[] }>(`/v1/guides?scope=${encodeURIComponent(scope.value)}`),
         call<HubData["board"]>("/v1/board"),
         call<{ notifications: HubData["activity"]; unread: number }>("/v1/notifications?limit=30"),
+        call<{ log: LogEntry[] }>("/v1/log?limit=200"),
         call<{ tokens: HubData["tokens"] }>("/v1/tokens"),
       ]);
       const team =
@@ -150,6 +155,7 @@ export function useHub() {
         guides: list.guides,
         board,
         activity: activity.notifications,
+        log: log.log,
         unread: activity.unread,
         tokens: tokens.tokens,
         team,
