@@ -42,6 +42,7 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `DELETE /v1/guides/:id` | **owner only** | |
 | `GET /v1/inbox` | account | Handed to you or your teams, not yet pulled |
 | `GET /v1/board` | account | The queues: waiting, not working, in flight, landed |
+| `GET /v1/log?repo=&since=&limit=` | account | Your own acts, newest first. `since` is a date prefix (`2026`, `2026-09`, `2026-09-11`) and anything else is a 400 |
 | `GET /v1/notifications?unread=` | account | |
 | `POST /v1/notifications/read` | account | `{ ids? }` — everything unread when `ids` is omitted |
 

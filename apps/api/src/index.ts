@@ -20,6 +20,7 @@
 //   GET    /v1/guides?q=&scope=        list/search: scope=all (default) | mine | <team slug>
 //   GET    /v1/inbox                   guides handed to you (or your teams) you have not pulled
 //   GET    /v1/board                   the queues: waiting, not working, in flight, landed, promote
+//   GET    /v1/log?repo=&since=       what you did, newest first
 //   GET    /v1/notifications?unread=   what happened while you were away
 //   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
@@ -80,6 +81,7 @@ import {
   tag,
   tagList,
 } from "./guide.js";
+import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
 import {
   announce,
@@ -1721,6 +1723,28 @@ app.get("/v1/board", async (c) => {
     promote: [] as ReturnType<typeof pick>,
     unread: await unreadCount(c.env, account),
   });
+});
+
+// ---- log --------------------------------------------------------------------------------
+
+// What you did, newest first. The opposite face of `/v1/notifications`: that one is what other
+// people did to your guides and it clears when you read it, this one is your own acts and it never
+// clears. Neither the buckets of the board nor the rank of the guides page — the only order here
+// is time, which is the one axis nothing else in the product offers.
+//
+// See log.ts for why this invents no table, and for the one thing it cannot honestly claim to be.
+app.get("/v1/log", async (c) => {
+  const since = (c.req.query("since") || "").trim();
+  // A malformed `since` compares lexicographically against ISO timestamps and silently returns
+  // either everything or nothing, so it is refused rather than guessed at.
+  if (since && !SINCE_RE.test(since))
+    return err(c, 400, "since must be a date: 2026, 2026-09, 2026-09-11, or a full ISO instant");
+  const rows = await logFeed(c.env, c.get("account"), {
+    repo: (c.req.query("repo") || "").trim(),
+    since,
+    limit: Number(c.req.query("limit")) || 100,
+  });
+  return c.json({ log: rows.map(logSummary(origin(c), c.get("account"))) });
 });
 
 // ---- notifications ----------------------------------------------------------------------

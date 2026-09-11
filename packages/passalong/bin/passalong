@@ -8,6 +8,7 @@
 //   passalong inbox               guides handed to you that you have not pulled yet
 //   passalong board               waiting on you, in flight, landed, worth keeping
 //   passalong activity [--all]    what happened while you were away; clears unless --all
+//   passalong log [repo]          what you did, newest first, by month
 //   passalong list [query]        your guides and your teams', local and synced
 //   passalong open <id> [--print] view a guide in the browser (or the terminal)
 //   passalong hub                 open your synced guides in the browser
@@ -99,6 +100,10 @@ function activityLine(n) {
   return `${dot} ${(n.guide || "").padEnd(8)}  ${relDate(n.at).padEnd(10)} ${n.text}`;
 }
 
+const MONTHS = "January February March April May June July August September October November December".split(" ");
+/** "September 2026" from an ISO timestamp, without pulling in a date library for one heading. */
+const monthOf = (iso) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
+
 const commands = {
   async share(f) {
     let path = f._[0];
@@ -164,6 +169,39 @@ const commands = {
     const total = b.waiting.length + b.failing.length + b.in_flight.length + b.landed.length;
     if (!total) console.error("nothing in flight — every transfer is closed");
     else if (b.unread) console.error(`\n${b.unread} new: passalong activity`);
+  },
+
+  /**
+   * What you did, newest first, under a heading per month.
+   *
+   * The month headings are the whole point: every other list in this CLI is ordered by what needs
+   * you — the board's queues, `list`'s state rank — and none of them can answer "what did I get
+   * done in September". Time is the axis nothing else offers.
+   *
+   * A repo narrows it, positionally and without a flag, for the same reason `list` takes its query
+   * that way: it is the one thing you are likely to say, and a flag would make you name it twice.
+   */
+  async log(f) {
+    const repo = f._.join(" ");
+    const rows = await passalong.log({ repo }).catch((e) => die(e.message));
+    if (!rows.length)
+      return console.error(
+        repo
+          ? `nothing passed along from anything matching "${repo}"`
+          : "nothing yet — your log fills up as you share, pull and answer guides",
+      );
+    let month = "";
+    for (const r of rows) {
+      const m = monthOf(r.at);
+      if (m !== month) {
+        console.log(`\n${m}`);
+        month = m;
+      }
+      console.log(`  ${r.guide}  ${r.at.slice(0, 10)}  ${r.text}${r.repo && !repo ? `  ${r.repo}` : ""}`);
+    }
+    // Said every time, because the list looks like a work log and is not one. A month you shipped
+    // without sharing looks identical here to a month you did nothing.
+    console.error(`\n${rows.length} thing${rows.length === 1 ? "" : "s"}. Work that never became a guide is not here.`);
   },
 
   async activity(f) {

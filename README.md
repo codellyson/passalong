@@ -30,6 +30,7 @@ passalong pull <id|link>      fetch a guide into ./.passalong/ (git-ignored) and
 passalong inbox               guides handed to you that you have not pulled yet
 passalong board               waiting on you, in flight, landed, worth keeping
 passalong activity [--all]    what happened while you were away; clears unless --all
+passalong log [repo]          what you did, newest first, under a heading per month
 passalong list [query]        your guides and your teams', local and synced
 passalong open <id> [--print] view a guide in the browser (or the terminal)
 passalong hub                 open your synced guides in the browser

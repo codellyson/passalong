@@ -211,6 +211,19 @@ export async function inbox() {
 export const board = () => api.board();
 
 /**
+ * What you did, newest first: what you published, what you took delivery of, and every verdict and
+ * ack you gave. The other half of `activity` — that one is what other people did to your guides and
+ * it clears when you read it; this is your own record and it never clears.
+ *
+ * It is a record of what you passed along, not of what you worked on. Work that never became a
+ * guide has no row, so anything printing this has to say so. Needs sync.
+ */
+export async function log({ repo = "", since = "" } = {}) {
+  const res = await api.log({ repo, since });
+  return res.log;
+}
+
+/**
  * What happened while you were away: your guides being pulled and shipped, guides handed to you,
  * invites taken up. Each item carries a rendered `text` line so every surface says the same thing.
  */

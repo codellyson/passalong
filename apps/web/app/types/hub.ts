@@ -96,6 +96,23 @@ export interface Note {
   read: boolean;
 }
 
+/**
+ * One thing you did. The server renders `text`, the same way it renders a notification's — see
+ * apps/api/src/log.ts for why this is your own acts and `Note` is everyone else's.
+ */
+export interface LogEntry {
+  act: "published" | "pulled" | "works" | "broken" | "took" | "passed";
+  at: string;
+  guide: string;
+  title: string;
+  /** The guide's `source_context`. The author's repo, which is not always the reader's. */
+  repo: string;
+  url: string;
+  mine: boolean;
+  note: string;
+  text: string;
+}
+
 export interface ApiToken {
   id: string;
   name: string;
@@ -115,6 +132,8 @@ export interface HubData {
   guides: Guide[];
   board: Board | null;
   activity: Note[];
+  /** Your own acts, newest first. The window the server sends, not everything you have ever done. */
+  log: LogEntry[];
   unread: number;
   tokens: ApiToken[];
   team: TeamDetail | null;

@@ -17,7 +17,7 @@ public one, for agents *using* Passalong rather than changing it.
     **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
-  - `src/mcp.js` — MCP tools: `search_guides`, `inbox`, `board`, `activity`, `get_guide`,
+  - `src/mcp.js` — MCP tools: `search_guides`, `inbox`, `board`, `activity`, `log`, `get_guide`,
     `publish_guide`, `guide_template`, `set_guide_status`.
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
@@ -281,6 +281,21 @@ public one, for agents *using* Passalong rather than changing it.
   is why landed excludes it: one guide, one card. "Someone else pulled it" is the test everywhere
   — your own pull from another machine is not the transfer landing. The hub reloads after a status
   change rather than moving rows itself; re-deriving buckets in JS is how the two drift apart.
+- **The log (`GET /v1/log`) is the only surface ordered by time, and it owns no table.** Everything
+  else is ordered by state — the board's queues, the guides page's rank — so nothing could answer
+  "what did I get done in September", and the one thing the product recorded everywhere and showed
+  nowhere was your own work. `log.ts` is a `UNION ALL` over rows that already exist: `guide.created`
+  for a publish, and the `pull`, `verdict` and `ack` rows for the rest. **Never give it a table.**
+  The moment it has its own rows it can disagree with the board, and the whole reason it cannot
+  today is that there is nothing to keep in step. Two rules follow from what it is. It renders
+  **no counts** — no totals, no streak, no per-month number: a count of guides shared is a metric of
+  the wrong thing, and it is the shape this becomes if allowed to summarise (PRD §9). And every
+  surface printing it **must say it is what you passed along, not what you worked on** — work that
+  never became a guide has no row, so an empty month is indistinguishable from a quiet one, and a
+  page that does not say so lies about the exact thing people open it to check. The pull arm is
+  `GROUP BY guide_id` on purpose: `recordPull` writes a row per fetch of `/v1/guides/:id` and the
+  CLI resolves an id by fetching, so `take` then `pull` leaves two rows seconds apart. The board
+  wants both; a log rendering both says you pulled the same thing twice in a minute.
 - **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
   to whoever should hear it: `handoff`, `shared`, `pulled`, `consumed`, `joined`. Rows first,
   delivery second — mail is a channel over the row, so the feed works with no mailer configured.
