@@ -98,7 +98,8 @@ passalong login                 # optional: sync across machines
 
 `passalong setup` registers a stdio MCP server exposing: `publish_guide`, `file_bugs`,
 `start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`,
-`verify_guide`, `inbox`, `board`, `activity`.
+`verify_guide`, `inbox`, `board`, `activity`. `start_guide` needs passalong 0.3 or later; an older
+install exposes the rest, so fall back to `get_guide` then `ack_guide` if it is not there.
 
 Open a guide you mean to act on with `start_guide`, not `get_guide`. Both return the same markdown;
 `start_guide` also says you are on it, and between handing work over and hearing it worked that is

@@ -3,12 +3,23 @@
 // team, the same tools see the team's guides and the user's inbox.
 //
 //   claude mcp add passalong -- passalong mcp
+import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as api from "./api.js";
 import { AREAS, BUG_SECTIONS, parse, SECTIONS, template } from "./guide.js";
 import * as passalong from "./passalong.js";
+
+/**
+ * What the server calls itself in the MCP handshake — read from package.json rather than written
+ * here, because a literal drifts. This one said 0.2.0 for two releases while the package was
+ * 0.2.2, and the one thing a version string in a handshake is for is telling a client which build
+ * it is talking to. `pnpm release` bumps package.json, so there is only one number to bump.
+ */
+const VERSION = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
 
 const text = (s) => ({ content: [{ type: "text", text: s }] });
 
@@ -46,7 +57,7 @@ const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError
 
 export async function serve() {
   const server = new McpServer(
-    { name: "passalong", version: "0.2.0" },
+    { name: "passalong", version: VERSION },
     {
       instructions:
         "Passalong hands work between contexts as guides: markdown with frontmatter, in two " +
