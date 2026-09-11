@@ -51,10 +51,13 @@ export interface LogEnv {
  * and the guide is still the only place it is recorded. An archived guide stays in the log — this
  * is a record of what happened, not a view of what is current, so nothing here filters on status.
  *
- * Pulling your own guide is absent by construction: `recordReceipt` skips the author, because a
- * pull is the receipt for a transfer and fetching your own work is not one. That is a real hole in
- * "what I did today" and the honest fix is a `pull` row, which would change what the board counts
- * as landed. Not worth it for a line in a list.
+ * Pulling your own guide lands here sometimes, and which times is not obvious. `recordPull` does
+ * not skip the author — every fetch of `/v1/guides/:id` writes a row, whoever asked — but the CLI's
+ * `pull` resolves from the local store first and only calls the API when the guide carries a team,
+ * so that a teammate's cached copy still registers as a pull for them. The upshot: re-pulling your
+ * own guide in another repo is in your log when it was shared with a team, and invisible when it
+ * was not. That is the receipt model showing through, and it is `mine` on a `pulled` row rather
+ * than a missing row, which is the more honest of the two.
  *
  * The `GROUP BY` on the pull arm is load-bearing. `pull` is not one row per act of taking
  * something: `recordPull` writes one on every fetch of `/v1/guides/:id` and never dedupes, on
