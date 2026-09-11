@@ -85,7 +85,13 @@ Register the webhook endpoints as `https://passalong.dev/v1/billing/webhook/stri
 needs `subscription.create`, `subscription.disable` and `invoice.payment_failed`. Anything else is
 answered 200 and ignored, so subscribing to more is harmless.
 
-To exercise this locally, put the test keys in `apps/web/.dev.vars` (gitignored) and point the
+What the tests cannot reach is the provider validating ids that only exist in your account — a
+price id, a plan code, a live subscription. `apps/api/test/billing-calls.test.mjs` pins everything
+this side of that by stubbing `fetch`: the endpoint, the encoding, the field names, where the
+metadata goes and how an error is read back. Run it before the first real checkout and after any
+change to `billing.ts`.
+
+To exercise the rest, put the test keys in `apps/web/.dev.vars` (gitignored) and point the
 provider's CLI forwarder at `http://localhost:3000/v1/billing/webhook/<provider>`. Note the
 webhook, not the checkout, is what writes a plan — so a subscription only takes effect once the
 event arrives.
