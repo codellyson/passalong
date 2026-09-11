@@ -34,7 +34,10 @@ session's history. Write for execution, not for permanence.
    team's members and their handles. It prints the guide id on stdout and the share link (and
    who it was handed to) on stderr.
 6. **Report** the id (and link if synced) and one line on how to use it on the other side:
-   `passalong pull <id>` in the target repo, or "pull passalong <id>" to an agent with the Passalong MCP server.
+   `passalong start <id>` in the target repo, or "start passalong <id>" to an agent with the
+   Passalong MCP server. `start` rather than `pull` on purpose: it takes the handoff as well as
+   fetching it, and until somebody says they are on it the sender cannot tell a guide nobody
+   noticed from one somebody is deep in.
 
 If the `passalong` command is missing, tell the user to run `npm i -g passalong && passalong setup` and
 still write the draft file so nothing is lost.

@@ -315,3 +315,11 @@ test("what parses and what may be set are two different lists", () => {
   for (const s of SETTABLE) assert.ok(STATUSES.includes(s), `${s} must also parse`);
   assert.deepEqual([...SETTABLE], ["draft", "published", "consumed"]);
 });
+
+test("parseMeta reads a parent, which needs no rule of its own", () => {
+  // The parser is generic, so `parent:` is read the moment the field exists in the format. This
+  // pins that it stays a plain scalar — not a list, not normalised the way tags are.
+  const m = parseMeta(`---\nid: k3mq2xa7\ntitle: One\nparent: zx9y8w42\n---\n\n## Problem\nx\n`);
+  assert.equal(m.parent, "zx9y8w42");
+  assert.equal(parseMeta(DOC).parent, undefined, "and a guide without one says nothing");
+});

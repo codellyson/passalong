@@ -1,7 +1,7 @@
 // The operations Passalong exposes. Both surfaces (bin/passalong and the MCP server) call these,
 // so anything an agent can do through MCP a human can do from the terminal and vice versa.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import * as api from "./api.js";
 import { context } from "./capture.js";
 import {
@@ -153,6 +153,27 @@ export async function resolve(ref) {
 }
 
 /**
+ * Resolve a reference to its id alone, without fetching the guide.
+ *
+ * The reader's two answers — an ack and a verdict — are writes that take an id and nothing else,
+ * so the guide body they used to fetch on the way was never read. That fetch was not free:
+ * `GET /v1/guides/:id` records a pull, which is how somebody saying "not me" on a handoff
+ * registered as taking delivery of it — inflating the guide's pull count and moving it into the
+ * sender's "landed" queue. An id needs no lookup at all, and a link or a file carries the id in
+ * its own frontmatter.
+ *
+ * Unlike `resolve()`, a bare id is not checked for existence here. The server answers that when
+ * the write lands, and "no such guide" from the route the write went to is the same news one
+ * round trip earlier.
+ */
+export async function resolveId(ref) {
+  if (/^https?:\/\//.test(ref)) return parse(await api.fetchShared(ref)).meta.id;
+  if (ref.endsWith(".md") && existsSync(ref)) return parse(readFileSync(ref, "utf8")).meta.id;
+  if (ID_RE.test(ref)) return ref;
+  throw new PassalongError(`"${ref}" is not a passalong id, share link, or .md file`);
+}
+
+/**
  * Pull a guide into a working directory: writes .passalong/<id>.md there and returns the guide
  * so the caller can put the text straight into an agent's context. A pull of someone else's
  * guide is also recorded server-side, which is how the sender sees the transfer landed.
@@ -176,6 +197,99 @@ export async function pull(ref, { cwd = process.cwd(), write = true } = {}) {
     writeFileSync(path, serialize(guide));
   }
   return { guide, from, path, markdown: serialize(guide) };
+}
+
+/**
+ * Pull a guide *and* take the handoff: the two halves of starting work, in one call.
+ *
+ * `pull` says the guide arrived. `ack` says somebody is doing it, which is the thing the sender
+ * cannot find out any other way — and the two are deliberately separate, because reading a guide
+ * to decide it is not yours is exactly what `pass` is for. Fetching is not committing.
+ *
+ * For an agent the distinction is real but the ordering never varies: it reads a guide because it
+ * is about to follow it. So this is the path an agent takes when it means to do the work, and it
+ * is one call rather than two — the mandated thing has to be the cheap thing or it gets skipped.
+ * `pull` alone remains the way to read one without answering for it.
+ *
+ * The ack is best-effort and never costs the caller the markdown, which is what they came for:
+ *
+ *   - the author's own guide is a 403 (`ack` is the reader's answer and an author is not a party
+ *     to it), and that is a no-op, not a failure — an agent working in its own user's repo hits
+ *     this constantly;
+ *   - logged out, there is nobody to tell;
+ *   - anything else is reported in `ack_error` rather than swallowed, because an ack that quietly
+ *     did not land leaves the sender in the silence the whole feature exists to end.
+ */
+export async function start(ref, { cwd = process.cwd(), write = true } = {}) {
+  const pulled = await pull(ref, { cwd, write });
+  const id = pulled.guide.meta.id;
+  if (!api.loggedIn()) return { ...pulled, took: false, ack_error: "", own: false };
+  try {
+    await api.ack(id, true, "");
+    return { ...pulled, took: true, ack_error: "", own: false };
+  } catch (err) {
+    if (err.status === 403) return { ...pulled, took: false, ack_error: "", own: true };
+    return { ...pulled, took: false, ack_error: err.message, own: false };
+  }
+}
+
+/**
+ * The one line `get_guide` adds to a guide it is handing an agent, or "" when there is nothing to
+ * say. Separate from the tool so it can be tested without a server.
+ *
+ * Only a guide that was addressed to somebody can be taken — one nobody was handed has no handoff
+ * to answer for, and nudging about it is noise that teaches an agent to ignore the nudge.
+ *
+ * It goes after the document, not in front of it. Anything before the opening `---` stops the
+ * frontmatter being frontmatter, and an agent that writes what it was handed back out to a file
+ * would lose the id along with it.
+ */
+export function handoffNudge(meta = {}) {
+  if (!meta.to && !meta.team) return "";
+  return (
+    "<!-- passalong: this guide was handed to someone. If you are about to do the work, call " +
+    "start_guide instead of get_guide — it takes the handoff so the sender stops guessing. " +
+    "If you are only reading, or it turns out not to be yours, answer with ack_guide taken=false " +
+    "and a reason. -->"
+  );
+}
+
+/**
+ * The image types a guide can carry as evidence. Mirrors SHOT_TYPES in apps/api/src/shots.ts —
+ * the server is the authority and refuses anything else; this is what lets a local caller find
+ * out before spending an upload on it.
+ */
+export const SHOT_TYPES = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+};
+
+/**
+ * Attach a screenshot from disk, and return the markdown that points at it.
+ *
+ * Evidence belongs *in* the document: a guide travels as markdown to anyone holding its link, so
+ * an image beside it would not travel at all. `claimShots` binds the upload to whichever guide's
+ * markdown names it at publish, which is why this returns a line to paste rather than taking a
+ * guide id — there is nothing to attach it to until the document says so.
+ *
+ * Local because it reads a path. An agent in a terminal has one; a hosted assistant does not, and
+ * reaches the same route through `attach_screenshot` on the HTTP server instead.
+ */
+export async function attach(file, { name = "" } = {}) {
+  if (!api.loggedIn())
+    throw new PassalongError("attaching evidence needs sync — run `passalong login` first");
+  if (!existsSync(file)) throw new PassalongError(`no file at ${file}`);
+  const ext = file.slice(file.lastIndexOf(".")).toLowerCase();
+  const type = SHOT_TYPES[ext];
+  if (!type)
+    throw new PassalongError(
+      `screenshots must be ${[...new Set(Object.values(SHOT_TYPES))].join(", ")} — ${ext || file} is not one`,
+    );
+  const shot = await api.uploadShot(readFileSync(file), type, name || basename(file));
+  return { ...shot, markdown: `![${name || basename(file)}](${shot.url})` };
 }
 
 /** Local guides merged with synced ones (by id), newest first, optionally filtered. */
@@ -240,8 +354,7 @@ export async function verdict(id, ok, note = "") {
   if (!api.loggedIn()) throw new PassalongError("verdicts need sync — run `passalong login` first");
   if (!ok && !note.trim())
     throw new PassalongError("say what went wrong: passalong failed <id> <what happened>");
-  const { guide } = await resolve(id);
-  return api.verdict(guide.meta.id, ok, note.trim());
+  return api.verdict(await resolveId(id), ok, note.trim());
 }
 
 /**
@@ -255,8 +368,7 @@ export async function ack(id, taken, note = "") {
   if (!api.loggedIn()) throw new PassalongError("acks need sync — run `passalong login` first");
   if (!taken && !note.trim())
     throw new PassalongError("say why you are passing: pass a note with taken=false");
-  const { guide } = await resolve(id);
-  return api.ack(guide.meta.id, taken, note.trim());
+  return api.ack(await resolveId(id), taken, note.trim());
 }
 
 /** Mark notifications seen. No ids means everything unread. */

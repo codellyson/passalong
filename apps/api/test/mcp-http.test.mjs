@@ -9,13 +9,17 @@ import { test } from "node:test";
 import { handleMcp } from "../src/mcp-http.ts";
 
 const PROTOCOL = "2025-06-18";
-const VOCAB = { areas: "web, mobile", severities: "s1 blocker, s3 minor" };
+const VOCAB = {
+  areas: "web, mobile",
+  severities: "s1 blocker, s3 minor",
+  shotTypes: "Accepts image/png, image/jpeg",
+};
 
 /** Stands in for the app: records what a tool asked for, answers what the test wants. */
 function recorder(answers = {}) {
   const seen = [];
-  const call = async (method, path, body) => {
-    seen.push({ method, path, body });
+  const call = async (method, path, body, raw) => {
+    seen.push({ method, path, body, raw });
     const answer = answers[`${method} ${path.split("?")[0]}`] ?? { status: 200, text: "{}" };
     return typeof answer === "function" ? answer(body) : answer;
   };
@@ -71,6 +75,7 @@ test("every tool it lists is one an agent could act on", async () => {
   const names = body.result.tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "ack_guide",
+    "attach_screenshot",
     "board",
     "file_bugs",
     "get_guide",
@@ -263,4 +268,108 @@ test("acking maps onto the route, and passing carries its reason", async () => {
   assert.equal(sent.method, "PUT");
   assert.equal(sent.path, "/v1/guides/k3mq2xa7/ack");
   assert.deepEqual(sent.body, { taken: false, note: "no context on payments" });
+});
+
+// attach_screenshot is the one tool that reaches outside: it fetches a URL a caller handed it.
+// `download_url` is filled in by ChatGPT in practice, but anyone holding a token can call the tool
+// directly, so what it refuses matters as much as what it uploads.
+const FILE = {
+  download_url: "https://files.example.com/abc.png",
+  file_id: "file-abc",
+  mime_type: "image/png",
+  file_name: "shot.png",
+};
+
+const attach = (file) =>
+  rpc({
+    jsonrpc: "2.0",
+    id: 9,
+    method: "tools/call",
+    params: { name: "attach_screenshot", arguments: { file } },
+  });
+
+test("attach_screenshot declares its file input the way a client looks for it", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
+  );
+  const tool = body.result.tools.find((t) => t.name === "attach_screenshot");
+  assert.deepEqual(tool._meta["openai/fileParams"], ["file"]);
+  const props = tool.inputSchema.properties.file.properties;
+  assert.deepEqual(Object.keys(props).sort(), [
+    "download_url",
+    "file_id",
+    "file_name",
+    "mime_type",
+  ]);
+  assert.deepEqual(tool.inputSchema.properties.file.required.sort(), ["download_url", "file_id"]);
+});
+
+test("attach_screenshot refuses a URL only the worker could reach", async () => {
+  const { call, seen } = recorder();
+  for (const url of [
+    "http://files.example.com/a.png",
+    "https://localhost/a.png",
+    "https://127.0.0.1/a.png",
+    "https://10.0.0.5/a.png",
+    "https://169.254.169.254/latest/meta-data",
+    "https://192.168.1.1/a.png",
+    "not a url",
+  ]) {
+    const body = await read(await handleMcp(attach({ ...FILE, download_url: url }), call, VOCAB));
+    assert.equal(body.result.isError, true, `${url} should be refused`);
+    assert.match(body.result.content[0].text, /public https URL/);
+  }
+  // Nothing reached the API: a refused URL is refused before any of it is fetched or stored.
+  assert.deepEqual(seen, []);
+});
+
+test("attach_screenshot uploads the bytes it fetched, labelled by what was served", async () => {
+  const png = new Uint8Array([137, 80, 78, 71]);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(png, { status: 200, headers: { "content-type": "image/png" } });
+  try {
+    const { call, seen } = recorder({
+      "POST /v1/shots": {
+        status: 201,
+        text: JSON.stringify({ shot: { id: "s1", url: "https://passalong.dev/v1/shots/s1" } }),
+      },
+    });
+    const body = await read(await handleMcp(attach(FILE), call, VOCAB));
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].path, "/v1/shots");
+    assert.equal(seen[0].raw.contentType, "image/png");
+    assert.equal(seen[0].raw.headers["x-shot-name"], "shot.png");
+    assert.equal(seen[0].body.byteLength, 4, "the bytes go up, not a description of them");
+    // The markdown is the point: evidence lives in the document, so the tool hands back the line.
+    assert.match(
+      body.result.content[0].text,
+      /!\[shot\.png\]\(https:\/\/passalong\.dev\/v1\/shots\/s1\)/,
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("attach_screenshot lets the route refuse, rather than inventing its own rules", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(new Uint8Array([1, 2]), {
+      status: 200,
+      headers: { "content-type": "image/tiff" },
+    });
+  try {
+    const { call } = recorder({
+      "POST /v1/shots": { status: 415, text: "screenshots must be image/png, image/jpeg" },
+    });
+    const body = await read(
+      await handleMcp(attach({ ...FILE, mime_type: "image/png" }), call, VOCAB),
+    );
+    assert.equal(body.result.isError, true);
+    // The served type wins over the client's claim, and `/v1/shots` is the one that says no.
+    assert.match(body.result.content[0].text, /screenshots must be/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

@@ -41,6 +41,11 @@ export interface Meta {
    * The receiving agent behaves differently for each — see KINDS in packages/passalong/src/guide.js.
    */
   kind?: string;
+  /**
+   * The guide this one came out of — see migrations/0015_lineage.sql. A chain, not a set: the
+   * parent is an ordinary guide somebody pulled, and this is what they learned doing it.
+   */
+  parent?: string;
   /** The report this guide is one issue of — see migrations/0006_reports.sql. */
   report?: string;
   /** Where the issue is, inside its report. Free text on purpose; see `AREAS`. */

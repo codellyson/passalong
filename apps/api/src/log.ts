@@ -59,13 +59,22 @@ export interface LogEnv {
  * was not. That is the receipt model showing through, and it is `mine` on a `pulled` row rather
  * than a missing row, which is the more honest of the two.
  *
- * The `GROUP BY` on the pull arm is load-bearing. `pull` is not one row per act of taking
- * something: `recordPull` writes one on every fetch of `/v1/guides/:id` and never dedupes, on
- * purpose — the pull count is how travelled a guide is, and re-reading it is part of that. But the
- * CLI resolves an id by fetching the guide, so `passalong take x` and then `passalong pull x`
- * leaves two rows seconds apart, and a log rendering both says you pulled the same thing twice in
- * one minute. The act is taking delivery of a guide, which happens once; the extra rows are the
- * transfer's bookkeeping and belong to the board, not here.
+ * The `GROUP BY` on the pull arm is load-bearing, though no longer for the reason it was written
+ * for. `pull` is not one row per act of taking something: `recordPull` writes one on every fetch of
+ * `/v1/guides/:id` and never dedupes, on purpose — the pull count is how travelled a guide is, and
+ * re-reading it is part of that.
+ *
+ * What used to make that acute was the CLI resolving an id by fetching the guide, so `passalong
+ * take x` followed by `passalong pull x` left two rows seconds apart and this list claimed you
+ * pulled the same thing twice in a minute. That is fixed at the source now: an ack and a verdict
+ * resolve an id without a fetch, so they write no pull row at all.
+ *
+ * The clause stays, because the fix removed a cause and not the property. A person who pulls a
+ * guide on Monday and again on Thursday still has two rows, `start_guide` writes one every time an
+ * agent opens a guide it means to work on, and rows from before the fix are still in the table. The
+ * act this list renders is taking delivery of a guide, which happens once; every extra row is the
+ * transfer's bookkeeping and belongs to the board, not here. `MIN(p.at)` dates the act from the
+ * first of them for the same reason.
  */
 const LOG_SQL = `
   SELECT 'published' AS act, g.created AS at, '' AS detail,

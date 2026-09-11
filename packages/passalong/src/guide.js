@@ -245,6 +245,9 @@ const META_ORDER = [
   "created",
   "author",
   "source_context",
+  // Where it came from, in the two senses a guide has one: `source_context` is the repo and branch
+  // it was written in, `parent` is the guide it was written *out of*.
+  "parent",
   "status",
   "team",
   "to",
@@ -307,6 +310,16 @@ export function validate({ meta, body }) {
   const errors = [];
   if (!meta.title) errors.push("frontmatter needs a title");
   if (meta.id && !ID_RE.test(meta.id)) errors.push(`id "${meta.id}" is not a valid passalong id`);
+  // A parent is optional, and a self-parent is always a mistake worth refusing.
+  //
+  // A malformed one is not refused, though, and that is deliberate. `parent:` is a field name this
+  // format did not reserve until now, so a guide written months ago may already carry one meaning
+  // something else entirely — and a guide shared then has to still re-share today. Rejecting the
+  // value would make that document unpublishable by its own author, which is the failure the
+  // STATUSES comment above describes. The server drops a parent it cannot resolve, so the worst
+  // case is lineage that silently does not apply rather than work nobody can hand on.
+  if (meta.parent && meta.id && meta.parent === meta.id)
+    errors.push("a guide cannot follow itself");
   if (meta.status && !STATUSES.includes(meta.status)) {
     errors.push(`status must be one of ${STATUSES.join(", ")}`);
   }

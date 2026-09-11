@@ -17,8 +17,12 @@ public one, for agents *using* Passalong rather than changing it.
     **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
-  - `src/mcp.js` — MCP tools: `search_guides`, `inbox`, `board`, `activity`, `log`, `get_guide`,
-    `publish_guide`, `guide_template`, `set_guide_status`.
+  - `src/mcp.js` — MCP tools: `search_guides`, `inbox`, `board`, `activity`, `log`, `start_guide`,
+    `get_guide`, `publish_guide`, `guide_template`, `set_guide_status`, `ack_guide`,
+    `verify_guide`, `file_bugs`, `attach_screenshot`. `start_guide` is the one an agent should
+    reach for on work it means to do: it pulls and takes the handoff together. `get_guide` only
+    reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a
+    client-passed file over HTTP (`openai/fileParams`).
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to
