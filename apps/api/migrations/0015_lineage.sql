@@ -1,0 +1,28 @@
+-- M15: a guide that came out of another guide.
+--
+-- The loop the product could not record. Somebody pulls your guide, does the work, and learns
+-- three things doing it — and today those three things are either a 280-character verdict note or
+-- nowhere. Written as a guide of their own they are pullable, verifiable and addressable like
+-- anything else; the only thing missing is a way to say which guide they came out of.
+--
+-- So a child is a whole guide, for the same reason `0006_reports.sql` made an issue a whole guide:
+-- it has to stand on its own, be taken by one person, and be answered for separately. A reply
+-- would have none of that, which is why this is lineage and not a comment thread — see
+-- docs/LINEAGE.md §7 for what that costs and why the board is the reason.
+--
+-- Deliberately not `report_id`, which already exists and is a different question. A report is a
+-- set: issues filed together in one act, siblings, under a parent that is not itself a guide.
+-- This is a chain: a different author, a different day, and a parent that is an ordinary guide
+-- with its own pulls and verdicts. A guide can have both.
+--
+-- Denormalized from the child's own frontmatter, exactly like `report`, `area` and `severity` —
+-- `parent:` is a field in the markdown, so a guide published from the browser is byte-for-byte
+-- the same document as one published by the CLI, and neither surface needs to know the other
+-- exists.
+--
+-- No foreign key, matching `report_id` and `team_id`. An author may delete a guide that other
+-- people have already written children against, and those children are not theirs to take with
+-- it: the delete orphans them instead, clearing this column while the child's own markdown keeps
+-- saying where it came from.
+ALTER TABLE guide ADD COLUMN parent_id TEXT NOT NULL DEFAULT '';
+CREATE INDEX guide_parent ON guide(parent_id, created);

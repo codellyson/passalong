@@ -199,6 +199,61 @@ export async function pull(ref, { cwd = process.cwd(), write = true } = {}) {
   return { guide, from, path, markdown: serialize(guide) };
 }
 
+/**
+ * Pull a guide *and* take the handoff: the two halves of starting work, in one call.
+ *
+ * `pull` says the guide arrived. `ack` says somebody is doing it, which is the thing the sender
+ * cannot find out any other way — and the two are deliberately separate, because reading a guide
+ * to decide it is not yours is exactly what `pass` is for. Fetching is not committing.
+ *
+ * For an agent the distinction is real but the ordering never varies: it reads a guide because it
+ * is about to follow it. So this is the path an agent takes when it means to do the work, and it
+ * is one call rather than two — the mandated thing has to be the cheap thing or it gets skipped.
+ * `pull` alone remains the way to read one without answering for it.
+ *
+ * The ack is best-effort and never costs the caller the markdown, which is what they came for:
+ *
+ *   - the author's own guide is a 403 (`ack` is the reader's answer and an author is not a party
+ *     to it), and that is a no-op, not a failure — an agent working in its own user's repo hits
+ *     this constantly;
+ *   - logged out, there is nobody to tell;
+ *   - anything else is reported in `ack_error` rather than swallowed, because an ack that quietly
+ *     did not land leaves the sender in the silence the whole feature exists to end.
+ */
+export async function start(ref, { cwd = process.cwd(), write = true } = {}) {
+  const pulled = await pull(ref, { cwd, write });
+  const id = pulled.guide.meta.id;
+  if (!api.loggedIn()) return { ...pulled, took: false, ack_error: "", own: false };
+  try {
+    await api.ack(id, true, "");
+    return { ...pulled, took: true, ack_error: "", own: false };
+  } catch (err) {
+    if (err.status === 403) return { ...pulled, took: false, ack_error: "", own: true };
+    return { ...pulled, took: false, ack_error: err.message, own: false };
+  }
+}
+
+/**
+ * The one line `get_guide` adds to a guide it is handing an agent, or "" when there is nothing to
+ * say. Separate from the tool so it can be tested without a server.
+ *
+ * Only a guide that was addressed to somebody can be taken — one nobody was handed has no handoff
+ * to answer for, and nudging about it is noise that teaches an agent to ignore the nudge.
+ *
+ * It goes after the document, not in front of it. Anything before the opening `---` stops the
+ * frontmatter being frontmatter, and an agent that writes what it was handed back out to a file
+ * would lose the id along with it.
+ */
+export function handoffNudge(meta = {}) {
+  if (!meta.to && !meta.team) return "";
+  return (
+    "<!-- passalong: this guide was handed to someone. If you are about to do the work, call " +
+    "start_guide instead of get_guide — it takes the handoff so the sender stops guessing. " +
+    "If you are only reading, or it turns out not to be yours, answer with ack_guide taken=false " +
+    "and a reason. -->"
+  );
+}
+
 /** Local guides merged with synced ones (by id), newest first, optionally filtered. */
 export async function list(query = "", { remote = true, scope = "" } = {}) {
   const local = scope && scope !== "all" && scope !== "mine" ? [] : store.search(query);

@@ -3,12 +3,23 @@
 // team, the same tools see the team's guides and the user's inbox.
 //
 //   claude mcp add passalong -- passalong mcp
+import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as api from "./api.js";
 import { AREAS, BUG_SECTIONS, parse, SECTIONS, template } from "./guide.js";
 import * as passalong from "./passalong.js";
+
+/**
+ * What the server calls itself in the MCP handshake — read from package.json rather than written
+ * here, because a literal drifts. This one said 0.2.0 for two releases while the package was
+ * 0.2.2, and the one thing a version string in a handshake is for is telling a client which build
+ * it is talking to. `pnpm release` bumps package.json, so there is only one number to bump.
+ */
+const VERSION = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
 
 const text = (s) => ({ content: [{ type: "text", text: s }] });
 
@@ -46,7 +57,7 @@ const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError
 
 export async function serve() {
   const server = new McpServer(
-    { name: "passalong", version: "0.2.0" },
+    { name: "passalong", version: VERSION },
     {
       instructions:
         "Passalong hands work between contexts as guides: markdown with frontmatter, in two " +
@@ -55,6 +66,13 @@ export async function serve() {
         `kind: transfer (or absent) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +
         "Follow its Steps, adapting anything marked ASSUMES to this codebase; run its " +
         "Verification before declaring done, then verify_guide with the result.\n" +
+        "OPEN A GUIDE YOU MEAN TO ACT ON WITH start_guide, NOT get_guide. Both return the same " +
+        "markdown; start_guide also says you are on it, and that is the only signal the sender " +
+        "gets between handing work over and hearing it worked. get_guide is for reading one you " +
+        "have not committed to. Taking your own guide is a no-op, so there is no case where " +
+        "start_guide is the wrong call on work you are about to do. If it turns out not to be " +
+        "yours, hand it back with ack_guide taken=false and a reason — say why, or the sender is " +
+        "left exactly where silence left them.\n" +
         `kind: bug is a defect to FIX here. Sections: ${BUG_SECTIONS.join(", ")}. ` +
         "It has no Steps and nothing in it is a procedure to apply: Reproduce is how to see the " +
         "bug and running it produces the bug, Verification is the behaviour that should have " +
@@ -67,7 +85,8 @@ export async function serve() {
         "share what was just done, distill the session into a guide (guide_template shows the " +
         "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or " +
         "team/#group for the people who do a thing. " +
-        "At the start of work, inbox shows guides teammates have handed to this user, and activity " +
+        "At the start of work, inbox shows guides teammates have handed to this user — open one " +
+        "with start_guide — and activity " +
         "shows whether the guides they handed off have landed. When the user asks what they have " +
         "been working on, or wants a standup or a summary of a period, call log — but say that it " +
         "holds what they passed along and not everything they did. Gotchas are " +
@@ -243,13 +262,65 @@ export async function serve() {
   );
 
   server.registerTool(
+    "start_guide",
+    {
+      title: "Start work on a guide",
+      description:
+        "Take a guide handed to you AND fetch it, in one call — use this the moment you are going " +
+        "to do the work. Same markdown as get_guide, plus the handoff is answered: until somebody " +
+        "says they are on it, a guide nobody has noticed and a guide somebody is deep in look " +
+        "identical to the sender, who finds out in a week instead of a minute. Taking your own " +
+        "guide is a no-op, not an error, so this is always safe to call. If the work turns out " +
+        "not to be yours after reading, hand it back with ack_guide taken=false and a reason.",
+      inputSchema: {
+        ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("directory to write .passalong/<id>.md into; default is the server's cwd"),
+      },
+    },
+    async ({ ref, cwd }) => {
+      try {
+        const r = await passalong.start(ref, { cwd: cwd || process.cwd() });
+        const meta = parse(r.markdown).meta;
+        const lead =
+          meta.kind === "bug"
+            ? "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
+              "— those steps produce the defect. Fix what Problem describes, then check " +
+              "Verification and answer with verify_guide.\n\n"
+            : "";
+        // What actually happened to the ack, said plainly. An agent that reports "took it" when
+        // nothing was sent is the failure this tool exists to prevent, one step further along.
+        const took = r.took
+          ? "handoff taken; the sender has been told"
+          : r.own
+            ? "your own guide — nothing to take, and nobody to tell"
+            : r.ack_error
+              ? `NOT taken (${r.ack_error}) — retry with ack_guide before reporting that you have it`
+              : "not logged in, so no handoff was taken";
+        const siblings = await related(meta);
+        return text(
+          `${lead}${r.markdown}${siblings}` +
+            `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->`,
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "get_guide",
     {
       title: "Get guide",
       description:
-        "Fetch a transfer guide by passalong id or share link and return its full markdown. Also " +
+        "READ a transfer guide by passalong id or share link and return its full markdown. Also " +
         "writes it to .passalong/<id>.md in the working directory so it survives the session. " +
-        "Pulling a teammate's guide tells them the transfer landed.",
+        "Pulling a teammate's guide tells them the transfer landed. Use this to look at a guide " +
+        "you have not committed to. If you are about to DO the work, call start_guide instead: " +
+        "it does this and takes the handoff in one call, which is the only way the sender learns " +
+        "somebody picked it up.",
       inputSchema: {
         ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
         cwd: z
@@ -272,8 +343,15 @@ export async function serve() {
               "Verification and answer with verify_guide.\n\n"
             : "";
         const siblings = await related(meta);
+        // After the document, with the other trailing comments, not in front of it. An
+        // instruction that arrives with the payload is what gets read — but anything before the
+        // opening `---` stops the frontmatter being frontmatter, and this fires on every guide
+        // anyone was handed rather than only on bugs. The bug lead stays where it is: it is a
+        // warning against executing the document, so being read first is its whole job.
         return text(
-          `${lead}${markdown}${siblings}\n\n<!-- passalong: ${from}; written to ${path} -->`,
+          `${lead}${markdown}${siblings}` +
+            `\n\n<!-- passalong: ${from}; written to ${path} -->` +
+            `\n${passalong.handoffNudge(meta)}`,
         );
       } catch (err) {
         return fail(err);
