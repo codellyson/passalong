@@ -153,6 +153,27 @@ export async function resolve(ref) {
 }
 
 /**
+ * Resolve a reference to its id alone, without fetching the guide.
+ *
+ * The reader's two answers — an ack and a verdict — are writes that take an id and nothing else,
+ * so the guide body they used to fetch on the way was never read. That fetch was not free:
+ * `GET /v1/guides/:id` records a pull, which is how somebody saying "not me" on a handoff
+ * registered as taking delivery of it — inflating the guide's pull count and moving it into the
+ * sender's "landed" queue. An id needs no lookup at all, and a link or a file carries the id in
+ * its own frontmatter.
+ *
+ * Unlike `resolve()`, a bare id is not checked for existence here. The server answers that when
+ * the write lands, and "no such guide" from the route the write went to is the same news one
+ * round trip earlier.
+ */
+export async function resolveId(ref) {
+  if (/^https?:\/\//.test(ref)) return parse(await api.fetchShared(ref)).meta.id;
+  if (ref.endsWith(".md") && existsSync(ref)) return parse(readFileSync(ref, "utf8")).meta.id;
+  if (ID_RE.test(ref)) return ref;
+  throw new PassalongError(`"${ref}" is not a passalong id, share link, or .md file`);
+}
+
+/**
  * Pull a guide into a working directory: writes .passalong/<id>.md there and returns the guide
  * so the caller can put the text straight into an agent's context. A pull of someone else's
  * guide is also recorded server-side, which is how the sender sees the transfer landed.
@@ -227,8 +248,7 @@ export async function verdict(id, ok, note = "") {
   if (!api.loggedIn()) throw new PassalongError("verdicts need sync — run `passalong login` first");
   if (!ok && !note.trim())
     throw new PassalongError("say what went wrong: passalong failed <id> <what happened>");
-  const { guide } = await resolve(id);
-  return api.verdict(guide.meta.id, ok, note.trim());
+  return api.verdict(await resolveId(id), ok, note.trim());
 }
 
 /**
@@ -242,8 +262,7 @@ export async function ack(id, taken, note = "") {
   if (!api.loggedIn()) throw new PassalongError("acks need sync — run `passalong login` first");
   if (!taken && !note.trim())
     throw new PassalongError("say why you are passing: pass a note with taken=false");
-  const { guide } = await resolve(id);
-  return api.ack(guide.meta.id, taken, note.trim());
+  return api.ack(await resolveId(id), taken, note.trim());
 }
 
 /** Mark notifications seen. No ids means everything unread. */
