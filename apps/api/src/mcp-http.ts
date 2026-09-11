@@ -20,11 +20,19 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 
-/** How a tool reaches the rest of the API: the app's own fetch, with the caller's credential. */
+/**
+ * How a tool reaches the rest of the API: the app's own fetch, with the caller's credential.
+ *
+ * `raw` is for the one route that does not take JSON. `POST /v1/shots` reads the body as bytes and
+ * the content type as the declaration of what they are, so a tool uploading evidence has to be
+ * able to say both. Without it the only way to reach that route from here would be to talk to R2
+ * directly, which is the thing this module exists not to do.
+ */
 type Call = (
   method: string,
   path: string,
   body?: unknown,
+  raw?: { contentType: string; headers?: Record<string, string> },
 ) => Promise<{ status: number; text: string }>;
 
 const text = (value: string) => ({ content: [{ type: "text" as const, text: value }] });
@@ -52,6 +60,48 @@ export interface Vocabulary {
   areas: string;
   /** Severity slugs and what they mean. */
   severities: string;
+  /** Image media types `/v1/shots` accepts, for the attach_screenshot description. */
+  shotTypes: string;
+}
+
+/**
+ * How many bytes an evidence download is allowed to be before this gives up on it.
+ *
+ * Not the rule — `/v1/shots` owns that, and answers 413 with the real limit. This only bounds what
+ * gets pulled into memory on the way there: `download_url` is a string somebody handed us, and a
+ * Worker that reads it to completion before the route ever sees it can be made to read anything.
+ * Deliberately above the route's own cap, so the refusal a caller reads is the route's.
+ */
+const FETCH_MAX = 8 * 1024 * 1024;
+
+/**
+ * Refuse a download URL that points somewhere only this Worker can reach.
+ *
+ * The URL arrives in a tool call. ChatGPT fills it in with its own file host, but any caller
+ * holding a token can call the tool directly with whatever they like, and "fetch this and tell me
+ * what came back" aimed at a private address is the shape of every SSRF. Public HTTPS or nothing.
+ */
+function fetchable(raw: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  const host = url.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal"))
+    return null;
+  // Literal addresses only: a name that resolves to a private address is a DNS-rebinding problem
+  // this cannot see from here, and the allowlist that would fix it belongs in egress policy.
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    const [a = 0, b = 0] = host.split(".").map(Number);
+    if (a === 10 || a === 127 || a === 0 || (a === 172 && b >= 16 && b < 32)) return null;
+    if (a === 192 && b === 168) return null;
+    if (a === 169 && b === 254) return null;
+  }
+  if (host.includes(":")) return null; // bare IPv6, including ::1 and fc00::/7
+  return url;
 }
 
 export function buildServer(call: Call, vocabulary: Vocabulary) {
@@ -302,6 +352,85 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         filed.push({ id, url: (JSON.parse(res.text) as { url: string }).url, title: issue.title });
       }
       return text(JSON.stringify({ report, issues: filed }, null, 2));
+    },
+  );
+
+  /**
+   * Evidence, from a chat surface that has the file and no way to hand it over.
+   *
+   * A bug report's screenshot is the part a reader trusts most, and until now only the web form
+   * could carry one: every MCP tool takes JSON, and a model cannot type out bytes of an image it
+   * was shown. `openai/fileParams` is how ChatGPT closes that — it declares which inputs are
+   * files, and fills them with a `download_url` its own file host serves. The bytes never pass
+   * through the model, which is why this works at all.
+   *
+   * The upload itself is `POST /v1/shots`, unchanged and doing its own validation. This fetches,
+   * bounds what it read, and hands it on.
+   *
+   * Vendor-shaped on purpose, and worth knowing when it moves: `openai/fileParams` is OpenAI's
+   * extension, the standard file input is still a proposal (modelcontextprotocol SEP-2356), and
+   * ChatGPT's mobile apps send file references this cannot download. The browser works today.
+   */
+  server.registerTool(
+    "attach_screenshot",
+    {
+      title: "Attach a screenshot",
+      description:
+        "Store an image a user attached, so a bug report can point at it. Returns the markdown to " +
+        `put in the guide body — evidence lives in the document, not beside it. ${vocabulary.shotTypes}. ` +
+        "Call this before file_bugs or publish_guide, then paste the returned line into the " +
+        "issue's Problem or Reproduce section; publishing claims whatever the markdown names.",
+      inputSchema: {
+        file: z
+          .object({
+            download_url: z.string().describe("where the file can be fetched (https)"),
+            file_id: z.string().describe("the host's id for the file"),
+            mime_type: z
+              .string()
+              .optional()
+              .describe("image/png, image/jpeg, image/webp, image/gif"),
+            file_name: z.string().optional().describe("original filename, used as the label"),
+          })
+          .describe("the attached image, filled in by the client"),
+      },
+      // The field names a client fills with files. Expressed with zod rather than the `$defs` /
+      // `$ref` the Apps SDK reference writes out: the wire schema is the same object with the same
+      // four properties, and one schema language in this file is worth more than matching a
+      // document's formatting.
+      _meta: { "openai/fileParams": ["file"] },
+    },
+    async ({ file }) => {
+      const url = fetchable(file.download_url);
+      if (!url) return failed("download_url has to be a public https URL");
+      let res: Response;
+      try {
+        res = await fetch(url);
+      } catch (err) {
+        return failed(`could not fetch the file (${(err as Error).message})`);
+      }
+      if (!res.ok) return failed(`could not fetch the file: ${res.status} ${res.statusText}`);
+      // The declared length is a hint and a lie is free, so the bytes are what gets measured.
+      const bytes = await res.arrayBuffer();
+      if (bytes.byteLength > FETCH_MAX) return failed("that file is too large to attach");
+      if (!bytes.byteLength) return failed("that file is empty");
+      // The client's mime_type is what it says the file is; the host's own content-type is what it
+      // served. Prefer the served one — `/v1/shots` keys storage off this and refuses what it does
+      // not know, so being wrong here is a 415 rather than a mislabelled image.
+      const served = (res.headers.get("content-type") || "").split(";")[0]?.trim();
+      const type = served || file.mime_type || "";
+      const up = await call("POST", "/v1/shots", bytes, {
+        contentType: type,
+        headers: file.file_name
+          ? { "x-shot-name": file.file_name.replace(/[^\x20-\x7e]/g, "") }
+          : {},
+      });
+      if (up.status >= 400) return failed(up.text);
+      const shot = JSON.parse(up.text) as { shot: { id: string; url: string } };
+      const label = file.file_name || "screenshot";
+      return text(
+        `${JSON.stringify(shot.shot, null, 2)}\n\n` +
+          `Put this in the guide body:\n![${label}](${shot.shot.url})`,
+      );
     },
   );
 

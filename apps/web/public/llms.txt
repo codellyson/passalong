@@ -99,8 +99,9 @@ passalong login                 # optional: sync across machines
 
 `passalong setup` registers a stdio MCP server exposing: `publish_guide`, `file_bugs`,
 `start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`,
-`verify_guide`, `inbox`, `board`, `activity`, `log`. `start_guide` needs passalong 0.3 or later; an
-older install exposes the rest, so fall back to `get_guide` then `ack_guide` if it is not there.
+`verify_guide`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`. `start_guide` and
+`attach_screenshot` need passalong 0.3 or later; an older install exposes the rest, so fall back to
+`get_guide` then `ack_guide` if `start_guide` is not there.
 
 Open a guide you mean to act on with `start_guide`, not `get_guide`. Both return the same markdown;
 `start_guide` also says you are on it, and between handing work over and hearing it worked that is
@@ -122,15 +123,23 @@ every verdict and ack they gave, each with a ready-made `text` line and the guid
 It holds what was passed along and not what was worked on: work that never became a guide has no
 entry, so do not present it as a complete record, and do not read a quiet month as an idle one.
 
+`attach_screenshot` puts an image behind a guide. Evidence goes *in* the document: a guide travels
+as markdown to whoever holds its link, so a file beside it does not travel at all. The tool returns
+the `![](...)` line to paste into the body, and publishing claims whatever the markdown names — so
+attach first, publish after. Locally it takes a path on the machine. Over the hosted server it
+takes a file the client passes in, which today means ChatGPT on the web; the ChatGPT mobile apps
+send file references the server cannot download.
+
 `file_bugs` files defects you found but are not fixing — from a test run, a QA pass, a review — as
 one report. Each issue becomes a guide with its own id, share link and verdict, so any of them can
 be handed to whoever fixes it. Send them in one call rather than one call each.
 
 The same server is also hosted, for assistants that add remote MCP servers rather than running
 one: `https://passalong.dev/v1/mcp`, Streamable HTTP, authenticated with a bearer token. It carries
-nine of these tools — everything except the ones that touch a working directory. `start_guide` is
+most of these tools — everything except the ones that touch a working directory. `start_guide` is
 one of those, so over the hosted server take a handoff with `ack_guide` and fetch it with
-`get_guide`, which there returns the markdown without writing it anywhere. A local server is
+`get_guide`, which there returns the markdown without writing it anywhere. `attach_screenshot` is
+on both, shaped for where it runs: a path locally, a client-passed file over HTTP. A local server is
 still better where you can run one: it works offline and knows which repo you are in.
 
 Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for Gemini
