@@ -17,7 +17,6 @@
 //   passalong works <id>          you tried it and it holds up
 //   passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
 //   passalong done <id>           archive it: off your board and out of the free tier's count
-//   passalong promote <id>        deprecated: mark promoted
 //   passalong rm <id>             delete a guide locally and from sync
 //   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
 //   passalong login [token]       create an account, or attach this machine with a token from your hub
@@ -91,8 +90,7 @@ function guideLine(r) {
     const p = r.pulled_by[0];
     pulled = `  ← ${p.handle ? `@${p.handle}` : "link"} ${relDate(p.at)}${r.pulled_by.length > 1 ? ` +${r.pulled_by.length - 1}` : ""}`;
   }
-  const nudge = r.mine && r.status === "published" && r.pulls >= 3 ? "  ★ promote?" : "";
-  return `${r.id}  ${r.status.padEnd(9)} ${relDate(r.created).padEnd(10)} ${r.title}${who}${tags}${pulled}${nudge}`;
+  return `${r.id}  ${r.status.padEnd(9)} ${relDate(r.created).padEnd(10)} ${r.title}${who}${tags}${pulled}`;
 }
 
 function activityLine(n) {
@@ -301,16 +299,6 @@ const commands = {
     const id = f._[0] || die("usage: passalong done <id>");
     const g = await passalong.setStatus(id, "consumed").catch((e) => die(e.message));
     console.error(`${g.meta.id} archived — off your board, and it no longer counts against sync`);
-  },
-
-  // Still on the way out: it sets an author lifecycle nothing reads, and the board reports pull
-  // counts on its own. It stays, and warns, because removing a command from a published package
-  // is a breaking change.
-  async promote(f) {
-    const id = f._[0] || die("usage: passalong promote <id>");
-    const g = await passalong.setStatus(id, "promoted").catch((e) => die(e.message));
-    console.error(`${g.meta.id} marked promoted`);
-    console.error("note: `promote` is deprecated — the board reports pull counts on their own");
   },
 
   async rm(f) {

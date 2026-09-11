@@ -37,7 +37,7 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `PUT /v1/guides/:id` | owner | Body is `text/markdown`, not JSON. The markdown is the record; `team`/`to` are read from its frontmatter. |
 | `GET /v1/guides/:id` | owner or team member | Returns markdown. **Records a pull.** |
 | `GET /v1/guides?q=&scope=` | account | `scope=all` (default) `| mine | <team slug>` |
-| `PATCH /v1/guides/:id/status` | owner: any status; team member: `consumed` or `published` only | Deprecated — prefer the verdict. Nothing in the hub calls it; the CLI's `done`/`promote` and the MCP `set_guide_status` still do |
+| `PATCH /v1/guides/:id/status` | owner: `draft`/`published`/`consumed`; team member: `consumed` or `published` only | Archiving, not judgement — the verdict says whether it worked. `promoted` is refused by name (400) on this route and cannot be acquired through `PUT /v1/guides/:id` either; a guide already carrying it keeps it |
 | `PUT /v1/guides/:id/verdict` | account | `{ ok, note? }` |
 | `DELETE /v1/guides/:id` | **owner only** | |
 | `GET /v1/inbox` | account | Handed to you or your teams, not yet pulled |

@@ -3,16 +3,32 @@
 // packages/passalong/src/guide.js; this mirrors its parsing rules for strings and string lists.
 
 /**
- * A guide is a draft or it is published. `consumed` and `promoted` are legacy: they were an author
- * lifecycle laid over a transfer that already reports itself — `consumed` duplicated the verdict,
- * and `promoted` was a pull count with a name. Nothing sets them any more.
+ * A guide is a draft or it is published, and `consumed` is the author's shelf — off the board, out
+ * of the free tier's count, reversible. `promoted` is the one true legacy: an author lifecycle laid
+ * over a transfer that already reports itself, since a pull count says how travelled a guide is
+ * without anyone having to grade it.
  *
- * They stay in this list because they are *accepted*, not produced. The value lives in frontmatter
- * inside markdown files in other people's repositories, and `validate()` rejects a status it does
- * not know — so removing them here would make a guide shared a month ago fail to re-share today.
+ * This list is what is **accepted**, and it is not what may be **set** — that is `SETTABLE` below.
+ * The distinction is load-bearing. A status lives in frontmatter, inside markdown files in other
+ * people's repositories, and `validate()` rejects a status it does not know, so dropping a value
+ * from here would make a guide shared a month ago fail to re-share today.
  */
 export const STATUSES = ["draft", "published", "consumed", "promoted"] as const;
 export type Status = (typeof STATUSES)[number];
+
+/**
+ * What a write may choose. `promoted` is absent: it cannot be set on a guide that does not already
+ * carry it, from any surface.
+ *
+ * Two reasons, and the second is the sharper one. A status that can still be set reads as a
+ * feature to whoever meets it next, however many deprecation notices sit around it. And
+ * `quota.ts` counts `published` and `promoted` as the statuses that occupy room — so while
+ * `promoted` remains settable, promoting every guide is an unlimited free tier. Closing the write
+ * closes that, and does it without touching what the free tier counts, which still has to include
+ * the guides already carrying the status.
+ */
+export const SETTABLE = ["draft", "published", "consumed"] as const;
+export type Settable = (typeof SETTABLE)[number];
 
 export interface Meta {
   id?: string;

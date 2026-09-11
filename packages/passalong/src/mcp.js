@@ -421,10 +421,11 @@ export async function serve() {
     {
       title: "Set guide status",
       description:
-        "Deprecated — prefer verify_guide. Marks a guide consumed or promoted, an author lifecycle " +
-        "nothing reads any more: the board reports where a transfer is and the verdict reports " +
-        "whether it worked. Kept so existing callers do not break. Only the author can promote.",
-      inputSchema: { id: z.string(), status: z.enum(["published", "consumed", "promoted"]) },
+        "Archive a guide (`consumed`) or put it back on the board (`published`). Archiving is the " +
+        "author's shelf: off the board, out of the free tier's count, reversible — it is not a " +
+        "judgement that the work landed, which is what verify_guide reports. `promoted` was " +
+        "retired and the server refuses it.",
+      inputSchema: { id: z.string(), status: z.enum(["published", "consumed"]) },
     },
     async ({ id, status }) => {
       try {

@@ -236,10 +236,22 @@ public one, for agents *using* Passalong rather than changing it.
   membership or fails on `team.created_by`, which has no cascade. `PRAGMA defer_foreign_keys` does
   not save it — D1 rolls the whole migration back. Both were tested. Inserts write a `retired:`
   marker that can never equal a SHA-256; nothing reads the column.
-- **Status lifecycle**: draft → published. `consumed` and `promoted` are legacy — accepted on
-  guides that already carry them, never set: the verdict says whether work landed, and the pull
-  count says how travelled it is. The server stores status both in
-  the `guide.status` column and inside the markdown (`setField`) so a pulled `.md` is truthful.
+- **Status lifecycle**: draft → published, with `consumed` as the author's shelf. **What is
+  accepted and what may be set are two different lists**, and `guide.ts` holds both: `STATUSES` is
+  what parses, `SETTABLE` is what a write may choose. `promoted` is in the first and not the second
+  — a guide carrying it keeps it and still re-shares, and nothing can acquire it. Shrinking
+  `STATUSES` instead would have been the obvious move and the wrong one: the value lives in
+  frontmatter inside markdown in other people's repositories, and `validate()` refuses a status it
+  does not know, so a guide shared a month ago would stop re-sharing today. Both write paths
+  enforce it and they enforce it differently, because they are asked different things: `PATCH
+  /v1/guides/:id/status` refuses `promoted` **by name**, since an installed CLI still calls it and
+  "must be one of …" reads as a typo rather than as a retirement; `PUT /v1/guides/:id` silently
+  keeps `promoted` when the stored row already had it and downgrades to `published` when it did
+  not, checked against the row rather than the markdown somebody just sent. That second check is
+  also what keeps the free tier honest — `quota.ts` counts `published` and `promoted` as the
+  statuses occupying room, so a settable `promoted` was an unlimited free tier for anyone who
+  noticed. The server stores status both in the `guide.status` column and inside the markdown
+  (`setField`) so a pulled `.md` is truthful.
 - **Teams (M2).** `team`/`membership`/`invite`/`pull` tables (migration 0002). A guide's
   `team_id` makes it readable and consumable by members; `to_account_id` addresses one member.
   Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),

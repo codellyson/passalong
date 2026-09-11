@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { body, parseMeta, setField, setList, shotIds, split, tag, tagList } from "../src/guide.ts";
+import { SETTABLE, STATUSES, body, parseMeta, setField, setList, shotIds, split, tag, tagList } from "../src/guide.ts";
 
 const DOC = `---
 id: k3mq2xa7
@@ -292,4 +292,15 @@ test("somebody else taking it clears a shared ask, never one with your name on i
   // addressed to you by name would quietly clear it off your board.
   const clause = body.slice(body.indexOf("AND (to_account_id = ?"));
   assert.match(clause.slice(0, 200), /to_account_id = \?/);
+});
+
+test("what parses and what may be set are two different lists", () => {
+  // `promoted` has to keep parsing: the value lives in frontmatter inside markdown in other
+  // people's repositories, and validate() refuses a status it does not know — so dropping it from
+  // STATUSES would stop a guide shared a month ago from re-sharing today. It must not be settable,
+  // because quota.ts counts it as occupying room and a settable one is an unlimited free tier.
+  assert.ok(STATUSES.includes("promoted"), "promoted must still parse");
+  assert.ok(!SETTABLE.includes("promoted"), "promoted must not be settable");
+  for (const s of SETTABLE) assert.ok(STATUSES.includes(s), `${s} must also parse`);
+  assert.deepEqual([...SETTABLE], ["draft", "published", "consumed"]);
 });

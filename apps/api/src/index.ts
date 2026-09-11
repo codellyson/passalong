@@ -72,6 +72,7 @@ import {
   AREAS,
   type Meta,
   parseMeta,
+  SETTABLE,
   SEVERITIES,
   STATUSES,
   setField,
@@ -1802,10 +1803,6 @@ app.put("/v1/guides/:id", async (c) => {
   const meta: Meta = parseMeta(markdown);
   if (meta.id && meta.id !== id) return err(c, 400, "frontmatter id does not match the URL");
   if (!meta.title) return err(c, 400, "frontmatter needs a title");
-  const status =
-    meta.status && (STATUSES as readonly string[]).includes(meta.status)
-      ? meta.status
-      : "published";
 
   // Addressing: `team: <slug>` puts the guide in a team; `to: <handle>` hands it to a member.
   let team: (TeamRow & { role: string }) | null = null;
@@ -1857,17 +1854,36 @@ app.put("/v1/guides/:id", async (c) => {
   }
 
   const existing = await c.env.DB.prepare(
-    "SELECT id, account_id, share_key, created, team_id, to_account_id, to_group_id FROM guide WHERE id = ?",
+    "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id FROM guide WHERE id = ?",
   )
     .bind(id)
     .first<
       Pick<
         GuideRow,
-        "id" | "account_id" | "share_key" | "created" | "team_id" | "to_account_id" | "to_group_id"
+        | "id"
+        | "account_id"
+        | "share_key"
+        | "created"
+        | "status"
+        | "team_id"
+        | "to_account_id"
+        | "to_group_id"
       >
     >();
   if (existing && existing.account_id !== account)
     return err(c, 403, "that id belongs to another account");
+
+  // Frontmatter still round-trips `promoted`, because the document is the record and a guide shared
+  // a month ago must re-share today. It cannot be acquired, though: only a guide already carrying
+  // the status keeps it, and that is read from the stored row rather than the markdown just sent.
+  const asked =
+    meta.status && (STATUSES as readonly string[]).includes(meta.status) ? meta.status : "";
+  const status =
+    asked === "promoted"
+      ? existing?.status === "promoted"
+        ? "promoted"
+        : "published"
+      : asked || "published";
 
   if (!existing) {
     const room = await quota(c, account);
@@ -2119,8 +2135,18 @@ app.patch("/v1/guides/:id/status", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, "no such guide");
   const { status } = (await c.req.json().catch(() => ({}))) as { status?: string };
-  if (!status || !(STATUSES as readonly string[]).includes(status))
-    return err(c, 400, `status must be one of ${STATUSES.join(", ")}`);
+  // `promoted` is readable and no longer settable, so it is refused by name rather than by being
+  // missing from a list — an installed CLI still calls this, and "must be one of ..." would read
+  // as a typo rather than as a status that was retired.
+  if (status === "promoted")
+    return err(
+      c,
+      400,
+      "`promoted` was retired: a guide's pull count already says how travelled it is. " +
+        "Guides that carry it keep it.",
+    );
+  if (!status || !(SETTABLE as readonly string[]).includes(status))
+    return err(c, 400, `status must be one of ${SETTABLE.join(", ")}`);
   if (!found.owner && !["consumed", "published"].includes(status))
     return err(c, 403, "only the author can promote or draft a guide; you can mark it consumed");
   const markdown = setField(found.row.markdown, "status", status);

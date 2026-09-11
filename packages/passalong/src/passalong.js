@@ -278,7 +278,7 @@ export function summary(g) {
   };
 }
 
-/** Move a guide through its lifecycle: published → consumed → promoted (any order allowed). */
+/** Archive a guide (`consumed`) or put it back (`published`). The server refuses `promoted`. */
 export async function setStatus(id, status) {
   if (!STATUSES.includes(status))
     throw new PassalongError(`status must be one of ${STATUSES.join(", ")}`);
