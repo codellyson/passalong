@@ -78,7 +78,8 @@ passalong login                 # optional: sync across machines
 ```
 
 - `passalong share [file] [--to team[/handle]]` — publish a guide, get an id and a link
-- `passalong pull <id|link>` — fetch a guide into `./.passalong/` and print it
+- `passalong start <id|link>` — pull it and take it: one command for "I am doing this"
+- `passalong pull <id|link>` — fetch a guide into `./.passalong/` and print it, without answering for it
 - `passalong inbox` — guides handed to you that you have not pulled
 - `passalong board` — waiting on you, in flight, landed, worth keeping
 - `passalong activity [--all]` — what happened while you were away
@@ -95,18 +96,23 @@ passalong login                 # optional: sync across machines
 
 ## MCP tools
 
-`passalong setup` registers a stdio MCP server exposing: `publish_guide`, `file_bugs`, `get_guide`,
-`search_guides`, `guide_template`, `set_guide_status`, `ack_guide`, `verify_guide`, `inbox`,
-`board`, `activity`.
+`passalong setup` registers a stdio MCP server exposing: `publish_guide`, `file_bugs`,
+`start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`,
+`verify_guide`, `inbox`, `board`, `activity`.
 
-Given a share link or an id, `get_guide` returns the guide; follow its `Steps`, adapt anything
-marked as an assumption, run its `Verification`, then
-`verify_guide` with the result.
+Open a guide you mean to act on with `start_guide`, not `get_guide`. Both return the same markdown;
+`start_guide` also says you are on it, and between handing work over and hearing it worked that is
+the only signal the sender gets. Follow its `Steps`, adapt anything marked as an assumption, run
+its `Verification`, then `verify_guide` with the result.
 
-`ack_guide` is the first word back, before any of that: when you pick up an `inbox`, say for each
-guide whether you are taking it. Passing must say why — an unanswered handoff looks exactly like
-one nobody has noticed, so the sender learns in a week rather than a minute. Taking it leaves it on
-your board; passing puts it back on its author's.
+`get_guide` is the same fetch without the answer — for reading a guide you have not committed to.
+Fetching is not committing, which is why they are two tools: you have to be able to read something
+to decide it is not yours.
+
+`ack_guide` is that answer on its own, and the way to say no. Passing must say why — an unanswered
+handoff looks exactly like one nobody has noticed, so the sender learns in a week rather than a
+minute. Taking it leaves it on your board; passing puts it back on its author's. Taking your own
+guide does nothing: an author is not a party to their own handoff.
 
 `file_bugs` files defects you found but are not fixing — from a test run, a QA pass, a review — as
 one report. Each issue becomes a guide with its own id, share link and verdict, so any of them can
@@ -114,7 +120,9 @@ be handed to whoever fixes it. Send them in one call rather than one call each.
 
 The same server is also hosted, for assistants that add remote MCP servers rather than running
 one: `https://passalong.dev/v1/mcp`, Streamable HTTP, authenticated with a bearer token. It carries
-nine of these tools — everything except the ones that touch a working directory. A local server is
+nine of these tools — everything except the ones that touch a working directory. `start_guide` is
+one of those, so over the hosted server take a handoff with `ack_guide` and fetch it with
+`get_guide`, which there returns the markdown without writing it anywhere. A local server is
 still better where you can run one: it works offline and knows which repo you are in.
 
 Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for Gemini

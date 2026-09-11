@@ -5,6 +5,7 @@
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
+//   passalong start <id|link>     pull it and take it — one command for "I am doing this"
 //   passalong inbox               guides handed to you that you have not pulled yet
 //   passalong board               waiting on you, in flight, landed, worth keeping
 //   passalong activity [--all]    what happened while you were away; clears unless --all
@@ -141,11 +142,29 @@ const commands = {
     console.error(`\npulled from ${from} → ${path}`);
   },
 
+  /**
+   * Pull and take in one command. `pull` says it arrived, `take` says somebody is doing it, and
+   * they stay separate because reading a guide to decide it is not yours is what `pass` is for.
+   * This is the pair for the case where you already know: you are picking this up.
+   */
+  async start(f) {
+    const ref = f._[0] || die("usage: passalong start <id|link>");
+    const r = await passalong.start(ref).catch((e) => die(e.message));
+    process.stdout.write(r.markdown);
+    console.error(`\npulled from ${r.from} → ${r.path}`);
+    if (r.took) console.error("you are on it, and the author has been told");
+    else if (r.own) console.error("your own guide — nothing to take");
+    else if (r.ack_error) console.error(`not taken (${r.ack_error}) — run \`passalong take ${r.guide.meta.id}\``);
+    // Saying nothing here would be the silence the whole hop exists to end: you would have the
+    // guide, believe you had answered for it, and the sender would still be waiting.
+    else console.error("not taken — sync is off, so nobody was told (run `passalong login`)");
+  },
+
   async inbox() {
     const rows = await passalong.inbox().catch((e) => die(e.message));
     if (!rows.length) return console.error("inbox empty — nothing handed to you that you haven't pulled");
     for (const r of rows) console.log(guideLine(r));
-    console.error(`\n${rows.length} waiting. Pull one with: passalong pull <id>`);
+    console.error(`\n${rows.length} waiting. Take one with: passalong start <id>`);
   },
 
   async board() {
