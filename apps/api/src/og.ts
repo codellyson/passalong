@@ -96,20 +96,44 @@ function card(o: { title: string; id: string; meta: Meta }): string {
 </div>`;
 }
 
-/** PNG bytes for one guide's unfurl card, 1200×630. */
-export async function renderOgImage(
-  env: Env,
-  base: string,
-  g: { id: string; meta: Meta },
-): Promise<Response> {
-  // `workers-og` is workerd-only: its yoga and resvg wasm declare imports that only that runtime
-  // supplies, so `import()` fails outright under Node with "Cannot find package 'a'" — a message
-  // that says nothing about the cause. Nitro's `experimental.wasm` bundles both files for the
-  // deployed Worker, so this route works there and cannot work under `nuxt dev`. To see a card
-  // locally, build and serve the output on workerd:
-  //
-  //     pnpm --filter @passalong/web build
-  //     npx wrangler dev .output/server/index.mjs --assets .output/public
+/**
+ * The card for the site itself.
+ *
+ * `/` had no `og:image` at all, so every link to the product unfurled as a bare text row — the same
+ * blank card the guide pages were fixed for, on the one page most people meet first. Same renderer
+ * and same palette; what differs is that a guide's card leads with its title while this one leads
+ * with the claim, because a link to `/` is not about any particular guide.
+ */
+function siteCard(): string {
+  return `
+<div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Instrument Sans';">
+  <div style="display:flex;align-items:center;">
+    <div style="display:flex;width:44px;height:44px;border-radius:10px;background:${C.accent};margin-right:18px;"></div>
+    <div style="display:flex;color:${C.accent};font-size:26px;font-weight:600;letter-spacing:4px;">PASSALONG</div>
+  </div>
+  <div style="display:flex;flex-direction:column;">
+    <div style="display:flex;color:${C.fg};font-size:62px;font-weight:600;line-height:1.12;letter-spacing:-2px;">You already solved this.</div>
+    <div style="display:flex;color:${C.accent};font-size:62px;font-weight:600;line-height:1.12;letter-spacing:-2px;margin-top:6px;">Somewhere else, someone is about to solve it again.</div>
+  </div>
+  <div style="display:flex;align-items:center;border-top:2px solid ${C.line};padding-top:26px;">
+    <div style="display:flex;color:${C.muted};font-size:26px;">Hand finished work to the next repo, machine, session or teammate</div>
+  </div>
+</div>`;
+}
+
+/**
+ * Markup to PNG bytes, once, for whichever card asked.
+ *
+ * `workers-og` is workerd-only: its yoga and resvg wasm declare imports that only that runtime
+ * supplies, so `import()` fails outright under Node with "Cannot find package 'a'" — a message that
+ * says nothing about the cause. Nitro's `experimental.wasm` bundles both files for the deployed
+ * Worker, so this works there and cannot work under `nuxt dev`. To see a card locally, build and
+ * serve the output on workerd:
+ *
+ *     pnpm --filter @passalong/web build
+ *     npx wrangler dev .output/server/index.mjs --assets .output/public
+ */
+async function renderCard(env: Env, base: string, markup: string): Promise<Response> {
   const [og, fonts] = await Promise.all([
     import("workers-og").catch((e) => {
       throw new Error(
@@ -119,13 +143,8 @@ export async function renderOgImage(
     loadFonts(env, base),
   ]);
   const { ImageResponse } = og;
-  const img = new ImageResponse(card({ title: g.meta.title || g.id, id: g.id, meta: g.meta }), {
-    width: 1200,
-    height: 630,
-    format: "png",
-    fonts,
-  });
-  // Crawlers refetch these often and a guide's card only changes when the guide does.
+  const img = new ImageResponse(markup, { width: 1200, height: 630, format: "png", fonts });
+  // Crawlers refetch these often, and a card only changes when the thing behind it does.
   return new Response(img.body, {
     headers: {
       "content-type": "image/png",
@@ -133,4 +152,18 @@ export async function renderOgImage(
       "x-content-type-options": "nosniff",
     },
   });
+}
+
+/** PNG bytes for one guide's unfurl card, 1200×630. */
+export async function renderOgImage(
+  env: Env,
+  base: string,
+  g: { id: string; meta: Meta },
+): Promise<Response> {
+  return renderCard(env, base, card({ title: g.meta.title || g.id, id: g.id, meta: g.meta }));
+}
+
+/** PNG bytes for the site's own unfurl card, 1200×630. */
+export async function renderSiteOgImage(env: Env, base: string): Promise<Response> {
+  return renderCard(env, base, siteCard());
 }

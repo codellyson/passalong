@@ -16,9 +16,17 @@
 -->
 <script setup lang="ts">
 usePage({
-  title: "Passalong",
+  // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
+  // none of the space a result gets and says nothing to somebody who has not heard of it.
+  title: "Passalong — hand finished work to the next repo or agent",
+  // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
+  // page that did not think about being shared. This one ends where it means to.
   description:
-    "Hand finished work to another context. A baton pass between repos, machines, agent sessions, and teammates, in a form an agent can act on.",
+    "A baton pass between repos, machines, agent sessions and teammates — finished work, in a form the next agent can act on.",
+  // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
+  // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
+  // switches on the moment there is something to show.
+  image: `${useRequestURL().origin}/og.png`,
 });
 
 /**

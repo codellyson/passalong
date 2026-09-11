@@ -30,7 +30,7 @@
 //   PUT    /v1/guides/:id/verdict      { ok, note? } → does it actually work?
 //   DELETE /v1/guides/:id              owner only
 //   GET    /g/:id/:key.md              a guide's raw markdown (share link); records a pull
-//   GET    /g/:id/:key/og.png          the unfurl card for that link
+//   GET    /og.png                     the site's own unfurl card\n//   GET    /g/:id/:key/og.png          the unfurl card for that link
 //   GET    /health                     what CI waits on after a deploy
 //
 // **This app is not deployed on its own.** apps/web mounts it — see
@@ -118,7 +118,7 @@ import {
   timingSafeEqual,
 } from "./oauth.js";
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
-import { renderOgImage } from "./og.js";
+import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
 import { acceptsNewWork, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
 import { SHOT_TYPES, shotKey } from "./shots.js";
@@ -2616,6 +2616,11 @@ app.get("/g/:id/:key{.+\\.md}", async (c) => {
 // The unfurl card. Deliberately not counted as a pull: this is fetched by crawlers, not people.
 // A miss answers with a bare 404 rather than the 404 *page* — this endpoint returns an image, and
 // its caller is an unfurler that will never render HTML.
+// The site's own unfurl card. `/` is the page most people meet first and it had no image at all,
+// so a link to the product previewed as a bare text row — the same blank card the guide pages were
+// fixed for. Static in every sense: it takes no parameters and changes only when this code does.
+app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c)));
+
 app.get("/g/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
   if (!row) return c.text("no such guide", 404, VIEW_HEADERS);
