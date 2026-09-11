@@ -1,7 +1,7 @@
 // The operations Passalong exposes. Both surfaces (bin/passalong and the MCP server) call these,
 // so anything an agent can do through MCP a human can do from the terminal and vice versa.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import * as api from "./api.js";
 import { context } from "./capture.js";
 import {
@@ -252,6 +252,44 @@ export function handoffNudge(meta = {}) {
     "If you are only reading, or it turns out not to be yours, answer with ack_guide taken=false " +
     "and a reason. -->"
   );
+}
+
+/**
+ * The image types a guide can carry as evidence. Mirrors SHOT_TYPES in apps/api/src/shots.ts —
+ * the server is the authority and refuses anything else; this is what lets a local caller find
+ * out before spending an upload on it.
+ */
+export const SHOT_TYPES = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+};
+
+/**
+ * Attach a screenshot from disk, and return the markdown that points at it.
+ *
+ * Evidence belongs *in* the document: a guide travels as markdown to anyone holding its link, so
+ * an image beside it would not travel at all. `claimShots` binds the upload to whichever guide's
+ * markdown names it at publish, which is why this returns a line to paste rather than taking a
+ * guide id — there is nothing to attach it to until the document says so.
+ *
+ * Local because it reads a path. An agent in a terminal has one; a hosted assistant does not, and
+ * reaches the same route through `attach_screenshot` on the HTTP server instead.
+ */
+export async function attach(file, { name = "" } = {}) {
+  if (!api.loggedIn())
+    throw new PassalongError("attaching evidence needs sync — run `passalong login` first");
+  if (!existsSync(file)) throw new PassalongError(`no file at ${file}`);
+  const ext = file.slice(file.lastIndexOf(".")).toLowerCase();
+  const type = SHOT_TYPES[ext];
+  if (!type)
+    throw new PassalongError(
+      `screenshots must be ${[...new Set(Object.values(SHOT_TYPES))].join(", ")} — ${ext || file} is not one`,
+    );
+  const shot = await api.uploadShot(readFileSync(file), type, name || basename(file));
+  return { ...shot, markdown: `![${name || basename(file)}](${shot.url})` };
 }
 
 /** Local guides merged with synced ones (by id), newest first, optionally filtered. */

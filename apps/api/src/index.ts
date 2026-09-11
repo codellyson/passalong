@@ -2417,16 +2417,25 @@ app.all("/v1/mcp", async (c) => {
   const vocabulary = {
     areas: AREAS.map((a) => a.slug).join(", "),
     severities: SEVERITIES.map((s) => `${s.slug} ${s.label.toLowerCase()}`).join(", "),
+    shotTypes: `Accepts ${Object.keys(SHOT_TYPES).join(", ")}`,
   };
   return handleMcp(
     c.req.raw,
-    async (method, path, body) => {
+    async (method, path, body, raw) => {
+      // `raw` means the body is already bytes and says what they are — `/v1/shots` reads an image,
+      // not JSON. Everything else is serialised as it always was.
+      const headers = raw
+        ? { "content-type": raw.contentType, ...(raw.headers || {}) }
+        : body === undefined
+          ? {}
+          : { "content-type": "application/json" };
       const res = await app.fetch(
         asAccount(
           new Request(`${base}${path}`, {
             method,
-            headers: body === undefined ? {} : { "content-type": "application/json" },
-            body: body === undefined ? undefined : JSON.stringify(body),
+            headers,
+            body:
+              body === undefined ? undefined : raw ? (body as ArrayBuffer) : JSON.stringify(body),
           }),
           c.get("account"),
         ),

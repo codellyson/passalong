@@ -101,6 +101,37 @@ export const verdict = (id, ok, note = "") =>
 export const ack = (id, taken, note = "") =>
   call(`/v1/guides/${id}/ack`, { method: "PUT", body: { taken, note } });
 
+/**
+ * Upload an image as evidence, and get back the URL a guide points at.
+ *
+ * Not `call()`: that serialises a body as JSON or markdown, and this route reads bytes and takes
+ * the content type as the declaration of what they are. `name` is the label, and it travels in a
+ * header rather than the body for the same reason.
+ */
+export async function uploadShot(bytes, type, name = "") {
+  const t = token();
+  if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
+  const headers = { authorization: `Bearer ${t}`, "content-type": type };
+  // A header is latin-1: a filename with an accent in it throws on the way out rather than at the
+  // server, and the label is not worth failing an upload over.
+  if (name) headers["x-shot-name"] = String(name).replace(/[^\x20-\x7e]/g, "");
+  let res;
+  try {
+    res = await fetch(`${baseUrl()}/v1/shots`, { method: "POST", headers, body: bytes });
+  } catch (err) {
+    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    let message = body;
+    try {
+      message = JSON.parse(body).message || body;
+    } catch {}
+    throw new ApiError(res.status, message || res.statusText);
+  }
+  return (await res.json()).shot;
+}
+
 /** Fetch a guide by its share link (no account needed). Accepts the web URL or the .md URL. */
 export async function fetchShared(url) {
   const u = new URL(url);

@@ -360,6 +360,34 @@ export async function serve() {
   );
 
   server.registerTool(
+    "attach_screenshot",
+    {
+      title: "Attach a screenshot",
+      description:
+        "Upload an image from this machine as evidence, and get back the markdown line that " +
+        "points at it. Put that line in the guide body — a guide travels as markdown to whoever " +
+        "holds its link, so evidence beside the document does not travel at all. Publishing " +
+        "claims whatever the markdown names, so attach first and publish after. png, jpg, webp " +
+        "or gif.",
+      inputSchema: {
+        file: z.string().describe("path to the image on this machine"),
+        name: z.string().default("").describe("label for the image; defaults to its filename"),
+      },
+    },
+    async ({ file, name }) => {
+      try {
+        const shot = await passalong.attach(file, { name: name || "" });
+        return text(
+          `${JSON.stringify({ id: shot.id, url: shot.url, bytes: shot.bytes }, null, 2)}\n\n` +
+            `Put this in the guide body:\n${shot.markdown}`,
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "publish_guide",
     {
       title: "Publish guide",

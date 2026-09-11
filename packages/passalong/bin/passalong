@@ -4,6 +4,7 @@
 //   passalong share [file] [--to TARGET]  publish a guide → id + link
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
+//   passalong attach <image>      upload evidence and print the markdown that points at it
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong start <id|link>     pull it and take it — one command for "I am doing this"
 //   passalong inbox               guides handed to you that you have not pulled yet
@@ -163,6 +164,17 @@ const commands = {
     // Saying nothing here would be the silence the whole hop exists to end: you would have the
     // guide, believe you had answered for it, and the sender would still be waiting.
     else console.error("not taken — sync is off, so nobody was told (run `passalong login`)");
+  },
+
+  /**
+   * Upload an image and print the markdown that points at it. Evidence goes *in* the document:
+   * a guide travels as markdown to whoever holds its link, so a file beside it does not travel.
+   */
+  async attach(f) {
+    const file = f._[0] || die("usage: passalong attach <image> [--name LABEL]");
+    const shot = await passalong.attach(file, { name: f.name || "" }).catch((e) => die(e.message));
+    process.stdout.write(`${shot.markdown}\n`);
+    console.error(`uploaded ${shot.bytes} bytes → ${shot.url}`);
   },
 
   async inbox() {
