@@ -142,6 +142,27 @@ public one, for agents *using* Passalong rather than changing it.
   edge. Severity is named (`Blocker`, `Minor`) rather than coded (`s1`, `s3`) wherever it is shown
   to a reader, in the list and in the report editor both, and `severityTone()`/`severityLabel()`
   in `app/utils/report.ts` are the only copies of that lookup.
+- **A billing webhook is the only write in the product that no person authenticates**, so the
+  signature over the **raw** body is the entire credential. `billing.ts` reads it with
+  `c.req.text()` and verifies before anything parses: parse first and you verify a different set of
+  bytes than the one that was signed, which is the classic way this is got wrong. The module
+  **imports no sibling `.ts` on purpose** — it has to be unit-testable and a value import of a
+  sibling is what Node's type stripping cannot resolve, so `eq()` is a local copy of
+  `timingSafeEqual` rather than an import (the same reason `chatCard` lives inside notify.ts). Both
+  providers are here because the first paying teams and the Show HN ones do not reach for the same
+  processor: Stripe signs `${t}.${body}` with HMAC-SHA256 and **the timestamp is checked**, because
+  without a tolerance a captured "subscription is active" replays forever; Paystack signs the body
+  with HMAC-SHA512 and has no timestamp at all, which is survivable only because every event sets a
+  plan to a value rather than moving it by a step. Three rules in the mapping, each of which was a
+  way to get this wrong: `past_due` is **not** lapsed, since downgrading on the first failed
+  attempt makes an overnight bank decline look like a cancellation; an event that carries no seat
+  count leaves seats **untouched**, since writing zero would unseat the whole team on a payment
+  retry; and an event nobody mapped answers **200**, because an endpoint that errors on what it
+  does not care about is one the provider retries all day and then disables, taking the events that
+  do matter with it. The webhook path is public by **prefix**, not by the two exact routes: a
+  webhook aimed at the wrong URL is a real thing that happens during setup, and the middleware
+  answering it with "not signed in — sign in at /hub" sends whoever is reading the provider's
+  delivery log to a screen with nothing to do with the problem.
 - **A plan belongs to a team, and an account's ceiling is derived from it — never copied onto the
   account.** §11 sells the team, so the decision that follows is that a *free* member of a paid team
   publishes without a ceiling: the seat lifts whoever sits in it, paid for or not. `quota()` asks

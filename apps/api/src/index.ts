@@ -60,6 +60,14 @@ import {
   verifyPassword,
 } from "./auth.js";
 import {
+  BillingError,
+  isProvider,
+  type Provider,
+  parseEvent,
+  verifyPaystack,
+  verifyStripe,
+} from "./billing.js";
+import {
   type MailEnv,
   sendConsumed,
   sendHandoff,
@@ -122,6 +130,10 @@ type Env = MailEnv &
         every other route exactly as before. */
     SHOTS?: R2Bucket;
     ACCOUNT_LIMIT?: RateLimiter;
+    /** Billing. Optional, like every other integration here: without them a deployment runs
+        exactly as before and every webhook is refused rather than trusted. */
+    STRIPE_WEBHOOK_SECRET?: string;
+    PAYSTACK_SECRET?: string;
     FREE_SYNC_LIMIT: string;
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
@@ -469,6 +481,18 @@ const publicShot = (method: string, path: string) =>
   method === "GET" && /^\/v1\/shots\/[a-z0-9]+$/.test(path);
 
 /**
+ * Every billing webhook path, including the ones naming a provider we do not have.
+ *
+ * A prefix rather than the two exact paths in PUBLIC, because a webhook pointed at the wrong URL is
+ * a real thing that happens while somebody is setting this up, and the middleware answering it with
+ * "not signed in — sign in at /hub" sends whoever is reading the provider's delivery log to a
+ * screen that has nothing to do with the problem. Letting it through costs nothing: the route
+ * refuses an unknown provider, and a known one still has to carry a valid signature.
+ */
+const publicWebhook = (method: string, path: string) =>
+  method === "POST" && path.startsWith("/v1/billing/webhook/");
+
+/**
  * How the app tells its own dispatch apart from a request off the wire.
  *
  * The MCP tools work by calling this app's routes — one implementation of every rule, and it is
@@ -522,6 +546,7 @@ app.use("/v1/*", async (c, next) => {
   }
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
   if (publicShot(c.req.method, c.req.path)) return next();
+  if (publicWebhook(c.req.method, c.req.path)) return next();
 
   const auth = c.req.header("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
@@ -1794,6 +1819,63 @@ app.get("/v1/log", async (c) => {
     limit: Number(c.req.query("limit")) || 100,
   });
   return c.json({ log: rows.map(logSummary(origin(c), c.get("account"))) });
+});
+
+// ---- billing ----------------------------------------------------------------------------------
+
+// The provider telling us a subscription changed. It is the only write in the product that no
+// person authenticates: the signature over the raw body is the entire credential, which is why
+// `billing.ts` is unit-tested to the edges and why the body is read with `c.req.text()` here —
+// parsing first and verifying second is the classic way to verify a different set of bytes than
+// the one that was signed.
+app.post("/v1/billing/webhook/:provider", async (c) => {
+  const named = c.req.param("provider");
+  if (!isProvider(named)) return err(c, 404, "no such billing provider");
+  const provider: Provider = named;
+  const raw = await c.req.text();
+
+  let event: unknown;
+  try {
+    event =
+      provider === "stripe"
+        ? await verifyStripe(
+            raw,
+            c.req.header("stripe-signature") || "",
+            c.env.STRIPE_WEBHOOK_SECRET || "",
+          )
+        : await verifyPaystack(
+            raw,
+            c.req.header("x-paystack-signature") || "",
+            c.env.PAYSTACK_SECRET || "",
+          );
+  } catch (e) {
+    // The provider's own message, which is about our configuration and never about their payload,
+    // so there is nothing here that helps someone guess a secret.
+    return err(c, 400, e instanceof BillingError ? e.message : "could not read that webhook");
+  }
+
+  const change = parseEvent(provider, event);
+  // 200 for an event we do not act on. A webhook endpoint that errors on anything it has no opinion
+  // about is one the provider retries all day and then disables, taking the events that do matter
+  // with it.
+  if (!change) return c.json({ ok: true, applied: false });
+
+  const team = await c.env.DB.prepare(
+    "SELECT id, slug, plan, seats FROM team WHERE subscription_id = ?",
+  )
+    .bind(change.subscription_id)
+    .first<{ id: string; slug: string; plan: string; seats: number }>();
+  // Also 200, and deliberately: a subscription we have never heard of is the provider's business,
+  // not a failure of ours, and answering 4xx would have them retry something that can never work.
+  if (!team) return c.json({ ok: true, applied: false });
+
+  // Seats only move when the event carried a count. A payment failing says nothing about how many
+  // seats were bought, and writing zero there would silently unseat the whole team.
+  await c.env.DB.prepare("UPDATE team SET plan = ?, seats = ?, plan_since = ? WHERE id = ?")
+    .bind(change.plan, change.seats ?? team.seats, now(), team.id)
+    .run();
+  count(c, "plan_changed", { provider, plan: change.plan });
+  return c.json({ ok: true, applied: true });
 });
 
 // ---- notifications ----------------------------------------------------------------------
