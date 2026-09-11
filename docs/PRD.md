@@ -73,9 +73,10 @@ Plain markdown with frontmatter. No proprietary format, fully exportable, git-fr
 - Guides addressed to a person or team ("handoff to X"), with notification
 - Pull activity visible to the sender (did the transfer land?)
 - Team-wide MCP endpoint so every member's agents can search the team's guides
-- Promotion flow: transfer guides that keep getting pulled graduate into a small set of maintained references
 
 Explicitly out of scope for v2: analytics dashboards, rich text editor, comments/threads, permissions beyond workspace membership.
+
+Removed 2026-09-11: a **promotion flow** was listed here — guides that keep getting pulled graduating into a small set of maintained references. It was cut during M2 for the reason §5 already records: the pull count on a guide says how travelled it is, and an author lifecycle on top of that says the same thing twice. Nothing reads `promoted`, the board has no bucket for it, and `passalong promote` prints its own deprecation notice. The line stayed on this list after the thing it described was removed, which made a deliberate decision read as an outstanding gap.
 
 Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`works` / `broken` with a one-line reason) is a first-class event, separate from the guide's status. `consumed` means implemented; a verdict means it actually runs. It is capped at one line per person per guide precisely so it stays a verdict and does not become the comment thread excluded above. This also widens the persona: testers and QA receive guides, and the Verification and Gotchas sections were already written for them.
 
