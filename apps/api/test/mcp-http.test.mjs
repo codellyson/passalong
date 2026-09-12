@@ -373,3 +373,66 @@ test("attach_screenshot lets the route refuse, rather than inventing its own rul
     globalThis.fetch = realFetch;
   }
 });
+
+test("file_bugs carries evidence into the issue it belongs to", async () => {
+  const { call, seen } = recorder({
+    "POST /v1/reports": { status: 201, text: JSON.stringify({ report: { id: "r1" } }) },
+    "PUT /v1/guides": { status: 201, text: JSON.stringify({ url: "https://passalong.dev/g/x/y" }) },
+  });
+  const res = await handleMcp(
+    rpc({
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/call",
+      params: {
+        name: "file_bugs",
+        arguments: {
+          title: "Checkout pass",
+          issues: [
+            {
+              title: "Save does nothing",
+              problem: "Clicking Save does not save.",
+              reproduce: "1. Click Save.",
+              evidence: ["https://passalong.dev/v1/shots/abc123"],
+            },
+            { title: "No evidence here", problem: "P", reproduce: "R" },
+          ],
+        },
+      },
+    }),
+    call,
+    VOCAB,
+  );
+  await read(res);
+  const puts = seen.filter((s) => s.method === "PUT");
+  assert.equal(puts.length, 2);
+  // Under Problem, ahead of Reproduce — the same placement bugGuide() uses in the CLI, because a
+  // guide filed from either surface has to be the same document.
+  const first = puts[0].body.markdown;
+  assert.match(
+    first,
+    /## Problem\n[\s\S]*!\[evidence\]\(https:\/\/passalong\.dev\/v1\/shots\/abc123\)\n\n## Reproduce/,
+  );
+  // An issue with no evidence is untouched, so a report of eight bugs and one screenshot does not
+  // put the screenshot on all eight.
+  assert.doesNotMatch(puts[1].body.markdown, /!\[/);
+});
+
+test("the tools that write a guide say where a screenshot goes", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
+  );
+  // The failure this guards: an agent reads file_bugs' fields, finds no attachment among them, and
+  // concludes the product cannot carry evidence. The tool that can is named where it will be read.
+  for (const name of ["file_bugs", "publish_guide"]) {
+    const tool = body.result.tools.find((t) => t.name === name);
+    assert.match(
+      tool.description,
+      /attach_screenshot/,
+      `${name} should point at attach_screenshot`,
+    );
+  }
+  const issue = body.result.tools.find((t) => t.name === "file_bugs").inputSchema.properties.issues;
+  assert.ok(issue.items.properties.evidence, "each issue takes its own evidence");
+});
