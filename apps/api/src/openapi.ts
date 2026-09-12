@@ -194,7 +194,9 @@ export function openapi(origin: string) {
             "Frontmatter carries the addressing: `team:` and `to:` hand it over, `kind: bug` " +
             "makes it a bug report, `report:` files it under a report. A bug's repro belongs " +
             "under `## Reproduce`, never `## Steps`. `parent:` names the guide this one came out of " +
-            "— or send `parent` beside `markdown` and it is written into the frontmatter for you.",
+            "— or send `parent` beside `markdown` and it is written into the frontmatter for you. " +
+            "Choose a new id only for a new guide. To change one, PUT to the id it was published " +
+            "under: a different id publishes a second copy, and each counts against the synced limit.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,

@@ -230,14 +230,20 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       title: "Publish guide",
       description:
         "Publish a guide from its full markdown — a transfer guide, or a single bug with " +
-        "`kind: bug`. Use file_bugs for more than one bug. Missing id, created, author and " +
-        "source_context are filled in. Addressing is frontmatter: `team:` and `to:`. A screenshot " +
+        "`kind: bug`. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
+        "is minted and returned. To change a guide, pass the id it came back with; inventing a " +
+        "fresh id to retry or to correct one publishes a second copy, and every copy counts " +
+        "against the author's synced limit. Created, author and source_context are filled in. " +
+        "Addressing is frontmatter: `team:` and `to:`. A screenshot " +
         "belongs in the markdown: attach it with attach_screenshot and put the line it returns in " +
         "the body, because publishing claims whatever the markdown names.",
       inputSchema: {
         id: z
           .string()
-          .describe("passalong id: 6-12 lowercase letters and digits, chosen by you if new"),
+          .optional()
+          .describe(
+            "omit for a new guide; to update one, the id it was published under — never a new one",
+          ),
         markdown: z.string().describe("the whole document, frontmatter first"),
         parent: z
           .string()
@@ -250,11 +256,15 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     },
     // `parent` rides beside the document and the route writes it into the frontmatter, so a model
     // never has to edit YAML to record where its work came from.
+    //
+    // The id is minted here when none is given. Requiring one made the model name every guide
+    // itself, and a model that re-files names it again: one bug reached a hub as three guides,
+    // `khaimeteam4`, `5` and `6`. The route's answer carries the id, so the caller has it to reuse.
     async ({ id, markdown, parent }) =>
       relay(
         call,
         "PUT",
-        `/v1/guides/${encodeURIComponent(id)}`,
+        `/v1/guides/${encodeURIComponent(id || newId())}`,
         parent ? { markdown, parent } : { markdown },
       ),
   );
@@ -290,7 +300,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       title: "Say whether it worked",
       description:
         "Answer for a guide you took. The single most valuable thing to report back, and the " +
-        "only way the sender learns their handoff did not land. A failure must say why.",
+        "only way the sender learns their handoff did not land. A failure must say why. If doing " +
+        "it taught you something the guide did not say, publish that as its own guide with " +
+        "publish_guide `parent` set to this id — the author sees it as a follow-up, where a " +
+        "one-line note gets lost.",
       inputSchema: {
         id: z.string(),
         ok: z.boolean().describe("true if it holds up"),

@@ -20,6 +20,13 @@ const confirming = ref(false);
 const root = ref<HTMLElement | null>(null);
 
 const pull = computed(() => `passalong pull ${props.g.id}`);
+/**
+ * A follow-up is written where guides are written — a terminal or an agent — not in this page, so
+ * the menu hands over the command rather than pretending to be an editor. It is offered on every
+ * guide, including ones with no follow-ups yet: an action that only appears once somebody has
+ * already done it is an action nobody finds.
+ */
+const follow = computed(() => `passalong share --follows ${props.g.id}`);
 /** Only the person a guide was handed to gets to say whether it worked. */
 const canJudge = computed(() => !props.g.mine);
 
@@ -60,6 +67,16 @@ function run(work: () => void) {
         copy pull command
       </button>
       <button class="menu-item" @click="copy(g.url, $event.currentTarget)">copy link</button>
+      <button class="menu-item" :title="follow" @click="copy(follow, $event.currentTarget)">
+        copy follow-up command
+      </button>
+      <NuxtLink
+        class="menu-item"
+        :to="{ path: '/hub/guides', query: { follows: g.id } }"
+        @click="shut"
+      >
+        see follow-ups{{ g.children ? ` (${g.children})` : "" }}
+      </NuxtLink>
 
       <template v-if="canJudge">
         <div class="menu-rule" />

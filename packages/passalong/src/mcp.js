@@ -223,7 +223,10 @@ export async function serve() {
       description:
         "After following a guide's Verification section, report the result. This is the only way " +
         "the author learns their handoff did not land — `set_guide_status consumed` says it was " +
-        "implemented, this says it actually works. A failing verdict must say what went wrong.",
+        "implemented, this says it actually works. A failing verdict must say what went wrong. " +
+        "If doing it taught you something the guide did not say — a flag it needed, a step that " +
+        "was wrong for this stack — publish that as its own guide with publish_guide `parent` set " +
+        "to this id. The author sees it as a follow-up; a verdict note is one line and gets lost.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         ok: z.boolean().describe("true if the Verification steps passed"),
