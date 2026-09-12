@@ -462,3 +462,25 @@ test("publish_guide carries a parent beside the document, and only when one was 
   // No parent means the body a publish has always sent — nothing new rides along by accident.
   assert.deepEqual(seen[1].body, { markdown: "---\n---\n" });
 });
+
+test("publish_guide mints an id when none is given, and uses the one it was handed", async () => {
+  const { call, seen } = recorder();
+  const publish = (args) =>
+    handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: { name: "publish_guide", arguments: { markdown: "---\n---\n", ...args } },
+      }),
+      call,
+      VOCAB,
+    );
+  await read(await publish({}));
+  await read(await publish({ id: "k3mq2xa7" }));
+  // Minted in the CLI's own alphabet, so nothing downstream can tell where an id came from. The
+  // model no longer names guides, which is how one bug became khaimeteam4, 5 and 6.
+  assert.match(seen[0].path, /^\/v1\/guides\/[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
+  // An update names the guide it updates; minting there would publish a copy instead.
+  assert.equal(seen[1].path, "/v1/guides/k3mq2xa7");
+});

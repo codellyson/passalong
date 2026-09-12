@@ -137,6 +137,10 @@ filed without one is not stuck: `get_guide` it, add the markdown line to the bod
 `publish_guide` the same id. Publishing claims whatever the markdown names, every time, so a
 re-publish picks the image up.
 
+`publish_guide` needs no id for a new guide: leave it out and one is minted and returned. To change a
+guide, pass the id it came back with. Inventing a fresh id to retry or to correct a guide publishes a
+second copy, and every copy counts against the author's synced limit.
+
 A guide can name the guide it came out of. When what you are publishing is what you learned doing
 someone else's guide, pass `parent` to `publish_guide` — or `passalong share --follows <id>` — and
 the parent counts it as a follow-up. A follow-up is a whole guide, not a reply: it has its own id,
