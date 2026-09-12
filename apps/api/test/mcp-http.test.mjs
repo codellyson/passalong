@@ -484,3 +484,60 @@ test("publish_guide mints an id when none is given, and uses the one it was hand
   // An update names the guide it updates; minting there would publish a copy instead.
   assert.equal(seen[1].path, "/v1/guides/k3mq2xa7");
 });
+
+// An agent that departs from a guide and writes nothing back is the loop this product exists to
+// close. Being able to set `parent` is not enough; it has to be told when, where it will read it.
+test("agents are told when a follow-up is a guide, at connect and with the guide itself", async () => {
+  const { call } = recorder({
+    "GET /v1/guides/k3mq2xa7": {
+      status: 200,
+      text: "---\nid: k3mq2xa7\ntitle: T\n---\n\n## Steps\n1. x\n",
+    },
+    "GET /v1/guides/bugbug12": {
+      status: 200,
+      text: "---\nid: bugbug12\nkind: bug\n---\n\n## Problem\nx\n",
+    },
+  });
+  const init = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: PROTOCOL,
+          capabilities: {},
+          clientInfo: { name: "t", version: "0" },
+        },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.match(init.result.instructions, /FOLLOW-UP IS A GUIDE/);
+  assert.match(init.result.instructions, /publish_guide `parent`/);
+  // And when not to, or every guide collects copies.
+  assert.match(init.result.instructions, /worked exactly as written/);
+
+  const get = async (id) =>
+    (
+      await read(
+        await handleMcp(
+          rpc({
+            jsonrpc: "2.0",
+            id: 3,
+            method: "tools/call",
+            params: { name: "get_guide", arguments: { id } },
+          }),
+          call,
+          VOCAB,
+        ),
+      )
+    ).result.content;
+  const transfer = await get("k3mq2xa7");
+  // The document is its own block, byte for byte; the note is a second one. An agent that writes
+  // the guide back out cannot carry the note into it, and nothing lands in front of `---`.
+  assert.equal(transfer[0].text, "---\nid: k3mq2xa7\ntitle: T\n---\n\n## Steps\n1. x\n");
+  assert.match(transfer[1].text, /publish_guide parent=k3mq2xa7/);
+  assert.match((await get("bugbug12"))[1].text, /once this is fixed[\s\S]*parent=bugbug12/);
+});

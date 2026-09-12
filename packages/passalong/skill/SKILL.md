@@ -33,6 +33,13 @@ session's history. Write for execution, not for permanence.
    team"), add `--to <team>` or `--to <team>/<handle>`; `passalong team` lists the current
    team's members and their handles. It prints the guide id on stdout and the share link (and
    who it was handed to) on stderr.
+
+   **If this session started from a passalong guide** — you ran `passalong start` or `pull` on an
+   id, or an agent opened one — and what you are capturing is what doing it taught you, add
+   `--follows <that id>`. The original then lists this one as a follow-up. That is the case when
+   you departed from it: changed or skipped a Step, adapted an `ASSUMES` for this stack, found the
+   fix a failing guide did not have, or hit a Gotcha it does not list. If it worked exactly as
+   written there is nothing to capture — say so with `passalong works <id>` instead.
 6. **Report** the id (and link if synced) and one line on how to use it on the other side:
    `passalong start <id>` in the target repo, or "start passalong <id>" to an agent with the
    Passalong MCP server. `start` rather than `pull` on purpose: it takes the handoff as well as
