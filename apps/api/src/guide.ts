@@ -182,6 +182,36 @@ export function shotIds(markdown: string): string[] {
   return [...new Set([...found].map((m) => m[1] as string))];
 }
 
+/**
+ * Image targets in a document that no reader will ever load.
+ *
+ * A guide travels as markdown to whoever holds its link, so an image reference is only worth
+ * anything if it resolves for someone who is not the author. A client-internal handle does not:
+ * ChatGPT filed a bug with `![shot](attachment://file_0000…)`, which is its own file id wrapped in
+ * a scheme it invented, and the publish succeeded because nothing looked. The guide is stored with
+ * a dead image and the screenshot it names was never uploaded at all.
+ *
+ * Told, not inferred — the tool descriptions and the server instructions both say to attach with
+ * `attach_screenshot` first, and an agent composing markdown still reached for a URI. So this is
+ * the check at the one place every surface goes through, which is where the product's other
+ * load-bearing rules live.
+ *
+ * Only a foreign *scheme* counts. `https:` is left alone even when it points somewhere else
+ * entirely, because embedding an image you host is legitimate and this is not a link checker. A
+ * relative path is left alone too: it is also broken in a document that travels, but it has
+ * always been accepted and breaking it here would refuse guides that publish today.
+ */
+export function unreachableImages(markdown: string): string[] {
+  const found = markdown.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)/g);
+  const bad = [...found]
+    .map((m) => (m[1] as string).trim())
+    .filter((target) => {
+      const scheme = /^([a-z][a-z0-9+.\-]*):/i.exec(target);
+      return Boolean(scheme) && !/^https?$/i.test(scheme?.[1] || "");
+    });
+  return [...new Set(bad)];
+}
+
 export function split(markdown: string): { front: string; body: string } | null {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(markdown);
   // Both groups are mandatory in the pattern, so a match means both are strings. The assertions

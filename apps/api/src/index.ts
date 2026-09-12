@@ -89,6 +89,7 @@ import {
   setField,
   setList,
   shotIds,
+  unreachableImages,
   slug,
   tag,
   tagList,
@@ -2239,6 +2240,19 @@ app.put("/v1/guides/:id", async (c) => {
       parentId = parent.row.id;
     }
   }
+
+  // An image nobody but the author's own client can load is not evidence, and a publish that
+  // accepts one stores a guide with a dead picture in it. Refused rather than stripped: the
+  // screenshot is usually the most useful thing in a bug report, so the answer is to upload it,
+  // not to quietly drop the line naming it.
+  const unreachable = unreachableImages(markdown);
+  if (unreachable.length)
+    return err(
+      c,
+      400,
+      `${unreachable[0]} is not a URL a reader can load. Upload the image first — POST /v1/shots, ` +
+        "or the attach_screenshot tool — and put the URL it returns in the markdown.",
+    );
 
   const existing = await c.env.DB.prepare(
     "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id FROM guide WHERE id = ?",
