@@ -95,7 +95,13 @@ export async function serve() {
         "shows whether the guides they handed off have landed. When the user asks what they have " +
         "been working on, or wants a standup or a summary of a period, call log — but say that it " +
         "holds what they passed along and not everything they did. Gotchas are " +
-        "the highest-value section: record what failed and why.",
+        "the highest-value section: record what failed and why.\n" +
+        "A FOLLOW-UP IS A GUIDE, NOT A NOTE. When you worked from a guide and departed from it — " +
+        "changed or skipped a Step, adapted an ASSUMES for this stack, found the fix a failing " +
+        "guide did not have, or hit a Gotcha it does not list — publish what you learned as its " +
+        "own guide with publish_guide `parent` set to that guide's id; the original then lists it " +
+        "as a follow-up. If it worked exactly as written, do not: answer with verify_guide, or " +
+        "every guide collects copies that say nothing new.",
     },
   );
 
@@ -310,7 +316,8 @@ export async function serve() {
         const siblings = await related(meta);
         return text(
           `${lead}${r.markdown}${siblings}` +
-            `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->`,
+            `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->` +
+            `\n${passalong.followUpNote(meta)}`,
         );
       } catch (err) {
         return fail(err);
@@ -359,7 +366,8 @@ export async function serve() {
         return text(
           `${lead}${markdown}${siblings}` +
             `\n\n<!-- passalong: ${from}; written to ${path} -->` +
-            `\n${passalong.handoffNudge(meta)}`,
+            `\n${passalong.handoffNudge(meta)}` +
+            `\n${passalong.followUpNote(meta)}`,
         );
       } catch (err) {
         return fail(err);

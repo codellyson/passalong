@@ -125,7 +125,13 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "attach it with attach_screenshot and pass what it returns as `evidence` — a screenshot " +
         "you described instead of attaching is the most useful thing in the report, thrown away. " +
         "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
-        "the body, and publish_guide the same id — publishing claims whatever the markdown names.",
+        "the body, and publish_guide the same id — publishing claims whatever the markdown names.\n" +
+        "A FOLLOW-UP IS A GUIDE, NOT A NOTE. When you worked from a guide and departed from it — " +
+        "changed or skipped a Step, adapted an ASSUMES for this stack, found the fix a failing " +
+        "guide did not have, or hit a Gotcha it does not list — publish what you learned as its " +
+        "own guide with publish_guide `parent` set to that guide's id; the original then lists it " +
+        "as a follow-up. If it worked exactly as written, do not: answer with verify_guide, or " +
+        "every guide collects copies that say nothing new.",
     },
   );
 
@@ -170,7 +176,23 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           "those steps produce the defect. Fix what Problem describes, then check Verification " +
           "and answer with verify_guide.\n\n"
         : "";
-      return text(lead + res.text);
+      // A second content block, not text added to the first. The document is handed over as it
+      // came — a transfer guide byte for byte — so an agent that writes it back out cannot carry
+      // the note into it, and nothing lands in front of `---`. Mirrors `followUpNote()`.
+      const bug = /^kind:\s*bug\s*$/m.test(res.text);
+      const note = bug
+        ? "<!-- passalong: once this is fixed, if the fix is worth repeating somewhere else, " +
+          `publish it as a transfer guide with publish_guide parent=${id} so this bug lists it. -->`
+        : "<!-- passalong: if you depart from this guide — change or skip a Step, adapt an " +
+          "ASSUMES for this stack, find a fix it did not have, hit a Gotcha it does not list — " +
+          `publish what you learned as its own guide with publish_guide parent=${id}. If it ` +
+          "worked exactly as written, answer with verify_guide instead. -->";
+      return {
+        content: [
+          { type: "text" as const, text: lead + res.text },
+          { type: "text" as const, text: note },
+        ],
+      };
     },
   );
 

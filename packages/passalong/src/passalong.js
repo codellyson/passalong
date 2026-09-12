@@ -296,6 +296,33 @@ export async function attach(file, { name = "" } = {}) {
   return { ...shot, markdown: `![${name || basename(file)}](${shot.url})` };
 }
 
+/**
+ * The line a guide arrives with, saying when what you do next deserves to be a guide of its own.
+ *
+ * Trailing, like the handoff nudge, so it never sits in front of the frontmatter. It is here and
+ * not only in the server's instructions because an agent reads the payload it is working from and
+ * skims everything else — the same reason the bug lead is inside the document.
+ *
+ * It says when *not* to as well. A follow-up for a guide that worked exactly as written is a copy
+ * that says nothing new, and a guide collecting those is worse than one with none; that answer is a
+ * verdict. For a bug the question is different — nothing to depart from, but a fix worth repeating
+ * elsewhere is a transfer guide, and the bug is where it came from.
+ */
+export function followUpNote(meta = {}) {
+  if (!meta.id) return "";
+  if (meta.kind === "bug")
+    return (
+      "<!-- passalong: once this is fixed, if the fix is worth repeating somewhere else, publish " +
+      `it as a transfer guide with publish_guide parent=${meta.id} so this bug lists it. -->`
+    );
+  return (
+    "<!-- passalong: if you depart from this guide — change or skip a Step, adapt an ASSUMES for " +
+    "this stack, find a fix it did not have, hit a Gotcha it does not list — publish what you " +
+    `learned as its own guide with publish_guide parent=${meta.id}. If it worked exactly as ` +
+    "written, answer with verify_guide instead. -->"
+  );
+}
+
 /** Local guides merged with synced ones (by id), newest first, optionally filtered. */
 export async function list(query = "", { remote = true, scope = "" } = {}) {
   const local = scope && scope !== "all" && scope !== "mine" ? [] : store.search(query);
