@@ -81,6 +81,11 @@ export async function serve() {
         "because you reproduced it. " +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
         "file_bugs with all of them at once; each becomes a guide someone can take on its own. " +
+        "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
+        "attach it with attach_screenshot and pass what it returns as `evidence` — a screenshot " +
+        "you described instead of attaching is the most useful thing in the report, thrown away. " +
+        "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
+        "the body, and publish_guide the same id — publishing claims whatever the markdown names. " +
         "When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
         "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or " +
@@ -394,7 +399,10 @@ export async function serve() {
       description:
         "Publish a guide from markdown (frontmatter + sections) — a transfer guide by default, or " +
         "a single bug with `kind: bug`; use file_bugs for more than one. Missing id, created, " +
-        'author, and source_context are filled in. `to` addresses it to a team ("khaime") or a ' +
+        "author, and source_context are filled in. A screenshot belongs in the markdown: attach it " +
+        "with attach_screenshot and put the line it returns in the body, because publishing claims " +
+        "whatever the markdown names. " +
+        '`to` addresses it to a team ("khaime") or a ' +
         'teammate ("khaime/lukman"), who is notified. Returns the id and share link.',
       inputSchema: {
         markdown: z.string().describe("full guide markdown; start from guide_template"),
@@ -439,7 +447,10 @@ export async function serve() {
         "publishes each issue as its own guide — its own id, share link, and verdict — so a " +
         "reviewer can hand any one of them to whoever fixes it. Use this after a test run, a QA " +
         "pass, or a review that turned up defects; use publish_guide instead for work you " +
-        "finished and want repeated elsewhere. Needs sync (`passalong login`).",
+        "finished and want repeated elsewhere. If there is a screenshot of any of this, it is " +
+        "evidence: call attach_screenshot first and pass what it returns as that issue's " +
+        "`evidence`. Describing a screenshot instead of attaching it throws away the most useful " +
+        "thing in the report. Needs sync (`passalong login`).",
       inputSchema: {
         title: z
           .string()
@@ -456,6 +467,13 @@ export async function serve() {
         issues: z
           .array(
             z.object({
+              evidence: z
+                .array(z.string())
+                .default([])
+                .describe(
+                  "screenshot URLs from attach_screenshot, or the markdown lines it returned; " +
+                    "they go under Problem, where a reader looks first",
+                ),
               title: z.string().describe("what is broken, in one line"),
               problem: z
                 .string()

@@ -354,7 +354,26 @@ export function bugGuide({
   report = "",
   environment = "",
   status = "published",
+  evidence = [],
 } = {}) {
+  /**
+   * Screenshots, as markdown inside the document.
+   *
+   * They go under Problem rather than a heading of their own, because for a visual defect the
+   * picture *is* the problem statement and a bug's sections are a fixed set — a seventh heading
+   * would change the shape every reader keys on to add a line that already belongs in the first
+   * one.
+   *
+   * Naming them in the body is also the only thing that binds them: `claimShots` claims whatever
+   * the markdown points at, scoped to the author, so a URL listed anywhere else would upload
+   * evidence that no guide owns and the nightly sweep deletes.
+   */
+  const shots = (Array.isArray(evidence) ? evidence : [evidence])
+    .map((s) => String(s ?? "").trim())
+    .filter(Boolean)
+    // A caller that already has the markdown line from `attach_screenshot` passes it through
+    // whole; one holding just the URL gets it wrapped. Both reach the same document.
+    .map((s) => (s.startsWith("![") ? s : `![evidence](${s})`));
   const body = [
     // Written into the document, not added by whatever served it.
     //
@@ -367,10 +386,13 @@ export function bugGuide({
     "",
     "## Problem",
     problem.trim() || "_No description given._",
+  ];
+  if (shots.length) body.push("", ...shots);
+  body.push(
     "",
     "## Reproduce",
     reproduce.trim() || "_Not recorded — the description above is what there is._",
-  ];
+  );
   // Both are optional and both are worse than absent when empty: a Verification heading with
   // nothing under it says nobody knows what fixed looks like, on the section a fixer reads first.
   if (verification.trim()) body.push("", "## Verification", verification.trim());

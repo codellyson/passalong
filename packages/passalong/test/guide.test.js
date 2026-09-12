@@ -252,3 +252,32 @@ test("a parent is optional, and a malformed one is caught before publish", () =>
     "a guide cannot follow itself",
   ]);
 });
+
+test("a bug carries its evidence in the document, where a fixer reads first", () => {
+  const md = bugGuide({
+    title: "Button does nothing",
+    problem: "Clicking Save does not save.",
+    reproduce: "1. Click Save.",
+    evidence: [
+      "https://passalong.dev/v1/shots/abc123",
+      "![shot.png](https://passalong.dev/v1/shots/def456)",
+    ],
+  });
+  // Under Problem, before Reproduce: for a visual defect the picture is the problem statement, and
+  // a seventh heading would change the shape every reader keys on.
+  const body = sections(md.split("---\n").slice(2).join("---\n"));
+  assert.match(body.Problem, /!\[evidence\]\(https:\/\/passalong\.dev\/v1\/shots\/abc123\)/);
+  // A caller holding the line attach_screenshot returned passes it through whole rather than
+  // having it wrapped a second time.
+  assert.match(body.Problem, /!\[shot\.png\]\(https:\/\/passalong\.dev\/v1\/shots\/def456\)/);
+  assert.doesNotMatch(body.Problem, /!\[evidence\]\(!\[/);
+  assert.equal(body.Reproduce, "1. Click Save.");
+  assert.deepEqual(validate(parse(md)), []);
+});
+
+test("no evidence leaves a bug byte-for-byte what it was", () => {
+  const args = { title: "T", problem: "P", reproduce: "R" };
+  assert.equal(bugGuide(args), bugGuide({ ...args, evidence: [] }));
+  assert.equal(bugGuide(args), bugGuide({ ...args, evidence: ["", "  "] }));
+  assert.doesNotMatch(bugGuide(args), /!\[/);
+});

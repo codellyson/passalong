@@ -120,7 +120,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "the behaviour that should have happened. Fix the defect, then check Verification and " +
         "verify_guide with the result. A bug report is not broken because you reproduced it.\n" +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
-        "file_bugs with all of them at once; each becomes a guide someone can take on its own.",
+        "file_bugs with all of them at once; each becomes a guide someone can take on its own.\n" +
+        "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
+        "attach it with attach_screenshot and pass what it returns as `evidence` — a screenshot " +
+        "you described instead of attaching is the most useful thing in the report, thrown away. " +
+        "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
+        "the body, and publish_guide the same id — publishing claims whatever the markdown names.",
     },
   );
 
@@ -226,7 +231,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       description:
         "Publish a guide from its full markdown — a transfer guide, or a single bug with " +
         "`kind: bug`. Use file_bugs for more than one bug. Missing id, created, author and " +
-        "source_context are filled in. Addressing is frontmatter: `team:` and `to:`.",
+        "source_context are filled in. Addressing is frontmatter: `team:` and `to:`. A screenshot " +
+        "belongs in the markdown: attach it with attach_screenshot and put the line it returns in " +
+        "the body, because publishing claims whatever the markdown names.",
       inputSchema: {
         id: z
           .string()
@@ -290,7 +297,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       description:
         "File defects you found but are not fixing, as one report. Each issue becomes its own " +
         "guide — own id, share link and verdict — so any of them can be handed to whoever fixes " +
-        "it. Send them all in one call rather than one call each.",
+        "it. Send them all in one call rather than one call each. If the user showed you an " +
+        "image of any of this, it is evidence: call attach_screenshot first and pass what it " +
+        "returns as that issue's `evidence`. Describing a screenshot you were given, instead of " +
+        "attaching it, throws away the most useful thing in the report.",
       inputSchema: {
         title: z.string().optional().describe('what the sweep was, e.g. "Checkout pass, 8 Sep"'),
         environment: z.string().optional().describe("production, staging or development"),
@@ -301,6 +311,13 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         issues: z
           .array(
             z.object({
+              evidence: z
+                .array(z.string())
+                .default([])
+                .describe(
+                  "screenshot URLs from attach_screenshot, or the markdown lines it returned; " +
+                    "they go under Problem, where a reader looks first",
+                ),
               title: z.string().describe("what is broken, in one line"),
               problem: z.string().describe("what is broken and what it stops someone doing"),
               reproduce: z
@@ -472,6 +489,7 @@ function bugDocument(issue: {
   environment?: string;
   team?: string;
   to?: string;
+  evidence?: string[];
 }) {
   const front = [
     `title: ${quote(issue.title)}`,
@@ -487,16 +505,23 @@ function bugDocument(issue: {
   const tags = ["bug", issue.environment, issue.area].filter(Boolean) as string[];
   front.push(`tags: [${tags.map(quote).join(", ")}]`);
 
+  // Under Problem, not a heading of their own: for a visual defect the picture *is* the problem
+  // statement, and a bug's sections are a fixed set. Naming them in the body is also what binds
+  // them — `claimShots` claims whatever the markdown points at, so a URL anywhere else uploads
+  // evidence no guide owns and the nightly sweep takes it.
+  const shots = (issue.evidence || [])
+    .map((s) => String(s ?? "").trim())
+    .filter(Boolean)
+    .map((s) => (s.startsWith("![") ? s : `![evidence](${s})`));
   const body = [
     "> **Bug report.** The steps under Reproduce show the problem — they are not a fix to apply. " +
       "Fix what Problem describes, then check Verification.",
     "",
     "## Problem",
     issue.problem.trim() || "_No description given._",
-    "",
-    "## Reproduce",
-    issue.reproduce.trim() || "_Not recorded._",
   ];
+  if (shots.length) body.push("", ...shots);
+  body.push("", "## Reproduce", issue.reproduce.trim() || "_Not recorded._");
   if (issue.verification?.trim()) body.push("", "## Verification", issue.verification.trim());
   if (issue.gotchas?.trim()) body.push("", "## Gotchas", issue.gotchas.trim());
   return `---\n${front.join("\n")}\n---\n\n${body.join("\n")}\n`;
