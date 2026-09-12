@@ -239,10 +239,24 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           .string()
           .describe("passalong id: 6-12 lowercase letters and digits, chosen by you if new"),
         markdown: z.string().describe("the whole document, frontmatter first"),
+        parent: z
+          .string()
+          .optional()
+          .describe(
+            "id of the guide this one came out of — set it when this is what you learned doing " +
+              "someone else's guide, so theirs lists it as a follow-up",
+          ),
       },
     },
-    async ({ id, markdown }) =>
-      relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}`, { markdown }),
+    // `parent` rides beside the document and the route writes it into the frontmatter, so a model
+    // never has to edit YAML to record where its work came from.
+    async ({ id, markdown, parent }) =>
+      relay(
+        call,
+        "PUT",
+        `/v1/guides/${encodeURIComponent(id)}`,
+        parent ? { markdown, parent } : { markdown },
+      ),
   );
 
   server.registerTool(

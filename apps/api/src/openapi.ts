@@ -193,7 +193,8 @@ export function openapi(origin: string) {
           description:
             "Frontmatter carries the addressing: `team:` and `to:` hand it over, `kind: bug` " +
             "makes it a bug report, `report:` files it under a report. A bug's repro belongs " +
-            "under `## Reproduce`, never `## Steps`.",
+            "under `## Reproduce`, never `## Steps`. `parent:` names the guide this one came out of " +
+            "— or send `parent` beside `markdown` and it is written into the frontmatter for you.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -210,6 +211,12 @@ export function openapi(origin: string) {
                       type: "string",
                       description: "The whole document, frontmatter first.",
                     },
+                    parent: {
+                      type: "string",
+                      description:
+                        "Optional id of the guide this one came out of. Written into the " +
+                        "frontmatter as `parent:`, so the stored document is the same either way.",
+                    },
                   },
                 },
               },
@@ -220,6 +227,20 @@ export function openapi(origin: string) {
             200: { description: "Updated." },
             201: { description: "Created." },
             400: { description: "The document or its addressing is not valid." },
+          },
+        },
+      },
+      "/v1/guides/{id}/children": {
+        get: {
+          operationId: "listFollowUps",
+          summary: "The guides that came out of this one, one level down.",
+          description:
+            "Guides whose `parent:` names this one, newest first, filtered to what you can read. " +
+            "One level: walk it for more.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          responses: {
+            200: { description: "The follow-ups.", content: { "application/json": {} } },
+            404: { description: "No such guide." },
           },
         },
       },

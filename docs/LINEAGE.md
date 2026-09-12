@@ -1,6 +1,6 @@
 # Passalong — guide lineage (`parent_id`)
 
-**Status:** spec, not built. **Date:** 2026-09-11.
+**Status:** built — column, frontmatter, write path, read fields, children endpoint, hub row. **Date:** 2026-09-11, finished 2026-09-12.
 
 A guide that descends from another guide. B pulls A's guide, implements it, learns three things on
 the way, and publishes those as a guide whose parent is A's — so the original accumulates what it
@@ -130,11 +130,18 @@ and the board goes quiet while the guide looks busy.
 
 Parity is a product rule, so all three faces or none.
 
-- **CLI** — `passalong share --follows <id>`, and `passalong pull` writes `parent:` through
-  untouched. `passalong open <id>` lists children.
-- **MCP** — `publish_guide` takes `parent`; `get_guide` returns `children`.
-- **Hub** — the parent links up from a child ("follows *Title*"), and the guide page lists
-  descendants under the document, below Gotchas.
+- **CLI** — `passalong share --follows <id|link>`, and `passalong pull` writes `parent:` through
+  untouched.
+- **MCP** — `publish_guide` takes `parent` on both servers. Locally it goes through `share()`; over
+  HTTP it rides beside the markdown and the route writes it into the frontmatter, so a model never
+  edits YAML to record where its work came from.
+- **Hub** — a row says "follows *Title*" and how many follow-ups it has, both scoped to what you can
+  read. `GET /v1/guides/:id/children` returns one level.
+- **Not the public guide page, deliberately.** An earlier draft of this spec put descendants below
+  Gotchas on `/g/:id/:key`. That page is authorised by the share key alone — there is no account —
+  and a follow-up's visibility is its team. Listing children there, or showing a parent's title,
+  would hand team-private guides to anyone holding one link. The child's own `parent:` id stays in
+  its markdown, which is what the key already shows.
 
 ## 9. Board and counts
 

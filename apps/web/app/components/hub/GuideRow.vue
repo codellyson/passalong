@@ -188,6 +188,21 @@ const verdict = computed(() => {
             {{ shorten(g.report_title || "part of a report", 24).text }}
           </NuxtLink>
         </template>
+        <!-- Lineage, both directions. A parent is a link only when you can read it: a title means
+             it is in one of your teams, and an id alone would open a search that finds nothing. -->
+        <template v-if="g.parent">
+          <span>·</span>
+          <NuxtLink v-if="g.parent_title" :to="{ path: '/hub/guides', query: { q: g.parent } }">
+            follows {{ shorten(g.parent_title, 24).text }}
+          </NuxtLink>
+          <span v-else>follows {{ g.parent }}</span>
+        </template>
+        <template v-if="g.children">
+          <span>·</span>
+          <NuxtLink :to="{ path: '/hub/guides', query: { follows: g.id } }">
+            {{ g.children }} {{ g.children === 1 ? "follow-up" : "follow-ups" }}
+          </NuxtLink>
+        </template>
         <span v-for="t in shownTags" :key="t">#{{ t }}</span>
         <button
           v-if="moreTags"

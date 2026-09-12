@@ -31,8 +31,27 @@ const rows = computed<Row[]>(() =>
     .sort((a, b) => rank(a) - rank(b)),
 );
 
-/** The one genuinely controlled input on the page. */
-const q = ref("");
+/**
+ * The one genuinely controlled input on the page — seeded from the URL, so a row elsewhere can link
+ * straight to a search. Watched as well as read, because following a link from this same page
+ * changes the query without remounting it.
+ */
+const route = useRoute();
+const q = ref(typeof route.query.q === "string" ? route.query.q : "");
+watch(
+  () => route.query.q,
+  (v) => {
+    q.value = typeof v === "string" ? v : "";
+  },
+);
+/**
+ * Follow-ups of one guide: `?follows=<id>` narrows the list to guides naming it as their parent. A
+ * filter of its own rather than a search term, because a search matches text and a follow-up does
+ * not contain its parent's title — only its `parent:` does.
+ */
+const follows = computed(() =>
+  typeof route.query.follows === "string" ? route.query.follows : "",
+);
 const cut = ref("all");
 
 const CUTS = [
@@ -78,6 +97,7 @@ const visible = computed(() => {
   return rows.value.filter((r) => {
     if (!inCut(r, cut.value)) return false;
     const g = r.g;
+    if (follows.value && g.parent !== follows.value) return false;
     const hay = [
       g.title,
       g.source_context,
@@ -100,6 +120,10 @@ const visible = computed(() => {
          and four filter chips all reading zero, above a line saying nothing is synced. -->
     <div v-if="data.guides.length" class="toolbar">
       <input v-model="q" type="search" placeholder="search title, tags, stack, repo" />
+      <p v-if="follows" class="text-xs text-muted">
+        follow-ups of {{ follows }} ·
+        <NuxtLink to="/hub/guides">show all</NuxtLink>
+      </p>
       <div class="chips">
         <button
           v-for="c in CUTS"

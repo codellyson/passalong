@@ -89,10 +89,10 @@ import {
   setField,
   setList,
   shotIds,
-  unreachableImages,
   slug,
   tag,
   tagList,
+  unreachableImages,
 } from "./guide.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
@@ -404,6 +404,34 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       .all<{ id: string; title: string }>();
     for (const row of results) reportTitles.set(row.id, row.title);
   }
+  // A guide that came out of another says so by name, the way a report row does: "follows
+  // Migrating the worker" is a link somebody follows, and eight characters are not. Both lookups
+  // are scoped to what this caller can read. A follow-up published into a team you are in must not
+  // hand you the title of a parent from a team you are not in, and a count of children you cannot
+  // open is a number about things you are not allowed to see.
+  const readable =
+    "(account_id = ? OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?))";
+  const parentIds = [...new Set(rows.map((r) => r.parent_id).filter(Boolean))];
+  const parentTitles = new Map<string, string>();
+  if (parentIds.length) {
+    const { results } = await c.env.DB.prepare(
+      `SELECT id, title FROM guide WHERE id IN (${parentIds.map(() => "?").join(",")}) AND ${readable}`,
+    )
+      .bind(...parentIds, me, me)
+      .all<{ id: string; title: string }>();
+    for (const row of results) parentTitles.set(row.id, row.title);
+  }
+  const childCounts = new Map<string, number>();
+  if (rows.length) {
+    const { results } = await c.env.DB.prepare(
+      `SELECT parent_id, COUNT(*) AS n FROM guide
+        WHERE parent_id IN (${rows.map(() => "?").join(",")}) AND status <> 'draft' AND ${readable}
+        GROUP BY parent_id`,
+    )
+      .bind(...rows.map((r) => r.id), me, me)
+      .all<{ parent_id: string; n: number }>();
+    for (const row of results) childCounts.set(row.parent_id, Number(row.n));
+  }
   return rows.map((r) => {
     const heard = said.get(r.id) || [];
     // The latest word, plus whether anyone's standing verdict is still negative.
@@ -433,6 +461,9 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       for_me: r.to_account_id === me,
       report: r.report_id || "",
       report_title: reportTitles.get(r.report_id) || "",
+      parent: r.parent_id || "",
+      parent_title: parentTitles.get(r.parent_id) || "",
+      children: childCounts.get(r.id) || 0,
       area: r.area || "",
       severity: r.severity || "",
       // Empty means transfer, which is what every guide written before bug reports existed is.
@@ -2127,8 +2158,13 @@ app.put("/v1/guides/:id", async (c) => {
     (c.req.header("content-type") || "").split(";")[0]?.trim() === "application/json";
   let markdown = "";
   if (sentJson) {
-    const wrapper = await c.req.json<{ markdown?: unknown }>().catch(() => null);
+    const wrapper = await c.req.json<{ markdown?: unknown; parent?: unknown }>().catch(() => null);
     if (typeof wrapper?.markdown === "string") markdown = wrapper.markdown;
+    // A caller composing a tool call can name the parent beside the document rather than edit
+    // frontmatter by hand. It is written *into* the frontmatter, so the stored guide is exactly the
+    // document it would be had the author typed `parent:` — the markdown stays the one source.
+    if (markdown.trim() && typeof wrapper?.parent === "string" && wrapper.parent.trim())
+      markdown = setField(markdown, "parent", wrapper.parent.trim());
   } else {
     markdown = await c.req.text();
   }
@@ -2538,6 +2574,28 @@ app.get("/v1/guides/:id", async (c) => {
   if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
   await recordPull(c, found.row, c.get("account"), "cli");
   return c.text(found.row.markdown, 200, { "content-type": "text/markdown; charset=utf-8" });
+});
+
+/**
+ * The guides that came out of this one, one level down.
+ *
+ * One level rather than the tree: a caller can walk it, and a recursive query returning every
+ * descendant of a guide that travelled is a response nobody renders. Readable on the parent is the
+ * gate, and each child is filtered again on its own — a follow-up published into a team you are
+ * not in does not appear under a guide you can see. Drafts are not children yet.
+ */
+app.get("/v1/guides/:id/children", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
+  const account = c.get("account");
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM guide WHERE parent_id = ? AND status <> 'draft'
+       AND (account_id = ? OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?))
+     ORDER BY created DESC LIMIT 100`,
+  )
+    .bind(found.row.id, account, account)
+    .all<GuideRow>();
+  return c.json({ guides: await summaries(c, results) });
 });
 
 app.patch("/v1/guides/:id/status", async (c) => {
