@@ -305,6 +305,24 @@ export function sections(body) {
   return out;
 }
 
+/**
+ * Image targets no reader will ever load. Mirrors `unreachableImages` in apps/api/src/guide.ts,
+ * which is the authority and refuses the publish; this lets a local share fail before the network.
+ *
+ * Only a foreign scheme counts — `attachment://`, `blob:`, `file:`, `data:`. `https:` is left alone
+ * because embedding an image you host is legitimate, and a relative path is left alone because it
+ * has always been accepted.
+ */
+export function unreachableImages(markdown) {
+  const bad = [...String(markdown).matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)/g)]
+    .map((m) => m[1].trim())
+    .filter((target) => {
+      const scheme = /^([a-z][a-z0-9+.\-]*):/i.exec(target);
+      return Boolean(scheme) && !/^https?$/i.test(scheme[1]);
+    });
+  return [...new Set(bad)];
+}
+
 /** Problems that make a guide unfit to publish. Empty array means it is fine. */
 export function validate({ meta, body }) {
   const errors = [];
@@ -335,6 +353,12 @@ export function validate({ meta, body }) {
     errors.push('a bug uses "## Reproduce", not "## Steps" — an agent executes Steps');
   }
   if (body.includes("<!-- passalong:")) errors.push("template placeholders are still in the body");
+  // An agent that has a file id but never called attach_screenshot writes the id as if it were a
+  // link. It publishes, and stores a guide whose screenshot was never uploaded anywhere.
+  for (const target of unreachableImages(body))
+    errors.push(
+      `${target} is not a URL a reader can load — attach the image first and use the URL it returns`,
+    );
   return errors;
 }
 

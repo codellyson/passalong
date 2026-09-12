@@ -37,7 +37,7 @@ export function parseTarget(to) {
  * logged in. `to` addresses it: "team", "team/@handle", or "team/#group". Returns
  * { guide, path, url, synced }.
  */
-export async function share(markdown, { cwd = process.cwd(), to } = {}) {
+export async function share(markdown, { cwd = process.cwd(), to, follows } = {}) {
   const c = context(cwd);
   const raw = parse(markdown);
   let guide = stamp(
@@ -50,6 +50,10 @@ export async function share(markdown, { cwd = process.cwd(), to } = {}) {
   const target = parseTarget(to);
   if (target.team) guide.meta.team = target.team;
   if (target.to) guide.meta.to = target.to;
+  // `follows` names the guide this one came out of: an id, a share link, or a pulled .md file. An id
+  // is used as it is; a link or a file is read for the id in its own frontmatter. `validate()` below
+  // is what refuses a guide that names itself.
+  if (follows) guide.meta.parent = await resolveId(String(follows).trim());
   if (guide.meta.to && !guide.meta.team)
     throw new PassalongError("`to:` needs a team — address a handoff as team/handle");
   const errors = validate(guide);

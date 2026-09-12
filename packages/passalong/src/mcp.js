@@ -414,13 +414,21 @@ export async function serve() {
           .string()
           .optional()
           .describe("directory the work happened in, used to infer source_context"),
+        parent: z
+          .string()
+          .optional()
+          .describe(
+            "id or share link of the guide this one came out of — set it when this is what you " +
+              "learned doing someone else's guide, so theirs lists it as a follow-up",
+          ),
       },
     },
-    async ({ markdown, to, cwd }) => {
+    async ({ markdown, to, cwd, parent }) => {
       try {
         const { guide, url, synced, notified, path } = await passalong.share(markdown, {
           cwd: cwd || process.cwd(),
           to,
+          follows: parent,
         });
         return json({
           id: guide.meta.id,
@@ -429,6 +437,7 @@ export async function serve() {
           synced,
           team: guide.meta.team || "",
           to: guide.meta.to || "",
+          parent: guide.meta.parent || "",
           notified,
           path,
         });

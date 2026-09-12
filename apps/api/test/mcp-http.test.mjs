@@ -436,3 +436,29 @@ test("the tools that write a guide say where a screenshot goes", async () => {
   const issue = body.result.tools.find((t) => t.name === "file_bugs").inputSchema.properties.issues;
   assert.ok(issue.items.properties.evidence, "each issue takes its own evidence");
 });
+
+test("publish_guide carries a parent beside the document, and only when one was given", async () => {
+  const { call, seen } = recorder({
+    "PUT /v1/guides/k3mq2xa7": { status: 201, text: JSON.stringify({ url: "https://x/g/a/b" }) },
+  });
+  const publish = (args) =>
+    handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: {
+          name: "publish_guide",
+          arguments: { id: "k3mq2xa7", markdown: "---\n---\n", ...args },
+        },
+      }),
+      call,
+      VOCAB,
+    );
+  await read(await publish({ parent: "zx9y8w42" }));
+  await read(await publish({}));
+  // The route writes `parent` into the frontmatter, so a model records lineage without editing YAML.
+  assert.deepEqual(seen[0].body, { markdown: "---\n---\n", parent: "zx9y8w42" });
+  // No parent means the body a publish has always sent — nothing new rides along by accident.
+  assert.deepEqual(seen[1].body, { markdown: "---\n---\n" });
+});

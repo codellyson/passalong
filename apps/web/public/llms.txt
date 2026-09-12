@@ -137,6 +137,11 @@ filed without one is not stuck: `get_guide` it, add the markdown line to the bod
 `publish_guide` the same id. Publishing claims whatever the markdown names, every time, so a
 re-publish picks the image up.
 
+A guide can name the guide it came out of. When what you are publishing is what you learned doing
+someone else's guide, pass `parent` to `publish_guide` — or `passalong share --follows <id>` — and
+the parent counts it as a follow-up. A follow-up is a whole guide, not a reply: it has its own id,
+verdicts and pulls. `parent` on `publish_guide` and `--follows` need passalong 0.3.1 or later.
+
 `file_bugs` files defects you found but are not fixing — from a test run, a QA pass, a review — as
 one report. Each issue becomes a guide with its own id, share link and verdict, so any of them can
 be handed to whoever fixes it. Send them in one call rather than one call each. Each issue takes

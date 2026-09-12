@@ -70,6 +70,14 @@ export interface Guide {
   /** The report this issue belongs to, when it is one — see migrations/0006_reports.sql. */
   report?: string;
   report_title?: string;
+  /**
+   * The guide this one came out of — see migrations/0015_lineage.sql. The title is only filled when
+   * you can read the parent, so an id with no title is a parent in a team you are not in.
+   */
+  parent?: string;
+  parent_title?: string;
+  /** Follow-ups you can read: published guides that name this one as their parent. */
+  children?: number;
   /** "bug" or "transfer"; absent means transfer. */
   kind?: string;
   area?: string;
