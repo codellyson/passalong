@@ -1,7 +1,6 @@
 <!--
-  Whose guides you are looking at. Only the guide list is actually scoped — the board reads
-  `/v1/board`, which is not — so on the other two pages these are a filter you can set and see the
-  effect of one tab over.
+  Whose guides you are looking at. The hub's guide list is scoped; `/v1/board` is not, so across
+  everything the page adds back anything handed to you from outside your teams.
 
   Making a team is not here. It lives on settings, next to the list of the teams you are in, where
   the thing being added is in view.

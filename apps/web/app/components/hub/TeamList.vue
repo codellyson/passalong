@@ -69,7 +69,7 @@ async function invite(t: TeamDetail, el: EventTarget | null) {
 
 function guides(t: TeamDetail) {
   scope.value = t.slug;
-  router.push("/hub/guides");
+  router.push("/hub");
 }
 </script>
 
