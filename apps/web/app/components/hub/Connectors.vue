@@ -103,22 +103,23 @@ async function remove(id: string) {
 <template>
   <div>
     <div class="mb-4 font-ui text-sm text-muted">
+      <!-- No app leads. Claude, ChatGPT, Cursor and the rest all connect the same way — paste an
+           address, approve — so the instructions are written once, for whichever one you use. -->
       <p class="m-0">
-        <b class="text-fg">Claude:</b> open Connectors in Claude's settings, choose
-        <b class="text-fg">Add custom connector</b> and paste this address. Claude opens Passalong
-        and asks you to approve.
+        To connect an assistant, open its connector settings, add a custom connector and paste
+        this address. It opens Passalong and asks you to approve.
       </p>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <code
           class="overflow-x-auto rounded-1 border border-line-strong bg-raised px-3 py-2 font-code text-sm whitespace-nowrap text-fg"
         >{{ MCP_URL }}</code>
         <button class="btn sm" @click="copy(MCP_URL, $event.currentTarget)">
-          <AppIcon name="copy" /><span data-label>copy</span>
+          <AppIcon name="copy" /><span data-label>Copy</span>
         </button>
       </div>
       <p class="mt-2 mb-0">
-        <b class="text-fg">ChatGPT</b> and other apps that add MCP servers work the same way: paste
-        the address, choose OAuth if asked, and approve.
+        Works with any assistant that supports MCP connectors, such as Claude, ChatGPT and Cursor.
+        If it asks how to sign in, choose OAuth.
       </p>
     </div>
 
@@ -129,7 +130,7 @@ async function remove(id: string) {
         <b class="font-ui text-sm text-fg">
           New connector<template v-if="fresh.secret"> · secret shown once</template>
         </b>
-        <span class="font-ui text-sm text-accent">paste these into the app</span>
+        <span class="font-ui text-sm text-accent">Paste these into the app</span>
       </div>
       <div class="flex flex-col gap-2">
         <code
@@ -142,12 +143,11 @@ async function remove(id: string) {
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button class="btn primary sm" @click="copy(fresh.id, $event.currentTarget)">
-          <AppIcon name="copy" /><span data-label>copy client ID</span>
+          <AppIcon name="copy" /><span data-label>Copy client ID</span>
         </button>
-        <button class="btn sm" @click="fresh = null">done</button>
+        <button class="btn sm" @click="fresh = null">Done</button>
         <span v-if="!fresh.secret" class="font-ui text-sm text-muted">
-          No secret. If the app asks how it signs in to the token endpoint, choose
-          <code class="font-code">none</code>.
+          There's no secret. If the app asks for one, or asks how it authenticates, choose "none".
         </span>
       </div>
     </div>
@@ -172,7 +172,7 @@ async function remove(id: string) {
             <span class="block font-ui text-xs text-muted">{{ client.host }}</span>
           </td>
           <td :class="cell" class="pr-3 font-ui text-sm text-muted">
-            {{ client.approved ? rel(client.approved) : "not yet" }}
+            {{ client.approved ? rel(client.approved) : "—" }}
           </td>
           <td :class="cell" class="pr-3 font-ui text-sm text-muted">
             {{ client.last_used ? rel(client.last_used) : "never" }}
@@ -212,7 +212,7 @@ async function remove(id: string) {
           <input id="connector-redirect" v-model="redirect" class="w-full" type="url" placeholder="https://…" required>
           <p class="mt-2 mb-0 font-ui text-xs text-muted">
             Claude's is <code>https://claude.ai/api/mcp/auth_callback</code>
-            <button type="button" class="btn sm ml-1" @click="useClaude">use it</button>
+            <button type="button" class="btn sm ml-1" @click="useClaude">Use it</button>
           </p>
         </div>
         <button class="btn primary sm" type="submit" :disabled="busy || !redirect.trim()">
@@ -226,7 +226,7 @@ async function remove(id: string) {
     </details>
 
     <div class="mt-3 flex justify-end">
-      <NuxtLink to="/connect" class="font-ui text-sm">more on connecting apps</NuxtLink>
+      <NuxtLink to="/connect" class="font-ui text-sm">More about connecting apps</NuxtLink>
     </div>
   </div>
 </template>

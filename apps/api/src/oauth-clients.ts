@@ -197,7 +197,10 @@ export async function listConnectors(db: D1Database, account: string): Promise<C
   const { results } = await db
     .prepare(
       `SELECT c.id, c.name, c.redirect_uri, c.registered, c.created,
-              k.created AS approved,
+              -- A connector someone created by hand was approved the moment they created it; only
+              -- a self-registered app waits for a consent row. Reading consent alone printed "not
+              -- yet" beside manual connectors that were in use.
+              COALESCE(k.created, CASE WHEN c.registered = 'manual' THEN c.created END) AS approved,
               c.secret_hash <> '' AS confidential,
               (SELECT COUNT(*) FROM oauth_token t
                 WHERE t.client_id = c.id AND (c.registered = 'manual' OR t.account_id = ?1)) AS grants,
