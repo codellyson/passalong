@@ -22,7 +22,7 @@ const { data } = useHub();
 
 <template>
   <HubShell heading="Settings">
-    <template #sub>Your handle, your teams, and the tokens that sign the CLI in.</template>
+    <template #sub>Your details, your teams and plans, and what else can use Passalong as you.</template>
 
     <!-- A token-only account cannot sign in from any other browser. That is a state, not a
          setting, so it stays above the sections rather than inside one. -->
@@ -31,7 +31,7 @@ const { data } = useHub();
     <section :class="section">
       <div>
         <h2 :class="label">Identity</h2>
-        <p :class="blurb">Your handle is how a teammate addresses a transfer to you.</p>
+        <p :class="blurb">Your name, and the @name teammates send work to.</p>
       </div>
       <HubIdentity bare />
     </section>
@@ -44,7 +44,7 @@ const { data } = useHub();
     <section :class="section">
       <div>
         <h2 :class="label">Your plan</h2>
-        <p :class="blurb">What this account pays for, and what is lifting its ceiling.</p>
+        <p :class="blurb">What you pay for, and how many guides you can keep.</p>
       </div>
       <HubSolo />
     </section>
@@ -55,7 +55,7 @@ const { data } = useHub();
     <section v-if="data.me?.teams.length" :class="section">
       <div>
         <h2 :class="label">Team plans</h2>
-        <p :class="blurb">What each team is paying for, and what that buys its members.</p>
+        <p :class="blurb">What each team pays for, and what that gives everyone in it.</p>
       </div>
       <div class="flex flex-col gap-6">
         <HubPlan v-for="t in data.me.teams" :key="t.slug" :slug="t.slug" />
@@ -65,7 +65,7 @@ const { data } = useHub();
     <section :class="section">
       <div>
         <h2 :class="label">Teams</h2>
-        <p :class="blurb">Guides are addressed to a team. Invite someone with a link.</p>
+        <p :class="blurb">The people you send guides to. Invite someone with a link.</p>
       </div>
       <HubTeamList />
     </section>
@@ -74,8 +74,8 @@ const { data } = useHub();
       <div>
         <h2 :class="label">API tokens</h2>
         <p :class="blurb">
-          For <code class="font-code">passalong login</code> and MCP servers. Your password never
-          goes near the CLI.
+          For the terminal tool and for assistants you set up by hand. Your password is never used
+          for these.
         </p>
       </div>
       <HubTokens />

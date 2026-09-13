@@ -17,7 +17,14 @@
   // the account table. The namespace id is carried over from apps/api rather than renumbered, so
   // the limit does not reset to empty at the cutover.
   "ratelimits": [
-    { "name": "ACCOUNT_LIMIT", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } }
+    { "name": "ACCOUNT_LIMIT", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
+    // OAuth dynamic client registration (POST /v1/oauth/register), the other unauthenticated
+    // write. Per IP, looser than sign-up because one connect can register more than once.
+    {
+      "name": "OAUTH_REGISTER_LIMIT",
+      "namespace_id": "1002",
+      "simple": { "limit": 10, "period": 60 }
+    }
   ],
 
   // Outbound mail (handoffs, pulls, invites) through Cloudflare Email Service. No API key: the

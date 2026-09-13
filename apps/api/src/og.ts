@@ -75,7 +75,7 @@ const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><r
 const MARK = `<img src="data:image/svg+xml;base64,${btoa(MARK_SVG)}" width="44" height="44" style="margin-right:18px;" />`;
 
 /** The card markup. Satori supports a flexbox subset, so every container declares display. */
-function card(o: { title: string; id: string; meta: Meta }): string {
+function card(o: { title: string; from: string; meta: Meta }): string {
   const bits = [
     o.meta.status ? `${o.meta.status}` : "",
     o.meta.author ? `by ${o.meta.author}` : "",
@@ -99,7 +99,7 @@ function card(o: { title: string; id: string; meta: Meta }): string {
   <div style="display:flex;flex-direction:column;">
     <div style="display:flex;margin-bottom:28px;">${bits.map(chip).join("")}</div>
     <div style="display:flex;align-items:center;border-top:2px solid ${C.line};padding-top:26px;">
-      <div style="display:flex;color:${C.muted};font-size:26px;">A transfer guide \u00a0·\u00a0 id ${esc(o.id)}</div>
+      <div style="display:flex;color:${C.muted};font-size:26px;">${o.from ? `From ${esc(clip(o.from, 60))}` : "A Passalong guide"}</div>
     </div>
   </div>
 </div>`;
@@ -163,13 +163,22 @@ async function renderCard(env: Env, base: string, markup: string): Promise<Respo
   });
 }
 
-/** PNG bytes for one guide's unfurl card, 1200×630. */
+/**
+ * PNG bytes for one guide's unfurl card, 1200×630.
+ *
+ * `from` is the author as a person reads them. The footer used to print the guide's id, which is
+ * the one thing on the card nobody looking at a preview can do anything with.
+ */
 export async function renderOgImage(
   env: Env,
   base: string,
-  g: { id: string; meta: Meta },
+  g: { id: string; meta: Meta; from?: string },
 ): Promise<Response> {
-  return renderCard(env, base, card({ title: g.meta.title || g.id, id: g.id, meta: g.meta }));
+  return renderCard(
+    env,
+    base,
+    card({ title: g.meta.title || g.id, from: g.from || "", meta: g.meta }),
+  );
 }
 
 /** PNG bytes for the site's own unfurl card, 1200×630. */

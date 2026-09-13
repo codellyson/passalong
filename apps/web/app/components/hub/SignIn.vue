@@ -13,19 +13,20 @@ const emit = defineEmits<{ token: [string]; signedIn: [] }>();
 
 type Mode = "login" | "signup" | "forgot";
 
-const mode = ref<Mode>("login");
+// `?forgot=1` is where an expired reset link sends someone: straight to asking for a new one.
+const mode = ref<Mode>(useRoute().query.forgot ? "forgot" : "login");
 const authError = ref<string | null>(null);
 const notice = ref<string | null>(null);
 
 const COPY: Record<Mode, { title: string; lede: string; submit: string }> = {
   login: {
     title: "Sign in to Passalong",
-    lede: "Pick up work handed to you, and see what you handed over.",
+    lede: "Pick up work sent to you, and see where the work you sent got to.",
     submit: "Sign in",
   },
   signup: {
     title: "Create your account",
-    lede: "Somewhere to keep the guides you publish, and to receive the ones handed to you.",
+    lede: "Somewhere to keep the guides you send, and to receive the ones sent to you.",
     submit: "Create account",
   },
   forgot: {
@@ -156,14 +157,14 @@ function useToken(e: Event) {
     </div>
 
     <details class="more">
-      <summary>Other ways in — invite link, API token</summary>
+      <summary>Other ways in: an invite link, or the terminal tool</summary>
       <p class="muted">
         Been sent an invite? Opening the link makes your account and joins the team in one step.
       </p>
-      <HubInvitePaste label="invite link" />
+      <HubInvitePaste label="Invite link" />
       <p class="muted">
-        Or paste an API token — the CLI prints one with <code>passalong login</code>, and
-        <code>passalong hub</code> opens this page already signed in.
+        Using the Passalong terminal tool? It can sign this page in for you, or paste the token it
+        gives you here.
       </p>
       <form class="invite-paste" @submit.prevent="useToken">
         <input

@@ -1,10 +1,10 @@
 <!--
-  The first thing most people see. A self-serve signup lands in a genuinely empty hub — guides are
-  only made by `passalong share`, and this surface has no editor — so the empty state cannot be a
-  sentence explaining that nothing is here. It has to be the two things that lead somewhere.
+  The first thing most people see: an account with nothing in it yet.
 
-  They are ordered because they depend on each other: work handed over before you have a handle
-  can be addressed to a team but not to you.
+  Two steps, in the order they depend on each other. Teammates can only send work to you once they
+  have something to call you, so step one asks for your name and suggests the @name from it. Step
+  two is sending something — and it used to be a single `passalong share` command, which told a
+  tester or a designer that the product was not for them. It now offers the browser first.
 -->
 <script setup lang="ts">
 import type { Me } from "~/types/hub";
@@ -14,180 +14,154 @@ const { data, api, json, setMe } = useHub();
 const me = computed(() => data.value.me);
 const claimed = computed(() => Boolean(me.value?.handle));
 
+const name = ref(me.value?.name || "");
+const handle = ref("");
+const handleTouched = ref(false);
+const editingHandle = ref(false);
+watch(
+  name,
+  (typed) => {
+    if (!handleTouched.value) handle.value = handleFrom(typed);
+  },
+  { immediate: true },
+);
+
 const error = ref<string | null>(null);
 const saving = ref(false);
 
-const hint = "mt-2 mb-0 font-ui text-xs text-muted";
-const label = "block font-ui text-sm font-medium text-fg mb-2";
-
-async function claim(e: Event) {
-  const f = e.target as HTMLFormElement;
-  const body = { handle: field(f, "handle"), name: field(f, "name") };
+async function claim() {
   error.value = null;
   saving.value = true;
   try {
-    const next = await api<Partial<Me>>("/v1/me", json("PATCH", body));
+    const next = await api<Partial<Me>>(
+      "/v1/me",
+      json("PATCH", { handle: handle.value, name: name.value.trim() }),
+    );
     if (me.value && next) setMe({ ...me.value, ...next });
   } catch (err) {
     error.value = (err as Error).message;
+    editingHandle.value = true;
   } finally {
     saving.value = false;
   }
 }
+
+const step =
+  "absolute top-0 left-0 flex h-7 w-7 items-center justify-center rounded-pill font-ui text-sm font-semibold";
 </script>
 
 <template>
   <div>
     <ol class="m-0 list-none p-0">
-      <!-- Step one: claim a handle. -->
       <li class="relative pb-8 pl-10">
-        <span
-          class="absolute top-0 left-0 flex h-7 w-7 items-center justify-center rounded-pill font-ui text-sm font-semibold"
-          :class="claimed ? 'bg-ok text-bg' : 'bg-accent text-accent-fg'"
-        ><AppIcon v-if="claimed" name="check" /><template v-else>1</template></span>
+        <span :class="[step, claimed ? 'bg-ok text-bg' : 'bg-accent text-accent-fg']">
+          <AppIcon v-if="claimed" name="check" /><template v-else>1</template>
+        </span>
         <span class="absolute top-8 bottom-0 left-[13px] w-px bg-line" />
 
-        <h2 class="m-0 font-ui text-base font-semibold text-fg">Claim a handle</h2>
-        <p class="mt-1 mb-0 font-ui text-sm text-muted">
-          Teammates hand work to a handle. Until you claim one, nothing can reach you.
-        </p>
+        <template v-if="claimed">
+          <h2 class="m-0 font-ui text-base font-semibold text-fg">You're set up as {{ meName(me) }}</h2>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">
+            Teammates send you work as <b class="font-medium text-fg">@{{ me?.handle }}</b>.
+            <NuxtLink to="/hub/settings">Change it in Settings</NuxtLink>
+          </p>
+        </template>
 
-        <p v-if="claimed" class="mt-3 mb-0 font-ui text-sm text-fg">
-          You are <b class="font-code font-semibold">@{{ me?.handle }}</b>.
-          <NuxtLink to="/hub/settings">change it in settings</NuxtLink>
-        </p>
+        <template v-else>
+          <h2 class="m-0 font-ui text-base font-semibold text-fg">Tell your team who you are</h2>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">
+            Nothing can be sent to you until teammates have something to call you.
+          </p>
 
-        <form
-          v-else
-          class="mt-3 rounded-2 border border-line bg-raised p-4"
-          @submit.prevent="claim"
-        >
-          <div class="grid gap-4 md:grid-cols-2">
+          <form class="mt-3 flex max-w-md flex-col gap-3 rounded-2 border border-line bg-raised p-4" @submit.prevent="claim">
             <div>
-              <label :class="label" for="first-handle">Handle</label>
-              <div
-                class="flex items-center gap-1 rounded-1 border bg-raised pl-3 focus-within:border-accent"
-                :class="error ? 'border-danger' : 'border-line-strong'"
-              >
-                <span class="font-code text-sm text-muted">@</span>
+              <label class="mb-2 block font-ui text-sm font-medium text-fg" for="first-name">Your name</label>
+              <input id="first-name" v-model="name" class="w-full" required placeholder="Ada Okafor" autocomplete="name" />
+            </div>
+
+            <p v-if="!editingHandle" class="m-0 font-ui text-sm text-muted">
+              Teammates can send you work as <b class="font-medium text-fg">@{{ handle || "your-name" }}</b>.
+              <button class="linkish" type="button" @click="editingHandle = true">Change</button>
+            </p>
+            <div v-else>
+              <label class="mb-2 block font-ui text-sm font-medium text-fg" for="first-handle">
+                How teammates mention you
+              </label>
+              <div class="flex items-center gap-1 rounded-1 border border-line-strong bg-raised pl-3 focus-within:border-accent">
+                <span class="text-sm text-muted">@</span>
                 <input
                   id="first-handle"
-                  name="handle"
+                  v-model="handle"
                   class="w-full border-0 bg-transparent px-0 py-2 pr-3 focus:outline-none"
-                  placeholder="ada"
                   required
                   spellcheck="false"
-                  pattern="[a-zA-Z0-9][a-zA-Z0-9-]{1,30}"
-                  title="2–31 characters: letters, digits and dashes"
+                  pattern="[a-z0-9][a-z0-9-]{1,30}"
+                  title="2 to 31 lowercase letters, numbers or dashes"
+                  @input="handleTouched = true"
                 />
               </div>
-              <p :class="hint">lowercase, unique, hard to typo</p>
+              <p class="mt-2 mb-0 font-ui text-xs text-muted">2 to 31 lowercase letters, numbers or dashes.</p>
             </div>
+
+            <p v-if="error" class="m-0 font-ui text-sm text-danger">{{ error }}</p>
 
             <div>
-              <label :class="label" for="first-name">Name</label>
-              <input
-                id="first-name"
-                name="name"
-                class="w-full"
-                :value="me?.name || ''"
-                placeholder="Ada Lovelace"
-              />
-              <p :class="hint">shown next to your guides</p>
+              <button class="btn primary" type="submit" :disabled="saving || !name.trim()">
+                {{ saving ? "Saving…" : "Save" }}
+              </button>
             </div>
-          </div>
-
-          <p v-if="error" class="mt-3 mb-0 font-ui text-sm text-danger">{{ error }}</p>
-
-          <div class="mt-4 flex flex-wrap items-center gap-3">
-            <button class="primary" type="submit" :disabled="saving">
-              {{ saving ? "Claiming…" : "Claim it" }}
-            </button>
-            <span class="font-ui text-sm text-muted">
-              <template v-if="me?.email">Signed in as {{ me.email }} · </template>
-              <NuxtLink to="/hub/settings">change in settings</NuxtLink>
-            </span>
-          </div>
-        </form>
+          </form>
+        </template>
       </li>
 
-      <!-- The way in for everyone who does not have a terminal.
-           This screen used to offer exactly one next step — install the CLI and run it — which
-           told a tester, a designer or anyone else invited to a team that the product was not for
-           them. Filing bugs needs nothing installed, so it is offered first and without a step
-           number: it is not part of the sequence, it is the other door. -->
-      <div class="mb-6 rounded-3 border border-line bg-raised p-4">
-        <b class="block font-ui text-base font-semibold text-fg">Found a bug? Report it</b>
-        <p class="mt-2 mb-0 font-ui text-sm text-muted">
-          Nothing to install. Group everything from a testing pass into one report — screenshots,
-          steps, how bad each one is — and hand it to your team. Each issue becomes something one
-          person can pick up and answer for.
-        </p>
-        <NuxtLink to="/hub/report" class="btn primary mt-3">Report a bug</NuxtLink>
-      </div>
-
-      <!-- Step two: hand something over. Dimmed until the first is done, because a guide shared
-           before you have a handle cannot be addressed to you. -->
       <li class="relative pl-10" :class="claimed ? '' : 'opacity-60'">
         <span
-          class="absolute top-0 left-0 flex h-7 w-7 items-center justify-center rounded-pill border font-ui text-sm font-semibold"
-          :class="claimed ? 'border-accent bg-accent text-accent-fg' : 'border-line-strong text-muted'"
+          :class="[step, 'border', claimed ? 'border-accent bg-accent text-accent-fg' : 'border-line-strong text-muted']"
         >2</span>
 
         <h2 class="m-0 font-ui text-base font-semibold" :class="claimed ? 'text-fg' : 'text-muted'">
-          Hand over your first piece of work
+          Send your first guide
         </h2>
         <p class="mt-1 mb-0 font-ui text-sm text-muted">
-          Run this at the end of a session. Passalong writes up what you did and puts it on this
-          board.
+          A guide is finished work written down so someone else can repeat it.
         </p>
 
-        <div class="mt-3 flex flex-wrap items-center gap-3">
-          <code
-            class="rounded-1 border border-line bg-surface px-3 py-2 font-code text-sm text-fg select-all"
-          >passalong share</code>
-          <span class="font-ui text-sm text-muted">
-            or tell Claude Code <b class="font-medium text-fg">“pass this along”</b>
-          </span>
-        </div>
-
-        <!-- What the board turns into. It is a drawing, not data: an empty state that describes a
-             row is asking someone to imagine the product they have not used yet. -->
-        <div class="mt-4 rounded-2 border border-line p-4">
-          <p class="m-0 font-ui text-xs font-semibold tracking-widest text-muted uppercase">
-            What lands here
-          </p>
-          <div class="mt-3 flex items-start gap-4 border-l-[3px] border-l-warn pl-3">
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-3">
-                <span
-                  class="rounded-1 bg-warn-soft px-2 py-0.5 font-ui text-xs font-semibold tracking-wide text-warn uppercase"
-                >in flight</span>
-                <span class="h-2 w-28 rounded-pill bg-line" />
-              </div>
-              <span class="mt-3 block h-2.5 w-3/5 rounded-pill bg-line-strong" />
-              <span class="mt-2 block h-2 w-2/5 rounded-pill bg-line" />
-            </div>
-            <span class="h-8 w-20 shrink-0 rounded-1 border border-line" />
+        <div class="mt-3 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
+          <div class="flex flex-col gap-2 rounded-2 border border-line bg-raised p-4">
+            <b class="font-ui text-sm text-fg">Write it here</b>
+            <p class="m-0 font-ui text-sm text-muted">
+              Describe the problem, what you did, and how someone checks it worked.
+            </p>
+            <NuxtLink to="/hub/write" class="btn primary sm mt-auto self-start">Write a guide</NuxtLink>
           </div>
-          <p class="mt-3 mb-0 font-ui text-sm text-muted">
-            One row per guide: who it went to, whether anyone pulled it, and whether it worked for
-            them.
-          </p>
+          <div class="flex flex-col gap-2 rounded-2 border border-line bg-raised p-4">
+            <b class="font-ui text-sm text-fg">From Claude Code or a terminal</b>
+            <p class="m-0 font-ui text-sm text-muted">
+              At the end of a session, say <b class="font-medium text-fg">“pass this along”</b> in
+              Claude Code, or run the command below.
+            </p>
+            <button
+              class="btn sm mt-auto self-start"
+              type="button"
+              @click="copy('passalong share', $event.currentTarget)"
+            >
+              <AppIcon name="copy" /><span data-label>Copy <code>passalong share</code></span>
+            </button>
+          </div>
         </div>
       </li>
     </ol>
 
-    <!-- The one path that leads somewhere immediately: an invite is how testers, designers and
-         anyone who has never opened a terminal arrives. -->
+    <!-- The one path that leads somewhere immediately: an invite is how most people who never
+         open a terminal arrive. -->
     <div class="mt-8 flex flex-wrap items-end justify-between gap-4 border-t border-line pt-6">
       <div class="min-w-0 grow basis-72">
-        <h2 class="m-0 font-ui text-base font-semibold text-fg">Someone sent you an invite instead?</h2>
+        <h2 class="m-0 font-ui text-base font-semibold text-fg">Someone sent you an invite?</h2>
         <p class="mt-1 mb-0 font-ui text-sm text-muted">
-          Paste their link to join a team and see what is waiting on you.
+          Paste the link to join their team and see what's waiting for you.
         </p>
       </div>
-      <HubInvitePaste label="invite link" />
+      <HubInvitePaste label="Invite link" />
     </div>
   </div>
 </template>

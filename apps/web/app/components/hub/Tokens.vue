@@ -65,8 +65,8 @@ const head =
          back. It says so where the value is, not in a line underneath it. -->
     <div v-if="fresh" class="mb-4 rounded-2 border border-accent bg-accent-soft p-3">
       <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <b class="font-ui text-sm text-fg">New token · shown once</b>
-        <span class="font-ui text-sm text-accent">copy it now, it is not stored</span>
+        <b class="font-ui text-sm text-fg">Your new token</b>
+        <span class="font-ui text-sm text-accent">Copy it now. You won't be able to see it again.</span>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <code
@@ -76,13 +76,13 @@ const head =
           class="btn primary sm"
           @click="copy(fresh.token, $event.currentTarget)"
         >
-          <AppIcon name="copy" /><span data-label>copy token</span>
+          <AppIcon name="copy" /><span data-label>Copy token</span>
         </button>
         <button
           class="btn sm"
           @click="fresh = null"
         >
-          done
+          Done
         </button>
       </div>
     </div>
@@ -110,7 +110,7 @@ const head =
               <button class="btn outline danger sm" @click="revoke(t.id)">Revoke it</button>
               <button class="btn sm ml-2" @click="revoking = null">Cancel</button>
             </template>
-            <button v-else class="btn destructive sm" @click="revoking = t.id">revoke</button>
+            <button v-else class="btn destructive sm" @click="revoking = t.id">Revoke</button>
           </td>
         </tr>
       </tbody>
@@ -138,20 +138,12 @@ const head =
     </form>
 
     <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-      <button v-if="!naming" class="btn sm" @click="ask"><AppIcon name="plus" />new token</button>
+      <button v-if="!naming" class="btn sm" @click="ask"><AppIcon name="plus" />New token</button>
       <span v-else />
-      <!-- A seat on a paid team removes the ceiling, and the server says so by sending zero — which
-           printed here as "7 of 0 synced guides used on the free tier". There is no free tier to be
-           on and no number to be under, so the sentence changes rather than the number. -->
+      <!-- How many guides you're using lives with your plan in Settings, where someone who has hit
+           the limit looks. Under API tokens it was a fact in the wrong room. -->
       <span v-if="me" class="font-ui text-sm text-muted">
-        {{ plural(tokens.length, "active token") }} ·
-        <template v-if="me.sync === 'free'">
-          {{ me.guides }} of {{ me.limit }} synced guides used
-        </template>
-        <template v-else-if="me.sync === 'none'">no plan, so nothing is syncing</template>
-        <template v-else>
-          {{ plural(me.guides, "synced guide") }}, with no limit on your plan
-        </template>
+        {{ plural(tokens.length, "active token") }}
       </span>
     </div>
   </div>

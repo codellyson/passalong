@@ -45,14 +45,21 @@ const GUIDE = {
     pulls: { type: "integer", description: "How many times it has been taken." },
     mine: { type: "boolean" },
     from: { type: "string", description: "Handle of whoever shared it." },
+    from_name: {
+      type: "string",
+      description: "Whoever sent it, as a person reads them: their name, else @handle, else @id.",
+    },
     team: { type: "string" },
+    team_name: { type: "string", description: "The team's display name, or empty." },
     to: { type: "string", description: "Handle it was addressed to, if anyone." },
+    to_name: { type: "string", description: "Who it was sent to, by name, or empty." },
     to_group: {
       type: "string",
       description:
         "Group inside the team it was handed to, if any. Reaches every member; the first to " +
         "take it clears it from the others.",
     },
+    to_group_name: { type: "string", description: "That group's display name, or empty." },
     for_me: { type: "boolean", description: "You were named, rather than being in the team." },
     source_context: { type: "string" },
     tags: { type: "array", items: { type: "string" } },
@@ -67,6 +74,7 @@ const GUIDE = {
       properties: {
         ok: { type: "boolean" },
         by: { type: "string" },
+        by_name: { type: "string" },
         note: { type: "string" },
         at: { type: "string", format: "date-time" },
       },
@@ -76,6 +84,11 @@ const GUIDE = {
       items: { type: "string" },
       description: "Handles of the people who said they are on it.",
     },
+    taken_by_names: {
+      type: "array",
+      items: { type: "string" },
+      description: "The same people as taken_by, in the same order, by name.",
+    },
     declined: {
       type: "array",
       description: "Who handed it back, and why. Only its author can re-home it.",
@@ -83,6 +96,7 @@ const GUIDE = {
         type: "object",
         properties: {
           by: { type: "string" },
+          by_name: { type: "string" },
           note: { type: "string" },
           at: { type: "string", format: "date-time" },
         },

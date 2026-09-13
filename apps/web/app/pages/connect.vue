@@ -81,23 +81,34 @@ passalong setup     # Claude Code: skill + MCP server</code></pre>
           </p>
           <pre><code>https://passalong.dev/v1/mcp</code></pre>
           <p>
-            <b>Clients that sign in with OAuth</b> — Claude and ChatGPT — need a connector first.
-            In <a href="/hub/settings">your hub's settings</a>, add a new connector with the
-            callback URL the client gives you, and leave the client secret off unless the client
-            asks for one. The client then takes the connector's id.
-          </p>
-          <p><b>Claude's</b> callback URL is:</p>
-          <pre><code>https://claude.ai/api/mcp/auth_callback</code></pre>
-          <p>
-            In Claude, open Customize → Connectors → Add custom connector and paste the server URL.
-            Under Advanced settings, put the connector's id in OAuth Client ID and leave OAuth
-            Client Secret empty.
+            <b>In Claude</b>, open Connectors in Claude's settings, choose Add custom connector and
+            paste that address. Leave everything else empty. Claude opens Passalong and asks you to
+            approve — that is the whole setup.
           </p>
           <p>
-            <b>Clients that send a header</b> can skip the connector and authenticate with a bearer
-            token from <a href="/hub/settings">your hub</a> — the same named, revocable token the
-            CLI and the API use.
+            <b>In ChatGPT</b>, and other apps that add MCP servers and sign in with OAuth, it works
+            the same way: paste the address, choose OAuth if asked, and approve.
           </p>
+          <p>
+            You can see every app you have approved, and disconnect it, under Connectors in
+            <a href="/hub/settings">your hub's settings</a>.
+          </p>
+          <p>
+            <b>Apps that send a header</b> can skip approving and use a token from
+            <a href="/hub/settings">your hub</a> — the same named, revocable token the CLI and the
+            API use.
+          </p>
+          <details>
+            <summary>Set up a connector manually</summary>
+            <p>
+              Only for an app that asks you for a client ID instead of taking the address. In
+              <a href="/hub/settings">your hub's settings</a>, open "Set up a connector manually",
+              give it the app's callback address, and paste the client ID it gives you back into
+              the app. Leave "This app keeps a secret" off unless the app demands one.
+            </p>
+            <p>Claude's callback address, if you set Claude up this way, is:</p>
+            <pre><code>https://claude.ai/api/mcp/auth_callback</code></pre>
+          </details>
         </div>
       </section>
 

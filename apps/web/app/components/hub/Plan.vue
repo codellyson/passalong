@@ -47,6 +47,13 @@ const testing = computed(() => available.value.some((p) => modes.value?.[p] === 
 
 const owner = computed(() => team.value?.role === "owner");
 const members = computed(() => team.value?.members.length ?? 0);
+/** Who to ask, by name, when you are not the one who can change the plan. */
+const ownerName = computed(() => {
+  const o = team.value?.members.find((m) => m.role === "owner");
+  return o ? o.display || personName(o.name, o.handle) : "";
+});
+/** The provider as its own brand writes it, not the id this app stores it under. */
+const PROVIDER: Record<string, string> = { stripe: "Stripe", paystack: "Paystack" };
 
 interface PlanCopy {
   label: string;
@@ -57,7 +64,7 @@ interface PlanCopy {
 const FREE: PlanCopy = {
   label: "Free",
   tone: "bg-surface text-muted",
-  says: "Each member keeps their own ceiling on synced guides.",
+  says: "Each member has the free plan's limit on guides.",
 };
 
 const PLANS: Record<string, PlanCopy> = {
@@ -65,12 +72,12 @@ const PLANS: Record<string, PlanCopy> = {
   team: {
     label: "Paid",
     tone: "bg-ok-soft text-ok",
-    says: "Every member publishes without a ceiling, including members who never paid.",
+    says: "Everyone in the team can send as many guides as they like.",
   },
   lapsed: {
     label: "Read-only",
     tone: "bg-warn-soft text-warn",
-    says: "The subscription lapsed. Everything in the team can still be read, pulled and answered; what stops is handing over anything new and anyone new joining.",
+    says: "The plan has lapsed. Everything in the team can still be read and answered; new guides and new members have to wait until it's renewed.",
   },
 };
 const plan = computed<PlanCopy>(() => (team.value ? (PLANS[team.value.plan] ?? FREE) : FREE));
@@ -118,19 +125,19 @@ async function changeSeats() {
         class="rounded-pill px-2 py-0.5 text-xs font-semibold uppercase tracking-wide"
         :class="plan.tone"
       >{{ plan.label }}</span>
-      <span v-if="team.plan === 'team'" class="font-code text-sm text-muted">
+      <span v-if="team.plan === 'team'" class="font-ui text-sm text-muted tabular-nums">
         {{ members }} of {{ team.seats }} seats used
       </span>
       <span
         v-if="testing"
-        class="rounded-pill bg-warn-soft px-2 py-0.5 font-code text-xs font-semibold text-warn"
-      >test mode — no real money moves</span>
+        class="rounded-pill bg-warn-soft px-2 py-0.5 font-ui text-xs font-semibold text-warn"
+      >Test mode: no real money is charged</span>
     </div>
 
     <p class="m-0 font-ui text-sm text-muted">{{ plan.says }}</p>
 
     <p v-if="!available.length" class="m-0 font-ui text-sm text-muted">
-      No payment provider is configured on this deployment, so there is nothing to subscribe to yet.
+      Paid plans aren't available yet. Check back later.
     </p>
 
     <template v-else-if="owner">
@@ -157,7 +164,7 @@ async function changeSeats() {
             :disabled="busy"
             @click="subscribe(p)"
           >
-            {{ team.plan === "lapsed" ? "Renew" : "Subscribe" }} with {{ p }}
+            {{ team.plan === "lapsed" ? "Renew" : "Subscribe" }} with {{ PROVIDER[p] || p }}
           </button>
         </template>
       </div>
@@ -170,7 +177,8 @@ async function changeSeats() {
     </template>
 
     <p v-else class="m-0 font-ui text-sm text-muted">
-      Only {{ team.name }}'s owner can change its plan.
+      Only {{ ownerName || `${team.name}'s owner` }} can change {{ team.name }}'s plan. Ask them if
+      it needs changing.
     </p>
   </div>
 </template>

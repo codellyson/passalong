@@ -8,6 +8,8 @@
 // is handled where it happens — claimed when the guide naming it is written, deleted with that
 // guide — and the leftover case is the upload nobody ever referenced, which nothing else is in a
 // position to notice.
+import { DYNAMIC_TTL_MS } from "#api/oauth";
+import { registrationCutoff, sweepRegistrations } from "#api/oauth-clients";
 import { sweepOrphans } from "#api/shots";
 
 export default defineNitroPlugin((nitro) => {
@@ -23,6 +25,16 @@ export default defineNitroPlugin((nitro) => {
       if (swept) console.log(`swept ${swept} unclaimed screenshot${swept === 1 ? "" : "s"}`);
     } catch (err) {
       console.error("shot sweep failed", err);
+    }
+    // OAuth clients that registered themselves and were never approved. Also swept lazily on each
+    // registration; this catches the quiet days when nothing registers.
+    try {
+      await sweepRegistrations(
+        env.DB as D1Database,
+        registrationCutoff(new Date(), DYNAMIC_TTL_MS),
+      );
+    } catch (err) {
+      console.error("registration sweep failed", err);
     }
   });
 });

@@ -47,10 +47,9 @@ const created = computed(() => str(meta.value?.created).slice(0, 10));
  */
 const facts = computed(() =>
   [
-    { label: "id", value: guide.value?.id, mono: true },
     { label: "from", value: str(meta.value?.author), mono: false },
-    { label: "shared", value: created.value, mono: false },
-    { label: "out of", value: str(meta.value?.source_context), mono: true },
+    { label: "sent", value: created.value, mono: false },
+    { label: "project", value: str(meta.value?.source_context), mono: false },
     { label: "assumes", value: list(meta.value?.stack_assumptions).join(" · "), mono: false },
   ]
     .filter((f) => f.value)
@@ -77,14 +76,17 @@ const contents = computed(() => outline.value.filter((h) => !h.then));
 const then = computed(() => outline.value.filter((h) => h.then));
 
 const views = computed(() => [
-  { label: "Full guide", href: url.value, on: view.value !== "verify" },
-  {
-    label: "Verify — the short cut",
-    href: `${url.value}?view=verify`,
-    on: view.value === "verify",
-  },
-  { label: "Markdown source", href: `${url.value}.md`, on: false },
+  { label: "Whole guide", href: url.value, on: view.value !== "verify" },
+  { label: "Checks first", href: `${url.value}?view=verify`, on: view.value === "verify" },
+  { label: "Markdown, for agents", href: `${url.value}.md`, on: false },
 ]);
+
+/**
+ * Where the answer buttons lead. This page runs no script, so it cannot hold a form: each button
+ * is a link into the hub, which signs the visitor in if needed and asks the question there.
+ */
+const answer = (what: string) => `/hub/answer/${encodeURIComponent(id.value)}?do=${what}`;
+const author = computed(() => str(meta.value?.author) || "the sender");
 
 const rail = "font-ui text-xs font-semibold tracking-widest text-muted uppercase";
 
@@ -148,7 +150,7 @@ usePage({
       </nav>
 
       <nav class="mt-4 md:mt-6">
-        <p :class="rail">Views</p>
+        <p :class="rail">Read it as</p>
         <ul class="m-0 mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 md:block">
           <li v-for="v in views" :key="v.label">
             <!-- The marker for the view you are on moves from the left edge to under the label:
@@ -167,10 +169,10 @@ usePage({
 
     <div class="min-w-0 md:py-8">
       <header class="mb-6 border-b-0 pb-0">
-        <h1 class="mt-0">{{ str(meta?.title) || guide.id }}</h1>
+        <h1 class="mt-0">{{ str(meta?.title) || "Untitled guide" }}</h1>
 
         <p v-if="guide.pulls" class="mt-2 mb-0 font-ui text-sm text-muted">
-          pulled {{ guide.pulls }}×
+          Opened {{ guide.pulls === 1 ? "once" : `${guide.pulls} times` }}
         </p>
 
         <!-- Labelled, because the difference between the repo it came out of and the stack it
@@ -200,20 +202,17 @@ usePage({
         class="mb-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 rounded-2 border border-accent bg-accent-soft px-4 py-3"
       >
         <div class="min-w-0 grow basis-72">
-          <p :class="rail" class="text-accent">
-            {{ cut.lead.length ? `Verify · ${cut.lead.length} of ${cut.total} sections first` : "Verify" }}
-          </p>
+          <p :class="rail" class="text-accent">Checks first</p>
           <p class="mt-1 mb-0 font-ui text-sm text-muted">
             <template v-if="cut.lead.length">
-              {{ sentence(cut.lead) }} lead. Everything else follows below, never dropped.
+              Showing {{ sentence(cut.lead) }} first. The rest of the guide follows below.
             </template>
             <template v-else>
-              Nothing in this guide is named like a section Verify leads with, so it reads in the
-              author's order.
+              This guide has no checks section, so it's shown in the order it was written.
             </template>
           </p>
         </div>
-        <a :href="url" class="font-ui text-sm whitespace-nowrap">read in the author's order</a>
+        <a :href="url" class="font-ui text-sm whitespace-nowrap">Read it in order</a>
       </div>
 
       <!-- eslint-disable-next-line vue/no-v-html -- see server/utils/guide-html.ts: the CSP is what
@@ -229,46 +228,34 @@ usePage({
         <div v-if="rest" v-html="rest.html" />
       </article>
 
+      <!-- The answer, on the page the link opened. Every control here is a plain link or a
+           <details>, because this page runs no script: the buttons lead into the hub, which signs
+           the visitor in if they need it and asks the question there. -->
       <div class="pull">
-        <template v-if="isBug">
-          <b class="block font-ui text-sm text-fg">This is a bug report</b>
-          <p class="mt-1 mb-0 font-ui text-sm text-muted">
-            The steps under Reproduce show the problem — they are not a fix to apply. Fix what
-            Problem describes, then check Verification and say whether it worked.
-          </p>
-          <p class="mt-3 mb-0 font-ui text-sm text-muted">
-            Send it to someone by sharing this page's address.
-          </p>
-          <code class="line">{{ url }}</code>
-          <p class="mt-2 mb-0 font-ui text-sm text-muted">
-            An agent takes it with <code>passalong pull {{ id }}</code>; append <code>.md</code> to
-            this URL for the markdown.
-          </p>
-        </template>
-        <template v-else>
-          <b class="block font-ui text-sm text-fg">Pull this into your context</b>
-          <p class="mt-1 mb-0 font-ui text-sm text-muted">
-            Select the line — a guide page runs no script, so there is no copy button.
-          </p>
+        <p v-if="isBug" class="mt-0 mb-3 font-ui text-sm text-muted">
+          <b class="text-fg">This is a bug report.</b> The steps under Reproduce show the problem;
+          they aren't a fix. Fix what Problem describes, then check Verification.
+        </p>
+
+        <b class="block font-ui text-base text-fg">Was this sent to you?</b>
+        <p class="mt-1 mb-0 font-ui text-sm text-muted">
+          Tell {{ author }} whether you're taking it. You'll be asked to sign in if you aren't.
+        </p>
+        <p class="mt-3 mb-0 flex flex-wrap items-center gap-2">
+          <a class="btn primary" :href="answer('take')">Take it</a>
+          <a class="btn" :href="answer('pass')">Pass</a>
+          <a class="ml-1 font-ui text-sm" :href="answer('report')">Already on it? Say how it went</a>
+        </p>
+
+        <details class="mt-4">
+          <summary class="cursor-pointer font-ui text-sm text-muted">For agents and terminals</summary>
+          <p class="mt-2 mb-0 font-ui text-sm text-muted">Fetch it into a session with:</p>
           <code class="line">passalong pull {{ url }}</code>
           <p class="mt-2 mb-0 font-ui text-sm text-muted">
-            Or append <code>.md</code> to this URL for the markdown source.
+            Or give an agent the <a :href="`${url}.md`">markdown version</a>.
           </p>
-        </template>
+        </details>
       </div>
-
-      <footer>
-        <!-- The transfer-guide line assumes the reader wrote this in an editor somewhere and can
-             re-share it. Whoever filed a bug through the hub did not, and telling them to go and
-             edit markdown is how a page stops being for them. -->
-        <template v-if="isBug">
-          Read-only. Something to add? File it as another issue, or say whether the fix worked from
-          your board.
-        </template>
-        <template v-else>
-          Read-only. Edit the markdown in your own tools and <code>passalong share</code> again.
-        </template>
-      </footer>
     </div>
   </main>
 </template>
