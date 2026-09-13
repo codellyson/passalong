@@ -2,37 +2,29 @@
   The hub: one page, three questions. What needs you, what you sent and where it got to, and what
   is finished — folded, because it is most of what exists and none of what needs doing.
 
-  This used to be two pages that showed most guides twice: a board of lanes, and a list of every
-  guide with six filter chips whose counts overlapped and never added up. The list's search and its
-  follow-up filter moved here; /hub/guides redirects with its query intact.
+  The title says whose guides these are — "Guides in [Khaime ▾]" — with the team picker in it, and
+  the line under it is the three sections' own counts, each a link to its section. Those numbers
+  used to be computed separately in the page header and disagreed with the sections on the same
+  screen.
+
+  /hub/guides redirects here with its query, so `?q=` and `?follows=` links still work. `?done=1`
+  opens Done, which is where the free-plan banner sends you to make room.
 -->
 <script setup lang="ts">
 import type { Guide } from "~/types/hub";
 import { boardStates, stateOf } from "~/utils/guide-state";
 
 usePage({
-  title: "Passalong hub",
-  description: "Your synced transfer guides.",
+  title: "Guides · Passalong",
+  description: "Guides sent to you, guides you sent, and what's done.",
   noindex: true,
 });
 
 const { data, scope } = useHub();
 
-// An account with nothing on its board is not looking at a board. Guides are only created by
-// `share()`, so the empty hub cannot explain itself — it hands over the two things that lead
-// somewhere instead, and takes the heading with it.
+// An account with nothing in it is not looking at a list. It gets the two things that lead
+// somewhere instead, and a heading that says so.
 const first = computed(() => Boolean(data.value.me) && data.value.guides.length === 0);
-const claimed = computed(() => Boolean(data.value.me?.handle));
-
-const heading = computed(() =>
-  first.value ? `${claimed.value ? "One step" : "Two steps"} to a working board` : "Your transfers",
-);
-
-const standing = computed(() =>
-  claimed.value
-    ? "Nothing is on your board yet."
-    : "Nothing is on your board yet, and nothing can be addressed to you until you have a handle.",
-);
 
 const route = useRoute();
 const text = (v: unknown) => (typeof v === "string" ? v : "");
@@ -52,11 +44,12 @@ const searching = computed(() => Boolean(q.value.trim() || follows.value));
 
 const fromBoard = computed(() => boardStates(data.value.board));
 const me = computed(() => data.value.me?.handle || null);
+const hasTeams = computed(() => Boolean(data.value.me?.teams.length));
 
 /**
- * The list is scoped and the board is not. Across everything, a guide handed to you from outside
- * your teams is on the board and not in the list — it is the one thing on this page that must not
- * go missing, so it is added back.
+ * The list is scoped and the board is not. Across all teams, a guide sent to you from outside your
+ * teams is on the board and not in the list — it is the one thing on this page that must not go
+ * missing, so it is added back.
  */
 const guides = computed<Guide[]>(() => {
   const list = data.value.guides;
@@ -73,7 +66,10 @@ const matches = (g: Guide) => {
     g.title,
     g.source_context,
     g.from,
+    g.from_name,
     g.to,
+    g.to_name,
+    g.team_name,
     g.id,
     g.report_title,
     ...(g.tags || []),
@@ -94,36 +90,50 @@ const sentCount = computed(() =>
   lanes.value.sent.reduce((n, e) => n + ("row" in e ? 1 : e.group.rows.length), 0),
 );
 
-const showDone = ref(false);
+const showDone = ref(route.query.done === "1");
+watch(
+  () => route.query.done,
+  (v) => {
+    if (v === "1") showDone.value = true;
+  },
+);
 /** A search looks everywhere, so it opens the shelf rather than hiding matches behind it. */
 const doneOpen = computed(() => showDone.value || searching.value);
 </script>
 
 <template>
-  <HubShell :heading="heading">
-    <template v-if="first" #sub>{{ standing }}</template>
-
+  <HubShell :heading="first ? 'Get started' : ''">
     <!-- A token-only account cannot sign in from any other browser. That is true whether or not
-         the board is empty, so it sits above whichever of the two this page is showing. -->
+         the list is empty, so it sits above whichever of the two this page is showing. -->
     <HubClaim />
 
     <HubFirstRun v-if="first" />
 
     <div v-else class="flex flex-col gap-8">
-      <div class="toolbar">
-        <input
-          v-model="q"
-          type="search"
-          placeholder="search everything, including done"
-          aria-label="Search guides"
-        />
-        <p v-if="follows" class="text-xs text-muted">
-          follow-ups of {{ follows }} ·
-          <NuxtLink to="/hub">show all</NuxtLink>
-        </p>
+      <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div class="flex min-w-0 flex-col gap-1">
+          <h1 class="m-0 flex flex-wrap items-center gap-2 text-h2">
+            Guides<template v-if="hasTeams"> in <HubScopes /></template>
+          </h1>
+          <p class="m-0 font-ui text-sm text-muted">
+            <a href="#needs">{{ lanes.needs.length }} need you</a>
+            ·
+            <a href="#sent">{{ sentCount }} you sent {{ sentCount === 1 ? "is" : "are" }} still out</a>
+            ·
+            <a href="#done" @click="showDone = true">{{ lanes.done.length }} done</a>
+          </p>
+        </div>
+        <div class="toolbar m-0 min-w-[14rem] grow basis-56 sm:max-w-xs">
+          <input v-model="q" type="search" placeholder="Search guides" aria-label="Search guides" />
+        </div>
       </div>
 
-      <section aria-labelledby="lane-needs" class="flex flex-col gap-3">
+      <p v-if="follows" class="-mt-4 mb-0 font-ui text-sm text-muted">
+        Showing guides that follow on from one guide ·
+        <NuxtLink to="/hub">Show all</NuxtLink>
+      </p>
+
+      <section id="needs" aria-labelledby="lane-needs" class="flex scroll-mt-4 flex-col gap-3">
         <h2 id="lane-needs" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
           Needs you
           <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ lanes.needs.length }}</span>
@@ -136,7 +146,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
         </p>
       </section>
 
-      <section aria-labelledby="lane-sent" class="flex flex-col gap-3">
+      <section id="sent" aria-labelledby="lane-sent" class="flex scroll-mt-4 flex-col gap-3">
         <h2 id="lane-sent" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
           You sent
           <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ sentCount }}</span>
@@ -148,11 +158,12 @@ const doneOpen = computed(() => showDone.value || searching.value);
           </template>
         </ul>
         <p v-else class="m-0 font-ui text-sm text-muted">
-          {{ searching ? "Nothing you sent matches." : "Nothing of yours is out there." }}
+          {{ searching ? "Nothing you sent matches." : "Nothing you sent is still out." }}
+          <NuxtLink v-if="!searching" to="/hub/write">Write a guide</NuxtLink>
         </p>
       </section>
 
-      <section aria-labelledby="lane-done" class="flex flex-col gap-3">
+      <section id="done" aria-labelledby="lane-done" class="flex scroll-mt-4 flex-col gap-3">
         <button
           type="button"
           class="flex w-full cursor-pointer items-center justify-between rounded-3 border border-line bg-raised px-4 py-3 text-left hover:border-line-strong"

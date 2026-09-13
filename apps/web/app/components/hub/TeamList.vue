@@ -47,13 +47,12 @@ async function loadDetails() {
 onMounted(loadDetails);
 watch(teams, loadDetails);
 
-/** "@bo, @mira, @sol and you" — you are always in it, and always last. */
+/** "Bo, Mira, Sol and you" — by name, you are always in it, and always last. */
 function who(t: TeamDetail) {
   const me = data.value.me?.handle;
   const others = t.members
-    .map((m) => m.handle)
-    .filter((h) => h && h !== me)
-    .map((h) => `@${h}`);
+    .filter((m) => !(m.handle && m.handle === me))
+    .map((m) => m.display || personName(m.name, m.handle));
   if (!others.length) return "just you";
   return `${others.join(", ")} and you`;
 }
@@ -79,7 +78,7 @@ function guides(t: TeamDetail) {
       <li v-for="t in details" :key="t.slug" class="flex flex-col">
         <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
-          <p class="m-0 font-ui text-base font-semibold text-fg">{{ t.slug }}</p>
+          <p class="m-0 font-ui text-base font-semibold text-fg">{{ t.name || t.slug }}</p>
           <p class="mt-0.5 mb-0 font-ui text-sm text-muted">
             {{ t.role }} · {{ plural(t.members.length, "member") }} · {{ who(t) }}
           </p>
@@ -90,7 +89,7 @@ function guides(t: TeamDetail) {
             class="btn sm"
             @click="invite(t, $event.currentTarget)"
           >
-            <AppIcon name="copy" /><span data-label>copy invite link</span>
+            <AppIcon name="copy" /><span data-label>Copy invite link</span>
           </button>
           <button
             class="btn icon"
@@ -101,10 +100,9 @@ function guides(t: TeamDetail) {
             <AppIcon name="more" />
           </button>
           <div v-if="open === t.slug" class="menu" @keydown.esc="open = null">
-            <button class="menu-item" @click="guides(t)">see this team's guides</button>
-            <button class="menu-item" @click="copy(t.slug, $event.currentTarget)">copy team slug</button>
+            <button class="menu-item" @click="guides(t)">See this team's guides</button>
             <p class="menu-note">
-              {{ plural(t.guides, "guide") }} shared here
+              {{ plural(t.guides, "guide") }} sent here
             </p>
           </div>
         </div>
@@ -120,7 +118,7 @@ function guides(t: TeamDetail) {
     </ul>
 
     <p v-if="!teams.length" class="mt-0 mb-3 font-ui text-sm text-muted">
-      No team yet. A team is who you can hand work to.
+      No team yet. A team is the people you send guides to.
     </p>
 
     <form v-if="naming" class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="make">
@@ -128,11 +126,11 @@ function guides(t: TeamDetail) {
         <label class="mb-2 block font-ui text-sm font-medium text-fg" for="team-name">
           Name your team
         </label>
-        <input id="team-name" ref="field" v-model="name" class="w-full" placeholder="kreative-korna" required />
+        <input id="team-name" ref="field" v-model="name" class="w-full" placeholder="Kreative Korna" required />
       </div>
       <button class="btn primary sm" type="submit" :disabled="!name.trim()">Create team</button>
       <button class="btn sm" type="button" @click="naming = false">Cancel</button>
     </form>
-    <button v-else class="btn sm mt-3" @click="ask"><AppIcon name="plus" />new team</button>
+    <button v-else class="btn sm mt-3" @click="ask"><AppIcon name="plus" />New team</button>
   </div>
 </template>

@@ -14,23 +14,28 @@ const props = defineProps<{
   open?: boolean;
 }>();
 
+const { data } = useHub();
+
 const expanded = ref(false);
 const shown = computed(() => expanded.value || props.open);
 
 const rows = computed(() => props.group.rows);
 const blockers = computed(() => rows.value.filter((r) => r.g.severity === "s1").length);
-const team = computed(() => rows.value[0]?.g.team);
+const team = computed(() =>
+  rows.value[0] ? teamLabel(rows.value[0].g, data.value.me?.teams) : "",
+);
 
 /** How far the batch has got, in the one phrase that matters most right now. */
 const progress = computed(() => {
+  const n = rows.value.length;
   const problems = rows.value.filter((r) => r.state?.attention).length;
   if (problems)
-    return { text: `${plural(problems, "bug")} handed back or not working`, tone: "text-danger" };
+    return { text: `${problems} of ${n} sent back or not working`, tone: "text-danger" };
   const taken = rows.value.filter((r) => r.g.taken_by?.length).length;
-  if (taken) return { text: `${taken} of ${rows.value.length} taken`, tone: "" };
+  if (taken) return { text: `${taken} of ${n} being worked on`, tone: "" };
   const opened = rows.value.filter((r) => r.g.pulled_by?.length).length;
-  if (opened) return { text: `${opened} opened, none taken yet`, tone: "" };
-  return { text: "none opened yet", tone: "" };
+  if (opened) return { text: `${opened} opened, nobody has taken one yet`, tone: "" };
+  return { text: "not opened yet", tone: "" };
 });
 
 const DOT: Record<string, string> = {
@@ -78,7 +83,7 @@ const TONE = {
         </span>
       </button>
       <NuxtLink :to="`/hub/report/${group.report}`" class="btn sm">
-        <AppIcon name="open" />open report
+        <AppIcon name="open" />Open report
       </NuxtLink>
     </div>
 
@@ -98,7 +103,7 @@ const TONE = {
             :title="r.g.severity ? severityLabel(r.g.severity) : 'no severity'"
           />
           <a :href="r.g.url" target="_blank" rel="noopener" class="text-fg no-underline hover:text-accent">
-            {{ r.g.title || r.g.id }}
+            {{ r.g.title || "Untitled bug" }}
           </a>
         </span>
         <span class="font-ui text-xs" :class="TONE[statusLine(r).tone]">{{ statusLine(r).text }}</span>

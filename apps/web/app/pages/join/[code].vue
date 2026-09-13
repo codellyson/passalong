@@ -1,21 +1,24 @@
 <!--
-  Where an invite link lands. Ported from `renderJoin()` in apps/api/src/render.ts and the
-  apps/api/public/join.js that ran inside it.
+  Where an invite link lands.
 
-  The person clicking this link is often the one who has never used Passalong — a tester, a
-  designer, someone handed a link in chat — so the terminal cannot be on the critical path. Three
-  calls, no password: mint an account, claim a handle, accept the invite. The CLI instructions stay
-  on the page for people who would rather.
+  The person clicking this is often someone who has never used Passalong — a tester, a designer,
+  someone handed a link in chat — so the only thing asked is their name. The @name teammates send
+  work to is suggested from it and can be changed; it used to be a required field in a strict
+  format, explained with a CLI flag, and it was where people got stuck.
+
+  No password: the account lives in this browser until they add one in Settings. The terminal tool
+  is one link away for people who want it, not a four-command block competing with the button.
 -->
 <script setup lang="ts">
 const route = useRoute();
 const code = computed(() => String(route.params.code));
 
 const { data: invite } = await useFetch(`/api/invite/${encodeURIComponent(code.value)}`);
-if (!invite.value) throw createError({ statusCode: 404, statusMessage: "no such invite" });
+// `statusMessage: "invite"` is what error.vue reads to say "ask for a fresh invite" rather than
+// talking about guide links.
+if (!invite.value) throw createError({ statusCode: 404, statusMessage: "invite" });
 
 const team = computed(() => invite.value?.team ?? "");
-const joinUrl = computed(() => `${useRequestURL().origin}/join/${code.value}`);
 
 usePage({
   title: `Join ${team.value}`,
@@ -62,27 +65,42 @@ async function call<T>(
   });
   if (!res.ok) {
     const failed = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new Error(failed.message || res.statusText);
+    throw new Error(failed.message || "That didn't work. Try again in a moment.");
   }
   return res.json() as Promise<T>;
 }
 
 const me = ref<Me | null>(null);
+const name = ref("");
+const handle = ref("");
+const email = ref("");
+/** Once someone edits the @name themselves, typing their name stops overwriting it. */
+const handleTouched = ref(false);
+const editingHandle = ref(false);
 const busy = ref(false);
 const error = ref<string | null>(null);
 
-// Someone already signed in gets their handle filled in rather than an empty form.
-onMounted(() => {
-  if (token.get()) {
-    call<Me>("/v1/me")
-      .then((who) => {
-        me.value = who;
-      })
-      .catch(() => {});
-  }
+watch(name, (typed) => {
+  if (!handleTouched.value) handle.value = handleFrom(typed);
 });
 
-// An account is minted once and kept, so a rejected handle is retried against the same account
+// Someone already signed in gets their details filled in rather than an empty form.
+onMounted(() => {
+  if (!token.get()) return;
+  call<Me>("/v1/me")
+    .then((who) => {
+      me.value = who;
+      if (who.name) name.value = who.name;
+      if (who.handle) {
+        handle.value = who.handle;
+        handleTouched.value = true;
+      }
+      if (who.email) email.value = who.email;
+    })
+    .catch(() => {});
+});
+
+// An account is minted once and kept, so a rejected @name is retried against the same account
 // rather than leaving a trail of empty ones behind.
 async function account(): Promise<Me> {
   if (me.value) return me.value;
@@ -98,24 +116,16 @@ async function account(): Promise<Me> {
   return call<Me>("/v1/me");
 }
 
-async function submit(e: Event) {
-  // Read the form before touching state, exactly as the Preact version had to: this is now a
-  // Vue form with uncontrolled inputs, and reading them first is still the honest order.
-  const f = e.target as HTMLFormElement;
-  const typed = {
-    handle: field(f, "handle"),
-    name: field(f, "name"),
-    email: field(f, "email"),
-  };
+async function submit() {
   busy.value = true;
   error.value = null;
   try {
     const who = await account();
     me.value = who;
     const patch: Record<string, string> = {};
-    if (typed.handle && typed.handle !== who.handle) patch.handle = typed.handle;
-    if (typed.name) patch.name = typed.name;
-    if (typed.email) patch.email = typed.email;
+    if (handle.value && handle.value !== who.handle) patch.handle = handle.value;
+    if (name.value.trim() && name.value.trim() !== who.name) patch.name = name.value.trim();
+    if (email.value.trim()) patch.email = email.value.trim();
     if (Object.keys(patch).length) {
       me.value = await call<Me>("/v1/me", { method: "PATCH", body: patch });
     }
@@ -123,6 +133,8 @@ async function submit(e: Event) {
     location.assign("/hub");
   } catch (err) {
     error.value = (err as Error).message;
+    // The @name is the field most likely to be refused, so it opens for editing.
+    if (/@|name|handle/i.test(error.value)) editingHandle.value = true;
     busy.value = false;
   }
 }
@@ -132,59 +144,60 @@ async function submit(e: Event) {
   <main>
     <header>
       <AppBrand />
-      <h1>Join {{ team }}</h1>
-      <div class="meta"><span>an invite to a Passalong team</span></div>
+      <h1>Join {{ team }} on Passalong</h1>
+      <div class="meta"><span>You've been invited to a team</span></div>
     </header>
 
     <article>
       <p>
-        Teams share transfer guides: when someone finishes a piece of work you need to pick up —
-        implement it, verify it, take it to another repo — they hand it to you and it lands in your
-        inbox, written to be acted on.
+        When someone on the team finishes a piece of work you need to pick up, they send it to you
+        as a guide: what the problem was, how they solved it, and how to check it worked.
       </p>
 
       <form class="join" @submit.prevent="submit">
         <label>
-          Your handle
+          Your name
+          <input v-model="name" name="name" placeholder="Ada Okafor" autocomplete="name" required />
+        </label>
+
+        <p class="muted m-0">
+          <template v-if="!editingHandle">
+            Teammates can send you work as <b>@{{ handle || "your-name" }}</b>.
+            <button class="linkish" type="button" @click="editingHandle = true">Change</button>
+          </template>
+        </p>
+        <label v-if="editingHandle">
+          How teammates mention you
           <input
-            :key="me?.handle || 'new'"
+            v-model="handle"
             name="handle"
-            :value="me?.handle || ''"
-            placeholder="ada"
             required
-            autocomplete="username"
             spellcheck="false"
-            pattern="[a-zA-Z0-9][a-zA-Z0-9-]{1,30}"
-            title="2–31 characters: letters, digits and dashes"
+            autocomplete="username"
+            pattern="[a-z0-9][a-z0-9-]{1,30}"
+            title="2 to 31 lowercase letters, numbers or dashes"
+            @input="handleTouched = true"
           />
-          <span class="muted"
-            >how teammates address you: passalong share --to {{ "<team>" }}/@you</span
-          >
+          <span class="muted">2 to 31 lowercase letters, numbers or dashes.</span>
         </label>
-        <label>
-          Your name <span class="muted">optional</span>
-          <input name="name" placeholder="Ada Lovelace" autocomplete="name" />
-        </label>
+
         <label>
           Email <span class="muted">optional</span>
-          <input name="email" type="email" placeholder="ada@example.com" autocomplete="email" />
-          <span class="muted">only used to tell you when something is handed to you</span>
+          <input v-model="email" name="email" type="email" placeholder="ada@example.com" autocomplete="email" />
+          <span class="muted">Only used to tell you when something is sent to you.</span>
         </label>
+
         <button class="btn primary" type="submit" :disabled="busy">
           {{ busy ? "Joining…" : `Join ${team}` }}
         </button>
         <p v-if="error" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-3 font-ui text-sm text-danger">{{ error }}</p>
         <p class="muted">
-          No password. Your account is a token this browser keeps;
-          <code>passalong login</code> moves it to a terminal later if you want one.
+          This browser keeps you signed in. Add a password later in Settings to sign in anywhere
+          else.
         </p>
       </form>
 
-      <h2>Or from a terminal</h2>
-      <pre><code>npm i -g passalong
-passalong login                 # your account
-passalong me --handle you
-passalong team join {{ joinUrl }}</code></pre>
+      <p class="muted"><a href="/connect">Use the terminal tool or an assistant instead</a></p>
     </article>
   </main>
 </template>

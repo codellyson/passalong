@@ -1,16 +1,47 @@
 <!--
-  Ported from apps/api/public/404.html, which the Worker hands back through its ASSETS binding for
-  unmatched routes. Here it is Nuxt's error page, so it covers a 500 too — but the copy leads with
-  the case that actually happens: a share link whose key did not survive the trip.
+  Nuxt's error page, for three different people.
+
+  Someone whose guide link broke — usually trimmed or retyped on the way — needs to ask for it
+  again. Someone whose invite stopped working needs a fresh invite, and used to be shown this same
+  page talking about guide URLs and `passalong list`. Everyone else hit a real error, which is ours.
+  None of them is helped by a bare status code or a URL format.
 -->
 <script setup lang="ts">
 import type { NuxtError } from "#app";
 
 const props = defineProps<{ error: NuxtError }>();
-const notFound = computed(() => props.error?.statusCode === 404);
+const path = useRequestURL().pathname;
+
+const kind = computed(() => {
+  if (props.error?.statusMessage === "invite" || path.startsWith("/join/")) return "invite";
+  if (props.error?.statusCode !== 404) return "broken";
+  if (path.startsWith("/g/")) return "guide";
+  return "missing";
+});
+
+const COPY = {
+  invite: {
+    title: "This invite doesn't work any more",
+    body: "It may have been used already, or replaced with a new one. Ask the person who sent it for a fresh link.",
+  },
+  guide: {
+    title: "This guide link doesn't work",
+    body: "Part of the link may have been cut off when it was copied, or the guide was deleted. Ask whoever sent it for the link again.",
+  },
+  missing: {
+    title: "There's nothing at this address",
+    body: "Check the link, or go to your guides.",
+  },
+  broken: {
+    title: "Something went wrong on our side",
+    body: "It isn't anything you did. Try again in a moment.",
+  },
+} as const;
+
+const copyFor = computed(() => COPY[kind.value]);
 
 usePage({
-  title: notFound.value ? "Not found · Passalong" : "Something went wrong · Passalong",
+  title: `${copyFor.value.title} · Passalong`,
   description: "",
   noindex: true,
 });
@@ -20,19 +51,15 @@ usePage({
   <main>
     <header>
       <AppBrand />
-      <h1>{{ notFound ? "Nothing here." : "Something went wrong." }}</h1>
-      <div class="meta"><span>{{ error?.statusCode }}</span></div>
+      <h1>{{ copyFor.title }}</h1>
     </header>
-    <article v-if="notFound">
-      <p>
-        There is no guide at this address. Share links look like <code>/g/&lt;id&gt;/&lt;key&gt;</code>
-        and are only as good as the key: if it was retyped or trimmed, ask for the link again.
+    <article>
+      <p>{{ copyFor.body }}</p>
+      <p class="flex flex-wrap gap-3">
+        <a v-if="kind === 'broken'" class="btn primary" :href="path">Try again</a>
+        <a class="btn" :class="kind === 'broken' ? '' : 'primary'" href="/hub">Go to your guides</a>
+        <a class="btn" href="/">Passalong home</a>
       </p>
-      <p>If the guide was yours, <code>passalong list</code> shows what is synced.</p>
     </article>
-    <article v-else>
-      <p>That is on us, not on you. Try again in a moment.</p>
-    </article>
-    <footer><a href="/">Back to Passalong</a></footer>
   </main>
 </template>

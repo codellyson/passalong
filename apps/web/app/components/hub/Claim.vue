@@ -41,8 +41,8 @@ async function submit(e: Event) {
   <section v-if="needed" class="identity needed">
     <h2>Add a way to sign in</h2>
     <p class="muted">
-      This account only exists as a token. Set an email and password and you can sign in from any
-      browser — and recover it if the token is lost.
+      Right now you're only signed in on this browser. Add an email and password to sign in
+      anywhere else, and to get back in if this browser forgets you.
     </p>
 
     <form class="flex flex-col gap-4" @submit.prevent="submit">

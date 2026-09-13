@@ -8,6 +8,9 @@
  * which of the three sections a guide belongs in, what order they go in, and the one plain
  * sentence its row says about it.
  *
+ * The sentence uses one word per act everywhere in the product: send, open, take, pass, worked,
+ * didn't work, archive. "Pull" is what a terminal does; a person opens.
+ *
  * Imports only types, so it runs under `node --test` without Nuxt.
  */
 import type { Guide } from "~/types/hub";
@@ -35,9 +38,9 @@ export function laneOf({ g, state }: LaneRow): "needs" | "sent" | "done" {
   if (g.status === "consumed") return "done";
   const key = state?.key;
   if (key === "waiting" || key === "unanswered" || key === "unjudged") return "needs";
-  // Handed to you and answered, or passed on: nothing more is owed by you.
+  // Sent to you and answered, or passed on: nothing more is owed by you.
   if (!g.mine || !state) return "done";
-  // Someone pulled it and said it worked. That is the end of a handoff, not a stage of one.
+  // Someone opened it and said it worked. That is the end of a handoff, not a stage of one.
   if (key === "landed" && g.verdict?.ok) return "done";
   return "sent";
 }
@@ -98,45 +101,58 @@ export function arrange(rows: LaneRow[]) {
   return { needs, sent, done };
 }
 
-const at = (h?: string | null) => (h ? `@${h}` : "someone");
+/** A person by name when the API sent one, else by handle. Anonymous only when nobody is known. */
+const named = (name?: string, handle?: string | null) =>
+  name || (handle ? `@${handle}` : "someone");
+
+const list = (names: string[]) =>
+  names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 
 /** The one sentence a row says about where a guide is, in words rather than a state name. */
 export function statusLine({ g, state }: LaneRow): { text: string; tone: Tone } {
-  const pulledBy = g.pulled_by?.length
-    ? g.pulled_by.map((p) => (p.handle ? `@${p.handle}` : "a link")).join(", ")
-    : "";
+  // A pull with no account behind it is somebody who opened the share link without signing in;
+  // that one really is anonymous.
+  const openers = list(
+    (g.pulled_by ?? []).map((p) => (p.handle ? `@${p.handle}` : "someone with the link")),
+  );
   switch (state?.key) {
     case "unanswered":
-      return { text: "asking if you're taking it", tone: "" };
+      return { text: "waiting for your answer", tone: "" };
     case "waiting":
-      return { text: "you're on it · did it work?", tone: "accent" };
+      return { text: "you're taking it", tone: "accent" };
     case "unjudged":
-      return { text: "you pulled it · did it work?", tone: "accent" };
+      return { text: "waiting to hear how it went", tone: "accent" };
     case "flight":
-      return { text: pulledBy ? `opened by ${pulledBy}` : "not opened yet", tone: "" };
-    case "taken": {
-      const who = g.taken_by ?? [];
       return {
-        text: `${who.map((h) => `@${h}`).join(", ")} ${who.length === 1 ? "is" : "are"} on it`,
+        text: openers ? `opened by ${openers}, nobody has taken it` : "not opened yet",
         tone: "",
       };
+    case "taken": {
+      const who = g.taken_by_names?.length
+        ? g.taken_by_names
+        : (g.taken_by ?? []).map((h) => `@${h}`);
+      return { text: `${list(who)} ${who.length === 1 ? "is" : "are"} taking it`, tone: "" };
     }
     case "passed": {
       const d = g.declined?.[0];
-      return { text: `${at(d?.by)} passed: ${d?.note || "no reason given"}`, tone: "danger" };
+      return {
+        text: `${named(d?.by_name, d?.by)} passed: ${d?.note || "no reason given"}`,
+        tone: "danger",
+      };
     }
     case "failing":
       return g.mine
         ? {
-            text: `${at(g.verdict?.by)} says it didn't work: ${g.verdict?.note || "no reason given"}`,
+            text: `${named(g.verdict?.by_name, g.verdict?.by)} said it didn't work: ${g.verdict?.note || "no reason given"}`,
             tone: "danger",
           }
         : { text: "you said it didn't work", tone: "danger" };
     case "landed":
       if (!g.mine) return { text: "you said it worked", tone: "ok" };
-      if (g.verdict?.ok) return { text: `${at(g.verdict.by)} says it worked`, tone: "ok" };
+      if (g.verdict?.ok)
+        return { text: `${named(g.verdict.by_name, g.verdict.by)} said it worked`, tone: "ok" };
       return {
-        text: pulledBy ? `pulled by ${pulledBy}, no answer yet` : "pulled, no answer yet",
+        text: openers ? `opened by ${openers}, no answer yet` : "opened, no answer yet",
         tone: "",
       };
   }
@@ -144,6 +160,6 @@ export function statusLine({ g, state }: LaneRow): { text: string; tone: Tone } 
   if (!g.mine && g.my_ack && !g.my_ack.taken) {
     return { text: `you passed${g.my_ack.note ? `: ${g.my_ack.note}` : ""}`, tone: "" };
   }
-  if (g.mine && !g.team) return { text: "shared with nobody", tone: "" };
+  if (g.mine && !g.team) return { text: "not sent to anyone", tone: "" };
   return { text: "", tone: "" };
 }
