@@ -473,37 +473,68 @@ export async function markRead(env: NotifyEnv, account: string, ids?: number[]):
   return meta.changes ?? 0;
 }
 
-/** The single sentence a notification reads as. Every surface shows this string. */
-export function line(
-  r: Pick<Row, "kind" | "actor" | "title" | "team" | "times"> & { note?: string },
-): string {
-  const who = r.actor ? `@${r.actor}` : "someone with the link";
+export interface LineFacts {
+  kind: Kind;
+  title: string;
+  times: number;
+  note?: string;
+  /** Who did it, already a display name. When absent it is worked out from the three below. */
+  actor_name?: string;
+  actor_id?: string;
+  /** Handle. */
+  actor?: string;
+  actor_real?: string;
+  /** Team slug, and its name — the name wins. */
+  team?: string;
+  team_name?: string;
+  /**
+   * Who a guide was sent to, by name. Set only for a room: a channel is read by everyone in it, so
+   * a handoff posted there says who it went to rather than "you".
+   */
+  to?: string;
+}
+
+/**
+ * The single sentence a notification reads as. Every surface shows this string.
+ *
+ * One vocabulary, the same everywhere a person reads about a guide: sent, opened, taking, passed
+ * on, worked or didn't work, done with. A person is their display name, a team is its name, and
+ * "Someone" is kept for the one actor who has no account at all — an anonymous share-link reader.
+ */
+export function line(r: LineFacts): string {
+  const who =
+    r.actor_name ||
+    (r.actor_id || r.actor
+      ? displayName({ id: r.actor_id || "", handle: r.actor, name: r.actor_real })
+      : "Someone");
   const title = r.title ? `"${r.title}"` : "a guide";
-  const more = r.times > 1 ? ` (${r.times}×)` : "";
+  const team = r.team_name || r.team || "";
   const note = r.note ? `: ${r.note}` : "";
   switch (r.kind) {
     case "handoff":
-      return `${who} handed you ${title}${r.team ? ` in ${r.team}` : ""}`;
+      return r.to
+        ? `${who} sent ${title} to ${r.to}${team ? ` in ${team}` : ""}`
+        : `${who} sent you ${title}${team ? ` in ${team}` : ""}`;
     case "shared":
-      return `${who} shared ${title} with ${r.team || "your team"}`;
+      return `${who} shared ${title} with ${team || "your team"}`;
     case "taken":
-      return `${who} is on ${title}${note}`;
+      return `${who} is taking ${title}${note}`;
     case "declined":
       return `${who} passed on ${title}${note}`;
     case "pulled":
-      return `${who} pulled ${title}${more}`;
+      return `${who} opened ${title}${r.times > 1 ? ` ${r.times} times` : ""}`;
     case "consumed":
-      return `${who} marked ${title} consumed`;
+      return `${who} is done with ${title}`;
     case "reopened":
-      return `${who} put ${title} back on your board`;
+      return `${who} put ${title} back on your list`;
     case "verified":
-      return `${who} verified ${title}${note}`;
+      return `${who} said ${title} worked${note}`;
     case "failed":
-      return `${who} says ${title} does not work${note}`;
+      return `${who} said ${title} didn't work${note}`;
     case "joined":
-      return `${who} joined ${r.team || "your team"}`;
+      return `${who} joined ${team || "your team"}`;
     default:
-      return `${who} did something to ${title}`;
+      return `${who} did something with ${title}`;
   }
 }
 

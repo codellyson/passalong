@@ -76,7 +76,7 @@ test("a failed verdict reaches the channel, with the sentence every surface show
     });
     assert.equal(h.posts.length, 1);
     const { body } = h.posts[0];
-    assert.match(body.text, /@hybee1 says "Add Paystack webhook verification" does not work/);
+    assert.match(body.text, /@hybee1 said "Add Paystack webhook verification" didn't work/);
     assert.match(body.text, /the signature check rejects valid payloads/);
     assert.match(body.text, /https:\/\/passalong\.dev\/g\/abc12345\/key/);
     assert.equal(
@@ -258,7 +258,7 @@ test("a refusal is recorded, and recovery clears it", async () => {
 const GCHAT = "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t";
 const facts = (over = {}) => ({
   kind: "handoff",
-  text: '@lukman handed you "Invoice creation fails" in khaime / @hybee1',
+  text: 'Lukman sent "Invoice creation fails" to Hybee1 in Khaime',
   title: "Invoice creation fails: integer overflow in invoice_number sequence allocator",
   url: "https://passalong.dev/g/jvj2vckm/r9pfeum5h9kgwbwkh2wju8",
   ...over,
@@ -270,7 +270,7 @@ test("Chat gets a card, because Chat is the one room that cannot make its own", 
   assert.ok(Array.isArray(body.cardsV2));
   const card = body.cardsV2[0].card;
   assert.match(card.header.title, /Invoice creation fails/);
-  assert.match(card.header.subtitle, /@lukman handed you/);
+  assert.match(card.header.subtitle, /Lukman sent "Invoice creation fails" to Hybee1/);
   const buttons = card.sections[0].widgets.at(-1).buttonList.buttons;
   assert.equal(buttons[0].onClick.openLink.url, facts().url);
   assert.equal(buttons[0].text, "Open the guide");
@@ -363,7 +363,7 @@ test("a room without a card still gets the link spelled out", async () => {
     await announce(h.env, {
       kind: "failed",
       team_id: "t1",
-      text: "@ada says it does not work",
+      text: "Ada said it didn't work",
       title: "Fix the payment link",
       url: "https://passalong.dev/g/abc12345/key",
     });

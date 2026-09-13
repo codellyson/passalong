@@ -1240,7 +1240,7 @@ app.post("/v1/teams/:slug/channels/:id/test", async (c) => {
   const result = await post(
     c.env,
     channel,
-    `Passalong is connected to ${team.slug}. Verdicts and handoffs will arrive here.`,
+    `Passalong is connected to ${team.name}. You'll see guides being sent and answered here.`,
   );
   // The channel's own answer, because "it did not arrive" is otherwise unattributable.
   return c.json({ delivered: result.ok, status: result.status, error: result.error });
@@ -1390,7 +1390,7 @@ app.post("/v1/teams/:slug/invites", async (c) => {
     mailed = await sendInvite(c.env, {
       to,
       team: team.name,
-      by: me?.name || (me?.handle ? `@${me.handle}` : "a teammate"),
+      by: displayName({ id: account, handle: me?.handle, name: me?.name }),
       url,
     });
   }
@@ -2298,17 +2298,17 @@ app.put("/v1/guides/:id", async (c) => {
   // `to:` names either a person or a group, and the sigil says which: `@ada` is one teammate,
   // `#frontend` is the people who do a thing. Both need a `team:` — an address is only meaningful
   // inside the room it belongs to.
-  let toGroup: { id: string; slug: string } | null = null;
+  let toGroup: { id: string; slug: string; name: string } | null = null;
   if (meta.to) {
     const raw = String(meta.to).trim();
     if (!team) return err(c, 400, "`to:` needs a `team:` — a handoff goes to a teammate");
     if (raw.startsWith("#")) {
       const wanted = tag(raw.slice(1));
       toGroup = await c.env.DB.prepare(
-        "SELECT id, slug FROM team_group WHERE slug = ? AND team_id = ?",
+        "SELECT id, slug, name FROM team_group WHERE slug = ? AND team_id = ?",
       )
         .bind(wanted, team.id)
-        .first<{ id: string; slug: string }>();
+        .first<{ id: string; slug: string; name: string }>();
       if (!toGroup) return err(c, 400, `${team.slug} has no group called #${wanted}`);
     } else {
       const handle = raw.replace(/^@/, "").toLowerCase();
@@ -2491,7 +2491,7 @@ app.put("/v1/guides/:id", async (c) => {
   const newlyShared = team && existing?.team_id !== team.id;
   if (addressed || handedToGroup || newlyShared) {
     const me = (await accounts(c, [account])).get(account);
-    const fromHandle = me?.handle || "someone";
+    const fromName = displayName({ id: account, handle: me?.handle, name: me?.name });
     if (addressed && toAccount) {
       await notify(c.env, {
         to: toAccount.id,
@@ -2503,7 +2503,7 @@ app.put("/v1/guides/:id", async (c) => {
         mail: async () => {
           notified = await sendHandoff(c.env, {
             to: toAccount.email,
-            fromHandle,
+            fromName,
             title: String(meta.title),
             id,
             url,
@@ -2546,18 +2546,25 @@ app.put("/v1/guides/:id", async (c) => {
       });
     }
     if (team) {
-      // The room hears who it went to, in the words it was addressed with: a handle, a #group, or
-      // the team itself. "handed you" is right for the first two — somebody was asked.
+      // The room hears who it went to: a person, a group, or the team itself. Never "you" — a
+      // channel is read by everyone in it, so "sent you" would be wrong for all but one of them.
       const kind = toAccount || toGroup ? "handoff" : "shared";
-      const where = toAccount
-        ? `${team.slug} / @${toAccount.handle}`
+      const to = toAccount
+        ? displayName(toAccount)
         : toGroup
-          ? `${team.slug} / #${toGroup.slug}`
-          : team.slug;
+          ? toGroup.name.trim() || `#${toGroup.slug}`
+          : "";
       await announce(c.env, {
         kind,
         team_id: team.id,
-        text: line({ kind, actor: fromHandle, title: String(meta.title), team: where, times: 1 }),
+        text: line({
+          kind,
+          actor_name: fromName,
+          title: String(meta.title),
+          team_name: team.name,
+          to,
+          times: 1,
+        }),
         title: String(meta.title),
         url,
       });
@@ -2631,9 +2638,8 @@ async function recordPull(
       ? () =>
           sendPulled(c.env, {
             to: people.get(row.account_id)?.email || "",
-            byHandle: people.get(account)?.handle || "",
+            byName: nameOf(people, account),
             title: row.title,
-            id: row.id,
             url: shareUrl(origin(c), row),
           })
       : undefined,
@@ -2742,9 +2748,9 @@ app.patch("/v1/guides/:id/status", async (c) => {
       mail: () =>
         sendConsumed(c.env, {
           to: people.get(found.row.account_id)?.email || "",
-          byHandle: people.get(account)?.handle || "someone",
+          byName: nameOf(people, account),
           title: found.row.title,
-          id: found.row.id,
+          url: shareUrl(origin(c), found.row),
         }),
     });
   }
@@ -2786,9 +2792,8 @@ app.put("/v1/guides/:id/verdict", async (c) => {
     mail: () =>
       sendVerdict(c.env, {
         to: people.get(found.row.account_id)?.email || "",
-        byHandle: people.get(account)?.handle || "",
+        byName: nameOf(people, account),
         title: found.row.title,
-        id: found.row.id,
         url: shareUrl(origin(c), found.row),
         ok: body.ok === true,
         note,
@@ -2801,9 +2806,8 @@ app.put("/v1/guides/:id/verdict", async (c) => {
     team_id: found.row.team_id,
     text: line({
       kind: body.ok ? "verified" : "failed",
-      actor: people.get(account)?.handle || "",
+      actor_name: nameOf(people, account),
       title: found.row.title,
-      team: "",
       times: 1,
     }),
     title: found.row.title,
@@ -2864,9 +2868,8 @@ app.put("/v1/guides/:id/ack", async (c) => {
     team_id: found.row.team_id,
     text: line({
       kind,
-      actor: people.get(account)?.handle || "",
+      actor_name: nameOf(people, account),
       title: found.row.title,
-      team: "",
       times: 1,
     }),
     title: found.row.title,
@@ -2928,7 +2931,12 @@ app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c)));
 app.get("/g/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
   if (!row) return c.text("no such guide", 404, VIEW_HEADERS);
-  return renderOgImage(c.env, c.req.url, { id: row.id, meta: parseMeta(row.markdown) });
+  const people = await accounts(c, [row.account_id]);
+  return renderOgImage(c.env, c.req.url, {
+    id: row.id,
+    meta: parseMeta(row.markdown),
+    from: nameOf(people, row.account_id),
+  });
 });
 
 /**
