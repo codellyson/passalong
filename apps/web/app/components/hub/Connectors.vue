@@ -1,10 +1,13 @@
 <!--
-  Connectors: what a hosted assistant uses instead of a token you pasted into it.
+  Connectors: the apps that use Passalong for you, and how to add one.
 
   A token here reaches your whole account, which is the right shape for your own CLI and the wrong
-  one for a form in somebody else's product. A connector gets its own credential instead — scoped
-  to the MCP endpoint, expiring, and revocable on its own — and this is where you create one and
-  take it back.
+  one for somebody else's product. A connector gets its own credential instead — reaching only the
+  MCP endpoint, expiring, and revocable on its own.
+
+  Adding one is pasting an address into the app: it registers itself and sends you to approve
+  (RFC 7591), so that is what this leads with. The manual form stays, folded away, for an app that
+  cannot register itself and asks for a client ID instead.
 
   Listed for the same reason tokens are: a credential you cannot see is one you cannot revoke.
 -->
@@ -12,22 +15,27 @@
 interface Connector {
   id: string;
   name: string;
-  redirect_uri: string;
+  host: string;
+  registered: "manual" | "dynamic";
   created: string;
+  approved: string | null;
+  last_used: string | null;
   confidential: number;
   grants: number;
 }
 
 const { api, json } = useHub();
 
+/** The address people paste. The same one /connect shows. */
+const MCP_URL = "https://passalong.dev/v1/mcp";
+
 const clients = ref<Connector[]>([]);
-const adding = ref(false);
 const name = ref("");
 const redirect = ref("");
 /**
- * The callback nobody could guess. The field is required and exact-matched, and a client's own
- * setup screen does not always show the value to copy — so the one we know is offered here, next to
- * the field that needs it, and on /connect. Kept identical in both by test/connect-claude.test.mjs.
+ * The callback nobody could guess, for the manual form only. A client's own setup screen does not
+ * always show the value to copy — so the one we know is offered here, next to the field that needs
+ * it, and on /connect. Kept identical in both by test/connect-claude.test.mjs.
  */
 const CLAUDE_CALLBACK = "https://claude.ai/api/mcp/auth_callback";
 function useClaude() {
@@ -41,9 +49,7 @@ const trouble = ref("");
 const fresh = ref<{ id: string; secret: string } | null>(null);
 const removing = ref<string | null>(null);
 
-// The same two class strings the tokens table uses. Credentials on one page should not be
-// presented two different ways: this section sat in nested cards while the one above it was a
-// plain table, which is what made a finished page look half-built.
+// The same two class strings the tokens table uses, so credentials on one page look one way.
 const cell = "border-0 border-b border-b-line px-0 py-3 align-middle";
 const head =
   "border-0 border-b border-b-line bg-transparent px-0 py-2 font-ui text-xs font-semibold tracking-wide text-muted uppercase";
@@ -72,7 +78,6 @@ async function create() {
       }),
     );
     if (answer?.client) fresh.value = answer.client;
-    adding.value = false;
     name.value = "";
     redirect.value = "";
     confidential.value = false;
@@ -97,6 +102,26 @@ async function remove(id: string) {
 
 <template>
   <div>
+    <div class="mb-4 font-ui text-sm text-muted">
+      <p class="m-0">
+        <b class="text-fg">Claude:</b> open Connectors in Claude's settings, choose
+        <b class="text-fg">Add custom connector</b> and paste this address. Claude opens Passalong
+        and asks you to approve.
+      </p>
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <code
+          class="overflow-x-auto rounded-1 border border-line-strong bg-raised px-3 py-2 font-code text-sm whitespace-nowrap text-fg"
+        >{{ MCP_URL }}</code>
+        <button class="btn sm" @click="copy(MCP_URL, $event.currentTarget)">
+          <AppIcon name="copy" /><span data-label>copy</span>
+        </button>
+      </div>
+      <p class="mt-2 mb-0">
+        <b class="text-fg">ChatGPT</b> and other apps that add MCP servers work the same way: paste
+        the address, choose OAuth if asked, and approve.
+      </p>
+    </div>
+
     <!-- Shown once, the same shape and wording as a new token: the interface is holding something
          the server cannot give back, and it says so where the value is. -->
     <div v-if="fresh" class="mb-4 rounded-2 border border-accent bg-accent-soft p-3">
@@ -104,7 +129,7 @@ async function remove(id: string) {
         <b class="font-ui text-sm text-fg">
           New connector<template v-if="fresh.secret"> · secret shown once</template>
         </b>
-        <span class="font-ui text-sm text-accent">paste these into the connector</span>
+        <span class="font-ui text-sm text-accent">paste these into the app</span>
       </div>
       <div class="flex flex-col gap-2">
         <code
@@ -117,11 +142,12 @@ async function remove(id: string) {
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button class="btn primary sm" @click="copy(fresh.id, $event.currentTarget)">
-          <AppIcon name="copy" /><span data-label>copy client id</span>
+          <AppIcon name="copy" /><span data-label>copy client ID</span>
         </button>
         <button class="btn sm" @click="fresh = null">done</button>
         <span v-if="!fresh.secret" class="font-ui text-sm text-muted">
-          no secret — set the connector's token auth method to <code class="font-code">none</code>
+          No secret. If the app asks how it signs in to the token endpoint, choose
+          <code class="font-code">none</code>.
         </span>
       </div>
     </div>
@@ -131,69 +157,76 @@ async function remove(id: string) {
     <table v-if="clients.length" class="w-full">
       <thead>
         <tr>
-          <th :class="head">Name</th>
-          <th :class="head">Client ID</th>
-          <th :class="head">Holding</th>
-          <th :class="head"><span class="sr-only">Remove</span></th>
+          <th :class="head">App</th>
+          <th :class="head">Approved</th>
+          <th :class="head">Last used</th>
+          <th :class="head"><span class="sr-only">Disconnect</span></th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="client in clients" :key="client.id">
-          <td :class="cell" class="font-ui text-sm font-semibold text-fg">
-            {{ client.name || "Unnamed" }}
+          <td :class="cell" class="pr-3">
+            <span class="block font-ui text-sm font-semibold text-fg">
+              {{ client.name || client.host || "Unnamed app" }}
+            </span>
+            <span class="block font-ui text-xs text-muted">{{ client.host }}</span>
           </td>
-          <td :class="cell" class="pr-3 font-code text-xs break-all text-muted">{{ client.id }}</td>
-          <td :class="cell" class="font-ui text-sm text-muted">
-            {{ plural(client.grants, "grant") }}
+          <td :class="cell" class="pr-3 font-ui text-sm text-muted">
+            {{ client.approved ? rel(client.approved) : "not yet" }}
+          </td>
+          <td :class="cell" class="pr-3 font-ui text-sm text-muted">
+            {{ client.last_used ? rel(client.last_used) : "never" }}
           </td>
           <td :class="cell" class="text-right whitespace-nowrap">
             <!-- Two taps to break something, and the second one says what breaks. -->
             <template v-if="removing === client.id">
               <span class="mr-2 font-ui text-sm text-muted">It stops working now.</span>
-              <button class="btn outline danger sm" @click="remove(client.id)">Remove it</button>
+              <button class="btn outline danger sm" @click="remove(client.id)">Disconnect</button>
               <button class="btn sm ml-2" @click="removing = null">Cancel</button>
             </template>
-            <button v-else class="btn destructive sm" @click="removing = client.id">remove</button>
+            <button v-else class="btn destructive sm" @click="removing = client.id">
+              Disconnect
+            </button>
           </td>
         </tr>
       </tbody>
     </table>
-    <p v-else class="m-0 font-ui text-sm text-muted">None yet.</p>
+    <p v-else class="m-0 font-ui text-sm text-muted">Nothing connected yet.</p>
 
-    <form v-if="adding" class="appears mt-3 flex flex-wrap items-end gap-3" @submit.prevent="create">
-      <div class="grow basis-48">
-        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="connector-name">
-          What is connecting?
+    <details class="mt-4">
+      <summary class="cursor-pointer font-ui text-sm text-fg">Set up a connector manually</summary>
+      <p class="mt-2 mb-0 font-ui text-sm text-muted">
+        Only for an app that asks you for a client ID instead of taking the address above.
+      </p>
+      <form class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="create">
+        <div class="grow basis-48">
+          <label class="mb-2 block font-ui text-sm font-medium text-fg" for="connector-name">
+            What is connecting?
+          </label>
+          <input id="connector-name" v-model="name" class="w-full" placeholder="ChatGPT" required>
+        </div>
+        <div class="grow basis-72">
+          <label class="mb-2 block font-ui text-sm font-medium text-fg" for="connector-redirect">
+            Its callback address, copied from its setup screen
+          </label>
+          <input id="connector-redirect" v-model="redirect" class="w-full" type="url" placeholder="https://…" required>
+          <p class="mt-2 mb-0 font-ui text-xs text-muted">
+            Claude's is <code>https://claude.ai/api/mcp/auth_callback</code>
+            <button type="button" class="btn sm ml-1" @click="useClaude">use it</button>
+          </p>
+        </div>
+        <button class="btn primary sm" type="submit" :disabled="busy || !redirect.trim()">
+          {{ busy ? "Creating…" : "Create connector" }}
+        </button>
+        <label class="basis-full font-ui text-sm text-muted">
+          <input v-model="confidential" type="checkbox" class="mr-2 w-auto">
+          This app keeps a secret (most don't)
         </label>
-        <input id="connector-name" v-model="name" class="w-full" placeholder="ChatGPT" required>
-      </div>
-      <div class="grow basis-72">
-        <label class="mb-2 block font-ui text-sm font-medium text-fg" for="connector-redirect">
-          Callback URL, copied from its form
-        </label>
-        <input id="connector-redirect" v-model="redirect" class="w-full" type="url" placeholder="https://…" required>
-        <p class="mt-2 mb-0 font-ui text-xs text-muted">
-          Claude's is <code>https://claude.ai/api/mcp/auth_callback</code>
-          <button type="button" class="btn sm ml-1" @click="useClaude">use it</button>
-        </p>
-      </div>
-      <button class="btn primary sm" type="submit" :disabled="busy || !redirect.trim()">
-        {{ busy ? "Creating…" : "Create connector" }}
-      </button>
-      <button class="btn sm" type="button" @click="adding = false">Cancel</button>
-      <label class="basis-full font-ui text-sm text-muted">
-        <input v-model="confidential" type="checkbox" class="mr-2 w-auto">
-        issue a client secret — leave off unless the connector demands one, since PKCE proves the
-        exchange without a secret you have to keep in someone else's configuration
-      </label>
-    </form>
+      </form>
+    </details>
 
-    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-      <button v-if="!adding" class="btn sm" @click="adding = true">
-        <AppIcon name="plus" />new connector
-      </button>
-      <span v-else />
-      <NuxtLink to="/connect" class="font-ui text-sm">how to connect one</NuxtLink>
+    <div class="mt-3 flex justify-end">
+      <NuxtLink to="/connect" class="font-ui text-sm">more on connecting apps</NuxtLink>
     </div>
   </div>
 </template>

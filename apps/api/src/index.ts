@@ -110,14 +110,27 @@ import {
 } from "./notify.js";
 import {
   authorizationServerMetadata,
+  DYNAMIC_TTL_MS,
   errorRedirect,
   MCP_SCOPE,
-  type OAuthClientRow,
+  pickRedirect,
   pkceMatches,
   protectedResourceMetadata,
-  redirectAllowed,
+  redirectHost,
+  registrationResponse,
   timingSafeEqual,
+  validateRegistration,
 } from "./oauth.js";
+import {
+  disconnect,
+  findClient,
+  listConnectors,
+  recordApproval,
+  registrationCutoff,
+  saveRegistration,
+  sweepRegistrations,
+  tokenClient,
+} from "./oauth-clients.js";
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
@@ -134,6 +147,8 @@ type Env = MailEnv &
         every other route exactly as before. */
     SHOTS?: R2Bucket;
     ACCOUNT_LIMIT?: RateLimiter;
+    /** Per-IP throttle on OAuth dynamic client registration, the other unauthenticated write. */
+    OAUTH_REGISTER_LIMIT?: RateLimiter;
     /** "0" closes the free ceiling to new accounts. Unset means it is still open — see quota.ts. */
     FREE_SIGNUP?: string;
     /** Billing. Optional, like every other integration here: without them a deployment runs
@@ -563,6 +578,9 @@ const PUBLIC = new Set([
   // RFC 7009: a client handing a credential back must never be refused for not having one. Being
   // told no here would leave the token live, which is the opposite of what was asked for.
   "POST /v1/oauth/revoke",
+  // RFC 7591: a client registers before anyone has a credential to give it. What it registers
+  // grants nothing until a signed-in person approves it; see the route.
+  "POST /v1/oauth/register",
   "POST /v1/accounts",
   "POST /v1/auth/signup",
   "POST /v1/auth/login",
@@ -2985,16 +3003,18 @@ app.get("/.well-known/oauth-protected-resource/v1/mcp", (c) =>
  */
 app.get("/oauth/authorize", async (c) => {
   const q = c.req.query();
-  const client = q.client_id
-    ? await c.env.DB.prepare("SELECT * FROM oauth_client WHERE id = ? AND revoked = ''")
-        .bind(q.client_id)
-        .first<OAuthClientRow>()
-    : null;
-  if (!client) return c.text("unknown client_id", 400);
-  if (!redirectAllowed(client.redirect_uri, q.redirect_uri)) {
-    return c.text("redirect_uri does not match the one registered for this client", 400);
-  }
-  const redirect = q.redirect_uri || client.redirect_uri;
+  // A person is looking at this response, and neither problem can be sent back to the client: an
+  // unknown client has nowhere trusted to go, and a mismatched redirect is the address we must not
+  // use. So both go to the consent page, which says what to do in words rather than a status line.
+  const problem = (kind: string) => c.redirect(`${origin(c)}/oauth/consent?problem=${kind}`, 302);
+  const client = await findClient(
+    c.env.DB,
+    q.client_id || "",
+    registrationCutoff(new Date(), DYNAMIC_TTL_MS),
+  );
+  if (!client) return problem("unknown_client");
+  const redirect = pickRedirect(client.redirect_uris, q.redirect_uri);
+  if (!redirect) return problem("redirect_mismatch");
 
   if (q.response_type !== "code") {
     return c.redirect(
@@ -3009,8 +3029,102 @@ app.get("/oauth/authorize", async (c) => {
   const url = new URL(`${origin(c)}/oauth/consent`);
   for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
   url.searchParams.set("redirect_uri", redirect);
-  url.searchParams.set("client_name", client.name || client.id);
+  // The page does not take the name from its own address bar — anyone can write a link to
+  // /oauth/consent with any name in it. It asks /v1/oauth/consent, which reads the database.
+  url.searchParams.delete("client_name");
   return c.redirect(url.toString(), 302);
+});
+
+/**
+ * RFC 7591 dynamic client registration: how Claude or ChatGPT connect from one pasted address.
+ *
+ * Unauthenticated, because that is what it is for. The rules that make that safe:
+ *
+ * - A registration grants nothing. It is stored in `oauth_registration`, which the token endpoint
+ *   never reads; it becomes a client only when a signed-in person approves it on the consent page,
+ *   and approval takes the session cookie, never a bearer token (/v1/oauth/approve).
+ * - Public clients only. `token_endpoint_auth_method` is always `none`, so no secret exists to
+ *   leak, and PKCE with S256 is required at authorize and checked at the token endpoint.
+ * - Redirect URIs: https, or http for loopback only; no fragments, wildcards or userinfo; at most
+ *   five, each under 2000 characters (validateRegistration in oauth.ts). At authorize they are
+ *   exact-matched, with only the RFC 8252 loopback-port allowance.
+ * - `client_name` is capped and stripped of control and bidi characters, and the consent page
+ *   shows the redirect host beside it, so a registration cannot pass itself off as someone else.
+ * - Throttled per IP with its own rate-limit binding, the body is capped, and registrations
+ *   nobody approved are deleted after 24 hours — here, lazily, and by the nightly sweep.
+ */
+app.post("/v1/oauth/register", async (c) => {
+  const refuse = (status: number, error: string, description: string) =>
+    c.json({ error, error_description: description }, status as 400, {
+      "cache-control": "no-store",
+    });
+
+  if (c.env.OAUTH_REGISTER_LIMIT) {
+    const ip = c.req.header("cf-connecting-ip") || "unknown";
+    const { success } = await c.env.OAUTH_REGISTER_LIMIT.limit({ key: ip });
+    if (!success) {
+      return c.json(
+        {
+          error: "too_many_requests",
+          error_description: "too many registrations from this address; try again in a minute",
+        },
+        429,
+        { "retry-after": "60", "cache-control": "no-store" },
+      );
+    }
+  }
+
+  // A registration is a few hundred bytes. Anything much larger is not one.
+  const raw = await c.req.text().catch(() => "");
+  if (raw.length > 16_000) {
+    return refuse(400, "invalid_client_metadata", "the registration is too large");
+  }
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return refuse(400, "invalid_client_metadata", "the registration must be a JSON object");
+  }
+  const result = validateRegistration(body);
+  if (!result.ok) return refuse(400, result.error, result.error_description);
+
+  const issued = new Date();
+  const id = `pa_client_${rid(24)}`;
+  await saveRegistration(c.env.DB, id, result.registration, issued.toISOString());
+
+  // Lazy expiry, off the response path, so the table cannot grow between nightly sweeps.
+  try {
+    c.executionCtx.waitUntil(
+      sweepRegistrations(c.env.DB, registrationCutoff(issued, DYNAMIC_TTL_MS)).catch(() => 0),
+    );
+  } catch {}
+  count(c, "oauth_registered", {});
+  return c.json(registrationResponse(id, issued, result.registration), 201, {
+    "cache-control": "no-store",
+  });
+});
+
+/**
+ * What the consent page shows: the client's name and where approving sends you.
+ *
+ * Read from the database rather than the page's query string, so a hand-written link cannot put a
+ * different name on the screen. The host is the one the code will actually be sent to.
+ */
+app.get("/v1/oauth/consent", async (c) => {
+  const q = c.req.query();
+  const client = await findClient(
+    c.env.DB,
+    q.client_id || "",
+    registrationCutoff(new Date(), DYNAMIC_TTL_MS),
+  );
+  if (!client) return err(c, 404, "unknown client_id");
+  const redirect = pickRedirect(client.redirect_uris, q.redirect_uri);
+  if (!redirect) return err(c, 400, "redirect_uri does not match one registered for this client");
+  return c.json({
+    name: client.name,
+    host: redirectHost(redirect),
+    registered: client.registered,
+  });
 });
 
 /**
@@ -3039,26 +3153,29 @@ app.post("/v1/oauth/approve", async (c) => {
     code_challenge?: string;
   };
   const body = await c.req.json<Approval>().catch(() => ({}) as Approval);
-  const client = body.client_id
-    ? await c.env.DB.prepare("SELECT * FROM oauth_client WHERE id = ? AND revoked = ''")
-        .bind(body.client_id)
-        .first<OAuthClientRow>()
-    : null;
+  const client = await findClient(
+    c.env.DB,
+    body.client_id || "",
+    registrationCutoff(new Date(), DYNAMIC_TTL_MS),
+  );
   if (!client) return err(c, 400, "unknown client_id");
-  if (!redirectAllowed(client.redirect_uri, body.redirect_uri)) {
-    return err(c, 400, "redirect_uri does not match the one registered");
-  }
+  const redirect = pickRedirect(client.redirect_uris, body.redirect_uri);
+  if (!redirect) return err(c, 400, "redirect_uri does not match the one registered");
   if (!body.code_challenge) return err(c, 400, "PKCE with S256 is required");
+
+  // The step that lets a client get a token at all. A self-registered client becomes a real one
+  // here, owned by the person approving, and appears in their Settings → Connectors from now on.
+  await recordApproval(c.env.DB, client, account, now());
 
   const code = await issueCode(c.env.DB, {
     client_id: client.id,
     account_id: account,
     challenge: body.code_challenge,
     method: "S256",
-    redirect_uri: body.redirect_uri || client.redirect_uri,
+    redirect_uri: redirect,
     scope: MCP_SCOPE,
   });
-  const url = new URL(body.redirect_uri || client.redirect_uri);
+  const url = new URL(redirect);
   url.searchParams.set("code", code);
   if (body.state) url.searchParams.set("state", body.state);
   count(c, "oauth_granted", {});
@@ -3086,11 +3203,8 @@ app.post("/v1/oauth/token", async (c) => {
     clientSecret = decodeURIComponent(secret || "");
   }
 
-  const client = clientId
-    ? await c.env.DB.prepare("SELECT * FROM oauth_client WHERE id = ? AND revoked = ''")
-        .bind(clientId)
-        .first<OAuthClientRow>()
-    : null;
+  // Approved clients only: a self-registration nobody has approved is not in the table this reads.
+  const client = await tokenClient(c.env.DB, clientId);
   if (!client) return c.json({ error: "invalid_client" }, 401);
   if (client.secret_hash && !timingSafeEqual(client.secret_hash, await sha256(clientSecret))) {
     return c.json({ error: "invalid_client" }, 401);
@@ -3168,16 +3282,15 @@ app.post("/v1/oauth/revoke", async (c) => {
   return c.body(null, 200);
 });
 
-/** The clients you have registered, and what each one is currently holding. */
+/**
+ * The connectors you can see and disconnect: the ones you created, and the ones you approved.
+ * `host` is where each sends its codes, which is how a person recognises "claude.ai".
+ */
 app.get("/v1/oauth/clients", async (c) => {
-  const { results } = await c.env.DB.prepare(
-    `SELECT c.id, c.name, c.redirect_uri, c.created, c.secret_hash <> '' AS confidential,
-            (SELECT COUNT(*) FROM oauth_token t WHERE t.client_id = c.id) AS grants
-     FROM oauth_client c WHERE c.account_id = ? AND c.revoked = '' ORDER BY c.created DESC`,
-  )
-    .bind(c.get("account"))
-    .all();
-  return c.json({ clients: results });
+  const clients = await listConnectors(c.env.DB, c.get("account"));
+  return c.json({
+    clients: clients.map((client) => ({ ...client, host: redirectHost(client.redirect_uri) })),
+  });
 });
 
 /**
@@ -3216,19 +3329,12 @@ app.post("/v1/oauth/clients", async (c) => {
 
 app.delete("/v1/oauth/clients/:id", async (c) => {
   const id = c.req.param("id");
-  const owned = await c.env.DB.prepare(
-    "SELECT id FROM oauth_client WHERE id = ? AND account_id = ?",
-  )
-    .bind(id, c.get("account"))
-    .first<{ id: string }>();
-  if (!owned) return err(c, 404, "no such client");
-  // Revoke the client and everything it holds: a connector you have removed should stop working
-  // now, not in an hour when its access token happens to expire.
-  await c.env.DB.batch([
-    c.env.DB.prepare("UPDATE oauth_client SET revoked = ? WHERE id = ?").bind(now(), id),
-    c.env.DB.prepare("DELETE FROM oauth_token WHERE client_id = ?").bind(id),
-    c.env.DB.prepare("DELETE FROM oauth_code WHERE client_id = ?").bind(id),
-  ]);
+  // Everything it holds for you stops working now, not in an hour when its access token happens
+  // to expire. A connector you created is revoked outright; one you approved is disconnected from
+  // you — see disconnect() in oauth-clients.ts for why those differ.
+  if (!(await disconnect(c.env.DB, id, c.get("account"), now()))) {
+    return err(c, 404, "no such client");
+  }
   return c.json({ id, revoked: true });
 });
 
