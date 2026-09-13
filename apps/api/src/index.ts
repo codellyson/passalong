@@ -293,16 +293,40 @@ async function teamBySlug(c: Ctx, slug: string): Promise<(TeamRow & { role: stri
     .first<TeamRow & { role: string }>();
 }
 
+/**
+ * D1 refuses a statement binding more than 100 parameters ("too many SQL variables"), and a page of
+ * guides is up to 200 rows, so every `IN (?, …)` over a page runs in slices and the results are
+ * joined. `extra` is how many parameters the statement binds besides the ids. A LIMIT in the
+ * statement applies per slice, which only ever returns more, never less.
+ */
+const D1_MAX_PARAMS = 100;
+async function inSlices<T>(
+  ids: string[],
+  extra: number,
+  run: (slice: string[], marks: string) => Promise<T[]>,
+): Promise<T[]> {
+  const size = D1_MAX_PARAMS - extra;
+  const slices: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) slices.push(ids.slice(i, i + size));
+  const results = await Promise.all(slices.map((s) => run(s, s.map(() => "?").join(","))));
+  return results.flat();
+}
+
 async function accounts(c: { env: Env }, ids: string[]): Promise<Map<string, AccountRow>> {
   const map = new Map<string, AccountRow>();
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return map;
-  const { results } = await db(c)
-    .prepare(
-      `SELECT id, handle, name, email FROM account WHERE id IN (${unique.map(() => "?").join(",")})`,
-    )
-    .bind(...unique)
-    .all<AccountRow>();
+  const results = await inSlices(
+    unique,
+    0,
+    async (slice, marks) =>
+      (
+        await db(c)
+          .prepare(`SELECT id, handle, name, email FROM account WHERE id IN (${marks})`)
+          .bind(...slice)
+          .all<AccountRow>()
+      ).results,
+  );
   for (const a of results) map.set(a.id, a);
   return map;
 }
@@ -311,15 +335,22 @@ async function accounts(c: { env: Env }, ids: string[]): Promise<Map<string, Acc
 async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, PullRow[]>> {
   const map = new Map<string, PullRow[]>();
   if (!rows.length) return map;
-  const { results } = await db(c)
-    .prepare(
-      `SELECT p.guide_id, p.account_id, p.via, p.at, COALESCE(a.handle, '') AS handle
-       FROM pull p LEFT JOIN account a ON a.id = p.account_id
-       WHERE p.guide_id IN (${rows.map(() => "?").join(",")})
-       ORDER BY p.at DESC LIMIT 500`,
-    )
-    .bind(...rows.map((r) => r.id))
-    .all<PullRow>();
+  const results = await inSlices(
+    rows.map((r) => r.id),
+    0,
+    async (slice, marks) =>
+      (
+        await db(c)
+          .prepare(
+            `SELECT p.guide_id, p.account_id, p.via, p.at, COALESCE(a.handle, '') AS handle
+             FROM pull p LEFT JOIN account a ON a.id = p.account_id
+             WHERE p.guide_id IN (${marks})
+             ORDER BY p.at DESC LIMIT 500`,
+          )
+          .bind(...slice)
+          .all<PullRow>()
+      ).results,
+  );
   const owner = new Map(rows.map((r) => [r.id, r.account_id]));
   for (const p of results) {
     if (p.account_id && p.account_id === owner.get(p.guide_id)) continue;
@@ -334,15 +365,22 @@ async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<strin
 async function verdicts(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, VerdictRow[]>> {
   const map = new Map<string, VerdictRow[]>();
   if (!rows.length) return map;
-  const { results } = await db(c)
-    .prepare(
-      `SELECT v.guide_id, v.ok, v.note, v.at, COALESCE(a.handle, '') AS handle
-       FROM verdict v LEFT JOIN account a ON a.id = v.account_id
-       WHERE v.guide_id IN (${rows.map(() => "?").join(",")})
-       ORDER BY v.at DESC LIMIT 200`,
-    )
-    .bind(...rows.map((r) => r.id))
-    .all<VerdictRow>();
+  const results = await inSlices(
+    rows.map((r) => r.id),
+    0,
+    async (slice, marks) =>
+      (
+        await db(c)
+          .prepare(
+            `SELECT v.guide_id, v.ok, v.note, v.at, COALESCE(a.handle, '') AS handle
+             FROM verdict v LEFT JOIN account a ON a.id = v.account_id
+             WHERE v.guide_id IN (${marks})
+             ORDER BY v.at DESC LIMIT 200`,
+          )
+          .bind(...slice)
+          .all<VerdictRow>()
+      ).results,
+  );
   for (const v of results) map.set(v.guide_id, [...(map.get(v.guide_id) || []), v]);
   return map;
 }
@@ -356,15 +394,22 @@ async function verdicts(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, 
 async function acks(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, AckRow[]>> {
   const map = new Map<string, AckRow[]>();
   if (!rows.length) return map;
-  const { results } = await db(c)
-    .prepare(
-      `SELECT k.guide_id, k.account_id, k.taken, k.note, k.at, COALESCE(a.handle, '') AS handle
-       FROM ack k LEFT JOIN account a ON a.id = k.account_id
-       WHERE k.guide_id IN (${rows.map(() => "?").join(",")})
-       ORDER BY k.at DESC LIMIT 200`,
-    )
-    .bind(...rows.map((r) => r.id))
-    .all<AckRow>();
+  const results = await inSlices(
+    rows.map((r) => r.id),
+    0,
+    async (slice, marks) =>
+      (
+        await db(c)
+          .prepare(
+            `SELECT k.guide_id, k.account_id, k.taken, k.note, k.at, COALESCE(a.handle, '') AS handle
+             FROM ack k LEFT JOIN account a ON a.id = k.account_id
+             WHERE k.guide_id IN (${marks})
+             ORDER BY k.at DESC LIMIT 200`,
+          )
+          .bind(...slice)
+          .all<AckRow>()
+      ).results,
+  );
   for (const k of results) map.set(k.guide_id, [...(map.get(k.guide_id) || []), k]);
   return map;
 }
@@ -384,26 +429,32 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   // its row reads as a team-wide share and nobody treats it as theirs.
   const groupIds = [...new Set(rows.map((r) => r.to_group_id).filter(Boolean))];
   const groups = new Map<string, string>();
-  if (groupIds.length) {
-    const { results } = await c.env.DB.prepare(
-      `SELECT id, slug FROM team_group WHERE id IN (${groupIds.map(() => "?").join(",")})`,
-    )
-      .bind(...groupIds)
-      .all<{ id: string; slug: string }>();
-    for (const g of results) groups.set(g.id, g.slug);
-  }
+  const groupRows = await inSlices(
+    groupIds,
+    0,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(`SELECT id, slug FROM team_group WHERE id IN (${marks})`)
+          .bind(...slice)
+          .all<{ id: string; slug: string }>()
+      ).results,
+  );
+  for (const g of groupRows) groups.set(g.id, g.slug);
   // A row that belongs to a report says so by name, not by id: "part of Pre-release sweep" is a
   // link someone follows, and a bare eight characters is not.
   const reportIds = [...new Set(rows.map((r) => r.report_id).filter(Boolean))];
   const reportTitles = new Map<string, string>();
-  if (reportIds.length) {
-    const { results } = await c.env.DB.prepare(
-      `SELECT id, title FROM report WHERE id IN (${reportIds.map(() => "?").join(",")})`,
-    )
-      .bind(...reportIds)
-      .all<{ id: string; title: string }>();
-    for (const row of results) reportTitles.set(row.id, row.title);
-  }
+  const reportRows = await inSlices(
+    reportIds,
+    0,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(`SELECT id, title FROM report WHERE id IN (${marks})`)
+          .bind(...slice)
+          .all<{ id: string; title: string }>()
+      ).results,
+  );
+  for (const row of reportRows) reportTitles.set(row.id, row.title);
   // A guide that came out of another says so by name, the way a report row does: "follows
   // Migrating the worker" is a link somebody follows, and eight characters are not. Both lookups
   // are scoped to what this caller can read. A follow-up published into a team you are in must not
@@ -413,25 +464,33 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     "(account_id = ? OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?))";
   const parentIds = [...new Set(rows.map((r) => r.parent_id).filter(Boolean))];
   const parentTitles = new Map<string, string>();
-  if (parentIds.length) {
-    const { results } = await c.env.DB.prepare(
-      `SELECT id, title FROM guide WHERE id IN (${parentIds.map(() => "?").join(",")}) AND ${readable}`,
-    )
-      .bind(...parentIds, me, me)
-      .all<{ id: string; title: string }>();
-    for (const row of results) parentTitles.set(row.id, row.title);
-  }
+  const parentRows = await inSlices(
+    parentIds,
+    2,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(`SELECT id, title FROM guide WHERE id IN (${marks}) AND ${readable}`)
+          .bind(...slice, me, me)
+          .all<{ id: string; title: string }>()
+      ).results,
+  );
+  for (const row of parentRows) parentTitles.set(row.id, row.title);
   const childCounts = new Map<string, number>();
-  if (rows.length) {
-    const { results } = await c.env.DB.prepare(
-      `SELECT parent_id, COUNT(*) AS n FROM guide
-        WHERE parent_id IN (${rows.map(() => "?").join(",")}) AND status <> 'draft' AND ${readable}
-        GROUP BY parent_id`,
-    )
-      .bind(...rows.map((r) => r.id), me, me)
-      .all<{ parent_id: string; n: number }>();
-    for (const row of results) childCounts.set(row.parent_id, Number(row.n));
-  }
+  const childRows = await inSlices(
+    rows.map((r) => r.id),
+    2,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(
+          `SELECT parent_id, COUNT(*) AS n FROM guide
+            WHERE parent_id IN (${marks}) AND status <> 'draft' AND ${readable}
+            GROUP BY parent_id`,
+        )
+          .bind(...slice, me, me)
+          .all<{ parent_id: string; n: number }>()
+      ).results,
+  );
+  for (const row of childRows) childCounts.set(row.parent_id, Number(row.n));
   return rows.map((r) => {
     const heard = said.get(r.id) || [];
     // The latest word, plus whether anyone's standing verdict is still negative.
