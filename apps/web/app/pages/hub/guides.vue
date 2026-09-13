@@ -5,7 +5,7 @@
 -->
 <script setup lang="ts">
 import type { Guide } from "~/types/hub";
-import { boardStates, type GuideState, stateOf } from "~/utils/guide-state";
+import { boardStates, type GuideState, rankOf, stateOf } from "~/utils/guide-state";
 
 usePage({
   title: "All guides · Passalong",
@@ -21,14 +21,11 @@ const me = computed(() => data.value.me?.handle || null);
 
 // Sorted by state, not by date: the list answers "where did everything get to", and a guide
 // somebody is blocked on outranks one that is going fine however long ago it was shared. Within a
-// state the server's order is kept. A guide with no state — nothing in transit — sorts last.
-const RANK: Record<string, number> = { waiting: 0, unjudged: 0, failing: 1, flight: 2, landed: 3 };
-const rank = (r: Row) => (r.state ? (RANK[r.state.key] ?? 9) : 9);
-
+// state the server's order is kept. The ranks live beside the states, so none can go unranked.
 const rows = computed<Row[]>(() =>
   data.value.guides
     .map((g) => ({ g, state: stateOf(g, fromBoard.value, me.value) }))
-    .sort((a, b) => rank(a) - rank(b)),
+    .sort((a, b) => rankOf(a.state) - rankOf(b.state)),
 );
 
 /**
