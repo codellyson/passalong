@@ -1,7 +1,31 @@
 // Runs on Node 22.18+ with built-in type stripping (`node --test`).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { KINDS, line, summary } from "../src/notify.ts";
+import { displayName, KINDS, line, summary } from "../src/notify.ts";
+
+test("a person is named by their name, then their handle, then their account id", () => {
+  assert.equal(displayName({ id: "acc_1", handle: "ada", name: "Ada Lovelace" }), "Ada Lovelace");
+  assert.equal(displayName({ id: "acc_1", handle: "ada", name: "  Ada  " }), "Ada");
+  // A name that is only spaces is not a name.
+  assert.equal(displayName({ id: "acc_1", handle: "ada", name: "   " }), "@ada");
+  assert.equal(displayName({ id: "acc_1", handle: "ada", name: null }), "@ada");
+  assert.equal(displayName({ id: "acc_1", handle: "", name: "" }), "@acc_1");
+  assert.equal(displayName({ id: "acc_1", handle: null, name: null }), "@acc_1");
+  // A real account is never "someone": that word is kept for a reader with no account at all.
+  assert.doesNotMatch(displayName({ id: "x", handle: "", name: "" }), /someone/);
+});
+
+test("a notification carries the actor and the team as a person reads them", () => {
+  const named = summary(row({ actor_real: "Bob Marley", team_name: "Khaime" }));
+  assert.equal(named.actor_name, "Bob Marley");
+  assert.equal(named.actor, "bob", "the handle stays for anything that already reads it");
+  assert.equal(named.team_name, "Khaime");
+  assert.equal(named.team, "khaime");
+  assert.equal(summary(row({ actor_real: "" })).actor_name, "@bob");
+  assert.equal(summary(row({ actor: "", actor_real: "" })).actor_name, "@acc_bob");
+  // Nobody at all: an anonymous share-link reader has no name to give.
+  assert.equal(summary(row({ actor_id: "", actor: "", actor_real: "" })).actor_name, "");
+});
 
 const row = (over = {}) => ({
   id: 1,

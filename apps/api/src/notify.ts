@@ -33,6 +33,24 @@ export type Kind = (typeof KINDS)[number];
 
 export type NotifyEnv = MailEnv & { DB: D1Database };
 
+/**
+ * What a person is called wherever the product names them: the name they gave, else their handle,
+ * else the account id — which is ugly, and still a person rather than "someone".
+ *
+ * Here rather than in a module of its own because every test that reads a sentence imports this
+ * file, and a value import of a sibling `.ts` is what Node's type stripping cannot resolve.
+ */
+export function displayName(a: {
+  id: string;
+  handle?: string | null;
+  name?: string | null;
+}): string {
+  const name = (a.name || "").trim();
+  if (name) return name;
+  if (a.handle) return `@${a.handle}`;
+  return `@${a.id}`;
+}
+
 export interface Event {
   /** Account being told. Ignored when it is the actor: nobody needs telling what they just did. */
   to: string;
@@ -61,8 +79,13 @@ export interface Row {
   read_at: string;
   note: string;
   title: string;
+  /** The actor's handle. '' for an anonymous reader, and for an account that never chose one. */
   actor: string;
+  /** The actor's own name, as they typed it. Read through `displayName`, never shown raw. */
+  actor_real: string;
+  /** The team's slug, and its name. */
   team: string;
+  team_name: string;
 }
 
 /** Record one event and, if it is new, deliver it. Never throws; callers are on the write path. */
@@ -404,7 +427,9 @@ export async function notifyAll(env: NotifyEnv, tos: string[], e: Omit<Event, "t
 }
 
 const FEED_SQL = `SELECT n.id, n.kind, n.guide_id, n.actor_id, n.team_id, n.at, n.times, n.read_at, n.note,
-         COALESCE(g.title, '') AS title, COALESCE(a.handle, '') AS actor, COALESCE(t.slug, '') AS team
+         COALESCE(g.title, '') AS title, COALESCE(a.handle, '') AS actor,
+         COALESCE(a.name, '') AS actor_real, COALESCE(t.slug, '') AS team,
+         COALESCE(t.name, '') AS team_name
   FROM notification n
   LEFT JOIN guide g ON g.id = n.guide_id
   LEFT JOIN account a ON a.id = n.actor_id
@@ -482,12 +507,18 @@ export function line(
   }
 }
 
+/** The actor as a person reads them. '' only for an anonymous share-link reader. */
+const actorName = (r: Pick<Row, "actor_id" | "actor" | "actor_real">) =>
+  r.actor_id ? displayName({ id: r.actor_id, handle: r.actor, name: r.actor_real }) : "";
+
 export const summary = (r: Row) => ({
   id: r.id,
   kind: r.kind,
   guide: r.guide_id,
   actor: r.actor,
+  actor_name: actorName(r),
   team: r.team,
+  team_name: r.team_name || "",
   title: r.title,
   at: r.at,
   times: r.times,

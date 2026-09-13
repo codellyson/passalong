@@ -98,6 +98,7 @@ import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
 import {
   announce,
+  displayName,
   feed,
   line,
   markRead,
@@ -244,10 +245,12 @@ interface ReportRow {
 }
 interface VerdictRow {
   guide_id: string;
+  account_id: string;
   ok: number;
   note: string;
   at: string;
   handle: string;
+  name: string;
 }
 interface AckRow {
   guide_id: string;
@@ -256,6 +259,7 @@ interface AckRow {
   note: string;
   at: string;
   handle: string;
+  name: string;
 }
 interface PullRow {
   guide_id: string;
@@ -372,7 +376,8 @@ async function verdicts(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, 
       (
         await db(c)
           .prepare(
-            `SELECT v.guide_id, v.ok, v.note, v.at, COALESCE(a.handle, '') AS handle
+            `SELECT v.guide_id, v.account_id, v.ok, v.note, v.at,
+                    COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
              FROM verdict v LEFT JOIN account a ON a.id = v.account_id
              WHERE v.guide_id IN (${marks})
              ORDER BY v.at DESC LIMIT 200`,
@@ -401,7 +406,8 @@ async function acks(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, AckR
       (
         await db(c)
           .prepare(
-            `SELECT k.guide_id, k.account_id, k.taken, k.note, k.at, COALESCE(a.handle, '') AS handle
+            `SELECT k.guide_id, k.account_id, k.taken, k.note, k.at,
+                    COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
              FROM ack k LEFT JOIN account a ON a.id = k.account_id
              WHERE k.guide_id IN (${marks})
              ORDER BY k.at DESC LIMIT 200`,
@@ -413,6 +419,20 @@ async function acks(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, AckR
   for (const k of results) map.set(k.guide_id, [...(map.get(k.guide_id) || []), k]);
   return map;
 }
+
+/**
+ * A person by id, as a sentence names them — see `displayName`. '' when there is no id at all, so
+ * an unaddressed guide reads as unaddressed. An id whose account row is gone still names somebody.
+ */
+function nameOf(people: Map<string, AccountRow>, id: string): string {
+  if (!id) return "";
+  const a = people.get(id);
+  return displayName({ id, handle: a?.handle, name: a?.name });
+}
+
+/** A verdict or an ack, which carry their author's handle and name joined onto the row. */
+const personName = (r: { account_id: string; handle: string; name: string }) =>
+  r.account_id ? displayName({ id: r.account_id, handle: r.handle, name: r.name }) : "someone";
 
 async function summaries(c: Ctx, rows: GuideRow[]) {
   const me = c.get("account");
@@ -428,18 +448,18 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   // One lookup for the page, not one per row. A guide handed to a group has to say which one, or
   // its row reads as a team-wide share and nobody treats it as theirs.
   const groupIds = [...new Set(rows.map((r) => r.to_group_id).filter(Boolean))];
-  const groups = new Map<string, string>();
+  const groups = new Map<string, { slug: string; name: string }>();
   const groupRows = await inSlices(
     groupIds,
     0,
     async (slice, marks) =>
       (
-        await c.env.DB.prepare(`SELECT id, slug FROM team_group WHERE id IN (${marks})`)
+        await c.env.DB.prepare(`SELECT id, slug, name FROM team_group WHERE id IN (${marks})`)
           .bind(...slice)
-          .all<{ id: string; slug: string }>()
+          .all<{ id: string; slug: string; name: string }>()
       ).results,
   );
-  for (const g of groupRows) groups.set(g.id, g.slug);
+  for (const g of groupRows) groups.set(g.id, { slug: g.slug, name: g.name.trim() || g.slug });
   // A row that belongs to a report says so by name, not by id: "part of Pre-release sweep" is a
   // link someone follows, and a bare eight characters is not.
   const reportIds = [...new Set(rows.map((r) => r.report_id).filter(Boolean))];
@@ -512,11 +532,15 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       url: shareUrl(base, r),
       mine: r.account_id === me,
       from: people.get(r.account_id)?.handle || "",
+      from_name: nameOf(people, r.account_id),
       team: teams.get(r.team_id)?.slug || "",
+      team_name: teams.get(r.team_id)?.name || "",
       to: people.get(r.to_account_id)?.handle || "",
+      to_name: nameOf(people, r.to_account_id),
       // The group it was handed to, by name. A deleted group keeps its id on the row rather than
       // rewriting history to say it went nowhere, so this can be empty while the id is not.
-      to_group: groups.get(r.to_group_id) || "",
+      to_group: groups.get(r.to_group_id)?.slug || "",
+      to_group_name: groups.get(r.to_group_id)?.name || "",
       for_me: r.to_account_id === me,
       report: r.report_id || "",
       report_title: reportTitles.get(r.report_id) || "",
@@ -528,16 +552,24 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       // Empty means transfer, which is what every guide written before bug reports existed is.
       kind: r.kind || "transfer",
       verdict: latest
-        ? { ok: Boolean(latest.ok), by: latest.handle, note: latest.note, at: latest.at }
+        ? {
+            ok: Boolean(latest.ok),
+            by: latest.handle,
+            by_name: personName(latest),
+            note: latest.note,
+            at: latest.at,
+          }
         : null,
       failing: heard.some((v) => !v.ok),
       // The first word back, before any work: who said they are on it, and who passed. A decline
       // is carried in full — the reason is the whole reason to say no out loud, exactly as it is
       // for a failing verdict.
       taken_by: answers.filter((k) => k.taken).map((k) => k.handle || "someone"),
+      // Parallel to `taken_by`, index for index: the same people, as a person reads them.
+      taken_by_names: answers.filter((k) => k.taken).map(personName),
       declined: answers
         .filter((k) => !k.taken)
-        .map((k) => ({ by: k.handle, note: k.note, at: k.at })),
+        .map((k) => ({ by: k.handle, by_name: personName(k), note: k.note, at: k.at })),
       // Your own standing answer, so the row can offer the other one rather than asking again.
       my_ack: own ? { taken: Boolean(own.taken), note: own.note, at: own.at } : null,
       pulled_by: (pulls.get(r.id) || []).map((p) => ({
@@ -956,6 +988,7 @@ app.get("/v1/me", async (c) => {
     account,
     handle: me?.handle || "",
     name: me?.name || "",
+    display: displayName({ id: account, handle: me?.handle, name: me?.name }),
     email: me?.email || "",
     teams,
     // What is counted, not what exists: an archived guide takes up no room, so a warning drawn
@@ -1094,11 +1127,11 @@ app.get("/v1/teams/:slug", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
   if (!team) return err(c, 404, "no such team, or you are not a member");
   const { results: members } = await c.env.DB.prepare(
-    `SELECT a.handle, a.name, m.role, m.joined FROM membership m JOIN account a ON a.id = m.account_id
+    `SELECT a.id, a.handle, a.name, m.role, m.joined FROM membership m JOIN account a ON a.id = m.account_id
      WHERE m.team_id = ? ORDER BY m.joined`,
   )
     .bind(team.id)
-    .all<{ handle: string; name: string; role: string; joined: string }>();
+    .all<{ id: string; handle: string; name: string; role: string; joined: string }>();
   const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM guide WHERE team_id = ?")
     .bind(team.id)
     .first<{ n: number }>();
@@ -1110,7 +1143,8 @@ app.get("/v1/teams/:slug", async (c) => {
     name: team.name,
     role: team.role,
     created: team.created,
-    members,
+    // `display` is what a sentence calls them; the id is already what it falls back to.
+    members: members.map((m) => ({ ...m, display: displayName(m) })),
     guides: n?.n ?? 0,
     channels: chCount?.n ?? 0,
     plan: team.plan,
@@ -1753,8 +1787,11 @@ async function reportSummary(c: Ctx, row: ReportRow, issues: GuideRow[]) {
     updated: row.updated,
     mine: row.account_id === c.get("account"),
     from: people.get(row.account_id)?.handle || "",
+    from_name: nameOf(people, row.account_id),
     team: teams.get(row.team_id)?.slug || "",
+    team_name: teams.get(row.team_id)?.name || "",
     to: people.get(row.to_account_id)?.handle || "",
+    to_name: nameOf(people, row.to_account_id),
     issues: summarised.length,
     open: summarised.filter((i) => i.status === "draft").length,
     failing: summarised.filter((i) => i.failing).length,
