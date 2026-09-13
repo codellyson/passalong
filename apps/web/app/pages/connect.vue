@@ -11,6 +11,11 @@
   stopped being true when the endpoint shipped. What stays true is the shape of the answer: what a
   tool can do here is decided by how it talks, not by whose tool it is.
 
+  A third time, the other way round: it went on saying a client that signs in only with OAuth could
+  not connect, after the OAuth flow and the hub's connector form had shipped — and it never said
+  what Claude's callback URL is, which is the one field that form cannot be filled in without. It
+  also counted the tools, and the count went stale. They are described now, not numbered.
+
   Laid out like the landing: sections separated by space and a hairline rather than four bordered
   cards in a grid. A page where every block is a card has no hierarchy left to spend, and this one
   is a list of alternatives — peers, which read as peers when nothing is boxed.
@@ -65,21 +70,33 @@ passalong setup     # Claude Code: skill + MCP server</code></pre>
       </section>
 
       <section>
-        <p class="eyebrow">ChatGPT · anything that adds remote MCP servers</p>
+        <p class="eyebrow">Claude · ChatGPT · anything that adds remote MCP servers</p>
         <h2>Point it at a URL</h2>
         <div class="say">
           <p>
             Assistants that add outside tools add them as MCP servers reached over a URL. Paste
-            this as the server URL and authenticate with a bearer token from
-            <a href="/hub/settings">your hub</a> — the same named, revocable token everything else
-            here uses. You get nine tools: search and read guides, your inbox and board, publish a
-            guide, file a set of bugs, say whether you are taking one, and say whether it worked.
+            this as the server URL. You get every tool that does not need a working directory:
+            search and read guides, your inbox, board and log, publish a guide, file a set of bugs
+            with their screenshots, say whether you are taking one, and say whether it worked.
           </p>
           <pre><code>https://passalong.dev/v1/mcp</code></pre>
-          <p class="caveat">
-            <b>If the client will only authenticate with OAuth</b>, it cannot connect yet. This
-            server takes a bearer token and does not run an OAuth flow, and no setting on your end
-            changes that.
+          <p>
+            <b>Clients that sign in with OAuth</b> — Claude and ChatGPT — need a connector first.
+            In <a href="/hub/settings">your hub's settings</a>, add a new connector with the
+            callback URL the client gives you, and leave the client secret off unless the client
+            asks for one. The client then takes the connector's id.
+          </p>
+          <p><b>Claude's</b> callback URL is:</p>
+          <pre><code>https://claude.ai/api/mcp/auth_callback</code></pre>
+          <p>
+            In Claude, open Customize → Connectors → Add custom connector and paste the server URL.
+            Under Advanced settings, put the connector's id in OAuth Client ID and leave OAuth
+            Client Secret empty.
+          </p>
+          <p>
+            <b>Clients that send a header</b> can skip the connector and authenticate with a bearer
+            token from <a href="/hub/settings">your hub</a> — the same named, revocable token the
+            CLI and the API use.
           </p>
         </div>
       </section>

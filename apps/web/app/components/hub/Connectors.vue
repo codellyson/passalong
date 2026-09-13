@@ -24,6 +24,16 @@ const clients = ref<Connector[]>([]);
 const adding = ref(false);
 const name = ref("");
 const redirect = ref("");
+/**
+ * The callback nobody could guess. The field is required and exact-matched, and a client's own
+ * setup screen does not always show the value to copy — so the one we know is offered here, next to
+ * the field that needs it, and on /connect. Kept identical in both by test/connect-claude.test.mjs.
+ */
+const CLAUDE_CALLBACK = "https://claude.ai/api/mcp/auth_callback";
+function useClaude() {
+  redirect.value = CLAUDE_CALLBACK;
+  if (!name.value.trim()) name.value = "Claude";
+}
 const confidential = ref(false);
 const busy = ref(false);
 const trouble = ref("");
@@ -162,6 +172,10 @@ async function remove(id: string) {
           Callback URL, copied from its form
         </label>
         <input id="connector-redirect" v-model="redirect" class="w-full" type="url" placeholder="https://…" required>
+        <p class="mt-2 mb-0 font-ui text-xs text-muted">
+          Claude's is <code>https://claude.ai/api/mcp/auth_callback</code>
+          <button type="button" class="btn sm ml-1" @click="useClaude">use it</button>
+        </p>
       </div>
       <button class="btn primary sm" type="submit" :disabled="busy || !redirect.trim()">
         {{ busy ? "Creating…" : "Create connector" }}
