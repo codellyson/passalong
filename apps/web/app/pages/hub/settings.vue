@@ -89,8 +89,8 @@ const { data } = useHub();
       <div>
         <h2 :class="label">Connectors</h2>
         <p :class="blurb">
-          For an assistant that adds Passalong as a remote MCP server. It gets a credential of its
-          own rather than one of your tokens.
+          Assistants that work with your guides for you. Each one gets its own access, which you
+          can disconnect here at any time.
         </p>
       </div>
       <HubConnectors />

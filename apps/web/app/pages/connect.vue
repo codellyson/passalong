@@ -70,7 +70,7 @@ passalong setup     # Claude Code: skill + MCP server</code></pre>
       </section>
 
       <section>
-        <p class="eyebrow">Claude · ChatGPT · anything that adds remote MCP servers</p>
+        <p class="eyebrow">Claude · ChatGPT · Cursor · any assistant with MCP connectors</p>
         <h2>Point it at a URL</h2>
         <div class="say">
           <p>
@@ -80,14 +80,12 @@ passalong setup     # Claude Code: skill + MCP server</code></pre>
             with their screenshots, say whether you are taking one, and say whether it worked.
           </p>
           <pre><code>https://passalong.dev/v1/mcp</code></pre>
+          <!-- Written once, for whichever assistant you use. It read as a Claude page with ChatGPT
+               as an afterthought, when every one of them connects the same way. -->
           <p>
-            <b>In Claude</b>, open Connectors in Claude's settings, choose Add custom connector and
-            paste that address. Leave everything else empty. Claude opens Passalong and asks you to
-            approve — that is the whole setup.
-          </p>
-          <p>
-            <b>In ChatGPT</b>, and other apps that add MCP servers and sign in with OAuth, it works
-            the same way: paste the address, choose OAuth if asked, and approve.
+            In the assistant you use, open its connector settings, add a custom connector and paste
+            that address. Leave everything else empty, and if it asks how to sign in, choose OAuth.
+            It opens Passalong and asks you to approve. That's the whole setup.
           </p>
           <p>
             You can see every app you have approved, and disconnect it, under Connectors in
