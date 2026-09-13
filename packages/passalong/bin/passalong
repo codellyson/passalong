@@ -30,6 +30,7 @@
 //   passalong team use <slug>     switch the current team
 //   passalong setup               install the Claude Code capture skill + register the MCP server
 //   passalong mcp                 run the MCP server over stdio
+//   passalong version             print the installed version (also -v, --version)
 import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -490,5 +491,11 @@ const commands = {
 
 const argv = flags(process.argv.slice(2));
 const cmd = argv._.shift() || "help";
-if (cmd === "--help" || cmd === "-h" || !commands[cmd]) commands.help();
+// The first thing anyone runs when something is off, and until now it printed the help page. The
+// parser only knows `--x`, so `--version` arrives as a flag on an empty command and `-v` as a word;
+// both are caught here, with `version`, before dispatch. Only the number goes to stdout, so
+// `passalong -v` can be read by a script comparing it against the registry.
+if (cmd === "-v" || cmd === "version" || (cmd === "help" && argv.version === true)) {
+  console.log(JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version);
+} else if (cmd === "--help" || cmd === "-h" || !commands[cmd]) commands.help();
 else await commands[cmd](argv).catch((e) => die(e.message));

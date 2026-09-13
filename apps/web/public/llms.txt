@@ -94,6 +94,7 @@ passalong login                 # optional: sync across machines
 - `passalong me [--handle H]` — how teammates address you
 - `passalong take <id>` / `passalong pass <id> <why>` — whether you are doing what you were handed
 - `passalong mcp` — run the MCP server over stdio
+- `passalong version` — print the installed version (also `-v`, `--version`)
 
 ## MCP tools
 

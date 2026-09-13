@@ -48,6 +48,7 @@ passalong team join <link>    accept an invite
 passalong team use <slug>     switch the current team
 passalong setup               install the Claude Code capture skill + register the MCP server
 passalong mcp                 run the MCP server over stdio
+passalong version             print the installed version (also -v, --version)
 ```
 
 ## Teams
