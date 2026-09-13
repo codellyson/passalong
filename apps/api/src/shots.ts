@@ -60,8 +60,13 @@ export async function sweepOrphans(env: ShotEnv, { hours = 24, limit = 500 } = {
       return { swept: 0, deferred: results.length };
     }
   }
-  await env.DB.prepare(`DELETE FROM shot WHERE id IN (${results.map(() => "?").join(",")})`)
-    .bind(...results.map((r) => r.id))
-    .run();
+  // In slices: D1 refuses a statement binding more than 100 parameters, and a batch is up to 500.
+  const ids = results.map((r) => r.id);
+  for (let i = 0; i < ids.length; i += 100) {
+    const slice = ids.slice(i, i + 100);
+    await env.DB.prepare(`DELETE FROM shot WHERE id IN (${slice.map(() => "?").join(",")})`)
+      .bind(...slice)
+      .run();
+  }
   return { swept: results.length, deferred: 0 };
 }

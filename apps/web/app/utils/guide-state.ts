@@ -123,6 +123,27 @@ const STATES = {
   },
 } satisfies Record<string, GuideState>;
 
+/**
+ * Where each state sorts in the list, lowest first: blocked on you, then broken or stalled, then
+ * moving, then done. Keyed by every state so adding one without ranking it fails to compile —
+ * the list used to rank by a hand-kept map that missed `unanswered`, and those sank below landed.
+ */
+const RANK = {
+  waiting: 0,
+  unanswered: 0,
+  unjudged: 0,
+  failing: 1,
+  passed: 1,
+  flight: 2,
+  taken: 2,
+  landed: 3,
+} satisfies Record<keyof typeof STATES, number>;
+
+/** Sort position for a row; a guide with no state — nothing in transit — sorts last. */
+export function rankOf(state: GuideState | null): number {
+  return state ? (RANK[state.key as keyof typeof RANK] ?? 9) : 9;
+}
+
 /** No badge: nothing is in transit, so there is no state to report. */
 export const NO_STATE: GuideState | null = null;
 
