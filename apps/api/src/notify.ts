@@ -324,6 +324,41 @@ const cards = (url: string) => {
 /** How many channels one team's event will fan out to. A bound, not a policy. */
 const MAX_CHANNELS = 8;
 
+/** The service behind a webhook, as its owner would name it. */
+export function roomName(url: string): string {
+  try {
+    const host = new URL(url).hostname;
+    if (host === "chat.googleapis.com") return "Google Chat";
+    if (host.endsWith("slack.com")) return "Slack";
+    if (host === "discord.com" || host === "discordapp.com" || host.endsWith(".discord.com"))
+      return "Discord";
+  } catch {
+    // Not a URL we can read; name it generically.
+  }
+  return "The channel";
+}
+
+/**
+ * A channel's refusal, as the team's owner reads it in settings: who refused, the status in
+ * parentheses for anyone who needs it, and the next step. Never the provider's raw body — that is
+ * logged, and it is a paragraph of somebody else's JSON.
+ */
+export function refusal(room: string, status: number): string {
+  const next =
+    status === 404 || status === 410
+      ? "The webhook may have been removed — paste a new one."
+      : status === 401 || status === 403
+        ? "The webhook no longer has permission to post — paste a new one."
+        : status === 429
+          ? "It's getting too many messages. Later ones should go through."
+          : status >= 500
+            ? "It's having trouble right now. Later messages should go through."
+            : status >= 300 && status < 400
+              ? "The address points somewhere else — paste the webhook exactly as it was given to you."
+              : "It didn't accept the message. If this keeps happening, paste a new webhook.";
+  return `${room} refused the message (${status}). ${next}`;
+}
+
 export interface ChannelRow {
   id: string;
   url: string;
@@ -359,15 +394,21 @@ export async function post(
     if (!res.ok) {
       // The status alone is not a diagnosis. Chat answers a malformed card with a 400 that names
       // the offending field — "Cannot find field: r" — and throwing that away cost a day of a room
-      // being quiet with `refused with 400` as the only evidence. It is read back into the hub, so
-      // it is capped and it is the provider's own words rather than anything of ours.
+      // being quiet with `refused with 400` as the only evidence. So the provider's own words are
+      // logged in full. What is stored is read back into the hub as-is, so it is a sentence for
+      // the team's owner: who refused, the status, and what to do about it.
       const said = await res.text().catch(() => "");
-      error = said
-        ? `refused with ${res.status}: ${said.replace(/\s+/g, " ").slice(0, 160)}`
-        : `refused with ${res.status}`;
+      console.error(
+        "channel refused",
+        channel.id,
+        res.status,
+        said.replace(/\s+/g, " ").slice(0, 500),
+      );
+      error = refusal(roomName(channel.url), res.status);
     }
   } catch (err) {
-    error = (err as Error).message || "did not answer";
+    console.error("channel unreachable", channel.id, (err as Error).message);
+    error = `${roomName(channel.url)} didn't answer. Check the webhook address, or try again later.`;
   }
 
   // Written only when the state changes, so a healthy channel costs no writes at all.

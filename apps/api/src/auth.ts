@@ -94,9 +94,10 @@ export async function verifyPassword(password: string, stored: string): Promise<
 
 /** What a password has to clear. Length does more here than a zoo of character classes. */
 export function passwordProblem(password: string): string | null {
-  if (password.length < MIN_PASSWORD) return `password must be at least ${MIN_PASSWORD} characters`;
-  if (password.length > 200) return "password is too long";
-  if (!password.trim()) return "password cannot be only spaces";
+  if (password.length < MIN_PASSWORD)
+    return `Use a password of at least ${MIN_PASSWORD} characters.`;
+  if (password.length > 200) return "That password is too long. Use 200 characters or fewer.";
+  if (!password.trim()) return "A password can't be only spaces. Add some letters or numbers.";
   return null;
 }
 
