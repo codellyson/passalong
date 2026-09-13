@@ -20,16 +20,22 @@ usePage({
   noindex: true,
 });
 
-const { data, scope, loading, updating, scopeChanging } = useHub();
+const { data, scope, loading, failed, updating, scopeChanging } = useHub();
 
+/** Either half of what the sections are built from gave up loading. The shell's banner says so. */
+const unavailable = computed(() => failed.value.guides || failed.value.board);
 /** Either half of what the sections are built from is still on its way. */
-const waiting = computed(() => loading.value.guides || loading.value.board);
+const waiting = computed(() => !unavailable.value && (loading.value.guides || loading.value.board));
 
 // An account with nothing in it is not looking at a list. It gets the two things that lead
 // somewhere instead, and a heading that says so — but only once the list has actually arrived
 // empty, or every first load would flash the onboarding screen at people with guides.
 const first = computed(
-  () => Boolean(data.value.me) && !waiting.value && data.value.guides.length === 0,
+  () =>
+    Boolean(data.value.me) &&
+    !waiting.value &&
+    !unavailable.value &&
+    data.value.guides.length === 0,
 );
 
 const route = useRoute();
@@ -144,6 +150,9 @@ const doneOpen = computed(() => showDone.value || searching.value);
         <NuxtLink to="/hub">Show all</NuxtLink>
       </p>
 
+      <!-- A list that failed to load draws nothing rather than its empty state: the shell's banner
+           already says what happened and offers Try again. -->
+      <template v-if="!unavailable">
       <section
         id="needs"
         aria-labelledby="lane-needs"
@@ -214,6 +223,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
           </p>
         </template>
       </section>
+      </template>
 
       <HubActivity />
     </div>

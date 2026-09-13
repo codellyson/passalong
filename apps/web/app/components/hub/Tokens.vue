@@ -4,7 +4,7 @@
   you compare across rows when deciding which of four laptops to cut off.
 -->
 <script setup lang="ts">
-const { data, api, json, refresh, loading } = useHub();
+const { data, api, json, refresh, loading, failed } = useHub();
 
 const tokens = computed(() => data.value.tokens);
 const me = computed(() => data.value.me);
@@ -87,7 +87,11 @@ const head =
       </div>
     </div>
 
-    <HubSkeleton v-if="loading.tokens" variant="lines" :rows="2" label="Loading your tokens" />
+    <p v-if="failed.tokens" class="m-0 font-ui text-sm text-danger" role="alert">
+      Your tokens didn't load.
+      <button class="linkish" type="button" @click="refresh(hubKeys.tokens)">Try again</button>
+    </p>
+    <HubSkeleton v-else-if="loading.tokens" variant="lines" :rows="2" label="Loading your tokens" />
     <table v-else-if="tokens.length" class="w-full">
       <thead>
         <tr>

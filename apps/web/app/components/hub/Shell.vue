@@ -36,17 +36,30 @@ useHead({
   ],
 });
 
-const { data, signedIn, maybe, expired, error, loadError, adoptToken, setToken, load } = useHub();
+const {
+  data,
+  signedIn,
+  maybe,
+  expired,
+  error,
+  loadError,
+  meFailed,
+  adoptToken,
+  setToken,
+  start,
+  load,
+} = useHub();
 const route = useRoute();
 
 // Nothing is fetched during SSR: neither credential is visible from the server, so the first
 // render is always the signed-out screen and the client decides from there.
 onMounted(() => {
   adoptToken();
-  // Moving between hub pages remounts this shell. The queries are shared and cached, so a tab
-  // switch shows what is already loaded and refreshes only what has gone stale. Changing team is a
-  // change of query key, which fetches on its own.
-  if (!signedIn.value) load();
+  // Moving between hub pages remounts this shell. That must not refetch: the queries are shared
+  // and cached, and calling `load()` here invalidated all of them on every navigation, which
+  // restarted every retry — so a server that was failing kept the page on its skeleton forever and
+  // the error never got the chance to show. `start()` only begins loading the first time.
+  start();
 });
 
 function onToken(t: string) {
@@ -104,9 +117,12 @@ const active = (to: string) =>
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->
+    <!-- Not when `/v1/me` failed for a reason other than a 401. That is a server that did not
+         answer, not a session that ended, and showing the sign-in card for it tells someone who is
+         signed in that they are not. -->
     <HubSignIn
-      v-if="!signedIn && !maybe"
-      :error="error"
+      v-if="!signedIn && !maybe && !meFailed"
+      :error="error || loadError"
       :expired="expired"
       @token="onToken"
       @signed-in="onSignedIn"
@@ -198,11 +214,15 @@ const active = (to: string) =>
       <!-- Between the guess and the answer there is no data, so the page's own empty states would
            read as facts — "nothing is waiting on you" is the wrong sentence to show someone whose
            list is about to appear. -->
-      <div v-if="!signedIn" class="flex flex-col gap-6">
+      <!-- Once the session check has failed for good, the banner above is the whole message: a
+           skeleton under it would promise a list that is not coming. -->
+      <div v-if="!signedIn && !meFailed" class="flex flex-col gap-6">
         <span class="block h-6 w-48 rounded-pill bg-line-strong" aria-hidden="true" />
         <HubSkeleton :rows="4" label="Loading your guides" />
       </div>
-      <slot v-else />
+      <!-- Only for a known session. After a failed session check the banner is the page: the
+           slot would render its empty states ("Nothing is waiting on you") as if they were facts. -->
+      <slot v-else-if="signedIn" />
     </section>
   </main>
 </template>

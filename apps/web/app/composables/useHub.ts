@@ -222,6 +222,16 @@ function build(queryClient: QueryClient) {
     return failed ? (failed as Error).message : null;
   });
 
+  /**
+   * The session check itself failed, after retrying, for a reason other than a 401. The server did
+   * not answer; nobody was signed out. The shell shows the error with Try again rather than the
+   * sign-in card or a skeleton that would never fill.
+   */
+  const meFailed = computed(() => {
+    const e = meQ.error.value;
+    return Boolean(e && !(e instanceof SignedOut) && !meQ.isFetching.value);
+  });
+
   /** `passalong hub` opens /hub#token=… so the token never hits the server or a log line. */
   function adoptToken() {
     const fromHash = new URLSearchParams(location.hash.slice(1)).get("token");
@@ -232,7 +242,28 @@ function build(queryClient: QueryClient) {
     token.value = store.get();
   }
 
-  /** Start loading, or refresh everything already loaded. */
+  /**
+   * Which lists gave up after retrying with nothing to show. An empty list and a list that failed
+   * to load are different facts, and a page must not print "Nothing is waiting on you" for the
+   * second one.
+   */
+  const failed = computed(() => ({
+    guides: guidesQ.isError.value && !guidesQ.data.value,
+    board: boardQ.isError.value && !boardQ.data.value,
+    log: logQ.isError.value && !logQ.data.value,
+    tokens: tokensQ.isError.value && !tokensQ.data.value,
+  }));
+
+  /**
+   * Begin loading, once. Every hub page's shell calls this on mount; after the first, the queries
+   * are already running and cached, and refetching them on each navigation would restart every
+   * retry and hide a failing server behind a skeleton.
+   */
+  function start() {
+    started.value = true;
+  }
+
+  /** Refresh everything: Try again, or after signing in. */
   async function load(opts: { dropToken?: boolean } = {}) {
     if (opts.dropToken) setToken(null);
     error.value = null;
@@ -396,6 +427,8 @@ function build(queryClient: QueryClient) {
     updating,
     scopeChanging,
     loadError,
+    meFailed,
+    failed,
     scope,
     error,
     editing,
@@ -404,6 +437,7 @@ function build(queryClient: QueryClient) {
     setMe,
     api,
     json,
+    start,
     load,
     refresh,
     onAck,
