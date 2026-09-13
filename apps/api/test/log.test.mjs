@@ -17,21 +17,28 @@ const row = (over = {}) => ({
 
 test("every act renders a sentence in the first person's past tense", () => {
   const said = (over) => line(row(over));
-  assert.equal(said({ act: "published" }), 'published "Add Paystack webhook verification"');
-  assert.equal(said({ act: "pulled" }), 'pulled "Add Paystack webhook verification"');
-  assert.equal(said({ act: "works" }), 'said "Add Paystack webhook verification" works');
+  assert.equal(said({ act: "published" }), 'sent "Add Paystack webhook verification"');
+  assert.equal(said({ act: "pulled" }), 'opened "Add Paystack webhook verification"');
+  assert.equal(said({ act: "works" }), 'said "Add Paystack webhook verification" worked');
   assert.equal(said({ act: "took" }), 'took "Add Paystack webhook verification"');
 });
 
 test("a negative act carries the reason, because the reason is the whole point of saying no", () => {
   assert.equal(
     line(row({ act: "broken", detail: "HMAC is over the parsed body" })),
-    'said "Add Paystack webhook verification" is broken: HMAC is over the parsed body',
+    'said "Add Paystack webhook verification" didn\'t work: HMAC is over the parsed body',
   );
   assert.equal(
     line(row({ act: "passed", detail: "not my service" })),
-    'passed "Add Paystack webhook verification" back: not my service',
+    'passed on "Add Paystack webhook verification": not my service',
   );
+});
+
+test("the log speaks the same words as everything else, not the CLI's verbs", () => {
+  const all = ["published", "pulled", "works", "broken", "took", "passed"]
+    .map((act) => line(row({ act, detail: "why" })))
+    .join("\n");
+  assert.doesNotMatch(all, /published|pulled|broken|\bworks\b/);
 });
 
 test("a positive act never grows a colon, even when a row carries a note", () => {
@@ -39,7 +46,7 @@ test("a positive act never grows a colon, even when a row carries a note", () =>
   // would make a one-word confirmation read like a defence of itself.
   assert.equal(
     line(row({ act: "works", detail: "ran clean" })),
-    'said "Add Paystack webhook verification" works',
+    'said "Add Paystack webhook verification" worked',
   );
   assert.equal(
     line(row({ act: "took", detail: "on it today" })),
@@ -49,7 +56,7 @@ test("a positive act never grows a colon, even when a row carries a note", () =>
 
 test("a guide with no title still produces a sentence", () => {
   // Title is written from the document's frontmatter, and a draft published without one is legal.
-  assert.equal(line(row({ title: "" })), "published a guide");
+  assert.equal(line(row({ title: "" })), "sent a guide");
 });
 
 test("mine is the author, not the actor: every row in a log is something you did", () => {

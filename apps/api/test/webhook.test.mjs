@@ -1,7 +1,16 @@
 // The team channel: which events reach it, what it sends, and which URLs it refuses.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { announce, channelBody, chatCard, line, post, webhookAllowed } from "../src/notify.ts";
+import {
+  announce,
+  channelBody,
+  chatCard,
+  line,
+  post,
+  refusal,
+  roomName,
+  webhookAllowed,
+} from "../src/notify.ts";
 
 test("only URLs worth posting a secret to are accepted", () => {
   assert.equal(webhookAllowed("https://hooks.slack.com/services/T0/B0/xxxx"), true);
@@ -76,7 +85,7 @@ test("a failed verdict reaches the channel, with the sentence every surface show
     });
     assert.equal(h.posts.length, 1);
     const { body } = h.posts[0];
-    assert.match(body.text, /@hybee1 says "Add Paystack webhook verification" does not work/);
+    assert.match(body.text, /@hybee1 said "Add Paystack webhook verification" didn't work/);
     assert.match(body.text, /the signature check rejects valid payloads/);
     assert.match(body.text, /https:\/\/passalong\.dev\/g\/abc12345\/key/);
     assert.equal(
@@ -258,7 +267,7 @@ test("a refusal is recorded, and recovery clears it", async () => {
 const GCHAT = "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t";
 const facts = (over = {}) => ({
   kind: "handoff",
-  text: '@lukman handed you "Invoice creation fails" in khaime / @hybee1',
+  text: 'Lukman sent "Invoice creation fails" to Hybee1 in Khaime',
   title: "Invoice creation fails: integer overflow in invoice_number sequence allocator",
   url: "https://passalong.dev/g/jvj2vckm/r9pfeum5h9kgwbwkh2wju8",
   ...over,
@@ -270,7 +279,7 @@ test("Chat gets a card, because Chat is the one room that cannot make its own", 
   assert.ok(Array.isArray(body.cardsV2));
   const card = body.cardsV2[0].card;
   assert.match(card.header.title, /Invoice creation fails/);
-  assert.match(card.header.subtitle, /@lukman handed you/);
+  assert.match(card.header.subtitle, /Lukman sent "Invoice creation fails" to Hybee1/);
   const buttons = card.sections[0].widgets.at(-1).buttonList.buttons;
   assert.equal(buttons[0].onClick.openLink.url, facts().url);
   assert.equal(buttons[0].text, "Open the guide");
@@ -363,7 +372,7 @@ test("a room without a card still gets the link spelled out", async () => {
     await announce(h.env, {
       kind: "failed",
       team_id: "t1",
-      text: "@ada says it does not work",
+      text: "Ada said it didn't work",
       title: "Fix the payment link",
       url: "https://passalong.dev/g/abc12345/key",
     });
@@ -394,8 +403,9 @@ test("nothing in the card carries a field name Chat does not know", () => {
   assert.deepEqual(Object.keys(button.color).sort(), ["alpha", "blue", "green", "red"]);
 });
 
-test("a refusal records what was refused, not just that it was", async () => {
+test("a refusal is recorded as a sentence, and the provider's own words are logged", async () => {
   const seen = [];
+  const logged = [];
   const env = {
     DB: {
       prepare(sql) {
@@ -404,15 +414,42 @@ test("a refusal records what was refused, not just that it was", async () => {
     },
   };
   const real = globalThis.fetch;
+  const realError = console.error;
+  console.error = (...a) => logged.push(a.join(" "));
   globalThis.fetch = async () =>
     new Response('{ "error": { "message": "Cannot find field: r" } }', { status: 400 });
   try {
     const r = await post(env, { id: "c1", url: GCHAT, failures: 0 }, "hi", facts());
     assert.equal(r.ok, false);
-    assert.match(r.error, /refused with 400: .*Cannot find field: r/);
+    assert.equal(
+      r.error,
+      "Google Chat refused the message (400). It didn't accept the message. If this keeps " +
+        "happening, paste a new webhook.",
+    );
+    // It is read back into the hub as-is, so somebody else's JSON is not what goes there...
+    assert.doesNotMatch(r.error, /Cannot find field/);
     assert.ok(r.error.length <= 200, "it is read back into the hub, so it is capped");
     assert.match(seen[0].sql, /last_error = \?/);
+    // ...but it is still the diagnosis, so it is not thrown away either.
+    assert.ok(logged.some((l) => l.includes("Cannot find field: r")));
   } finally {
     globalThis.fetch = real;
+    console.error = realError;
+  }
+});
+
+test("each refusal names the service and says what to do next", () => {
+  assert.equal(roomName("https://hooks.slack.com/services/T0/B0/x"), "Slack");
+  assert.equal(roomName("https://discord.com/api/webhooks/1/x"), "Discord");
+  assert.equal(roomName(GCHAT), "Google Chat");
+  assert.equal(roomName("https://example.test/hook"), "The channel");
+  assert.equal(
+    refusal("Slack", 404),
+    "Slack refused the message (404). The webhook may have been removed — paste a new one.",
+  );
+  for (const status of [400, 401, 403, 404, 410, 429, 500, 503]) {
+    const said = refusal("Discord", status);
+    assert.match(said, new RegExp(`^Discord refused the message \\(${status}\\)\\. [A-Z]`));
+    assert.ok(said.length <= 200);
   }
 });
