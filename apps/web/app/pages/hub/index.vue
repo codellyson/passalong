@@ -20,11 +20,17 @@ usePage({
   noindex: true,
 });
 
-const { data, scope } = useHub();
+const { data, scope, loading, updating, scopeChanging } = useHub();
+
+/** Either half of what the sections are built from is still on its way. */
+const waiting = computed(() => loading.value.guides || loading.value.board);
 
 // An account with nothing in it is not looking at a list. It gets the two things that lead
-// somewhere instead, and a heading that says so.
-const first = computed(() => Boolean(data.value.me) && data.value.guides.length === 0);
+// somewhere instead, and a heading that says so — but only once the list has actually arrived
+// empty, or every first load would flash the onboarding screen at people with guides.
+const first = computed(
+  () => Boolean(data.value.me) && !waiting.value && data.value.guides.length === 0,
+);
 
 const route = useRoute();
 const text = (v: unknown) => (typeof v === "string" ? v : "");
@@ -115,7 +121,12 @@ const doneOpen = computed(() => showDone.value || searching.value);
           <h1 class="m-0 flex flex-wrap items-center gap-2 text-h2">
             Guides<template v-if="hasTeams"> in <HubScopes /></template>
           </h1>
-          <p class="m-0 font-ui text-sm text-muted">
+          <p v-if="waiting" class="m-0 h-5 font-ui text-sm text-muted" aria-hidden="true">
+            <span class="inline-block h-2.5 w-56 rounded-pill bg-line align-middle" />
+          </p>
+          <p v-else class="m-0 font-ui text-sm text-muted">
+            <!-- Said once, quietly, and only for a refresh of what is already on screen. -->
+            <span v-if="updating || scopeChanging" role="status" class="mr-2 text-muted">Updating…</span>
             <a href="#needs">{{ lanes.needs.length }} need you</a>
             ·
             <a href="#sent">{{ sentCount }} you sent {{ sentCount === 1 ? "is" : "are" }} still out</a>
@@ -133,12 +144,19 @@ const doneOpen = computed(() => showDone.value || searching.value);
         <NuxtLink to="/hub">Show all</NuxtLink>
       </p>
 
-      <section id="needs" aria-labelledby="lane-needs" class="flex scroll-mt-4 flex-col gap-3">
+      <section
+        id="needs"
+        aria-labelledby="lane-needs"
+        class="flex scroll-mt-4 flex-col gap-3 transition-opacity"
+        :class="scopeChanging ? 'opacity-60' : ''"
+        :aria-busy="waiting || scopeChanging"
+      >
         <h2 id="lane-needs" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
           Needs you
           <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ lanes.needs.length }}</span>
         </h2>
-        <ul v-if="lanes.needs.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
+        <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
+        <ul v-else-if="lanes.needs.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
           <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />
         </ul>
         <p v-else class="m-0 font-ui text-sm text-muted">
@@ -146,12 +164,19 @@ const doneOpen = computed(() => showDone.value || searching.value);
         </p>
       </section>
 
-      <section id="sent" aria-labelledby="lane-sent" class="flex scroll-mt-4 flex-col gap-3">
+      <section
+        id="sent"
+        aria-labelledby="lane-sent"
+        class="flex scroll-mt-4 flex-col gap-3 transition-opacity"
+        :class="scopeChanging ? 'opacity-60' : ''"
+        :aria-busy="waiting || scopeChanging"
+      >
         <h2 id="lane-sent" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
           You sent
           <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ sentCount }}</span>
         </h2>
-        <ul v-if="lanes.sent.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
+        <HubSkeleton v-if="waiting" :rows="2" label="Loading what you sent" />
+        <ul v-else-if="lanes.sent.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
           <template v-for="e in lanes.sent" :key="'row' in e ? e.row.g.id : `report-${e.group.report}`">
             <HubInboxRow v-if="'row' in e" :row="e.row" />
             <HubReportRow v-else :group="e.group" :open="searching" />
@@ -172,7 +197,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
         >
           <span id="lane-done" class="flex items-baseline gap-2 text-h3 font-bold text-fg">
             Done
-            <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ lanes.done.length }}</span>
+            <span v-if="!waiting" class="font-ui text-sm font-normal text-muted tabular-nums">{{ lanes.done.length }}</span>
           </span>
           <AppIcon
             name="reveal"

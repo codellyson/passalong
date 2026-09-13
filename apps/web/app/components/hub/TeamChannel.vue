@@ -10,6 +10,7 @@
   last post was refused, which is what a list of channels actually has to answer.
 -->
 <script setup lang="ts">
+import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 
 interface Channel {
@@ -23,9 +24,21 @@ interface Channel {
 
 const props = defineProps<{ team: TeamDetail }>();
 
-const { api, json } = useHub();
+const { api, json, signedIn } = useHub();
+const queryClient = useQueryClient();
 
-const channels = ref<Channel[]>([]);
+const key = computed(() => ["channels", props.team.slug] as const);
+const {
+  data: loaded,
+  isPending: loadingChannels,
+  error: loadFailed,
+} = useQuery({
+  queryKey: key,
+  queryFn: async () =>
+    (await api<{ channels: Channel[] }>(`/v1/teams/${props.team.slug}/channels`))?.channels ?? [],
+  enabled: signedIn,
+});
+const channels = computed(() => loaded.value ?? []);
 const adding = ref(false);
 const name = ref("");
 const url = ref("");
@@ -35,15 +48,10 @@ const trouble = ref("");
 const said = ref<Record<string, string>>({});
 const removing = ref<string | null>(null);
 
-async function load() {
-  try {
-    const answer = await api<{ channels: Channel[] }>(`/v1/teams/${props.team.slug}/channels`);
-    channels.value = answer?.channels || [];
-  } catch (e) {
-    trouble.value = (e as Error).message;
-  }
-}
-onMounted(load);
+const load = () => queryClient.invalidateQueries({ queryKey: key.value });
+watch(loadFailed, (e) => {
+  if (e) trouble.value = e.message;
+});
 
 async function add() {
   if (busy.value) return;
@@ -104,7 +112,8 @@ async function test(id: string) {
        section — three borders deep, on a page where nothing else has any. A hairline and an indent
        say "belongs to the team above" without building another container to say it. -->
   <div class="mt-2 border-t border-line pt-2 pl-3">
-    <ul v-if="channels.length" class="m-0 flex list-none flex-col gap-1 p-0">
+    <HubSkeleton v-if="loadingChannels" variant="lines" :rows="1" label="Loading channels" />
+    <ul v-else-if="channels.length" class="m-0 flex list-none flex-col gap-1 p-0">
       <li
         v-for="channel in channels"
         :key="channel.id"

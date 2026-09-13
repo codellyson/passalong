@@ -4,7 +4,7 @@
   you compare across rows when deciding which of four laptops to cut off.
 -->
 <script setup lang="ts">
-const { data, api, json, load } = useHub();
+const { data, api, json, refresh, loading } = useHub();
 
 const tokens = computed(() => data.value.tokens);
 const me = computed(() => data.value.me);
@@ -42,7 +42,7 @@ async function mint() {
     );
     naming.value = false;
     name.value = "";
-    await load();
+    await refresh(hubKeys.tokens);
   } finally {
     busy.value = false;
   }
@@ -51,7 +51,7 @@ async function mint() {
 async function revoke(id: string) {
   revoking.value = null;
   await api(`/v1/tokens/${id}`, { method: "DELETE" });
-  await load();
+  await refresh(hubKeys.tokens);
 }
 
 const cell = "border-0 border-b border-b-line px-0 py-3 align-middle";
@@ -87,7 +87,8 @@ const head =
       </div>
     </div>
 
-    <table v-if="tokens.length" class="w-full">
+    <HubSkeleton v-if="loading.tokens" variant="lines" :rows="2" label="Loading your tokens" />
+    <table v-else-if="tokens.length" class="w-full">
       <thead>
         <tr>
           <th :class="head">Name</th>

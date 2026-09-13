@@ -36,19 +36,18 @@ useHead({
   ],
 });
 
-const { data, signedIn, maybe, expired, scope, error, adoptToken, setToken, load } = useHub();
+const { data, signedIn, maybe, expired, error, loadError, adoptToken, setToken, load } = useHub();
 const route = useRoute();
 
 // Nothing is fetched during SSR: neither credential is visible from the server, so the first
 // render is always the signed-out screen and the client decides from there.
 onMounted(() => {
   adoptToken();
-  // Moving between hub pages remounts this shell. The state it would fetch is already in memory
-  // and every mutation reloads on its own, so a tab switch is not a reason to refetch.
+  // Moving between hub pages remounts this shell. The queries are shared and cached, so a tab
+  // switch shows what is already loaded and refreshes only what has gone stale. Changing team is a
+  // change of query key, which fetches on its own.
   if (!signedIn.value) load();
 });
-
-watch(scope, () => load());
 
 function onToken(t: string) {
   setToken(t);
@@ -149,12 +148,15 @@ const active = (to: string) =>
            looking at is stale and nothing to do about it but reload. The sentence itself comes
            from the server, which words it for a person. -->
       <div
-        v-if="error"
+        v-if="error || loadError"
+        role="alert"
         class="mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3"
       >
         <div class="min-w-0 grow basis-64">
-          <p class="m-0 font-ui text-sm font-semibold text-danger">That didn't work</p>
-          <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ error }}</p>
+          <p class="m-0 font-ui text-sm font-semibold text-danger">
+            {{ error ? "That didn't work" : "Your guides didn't load" }}
+          </p>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ error || loadError }}</p>
         </div>
         <button class="btn outline danger sm" @click="load()">Try again</button>
         <button class="btn sm" @click="error = null">Dismiss</button>
@@ -196,7 +198,10 @@ const active = (to: string) =>
       <!-- Between the guess and the answer there is no data, so the page's own empty states would
            read as facts — "nothing is waiting on you" is the wrong sentence to show someone whose
            list is about to appear. -->
-      <p v-if="!signedIn" class="font-ui text-sm text-muted">Loading your guides…</p>
+      <div v-if="!signedIn" class="flex flex-col gap-6">
+        <span class="block h-6 w-48 rounded-pill bg-line-strong" aria-hidden="true" />
+        <HubSkeleton :rows="4" label="Loading your guides" />
+      </div>
       <slot v-else />
     </section>
   </main>

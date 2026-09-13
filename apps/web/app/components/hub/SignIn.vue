@@ -8,6 +8,8 @@
   account will be empty until someone hands you something.
 -->
 <script setup lang="ts">
+import { useMutation } from "@tanstack/vue-query";
+
 defineProps<{ error: string | null; expired?: boolean }>();
 const emit = defineEmits<{ token: [string]; signedIn: [] }>();
 
@@ -18,18 +20,21 @@ const mode = ref<Mode>(useRoute().query.forgot ? "forgot" : "login");
 const authError = ref<string | null>(null);
 const notice = ref<string | null>(null);
 
-const COPY: Record<Mode, { title: string; lede: string; submit: string }> = {
+const COPY: Record<Mode, { title: string; lede: string; submit: string; busy: string }> = {
   login: {
+    busy: "Signing in…",
     title: "Sign in to Passalong",
     lede: "Pick up work sent to you, and see where the work you sent got to.",
     submit: "Sign in",
   },
   signup: {
+    busy: "Creating your account…",
     title: "Create your account",
     lede: "Somewhere to keep the guides you send, and to receive the ones sent to you.",
     submit: "Create account",
   },
   forgot: {
+    busy: "Sending…",
     title: "Reset your password",
     lede: "We will email you a link. It works once, and for an hour.",
     submit: "Email me a link",
@@ -50,32 +55,42 @@ const PATHS: Record<Mode, string> = {
   forgot: "/v1/auth/forgot",
 };
 
-async function submit(e: Event) {
+/** Pending while the request is out, so the button can say what it is doing and not be pressed twice. */
+const { mutate: send, isPending: sending } = useMutation({
+  mutationFn: async (o: { mode: Mode; body: { email: string; password?: string } }) => {
+    const res = await fetch(PATHS[o.mode], {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(o.body),
+    });
+    if (!res.ok) {
+      const failed = (await res.json().catch(() => ({}))) as { message?: string };
+      throw new Error(failed.message || "That didn't work. Try again in a moment.");
+    }
+    return o.mode;
+  },
+  onSuccess: (sent) => {
+    // Whether that address has an account is not something an unauthenticated caller gets to
+    // learn, so the same sentence comes back either way.
+    if (sent === "forgot") {
+      notice.value = "If that address has an account, a reset link is on its way.";
+    } else {
+      emit("signedIn");
+    }
+  },
+  onError: (err) => {
+    authError.value = err.message;
+  },
+});
+
+function submit(e: Event) {
+  if (sending.value) return;
   authError.value = null;
   notice.value = null;
   const f = e.target as HTMLFormElement;
   const body: { email: string; password?: string } = { email: field(f, "email") };
   if (mode.value !== "forgot") body.password = field(f, "password");
-  try {
-    const res = await fetch(PATHS[mode.value], {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const failed = (await res.json().catch(() => ({}))) as { message?: string };
-      throw new Error(failed.message || res.statusText);
-    }
-    // Whether that address has an account is not something an unauthenticated caller gets to
-    // learn, so the same sentence comes back either way.
-    if (mode.value === "forgot") {
-      notice.value = "If that address has an account, a reset link is on its way.";
-    } else {
-      emit("signedIn");
-    }
-  } catch (err) {
-    authError.value = (err as Error).message;
-  }
+  send({ mode: mode.value, body });
 }
 
 function useToken(e: Event) {
@@ -121,7 +136,9 @@ function useToken(e: Event) {
             :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'"
           />
         </label>
-        <button class="btn primary" type="submit">{{ copyFor.submit }}</button>
+        <button class="btn primary" type="submit" :disabled="sending" :aria-busy="sending">
+          {{ sending ? copyFor.busy : copyFor.submit }}
+        </button>
 
         <!-- The same treatments the hub uses: a refusal is a danger block, a "we sent it" is not
              a refusal and should not be red. Both were one unstyled line. -->

@@ -10,6 +10,7 @@
   ends up half-added.
 -->
 <script setup lang="ts">
+import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 
 interface Group {
@@ -22,9 +23,21 @@ interface Group {
 
 const props = defineProps<{ team: TeamDetail }>();
 
-const { api, json } = useHub();
+const { api, json, signedIn } = useHub();
+const queryClient = useQueryClient();
 
-const groups = ref<Group[]>([]);
+const key = computed(() => ["groups", props.team.slug] as const);
+const {
+  data: loaded,
+  isPending: loadingGroups,
+  error: loadFailed,
+} = useQuery({
+  queryKey: key,
+  queryFn: async () =>
+    (await api<{ groups: Group[] }>(`/v1/teams/${props.team.slug}/groups`))?.groups ?? [],
+  enabled: signedIn,
+});
+const groups = computed(() => loaded.value ?? []);
 const adding = ref(false);
 const slug = ref("");
 const busy = ref(false);
@@ -49,15 +62,10 @@ const nameOf = (handle: string) => {
   return m ? m.display || personName(m.name, m.handle) : `@${handle}`;
 };
 
-async function load() {
-  try {
-    groups.value =
-      (await api<{ groups: Group[] }>(`/v1/teams/${props.team.slug}/groups`))?.groups || [];
-  } catch (e) {
-    trouble.value = (e as Error).message;
-  }
-}
-onMounted(load);
+const load = () => queryClient.invalidateQueries({ queryKey: key.value });
+watch(loadFailed, (e) => {
+  if (e) trouble.value = e.message;
+});
 
 async function add() {
   if (busy.value || !slug.value.trim()) return;
@@ -118,7 +126,8 @@ async function drop(g: Group) {
   <!-- A hairline and an indent, the same as the channels below it: this belongs to the team above
        rather than being a card inside a card inside a section. -->
   <div class="mt-2 border-t border-line pt-2 pl-3">
-    <ul v-if="groups.length" class="m-0 flex list-none flex-col gap-3 p-0">
+    <HubSkeleton v-if="loadingGroups" variant="lines" :rows="2" label="Loading groups" />
+    <ul v-else-if="groups.length" class="m-0 flex list-none flex-col gap-3 p-0">
       <li v-for="g in groups" :key="g.id" class="flex flex-col gap-2">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
           <b class="font-ui text-sm font-semibold text-fg">{{ g.name || g.slug }}</b>

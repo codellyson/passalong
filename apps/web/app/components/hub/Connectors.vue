@@ -12,6 +12,8 @@
   Listed for the same reason tokens are: a credential you cannot see is one you cannot revoke.
 -->
 <script setup lang="ts">
+import { useQuery, useQueryClient } from "@tanstack/vue-query";
+
 interface Connector {
   id: string;
   name: string;
@@ -24,12 +26,24 @@ interface Connector {
   grants: number;
 }
 
-const { api, json } = useHub();
+const { api, json, signedIn } = useHub();
+const queryClient = useQueryClient();
 
 /** The address people paste. The same one /connect shows. */
 const MCP_URL = "https://passalong.dev/v1/mcp";
 
-const clients = ref<Connector[]>([]);
+const KEY = ["connectors"] as const;
+const {
+  data: loaded,
+  isPending: loadingClients,
+  error: loadFailed,
+} = useQuery({
+  queryKey: KEY,
+  queryFn: async () => (await api<{ clients: Connector[] }>("/v1/oauth/clients"))?.clients ?? [],
+  enabled: signedIn,
+});
+const clients = computed(() => loaded.value ?? []);
+const reload = () => queryClient.invalidateQueries({ queryKey: KEY });
 const name = ref("");
 const redirect = ref("");
 /**
@@ -54,15 +68,9 @@ const cell = "border-0 border-b border-b-line px-0 py-3 align-middle";
 const head =
   "border-0 border-b border-b-line bg-transparent px-0 py-2 font-ui text-xs font-semibold tracking-wide text-muted uppercase";
 
-async function load() {
-  try {
-    const answer = await api<{ clients: Connector[] }>("/v1/oauth/clients");
-    clients.value = answer?.clients || [];
-  } catch (e) {
-    trouble.value = (e as Error).message;
-  }
-}
-onMounted(load);
+watch(loadFailed, (e) => {
+  if (e) trouble.value = e.message;
+});
 
 async function create() {
   if (busy.value) return;
@@ -81,7 +89,7 @@ async function create() {
     name.value = "";
     redirect.value = "";
     confidential.value = false;
-    await load();
+    await reload();
   } catch (e) {
     trouble.value = (e as Error).message;
   } finally {
@@ -93,7 +101,7 @@ async function remove(id: string) {
   try {
     await api(`/v1/oauth/clients/${id}`, { method: "DELETE" });
     removing.value = null;
-    await load();
+    await reload();
   } catch (e) {
     trouble.value = (e as Error).message;
   }
@@ -154,7 +162,8 @@ async function remove(id: string) {
 
     <p v-if="trouble" class="mb-3 font-ui text-sm text-danger">{{ trouble }}</p>
 
-    <table v-if="clients.length" class="w-full">
+    <HubSkeleton v-if="loadingClients" variant="lines" :rows="2" label="Loading connected apps" />
+    <table v-else-if="clients.length" class="w-full">
       <thead>
         <tr>
           <th :class="head">App</th>

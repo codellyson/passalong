@@ -11,6 +11,7 @@
   browser pre-fetched the link; the answer is always a button pressed on this page.
 -->
 <script setup lang="ts">
+import { useQuery } from "@tanstack/vue-query";
 import type { Guide } from "~/types/hub";
 import { boardStates, stateOf } from "~/utils/guide-state";
 
@@ -25,36 +26,32 @@ const router = useRouter();
 const id = computed(() => String(route.params.id));
 const intent = computed(() => (typeof route.query.do === "string" ? route.query.do : ""));
 
-const { data, api, signedIn } = useHub();
+const { data, api, signedIn, loading } = useHub();
+
+/** Already in memory: the list for whichever team is picked, or the board. */
+const listed = computed(
+  () =>
+    [...data.value.guides, ...(data.value.board?.waiting ?? [])].find((x) => x.id === id.value) ||
+    null,
+);
 
 /**
- * The hub loads whichever team is picked, so a guide sent to you in another team may not be in
- * memory. It is looked for once across everything before the page says it is gone. Not through
+ * A guide sent to you in another team is not in the picked team's list, so it is looked for
+ * across everything — the same cached query the guides page uses for "All teams". Not through
  * `GET /v1/guides/:id`: that returns the markdown and counts as opening it.
  */
-const extra = ref<Guide[]>([]);
-const looked = ref(false);
-const pool = computed(() => [
-  ...data.value.guides,
-  ...(data.value.board?.waiting ?? []),
-  ...extra.value,
-]);
-const g = computed(() => pool.value.find((x) => x.id === id.value) || null);
+const inMemoryDone = computed(() => !loading.value.guides && !loading.value.board);
+const everything = useQuery({
+  queryKey: hubKeys.guides("all"),
+  queryFn: async () => (await api<{ guides: Guide[] }>("/v1/guides?scope=all")) ?? { guides: [] },
+  enabled: computed(() => signedIn.value && inMemoryDone.value && !listed.value),
+});
 
-watch(
-  [signedIn, g],
-  async ([yes, found]) => {
-    if (!yes || found || looked.value) return;
-    try {
-      const all = await api<{ guides: Guide[] }>("/v1/guides?scope=all");
-      extra.value = all?.guides ?? [];
-    } catch {
-      // Falls through to "isn't available", which is what the person can act on.
-    } finally {
-      looked.value = true;
-    }
-  },
-  { immediate: true },
+const g = computed(
+  () => listed.value || everything.data.value?.guides.find((x) => x.id === id.value) || null,
+);
+const looked = computed(
+  () => inMemoryDone.value && (Boolean(listed.value) || everything.isFetched.value),
 );
 
 const me = computed(() => data.value.me?.handle || null);
@@ -62,7 +59,6 @@ const state = computed(() =>
   g.value ? stateOf(g.value, boardStates(data.value.board), me.value) : null,
 );
 const status = computed(() => (g.value ? statusLine({ g: g.value, state: state.value }) : null));
-const sender = computed(() => (g.value ? fromName(g.value) : "") || "the sender");
 const team = computed(() => (g.value ? teamLabel(g.value, data.value.me?.teams) : ""));
 
 /** The one question still open for you on this guide, if any. */
@@ -108,16 +104,21 @@ const home = () => router.push("/hub");
         <NuxtLink to="/hub" class="font-ui text-sm">Go to your guides</NuxtLink>
       </template>
 
-      <div v-else-if="looked" class="rounded-3 border border-line bg-raised p-5">
+      <div v-else-if="looked && !everything.isFetching.value" class="rounded-3 border border-line bg-raised p-5">
         <h1 class="mt-0 mb-2 text-h2">This guide isn't available to you</h1>
         <p class="m-0 font-ui text-sm text-muted">
-          It may have been deleted, or sent to a team you're not in. If {{ sender }} sent it to you,
-          ask them to check who it went to.
+          It may have been deleted, or sent to a team you're not in. If someone sent it to you, ask
+          them to check who it went to.
         </p>
         <NuxtLink to="/hub" class="btn mt-4">Go to your guides</NuxtLink>
       </div>
 
-      <p v-else class="font-ui text-sm text-muted">Finding the guide…</p>
+      <div v-else class="flex flex-col gap-4" role="status" aria-label="Finding the guide">
+        <span class="block h-3 w-40 rounded-pill bg-line" aria-hidden="true" />
+        <span class="block h-7 w-4/5 rounded-pill bg-line-strong" aria-hidden="true" />
+        <span class="block h-28 rounded-2 border border-line bg-raised" aria-hidden="true" />
+        <span class="sr-only">Finding the guide…</span>
+      </div>
     </div>
   </HubShell>
 </template>
