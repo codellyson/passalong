@@ -11,6 +11,7 @@
   they look at this screen.
 -->
 <script setup lang="ts">
+import { useQuery } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 
 /**
@@ -21,23 +22,40 @@ import type { TeamDetail } from "~/types/hub";
  */
 const props = defineProps<{ slug: string }>();
 
-const { api, json, load, error } = useHub();
+const { api, json, refresh, error, signedIn } = useHub();
 
-const team = ref<TeamDetail | null>(null);
-const modes = ref<{ stripe: string; paystack: string } | null>(null);
 const seats = ref("1");
 const busy = ref(false);
 
-/** Which providers this deployment can take money with, and the team this block is about. */
-onMounted(async () => {
-  const [m, t] = await Promise.all([
-    api<{ stripe: string; paystack: string }>("/v1/billing").catch(() => null),
-    api<TeamDetail>(`/v1/teams/${encodeURIComponent(props.slug)}`).catch(() => null),
-  ]);
-  modes.value = m;
-  team.value = t;
-  if (t) seats.value = String(t.seats || t.members.length || 1);
+/** Which providers this deployment can take money with. It changes with a deploy, not a click. */
+const { data: modesData } = useQuery({
+  queryKey: hubKeys.billing,
+  queryFn: () => api<{ stripe: string; paystack: string }>("/v1/billing"),
+  enabled: signedIn,
+  staleTime: Number.POSITIVE_INFINITY,
 });
+const modes = computed(() => modesData.value ?? null);
+
+/** Shared with the team list and the write form, so each team is fetched once. */
+const { data: teamData, isPending: loadingTeam } = useQuery({
+  queryKey: computed(() => hubKeys.team(props.slug)),
+  queryFn: async () =>
+    (await api<TeamDetail>(`/v1/teams/${encodeURIComponent(props.slug)}`)) as TeamDetail,
+  enabled: signedIn,
+});
+const team = computed(() => teamData.value ?? null);
+// The seat field starts at what the team has, once, and is then the owner's to change.
+const seeded = ref(false);
+watch(
+  team,
+  (t) => {
+    if (t && !seeded.value) {
+      seats.value = String(t.seats || t.members.length || 1);
+      seeded.value = true;
+    }
+  },
+  { immediate: true },
+);
 
 const available = computed(() =>
   (["stripe", "paystack"] as const).filter((p) => modes.value?.[p] && modes.value[p] !== "unset"),
@@ -108,7 +126,7 @@ async function changeSeats() {
     );
     // The seat count this shows is the one the provider confirmed, so the page waits for the
     // webhook rather than displaying the number that was asked for.
-    await load();
+    await refresh(hubKeys.team(props.slug), hubKeys.me);
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -181,4 +199,5 @@ async function changeSeats() {
       it needs changing.
     </p>
   </div>
+  <HubSkeleton v-else-if="loadingTeam" variant="lines" :rows="2" label="Loading the team's plan" />
 </template>

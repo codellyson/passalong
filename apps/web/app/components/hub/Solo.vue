@@ -7,14 +7,20 @@
   shown "Free" beside an unlimited hub and reasonably conclude one of the two was lying.
 -->
 <script setup lang="ts">
-const { data, api, json, error } = useHub();
+import { useQuery } from "@tanstack/vue-query";
 
-const modes = ref<{ stripe: string; paystack: string } | null>(null);
+const { data, api, json, error, signedIn } = useHub();
+
 const busy = ref(false);
 
-onMounted(async () => {
-  modes.value = await api<{ stripe: string; paystack: string }>("/v1/billing").catch(() => null);
+/** Shared with each team's plan block: one fetch, and it only changes with a deploy. */
+const { data: modesData } = useQuery({
+  queryKey: hubKeys.billing,
+  queryFn: () => api<{ stripe: string; paystack: string }>("/v1/billing"),
+  enabled: signedIn,
+  staleTime: Number.POSITIVE_INFINITY,
 });
+const modes = computed(() => modesData.value ?? null);
 
 const available = computed(() =>
   (["stripe", "paystack"] as const).filter((p) => modes.value?.[p] && modes.value[p] !== "unset"),

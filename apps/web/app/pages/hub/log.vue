@@ -21,7 +21,7 @@ usePage({
   noindex: true,
 });
 
-const { data } = useHub();
+const { data, loading, failed, refresh } = useHub();
 
 /** The one genuinely controlled input on the page, as on the guides page. */
 const q = ref("");
@@ -84,7 +84,14 @@ const months = computed(() => {
   <HubShell heading="Your log">
     <template #sub>What you've sent, opened and answered, newest first.</template>
 
-    <p v-if="!data.log.length" class="empty">
+    <!-- Failed is not empty: "Nothing yet" would tell someone with a year of work that they have
+         none. -->
+    <p v-if="failed.log" class="empty" role="alert">
+      Your log didn't load.
+      <button class="linkish" type="button" @click="refresh(hubKeys.log)">Try again</button>
+    </p>
+    <HubSkeleton v-else-if="loading.log" variant="lines" :rows="6" label="Loading your log" />
+    <p v-else-if="!data.log.length" class="empty">
       Nothing yet. Your log fills up as you send guides, open them, and answer them.
       <NuxtLink to="/hub/write">Write your first guide</NuxtLink>
     </p>

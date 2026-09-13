@@ -6,6 +6,7 @@
   bug is still its own guide someone takes and answers for, so each row says where that one got to.
 -->
 <script setup lang="ts">
+import { useQuery } from "@tanstack/vue-query";
 import type { Guide } from "~/types/hub";
 import { areaLabel, severityLabel, severityTone } from "~/utils/severity";
 
@@ -27,28 +28,26 @@ const route = useRoute();
 const id = computed(() => String(route.params.id));
 const { data, api, signedIn } = useHub();
 
-const report = ref<ReportView | null>(null);
-const trouble = ref("");
-
 usePage({
   title: "Bug report · Passalong",
   description: "One report and its bugs.",
   noindex: true,
 });
 
-async function load() {
-  try {
-    const answer = await api<{ report: ReportView }>(`/v1/reports/${id.value}`);
-    report.value = answer?.report || null;
-  } catch (e) {
-    trouble.value = (e as Error).message;
-  }
-}
-
-// Nothing is fetched during SSR — the credential is not visible from the server — so the shell
-// renders signed-out first and this runs once the client knows who it is.
-onMounted(load);
-watch(signedIn, (yes) => yes && !report.value && load());
+// Nothing is fetched during SSR — the credential is not visible from the server — so the query
+// waits until the client knows who it is.
+const {
+  data: loaded,
+  isPending,
+  error,
+} = useQuery({
+  queryKey: computed(() => ["report", id.value] as const),
+  queryFn: async () =>
+    (await api<{ report: ReportView }>(`/v1/reports/${id.value}`))?.report ?? null,
+  enabled: signedIn,
+});
+const report = computed(() => loaded.value ?? null);
+const trouble = computed(() => (error.value ? error.value.message : ""));
 
 /** Where a bug has got to, in the same words the guides page uses. */
 function state(issue: Guide) {
@@ -126,6 +125,9 @@ const team = computed(() =>
       </div>
     </section>
 
-    <p v-else class="font-ui text-sm text-muted">Loading the report…</p>
+    <div v-else-if="isPending" class="flex flex-col gap-4">
+      <span class="block h-7 w-2/3 rounded-pill bg-line-strong" aria-hidden="true" />
+      <HubSkeleton :rows="4" label="Loading the report" />
+    </div>
   </HubShell>
 </template>

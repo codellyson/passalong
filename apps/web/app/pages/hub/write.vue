@@ -11,6 +11,7 @@
   rather than silently missing.
 -->
 <script setup lang="ts">
+import { useQuery } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 
 usePage({
@@ -19,7 +20,7 @@ usePage({
   noindex: true,
 });
 
-const { data, api, json, load } = useHub();
+const { data, api, json, refresh, signedIn } = useHub();
 const router = useRouter();
 
 const teams = computed(() => data.value.me?.teams ?? []);
@@ -35,21 +36,23 @@ watch(
   { immediate: true },
 );
 
-const members = ref<TeamDetail["members"]>([]);
+// A different team means a different set of people, so whoever was picked is cleared.
 watch(
   () => draft.team,
-  async (slug) => {
+  () => {
     draft.to = "";
-    members.value = [];
-    if (!slug) return;
-    try {
-      const team = await api<TeamDetail>(`/v1/teams/${encodeURIComponent(slug)}`);
-      members.value = (team?.members ?? []).filter((m) => m.handle !== data.value.me?.handle);
-    } catch {
-      // The picker falls back to "everyone in the team", which still sends the guide.
-    }
   },
-  { immediate: true },
+);
+// Shared with Settings, so a team already looked at there is not fetched again. If it fails, the
+// picker falls back to "everyone in the team", which still sends the guide.
+const { data: teamData, isFetching: loadingMembers } = useQuery({
+  queryKey: computed(() => hubKeys.team(draft.team)),
+  queryFn: async () =>
+    (await api<TeamDetail>(`/v1/teams/${encodeURIComponent(draft.team)}`)) as TeamDetail,
+  enabled: computed(() => signedIn.value && Boolean(draft.team)),
+});
+const members = computed(() =>
+  (teamData.value?.members ?? []).filter((m) => m.handle !== data.value.me?.handle),
 );
 
 const ready = computed(() =>
@@ -64,7 +67,7 @@ async function send() {
   trouble.value = null;
   try {
     await api(`/v1/guides/${id}`, json("PUT", { markdown: draftMarkdown(id, draft) }));
-    await load();
+    await refresh(hubKeys.allGuides, hubKeys.board, hubKeys.log, hubKeys.me);
     router.push("/hub#sent");
   } catch (e) {
     trouble.value = (e as Error).message;
@@ -108,8 +111,8 @@ const box =
         </div>
         <div v-if="draft.team">
           <label :class="label" for="g-to">Anyone in particular?</label>
-          <select id="g-to" v-model="draft.to" class="mt-2 w-full">
-            <option value="">Everyone in the team</option>
+          <select id="g-to" v-model="draft.to" class="mt-2 w-full" :aria-busy="loadingMembers">
+            <option value="">{{ loadingMembers ? "Loading people…" : "Everyone in the team" }}</option>
             <option
               v-for="m in members"
               :key="m.handle || m.display || m.name || ''"

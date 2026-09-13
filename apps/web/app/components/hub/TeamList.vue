@@ -7,9 +7,10 @@
   opened rarely and lists a handful.
 -->
 <script setup lang="ts">
+import { useQueries } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 
-const { data, api, json, scope, createTeam } = useHub();
+const { data, api, json, scope, createTeam, signedIn } = useHub();
 const router = useRouter();
 
 const teams = computed(() => data.value.me?.teams || []);
@@ -33,19 +34,24 @@ async function make() {
   naming.value = false;
   name.value = "";
 }
-const details = ref<TeamDetail[]>([]);
 const open = ref<string | null>(null);
 
-async function loadDetails() {
-  const slugs = teams.value.map((t) => t.slug);
-  const got = await Promise.all(
-    slugs.map((s) => api<TeamDetail>(`/v1/teams/${encodeURIComponent(s)}`).catch(() => null)),
-  );
-  details.value = got.filter(Boolean) as TeamDetail[];
-}
-
-onMounted(loadDetails);
-watch(teams, loadDetails);
+// One query per team, keyed the same way as the plan section and the write form, so each team is
+// fetched once however many parts of Settings show it.
+const detailQueries = useQueries({
+  queries: computed(() =>
+    teams.value.map((t) => ({
+      queryKey: hubKeys.team(t.slug),
+      queryFn: async () =>
+        (await api<TeamDetail>(`/v1/teams/${encodeURIComponent(t.slug)}`)) as TeamDetail,
+      enabled: signedIn.value,
+    })),
+  ),
+});
+const details = computed(
+  () => detailQueries.value.map((q) => q.data).filter(Boolean) as TeamDetail[],
+);
+const loadingDetails = computed(() => detailQueries.value.some((q) => q.isPending));
 
 /** "Bo, Mira, Sol and you" — by name, you are always in it, and always last. */
 function who(t: TeamDetail) {
@@ -74,7 +80,13 @@ function guides(t: TeamDetail) {
 
 <template>
   <div>
-    <ul class="m-0 flex list-none flex-col gap-3 p-0">
+    <HubSkeleton
+      v-if="loadingDetails && !details.length"
+      variant="lines"
+      :rows="3"
+      label="Loading your teams"
+    />
+    <ul v-else class="m-0 flex list-none flex-col gap-3 p-0">
       <li v-for="t in details" :key="t.slug" class="flex flex-col">
         <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">

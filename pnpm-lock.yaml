@@ -39,6 +39,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@tanstack/vue-query':
+        specifier: ^5.102.8
+        version: 5.102.8(vue@3.5.42(typescript@5.9.3))
       marked:
         specifier: ^15
         version: 15.0.12
@@ -1241,6 +1244,22 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
+  '@tanstack/match-sorter-utils@8.19.4':
+    resolution: {integrity: sha512-Wo1iKt2b9OT7d+YGhvEPD3DXvPv2etTusIMhMUoG7fbhmxcXCtIjJDEygy91Y2JFlwGyjqiBPRozme7UD8hoqg==}
+    engines: {node: '>=12'}
+
+  '@tanstack/query-core@5.102.8':
+    resolution: {integrity: sha512-ZNjkJ33CqvPNec/6lZBnHqLc3EVGPZ9ySLhYahU9TcuRFdmwXewuj0c4hwSWcGHqEUwcSrKeZ+oGcvPBqXcQcg==}
+
+  '@tanstack/vue-query@5.102.8':
+    resolution: {integrity: sha512-W3Q6Od3FbdttACuavgbICKMFgYCPobvuMiO8tIpqMP073QnREVSaO4ZPqrFqosIbFKikiQTmZhEEbYR9bPsWLA==}
+    peerDependencies:
+      '@vue/composition-api': ^1.1.2
+      vue: ^2.6.0 || ^3.3.0
+    peerDependenciesMeta:
+      '@vue/composition-api':
+        optional: true
+
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
@@ -1356,6 +1375,9 @@ packages:
 
   '@vue/compiler-ssr@3.5.42':
     resolution: {integrity: sha512-xmLk3wLkbizPAiLyomjgFFosf2ys9b5Ghb+oh/k2tnvipNz8OFrQOiTcWCzyK7MpBp9KkyGtfvgfLUivbmuGYA==}
+
+  '@vue/devtools-api@6.6.4':
+    resolution: {integrity: sha512-sGhTPMuXqZ1rVOk32RylztWkfXTRhuS7vgAKv0zjqk8gbsHkJ7xfFf+jbySxt7tWObEJwyKaHMikV/WGDiQm8g==}
 
   '@vue/devtools-api@8.2.1':
     resolution: {integrity: sha512-6u4vXBlIBAC1wMplIZgpyPn7uh/s4Bf6F5bMzvLv+EdJ0aHs/+4B7Ygv864EStQSjRbsRzTko/kUG1A1IejQ3A==}
@@ -3144,6 +3166,9 @@ packages:
     resolution: {integrity: sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A==}
     engines: {node: '>=4'}
 
+  remove-accents@0.5.0:
+    resolution: {integrity: sha512-8g3/Otx1eJaVD12e31UbJj1YzdtVvzH85HV7t+9MJYk/u3XmkOUJ5Ys9wQrf9PCPK8+xn4ymzqYCiZl6QWKn+A==}
+
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
@@ -3824,6 +3849,17 @@ packages:
 
   vue-component-type-helpers@3.3.11:
     resolution: {integrity: sha512-LwcxzeliO9fkQcpJG0PoX8X5kmAhKmH9wkpDLxNabwzkQ9Zeib2YVHwFV4pcWmMLfXVfjr/dSV+DaJ3cIPgSNA==}
+
+  vue-demi@0.14.10:
+    resolution: {integrity: sha512-nMZBOwuzabUO0nLgIcc6rycZEebF6eeUfaiQx9+WSk8e29IbLvPU9feI6tqW4kTo3hvoYAJkMh8n8D0fuISphg==}
+    engines: {node: '>=12'}
+    hasBin: true
+    peerDependencies:
+      '@vue/composition-api': ^1.0.0-rc.1
+      vue: ^3.0.0-0 || ^2.6.0
+    peerDependenciesMeta:
+      '@vue/composition-api':
+        optional: true
 
   vue-devtools-stub@0.1.0:
     resolution: {integrity: sha512-RutnB7X8c5hjq39NceArgXg28WZtZpGc3+J16ljMiYnFhKvd8hITxSWQSQ5bvldxMDU6gG5mkxl1MTQLXckVSQ==}
@@ -5184,6 +5220,20 @@ snapshots:
       tailwindcss: 4.3.3
       vite: 8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)
 
+  '@tanstack/match-sorter-utils@8.19.4':
+    dependencies:
+      remove-accents: 0.5.0
+
+  '@tanstack/query-core@5.102.8': {}
+
+  '@tanstack/vue-query@5.102.8(vue@3.5.42(typescript@5.9.3))':
+    dependencies:
+      '@tanstack/match-sorter-utils': 8.19.4
+      '@tanstack/query-core': 5.102.8
+      '@vue/devtools-api': 6.6.4
+      vue: 3.5.42(typescript@5.9.3)
+      vue-demi: 0.14.10(vue@3.5.42(typescript@5.9.3))
+
   '@types/estree@1.0.9': {}
 
   '@types/node@26.4.1':
@@ -5351,6 +5401,8 @@ snapshots:
     dependencies:
       '@vue/compiler-dom': 3.5.42
       '@vue/shared': 3.5.42
+
+  '@vue/devtools-api@6.6.4': {}
 
   '@vue/devtools-api@8.2.1':
     dependencies:
@@ -7265,6 +7317,8 @@ snapshots:
     dependencies:
       redis-errors: 1.2.0
 
+  remove-accents@0.5.0: {}
+
   require-from-string@2.0.2: {}
 
   resolve-from@5.0.0: {}
@@ -7957,6 +8011,10 @@ snapshots:
       ufo: 1.6.4
 
   vue-component-type-helpers@3.3.11: {}
+
+  vue-demi@0.14.10(vue@3.5.42(typescript@5.9.3)):
+    dependencies:
+      vue: 3.5.42(typescript@5.9.3)
 
   vue-devtools-stub@0.1.0: {}
 
