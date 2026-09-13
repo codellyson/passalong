@@ -60,9 +60,11 @@ const PRICING = {
  */
 const SPECIMEN = {
   title: "Backfill order totals without locking the table",
+  // No id and no repo@branch: the guide page stopped leading with either, and the specimen of it
+  // should not teach a visitor that guides are named by strings like those.
   facts: [
-    { label: "ID", value: "ejdq3v8q", mono: true },
-    { label: "From", value: "orders-api@main", mono: true },
+    { label: "From", value: "Ada Okafor" },
+    { label: "Project", value: "orders-api" },
     { label: "Assumes", value: "Postgres 16 \u00b7 Node 22" },
   ],
   tags: ["migrations", "backfill"],
@@ -114,7 +116,7 @@ const SPECIMEN = {
       </p>
       <p class="ways">
         <a class="go" href="/hub">Open your hub</a>
-        <a class="quiet" href="https://www.npmjs.com/package/passalong">or install the CLI</a>
+        <a class="quiet" href="https://www.npmjs.com/package/passalong">or install the command-line tool</a>
       </p>
     </header>
 
@@ -138,7 +140,7 @@ const SPECIMEN = {
         <dl class="facts">
           <div v-for="f in SPECIMEN.facts" :key="f.label">
             <dt>{{ f.label }}</dt>
-            <dd :class="f.mono ? 'font-code' : ''">{{ f.value }}</dd>
+            <dd>{{ f.value }}</dd>
           </div>
         </dl>
 
@@ -154,34 +156,35 @@ const SPECIMEN = {
     </section>
     <p class="under">
       That is what lands in the next session, and what a teammate opens in a browser. Underneath it
-      is plain markdown with frontmatter — in your repo, in your hub, and in
-      <code>passalong export</code> if you ever want out.
+      is plain markdown: in your repo, in your hub, and yours to export whenever you want out.
     </p>
 
-    <section class="steps" aria-label="How a transfer works">
+    <!-- Told as what a person does, not as the flags that do it. The addressing syntax and the
+         pull command are real and documented on /connect; on the front page they made the product
+         read as a CLI you have to learn before anything happens. -->
+    <section class="steps" aria-label="How sending a guide works">
       <article>
         <p class="n">01</p>
         <h2>Finish the work</h2>
         <p>
-          In an agent session, say <em>“pass this along”</em>, or run <code>passalong share</code>.
-          It distills what you just did into a guide.
+          In Claude Code, say <em>“pass this along”</em>. Or write it in your hub. Either way the
+          work becomes a guide: what was wrong, what you did, and how to check it.
         </p>
       </article>
       <article>
         <p class="n">02</p>
-        <h2>Hand it over</h2>
+        <h2>Send it</h2>
         <p>
-          Trim the draft. You get a short id and a link. Address it to a teammate with
-          <code>--to team/@them</code>, or to the people who do a thing with
-          <code>team/#group</code>.
+          Send it to a teammate, or to the group of people who do that kind of work. They get an
+          email with a link.
         </p>
       </article>
       <article>
         <p class="n">03</p>
-        <h2>Pick it up anywhere</h2>
+        <h2>They pick it up</h2>
         <p>
-          Run <code>passalong pull &lt;id&gt;</code> in the other context, or paste the link to an
-          agent. Nothing to install on the receiving end.
+          They open the link, say they're taking it, and later tell you whether it worked. An agent
+          can pick it up from the same link. Nothing to install on the receiving end.
         </p>
       </article>
     </section>
@@ -192,9 +195,9 @@ const SPECIMEN = {
         <span class="turn">A guide gets picked up.</span>
       </h2>
       <p>
-        Whoever takes it says whether they are on it, and says whether it worked when they have run
-        it — so the person who handed it over never has to ask, and never finds out a week later
-        that nobody did.
+        Whoever takes it says they're taking it, and says whether it worked once they've tried it,
+        so the person who sent it never has to ask, and never finds out a week later that nobody
+        did.
       </p>
     </section>
 
@@ -215,8 +218,8 @@ const SPECIMEN = {
             {{ PRICING.solo.amount }}<span>{{ PRICING.solo.period }}</span>
           </p>
           <p>
-            Every guide you write, synced across your machines with no ceiling, and an MCP endpoint
-            of your own so any agent you use can search them.
+            Every guide you write, on every machine you use, with no limit, and a private connection
+            any assistant you use can search.
           </p>
         </article>
 
@@ -226,8 +229,8 @@ const SPECIMEN = {
             {{ PRICING.team.amount }}<span>{{ PRICING.team.period }}, {{ PRICING.team.extra }}</span>
           </p>
           <p>
-            A shared workspace, handoffs addressed to a person or to the people who do a thing, and a
-            team MCP endpoint every member's agents can search —
+            A shared space, guides sent to a person or to the group who does that kind of work, and
+            a team connection every member's assistants can search,
             <b>for everyone in the team, including the members who never paid for a seat.</b>
           </p>
         </article>
@@ -262,7 +265,8 @@ const SPECIMEN = {
       <!-- The install line lives here rather than in a panel of its own. Writing guides takes one
            command; reading one takes nothing at all, and that asymmetry is the product. -->
       <p class="reassure">
-        <code>npm i -g passalong</code> to write them — and nothing at all to install to read one.
+        Write them in your hub, in Claude Code, or with <code>npm i -g passalong</code>. Reading one
+        needs nothing installed at all.
       </p>
     </section>
 
