@@ -115,14 +115,9 @@ const standing = computed(() => {
 });
 
 const tabs = computed(() => [
-  { to: "/hub", label: "Board", count: waiting.value || null },
-  {
-    to: "/hub/guides",
-    // Archived ones are on a shelf inside that page, not in this number: the count is meant to
-    // say how much there is to look at, and the point of archiving is that there is less.
-    label: "All guides",
-    count: data.value.guides.filter((g) => g.status !== "consumed").length || null,
-  },
+  // One page for guides now: what needs you, what you sent, what is done. The count is what waits
+  // on you, because that is the only number here that asks anything of the reader.
+  { to: "/hub", label: "Guides", count: waiting.value || null },
   // No count. The other two numbers say how much is waiting; a log has nothing waiting in it, and
   // a number beside it would only ever be "how much have you done", which is the stat line this
   // page exists without.
@@ -235,7 +230,7 @@ const tabs = computed(() => [
           The next <code>passalong share</code> will be refused — archive one you are done with.
         </template>
         <template v-else>The free tier stops at this number.</template>
-        <NuxtLink to="/hub/guides">See what is synced</NuxtLink>
+        <NuxtLink to="/hub">See what is synced</NuxtLink>
       </p>
 
       <!-- Between the guess and the answer there is no data, so the page's own empty states would

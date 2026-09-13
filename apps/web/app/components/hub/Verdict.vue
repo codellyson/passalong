@@ -11,7 +11,11 @@
 <script setup lang="ts">
 import type { Guide } from "~/types/hub";
 
-const props = defineProps<{ g: Guide }>();
+const props = defineProps<{
+  g: Guide;
+  /** Open on the reason: the row's own "It didn't" button has already said no. */
+  why?: boolean;
+}>();
 const emit = defineEmits<{ done: [] }>();
 
 const { onVerdict } = useHub();
@@ -19,7 +23,7 @@ const { onVerdict } = useHub();
 /** The server's limit, mirrored so the field can show it rather than silently truncating. */
 const MAX = 280;
 
-const why = ref(false);
+const why = ref(Boolean(props.why));
 const note = ref("");
 const field = ref<HTMLTextAreaElement | null>(null);
 
@@ -37,6 +41,16 @@ async function askWhy() {
   field.value?.focus();
 }
 
+onMounted(() => {
+  if (why.value) field.value?.focus();
+});
+
+/** Opened on the reason, there is no question to go back to: back closes it. */
+function back() {
+  if (props.why) emit("done");
+  else why.value = false;
+}
+
 function send() {
   if (!ready.value) return;
   onVerdict(props.g, false, note.value);
@@ -48,7 +62,7 @@ function send() {
   <div
     class="mt-2 w-full rounded-2 border p-3"
     :class="why ? 'border-danger bg-danger-soft' : 'border-line-strong bg-surface'"
-    @keydown.esc="why ? (why = false) : emit('done')"
+    @keydown.esc="why ? back() : emit('done')"
   >
     <template v-if="!why">
       <p class="m-0 font-ui text-sm font-semibold text-fg">Did it work?</p>
@@ -85,7 +99,7 @@ function send() {
 
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button class="btn primary" :disabled="!ready" @click="send">send it back</button>
-        <button class="btn" @click="why = false">back</button>
+        <button class="btn" @click="back">back</button>
         <span class="ml-auto font-ui text-xs" :class="left > 40 ? 'text-muted' : 'text-danger'">
           {{ left }} left
         </span>

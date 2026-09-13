@@ -65,6 +65,15 @@ const C = {
   soft: "#f7e7de",
 };
 
+/**
+ * The mark, exactly as apps/web/public/favicon.svg draws it: a rust square with two offset cream
+ * bars. Both cards used to draw only the square, which unfurled as a blank tile nobody recognised
+ * as the logo. Satori renders an <img> whose source is a data URI without fetching anything, so the
+ * SVG is inlined here. Keep it in step with favicon.svg.
+ */
+const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${C.accent}"/><rect x="8" y="21" width="34" height="9" rx="4.5" fill="${C.bg}"/><rect x="22" y="34" width="34" height="9" rx="4.5" fill="${C.bg}" opacity=".85"/></svg>`;
+const MARK = `<img src="data:image/svg+xml;base64,${btoa(MARK_SVG)}" width="44" height="44" style="margin-right:18px;" />`;
+
 /** The card markup. Satori supports a flexbox subset, so every container declares display. */
 function card(o: { title: string; id: string; meta: Meta }): string {
   const bits = [
@@ -82,7 +91,7 @@ function card(o: { title: string; id: string; meta: Meta }): string {
 <div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Instrument Sans';">
   <div style="display:flex;flex-direction:column;">
     <div style="display:flex;align-items:center;">
-      <div style="display:flex;width:44px;height:44px;border-radius:10px;background:${C.accent};margin-right:18px;"></div>
+      ${MARK}
       <div style="display:flex;color:${C.accent};font-size:26px;font-weight:600;letter-spacing:4px;">PASSALONG</div>
     </div>
     <div style="display:flex;color:${C.fg};font-size:66px;font-weight:600;line-height:1.1;letter-spacing:-2px;margin-top:44px;">${esc(clip(o.title, 90))}</div>
@@ -108,7 +117,7 @@ function siteCard(): string {
   return `
 <div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Instrument Sans';">
   <div style="display:flex;align-items:center;">
-    <div style="display:flex;width:44px;height:44px;border-radius:10px;background:${C.accent};margin-right:18px;"></div>
+    ${MARK}
     <div style="display:flex;color:${C.accent};font-size:26px;font-weight:600;letter-spacing:4px;">PASSALONG</div>
   </div>
   <div style="display:flex;flex-direction:column;">

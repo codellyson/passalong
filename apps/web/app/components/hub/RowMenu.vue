@@ -72,7 +72,7 @@ function run(work: () => void) {
       </button>
       <NuxtLink
         class="menu-item"
-        :to="{ path: '/hub/guides', query: { follows: g.id } }"
+        :to="{ path: '/hub', query: { follows: g.id } }"
         @click="shut"
       >
         see follow-ups{{ g.children ? ` (${g.children})` : "" }}
