@@ -32,6 +32,8 @@ const COPY: Record<string, { label: string; tone: string }> = {
   lapsed: { label: "Lapsed", tone: "bg-warn-soft text-warn" },
 };
 const badge = computed(() => COPY[plan.value] ?? COPY.free);
+/** The provider as its own brand writes it, not the id this app stores it under. */
+const PROVIDER: Record<string, string> = { stripe: "Stripe", paystack: "Paystack" };
 
 async function subscribe(provider: string) {
   busy.value = true;
@@ -57,38 +59,37 @@ async function subscribe(provider: string) {
       >{{ badge?.label }}</span>
       <span
         v-if="testing"
-        class="rounded-pill bg-warn-soft px-2 py-0.5 font-code text-xs font-semibold text-warn"
-      >test mode — no real money moves</span>
+        class="rounded-pill bg-warn-soft px-2 py-0.5 font-ui text-xs font-semibold text-warn"
+      >Test mode: no real money is charged</span>
     </div>
 
     <p v-if="plan === 'solo'" class="m-0 font-ui text-sm text-muted">
-      Your guides sync across your machines with no ceiling, and you have an MCP endpoint of your
-      own.
+      You can keep as many guides as you like, on every device you use, and connect your own
+      assistants to them.
     </p>
     <p v-else-if="plan === 'lapsed'" class="m-0 font-ui text-sm text-muted">
-      Your Solo subscription lapsed. Nothing has been taken away — every guide you have synced is
-      still there and still yours to export; what stops is adding new ones beyond your ceiling.
+      Your Solo plan has lapsed. Nothing has been taken away: every guide is still here and still
+      yours. New guides past the free limit have to wait until you renew.
     </p>
     <!-- The case that would otherwise read as a contradiction: Free on the badge, no limit in the
          footer. Saying which one is doing the lifting is the whole point of showing both. -->
     <p v-else-if="onATeamSeat" class="m-0 font-ui text-sm text-muted">
-      You are on a seat in a paid team, so your guides already sync without a ceiling. Solo is for
-      when that is no longer true.
+      You're in a paid team, so you can already keep as many guides as you like. Solo is for when
+      you're not.
     </p>
     <!-- Careful with the tense: an account reaches this state by a plan lapsing as well as by
          arriving without one, so it may well have guides already synced. Saying "nothing is synced"
          would be false for exactly the person most likely to be reading it. -->
     <p v-else-if="sync === 'none'" class="m-0 font-ui text-sm text-muted">
-      New guides will not sync until this account is on a plan. What is already synced stays, and
-      everything local still works — <code>passalong share</code> writes to this machine with or
-      without one.
+      New guides can't be sent until you're on a plan. Guides you already have stay where they are.
     </p>
     <p v-else class="m-0 font-ui text-sm text-muted">
-      You are on the free ceiling: {{ data.me?.limit }} synced guides. Solo removes it.
+      You're on the free plan: you're using {{ data.me?.guides }} of {{ data.me?.limit }} guides.
+      Solo removes the limit.
     </p>
 
     <p v-if="!available.length" class="m-0 font-ui text-sm text-muted">
-      No payment provider is configured on this deployment, so there is nothing to subscribe to yet.
+      Paid plans aren't available yet. Check back later.
     </p>
     <div v-else-if="plan !== 'solo'" class="flex flex-wrap gap-2">
       <button
@@ -98,7 +99,7 @@ async function subscribe(provider: string) {
         :disabled="busy"
         @click="subscribe(p)"
       >
-        {{ plan === "lapsed" ? "Renew" : "Subscribe" }} with {{ p }}
+        {{ plan === "lapsed" ? "Renew" : "Subscribe" }} with {{ PROVIDER[p] || p }}
       </button>
     </div>
   </div>

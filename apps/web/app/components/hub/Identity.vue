@@ -19,7 +19,7 @@ const show = computed(
 );
 
 /** The one error anyone actually hits belongs against the field that caused it. */
-const onHandle = computed(() => Boolean(error.value?.includes("handle")));
+const onHandle = computed(() => Boolean(error.value && /handle|@|taken/i.test(error.value)));
 
 const label = "block font-ui text-sm font-medium text-fg mb-2";
 const box = "block w-full max-w-sm";
@@ -48,26 +48,26 @@ async function submit(e: Event) {
 <template>
   <div v-if="show" :class="bare ? '' : 'identity' + (me?.handle ? '' : ' needed')">
     <template v-if="!bare">
-      <h2>{{ me?.handle ? "Your details" : "Claim a handle" }}</h2>
+      <h2>{{ me?.handle ? "Your details" : "Tell your team who you are" }}</h2>
       <p class="muted">
         {{
           me?.handle
-            ? "How teammates address you, and where handoffs are mailed."
-            : "Teammates hand work to a handle. Until you claim one, nothing can be addressed to you."
+            ? "Your name, the @name teammates send work to, and where we email you about it."
+            : "Nothing can be sent to you until teammates have an @name to send it to."
         }}
       </p>
     </template>
 
     <form class="flex flex-col gap-4" @submit.prevent="submit">
       <div :class="box">
-        <label :class="label" for="handle">Handle</label>
+        <label :class="label" for="handle">How teammates mention you</label>
         <!-- The @ is not part of the value, and typing it again is the obvious mistake to make, so
              it sits in the field as furniture rather than in the placeholder. -->
         <div
           class="flex items-center gap-1 rounded-1 border bg-raised pl-3 focus-within:border-accent"
           :class="onHandle ? 'border-danger' : 'border-line-strong'"
         >
-          <span class="font-code text-sm text-muted">@</span>
+          <span class="text-sm text-muted">@</span>
           <input
             id="handle"
             name="handle"
@@ -76,11 +76,12 @@ async function submit(e: Event) {
             required
             spellcheck="false"
             pattern="[a-zA-Z0-9][a-zA-Z0-9-]{1,30}"
-            title="2–31 characters: letters, digits and dashes"
+            title="2 to 31 letters, numbers or dashes"
           />
         </div>
-        <p v-if="onHandle" class="mt-2 mb-0 font-ui text-sm text-danger">
-          {{ error }}. Handles are unique across Passalong.
+        <p v-if="onHandle" class="mt-2 mb-0 font-ui text-sm text-danger">{{ error }}</p>
+        <p v-else class="mt-2 mb-0 font-ui text-sm text-muted">
+          2 to 31 letters, numbers or dashes. Nobody else on Passalong can use the same one.
         </p>
       </div>
 
