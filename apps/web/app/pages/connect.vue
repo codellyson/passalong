@@ -27,7 +27,7 @@
 import { APEX } from "#api/hosts";
 
 usePage({
-  title: "Connect Passalong",
+  title: "Set up Passalong in Claude Code, Cursor, ChatGPT or any MCP app",
   description:
     "Use Passalong from Claude Code, Cursor, Gemini or any HTTP client — what each one can do, and how to set it up.",
   url: `${APEX}/connect`,

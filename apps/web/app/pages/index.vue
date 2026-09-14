@@ -185,12 +185,15 @@ const SPECIMEN = {
     </nav>
 
     <header class="hero">
-      <p class="eyebrow">Finished work, handed over</p>
-      <h1>
+      <!-- The h1 names what the product is, because that is what a search engine reads first and
+           the claim below never says it. The claim keeps the display type as a <p class="headline">:
+           same look, no longer the page's heading. -->
+      <h1 class="eyebrow">Transfer guides for AI coding agents</h1>
+      <p class="headline">
         You already solved this.<br>
         Somewhere else, someone
         <span class="turn">is about to solve it again.</span>
-      </h1>
+      </p>
       <p class="lede">
         Passalong takes what an agent session just worked out — the problem, the decisions, the
         steps, how to check it, and what went wrong on the way — and hands it to the next repo,
