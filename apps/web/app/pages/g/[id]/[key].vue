@@ -87,6 +87,9 @@ const views = computed(() => [
  */
 const answer = (what: string) => `/hub/answer/${encodeURIComponent(id.value)}?do=${what}`;
 const author = computed(() => str(meta.value?.author) || "the sender");
+const followUp = computed(() => `/hub/write?follows=${encodeURIComponent(id.value)}`);
+/** This guide came out of another. Its title is not in the share payload, so it is found in the hub. */
+const parentId = computed(() => str(meta.value?.parent));
 
 const rail = "font-ui text-xs font-semibold tracking-widest text-muted uppercase";
 
@@ -171,6 +174,11 @@ usePage({
       <header class="mb-6 border-b-0 pb-0">
         <h1 class="mt-0">{{ str(meta?.title) || "Untitled guide" }}</h1>
 
+        <p v-if="parentId" class="mt-2 mb-0 font-ui text-sm text-muted">
+          A follow-up: what someone did differently from
+          <a :href="`/hub?q=${encodeURIComponent(parentId)}`">an earlier guide</a>.
+        </p>
+
         <p v-if="guide.pulls" class="mt-2 mb-0 font-ui text-sm text-muted">
           Opened {{ guide.pulls === 1 ? "once" : `${guide.pulls} times` }}
         </p>
@@ -245,6 +253,12 @@ usePage({
           <a class="btn primary" :href="answer('take')">Take it</a>
           <a class="btn" :href="answer('pass')">Pass</a>
           <a class="ml-1 font-ui text-sm" :href="answer('report')">Already on it? Say how it went</a>
+        </p>
+        <!-- A plain link, like the rest of this box: the write page is in the hub, which signs the
+             reader in first if it needs to. -->
+        <p class="mt-3 mb-0 font-ui text-sm text-muted">
+          Did it differently? <a :href="followUp">Write a follow-up</a> so {{ author }} and the next
+          person get your version.
         </p>
 
         <details class="mt-4">

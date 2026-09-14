@@ -75,6 +75,13 @@ function send() {
         <button class="btn outline danger" @click="askWhy">It didn't work</button>
         <button class="btn" @click="emit('done')">Not yet</button>
       </div>
+      <!-- The moment someone knows whether they departed from the guide is this one, so this is
+           where a follow-up is offered — not in a menu they have to know to open. -->
+      <p class="mt-3 mb-0 font-ui text-xs text-muted">
+        Had to change something to make it work?
+        <NuxtLink :to="{ path: '/hub/write', query: { follows: g.id } }">Write a follow-up</NuxtLink>
+        so the next person gets your version.
+      </p>
     </template>
 
     <template v-else>
@@ -104,6 +111,11 @@ function send() {
           {{ left }} characters left
         </span>
       </div>
+      <p class="mt-3 mb-0 font-ui text-xs text-muted">
+        Found a way that does work?
+        <NuxtLink :to="{ path: '/hub/write', query: { follows: g.id } }">Write it up as a follow-up</NuxtLink>
+        — a note is one line; a follow-up is the fix, for everyone after you.
+      </p>
     </template>
   </div>
 </template>

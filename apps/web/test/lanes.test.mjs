@@ -2,7 +2,7 @@
 // which the stripper erases, so they load without Nuxt.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { draftMarkdown } from "../app/utils/guide-draft.ts";
+import { draftMarkdown, followUpDefaults } from "../app/utils/guide-draft.ts";
 import { arrange, laneOf, statusLine } from "../app/utils/lanes.ts";
 import { handleFrom, personName } from "../app/utils/people.ts";
 
@@ -109,4 +109,21 @@ test("a guide written in the browser is the document the CLI would write", () =>
   assert.match(md, /\nteam: khaime\nto: bami\n---\n/);
   assert.match(md, /## Problem\n\nPDFs time out\.\n\n## Steps\n\n1\. Stream it\./);
   assert.doesNotMatch(md, /Solution shape|Gotchas/, "empty sections are left out");
+});
+
+test("a follow-up goes to the original's team, and back to its author", () => {
+  assert.deepEqual(followUpDefaults({ mine: false, team: "khaime", from: "bami" }), {
+    team: "khaime",
+    to: "bami",
+  });
+  assert.deepEqual(
+    followUpDefaults({ mine: true, team: "khaime", from: "me" }),
+    { team: "khaime", to: "" },
+    "your own guide has nobody to send it back to",
+  );
+  assert.deepEqual(
+    followUpDefaults({ mine: false, team: null, from: "bami" }),
+    { team: "", to: "" },
+    "no team, no address",
+  );
 });

@@ -52,6 +52,10 @@ watch(
 /** `?follows=<id>`: guides naming it as their parent. A follow-up does not contain its parent's
     title, so this cannot be a search term. */
 const follows = computed(() => text(route.query.follows));
+/** The guide being followed, by title, when it is one this list holds. */
+const followed = computed(() =>
+  follows.value ? data.value.guides.find((g) => g.id === follows.value) || null : null,
+);
 const searching = computed(() => Boolean(q.value.trim() || follows.value));
 
 const fromBoard = computed(() => boardStates(data.value.board));
@@ -145,9 +149,14 @@ const doneOpen = computed(() => showDone.value || searching.value);
         </div>
       </div>
 
+      <!-- Named, not "one guide": the filter is only useful if you can see which guide it is. -->
       <p v-if="follows" class="-mt-4 mb-0 font-ui text-sm text-muted">
-        Showing guides that follow on from one guide ·
-        <NuxtLink to="/hub">Show all</NuxtLink>
+        Follow-ups to
+        <b class="font-medium text-fg">{{ followed?.title || "this guide" }}</b>: what people did
+        differently.
+        <NuxtLink :to="{ path: '/hub/write', query: { follows } }">Write one</NuxtLink>
+        ·
+        <NuxtLink to="/hub">Show all guides</NuxtLink>
       </p>
 
       <!-- A list that failed to load draws nothing rather than its empty state: the shell's banner

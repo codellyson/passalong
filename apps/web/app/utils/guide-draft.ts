@@ -57,6 +57,22 @@ const SECTIONS: [keyof Draft, string][] = [
   ["gotchas", "Gotchas"],
 ];
 
+/**
+ * Where a follow-up goes by default: the team the original lives in, and back to whoever wrote it.
+ *
+ * A follow-up is written for two people — the next person to do the work, and the author, whose
+ * guide lists it. Sending it to the author by default is what makes them hear about it at all. Your
+ * own guide's follow-up has nobody to send back to, so it goes to the team.
+ */
+export function followUpDefaults(parent: {
+  mine: boolean;
+  team: string | null;
+  from: string | null;
+}): Pick<Draft, "team" | "to"> {
+  const team = parent.team || "";
+  return { team, to: team && !parent.mine && parent.from ? parent.from : "" };
+}
+
 export function draftMarkdown(id: string, d: Draft): string {
   const front = [
     `id: ${id}`,
