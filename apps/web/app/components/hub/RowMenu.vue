@@ -71,7 +71,7 @@ function run(work: () => void) {
       <a class="menu-item" :href="g.url" target="_blank" rel="noopener" @click="shut">Open the guide</a>
       <button class="menu-item" @click="copy(g.url, $event.currentTarget)">Copy link</button>
       <NuxtLink class="menu-item" :to="{ path: '/hub/write', query: { follows: g.id } }" @click="shut">
-        Write a follow-up
+        Add a follow-up
       </NuxtLink>
       <NuxtLink
         v-if="g.children"
@@ -81,7 +81,7 @@ function run(work: () => void) {
       >
         See follow-ups ({{ g.children }})
       </NuxtLink>
-      <p class="menu-note">A follow-up is what you did differently from this guide.</p>
+      <p class="menu-note">A follow-up adds more context to this guide. Anyone who opens it gets that too.</p>
 
       <template v-if="canTake || canJudge">
         <div class="menu-rule" />

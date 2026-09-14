@@ -6,11 +6,12 @@
   asked as a person would ask them — what was wrong, what did you do, how would someone else do it,
   how do they know it worked — and the answers become exactly the document the CLI writes.
 
-  `?follows=<id>` makes it a follow-up: a guide about what you did differently from someone else's.
-  People did not know how to write one, because the only way was `passalong share --follows <id>`
-  copied out of a menu, and nothing anywhere said what one was for. This page says it in a sentence,
-  names the guide it follows, and sends it back to that guide's author by default, so they hear
-  about it and their guide lists it.
+  `?follows=<id>` makes it a follow-up: more context for a guide, written as a guide of its own and
+  linked under the original, so whoever opens the original gets it too. People did not know how to
+  write one, because the only way was `passalong share --follows <id>` copied out of a menu, and
+  nothing anywhere said what one was for. This page says it in a sentence, names the guide it adds
+  to, and sends it to the same people by default: whoever the original went to, or its author when
+  the original is someone else's.
 
   Who it goes to is picked from the team's members by name. A teammate who has never set a handle
   cannot be addressed yet (the server resolves `to:` by handle), so they are listed and explained
@@ -152,8 +153,8 @@ const box =
   <HubShell :heading="follows ? 'Write a follow-up' : 'Write a guide'">
     <template #sub>
       <template v-if="follows">
-        A follow-up is a guide about what you did differently: a step you changed, a fix the
-        original didn't have, a problem it didn't warn about.
+        A follow-up adds more context to a guide: a missing detail, a step that needed explaining,
+        what changed since, or what someone found doing it. Anyone who opens the guide gets it too.
       </template>
       <template v-else>
         Write down what you finished so someone else can repeat it. They'll tell you whether it
@@ -168,19 +169,15 @@ const box =
         class="rounded-2 border border-accent bg-accent-soft px-4 py-3 font-ui text-sm text-muted"
       >
         <p class="m-0">
-          Following on from
+          More context for
           <a :href="parent.url" target="_blank" rel="noopener" class="font-semibold text-fg">
             {{ parent.title || "Untitled guide" }}
           </a>
           <template v-if="!parent.mine && parentAuthor"> by {{ parentAuthor }}</template>.
         </p>
         <p class="mt-1 mb-0">
-          <template v-if="!parent.mine && parentAuthor">
-            {{ parentAuthor }} sees it listed under their guide, and so does the next person who
-            opens it.
-          </template>
-          <template v-else>It's listed under your guide, for the next person who opens it.</template>
-          If it worked exactly as written, you don't need one: just say it worked.
+          It's listed under that guide. Everyone who opens the guide sees it, and agents that pick
+          the guide up read it along with the original.
         </p>
       </div>
       <p
@@ -200,7 +197,7 @@ const box =
       <div>
         <label :class="label" for="g-title">What is it?</label>
         <p :class="hint">
-          {{ follows ? "Say what's different, so it reads clearly next to the original." : "A title someone would recognise in a list." }}
+          {{ follows ? "Say what the extra context is about, so it reads clearly under the original." : "A title someone would recognise in a list." }}
         </p>
         <input
           id="g-title"
@@ -208,7 +205,7 @@ const box =
           class="w-full"
           required
           maxlength="140"
-          :placeholder="follows ? 'Invoice PDFs on Node 22: stream instead of buffering' : 'Invoice PDFs: download link and email attachment'"
+          :placeholder="follows ? 'Invoice PDFs: which environment variables the email step needs' : 'Invoice PDFs: download link and email attachment'"
         />
       </div>
 
@@ -238,10 +235,10 @@ const box =
 
       <div>
         <label :class="label" for="g-problem">
-          {{ follows ? "What was different from the original?" : "What was the problem?" }}
+          {{ follows ? "What context does the guide need?" : "What was the problem?" }}
         </label>
         <p :class="hint">
-          {{ follows ? "What didn't work as written, or didn't fit your setup." : "What was broken or missing, and where." }}
+          {{ follows ? "What's missing, unclear or out of date in the original, and where." : "What was broken or missing, and where." }}
         </p>
         <textarea id="g-problem" v-model="draft.problem" :class="box" rows="4" required />
       </div>
@@ -254,7 +251,7 @@ const box =
 
       <div>
         <label :class="label" for="g-steps">
-          {{ follows ? "How would someone do it your way?" : "How would someone else do it?" }}
+          {{ follows ? "What should someone do with this context?" : "How would someone else do it?" }}
         </label>
         <p :class="hint">The steps, in order. Numbered lines work well.</p>
         <textarea
@@ -291,7 +288,7 @@ const box =
         </button>
         <NuxtLink to="/hub" class="btn">Cancel</NuxtLink>
         <span v-if="!ready" class="font-ui text-sm text-muted">
-          A title, {{ follows ? "what was different" : "the problem" }} and the steps are needed.
+          A title, {{ follows ? "the context" : "the problem" }} and the steps are needed.
         </span>
       </div>
     </form>

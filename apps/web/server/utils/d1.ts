@@ -6,7 +6,10 @@ import type { H3Event } from "h3";
 /** Only what this app actually calls. The full surface is in @cloudflare/workers-types. */
 export interface D1 {
   prepare(query: string): {
-    bind(...values: unknown[]): { first<T>(): Promise<T | null> };
+    bind(...values: unknown[]): {
+      first<T>(): Promise<T | null>;
+      all<T>(): Promise<{ results: T[] }>;
+    };
   };
 }
 

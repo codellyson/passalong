@@ -88,8 +88,9 @@ const views = computed(() => [
 const answer = (what: string) => `/hub/answer/${encodeURIComponent(id.value)}?do=${what}`;
 const author = computed(() => str(meta.value?.author) || "the sender");
 const followUp = computed(() => `/hub/write?follows=${encodeURIComponent(id.value)}`);
-/** This guide came out of another. Its title is not in the share payload, so it is found in the hub. */
-const parentId = computed(() => str(meta.value?.parent));
+/** More context added to this guide, oldest first, and the guide this one adds context to. */
+const followUps = computed(() => guide.value?.followUps ?? []);
+const parent = computed(() => guide.value?.parent ?? null);
 
 const rail = "font-ui text-xs font-semibold tracking-widest text-muted uppercase";
 
@@ -174,9 +175,8 @@ usePage({
       <header class="mb-6 border-b-0 pb-0">
         <h1 class="mt-0">{{ str(meta?.title) || "Untitled guide" }}</h1>
 
-        <p v-if="parentId" class="mt-2 mb-0 font-ui text-sm text-muted">
-          A follow-up: what someone did differently from
-          <a :href="`/hub?q=${encodeURIComponent(parentId)}`">an earlier guide</a>.
+        <p v-if="parent" class="mt-2 mb-0 font-ui text-sm text-muted">
+          More context for <a :href="parent.url">{{ parent.title || "an earlier guide" }}</a>.
         </p>
 
         <p v-if="guide.pulls" class="mt-2 mb-0 font-ui text-sm text-muted">
@@ -201,6 +201,29 @@ usePage({
           <span v-for="t in list(meta?.tags)" :key="t" class="tag">#{{ t }}</span>
         </div>
       </header>
+
+      <!-- Follow-ups are more context for this guide, so a reader has to see them before acting on
+           it — above the document, not after the last section. Plain links: this page runs no
+           script. -->
+      <section
+        v-if="followUps.length"
+        class="mb-6 rounded-2 border border-accent bg-accent-soft px-4 py-3"
+        aria-labelledby="follow-ups"
+      >
+        <p id="follow-ups" :class="rail" class="text-accent">
+          More context · {{ followUps.length }} {{ followUps.length === 1 ? "follow-up" : "follow-ups" }}
+        </p>
+        <p class="mt-1 mb-2 font-ui text-sm text-muted">
+          Added to this guide after it was written. Read these too; where one disagrees with the
+          guide, the follow-up is newer.
+        </p>
+        <ul class="m-0 flex list-none flex-col gap-1 p-0">
+          <li v-for="f in followUps" :key="f.id" class="font-ui text-sm">
+            <a :href="f.url" class="font-medium">{{ f.title || "Untitled follow-up" }}</a>
+            <span class="text-muted"> · {{ f.created.slice(0, 10) }}</span>
+          </li>
+        </ul>
+      </section>
 
       <!-- Verify re-orders someone else's document, and a reader who does not know that is
            reading a guide whose author appears to have started in the middle. It says so, in the
@@ -257,8 +280,8 @@ usePage({
         <!-- A plain link, like the rest of this box: the write page is in the hub, which signs the
              reader in first if it needs to. -->
         <p class="mt-3 mb-0 font-ui text-sm text-muted">
-          Did it differently? <a :href="followUp">Write a follow-up</a> so {{ author }} and the next
-          person get your version.
+          Something missing from this guide? <a :href="followUp">Add a follow-up</a> with the extra
+          context, and everyone who opens it gets that too.
         </p>
 
         <details class="mt-4">

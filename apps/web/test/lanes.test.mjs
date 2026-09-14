@@ -111,18 +111,24 @@ test("a guide written in the browser is the document the CLI would write", () =>
   assert.doesNotMatch(md, /Solution shape|Gotchas/, "empty sections are left out");
 });
 
-test("a follow-up goes to the original's team, and back to its author", () => {
-  assert.deepEqual(followUpDefaults({ mine: false, team: "khaime", from: "bami" }), {
-    team: "khaime",
-    to: "bami",
-  });
+test("a follow-up goes to the people the original is for", () => {
   assert.deepEqual(
-    followUpDefaults({ mine: true, team: "khaime", from: "me" }),
-    { team: "khaime", to: "" },
-    "your own guide has nobody to send it back to",
+    followUpDefaults({ mine: true, team: "khaime", from: "me", to: "ada" }),
+    { team: "khaime", to: "ada" },
+    "context for your own guide reaches whoever you sent it to",
   );
   assert.deepEqual(
-    followUpDefaults({ mine: false, team: null, from: "bami" }),
+    followUpDefaults({ mine: true, team: "khaime", from: "me", to: null }),
+    { team: "khaime", to: "" },
+    "a guide sent to the whole team gets its context sent to the whole team",
+  );
+  assert.deepEqual(
+    followUpDefaults({ mine: false, team: "khaime", from: "bami", to: "me" }),
+    { team: "khaime", to: "bami" },
+    "context for someone else's guide goes to its author",
+  );
+  assert.deepEqual(
+    followUpDefaults({ mine: false, team: null, from: "bami", to: null }),
     { team: "", to: "" },
     "no team, no address",
   );

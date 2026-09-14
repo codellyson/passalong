@@ -152,9 +152,9 @@ const doneOpen = computed(() => showDone.value || searching.value);
       <!-- Named, not "one guide": the filter is only useful if you can see which guide it is. -->
       <p v-if="follows" class="-mt-4 mb-0 font-ui text-sm text-muted">
         Follow-ups to
-        <b class="font-medium text-fg">{{ followed?.title || "this guide" }}</b>: what people did
-        differently.
-        <NuxtLink :to="{ path: '/hub/write', query: { follows } }">Write one</NuxtLink>
+        <b class="font-medium text-fg">{{ followed?.title || "this guide" }}</b>: more context
+        added to it.
+        <NuxtLink :to="{ path: '/hub/write', query: { follows } }">Add one</NuxtLink>
         ·
         <NuxtLink to="/hub">Show all guides</NuxtLink>
       </p>
