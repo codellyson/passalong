@@ -1848,3 +1848,55 @@ tbody tr {
     width: 100vw;
   }
 }
+
+/* The dock's scrollbars. A row of columns has one scrollbar per column plus one along the bottom,
+   and the browser's default bar — a wide grey track on every one of them — turned the dock into a
+   stack of gutters. They are thin, take the line colour rather than their own grey, have no track,
+   and stay faint until you point at the column that scrolls. Scrolling itself is unchanged: wheel,
+   trackpad, keyboard and swipe all still work, and the bar is still there to grab. */
+.dock,
+.dock > main.dock-guide,
+.dock > .dock-col {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color var(--motion) ease;
+}
+.dock:hover,
+.dock > main.dock-guide:hover,
+.dock > .dock-col:hover,
+.dock:focus-within {
+  scrollbar-color: var(--line-strong) transparent;
+}
+/* Engines without `scrollbar-color` (older Safari) take the same shape through the prefixed
+   pseudo-elements. */
+.dock::-webkit-scrollbar,
+.dock > main.dock-guide::-webkit-scrollbar,
+.dock > .dock-col::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.dock::-webkit-scrollbar-track,
+.dock > main.dock-guide::-webkit-scrollbar-track,
+.dock > .dock-col::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dock::-webkit-scrollbar-thumb,
+.dock > main.dock-guide::-webkit-scrollbar-thumb,
+.dock > .dock-col::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.dock:hover::-webkit-scrollbar-thumb,
+.dock > main.dock-guide:hover::-webkit-scrollbar-thumb,
+.dock > .dock-col:hover::-webkit-scrollbar-thumb {
+  background-color: var(--line-strong);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock,
+  .dock > main.dock-guide,
+  .dock > .dock-col {
+    transition: none;
+  }
+}
