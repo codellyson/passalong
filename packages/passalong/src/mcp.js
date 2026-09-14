@@ -96,12 +96,12 @@ export async function serve() {
         "been working on, or wants a standup or a summary of a period, call log — but say that it " +
         "holds what they passed along and not everything they did. Gotchas are " +
         "the highest-value section: record what failed and why.\n" +
-        "A FOLLOW-UP IS A GUIDE, NOT A NOTE. When you worked from a guide and departed from it — " +
-        "changed or skipped a Step, adapted an ASSUMES for this stack, found the fix a failing " +
-        "guide did not have, or hit a Gotcha it does not list — publish what you learned as its " +
-        "own guide with publish_guide `parent` set to that guide's id; the original then lists it " +
-        "as a follow-up. If it worked exactly as written, do not: answer with verify_guide, or " +
-        "every guide collects copies that say nothing new.",
+        "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
+        "more context — a missing detail, a step that needed explaining, what changed since, what " +
+        "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
+        "id. It is listed under the original, and anyone who opens the original, person or agent, " +
+        "gets it too. get_guide and start_guide return a guide's follow-ups after it; read them " +
+        "before acting.",
     },
   );
 
@@ -230,9 +230,9 @@ export async function serve() {
         "After following a guide's Verification section, report the result. This is the only way " +
         "the author learns their handoff did not land — `set_guide_status consumed` says it was " +
         "implemented, this says it actually works. A failing verdict must say what went wrong. " +
-        "If doing it taught you something the guide did not say — a flag it needed, a step that " +
-        "was wrong for this stack — publish that as its own guide with publish_guide `parent` set " +
-        "to this id. The author sees it as a follow-up; a verdict note is one line and gets lost.",
+        "If the guide needs more context than a one-line note holds — a missing detail, a step " +
+        "that needed explaining, what you found doing it — publish that as a follow-up: its own " +
+        "guide, with publish_guide `parent` set to this id. Whoever opens this guide then gets it too.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         ok: z.boolean().describe("true if the Verification steps passed"),
@@ -314,8 +314,9 @@ export async function serve() {
               ? `NOT taken (${r.ack_error}) — retry with ack_guide before reporting that you have it`
               : "not logged in, so no handoff was taken";
         const siblings = await related(meta);
+        const context = await passalong.followUps(meta);
         return text(
-          `${lead}${r.markdown}${siblings}` +
+          `${lead}${r.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
             `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->` +
             `\n${passalong.followUpNote(meta)}`,
         );
@@ -358,13 +359,16 @@ export async function serve() {
               "Verification and answer with verify_guide.\n\n"
             : "";
         const siblings = await related(meta);
+        // Follow-ups are more context for this guide, so they come with it — after the document,
+        // never inside it, so the guide an agent writes back out is still only the guide.
+        const context = await passalong.followUps(meta);
         // After the document, with the other trailing comments, not in front of it. An
         // instruction that arrives with the payload is what gets read — but anything before the
         // opening `---` stops the frontmatter being frontmatter, and this fires on every guide
         // anyone was handed rather than only on bugs. The bug lead stays where it is: it is a
         // warning against executing the document, so being read first is its whole job.
         return text(
-          `${lead}${markdown}${siblings}` +
+          `${lead}${markdown}${siblings}${context ? `\n\n${context}` : ""}` +
             `\n\n<!-- passalong: ${from}; written to ${path} -->` +
             `\n${passalong.handoffNudge(meta)}` +
             `\n${passalong.followUpNote(meta)}`,
@@ -429,8 +433,8 @@ export async function serve() {
           .string()
           .optional()
           .describe(
-            "id or share link of the guide this one came out of — set it when this is what you " +
-              "learned doing someone else's guide, so theirs lists it as a follow-up",
+            "id or share link of the guide this one adds context to — set it and this is " +
+              "published as that guide's follow-up: listed under it, and read by whoever opens it",
           ),
       },
     },
