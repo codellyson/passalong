@@ -137,6 +137,7 @@ usePage({
   // halves share a host again at the cutover.
   image: `${url.value}/og.png`,
   noindex: true,
+  type: "article",
 });
 </script>
 

@@ -3131,6 +3131,8 @@ const VIEW_HEADERS = {
     "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' https: data:; manifest-src 'self'; base-uri 'none'; form-action 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
+  // A share link is for whoever holds it. The raw markdown has no <head> for a noindex meta.
+  "x-robots-tag": "noindex, nofollow, noarchive",
 };
 
 app.get("/g/:id/:key{.+\\.md}", async (c) => {

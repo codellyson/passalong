@@ -1042,12 +1042,28 @@ form.join label {
   padding: var(--s-4) 0;
   flex-wrap: wrap;
 }
+.masthead .doors {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  margin: 0;
+}
+.masthead .quiet {
+  color: var(--muted);
+  text-decoration: none;
+}
+.masthead .quiet:hover {
+  color: var(--fg);
+}
 
 .hero {
   padding: clamp(var(--s-7), 9vh, var(--s-9)) 0 0;
   text-align: center;
 }
-.hero h1 {
+/* `.headline` is the same display line when it is not the page's heading: the landing names the
+   product in a small `h1.eyebrow` for search engines, and sets its claim in a <p> styled like this. */
+.hero h1:not(.eyebrow),
+.hero .headline {
   /* Serif, and this is the argument the page is making: the thing this product makes is written
      prose that someone else reads. Setting the claim in the face that carries guides says that
      before any of the words do — and a grotesque display line says only "software". */
@@ -1513,6 +1529,10 @@ form.join label {
   color: var(--muted);
   margin-bottom: var(--s-3);
 }
+/* An eyebrow that is the page's h1 keeps the eyebrow's spacing, not the heading's. */
+h1.eyebrow {
+  margin: 0 0 var(--s-3);
+}
 
 /* ---- leaf overrides --------------------------------------------------------------------------
    Everything below refines a component defined earlier, so it is more specific than the rule it
@@ -1714,7 +1734,8 @@ details.more .invite-paste {
   .hero {
     text-align: left;
   }
-  .hero h1,
+  .hero h1:not(.eyebrow),
+  .hero .headline,
   .lede {
     margin-inline: 0;
   }

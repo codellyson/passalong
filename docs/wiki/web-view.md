@@ -130,6 +130,15 @@ share links, invites, resets and screenshot URLs under its own name — one guid
 each carrying a key, which is exactly what the `www` redirect exists to prevent. `PUBLIC_ORIGIN`
 now names the apex, so both hosts produce the same link and only the apex appears in anything new.
 
+Plain `http` on either serving host 308s to `https` on the same host, so a legacy link stays on
+the legacy host. The scheme comes from `x-forwarded-proto` (or `cf-visitor`), never from the request
+URL: the runtime may rebuild that URL as `http:` for an https visitor, and believing it would
+redirect every request to itself.
+
+Search engines see only the apex. The landing and `/connect` pass `url` to `usePage()` with `APEX`
+from `hosts.ts`, which emits their canonical link, so the legacy host's copies point home.
+`/sitemap.xml` lists the same two pages, and `robots.txt` names it.
+
 The redirect runs from `apps/web/server/middleware/0.canonical.ts`, not from Hono. It had to move
 there at the cutover: the mounted app only ever sees `/v1/*`, `/health` and the two machine routes,
 so a page request to `www` would never have reached a middleware inside it.

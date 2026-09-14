@@ -15,6 +15,12 @@
   no script here, and there never will be.
 -->
 <script setup lang="ts">
+import { APEX } from "#api/hosts";
+import { published } from "#shared/pages";
+
+/** The closer points at the docs once they are written, and not before. */
+const docsPublished = published("/docs");
+
 usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
@@ -25,8 +31,10 @@ usePage({
     "A baton pass between repos, machines, agent sessions and teammates — finished work, in a form the next agent can act on.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
-  // switches on the moment there is something to show.
-  image: `${useRequestURL().origin}/og.png`,
+  // switches on the moment there is something to show. The apex rather than the serving host, so
+  // the legacy host's copy of this page points at the same card and the same canonical.
+  image: `${APEX}/og.png`,
+  url: `${APEX}/`,
 });
 
 /**
@@ -48,6 +56,87 @@ const PRICING = {
   /** Plain mailto: this page runs no script and its CSP allows none, so a form is not an option. */
   contact: "contact@passalong.dev",
 };
+
+/**
+ * What a search engine is told about the product, as JSON-LD.
+ *
+ * Built from PRICING so the price in the markup cannot drift from the price on the page. A data
+ * block rather than script: browsers never execute it, so the landing's CSP, which allows no script
+ * at all, is untouched — and server/plugins/csp.ts knows not to count it as one.
+ *
+ * Only what the page itself says. No ratings or reviews: there are none to cite.
+ */
+const perMonth = (amount: string) => Number(amount.replace(/[^0-9.]/g, ""));
+const STRUCTURED = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${APEX}/#organization`,
+      name: "Passalong",
+      url: `${APEX}/`,
+      logo: `${APEX}/icon-512.png`,
+      email: PRICING.contact,
+      sameAs: [
+        "https://www.npmjs.com/package/passalong",
+        "https://github.com/codellyson/passalong",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${APEX}/#website`,
+      name: "Passalong",
+      url: `${APEX}/`,
+      publisher: { "@id": `${APEX}/#organization` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${APEX}/#software`,
+      name: "Passalong",
+      url: `${APEX}/`,
+      description:
+        "Hand finished work from one repo, machine, agent session or teammate to the next, as a transfer guide an AI agent can act on. A CLI, an MCP server and a sync service.",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "macOS, Linux, Windows",
+      publisher: { "@id": `${APEX}/#organization` },
+      offers: [
+        {
+          "@type": "Offer",
+          name: "Local",
+          description: "The CLI against a local store, with no account.",
+          price: 0,
+          priceCurrency: "USD",
+        },
+        {
+          "@type": "Offer",
+          name: "Solo",
+          price: perMonth(PRICING.solo.amount),
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: perMonth(PRICING.solo.amount),
+            priceCurrency: "USD",
+            billingDuration: "P1M",
+          },
+        },
+        {
+          "@type": "Offer",
+          name: "Team",
+          description: `Three seats, ${PRICING.team.extra}.`,
+          price: perMonth(PRICING.team.amount),
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: perMonth(PRICING.team.amount),
+            priceCurrency: "USD",
+            billingDuration: "P1M",
+          },
+        },
+      ],
+    },
+  ],
+};
+useHead({ script: [{ type: "application/ld+json", innerHTML: JSON.stringify(STRUCTURED) }] });
 
 /**
  * The specimen guide, as fields rather than as a text file.
@@ -95,20 +184,18 @@ const SPECIMEN = {
 
 <template>
   <main class="wide landing">
-    <nav class="masthead">
-      <AppBrand />
-      <!-- One, not two. The hub *is* the sign-in, so a masthead offering both was the same door
-           twice. This is for the returning visitor; the claim below is for everyone else. -->
-      <a class="btn" href="/hub">Sign in</a>
-    </nav>
+    <AppMasthead />
 
     <header class="hero">
-      <p class="eyebrow">Finished work, handed over</p>
-      <h1>
+      <!-- The h1 names what the product is, because that is what a search engine reads first and
+           the claim below never says it. The claim keeps the display type as a <p class="headline">:
+           same look, no longer the page's heading. -->
+      <h1 class="eyebrow">Transfer guides for AI coding agents</h1>
+      <p class="headline">
         You already solved this.<br>
         Somewhere else, someone
         <span class="turn">is about to solve it again.</span>
-      </h1>
+      </p>
       <p class="lede">
         Passalong takes what an agent session just worked out — the problem, the decisions, the
         steps, how to check it, and what went wrong on the way — and hands it to the next repo,
@@ -267,6 +354,7 @@ const SPECIMEN = {
       <p class="reassure">
         Write them in your hub, in Claude Code, or with <code>npm i -g passalong</code>. Reading one
         needs nothing installed at all.
+        <template v-if="docsPublished"><a href="/docs">The docs</a> cover the rest.</template>
       </p>
     </section>
 

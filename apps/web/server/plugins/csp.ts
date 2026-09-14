@@ -24,8 +24,12 @@ export default defineNitroPlugin((nitroApp) => {
 
     // Every `<script` the renderer wrote, including the JSON payload block. Tagging an external
     // <script src> too is harmless and keeps this from having to reason about which is which.
+    //
+    // Except JSON-LD. The landing carries a `application/ld+json` block for search engines, which
+    // no browser executes and no CSP governs. Counting it as script would hand the landing the
+    // hub's nonce policy in place of its stricter one.
     const stamp = (chunk: string) =>
-      chunk.replace(/<script(?![^>]*\bnonce=)/g, () => {
+      chunk.replace(/<script(?![^>]*\bnonce=)(?![^>]*type="application\/ld\+json")/g, () => {
         stamped = true;
         return `<script nonce="${nonce}"`;
       });
