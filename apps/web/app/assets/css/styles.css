@@ -1908,3 +1908,69 @@ tbody tr {
     transition: none;
   }
 }
+
+/* The dock's motion. Opening or closing a follow-up is a page load — this page runs no script — so
+   the movement comes from cross-document view transitions, which the browser runs between the two
+   pages with CSS alone. Columns keep their place by position (the CSP allows no inline styles, so a
+   column cannot carry its own name): the columns already open slide and resize to their new widths,
+   a column that appears slides in from the right, one that goes fades out, and the guide moves
+   between its full-page layout and its column. A browser without cross-document view transitions
+   simply loads the page, as before. Off entirely for anyone who asked for less motion. */
+@view-transition {
+  navigation: auto;
+}
+main.guide-page {
+  view-transition-name: dock-guide;
+}
+.dock > section.dock-col:nth-of-type(1) {
+  view-transition-name: dock-col-1;
+}
+.dock > section.dock-col:nth-of-type(2) {
+  view-transition-name: dock-col-2;
+}
+.dock > section.dock-col:nth-of-type(3) {
+  view-transition-name: dock-col-3;
+}
+.dock > section.dock-col:nth-of-type(4) {
+  view-transition-name: dock-col-4;
+}
+::view-transition-group(*) {
+  animation-duration: 260ms;
+  animation-timing-function: var(--ease-out);
+}
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    transform: translateX(2.5rem);
+  }
+}
+@keyframes dock-out {
+  to {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+}
+::view-transition-new(dock-col-1):only-child,
+::view-transition-new(dock-col-2):only-child,
+::view-transition-new(dock-col-3):only-child,
+::view-transition-new(dock-col-4):only-child {
+  animation: dock-in 260ms var(--ease-out) both;
+}
+::view-transition-old(dock-col-1):only-child,
+::view-transition-old(dock-col-2):only-child,
+::view-transition-old(dock-col-3):only-child,
+::view-transition-old(dock-col-4):only-child {
+  animation: dock-out 180ms ease-in both;
+}
+/* The jump to a newly opened column, from its #f-<id> fragment. */
+.dock {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+  .dock {
+    scroll-behavior: auto;
+  }
+}

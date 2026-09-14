@@ -143,6 +143,7 @@ usePage({
 <template>
   <div v-if="guide" :class="dockOpen ? 'dock' : ''">
     <main
+      class="guide-page"
       :class="
         dockOpen
           ? 'dock-guide'
