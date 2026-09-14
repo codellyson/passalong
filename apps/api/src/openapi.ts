@@ -251,9 +251,22 @@ export function openapi(origin: string) {
           operationId: "listFollowUps",
           summary: "The guides that came out of this one, one level down.",
           description:
-            "Guides whose `parent:` names this one, newest first, filtered to what you can read. " +
-            "One level: walk it for more.",
-          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+            "Guides whose `parent:` names this one — its follow-ups, more context for it — " +
+            "filtered to what you can read. One level: walk it for more. Newest first, up to 100, " +
+            "as summaries. With `markdown=1`, each summary also carries the follow-up's `markdown`, " +
+            "oldest first (context reads in the order it was added), at most 20, and any one over " +
+            "32 KB is cut with a marker saying so. Neither form counts as opening the follow-ups.",
+          parameters: [
+            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "markdown",
+              in: "query",
+              required: false,
+              description:
+                "1 to include each follow-up's markdown, oldest first, capped at 20 and 32 KB each",
+              schema: { type: "string", enum: ["1"] },
+            },
+          ],
           responses: {
             200: { description: "The follow-ups.", content: { "application/json": {} } },
             404: { description: "No such guide." },

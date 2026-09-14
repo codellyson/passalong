@@ -81,6 +81,8 @@ import {
 } from "./email.js";
 import {
   AREAS,
+  clipFollowUp,
+  FOLLOW_UPS_MAX,
   type Meta,
   parseMeta,
   SETTABLE,
@@ -2878,19 +2880,36 @@ app.get("/v1/guides/:id", async (c) => {
  * descendant of a guide that travelled is a response nobody renders. Readable on the parent is the
  * gate, and each child is filtered again on its own — a follow-up published into a team you are
  * not in does not appear under a guide you can see. Drafts are not children yet.
+ *
+ * `?markdown=1` is the reader's form: a follow-up is more context for the guide, so whoever opens
+ * the original — an agent through get_guide or start_guide, a person through `passalong pull` —
+ * gets the follow-ups' content with it. That form is oldest first, because context reads in the
+ * order it was added and a later follow-up may build on or correct an earlier one; at most
+ * `FOLLOW_UPS_MAX` of them, each clipped by `clipFollowUp`. Without it the listing is newest first,
+ * up to 100, summaries only, as the hub has always read it.
+ *
+ * Neither form records a pull on the children. Fetching context for a guide is not the reader
+ * opening those guides: a pull row moves a guide into its author's "landed" queue and mails them,
+ * and a follow-up nobody chose to open must not tell its author it was picked up.
  */
 app.get("/v1/guides/:id/children", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
   const account = c.get("account");
+  const withMarkdown = ["1", "true"].includes(c.req.query("markdown") || "");
   const { results } = await c.env.DB.prepare(
     `SELECT * FROM guide WHERE parent_id = ? AND status <> 'draft'
        AND (account_id = ? OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?))
-     ORDER BY created DESC LIMIT 100`,
+     ORDER BY created ${withMarkdown ? "ASC" : "DESC"} LIMIT ?`,
   )
-    .bind(found.row.id, account, account)
+    .bind(found.row.id, account, account, withMarkdown ? FOLLOW_UPS_MAX : 100)
     .all<GuideRow>();
-  return c.json({ guides: await summaries(c, results) });
+  const guides = await summaries(c, results);
+  if (!withMarkdown) return c.json({ guides });
+  const markdown = new Map(results.map((r) => [r.id, clipFollowUp(r.id, r.markdown)]));
+  return c.json({
+    guides: guides.map((g) => ({ ...g, markdown: markdown.get(g.id) || "" })),
+  });
 });
 
 app.patch("/v1/guides/:id/status", async (c) => {
