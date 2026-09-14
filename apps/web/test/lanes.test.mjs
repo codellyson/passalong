@@ -133,3 +133,22 @@ test("a follow-up goes to the people the original is for", () => {
     "no team, no address",
   );
 });
+
+test("the follow-up dock is an address: open, close, and room for four", async () => {
+  const { dockHref, parseWith, withClosed, withOpened } = await import("../app/utils/dock.ts");
+  assert.deepEqual(withOpened(["a"], "b"), ["a", "b"]);
+  assert.deepEqual(withOpened(["a", "b"], "a"), ["a", "b"], "already open is a no-op");
+  assert.deepEqual(
+    withOpened(["a", "b", "c", "d"], "e"),
+    ["b", "c", "d", "e"],
+    "past four, the one opened first makes room",
+  );
+  assert.deepEqual(withClosed(["a", "b"], "a"), ["b"]);
+  assert.equal(dockHref("/g/x/k", ["a", "b"], { jump: "b" }), "/g/x/k?with=a,b#f-b");
+  assert.equal(dockHref("/g/x/k", [], { verify: true }), "/g/x/k?view=verify");
+  assert.equal(dockHref("/g/x/k", []), "/g/x/k");
+  assert.deepEqual(parseWith("abc123, abc123,../x,def456", /^[a-z0-9]{6,12}$/), [
+    "abc123",
+    "def456",
+  ]);
+});

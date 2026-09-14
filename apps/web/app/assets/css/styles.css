@@ -1776,3 +1776,75 @@ tbody tr {
     color var(--motion) ease,
     border-color var(--motion) ease;
 }
+
+/* ---- follow-up dock -----------------------------------------------------------------------------
+   A guide with its follow-ups open beside it, one column each, like a TweetDeck column. Drawn by
+   the server from `?with=` — this page runs no script — so everything here is layout: columns in a
+   row that scrolls sideways, each column scrolling on its own, and on a phone one full-width column
+   at a time that snaps into place as you swipe. Nothing animates. */
+.dock {
+  display: flex;
+  height: 100dvh;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  background: var(--surface);
+}
+.dock > main.dock-guide,
+.dock > .dock-col {
+  flex: 0 0 auto;
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-align: start;
+  border-right: 1px solid var(--line);
+}
+.dock > main.dock-guide {
+  width: min(40rem, 100vw);
+  max-width: none;
+  margin: 0;
+  padding: 0 var(--s-5) var(--s-7);
+  background: var(--bg);
+}
+.dock-col {
+  width: min(28rem, 100vw);
+  background: var(--surface-raised);
+}
+.dock-col-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+.dock-col-body {
+  padding: var(--s-4) var(--s-4) var(--s-7);
+  font-size: var(--t-sm);
+}
+.dock-icon {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-1);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 1rem;
+}
+.dock-icon:hover {
+  background: var(--surface);
+  color: var(--fg);
+}
+@media (max-width: 40rem) {
+  .dock {
+    scroll-snap-type: x mandatory;
+  }
+  .dock > main.dock-guide,
+  .dock-col {
+    width: 100vw;
+  }
+}
