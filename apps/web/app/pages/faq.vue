@@ -37,7 +37,8 @@ const QUESTIONS = [
   {
     q: "How is a guide different from a pull request description or a README?",
     a: "",
-    notes: "Decisions, Verification and Gotchas; written for an agent in another context to act on.",
+    notes:
+      "Decisions, Verification and Gotchas; written for an agent in another context to act on.",
   },
   {
     q: "Do I need an account to read a guide someone sent me?",
@@ -57,7 +58,8 @@ const QUESTIONS = [
   {
     q: "Which assistants and editors does it work with?",
     a: "",
-    notes: "/connect: Claude Code, Cursor, Zed, Gemini CLI locally; any MCP connector by URL; HTTP API.",
+    notes:
+      "/connect: Claude Code, Cursor, Zed, Gemini CLI locally; any MCP connector by URL; HTTP API.",
   },
   {
     q: "What is the difference between a transfer and a bug?",
@@ -67,7 +69,8 @@ const QUESTIONS = [
   {
     q: "What happens to my guides if I stop paying or delete my account?",
     a: "",
-    notes: "llms.txt: passalong export dumps every guide; deleting an account leaves the author their content.",
+    notes:
+      "llms.txt: passalong export dumps every guide; deleting an account leaves the author their content.",
   },
 ];
 

@@ -36,9 +36,15 @@ const FIELDS = [
   { name: "status", note: "draft or published; consumed is the author's shelf." },
   { name: "team", note: "TODO(copy)" },
   { name: "to", note: "@handle asks one person; #group asks the people who do a thing." },
-  { name: "stack_assumptions", note: "A list. The author's environment, to adapt rather than copy." },
+  {
+    name: "stack_assumptions",
+    note: "A list. The author's environment, to adapt rather than copy.",
+  },
   { name: "tags", note: "A list." },
-  { name: "report, area, severity", note: "Bugs only. severity runs s1 (blocker) to s4 (cosmetic)." },
+  {
+    name: "report, area, severity",
+    note: "Bugs only. severity runs s1 (blocker) to s4 (cosmetic).",
+  },
 ];
 
 /** Transfer sections, in order. The headings are what a receiving agent keys on. */
@@ -47,7 +53,10 @@ const TRANSFER = [
   { h: "Solution shape", note: "The approach, not a diff." },
   { h: "Decisions and rationale", note: "What was chosen over what, and why." },
   { h: "Steps", note: "What to do. Required." },
-  { h: "Verification", note: "How to know it worked. A guide without it is flagged to the reader." },
+  {
+    h: "Verification",
+    note: "How to know it worked. A guide without it is flagged to the reader.",
+  },
   { h: "Gotchas", note: "What failed on the way. The highest-value section." },
 ];
 

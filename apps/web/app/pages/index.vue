@@ -77,7 +77,10 @@ const STRUCTURED = {
       url: `${APEX}/`,
       logo: `${APEX}/icon-512.png`,
       email: PRICING.contact,
-      sameAs: ["https://www.npmjs.com/package/passalong", "https://github.com/codellyson/passalong"],
+      sameAs: [
+        "https://www.npmjs.com/package/passalong",
+        "https://github.com/codellyson/passalong",
+      ],
     },
     {
       "@type": "WebSite",
