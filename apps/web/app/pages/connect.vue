@@ -24,10 +24,14 @@
   CSP. Nothing here is interactive, so nothing here needs to be.
 -->
 <script setup lang="ts">
+import { APEX } from "#api/hosts";
+
 usePage({
   title: "Connect Passalong",
   description:
     "Use Passalong from Claude Code, Cursor, Gemini or any HTTP client — what each one can do, and how to set it up.",
+  url: `${APEX}/connect`,
+  image: `${APEX}/og.png`,
 });
 </script>
 

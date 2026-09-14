@@ -15,6 +15,8 @@
   no script here, and there never will be.
 -->
 <script setup lang="ts">
+import { APEX } from "#api/hosts";
+
 usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
@@ -25,8 +27,10 @@ usePage({
     "A baton pass between repos, machines, agent sessions and teammates — finished work, in a form the next agent can act on.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
-  // switches on the moment there is something to show.
-  image: `${useRequestURL().origin}/og.png`,
+  // switches on the moment there is something to show. The apex rather than the serving host, so
+  // the legacy host's copy of this page points at the same card and the same canonical.
+  image: `${APEX}/og.png`,
+  url: `${APEX}/`,
 });
 
 /**

@@ -31,7 +31,9 @@ const modes = [
     <p class="modes">
       <template v-for="m in modes" :key="m.to">
         <span v-if="now === m.to" class="here" aria-current="true">{{ m.label }}</span>
-        <a v-else :href="`/theme?to=${m.to}&back=${back}`">{{ m.label }}</a>
+        <!-- nofollow: every page links here three times with its own `back`, which is an endless
+             supply of redirect URLs to a crawler. robots.txt disallows /theme as well. -->
+        <a v-else :href="`/theme?to=${m.to}&back=${back}`" rel="nofollow">{{ m.label }}</a>
       </template>
     </p>
   </div>
