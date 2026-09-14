@@ -1790,23 +1790,31 @@ tbody tr {
   scroll-snap-type: x proximity;
   background: var(--surface);
 }
+/* An equal split that fills the screen: the guide and every open follow-up share the width, so one
+   follow-up is 50/50, two are thirds, three are quarters. Fixed widths left a wide screen with a
+   60/40 split and empty space beside it, and cut the last column off on a narrow one. No column goes
+   below 22rem, where a paragraph stops being readable; past that the dock scrolls sideways. Text
+   inside a wide column keeps a reading measure rather than running the full width. */
 .dock > main.dock-guide,
 .dock > .dock-col {
-  flex: 0 0 auto;
+  flex: 1 0 22rem;
+  min-width: 0;
   height: 100%;
   overflow-y: auto;
   scroll-snap-align: start;
   border-right: 1px solid var(--line);
 }
 .dock > main.dock-guide {
-  width: min(40rem, 100vw);
   max-width: none;
   margin: 0;
   padding: 0 var(--s-5) var(--s-7);
   background: var(--bg);
 }
+.dock > main.dock-guide > *,
+.dock-col-body {
+  max-width: 46rem;
+}
 .dock-col {
-  width: min(28rem, 100vw);
   background: var(--surface-raised);
 }
 .dock-col-head {
@@ -1844,8 +1852,8 @@ tbody tr {
     scroll-snap-type: x mandatory;
   }
   .dock > main.dock-guide,
-  .dock-col {
-    width: 100vw;
+  .dock > .dock-col {
+    flex: 0 0 100vw;
   }
 }
 
