@@ -16,6 +16,10 @@
 -->
 <script setup lang="ts">
 import { APEX } from "#api/hosts";
+import { published } from "#shared/pages";
+
+/** The closer points at the docs once they are written, and not before. */
+const docsPublished = published("/docs");
 
 usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
@@ -177,12 +181,7 @@ const SPECIMEN = {
 
 <template>
   <main class="wide landing">
-    <nav class="masthead">
-      <AppBrand />
-      <!-- One, not two. The hub *is* the sign-in, so a masthead offering both was the same door
-           twice. This is for the returning visitor; the claim below is for everyone else. -->
-      <a class="btn" href="/hub">Sign in</a>
-    </nav>
+    <AppMasthead />
 
     <header class="hero">
       <!-- The h1 names what the product is, because that is what a search engine reads first and
@@ -352,6 +351,7 @@ const SPECIMEN = {
       <p class="reassure">
         Write them in your hub, in Claude Code, or with <code>npm i -g passalong</code>. Reading one
         needs nothing installed at all.
+        <template v-if="docsPublished"><a href="/docs">The docs</a> cover the rest.</template>
       </p>
     </section>
 

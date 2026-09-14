@@ -1042,6 +1042,19 @@ form.join label {
   padding: var(--s-4) 0;
   flex-wrap: wrap;
 }
+.masthead .doors {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  margin: 0;
+}
+.masthead .quiet {
+  color: var(--muted);
+  text-decoration: none;
+}
+.masthead .quiet:hover {
+  color: var(--fg);
+}
 
 .hero {
   padding: clamp(var(--s-7), 9vh, var(--s-9)) 0 0;

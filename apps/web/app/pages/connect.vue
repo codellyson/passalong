@@ -25,6 +25,10 @@
 -->
 <script setup lang="ts">
 import { APEX } from "#api/hosts";
+import { published } from "#shared/pages";
+
+/** The kinds section links the full format once that page is written, and not before. */
+const formatPublished = published("/docs/guide-format");
 
 usePage({
   title: "Set up Passalong in Claude Code, Cursor, ChatGPT or any MCP app",
@@ -37,10 +41,7 @@ usePage({
 
 <template>
   <main class="wide landing">
-    <nav class="masthead">
-      <AppBrand />
-      <a class="btn" href="/hub">Sign in</a>
-    </nav>
+    <AppMasthead />
 
     <header class="hero">
       <p class="eyebrow">Three ways in</p>
@@ -161,6 +162,10 @@ passalong setup     # Claude Code: skill + MCP server</code></pre>
         Agents that pull a guide through MCP are told this before they see the document, and the
         document says it too — so a tool that fetched a share link over plain HTTP is not left
         guessing.
+      </p>
+      <p v-if="formatPublished" class="caveat">
+        Every field and heading, and what a receiving agent does with each, is in
+        <a href="/docs/guide-format">the guide format</a>.
       </p>
     </section>
 

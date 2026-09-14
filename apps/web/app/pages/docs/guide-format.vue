@@ -85,10 +85,7 @@ tags: [TODO]
 
 <template>
   <main class="wide landing">
-    <nav class="masthead">
-      <AppBrand />
-      <a class="btn" href="/hub">Sign in</a>
-    </nav>
+    <AppMasthead />
 
     <header class="hero">
       <p class="eyebrow">Docs · Guide format</p>
