@@ -368,3 +368,28 @@ export function verifyLayout(body: string): {
     hasVerification: Boolean(by.Verification),
   };
 }
+
+/**
+ * How many follow-ups `GET /v1/guides/:id/children?markdown=1` hands over with their content, and
+ * how much of any one. A follow-up is context an agent reads before acting on the original, so it
+ * rides in the same context window: a guide that collected fifty long follow-ups must not crowd
+ * out the guide itself. Past the cap a reader still has the ids to pull the rest one at a time.
+ */
+export const FOLLOW_UPS_MAX = 20;
+export const FOLLOW_UP_BYTES = 32 * 1024;
+
+/**
+ * A follow-up's markdown, cut to `FOLLOW_UP_BYTES` with a marker saying so. Bytes, not characters,
+ * because the budget is what a response and a context window hold; a cut that lands inside a
+ * multi-byte character drops that character rather than emitting half of it.
+ */
+export function clipFollowUp(id: string, markdown: string, max = FOLLOW_UP_BYTES): string {
+  const bytes = new TextEncoder().encode(markdown);
+  if (bytes.length <= max) return markdown;
+  // Not fatal (the default), so a torn final character decodes as U+FFFD and is dropped.
+  const head = new TextDecoder().decode(bytes.slice(0, max)).replace(/\uFFFD$/, "");
+  return (
+    `${head}\n\n[passalong: follow-up truncated at ${Math.round(max / 1024)} KB of ` +
+    `${Math.round(bytes.length / 1024)} KB — pull ${id} for the whole guide]\n`
+  );
+}

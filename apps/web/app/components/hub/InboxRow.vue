@@ -61,6 +61,18 @@ const who = computed(() => {
         </span>
         <span><template v-if="who">· </template>{{ rel(g.created) }}</span>
         <span v-if="status.text" :class="TONE[status.tone]">· {{ status.text }}</span>
+        <!-- Lineage, both ways. Dropped when the rows were cut to two lines, and with it the only
+             sign on the page that follow-ups exist. -->
+        <span v-if="g.parent && g.parent_title">
+          · follows
+          <NuxtLink :to="{ path: '/hub', query: { q: g.parent } }">{{ shorten(g.parent_title, 32).text }}</NuxtLink>
+        </span>
+        <span v-if="g.children">
+          ·
+          <NuxtLink :to="{ path: '/hub', query: { follows: g.id } }">
+            {{ g.children }} {{ g.children === 1 ? "follow-up" : "follow-ups" }}
+          </NuxtLink>
+        </span>
       </p>
     </div>
 

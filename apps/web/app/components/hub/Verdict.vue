@@ -75,6 +75,13 @@ function send() {
         <button class="btn outline danger" @click="askWhy">It didn't work</button>
         <button class="btn" @click="emit('done')">Not yet</button>
       </div>
+      <!-- Someone who has just done the work knows what the guide was missing, so this is where
+           adding that context is offered — not in a menu they have to know to open. -->
+      <p class="mt-3 mb-0 font-ui text-xs text-muted">
+        Was something missing from the guide?
+        <NuxtLink :to="{ path: '/hub/write', query: { follows: g.id } }">Add a follow-up</NuxtLink>
+        with the extra context, so the next person has it.
+      </p>
     </template>
 
     <template v-else>
@@ -104,6 +111,11 @@ function send() {
           {{ left }} characters left
         </span>
       </div>
+      <p class="mt-3 mb-0 font-ui text-xs text-muted">
+        Know what the guide needs?
+        <NuxtLink :to="{ path: '/hub/write', query: { follows: g.id } }">Add a follow-up</NuxtLink>
+        — this note is one line; a follow-up is context everyone who opens the guide gets.
+      </p>
     </template>
   </div>
 </template>

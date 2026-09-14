@@ -57,6 +57,25 @@ const SECTIONS: [keyof Draft, string][] = [
   ["gotchas", "Gotchas"],
 ];
 
+/**
+ * Where a follow-up goes by default: to the people the original is for.
+ *
+ * A follow-up is more context for a guide, so the people who need it are the ones working from the
+ * guide. Context added to your own guide goes to whoever you sent the original to. Context added to
+ * someone else's guide goes to its author, who decides whether it changes anything for the people
+ * they sent it to. Either way it stays in the original's team, where the guide lists it.
+ */
+export function followUpDefaults(parent: {
+  mine: boolean;
+  team: string | null;
+  from: string | null;
+  to: string | null;
+}): Pick<Draft, "team" | "to"> {
+  const team = parent.team || "";
+  if (!team) return { team, to: "" };
+  return { team, to: (parent.mine ? parent.to : parent.from) || "" };
+}
+
 export function draftMarkdown(id: string, d: Draft): string {
   const front = [
     `id: ${id}`,

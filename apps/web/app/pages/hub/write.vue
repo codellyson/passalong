@@ -1,10 +1,17 @@
 <!--
-  Writing a guide in the browser.
+  Writing a guide in the browser — or a follow-up to one.
 
   Until this existed a guide could only come from `passalong share` or an agent, so anyone without
   a terminal could receive work and never send any. The questions are the guide format's sections
   asked as a person would ask them — what was wrong, what did you do, how would someone else do it,
   how do they know it worked — and the answers become exactly the document the CLI writes.
+
+  `?follows=<id>` makes it a follow-up: more context for a guide, written as a guide of its own and
+  linked under the original, so whoever opens the original gets it too. People did not know how to
+  write one, because the only way was `passalong share --follows <id>` copied out of a menu, and
+  nothing anywhere said what one was for. This page says it in a sentence, names the guide it adds
+  to, and sends it to the same people by default: whoever the original went to, or its author when
+  the original is someone else's.
 
   Who it goes to is picked from the team's members by name. A teammate who has never set a handle
   cannot be addressed yet (the server resolves `to:` by handle), so they are listed and explained
@@ -12,37 +19,92 @@
 -->
 <script setup lang="ts">
 import { useQuery } from "@tanstack/vue-query";
-import type { TeamDetail } from "~/types/hub";
+import type { Guide, TeamDetail } from "~/types/hub";
+
+const route = useRoute();
+const router = useRouter();
+const follows = computed(() =>
+  typeof route.query.follows === "string" ? route.query.follows : "",
+);
 
 usePage({
-  title: "Write a guide · Passalong",
+  title: follows.value ? "Write a follow-up · Passalong" : "Write a guide · Passalong",
   description: "Write down finished work so someone else can repeat it.",
   noindex: true,
 });
 
-const { data, api, json, refresh, signedIn } = useHub();
-const router = useRouter();
+const { data, api, json, refresh, signedIn, loading } = useHub();
 
 const teams = computed(() => data.value.me?.teams ?? []);
 const draft = reactive(blankDraft());
 /** Minted once per visit, so a retried publish updates the same guide instead of making two. */
 const id = newId();
 
+/**
+ * The guide this follows. In memory if it is in the current list or the board; otherwise looked
+ * for across all teams, through the same cached query the guides page uses.
+ */
+const listed = computed<Guide | null>(
+  () =>
+    [...data.value.guides, ...(data.value.board?.waiting ?? [])].find(
+      (g) => g.id === follows.value,
+    ) || null,
+);
+const everything = useQuery({
+  queryKey: hubKeys.guides("all"),
+  queryFn: async () => (await api<{ guides: Guide[] }>("/v1/guides?scope=all")) ?? { guides: [] },
+  enabled: computed(
+    () =>
+      signedIn.value &&
+      Boolean(follows.value) &&
+      !listed.value &&
+      !loading.value.guides &&
+      !loading.value.board,
+  ),
+});
+const parent = computed<Guide | null>(
+  () => listed.value || everything.data.value?.guides.find((g) => g.id === follows.value) || null,
+);
+const parentMissing = computed(
+  () => Boolean(follows.value) && !parent.value && everything.isFetched.value,
+);
+const parentAuthor = computed(() => (parent.value ? fromName(parent.value) : ""));
+
+// A different team means a different set of people, so whoever was picked is cleared — except
+// while a follow-up is filling both in from the guide it follows.
+let seeding = false;
 watch(
-  teams,
-  (list) => {
-    if (!draft.team && list.length === 1) draft.team = list[0]?.slug ?? "";
+  () => draft.team,
+  () => {
+    if (!seeding) draft.to = "";
+  },
+);
+
+// Once, when the original is known: its team, and back to its author.
+const seeded = ref(false);
+watch(
+  parent,
+  async (p) => {
+    if (!p || seeded.value) return;
+    seeded.value = true;
+    const defaults = followUpDefaults(p);
+    seeding = true;
+    draft.team = defaults.team;
+    await nextTick();
+    draft.to = defaults.to;
+    seeding = false;
   },
   { immediate: true },
 );
 
-// A different team means a different set of people, so whoever was picked is cleared.
 watch(
-  () => draft.team,
-  () => {
-    draft.to = "";
+  teams,
+  (list) => {
+    if (!follows.value && !draft.team && list.length === 1) draft.team = list[0]?.slug ?? "";
   },
+  { immediate: true },
 );
+
 // Shared with Settings, so a team already looked at there is not fetched again. If it fails, the
 // picker falls back to "everyone in the team", which still sends the guide.
 const { data: teamData, isFetching: loadingMembers } = useQuery({
@@ -66,7 +128,13 @@ async function send() {
   busy.value = true;
   trouble.value = null;
   try {
-    await api(`/v1/guides/${id}`, json("PUT", { markdown: draftMarkdown(id, draft) }));
+    const markdown = draftMarkdown(id, draft);
+    // `parent` beside the document, which the API writes into its frontmatter. It is only sent
+    // for a guide this account can actually read; the server would drop anything else anyway.
+    await api(
+      `/v1/guides/${id}`,
+      json("PUT", parent.value ? { markdown, parent: parent.value.id } : { markdown }),
+    );
     await refresh(hubKeys.allGuides, hubKeys.board, hubKeys.log, hubKeys.me);
     router.push("/hub#sent");
   } catch (e) {
@@ -82,22 +150,62 @@ const box =
 </script>
 
 <template>
-  <HubShell heading="Write a guide">
+  <HubShell :heading="follows ? 'Write a follow-up' : 'Write a guide'">
     <template #sub>
-      Write down what you finished so someone else can repeat it. They'll tell you whether it worked.
+      <template v-if="follows">
+        A follow-up adds more context to a guide: a missing detail, a step that needed explaining,
+        what changed since, or what someone found doing it. Anyone who opens the guide gets it too.
+      </template>
+      <template v-else>
+        Write down what you finished so someone else can repeat it. They'll tell you whether it
+        worked.
+      </template>
     </template>
 
     <form class="flex max-w-2xl flex-col gap-6" @submit.prevent="send">
+      <!-- The guide this follows, named, so nobody writes a follow-up to the wrong thing. -->
+      <div
+        v-if="parent"
+        class="rounded-2 border border-accent bg-accent-soft px-4 py-3 font-ui text-sm text-muted"
+      >
+        <p class="m-0">
+          More context for
+          <a :href="parent.url" target="_blank" rel="noopener" class="font-semibold text-fg">
+            {{ parent.title || "Untitled guide" }}
+          </a>
+          <template v-if="!parent.mine && parentAuthor"> by {{ parentAuthor }}</template>.
+        </p>
+        <p class="mt-1 mb-0">
+          It's listed under that guide. Everyone who opens the guide sees it, and agents that pick
+          the guide up read it along with the original.
+        </p>
+      </div>
+      <p
+        v-else-if="parentMissing"
+        class="m-0 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
+      >
+        The guide this was meant to follow isn't available to you, so this will be saved as a new
+        guide. <NuxtLink to="/hub/write">Start a plain guide instead</NuxtLink>
+      </p>
+      <div
+        v-else-if="follows"
+        class="h-16 rounded-2 border border-line bg-raised"
+        role="status"
+        aria-label="Finding the guide this follows"
+      />
+
       <div>
         <label :class="label" for="g-title">What is it?</label>
-        <p :class="hint">A title someone would recognise in a list.</p>
+        <p :class="hint">
+          {{ follows ? "Say what the extra context is about, so it reads clearly under the original." : "A title someone would recognise in a list." }}
+        </p>
         <input
           id="g-title"
           v-model="draft.title"
           class="w-full"
           required
           maxlength="140"
-          placeholder="Invoice PDFs: download link and email attachment"
+          :placeholder="follows ? 'Invoice PDFs: which environment variables the email step needs' : 'Invoice PDFs: download link and email attachment'"
         />
       </div>
 
@@ -126,8 +234,12 @@ const box =
       </div>
 
       <div>
-        <label :class="label" for="g-problem">What was the problem?</label>
-        <p :class="hint">What was broken or missing, and where.</p>
+        <label :class="label" for="g-problem">
+          {{ follows ? "What context does the guide need?" : "What was the problem?" }}
+        </label>
+        <p :class="hint">
+          {{ follows ? "What's missing, unclear or out of date in the original, and where." : "What was broken or missing, and where." }}
+        </p>
         <textarea id="g-problem" v-model="draft.problem" :class="box" rows="4" required />
       </div>
 
@@ -138,7 +250,9 @@ const box =
       </div>
 
       <div>
-        <label :class="label" for="g-steps">How would someone else do it?</label>
+        <label :class="label" for="g-steps">
+          {{ follows ? "What should someone do with this context?" : "How would someone else do it?" }}
+        </label>
         <p :class="hint">The steps, in order. Numbered lines work well.</p>
         <textarea
           id="g-steps"
@@ -170,11 +284,11 @@ const box =
 
       <div class="flex flex-wrap items-center gap-3">
         <button class="btn primary" type="submit" :disabled="!ready || busy">
-          {{ busy ? "Sending…" : draft.team ? "Send guide" : "Save guide" }}
+          {{ busy ? "Sending…" : follows ? "Send follow-up" : draft.team ? "Send guide" : "Save guide" }}
         </button>
         <NuxtLink to="/hub" class="btn">Cancel</NuxtLink>
         <span v-if="!ready" class="font-ui text-sm text-muted">
-          A title, the problem and the steps are needed.
+          A title, {{ follows ? "the context" : "the problem" }} and the steps are needed.
         </span>
       </div>
     </form>
