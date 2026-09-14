@@ -110,6 +110,11 @@ export default defineNuxtConfig({
     // treatment as the landing rather than the hub's nonce, because a page that needs no script
     // should not ship a policy that allows one.
     "/connect": { noScripts: true, headers: VIEW_HEADERS },
+    // Docs and the FAQ are prose like /connect, and get the same treatment. Both spellings of the
+    // docs rule, because `/docs/**` is not guaranteed to match `/docs` itself.
+    "/docs": { noScripts: true, headers: VIEW_HEADERS },
+    "/docs/**": { noScripts: true, headers: VIEW_HEADERS },
+    "/faq": { noScripts: true, headers: VIEW_HEADERS },
 
     // The hub, the invite page and the password reset run script, so their header is written per
     // response by server/plugins/csp.ts — it carries a nonce, which a route rule cannot.
