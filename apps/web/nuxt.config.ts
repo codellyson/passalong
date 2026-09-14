@@ -97,7 +97,15 @@ export default defineNuxtConfig({
     "/": { noScripts: true, headers: VIEW_HEADERS },
     // A guide page renders markdown a stranger wrote. There is no sanitiser behind this — the CSP
     // is what makes it safe, and `noScripts` is what lets the CSP name no `script-src` at all.
-    "/g/**": { noScripts: true, headers: VIEW_HEADERS },
+    //
+    // `x-robots-tag` because robots.txt and the page's `noindex` meta do not cover it between them:
+    // a disallowed page is never fetched, so its meta is never read, and a leaked link can still be
+    // indexed as a bare URL. The header also reaches the raw `.md` and the card, which have no
+    // <head> to put a meta tag in.
+    "/g/**": {
+      noScripts: true,
+      headers: { ...VIEW_HEADERS, "x-robots-tag": "noindex, nofollow, noarchive" },
+    },
     // Setup instructions: prose, a few code blocks, nothing interactive. It gets the same
     // treatment as the landing rather than the hub's nonce, because a page that needs no script
     // should not ship a policy that allows one.

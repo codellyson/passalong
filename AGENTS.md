@@ -426,7 +426,13 @@ public one, for agents *using* Passalong rather than changing it.
   styles; put styles in `public/styles.css`. `font-src` is same-origin only: fonts are served
   from `public/fonts`, never a CDN, for the same reason Preact is vendored.
 - **Guide pages are `noindex`** and `robots.txt` disallows `/g/`. The share key is the secret, so
-  the page must never end up in a search index.
+  the page must never end up in a search index. Everything under `/g/` also sends
+  `x-robots-tag: noindex, nofollow, noarchive` (route rule in `nuxt.config.ts`, and `VIEW_HEADERS`
+  in `apps/api/src/index.ts` for the raw `.md`): a disallowed page's meta is never read, and the
+  `.md` has no `<head>`. No canonical link on a noindex page either.
+- **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
+  `application/ld+json` when deciding whether a page runs script; without that the landing would
+  get the hub's nonce policy.
 
 ## Workflow
 

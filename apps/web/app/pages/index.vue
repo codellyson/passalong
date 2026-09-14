@@ -54,6 +54,84 @@ const PRICING = {
 };
 
 /**
+ * What a search engine is told about the product, as JSON-LD.
+ *
+ * Built from PRICING so the price in the markup cannot drift from the price on the page. A data
+ * block rather than script: browsers never execute it, so the landing's CSP, which allows no script
+ * at all, is untouched — and server/plugins/csp.ts knows not to count it as one.
+ *
+ * Only what the page itself says. No ratings or reviews: there are none to cite.
+ */
+const perMonth = (amount: string) => Number(amount.replace(/[^0-9.]/g, ""));
+const STRUCTURED = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${APEX}/#organization`,
+      name: "Passalong",
+      url: `${APEX}/`,
+      logo: `${APEX}/icon-512.png`,
+      email: PRICING.contact,
+      sameAs: ["https://www.npmjs.com/package/passalong", "https://github.com/codellyson/passalong"],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${APEX}/#website`,
+      name: "Passalong",
+      url: `${APEX}/`,
+      publisher: { "@id": `${APEX}/#organization` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${APEX}/#software`,
+      name: "Passalong",
+      url: `${APEX}/`,
+      description:
+        "Hand finished work from one repo, machine, agent session or teammate to the next, as a transfer guide an AI agent can act on. A CLI, an MCP server and a sync service.",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "macOS, Linux, Windows",
+      publisher: { "@id": `${APEX}/#organization` },
+      offers: [
+        {
+          "@type": "Offer",
+          name: "Local",
+          description: "The CLI against a local store, with no account.",
+          price: 0,
+          priceCurrency: "USD",
+        },
+        {
+          "@type": "Offer",
+          name: "Solo",
+          price: perMonth(PRICING.solo.amount),
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: perMonth(PRICING.solo.amount),
+            priceCurrency: "USD",
+            billingDuration: "P1M",
+          },
+        },
+        {
+          "@type": "Offer",
+          name: "Team",
+          description: `Three seats, ${PRICING.team.extra}.`,
+          price: perMonth(PRICING.team.amount),
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: perMonth(PRICING.team.amount),
+            priceCurrency: "USD",
+            billingDuration: "P1M",
+          },
+        },
+      ],
+    },
+  ],
+};
+useHead({ script: [{ type: "application/ld+json", innerHTML: JSON.stringify(STRUCTURED) }] });
+
+/**
  * The specimen guide, as fields rather than as a text file.
  *
  * The page used to print the markdown source: twenty-five lines of monospace, which is the
