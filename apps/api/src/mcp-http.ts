@@ -48,6 +48,42 @@ async function relay(call: Call, method: string, path: string, body?: unknown) {
 }
 
 /**
+ * What heads a guide's follow-ups when they are handed to an agent. Mirrors `FOLLOW_UPS_LEAD` in
+ * packages/passalong/src/passalong.js, so an agent reads the same words from either server.
+ */
+export const FOLLOW_UPS_LEAD =
+  "FOLLOW-UPS — more context added to this guide, oldest first. Read them before acting; where " +
+  "one contradicts the original, the follow-up is newer.";
+
+/**
+ * A guide's follow-ups with their content, formatted to go after the document — or "" when there
+ * are none or anything fails. A follow-up is more context for the guide, so whoever opens the
+ * original gets them; but context is never worth failing the tool over, since the guide itself is
+ * what was asked for. `?markdown=1` records no pull on the children: reading context for a guide is
+ * not opening those guides.
+ */
+async function followUps(call: Call, id: string): Promise<string> {
+  try {
+    const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}/children?markdown=1`);
+    if (res.status >= 400) return "";
+    const { guides = [] } = JSON.parse(res.text) as {
+      guides?: { id?: string; title?: string; markdown?: unknown }[];
+    };
+    const withContent = guides.filter((g) => g?.id && typeof g.markdown === "string");
+    if (!withContent.length) return "";
+    return [
+      FOLLOW_UPS_LEAD,
+      ...withContent.map(
+        (g) =>
+          `--- follow-up ${g.id}: ${g.title || "untitled"} ---\n${String(g.markdown).trimEnd()}`,
+      ),
+    ].join("\n\n");
+  } catch {
+    return "";
+  }
+}
+
+/**
  * The product's own vocabulary, handed in rather than imported.
  *
  * `guide.ts` is the single source for the areas and severities, and importing it here would make
@@ -126,12 +162,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "you described instead of attaching is the most useful thing in the report, thrown away. " +
         "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
         "the body, and publish_guide the same id — publishing claims whatever the markdown names.\n" +
-        "A FOLLOW-UP IS A GUIDE, NOT A NOTE. When you worked from a guide and departed from it — " +
-        "changed or skipped a Step, adapted an ASSUMES for this stack, found the fix a failing " +
-        "guide did not have, or hit a Gotcha it does not list — publish what you learned as its " +
-        "own guide with publish_guide `parent` set to that guide's id; the original then lists it " +
-        "as a follow-up. If it worked exactly as written, do not: answer with verify_guide, or " +
-        "every guide collects copies that say nothing new.",
+        "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
+        "more context — a missing detail, a step that needed explaining, what changed since, what " +
+        "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
+        "id. It is listed under the original, and anyone who opens the original, person or agent, " +
+        "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.",
     },
   );
 
@@ -182,14 +217,17 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       const bug = /^kind:\s*bug\s*$/m.test(res.text);
       const note = bug
         ? "<!-- passalong: once this is fixed, if the fix is worth repeating somewhere else, " +
-          `publish it as a transfer guide with publish_guide parent=${id} so this bug lists it. -->`
-        : "<!-- passalong: if you depart from this guide — change or skip a Step, adapt an " +
-          "ASSUMES for this stack, find a fix it did not have, hit a Gotcha it does not list — " +
-          `publish what you learned as its own guide with publish_guide parent=${id}. If it ` +
-          "worked exactly as written, answer with verify_guide instead. -->";
+          `that is more context for this bug: publish it as a transfer guide with publish_guide ` +
+          `parent=${id}, and whoever opens this bug gets it too. -->`
+        : "<!-- passalong: a follow-up is more context for this guide, written as its own guide. " +
+          "If this guide needs more — a missing detail, a step that needed explaining, what " +
+          "changed since, what you found doing it — publish that with publish_guide " +
+          `parent=${id}, and whoever opens this guide gets it too. -->`;
+      const context = await followUps(call, id);
       return {
         content: [
           { type: "text" as const, text: lead + res.text },
+          ...(context ? [{ type: "text" as const, text: context }] : []),
           { type: "text" as const, text: note },
         ],
       };
@@ -271,8 +309,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           .string()
           .optional()
           .describe(
-            "id of the guide this one came out of — set it when this is what you learned doing " +
-              "someone else's guide, so theirs lists it as a follow-up",
+            "id of the guide this one adds context to — set it and this is published as that " +
+              "guide's follow-up: listed under it, and read by whoever opens it",
           ),
       },
     },
@@ -322,10 +360,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       title: "Say whether it worked",
       description:
         "Answer for a guide you took. The single most valuable thing to report back, and the " +
-        "only way the sender learns their handoff did not land. A failure must say why. If doing " +
-        "it taught you something the guide did not say, publish that as its own guide with " +
-        "publish_guide `parent` set to this id — the author sees it as a follow-up, where a " +
-        "one-line note gets lost.",
+        "only way the sender learns their handoff did not land. A failure must say why. If the " +
+        "guide needs more context than a one-line note holds — a missing detail, a step that " +
+        "needed explaining, what you found doing it — publish that as a follow-up: its own guide, " +
+        "with publish_guide `parent` set to this id. Whoever opens this guide then gets it too.",
       inputSchema: {
         id: z.string(),
         ok: z.boolean().describe("true if it holds up"),

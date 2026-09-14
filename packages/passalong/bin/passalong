@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Passalong CLI. Few flags on purpose: the defaults are the product.
 //
-//   passalong share [file] [--to TARGET] [--follows ID]  publish a guide → id + link
+//   passalong share [file] [--to TARGET] [--follows ID]  publish a guide → id + link; --follows adds it as context to guide ID
+//     --follows ID publishes it as a follow-up: more context for guide ID, listed under it and
+//     handed to whoever pulls or starts that guide
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
 //   passalong attach <image>      upload evidence and print the markdown that points at it
@@ -101,6 +103,21 @@ function activityLine(n) {
   return `${dot} ${(n.guide || "").padEnd(8)}  ${relDate(n.at).padEnd(10)} ${n.text}`;
 }
 
+/**
+ * After a pulled guide, the follow-ups written for it: more context, each its own guide. Listed on
+ * stderr rather than printed in full, so stdout stays exactly the document; nothing at all when
+ * there are none or sync is off.
+ */
+async function listFollowUps(meta) {
+  const guides = await passalong.followUpGuides(meta);
+  if (!guides.length) return;
+  console.error(
+    `\n${guides.length} follow-up${guides.length === 1 ? "" : "s"} — more context for this guide:`,
+  );
+  for (const g of guides) console.error(`  ${g.id}  ${g.title || "untitled"}`);
+  console.error("Read one with: passalong pull <id>");
+}
+
 const MONTHS = "January February March April May June July August September October November December".split(" ");
 /** "September 2026" from an ISO timestamp, without pulling in a date library for one heading. */
 const monthOf = (iso) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
@@ -144,9 +161,10 @@ const commands = {
 
   async pull(f) {
     const ref = f._[0] || die("usage: passalong pull <id|link>");
-    const { markdown, path, from } = await passalong.pull(ref).catch((e) => die(e.message));
+    const { guide, markdown, path, from } = await passalong.pull(ref).catch((e) => die(e.message));
     process.stdout.write(markdown);
     console.error(`\npulled from ${from} → ${path}`);
+    await listFollowUps(guide.meta);
   },
 
   /**
@@ -165,6 +183,7 @@ const commands = {
     // Saying nothing here would be the silence the whole hop exists to end: you would have the
     // guide, believe you had answered for it, and the sender would still be waiting.
     else console.error("not taken — sync is off, so nobody was told (run `passalong login`)");
+    await listFollowUps(r.guide.meta);
   },
 
   /**

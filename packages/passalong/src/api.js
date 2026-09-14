@@ -91,6 +91,12 @@ export const createReport = (body) => call("/v1/reports", { method: "POST", body
 /** One report and the issues filed under it, grouped by product area. */
 export const report = (id) => call(`/v1/reports/${encodeURIComponent(id)}`);
 export const get = (id) => call(`/v1/guides/${id}`, { raw: true });
+/**
+ * A guide's follow-ups, one level down. `markdown` adds each one's content, oldest first and
+ * capped server-side; neither form counts as opening them.
+ */
+export const children = (id, { markdown = false } = {}) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/children${q({ markdown: markdown ? "1" : "" })}`);
 export const setStatus = (id, status) =>
   call(`/v1/guides/${id}/status`, { method: "PATCH", body: { status } });
 export const remove = (id) => call(`/v1/guides/${id}`, { method: "DELETE" });
