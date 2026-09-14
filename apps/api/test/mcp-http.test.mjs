@@ -514,10 +514,11 @@ test("agents are told when a follow-up is a guide, at connect and with the guide
       VOCAB,
     ),
   );
-  assert.match(init.result.instructions, /FOLLOW-UP IS A GUIDE/);
+  assert.match(init.result.instructions, /FOLLOW-UP IS MORE CONTEXT FOR A GUIDE/);
   assert.match(init.result.instructions, /publish_guide `parent`/);
-  // And when not to, or every guide collects copies.
-  assert.match(init.result.instructions, /worked exactly as written/);
+  assert.match(init.result.instructions, /get_guide returns a guide's follow-ups after it/);
+  // Not the old rule: context is worth adding whether or not the guide worked as written.
+  assert.doesNotMatch(init.result.instructions, /worked exactly as written|departed from/);
 
   const get = async (id) =>
     (
@@ -539,5 +540,69 @@ test("agents are told when a follow-up is a guide, at connect and with the guide
   // the guide back out cannot carry the note into it, and nothing lands in front of `---`.
   assert.equal(transfer[0].text, "---\nid: k3mq2xa7\ntitle: T\n---\n\n## Steps\n1. x\n");
   assert.match(transfer[1].text, /publish_guide parent=k3mq2xa7/);
+  assert.match(transfer[1].text, /more context for this guide/);
   assert.match((await get("bugbug12"))[1].text, /once this is fixed[\s\S]*parent=bugbug12/);
+});
+
+const getGuide = async (call, id) =>
+  (
+    await read(
+      await handleMcp(
+        rpc({
+          jsonrpc: "2.0",
+          id: 4,
+          method: "tools/call",
+          params: { name: "get_guide", arguments: { id } },
+        }),
+        call,
+        VOCAB,
+      ),
+    )
+  ).result.content;
+
+const DOC = "---\nid: k3mq2xa7\ntitle: T\n---\n\n## Steps\n1. x\n";
+
+test("get_guide hands over a guide's follow-ups after it, oldest first, with their bodies", async () => {
+  const { call, seen } = recorder({
+    "GET /v1/guides/k3mq2xa7": { status: 200, text: DOC },
+    "GET /v1/guides/k3mq2xa7/children": {
+      status: 200,
+      text: JSON.stringify({
+        guides: [
+          { id: "aaaa2222", title: "Postgres 16 needs a flag", markdown: "first body\n" },
+          { id: "bbbb3333", title: "What changed since", markdown: "second body" },
+        ],
+      }),
+    },
+  });
+  const content = await getGuide(call, "k3mq2xa7");
+  // The document block is still exactly the document.
+  assert.equal(content[0].text, DOC);
+  assert.equal(
+    content[1].text,
+    "FOLLOW-UPS — more context added to this guide, oldest first. Read them before acting; " +
+      "where one contradicts the original, the follow-up is newer.\n\n" +
+      "--- follow-up aaaa2222: Postgres 16 needs a flag ---\nfirst body\n\n" +
+      "--- follow-up bbbb3333: What changed since ---\nsecond body",
+  );
+  assert.match(content[2].text, /^<!-- passalong:/);
+  // Asked for with content, which is the form that records no pull on the children.
+  assert.ok(seen.some((s) => s.path === "/v1/guides/k3mq2xa7/children?markdown=1"));
+});
+
+test("no follow-ups, or a failure fetching them, returns the guide as it always was", async () => {
+  for (const children of [
+    { status: 200, text: JSON.stringify({ guides: [] }) },
+    { status: 500, text: "boom" },
+    { status: 200, text: "not json" },
+  ]) {
+    const { call } = recorder({
+      "GET /v1/guides/k3mq2xa7": { status: 200, text: DOC },
+      "GET /v1/guides/k3mq2xa7/children": children,
+    });
+    const content = await getGuide(call, "k3mq2xa7");
+    assert.equal(content.length, 2);
+    assert.equal(content[0].text, DOC);
+    assert.match(content[1].text, /^<!-- passalong:/);
+  }
 });
