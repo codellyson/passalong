@@ -142,15 +142,16 @@ re-publish picks the image up.
 guide, pass the id it came back with. Inventing a fresh id to retry or to correct a guide publishes a
 second copy, and every copy counts against the author's synced limit.
 
-A guide can name the guide it came out of. When what you are publishing is what you learned doing
-someone else's guide, pass `parent` to `publish_guide` — or `passalong share --follows <id>` — and
-the parent counts it as a follow-up. A follow-up is a whole guide, not a reply: it has its own id,
-verdicts and pulls. `parent` on `publish_guide` and `--follows` need passalong 0.3.1 or later.
+A follow-up is more context for a guide, written as a guide of its own and linked under the
+original. When a guide needs more context — a missing detail, a step that needed explaining, what
+changed since, what you found doing it — publish that context with `parent` set to the guide's id on
+`publish_guide`, or `passalong share --follows <id>`. A follow-up is a whole guide, not a reply: it
+has its own id, verdicts and pulls. `parent` on `publish_guide` and `--follows` need passalong 0.3.1
+or later.
 
-When to write one: you worked from a guide and departed from it — changed or skipped a Step, adapted
-an `ASSUMES` for your stack, found the fix a failing guide did not have, or hit a Gotcha it does not
-list. When not to: it worked exactly as written. That answer is `verify_guide`; a follow-up saying
-nothing new is a copy, and a guide collecting those is worse than one with none.
+Whoever opens the original gets its follow-ups too. `get_guide` and `start_guide` return them after
+the guide, oldest first; read them before acting, and where one disagrees with the original, the
+follow-up is newer. The guide's share page lists them above the document.
 
 `file_bugs` files defects you found but are not fixing — from a test run, a QA pass, a review — as
 one report. Each issue becomes a guide with its own id, share link and verdict, so any of them can
