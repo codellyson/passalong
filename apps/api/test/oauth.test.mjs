@@ -6,11 +6,40 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   authorizationServerMetadata,
+  clientRefusal,
+  invalidClient,
   pkceMatches,
   protectedResourceMetadata,
   redirectAllowed,
   timingSafeEqual,
 } from "../src/oauth.ts";
+
+// ChatGPT showed only "failed" for a connector made with a secret it was never given: the token
+// endpoint answered a bare `invalid_client`, which three different mistakes all produce.
+test("a client with no secret authenticates with its id alone", () => {
+  assert.equal(clientRefusal({ secret_hash: "" }, "", ""), null);
+  // A public client that sends a secret anyway is not refused for it.
+  assert.equal(clientRefusal({ secret_hash: "" }, "abc", "extra"), null);
+});
+
+test("each way a client can fail to authenticate is named", () => {
+  assert.equal(clientRefusal(null, "", ""), "unknown_client");
+  assert.equal(clientRefusal({ secret_hash: "h" }, "", ""), "secret_missing");
+  assert.equal(clientRefusal({ secret_hash: "right" }, "wrong", "pa_cs_x"), "secret_mismatch");
+  assert.equal(clientRefusal({ secret_hash: "right" }, "right", "pa_cs_x"), null);
+});
+
+test("every refusal is invalid_client with a description that says what to do", () => {
+  for (const reason of ["unknown_client", "secret_missing", "secret_mismatch"]) {
+    const body = invalidClient(reason);
+    assert.equal(body.error, "invalid_client", "RFC 6749 §5.2 keeps the error code");
+    assert.ok(body.error_description.length > 40, `${reason} needs a description`);
+    // The description is sent to whoever asked, so it must never carry a credential.
+    assert.doesNotMatch(body.error_description, /pa_cs_|pa_at_/);
+  }
+  assert.match(invalidClient("secret_missing").error_description, /secret/);
+  assert.match(invalidClient("unknown_client").error_description, /no client ID/);
+});
 
 test("PKCE accepts the verifier that made the challenge, and nothing else", async () => {
   // The known-answer pair from RFC 7636 appendix B. If this passes, the encoding is right:

@@ -113,8 +113,10 @@ import {
 } from "./notify.js";
 import {
   authorizationServerMetadata,
+  clientRefusal,
   DYNAMIC_TTL_MS,
   errorRedirect,
+  invalidClient,
   MCP_SCOPE,
   pickRedirect,
   pkceMatches,
@@ -3537,17 +3539,45 @@ app.post("/v1/oauth/token", async (c) => {
   let clientId = field("client_id");
   let clientSecret = field("client_secret");
   const basic = c.req.header("authorization") || "";
-  if (basic.startsWith("Basic ")) {
-    const [id, secret] = atob(basic.slice(6)).split(":");
-    clientId = decodeURIComponent(id || "");
-    clientSecret = decodeURIComponent(secret || "");
+  const usedBasic = basic.startsWith("Basic ");
+  if (usedBasic) {
+    // A malformed header is a client that failed to authenticate, not a server error.
+    try {
+      const decoded = atob(basic.slice(6));
+      const colon = decoded.indexOf(":");
+      clientId = decodeURIComponent(colon < 0 ? decoded : decoded.slice(0, colon));
+      clientSecret = decodeURIComponent(colon < 0 ? "" : decoded.slice(colon + 1));
+    } catch {
+      clientId = "";
+      clientSecret = "";
+    }
   }
 
   // Approved clients only: a self-registration nobody has approved is not in the table this reads.
   const client = await tokenClient(c.env.DB, clientId);
-  if (!client) return c.json({ error: "invalid_client" }, 401);
-  if (client.secret_hash && !timingSafeEqual(client.secret_hash, await sha256(clientSecret))) {
-    return c.json({ error: "invalid_client" }, 401);
+  const refusal = clientRefusal(
+    client,
+    clientSecret ? await sha256(clientSecret) : "",
+    clientSecret,
+  );
+  if (refusal || !client) {
+    const reason = refusal ?? "unknown_client";
+    // The reason and the method, never the secret: this is what `wrangler tail` shows when a
+    // connector's settings page says only that it failed.
+    console.warn(
+      JSON.stringify({
+        event: "oauth_token_refused",
+        reason,
+        client_id: clientId.slice(0, 64),
+        method: usedBasic ? "client_secret_basic" : clientSecret ? "client_secret_post" : "none",
+      }),
+    );
+    // RFC 6749 §5.2: a client that tried HTTP Basic is told which scheme to retry with.
+    return c.json(
+      invalidClient(reason),
+      401,
+      usedBasic ? { "www-authenticate": 'Basic realm="passalong"' } : {},
+    );
   }
 
   const grantType = field("grant_type");

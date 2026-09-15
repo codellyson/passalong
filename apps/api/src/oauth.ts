@@ -315,6 +315,45 @@ export async function pkceMatches(verifier: string, challenge: string): Promise<
   return timingSafeEqual(encoded, challenge);
 }
 
+/** Why the token endpoint refused to authenticate a client. */
+export type ClientRefusal = "unknown_client" | "secret_missing" | "secret_mismatch";
+
+/**
+ * Decide whether a client authenticated at the token endpoint, and if not, why.
+ *
+ * `invalid_client` on its own is all a connector's settings page shows, and three different
+ * mistakes produce it: an id that was revoked or mistyped, a connector created with a secret that
+ * the app was never given, and a secret pasted wrong. Each needs a different fix, so each is named.
+ * None of this leaks anything worth having — a client id is not a secret, it travels in every
+ * authorization URL — and the secret itself is still compared without timing.
+ */
+export function clientRefusal(
+  client: { secret_hash: string } | null,
+  presentedSecretHash: string,
+  presentedSecret: string,
+): ClientRefusal | null {
+  if (!client) return "unknown_client";
+  if (!client.secret_hash) return null;
+  if (!presentedSecret) return "secret_missing";
+  return timingSafeEqual(client.secret_hash, presentedSecretHash) ? null : "secret_mismatch";
+}
+
+/** The RFC 6749 §5.2 body for a refusal, with a description a person setting up a connector can act on. */
+export function invalidClient(reason: ClientRefusal) {
+  const description = {
+    unknown_client:
+      "no active client with this client_id: it was mistyped, revoked, or never approved. Reconnect " +
+      "with only the server URL and no client ID, or make a new connector in Settings.",
+    secret_missing:
+      "this client was created with a secret, and none was sent. Paste its client secret into the " +
+      "connector, or reconnect with only the server URL and no client ID.",
+    secret_mismatch:
+      "the client secret does not match this client. It was shown once, when the connector was " +
+      "made; if it is lost, make a new connector in Settings.",
+  }[reason];
+  return { error: "invalid_client", error_description: description };
+}
+
 /** Compare without leaking where two secrets diverge. */
 export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
