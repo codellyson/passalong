@@ -181,8 +181,31 @@ export interface Connector {
   created: string;
   approved: string | null;
   last_used: string | null;
+  /** When one of its tokens last reached the MCP endpoint. Null until a tool has been called. */
+  used: string | null;
   confidential: number;
   grants: number;
+  /** Why the token endpoint last refused it, cleared when it next gets a token. "" when fine. */
+  last_error: string;
+  last_error_at: string;
+}
+
+/** The token endpoint refused a client it knows: remember why, so Settings can say it. */
+export async function recordRefusal(db: D1Database, id: string, reason: string, at: string) {
+  await db
+    .prepare("UPDATE oauth_client SET last_error = ?, last_error_at = ? WHERE id = ?")
+    .bind(reason.slice(0, 40), at, id)
+    .run();
+}
+
+/** A client got a token, so whatever last went wrong is over. Writes nothing when nothing was wrong. */
+export async function clearRefusal(db: D1Database, id: string) {
+  await db
+    .prepare(
+      "UPDATE oauth_client SET last_error = '', last_error_at = '' WHERE id = ? AND last_error <> ''",
+    )
+    .bind(id)
+    .run();
 }
 
 /**
@@ -202,6 +225,11 @@ export async function listConnectors(db: D1Database, account: string): Promise<C
               -- yet" beside manual connectors that were in use.
               COALESCE(k.created, CASE WHEN c.registered = 'manual' THEN c.created END) AS approved,
               c.secret_hash <> '' AS confidential,
+              c.last_error, c.last_error_at,
+              -- A tool call, as opposed to a token existing: last_used below falls back to when a
+              -- token was made, which is right for "last used" and wrong for "has it worked yet".
+              (SELECT MAX(NULLIF(t.last_used, '')) FROM oauth_token t
+                WHERE t.client_id = c.id AND (c.registered = 'manual' OR t.account_id = ?1)) AS used,
               (SELECT COUNT(*) FROM oauth_token t
                 WHERE t.client_id = c.id AND (c.registered = 'manual' OR t.account_id = ?1)) AS grants,
               (SELECT MAX(CASE WHEN t.last_used <> '' THEN t.last_used ELSE t.created END)

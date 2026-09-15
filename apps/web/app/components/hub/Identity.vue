@@ -12,6 +12,8 @@ const props = defineProps<{ bare?: boolean }>();
 
 const { data, api, json, editing, setMe } = useHub();
 const error = ref<string | null>(null);
+/** On Settings, Save and Cancel only appear once something was typed: there is nothing to save before. */
+const dirty = ref(false);
 
 const me = computed(() => data.value.me);
 const show = computed(
@@ -37,6 +39,7 @@ async function submit(e: Event) {
     const next = await api<Partial<Me>>("/v1/me", json("PATCH", body));
     if (me.value && next) setMe({ ...me.value, ...next });
     editing.value = false;
+    dirty.value = false;
   } catch (err) {
     // "handle @x is taken" is the one error people actually hit, and it is useless at the bottom
     // of the page, so it reports next to the field. What was typed stays put.
@@ -58,7 +61,12 @@ async function submit(e: Event) {
       </p>
     </template>
 
-    <form class="flex flex-col gap-4" @submit.prevent="submit">
+    <form
+      class="flex flex-col gap-4"
+      @submit.prevent="submit"
+      @input="dirty = true"
+      @reset="dirty = false; error = null"
+    >
       <div :class="box">
         <label :class="label" for="handle">How teammates mention you</label>
         <!-- The @ is not part of the value, and typing it again is the obvious mistake to make, so
@@ -95,11 +103,12 @@ async function submit(e: Event) {
         <input id="email" name="email" type="email" class="w-full" :value="me?.email || ''" />
       </div>
 
-      <div class="flex flex-wrap gap-2">
-        <button class="primary" type="submit">Save</button>
+      <p v-if="bare && !dirty" class="m-0 font-ui text-sm text-muted">Saved.</p>
+      <div v-else class="flex flex-wrap gap-2">
+        <button class="primary" type="submit">{{ bare ? "Save changes" : "Save" }}</button>
         <!-- On settings there is nothing to close, so cancel means "put back what was there" —
              which a native reset does exactly, the inputs being uncontrolled. -->
-        <button v-if="bare" class="btn" type="reset" @click="error = null">Cancel</button>
+        <button v-if="bare" class="btn" type="reset">Cancel</button>
         <button v-else-if="me?.handle" class="btn" type="button" @click="editing = false">
           Cancel
         </button>

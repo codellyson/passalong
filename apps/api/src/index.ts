@@ -127,10 +127,12 @@ import {
   validateRegistration,
 } from "./oauth.js";
 import {
+  clearRefusal,
   disconnect,
   findClient,
   listConnectors,
   recordApproval,
+  recordRefusal,
   registrationCutoff,
   saveRegistration,
   sweepRegistrations,
@@ -3572,6 +3574,9 @@ app.post("/v1/oauth/token", async (c) => {
         method: usedBasic ? "client_secret_basic" : clientSecret ? "client_secret_post" : "none",
       }),
     );
+    // Kept on the client when there is one, so Settings can show the reason beside the connector
+    // instead of leaving it in a log line nobody reads.
+    if (client) await recordRefusal(c.env.DB, client.id, reason, now());
     // RFC 6749 §5.2: a client that tried HTTP Basic is told which scheme to retry with.
     return c.json(
       invalidClient(reason),
@@ -3590,6 +3595,7 @@ app.post("/v1/oauth/token", async (c) => {
       .bind(await sha256(presented), client.id)
       .first<{ access_hash: string; account_id: string; scope: string }>();
     if (!row) return c.json({ error: "invalid_grant" }, 400);
+    await clearRefusal(c.env.DB, client.id);
     // Rotation: the old pair goes as the new one is written, so a refresh token is worth one use.
     return c.json(
       await issueTokens(
@@ -3630,6 +3636,7 @@ app.post("/v1/oauth/token", async (c) => {
     .bind(now(), row.code)
     .run();
   count(c, "oauth_token_issued", {});
+  await clearRefusal(c.env.DB, client.id);
   return c.json(
     await issueTokens(c.env.DB, {
       client_id: client.id,
