@@ -320,10 +320,31 @@ export interface AttentionItem {
 /** Everything on Settings that is broken or quietly not working, most urgent first. */
 export function attention(input: {
   hasPassword: boolean;
+  /** Your own sync ceiling, as /v1/me sends it. At the limit, nothing new can be sent. */
+  plan?: { sync: string; guides: number; limit: number };
   connectors: ConnectorRow[];
   teams: { slug: string; name: string; channels: ChannelRow[]; groups: GroupRow[] }[];
 }): AttentionItem[] {
   const items: AttentionItem[] = [];
+  // First, because it stops the one thing Passalong is for: sending a guide.
+  const plan = input.plan;
+  if (plan?.sync === "none") {
+    items.push({
+      tone: "bad",
+      text: "New guides can't be sent until you're on a plan.",
+      where: "Your plan",
+      action: "See your plan",
+      anchor: "plan",
+    });
+  } else if (plan?.sync === "free" && plan.limit > 0 && plan.guides >= plan.limit) {
+    items.push({
+      tone: "bad",
+      text: `You've used all ${plan.limit} guides on the free plan, so new guides can't be sent. Archiving a finished guide frees a space.`,
+      where: "Your plan",
+      action: "See your plan",
+      anchor: "plan",
+    });
+  }
   for (const c of input.connectors) {
     const state = connectorState(c);
     if (state.tone !== "bad") continue;

@@ -11,6 +11,8 @@
   sections.
 -->
 <script setup lang="ts">
+import { useQuery } from "@tanstack/vue-query";
+
 withDefaults(
   defineProps<{
     /** The page's own title. The guides page draws its own, with the team picker in it. */
@@ -48,7 +50,23 @@ const {
   setToken,
   start,
   load,
+  api,
 } = useHub();
+
+/**
+ * Whether this deployment takes money at all. The limit banners link to plans, and a link to a page
+ * that says "Paid plans aren't available yet" is a dead end, so the link only appears when there is
+ * something there to choose. Same query and key as the plan blocks on Settings.
+ */
+const { data: billing } = useQuery({
+  queryKey: hubKeys.billing,
+  queryFn: () => api<{ stripe: string; paystack: string }>("/v1/billing"),
+  enabled: signedIn,
+  staleTime: Number.POSITIVE_INFINITY,
+});
+const plansOffered = computed(() =>
+  (["stripe", "paystack"] as const).some((p) => billing.value?.[p] && billing.value[p] !== "unset"),
+);
 const route = useRoute();
 
 // Nothing is fetched during SSR: neither credential is visible from the server, so the first
@@ -198,7 +216,7 @@ const active = (to: string) =>
       >
         <b class="text-fg">Sending guides needs a plan.</b>
         Guides you already have stay where they are.
-        <NuxtLink to="/hub/settings">Choose a plan</NuxtLink>
+        <NuxtLink v-if="plansOffered" to="/hub/settings#plan">Choose a plan</NuxtLink>
       </p>
 
       <p
@@ -209,8 +227,10 @@ const active = (to: string) =>
         <template v-if="full"> New guides can't be sent until you make room.</template>
         Archiving a finished guide frees a space.
         <NuxtLink :to="{ path: '/hub', query: { done: '1' } }">Show Done</NuxtLink>
-        ·
-        <NuxtLink to="/hub/settings">See plans</NuxtLink>
+        <template v-if="plansOffered">
+          ·
+          <NuxtLink to="/hub/settings#plan">See plans</NuxtLink>
+        </template>
       </p>
 
       <!-- Between the guess and the answer there is no data, so the page's own empty states would

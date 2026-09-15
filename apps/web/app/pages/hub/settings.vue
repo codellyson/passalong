@@ -31,6 +31,9 @@ const needsPassword = computed(() => Boolean(me.value) && !me.value?.has_passwor
 const items = computed(() =>
   attention({
     hasPassword: !needsPassword.value,
+    plan: me.value
+      ? { sync: me.value.sync, guides: me.value.guides, limit: me.value.limit }
+      : undefined,
     connectors: connectors.value,
     teams: extras.value,
   }),
@@ -92,7 +95,14 @@ const nav = computed(() => {
     },
     {
       group: "Plan",
-      links: [{ href: "#plan", label: "Your plan", note: planNote.value, tone: "" }],
+      links: [
+        {
+          href: "#plan",
+          label: "Your plan",
+          note: planNote.value,
+          tone: items.value.some((i) => i.anchor === "plan") ? "bad" : "",
+        },
+      ],
     },
     {
       group: "Teams",
@@ -147,7 +157,9 @@ const bandLabel = "m-0 mb-2 font-ui text-xs font-semibold tracking-widest text-m
 const sec = "flex scroll-mt-6 flex-col gap-4 py-5";
 const secHead = "flex flex-wrap items-baseline gap-x-3 gap-y-1";
 const title = "m-0 font-ui text-lg font-semibold text-fg";
-const blurb = "m-0 basis-full max-w-prose font-ui text-sm text-muted";
+// Its own line under the title. A max-width here let the flex row fit it beside the title instead,
+// since wrapping is decided by the width an item asks for.
+const blurb = "m-0 w-full basis-full font-ui text-sm text-muted";
 const noteTone: Record<string, string> = {
   bad: "text-danger",
   warn: "text-warn",
@@ -180,10 +192,11 @@ const noteTone: Record<string, string> = {
 
       <div class="flex min-w-0 flex-col">
         <section v-if="items.length" class="mb-8 rounded-2 border border-line bg-raised" aria-labelledby="needs-h">
-          <header class="flex items-baseline gap-2 border-b border-line px-4 py-3">
+          <!-- A div, not <header>: the global header rule's padding and margin outrank utilities. -->
+          <div class="flex items-baseline gap-2 border-b border-line px-4 py-3">
             <h2 id="needs-h" class="m-0 font-ui text-base font-semibold text-fg">Needs you</h2>
             <span class="font-ui text-sm text-muted">{{ plural(items.length, "thing") }}, most urgent first</span>
-          </header>
+          </div>
           <ul class="m-0 list-none p-0">
             <li
               v-for="(item, i) in items"

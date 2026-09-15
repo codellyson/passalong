@@ -143,7 +143,9 @@ const initials = (label: string) =>
       :key="t.slug"
       class="scroll-mt-6 rounded-2 border border-line bg-raised"
     >
-      <header class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-4 py-3">
+      <!-- A div, not <header>: the global header rule adds its own padding and margin, and it
+           outranks utility classes — it put a gap above the tabs. -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-4 py-3">
         <div class="min-w-0">
           <h3 class="m-0 font-ui text-base font-semibold text-fg">{{ t.name || t.slug }}</h3>
           <p class="m-0 font-ui text-sm text-muted">
@@ -157,7 +159,7 @@ const initials = (label: string) =>
           </button>
           <button class="btn sm" @click="guides(t)">See its guides</button>
         </div>
-      </header>
+      </div>
 
       <div class="flex gap-1 overflow-x-auto border-b border-line px-3" role="tablist" :aria-label="t.name || t.slug" @keydown="arrowTabs($event, t)">
         <button

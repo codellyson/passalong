@@ -137,6 +137,47 @@ test("Needs you lists what is broken, most urgent first, each with where to fix 
   assert.equal(attention({ hasPassword: true, connectors: [], teams: [] }).length, 0);
 });
 
+// The screenshot that found this: 25 of 25 guides used, a banner saying nothing new can be sent,
+// and a Settings page with nothing under Needs you.
+test("a full free plan is the first thing Needs you says", () => {
+  const full = attention({
+    hasPassword: true,
+    plan: { sync: "free", guides: 25, limit: 25 },
+    connectors: [row({ last_error: "secret_missing" })],
+    teams: [],
+  });
+  assert.equal(full[0].anchor, "plan");
+  assert.match(full[0].text, /all 25 guides/);
+  assert.equal(
+    attention({
+      hasPassword: true,
+      plan: { sync: "free", guides: 24, limit: 25 },
+      connectors: [],
+      teams: [],
+    }).length,
+    0,
+    "room left is not a problem",
+  );
+  assert.equal(
+    attention({
+      hasPassword: true,
+      plan: { sync: "unlimited", guides: 900, limit: 0 },
+      connectors: [],
+      teams: [],
+    }).length,
+    0,
+  );
+  assert.match(
+    attention({
+      hasPassword: true,
+      plan: { sync: "none", guides: 3, limit: 0 },
+      connectors: [],
+      teams: [],
+    })[0].text,
+    /on a plan/,
+  );
+});
+
 test("a connector's host picks which app's steps a Reconnect opens", () => {
   assert.equal(appForHost("chatgpt.com"), "chatgpt");
   assert.equal(appForHost("claude.ai"), "claude");
