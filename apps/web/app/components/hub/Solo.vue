@@ -89,10 +89,27 @@ async function subscribe(provider: string) {
     <p v-else-if="sync === 'none'" class="m-0 font-ui text-sm text-muted">
       New guides can't be sent until you're on a plan. Guides you already have stay where they are.
     </p>
-    <p v-else class="m-0 font-ui text-sm text-muted">
-      You're on the free plan: you're using {{ data.me?.guides }} of {{ data.me?.limit }} guides.
-      Solo removes the limit.
-    </p>
+    <div v-else class="flex max-w-md flex-col gap-2">
+      <div class="flex justify-between font-ui text-sm text-muted tabular-nums">
+        <span><b class="font-semibold text-fg">{{ data.me?.guides }}</b> of {{ data.me?.limit }} guides</span>
+        <span>{{ Math.max(0, (data.me?.limit ?? 0) - (data.me?.guides ?? 0)) }} left</span>
+      </div>
+      <!-- A bar, because "18 of 25" is a distance to a wall and reads faster as one. -->
+      <div
+        class="h-1.5 overflow-hidden rounded-pill bg-line"
+        role="meter"
+        :aria-valuenow="data.me?.guides"
+        aria-valuemin="0"
+        :aria-valuemax="data.me?.limit"
+        aria-label="Guides used"
+      >
+        <div
+          class="h-full rounded-pill bg-accent"
+          :style="{ width: `${Math.min(100, ((data.me?.guides ?? 0) / Math.max(1, data.me?.limit ?? 1)) * 100)}%` }"
+        />
+      </div>
+      <p class="m-0 font-ui text-sm text-muted">You're on the free plan. Solo removes the limit.</p>
+    </div>
 
     <p v-if="!available.length" class="m-0 font-ui text-sm text-muted">
       Paid plans aren't available yet. Check back later.

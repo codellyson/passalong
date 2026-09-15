@@ -7,7 +7,8 @@ import { test } from "node:test";
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const connect = read("../app/pages/connect.vue");
-const form = read("../app/components/hub/Connectors.vue");
+// The connector form's per-app requirements live in utils/connect-apps.ts, callback included.
+const form = read("../app/utils/connect-apps.ts");
 const CALLBACK = "https://claude.ai/api/mcp/auth_callback";
 
 test("the page and the form offer the same Claude callback", () => {
