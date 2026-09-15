@@ -77,6 +77,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "ack_guide",
     "attach_screenshot",
     "board",
+    "create_upload",
     "file_bugs",
     "get_guide",
     "get_report",
@@ -90,6 +91,86 @@ test("every tool it lists is one an agent could act on", async () => {
     assert.ok(tool.description && tool.description.length > 20, `${tool.name} needs a description`);
     assert.equal(tool.inputSchema.type, "object", `${tool.name} needs an input schema`);
   }
+});
+
+// create_upload is how an agent holding the image as a file hands it over: Claude's sandbox has the
+// file and no file input to put it in, so it gets somewhere to send the bytes instead.
+test("create_upload mints a link and hands back the command that uses it", async () => {
+  const link = `https://passalong.dev/v1/uploads/pa_up_${"a".repeat(32)}`;
+  const { call, seen } = recorder({
+    "POST /v1/uploads": {
+      status: 201,
+      text: JSON.stringify({ upload_url: link, expires: "2026-09-15T12:10:00.000Z" }),
+    },
+  });
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 12,
+        method: "tools/call",
+        params: { name: "create_upload", arguments: { name: "shot.png" } },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.equal(body.result.isError, undefined);
+  assert.deepEqual(
+    seen.map((s) => `${s.method} ${s.path}`),
+    ["POST /v1/uploads"],
+  );
+  assert.deepEqual(seen[0].body, { name: "shot.png" });
+  const { upload_url, command } = body.result.structuredContent;
+  assert.equal(upload_url, link);
+  // PUT and the file's bytes, to that link. No content-type in it: the route reads the bytes.
+  assert.equal(command, `curl -sS --fail-with-body -X PUT --data-binary @IMAGE_PATH '${link}'`);
+  assert.match(body.result.content[0].text, /IMAGE_PATH/);
+});
+
+test("create_upload passes the route's refusal on", async () => {
+  const { call } = recorder({
+    "POST /v1/uploads": { status: 429, text: '{"message":"Too many upload links are open."}' },
+  });
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 13,
+        method: "tools/call",
+        params: { name: "create_upload", arguments: {} },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.equal(body.result.isError, true);
+  assert.match(body.result.content[0].text, /Too many upload links/);
+});
+
+test("a local path passed as a download URL is pointed at create_upload", async () => {
+  const { call, seen } = recorder();
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 14,
+        method: "tools/call",
+        params: {
+          name: "attach_screenshot",
+          arguments: {
+            file: { download_url: "/mnt/user-data/uploads/shot.png", file_id: "shot.png" },
+          },
+        },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  // What Claude did: it had the file in its sandbox and passed the path. The refusal says what works.
+  assert.equal(body.result.isError, true);
+  assert.match(body.result.content[0].text, /create_upload/);
+  assert.deepEqual(seen, []);
 });
 
 test("a tool call reaches the route it maps onto, and relays what it said", async () => {

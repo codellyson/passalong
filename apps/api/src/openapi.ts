@@ -459,6 +459,44 @@ export function openapi(origin: string) {
           },
         },
       },
+      "/v1/uploads": {
+        post: {
+          operationId: "createUploadLink",
+          summary: "Get a one-time link that takes a screenshot's bytes without a credential.",
+          description:
+            "For something that holds an image as a file but cannot send your token with it, " +
+            "such as an agent's code sandbox. The link works once and expires in 10 minutes.",
+          requestBody: {
+            required: false,
+            content: {
+              "application/json": {
+                schema: { type: "object", properties: { name: { type: "string" } } },
+              },
+            },
+          },
+          responses: {
+            201: { description: "The link, as upload_url, and when it expires." },
+            429: { description: "Too many unused links are open." },
+          },
+        },
+      },
+      "/v1/uploads/{token}": {
+        put: {
+          operationId: "sendToUploadLink",
+          summary: "Send an image's raw bytes to an upload link. POST works too.",
+          description:
+            "png, jpeg, webp or gif, up to 5MB, recognised from the bytes. Returns the shot and " +
+            "the markdown line to put in a guide.",
+          security: [],
+          parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: { required: true, content: { "application/octet-stream": {} } },
+          responses: {
+            201: { description: "Stored." },
+            410: { description: "The link expired or was already used." },
+            415: { description: "Not an image type we store." },
+          },
+        },
+      },
       "/g/{id}/{key}.md": {
         get: {
           operationId: "readSharedGuide",

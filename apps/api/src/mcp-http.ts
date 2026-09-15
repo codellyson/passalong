@@ -180,6 +180,14 @@ const fileBugsOut = z
   })
   .passthrough();
 
+const uploadOut = z
+  .object({
+    upload_url: z.string().describe("one-time link that takes the image's bytes"),
+    expires: z.string().describe("when the link stops working"),
+    command: z.string().describe("the curl command to run where the file is"),
+  })
+  .passthrough();
+
 const shotOut = z
   .object({
     id: z.string(),
@@ -337,7 +345,13 @@ async function storeFile(
   file: FileInput,
 ): Promise<{ line: string; shot: { id: string; url: string } } | { error: string }> {
   const url = fetchable(file.download_url);
-  if (!url) return { error: "download_url has to be a public https URL" };
+  if (!url) {
+    return {
+      error:
+        "download_url has to be a public https URL. If the image is a file you hold — in a code " +
+        "sandbox or on disk — call create_upload and run the command it returns instead.",
+    };
+  }
   let res: Response;
   try {
     res = await fetch(url);
@@ -431,6 +445,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
         "attach it with attach_screenshot and pass what it returns as `evidence` — a screenshot " +
         "you described instead of attaching is the most useful thing in the report, thrown away. " +
+        "If you hold the image as a file rather than as a file input — in a code sandbox, or on " +
+        "disk — call create_upload and run the command it returns; never base64 an image into a " +
+        "tool call. " +
         "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
         "the body, and publish_guide the same id — publishing claims whatever the markdown names.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
@@ -699,7 +716,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "it. Send them all in one call rather than one call each. If the user showed you an " +
         "image of any of this, it is evidence: pass the files in `attachments` and list each " +
         "file's position in the issue it belongs to (`attachments: [0]`); with one issue, every " +
-        "file goes to it. A URL or line from attach_screenshot goes in `evidence` instead. " +
+        "file goes to it. A URL or line from attach_screenshot or create_upload goes in " +
+        "`evidence` instead. " +
         "Describing a screenshot you were given, instead of attaching it, throws away the most " +
         "useful thing in the report.",
       inputSchema: {
@@ -858,6 +876,54 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           `${JSON.stringify(stored.shot, null, 2)}\n\nPut this in the guide body:\n${stored.line}`,
         ),
         structuredContent: { ...stored.shot, markdown: stored.line },
+      };
+    },
+  );
+
+  /**
+   * Evidence, from an agent that holds the image as a file: Claude's sandbox, or anything else that
+   * can run a command but cannot fill a file input.
+   *
+   * The link is minted here and the bytes go to it from wherever the file is, so they never pass
+   * through the model. The route in index.ts spends the link and stores the shot.
+   */
+  server.registerTool(
+    "create_upload",
+    {
+      title: "Get an upload link",
+      annotations: ADDS,
+      description:
+        "For an image you hold as a file — in a code sandbox, or on disk — that you cannot pass " +
+        "as a file input. Returns a one-time link and the curl command that sends the file to " +
+        "it. Run the command where the file is, with IMAGE_PATH replaced by the file's path; its " +
+        "JSON response has `markdown`, the line to put in the guide body or pass as file_bugs " +
+        "`evidence`. The link works once and expires in 10 minutes, so ask for one per image, " +
+        "right before sending it. The bytes go straight to Passalong and never through the " +
+        "conversation — never base64 an image into a tool call instead. If the command cannot " +
+        "reach passalong.dev, the sandbox's network settings block it: tell the user to allow " +
+        "that domain for code execution.",
+      inputSchema: {
+        name: z.string().optional().describe("label for the image, e.g. its filename"),
+      },
+      outputSchema: uploadOut,
+    },
+    async ({ name }) => {
+      const res = await call("POST", "/v1/uploads", { name: name ?? "" });
+      if (res.status >= 400) return failed(res.text);
+      const { upload_url, expires } = JSON.parse(res.text) as {
+        upload_url: string;
+        expires: string;
+      };
+      // PUT spelled out, and no content-type: the route reads the type from the bytes, so the one
+      // thing an agent could get wrong in this command is not in it.
+      const command = `curl -sS --fail-with-body -X PUT --data-binary @IMAGE_PATH '${upload_url}'`;
+      return {
+        ...text(
+          `Upload link (one use, expires ${expires}):\n${upload_url}\n\n` +
+            `Run this where the file is, with IMAGE_PATH replaced by its path:\n${command}\n\n` +
+            "The response's `markdown` is the line to put in the guide body.",
+        ),
+        structuredContent: { upload_url, expires, command },
       };
     },
   );

@@ -168,7 +168,16 @@ on both, shaped for where it runs: a path locally, a client-passed file over HTT
 so a client that passes files needs one call: `publish_guide` puts each image under Problem (or at
 the end), and each `file_bugs` issue lists the positions of its own files in `attachments: [0]` —
 with one issue, every file goes to it. A client that lists tools once and caches them has to be
-refreshed to see these fields. A local server is
+refreshed to see these fields.
+
+Only ChatGPT fills a file input. An agent that holds the image as a file instead — Claude's code
+sandbox, or anything that can run a command — calls `create_upload` on the hosted server. It returns
+a one-time link, good for 10 minutes, and the command that sends the file to it:
+`curl -sS --fail-with-body -X PUT --data-binary @IMAGE_PATH '<link>'`. Run it where the file is;
+the JSON it prints has `markdown`, the line to put in the guide body or pass as `evidence`. The
+bytes go straight to Passalong and never through the conversation, so never base64 an image into a
+tool call. If the command cannot reach `passalong.dev`, the sandbox's network settings are blocking
+it, and the user has to allow that domain for code execution. A local server is
 still better where you can run one: it works offline and knows which repo you are in.
 
 Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for Gemini

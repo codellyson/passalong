@@ -24,7 +24,10 @@ public one, for agents *using* Passalong rather than changing it.
     reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a
     client-passed file over HTTP (`openai/fileParams`). Over HTTP, `publish_guide` and `file_bugs`
     also take a top-level `attachments` file array. `openai/fileParams` only accepts top-level
-    fields, so a `file_bugs` issue names its files by position rather than holding them.
+    fields, so a `file_bugs` issue names its files by position rather than holding them. Only
+    ChatGPT fills file inputs, so the HTTP server also has `create_upload`: a one-time link
+    (`POST /v1/uploads`, spent by `PUT /v1/uploads/:token` without a credential) that an agent's
+    sandbox sends the file to with curl. See `apps/api/src/uploads.ts`.
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to

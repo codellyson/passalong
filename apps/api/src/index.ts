@@ -139,6 +139,14 @@ import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
 import { acceptsNewWork, type Ceiling, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
 import { SHOT_TYPES, shotKey } from "./shots.js";
+import {
+  isUploadToken,
+  publicUpload,
+  sniffImage,
+  UPLOAD_OPEN_MAX,
+  UPLOAD_PREFIX,
+  UPLOAD_TTL_MS,
+} from "./uploads.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -725,6 +733,7 @@ app.use("/v1/*", async (c, next) => {
   }
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
   if (publicShot(c.req.method, c.req.path)) return next();
+  if (publicUpload(c.req.method, c.req.path)) return next();
   if (publicWebhook(c.req.method, c.req.path)) return next();
 
   const auth = c.req.header("authorization") || "";
@@ -1641,24 +1650,103 @@ app.post("/v1/shots", async (c) => {
   if (body.byteLength > SHOT_MAX)
     return err(c, 413, "That image is over 5 MB. Use a smaller screenshot.");
 
+  const shot = await storeShot(c, bucket, account, type, body, c.req.header("x-shot-name") || "");
+  return c.json({ shot }, 201);
+});
+
+/**
+ * Write one screenshot: the object, then the row that says whose it is. Shared by the direct
+ * upload and the upload link, so there is one place a shot comes into being.
+ */
+async function storeShot(
+  c: Ctx,
+  bucket: R2Bucket,
+  account: string,
+  type: string,
+  body: ArrayBuffer,
+  name: string,
+) {
   const id = rid(12);
   await bucket.put(shotKey(id, type), body, { httpMetadata: { contentType: type } });
   await c.env.DB.prepare(
     "INSERT INTO shot (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, '', ?, ?, ?, ?)",
   )
-    .bind(
-      id,
-      account,
-      String(c.req.header("x-shot-name") || "").slice(0, 120),
-      type,
-      body.byteLength,
-      now(),
-    )
+    .bind(id, account, String(name).slice(0, 120), type, body.byteLength, now())
     .run();
-  return c.json(
-    { shot: { id, url: `${origin(c)}/v1/shots/${id}`, type, bytes: body.byteLength } },
-    201,
-  );
+  return { id, url: `${origin(c)}/v1/shots/${id}`, type, bytes: body.byteLength };
+}
+
+/**
+ * Mint an upload link: somewhere an agent's sandbox can send an image it holds as a file.
+ *
+ * See uploads.ts for why this exists. Minting needs the account, because the link uploads as that
+ * account; using it does not, because the thing using it has no credential. Spent and expired links
+ * for the account are cleared here rather than on a cron — they are tiny, and this is the only
+ * moment anything reads them.
+ */
+app.post("/v1/uploads", async (c) => {
+  const account = c.get("account");
+  if (!c.env.SHOTS) return err(c, 501, "Screenshots can't be uploaded here right now.");
+  const body = (await c.req.json().catch(() => ({}))) as { name?: unknown };
+  const at = now();
+  await c.env.DB.prepare("DELETE FROM upload WHERE account_id = ? AND (expires <= ? OR used <> '')")
+    .bind(account, at)
+    .run();
+  const open = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM upload WHERE account_id = ?")
+    .bind(account)
+    .first<{ n: number }>();
+  if (Number(open?.n || 0) >= UPLOAD_OPEN_MAX) {
+    return err(
+      c,
+      429,
+      "Too many upload links are open. Use one, or wait ten minutes for them to expire.",
+    );
+  }
+  const token = `${UPLOAD_PREFIX}${rand(32)}`;
+  const expires = new Date(Date.now() + UPLOAD_TTL_MS).toISOString();
+  const name =
+    typeof body.name === "string" ? body.name.replace(/[^\x20-\x7e]/g, "").slice(0, 120) : "";
+  await c.env.DB.prepare(
+    "INSERT INTO upload (hash, account_id, name, created, expires) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(await sha256(token), account, name, at, expires)
+    .run();
+  return c.json({ upload_url: `${origin(c)}/v1/uploads/${token}`, expires }, 201);
+});
+
+/**
+ * Send an image to an upload link. No credential: the link is the authorization, and the
+ * middleware lets exactly this shape through (`publicUpload`).
+ *
+ * Everything that can be checked without the link is checked before the link is spent, so a wrong
+ * file does not burn it. Spending is one conditional UPDATE, so two uploads racing for the same link
+ * cannot both win.
+ */
+app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
+  const token = c.req.param("token");
+  if (!isUploadToken(token)) return c.notFound();
+  const bucket = c.env.SHOTS;
+  if (!bucket) return err(c, 501, "Screenshots can't be uploaded here right now.");
+
+  const body = await c.req.arrayBuffer();
+  if (!body.byteLength) return err(c, 400, "That file is empty. Check the path you sent.");
+  if (body.byteLength > SHOT_MAX)
+    return err(c, 413, "That image is over 5 MB. Use a smaller screenshot.");
+  const type = sniffImage(body);
+  if (!type) return err(c, 415, "That file isn't an image. Use a PNG, JPEG, WebP or GIF.");
+
+  const at = now();
+  const ticket = await c.env.DB.prepare(
+    "UPDATE upload SET used = ? WHERE hash = ? AND used = '' AND expires > ? RETURNING account_id, name",
+  )
+    .bind(at, await sha256(token), at)
+    .first<{ account_id: string; name: string }>();
+  if (!ticket) {
+    return err(c, 410, "That upload link has expired or was already used. Ask for a new one.");
+  }
+  const shot = await storeShot(c, bucket, ticket.account_id, type, body, ticket.name);
+  const label = (ticket.name || "screenshot").replace(/[[\]]/g, "");
+  return c.json({ shot, markdown: `![${label}](${shot.url})` }, 201);
 });
 
 /**
