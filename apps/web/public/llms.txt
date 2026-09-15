@@ -163,7 +163,12 @@ one: `https://passalong.dev/v1/mcp`, Streamable HTTP, authenticated with a beare
 most of these tools — everything except the ones that touch a working directory. `start_guide` is
 one of those, so over the hosted server take a handoff with `ack_guide` and fetch it with
 `get_guide`, which there returns the markdown without writing it anywhere. `attach_screenshot` is
-on both, shaped for where it runs: a path locally, a client-passed file over HTTP. A local server is
+on both, shaped for where it runs: a path locally, a client-passed file over HTTP. Over HTTP,
+`publish_guide` and `file_bugs` also take the files themselves in a top-level `attachments` array,
+so a client that passes files needs one call: `publish_guide` puts each image under Problem (or at
+the end), and each `file_bugs` issue lists the positions of its own files in `attachments: [0]` —
+with one issue, every file goes to it. A client that lists tools once and caches them has to be
+refreshed to see these fields. A local server is
 still better where you can run one: it works offline and knows which repo you are in.
 
 Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for Gemini
