@@ -103,8 +103,8 @@ async function submit(e: Event) {
         <input id="email" name="email" type="email" class="w-full" :value="me?.email || ''" />
       </div>
 
-      <p v-if="bare && !dirty" class="m-0 font-ui text-sm text-muted">Saved.</p>
-      <div v-else class="flex flex-wrap gap-2">
+      <!-- Nothing at rest: "Saved." before anyone has saved anything reads as a claim. -->
+      <div v-if="!bare || dirty" class="flex flex-wrap gap-2">
         <button class="primary" type="submit">{{ bare ? "Save changes" : "Save" }}</button>
         <!-- On settings there is nothing to close, so cancel means "put back what was there" —
              which a native reset does exactly, the inputs being uncontrolled. -->

@@ -104,7 +104,14 @@ async function subscribe(provider: string) {
         aria-label="Guides used"
       >
         <div
-          class="h-full rounded-pill bg-accent"
+          class="h-full rounded-pill"
+          :class="
+            (data.me?.guides ?? 0) >= (data.me?.limit ?? 1)
+              ? 'bg-danger'
+              : (data.me?.guides ?? 0) >= (data.me?.limit ?? 1) * 0.8
+                ? 'bg-warn'
+                : 'bg-accent'
+          "
           :style="{ width: `${Math.min(100, ((data.me?.guides ?? 0) / Math.max(1, data.me?.limit ?? 1)) * 100)}%` }"
         />
       </div>
