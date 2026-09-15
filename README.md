@@ -119,7 +119,9 @@ you see which ones keep travelling — there is nothing to mark them as, and not
 claude mcp add passalong -- passalong mcp     # or the equivalent stdio config
 ```
 
-Tools: `publish_guide` (with `to`), `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `verify_guide`, `inbox`, `board`, `activity`.
+Tools: `publish_guide` (with `to`), `file_bugs`, `start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`, `verify_guide`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`.
+
+The same server is hosted at `https://passalong.dev/v1/mcp` for assistants that add remote MCP servers. A screenshot reaches it differently by assistant — ChatGPT passes the file, Claude sends it from its code sandbox to a one-time upload link (`create_upload`, with `passalong.dev` allowed in its network settings), and a local server reads a path. [passalong.dev/connect](https://passalong.dev/connect#screenshots) has the steps.
 
 ## Principles
 

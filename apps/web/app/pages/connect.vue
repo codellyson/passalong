@@ -115,6 +115,45 @@ passalong setup     # Claude Code: skill + MCP server</code></pre>
         </div>
       </section>
 
+      <!-- Per assistant, because this is the one thing that does differ by vendor: MCP has no
+           standard file input yet, so how an image reaches a tool depends on the client. Each
+           route below was checked working before it was written here. -->
+      <section id="screenshots">
+        <p class="eyebrow">Screenshots · evidence for a bug</p>
+        <h2>Attach the screenshot</h2>
+        <div class="say">
+          <p>
+            Attach the image in your chat and ask for the bug to be filed with it. The screenshot
+            goes into the guide itself, under Problem, so whoever opens the link sees it. How the
+            file gets there depends on the assistant.
+          </p>
+          <p>
+            <b>ChatGPT</b> hands the file to Passalong itself. Attach it in ChatGPT on the web; the
+            mobile apps send a reference the server cannot download.
+          </p>
+          <p>
+            <b>Claude</b> sends the file from its code sandbox to a one-time upload link. Allow
+            <code>passalong.dev</code> in the network settings for Claude's code execution, or the
+            sandbox cannot reach it and the upload fails.
+          </p>
+          <p>
+            <b>Claude Code, Cursor and other local setups</b> read the image from disk: give the
+            agent the file's path.
+          </p>
+          <p>
+            <b>Scripts</b> send the raw bytes with a token, or ask for an upload link and send them
+            there with no token at all. The link works once and expires in ten minutes.
+          </p>
+          <pre><code>curl -H "authorization: Bearer $TOKEN" \
+  -H "content-type: image/png" --data-binary @shot.png \
+  https://passalong.dev/v1/shots</code></pre>
+          <p>
+            Either way the answer includes the markdown line that points at the image. Put it in the
+            guide, and publishing keeps the file for as long as the guide exists.
+          </p>
+        </div>
+      </section>
+
       <section>
         <p class="eyebrow">Gemini · scripts · anything that calls HTTP</p>
         <h2>Call the API</h2>

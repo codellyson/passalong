@@ -64,7 +64,8 @@ const TOPICS = [
   {
     eyebrow: "More context",
     h: "Follow-ups and bug reports",
-    // TODO(copy): --follows / parent, file_bugs, kind: bug vs transfer.
+    // TODO(copy): --follows / parent, file_bugs, kind: bug vs transfer, and attaching screenshots
+    // (per assistant, already written at /connect#screenshots).
     p: "TODO: adding context to a guide, and filing a set of bugs as one report.",
     href: null,
     link: "",

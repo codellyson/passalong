@@ -62,6 +62,12 @@ const QUESTIONS = [
       "/connect: Claude Code, Cursor, Zed, Gemini CLI locally; any MCP connector by URL; HTTP API.",
   },
   {
+    q: "Can an assistant attach the screenshot I gave it to a bug report?",
+    a: "",
+    notes:
+      "/connect#screenshots: ChatGPT web passes the file; Claude uploads from its sandbox via create_upload once passalong.dev is allowed; local servers take a path.",
+  },
+  {
     q: "What is the difference between a transfer and a bug?",
     a: "",
     notes: "/connect statement section; llms.txt 'Two kinds of guide'.",
