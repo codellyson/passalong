@@ -140,6 +140,104 @@ function fetchable(raw: string): URL | null {
   return url;
 }
 
+/**
+ * A file a client passes in, in the shape `openai/fileParams` requires: all four properties
+ * declared, only `download_url` and `file_id` required. The client fills it; the model never sees
+ * the bytes. Only a top-level input field can be declared a file — which is why the attachments on
+ * file_bugs sit beside `issues` and each issue points at them by position.
+ */
+const fileInput = z.object({
+  download_url: z.string().describe("where the file can be fetched (https)"),
+  file_id: z.string().describe("the host's id for the file"),
+  mime_type: z.string().optional().describe("image/png, image/jpeg, image/webp, image/gif"),
+  file_name: z.string().optional().describe("original filename, used as the label"),
+});
+type FileInput = z.infer<typeof fileInput>;
+
+/**
+ * Fetch a client-passed file and store it through `POST /v1/shots`. Returns the markdown line that
+ * points at it, or the reason it could not be stored. Shared by every tool that takes a file, so
+ * the SSRF guard and the size bound are written once.
+ */
+async function storeFile(
+  call: Call,
+  file: FileInput,
+): Promise<{ line: string; shot: { id: string; url: string } } | { error: string }> {
+  const url = fetchable(file.download_url);
+  if (!url) return { error: "download_url has to be a public https URL" };
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    return { error: `could not fetch the file (${(err as Error).message})` };
+  }
+  if (!res.ok) return { error: `could not fetch the file: ${res.status} ${res.statusText}` };
+  // The declared length is a hint and a lie is free, so the bytes are what gets measured.
+  const bytes = await res.arrayBuffer();
+  if (bytes.byteLength > FETCH_MAX) return { error: "that file is too large to attach" };
+  if (!bytes.byteLength) return { error: "that file is empty" };
+  // The client's mime_type is what it says the file is; the host's own content-type is what it
+  // served. Prefer the served one — `/v1/shots` keys storage off this and refuses what it does
+  // not know, so being wrong here is a 415 rather than a mislabelled image.
+  const served = (res.headers.get("content-type") || "").split(";")[0]?.trim();
+  const type = served || file.mime_type || "";
+  const up = await call("POST", "/v1/shots", bytes, {
+    contentType: type,
+    headers: file.file_name ? { "x-shot-name": file.file_name.replace(/[^\x20-\x7e]/g, "") } : {},
+  });
+  if (up.status >= 400) return { error: up.text };
+  const shot = (JSON.parse(up.text) as { shot: { id: string; url: string } }).shot;
+  const label = (file.file_name || "screenshot").replace(/[[\]]/g, "");
+  return { line: `![${label}](${shot.url})`, shot };
+}
+
+/** Store every file in order, stopping at the first that fails and naming which one it was. */
+async function storeFiles(
+  call: Call,
+  files: FileInput[],
+): Promise<{ lines: string[] } | { error: string }> {
+  const lines: string[] = [];
+  for (const [i, file] of files.entries()) {
+    const stored = await storeFile(call, file);
+    if ("error" in stored) {
+      const name = file.file_name ? ` (${file.file_name})` : "";
+      return { error: `attachment ${i}${name}: ${stored.error}` };
+    }
+    lines.push(stored.line);
+  }
+  return { lines };
+}
+
+/**
+ * Put evidence lines into a guide's markdown: at the end of its Problem section when it has one,
+ * where a bug's reader looks first and where `bugDocument` puts them; otherwise at the end.
+ */
+export function withEvidence(markdown: string, lines: string[]): string {
+  if (!lines.length) return markdown;
+  const block = lines.join("\n");
+  const problem = /^## Problem[ \t]*$/m.exec(markdown);
+  if (problem) {
+    const after = problem.index + problem[0].length;
+    const next = /^## /m.exec(markdown.slice(after));
+    if (next) {
+      const at = after + next.index;
+      return `${markdown.slice(0, at).trimEnd()}\n\n${block}\n\n${markdown.slice(at)}`;
+    }
+  }
+  return `${markdown.trimEnd()}\n\n${block}\n`;
+}
+
+/**
+ * What each tool does to the world, said out loud. MCP's defaults for a tool that says nothing are
+ * the worst case — it writes, it may destroy, it reaches outside — and a client acts on them:
+ * ChatGPT badged every tool here, `inbox` included, as a destructive public write.
+ *
+ * `openWorldHint` is false for everything that stays inside Passalong. Only attach_screenshot and
+ * the tools that take attachments fetch a URL somebody else controls.
+ */
+const READS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
+const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
+
 export function buildServer(call: Call, vocabulary: Vocabulary) {
   const server = new McpServer(
     { name: "passalong", version: "0.2.0" },
@@ -174,6 +272,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "search_guides",
     {
       title: "Search guides",
+      annotations: READS,
       description:
         "Search guides by words in the title, tags, stack or body. Returns summaries, not the " +
         "documents — follow up with get_guide.",
@@ -195,6 +294,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "get_guide",
     {
       title: "Get guide",
+      // Not read-only: fetching a teammate's guide records a pull, and that tells them it landed.
+      annotations: ADDS,
       description:
         "Fetch one guide's full markdown by id. Read `kind` in its frontmatter before acting: a " +
         "bug is a defect to fix, and its Reproduce section produces the problem rather than " +
@@ -238,6 +339,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "inbox",
     {
       title: "Inbox",
+      annotations: READS,
       description: "Guides handed to you or your teams that nobody has taken yet.",
       inputSchema: {},
     },
@@ -248,6 +350,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "board",
     {
       title: "Board",
+      annotations: READS,
       description:
         "What is waiting on you and what you handed over, in queues: waiting, not working, in " +
         "flight, landed.",
@@ -260,6 +363,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "log",
     {
       title: "What this user did",
+      annotations: READS,
       description:
         "This user's own acts on guides, newest first: published, pulled, and every verdict and " +
         "ack they gave, each with a rendered `text` line and the guide's repo. Use it for 'what " +
@@ -288,16 +392,24 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "publish_guide",
     {
       title: "Publish guide",
+      // Destructive because passing an existing id replaces that guide's document. Open world
+      // because `attachments` are fetched from wherever the client says they are.
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       description:
         "Publish a guide from its full markdown — a transfer guide, or a single bug with " +
         "`kind: bug`. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
         "is minted and returned. To change a guide, pass the id it came back with; inventing a " +
         "fresh id to retry or to correct one publishes a second copy, and every copy counts " +
         "against the author's synced limit. Created, author and source_context are filled in. " +
-        "Addressing is frontmatter: `team:` and `to:`. A screenshot " +
-        "belongs in the markdown: attach it with attach_screenshot and put the line it returns in " +
-        "the body, because publishing claims whatever the markdown names.",
+        "Addressing is frontmatter: `team:` and `to:`. A screenshot the user attached " +
+        "is evidence: pass it in `attachments` and it is stored and put in the body under Problem " +
+        "(or at the end). A line from attach_screenshot already in the markdown works too, " +
+        "because publishing claims whatever the markdown names.",
       inputSchema: {
+        attachments: z
+          .array(fileInput)
+          .optional()
+          .describe("images the user attached, filled in by the client; each lands in the body"),
         id: z
           .string()
           .optional()
@@ -313,6 +425,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
               "guide's follow-up: listed under it, and read by whoever opens it",
           ),
       },
+      _meta: { "openai/fileParams": ["attachments"] },
     },
     // `parent` rides beside the document and the route writes it into the frontmatter, so a model
     // never has to edit YAML to record where its work came from.
@@ -320,19 +433,27 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     // The id is minted here when none is given. Requiring one made the model name every guide
     // itself, and a model that re-files names it again: one bug reached a hub as three guides,
     // `khaimeteam4`, `5` and `6`. The route's answer carries the id, so the caller has it to reuse.
-    async ({ id, markdown, parent }) =>
-      relay(
+    //
+    // Attachments are stored before the guide is written, so a file that cannot be fetched fails
+    // the call instead of publishing a guide that names evidence it does not have.
+    async ({ id, markdown, parent, attachments }) => {
+      const stored = await storeFiles(call, attachments ?? []);
+      if ("error" in stored) return failed(stored.error);
+      const document = withEvidence(markdown, stored.lines);
+      return relay(
         call,
         "PUT",
         `/v1/guides/${encodeURIComponent(id || newId())}`,
-        parent ? { markdown, parent } : { markdown },
-      ),
+        parent ? { markdown: document, parent } : { markdown: document },
+      );
+    },
   );
 
   server.registerTool(
     "ack_guide",
     {
       title: "Say whether you are taking it",
+      annotations: ADDS,
       description:
         "The first word back on a guide handed to you, before any work: take it, or pass it " +
         "back. Passing must say why — an unanswered handoff is indistinguishable from one nobody " +
@@ -358,6 +479,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "verify_guide",
     {
       title: "Say whether it worked",
+      annotations: ADDS,
       description:
         "Answer for a guide you took. The single most valuable thing to report back, and the " +
         "only way the sender learns their handoff did not land. A failure must say why. If the " +
@@ -381,14 +503,24 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "file_bugs",
     {
       title: "File bugs",
+      // Every issue is a new guide, so nothing is replaced; attachments are fetched from outside.
+      annotations: { ...ADDS, openWorldHint: true },
       description:
         "File defects you found but are not fixing, as one report. Each issue becomes its own " +
         "guide — own id, share link and verdict — so any of them can be handed to whoever fixes " +
         "it. Send them all in one call rather than one call each. If the user showed you an " +
-        "image of any of this, it is evidence: call attach_screenshot first and pass what it " +
-        "returns as that issue's `evidence`. Describing a screenshot you were given, instead of " +
-        "attaching it, throws away the most useful thing in the report.",
+        "image of any of this, it is evidence: pass the files in `attachments` and list each " +
+        "file's position in the issue it belongs to (`attachments: [0]`); with one issue, every " +
+        "file goes to it. A URL or line from attach_screenshot goes in `evidence` instead. " +
+        "Describing a screenshot you were given, instead of attaching it, throws away the most " +
+        "useful thing in the report.",
       inputSchema: {
+        attachments: z
+          .array(fileInput)
+          .optional()
+          .describe(
+            "images the user attached, filled in by the client; each issue names its own by position",
+          ),
         title: z.string().optional().describe('what the sweep was, e.g. "Checkout pass, 8 Sep"'),
         environment: z.string().optional().describe("production, staging or development"),
         to: z
@@ -405,6 +537,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
                   "screenshot URLs from attach_screenshot, or the markdown lines it returned; " +
                     "they go under Problem, where a reader looks first",
                 ),
+              attachments: z
+                .array(z.number().int().min(0))
+                .default([])
+                .describe("positions in the top-level `attachments` that show this issue, from 0"),
               title: z.string().describe("what is broken, in one line"),
               problem: z.string().describe("what is broken and what it stops someone doing"),
               reproduce: z
@@ -422,8 +558,33 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           .min(1),
         cwd: z.string().optional().describe("ignored; this server has no working directory"),
       },
+      _meta: { "openai/fileParams": ["attachments"] },
     },
-    async ({ title, environment, to, issues }) => {
+    async ({ title, environment, to, issues, attachments: files = [] }) => {
+      // Which issue each file belongs to is settled before anything is written. A guess — every
+      // file on every issue, or the unclaimed ones on the first — puts one bug's screenshot on
+      // another bug, which is worse than no screenshot. With a single issue there is nothing to
+      // guess.
+      const claims = issues.map((issue) =>
+        issues.length === 1 && !issue.attachments.length
+          ? files.map((_, i) => i)
+          : issue.attachments,
+      );
+      const out = claims.flat().find((i) => i >= files.length);
+      if (out !== undefined) {
+        return failed(`an issue names attachment ${out}, but only ${files.length} were passed`);
+      }
+      const unclaimed = files.map((_, i) => i).filter((i) => !claims.some((c) => c.includes(i)));
+      if (unclaimed.length) {
+        return failed(
+          `attachment ${unclaimed.join(", ")} belongs to no issue: list each file's position in ` +
+            "the `attachments` of the issue it shows",
+        );
+      }
+      // Stored before the report opens, so a file that cannot be fetched leaves nothing half-filed.
+      const stored = await storeFiles(call, files);
+      if ("error" in stored) return failed(stored.error);
+
       // The report first, because each issue's frontmatter names it.
       const [team, handle] = String(to || "").split("/");
       const opened = await call("POST", "/v1/reports", {
@@ -438,10 +599,14 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       // One at a time: they are writes to the same account against a rate limit, and a partial
       // failure should be able to say which issues already landed.
       const filed: { id: string; url: string; title: string }[] = [];
-      for (const issue of issues) {
+      for (const [n, issue] of issues.entries()) {
         const id = newId();
         const markdown = bugDocument({
           ...issue,
+          evidence: [
+            ...issue.evidence,
+            ...[...new Set(claims[n])].map((i) => stored.lines[i] as string),
+          ],
           report: report.id,
           environment,
           team,
@@ -479,23 +644,14 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "attach_screenshot",
     {
       title: "Attach a screenshot",
+      annotations: { ...ADDS, openWorldHint: true },
       description:
         "Store an image a user attached, so a bug report can point at it. Returns the markdown to " +
         `put in the guide body — evidence lives in the document, not beside it. ${vocabulary.shotTypes}. ` +
         "Call this before file_bugs or publish_guide, then paste the returned line into the " +
         "issue's Problem or Reproduce section; publishing claims whatever the markdown names.",
       inputSchema: {
-        file: z
-          .object({
-            download_url: z.string().describe("where the file can be fetched (https)"),
-            file_id: z.string().describe("the host's id for the file"),
-            mime_type: z
-              .string()
-              .optional()
-              .describe("image/png, image/jpeg, image/webp, image/gif"),
-            file_name: z.string().optional().describe("original filename, used as the label"),
-          })
-          .describe("the attached image, filled in by the client"),
+        file: fileInput.describe("the attached image, filled in by the client"),
       },
       // The field names a client fills with files. Expressed with zod rather than the `$defs` /
       // `$ref` the Apps SDK reference writes out: the wire schema is the same object with the same
@@ -504,36 +660,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       _meta: { "openai/fileParams": ["file"] },
     },
     async ({ file }) => {
-      const url = fetchable(file.download_url);
-      if (!url) return failed("download_url has to be a public https URL");
-      let res: Response;
-      try {
-        res = await fetch(url);
-      } catch (err) {
-        return failed(`could not fetch the file (${(err as Error).message})`);
-      }
-      if (!res.ok) return failed(`could not fetch the file: ${res.status} ${res.statusText}`);
-      // The declared length is a hint and a lie is free, so the bytes are what gets measured.
-      const bytes = await res.arrayBuffer();
-      if (bytes.byteLength > FETCH_MAX) return failed("that file is too large to attach");
-      if (!bytes.byteLength) return failed("that file is empty");
-      // The client's mime_type is what it says the file is; the host's own content-type is what it
-      // served. Prefer the served one — `/v1/shots` keys storage off this and refuses what it does
-      // not know, so being wrong here is a 415 rather than a mislabelled image.
-      const served = (res.headers.get("content-type") || "").split(";")[0]?.trim();
-      const type = served || file.mime_type || "";
-      const up = await call("POST", "/v1/shots", bytes, {
-        contentType: type,
-        headers: file.file_name
-          ? { "x-shot-name": file.file_name.replace(/[^\x20-\x7e]/g, "") }
-          : {},
-      });
-      if (up.status >= 400) return failed(up.text);
-      const shot = JSON.parse(up.text) as { shot: { id: string; url: string } };
-      const label = file.file_name || "screenshot";
+      const stored = await storeFile(call, file);
+      if ("error" in stored) return failed(stored.error);
       return text(
-        `${JSON.stringify(shot.shot, null, 2)}\n\n` +
-          `Put this in the guide body:\n![${label}](${shot.shot.url})`,
+        `${JSON.stringify(stored.shot, null, 2)}\n\nPut this in the guide body:\n${stored.line}`,
       );
     },
   );
@@ -542,6 +672,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "get_report",
     {
       title: "Get report",
+      annotations: READS,
       description: "One bug report and its issues, grouped by product area.",
       inputSchema: { id: z.string() },
     },

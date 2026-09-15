@@ -22,7 +22,9 @@ public one, for agents *using* Passalong rather than changing it.
     `verify_guide`, `file_bugs`, `attach_screenshot`. `start_guide` is the one an agent should
     reach for on work it means to do: it pulls and takes the handoff together. `get_guide` only
     reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a
-    client-passed file over HTTP (`openai/fileParams`).
+    client-passed file over HTTP (`openai/fileParams`). Over HTTP, `publish_guide` and `file_bugs`
+    also take a top-level `attachments` file array. `openai/fileParams` only accepts top-level
+    fields, so a `file_bugs` issue names its files by position rather than holding them.
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to

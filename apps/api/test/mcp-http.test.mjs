@@ -270,6 +270,37 @@ test("acking maps onto the route, and passing carries its reason", async () => {
   assert.deepEqual(sent.body, { taken: false, note: "no context on payments" });
 });
 
+test("every tool says what it does to the world, so a client does not assume the worst", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
+  );
+  // Left unsaid, readOnlyHint defaults to false and destructiveHint and openWorldHint to true, and
+  // ChatGPT badged `inbox` as a destructive public write.
+  for (const t of body.result.tools) {
+    for (const hint of ["readOnlyHint", "destructiveHint", "openWorldHint"]) {
+      assert.equal(typeof t.annotations?.[hint], "boolean", `${t.name} must set ${hint}`);
+    }
+  }
+  const by = (pred) =>
+    body.result.tools
+      .filter(pred)
+      .map((t) => t.name)
+      .sort();
+  assert.deepEqual(
+    by((t) => t.annotations.readOnlyHint),
+    ["board", "get_report", "inbox", "log", "search_guides"],
+  );
+  assert.deepEqual(
+    by((t) => t.annotations.destructiveHint),
+    ["publish_guide"],
+  );
+  assert.deepEqual(
+    by((t) => t.annotations.openWorldHint),
+    ["attach_screenshot", "file_bugs", "publish_guide"],
+  );
+});
+
 // attach_screenshot is the one tool that reaches outside: it fetches a URL a caller handed it.
 // `download_url` is filled in by ChatGPT in practice, but anyone holding a token can call the tool
 // directly, so what it refuses matters as much as what it uploads.
@@ -435,6 +466,163 @@ test("the tools that write a guide say where a screenshot goes", async () => {
   }
   const issue = body.result.tools.find((t) => t.name === "file_bugs").inputSchema.properties.issues;
   assert.ok(issue.items.properties.evidence, "each issue takes its own evidence");
+});
+
+// The one-call path: a client that can pass files hands them to the tool that writes the guide, so
+// an agent does not have to call attach_screenshot and then copy a line into the document.
+const SHOT_API = {
+  "POST /v1/shots": {
+    status: 201,
+    text: JSON.stringify({ shot: { id: "s1", url: "https://passalong.dev/v1/shots/s1" } }),
+  },
+  "POST /v1/reports": { status: 201, text: JSON.stringify({ report: { id: "r1" } }) },
+  "PUT /v1/guides": { status: 201, text: JSON.stringify({ url: "https://passalong.dev/g/x/y" }) },
+};
+
+async function withImageHost(fn) {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(new Uint8Array([137, 80, 78, 71]), {
+      status: 200,
+      headers: { "content-type": "image/png" },
+    });
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+const tool = (name, args) =>
+  rpc({ jsonrpc: "2.0", id: 11, method: "tools/call", params: { name, arguments: args } });
+
+test("publish_guide and file_bugs declare attachments as file inputs, at the top level", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
+  );
+  for (const name of ["publish_guide", "file_bugs"]) {
+    const t = body.result.tools.find((x) => x.name === name);
+    // Only a top-level field can be a file param, so this is where a client will look.
+    assert.deepEqual(t._meta["openai/fileParams"], ["attachments"], name);
+    const items = t.inputSchema.properties.attachments.items;
+    assert.deepEqual(Object.keys(items.properties).sort(), [
+      "download_url",
+      "file_id",
+      "file_name",
+      "mime_type",
+    ]);
+    assert.deepEqual(items.required.sort(), ["download_url", "file_id"]);
+  }
+});
+
+test("publish_guide stores its attachments and puts them under Problem", async () => {
+  await withImageHost(async () => {
+    const { call, seen } = recorder(SHOT_API);
+    const markdown =
+      "---\ntitle: Save fails\nkind: bug\n---\n\n## Problem\nSave does nothing.\n\n## Reproduce\n1. Save\n";
+    const body = await read(
+      await handleMcp(
+        tool("publish_guide", { id: "k3mq2xa7", markdown, attachments: [FILE] }),
+        call,
+        VOCAB,
+      ),
+    );
+    assert.notEqual(body.result.isError, true);
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.path}`),
+      ["POST /v1/shots", "PUT /v1/guides/k3mq2xa7"],
+      "the file is stored before the guide that names it",
+    );
+    assert.match(
+      seen[1].body.markdown,
+      /## Problem\nSave does nothing\.\n\n!\[shot\.png\]\(https:\/\/passalong\.dev\/v1\/shots\/s1\)\n\n## Reproduce/,
+    );
+  });
+});
+
+test("publish_guide writes nothing when an attachment cannot be fetched", async () => {
+  const { call, seen } = recorder(SHOT_API);
+  const body = await read(
+    await handleMcp(
+      tool("publish_guide", {
+        markdown: "---\ntitle: x\n---\n\nbody\n",
+        attachments: [{ ...FILE, download_url: "https://127.0.0.1/a.png" }],
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.equal(body.result.isError, true);
+  assert.match(body.result.content[0].text, /attachment 0 \(shot\.png\): .*public https URL/);
+  assert.deepEqual(seen, []);
+});
+
+test("file_bugs puts each attachment on the issue that names it", async () => {
+  await withImageHost(async () => {
+    const { call, seen } = recorder(SHOT_API);
+    await read(
+      await handleMcp(
+        tool("file_bugs", {
+          attachments: [FILE],
+          issues: [
+            { title: "No shot", problem: "P1", reproduce: "R1" },
+            { title: "Has shot", problem: "P2", reproduce: "R2", attachments: [0] },
+          ],
+        }),
+        call,
+        VOCAB,
+      ),
+    );
+    const puts = seen.filter((s) => s.method === "PUT");
+    assert.doesNotMatch(puts[0].body.markdown, /!\[/);
+    assert.match(puts[1].body.markdown, /## Problem\nP2\n\n!\[shot\.png\]\(.*s1\)\n\n## Reproduce/);
+  });
+});
+
+test("file_bugs with one issue gives it every attachment", async () => {
+  await withImageHost(async () => {
+    const { call, seen } = recorder(SHOT_API);
+    await read(
+      await handleMcp(
+        tool("file_bugs", {
+          attachments: [FILE],
+          issues: [{ title: "Only", problem: "P", reproduce: "R" }],
+        }),
+        call,
+        VOCAB,
+      ),
+    );
+    const put = seen.find((s) => s.method === "PUT");
+    assert.match(put.body.markdown, /!\[shot\.png\]/);
+  });
+});
+
+test("file_bugs refuses to guess whose attachment it is, before writing anything", async () => {
+  const { call, seen } = recorder(SHOT_API);
+  const two = [
+    { title: "A", problem: "P", reproduce: "R" },
+    { title: "B", problem: "P", reproduce: "R" },
+  ];
+  let body = await read(
+    await handleMcp(tool("file_bugs", { attachments: [FILE], issues: two }), call, VOCAB),
+  );
+  assert.equal(body.result.isError, true);
+  assert.match(body.result.content[0].text, /attachment 0 belongs to no issue/);
+
+  body = await read(
+    await handleMcp(
+      tool("file_bugs", {
+        attachments: [FILE],
+        issues: [{ ...two[0], attachments: [0, 3] }, two[1]],
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.equal(body.result.isError, true);
+  assert.match(body.result.content[0].text, /names attachment 3, but only 1 were passed/);
+  assert.deepEqual(seen, [], "no shot stored and no report opened");
 });
 
 test("publish_guide carries a parent beside the document, and only when one was given", async () => {
