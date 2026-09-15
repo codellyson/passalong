@@ -301,6 +301,89 @@ test("every tool says what it does to the world, so a client does not assume the
   );
 });
 
+test("every tool declares an output schema that leaves room for fields it does not name", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
+  );
+  for (const t of body.result.tools) {
+    assert.equal(t.outputSchema?.type, "object", `${t.name} needs an output schema`);
+    // A closed object would make every field a route adds a validation error in the client.
+    assert.notEqual(t.outputSchema.additionalProperties, false, `${t.name} must stay open`);
+  }
+});
+
+test("a relayed answer comes back as data as well as text", async () => {
+  const guides = { guides: [{ id: "k3mq2xa7", title: "x", kind: "bug", extra: 1 }] };
+  const { call } = recorder({ "GET /v1/inbox": { status: 200, text: JSON.stringify(guides) } });
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "inbox", arguments: {} },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.equal(body.result.isError, undefined);
+  assert.deepEqual(
+    body.result.structuredContent,
+    guides,
+    "fields the schema does not name survive",
+  );
+  assert.equal(body.result.content[0].text, JSON.stringify(guides));
+});
+
+test("a route that answers with something other than an object is a tool error", async () => {
+  const { call } = recorder({ "GET /v1/board": { status: 200, text: "<html>" } });
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "board", arguments: {} },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.equal(body.result.isError, true);
+  assert.match(body.result.content[0].text, /unexpected response from \/v1\/board/);
+});
+
+test("get_guide hands back the document and its follow-ups as data, without the notes", async () => {
+  const markdown = "---\ntitle: x\nkind: bug\n---\n\n## Problem\np\n";
+  const { call } = recorder({
+    "GET /v1/guides/abc12345": { status: 200, text: markdown },
+    "GET /v1/guides/abc12345/children": {
+      status: 200,
+      text: JSON.stringify({ guides: [{ id: "f1", title: "More", markdown: "# more\n" }] }),
+    },
+  });
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "get_guide", arguments: { id: "abc12345" } },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.deepEqual(body.result.structuredContent, {
+    id: "abc12345",
+    kind: "bug",
+    markdown,
+    follow_ups: [{ id: "f1", title: "More", markdown: "# more" }],
+  });
+});
+
 // attach_screenshot is the one tool that reaches outside: it fetches a URL a caller handed it.
 // `download_url` is filled in by ChatGPT in practice, but anyone holding a token can call the tool
 // directly, so what it refuses matters as much as what it uploads.
@@ -477,6 +560,11 @@ const SHOT_API = {
   },
   "POST /v1/reports": { status: 201, text: JSON.stringify({ report: { id: "r1" } }) },
   "PUT /v1/guides": { status: 201, text: JSON.stringify({ url: "https://passalong.dev/g/x/y" }) },
+  // What the route really answers with: publish_guide's output schema requires the id.
+  "PUT /v1/guides/k3mq2xa7": {
+    status: 201,
+    text: JSON.stringify({ id: "k3mq2xa7", url: "https://passalong.dev/g/k3mq2xa7/y" }),
+  },
 };
 
 async function withImageHost(fn) {
