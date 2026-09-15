@@ -41,11 +41,174 @@ const failed = (value: string) => ({
   isError: true,
 });
 
-/** Hand a route's answer back as it came, so a tool never invents an error the API did not give. */
+/**
+ * Hand a route's answer back as it came, so a tool never invents an error the API did not give.
+ *
+ * The same JSON goes out twice: as text, which every client reads, and as `structuredContent`,
+ * which is what a tool with an output schema has to return. A route that answered with something
+ * other than a JSON object is a failure here, since the SDK would refuse the result anyway.
+ */
 async function relay(call: Call, method: string, path: string, body?: unknown) {
   const res = await call(method, path, body);
-  return res.status >= 400 ? failed(res.text) : text(res.text);
+  if (res.status >= 400) return failed(res.text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(res.text);
+  } catch {
+    return failed(`unexpected response from ${path}: ${res.text.slice(0, 200)}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return failed(`unexpected response from ${path}: ${res.text.slice(0, 200)}`);
+  }
+  return { ...text(res.text), structuredContent: parsed as Record<string, unknown> };
 }
+
+/**
+ * Output schemas: what each tool hands back, for clients that read results as data.
+ *
+ * Every object passes through fields it does not name, and almost every field is optional. The
+ * routes are the source of truth and add fields freely; a schema that closed the object, or
+ * required a field a route stopped sending, would turn a working tool into a validation error.
+ * What is named here is what a caller is likely to act on.
+ */
+const verdictOut = z
+  .object({
+    ok: z.boolean().optional(),
+    by: z.string().optional(),
+    note: z.string().optional(),
+    at: z.string().optional(),
+  })
+  .passthrough();
+
+const guideSummaryOut = z
+  .object({
+    id: z.string(),
+    title: z.string().optional(),
+    kind: z.string().optional().describe("transfer or bug"),
+    status: z.string().optional(),
+    url: z.string().optional().describe("share link"),
+    created: z.string().optional(),
+    updated: z.string().optional(),
+    source_context: z.string().optional(),
+    from: z.string().optional(),
+    team: z.string().optional(),
+    to: z.string().optional(),
+    for_me: z.boolean().optional(),
+    report: z.string().optional(),
+    parent: z.string().optional(),
+    children: z.number().optional(),
+    area: z.string().optional(),
+    severity: z.string().optional(),
+    verdict: verdictOut.nullable().optional(),
+    failing: z.boolean().optional(),
+  })
+  .passthrough();
+
+const guidesOut = z.object({ guides: z.array(guideSummaryOut) }).passthrough();
+
+const boardOut = z
+  .object({
+    waiting: z.array(guideSummaryOut).optional().describe("handed to you, not taken"),
+    failing: z.array(guideSummaryOut).optional().describe("yours, with a failing verdict"),
+    in_flight: z.array(guideSummaryOut).optional().describe("handed over, no answer yet"),
+    landed: z.array(guideSummaryOut).optional().describe("handed over and verified"),
+    unread: z.number().optional(),
+  })
+  .passthrough();
+
+const logOut = z
+  .object({
+    log: z.array(
+      z
+        .object({
+          act: z.string().optional(),
+          at: z.string().optional(),
+          guide: z.string().optional(),
+          title: z.string().optional(),
+          repo: z.string().optional(),
+          url: z.string().optional(),
+          note: z.string().optional(),
+          text: z.string().optional().describe("the act as one readable line"),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+const getGuideOut = z
+  .object({
+    id: z.string(),
+    kind: z.string().describe("transfer or bug"),
+    markdown: z.string().describe("the document as published, frontmatter first"),
+    follow_ups: z
+      .array(z.object({ id: z.string(), title: z.string(), markdown: z.string() }).passthrough())
+      .describe("more context published under this guide, oldest first"),
+  })
+  .passthrough();
+
+const publishOut = z
+  .object({
+    id: z.string(),
+    url: z.string().optional().describe("share link"),
+    status: z.string().optional(),
+    created: z.boolean().optional().describe("false when an existing guide was replaced"),
+    team: z.string().optional(),
+    to: z.string().optional(),
+  })
+  .passthrough();
+
+const ackOut = z
+  .object({ id: z.string(), taken: z.boolean().optional(), note: z.string().optional() })
+  .passthrough();
+
+const verdictResultOut = z
+  .object({ id: z.string(), ok: z.boolean().optional(), note: z.string().optional() })
+  .passthrough();
+
+const fileBugsOut = z
+  .object({
+    report: z
+      .object({
+        id: z.string(),
+        title: z.string().optional(),
+        environment: z.string().optional(),
+      })
+      .passthrough(),
+    issues: z.array(
+      z.object({ id: z.string(), url: z.string().optional(), title: z.string() }).passthrough(),
+    ),
+  })
+  .passthrough();
+
+const shotOut = z
+  .object({
+    id: z.string(),
+    url: z.string(),
+    markdown: z.string().describe("the line to put in the guide body"),
+  })
+  .passthrough();
+
+const reportOut = z
+  .object({
+    report: z
+      .object({
+        id: z.string(),
+        title: z.string().optional(),
+        environment: z.string().optional(),
+        issues: z.number().optional(),
+        open: z.number().optional(),
+        failing: z.number().optional(),
+        areas: z
+          .array(
+            z
+              .object({ area: z.string().optional(), issues: z.array(guideSummaryOut).optional() })
+              .passthrough(),
+          )
+          .optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
 /**
  * What heads a guide's follow-ups when they are handed to an agent. Mirrors `FOLLOW_UPS_LEAD` in
@@ -62,24 +225,34 @@ export const FOLLOW_UPS_LEAD =
  * what was asked for. `?markdown=1` records no pull on the children: reading context for a guide is
  * not opening those guides.
  */
-async function followUps(call: Call, id: string): Promise<string> {
+async function followUps(
+  call: Call,
+  id: string,
+): Promise<{ text: string; guides: { id: string; title: string; markdown: string }[] }> {
+  const none = { text: "", guides: [] };
   try {
     const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}/children?markdown=1`);
-    if (res.status >= 400) return "";
+    if (res.status >= 400) return none;
     const { guides = [] } = JSON.parse(res.text) as {
       guides?: { id?: string; title?: string; markdown?: unknown }[];
     };
-    const withContent = guides.filter((g) => g?.id && typeof g.markdown === "string");
-    if (!withContent.length) return "";
-    return [
-      FOLLOW_UPS_LEAD,
-      ...withContent.map(
-        (g) =>
-          `--- follow-up ${g.id}: ${g.title || "untitled"} ---\n${String(g.markdown).trimEnd()}`,
-      ),
-    ].join("\n\n");
+    const withContent = guides
+      .filter((g) => g?.id && typeof g.markdown === "string")
+      .map((g) => ({
+        id: String(g.id),
+        title: g.title || "untitled",
+        markdown: String(g.markdown).trimEnd(),
+      }));
+    if (!withContent.length) return none;
+    return {
+      text: [
+        FOLLOW_UPS_LEAD,
+        ...withContent.map((g) => `--- follow-up ${g.id}: ${g.title} ---\n${g.markdown}`),
+      ].join("\n\n"),
+      guides: withContent,
+    };
   } catch {
-    return "";
+    return none;
   }
 }
 
@@ -280,6 +453,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         q: z.string().optional().describe("words to match"),
         scope: z.string().optional().describe('"all" (default), "mine", or a team slug'),
       },
+      outputSchema: guidesOut,
     },
     async ({ q, scope }) => {
       const query = new URLSearchParams();
@@ -301,6 +475,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "bug is a defect to fix, and its Reproduce section produces the problem rather than " +
         "solving it. Fetching a teammate's guide tells them the transfer landed.",
       inputSchema: { id: z.string().describe("passalong id, e.g. k3mq2xa7") },
+      outputSchema: getGuideOut,
     },
     async ({ id }) => {
       const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}`);
@@ -328,9 +503,16 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       return {
         content: [
           { type: "text" as const, text: lead + res.text },
-          ...(context ? [{ type: "text" as const, text: context }] : []),
+          ...(context.text ? [{ type: "text" as const, text: context.text }] : []),
           { type: "text" as const, text: note },
         ],
+        // The document untouched — no lead, no note — for a client that reads results as data.
+        structuredContent: {
+          id,
+          kind: bug ? "bug" : "transfer",
+          markdown: res.text,
+          follow_ups: context.guides,
+        },
       };
     },
   );
@@ -342,6 +524,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       annotations: READS,
       description: "Guides handed to you or your teams that nobody has taken yet.",
       inputSchema: {},
+      outputSchema: guidesOut,
     },
     async () => relay(call, "GET", "/v1/inbox"),
   );
@@ -355,6 +538,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "What is waiting on you and what you handed over, in queues: waiting, not working, in " +
         "flight, landed.",
       inputSchema: {},
+      outputSchema: boardOut,
     },
     async () => relay(call, "GET", "/v1/board"),
   );
@@ -378,6 +562,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           .optional()
           .describe("only what happened on or after: 2026, 2026-09, or 2026-09-11"),
       },
+      outputSchema: logOut,
     },
     async ({ repo, since }) => {
       const query = new URLSearchParams();
@@ -425,6 +610,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
               "guide's follow-up: listed under it, and read by whoever opens it",
           ),
       },
+      outputSchema: publishOut,
       _meta: { "openai/fileParams": ["attachments"] },
     },
     // `parent` rides beside the document and the route writes it into the frontmatter, so a model
@@ -467,6 +653,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           .optional()
           .describe("required when taken is false: why it is not yours; one line, 280 chars"),
       },
+      outputSchema: ackOut,
     },
     async ({ id, taken, note }) =>
       relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/ack`, {
@@ -491,6 +678,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         ok: z.boolean().describe("true if it holds up"),
         note: z.string().optional().describe("required when ok is false; one line, 280 chars"),
       },
+      outputSchema: verdictResultOut,
     },
     async ({ id, ok, note }) =>
       relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/verdict`, {
@@ -558,6 +746,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           .min(1),
         cwd: z.string().optional().describe("ignored; this server has no working directory"),
       },
+      outputSchema: fileBugsOut,
       _meta: { "openai/fileParams": ["attachments"] },
     },
     async ({ title, environment, to, issues, attachments: files = [] }) => {
@@ -620,7 +809,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         }
         filed.push({ id, url: (JSON.parse(res.text) as { url: string }).url, title: issue.title });
       }
-      return text(JSON.stringify({ report, issues: filed }, null, 2));
+      const result = { report, issues: filed };
+      return { ...text(JSON.stringify(result, null, 2)), structuredContent: result };
     },
   );
 
@@ -653,6 +843,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       inputSchema: {
         file: fileInput.describe("the attached image, filled in by the client"),
       },
+      outputSchema: shotOut,
       // The field names a client fills with files. Expressed with zod rather than the `$defs` /
       // `$ref` the Apps SDK reference writes out: the wire schema is the same object with the same
       // four properties, and one schema language in this file is worth more than matching a
@@ -662,9 +853,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     async ({ file }) => {
       const stored = await storeFile(call, file);
       if ("error" in stored) return failed(stored.error);
-      return text(
-        `${JSON.stringify(stored.shot, null, 2)}\n\nPut this in the guide body:\n${stored.line}`,
-      );
+      return {
+        ...text(
+          `${JSON.stringify(stored.shot, null, 2)}\n\nPut this in the guide body:\n${stored.line}`,
+        ),
+        structuredContent: { ...stored.shot, markdown: stored.line },
+      };
     },
   );
 
@@ -675,6 +869,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       annotations: READS,
       description: "One bug report and its issues, grouped by product area.",
       inputSchema: { id: z.string() },
+      outputSchema: reportOut,
     },
     async ({ id }) => relay(call, "GET", `/v1/reports/${encodeURIComponent(id)}`),
   );
