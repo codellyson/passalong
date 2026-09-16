@@ -1,12 +1,12 @@
 <!--
   Connected apps: what uses Passalong as you, and how to add one.
 
-  Connecting starts from the app, not from a form. Every app's requirements are known — ChatGPT and
-  Claude sign themselves in and need no client ID or secret, Claude Code and Cursor run locally —
-  so they are stated up front from utils/connect-apps.ts, and only the steps that are yours are
-  left. The old form asked for a callback address and whether the app "keeps a secret", and the
-  reasonable-looking answer to the second made a ChatGPT connector that was refused at every
-  sign-in.
+  Connecting starts from the app, not from a form. Every app's requirements are known — Claude
+  signs itself in, ChatGPT wants a client ID and no secret, Claude Code and Cursor run locally — so
+  they are stated up front from utils/connect-apps.ts, and only the steps that are yours are left.
+  The old form asked every app the same two questions, a callback address and whether it "keeps a
+  secret", and the reasonable-looking answer to the second made a ChatGPT connector that was
+  refused at every sign-in.
 
   While an app that signs itself in is being connected, the list is polled and the progress shows:
   approved, signed in, first tool call — and if the token exchange is refused, why.
@@ -24,6 +24,7 @@ import {
   connectorState,
   handshake,
   MCP_URL,
+  markForHost,
 } from "~/utils/connect-apps";
 
 const { api, json } = useHub();
@@ -176,10 +177,11 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
             @click="stepsFor(a.id)"
           >
             <span
-              class="grid size-8 place-items-center rounded-1 border font-code text-xs"
+              class="grid size-8 place-items-center rounded-1 border"
               :class="a.id === connect.app ? 'border-transparent bg-accent-soft text-accent' : 'border-line bg-bg text-fg'"
-              aria-hidden="true"
-            >{{ a.mark }}</span>
+            >
+              <AppMark :name="a.mark" :size="18" />
+            </span>
             <span class="min-w-0">
               <span class="block font-ui text-sm font-medium text-fg">{{ a.name }}</span>
               <span class="block font-ui text-xs text-muted">{{ a.how }}</span>
@@ -190,6 +192,9 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
 
       <div class="flex min-w-0 flex-col gap-5 p-5" aria-live="polite">
         <div class="flex flex-wrap items-start gap-3">
+          <span class="grid size-10 shrink-0 place-items-center rounded-1 border border-line bg-bg text-fg">
+            <AppMark :name="app.mark" :size="22" />
+          </span>
           <div class="min-w-48 grow">
             <h4 class="m-0 font-ui text-lg font-semibold text-fg">{{ app.name }}</h4>
             <p class="mt-1 mb-0 max-w-prose font-ui text-sm text-muted">{{ app.lede }}</p>
@@ -252,9 +257,15 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
           </p>
         </div>
 
-        <details v-if="app.manual">
+        <details v-if="app.manual" :open="app.id === 'chatgpt'">
           <summary class="linkish w-fit cursor-pointer font-ui text-sm">
-            {{ app.id === "other" ? "The app asked for a client ID" : `${app.name} asked for a client ID instead` }}
+            {{
+              app.id === "chatgpt"
+                ? "Make a client ID for ChatGPT"
+                : app.id === "other"
+                  ? "The app asked for a client ID"
+                  : `${app.name} asked for a client ID instead`
+            }}
           </summary>
           <form class="mt-3 flex flex-col gap-3 rounded-1 border border-dashed border-line-strong p-3" @submit.prevent="createClient">
             <p v-if="app.manual.callback" class="m-0 font-ui text-sm text-muted">
@@ -345,9 +356,16 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
         <tbody>
           <tr v-for="client in clients" :key="client.id">
             <td :class="cell" class="pr-3">
-              <span class="block font-ui text-sm font-semibold text-fg">{{ client.name || client.host || "Unnamed app" }}</span>
-              <span class="block font-ui text-xs text-muted">
-                {{ client.host }} · {{ client.registered === "dynamic" ? "signed itself in" : "client ID made by hand" }}
+              <span class="flex items-center gap-2.5">
+                <span class="grid size-7 shrink-0 place-items-center rounded-1 border border-line bg-bg text-fg">
+                  <AppMark :name="markForHost(client.host)" :size="15" />
+                </span>
+                <span class="min-w-0">
+                  <span class="block font-ui text-sm font-semibold text-fg">{{ client.name || client.host || "Unnamed app" }}</span>
+                  <span class="block font-ui text-xs text-muted">
+                    {{ client.host }} · {{ client.registered === "dynamic" ? "signed itself in" : "client ID made by hand" }}
+                  </span>
+                </span>
               </span>
             </td>
             <td :class="cell" class="pr-3">

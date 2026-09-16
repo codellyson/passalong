@@ -33,7 +33,8 @@ export interface Step {
 export interface ConnectApp {
   id: string;
   group: "Assistants" | "On your machine" | "Anything else";
-  mark: string;
+  /** Which mark AppMark.vue draws. Each vendor's own logo; a plug and braces for the two that have none. */
+  mark: "chatgpt" | "claude" | "claude-code" | "cursor" | "mcp" | "script";
   name: string;
   how: string;
   method: string;
@@ -54,39 +55,45 @@ export const APPS: ConnectApp[] = [
   {
     id: "chatgpt",
     group: "Assistants",
-    mark: "Ch",
+    mark: "chatgpt",
     name: "ChatGPT",
-    how: "Paste an address",
-    method: "Signs itself in",
-    lede: "ChatGPT signs itself in. You paste one address and approve it here.",
+    how: "Address and a client ID",
+    method: "OAuth · client ID",
+    lede: "ChatGPT asks for a client ID, so you make one here and paste it back. It needs no secret.",
     kind: "oauth",
     requirements: [
-      { label: "Client ID", value: "Not needed", need: "none" },
+      { label: "Client ID", value: "Make one below", need: "you" },
       { label: "Secret", value: "Not needed", need: "none" },
-      { label: "Callback", value: "ChatGPT's own", need: "done" },
+      { label: "Callback", value: "From ChatGPT's form", need: "you" },
     ],
     steps: [
       {
-        text: "In ChatGPT, open {path} and create a custom connector.",
+        text: "In ChatGPT, open {path} and start a custom connector.",
         path: "Settings → Connectors",
       },
-      { text: "Paste the server address.", copy: MCP_URL },
       {
-        text: "Fill in only these fields:",
+        text: "Paste the server address, and choose OAuth when it asks how to sign in.",
+        copy: MCP_URL,
+      },
+      {
+        text: "Copy the callback address ChatGPT shows, then make a client ID for it below. Leave the secret off.",
+      },
+      {
+        text: "Back in ChatGPT, fill in only these:",
         fields: [
           ["Server URL", "the address above"],
           ["Authentication", "OAuth"],
-          ["Client ID", null],
+          ["Client ID", "the one made below"],
           ["Client secret", null],
         ],
       },
-      { text: "Approve Passalong in the window that opens." },
+      { text: "Save, and approve Passalong in the window that opens." },
     ],
     notes: [
       {
         tone: "warn",
         label: "Watch for",
-        text: 'Leave client ID and secret empty. A client ID made by hand is refused with "secret missing".',
+        text: 'Leave the client secret empty, and make the client ID without a secret. A connector made with one is refused with "secret missing" at every sign-in.',
       },
       {
         tone: "info",
@@ -94,11 +101,12 @@ export const APPS: ConnectApp[] = [
         text: "Attach them in ChatGPT on the web. The mobile apps send a file Passalong can't download.",
       },
     ],
+    manual: { callback: "" },
   },
   {
     id: "claude",
     group: "Assistants",
-    mark: "Cl",
+    mark: "claude",
     name: "Claude",
     how: "Paste an address",
     method: "Signs itself in",
@@ -130,7 +138,7 @@ export const APPS: ConnectApp[] = [
   {
     id: "claude-code",
     group: "On your machine",
-    mark: ">_",
+    mark: "claude-code",
     name: "Claude Code",
     how: "Three commands",
     method: "Local server",
@@ -154,7 +162,7 @@ export const APPS: ConnectApp[] = [
   {
     id: "cursor",
     group: "On your machine",
-    mark: "Cu",
+    mark: "cursor",
     name: "Cursor",
     how: "Install, then one file",
     method: "Local server",
@@ -179,7 +187,7 @@ export const APPS: ConnectApp[] = [
   {
     id: "other",
     group: "Anything else",
-    mark: "+",
+    mark: "mcp",
     name: "Another MCP app",
     how: "Address, or a client ID",
     method: "Signs itself in",
@@ -203,7 +211,7 @@ export const APPS: ConnectApp[] = [
   {
     id: "script",
     group: "Anything else",
-    mark: "{}",
+    mark: "script",
     name: "Script or API",
     how: "A token",
     method: "Token",
@@ -226,6 +234,9 @@ export const APPS: ConnectApp[] = [
 ];
 
 export const appById = (id: string) => APPS.find((a) => a.id === id) ?? APPS[0]!;
+
+/** The mark for a listed connector, from its host. A vendor's logo where we know it, a plug otherwise. */
+export const markForHost = (host: string) => appById(appForHost(host)).mark;
 
 /** The app a listed connector most likely is, from where it sends people back to. */
 export function appForHost(host: string): string {
@@ -252,9 +263,10 @@ export interface ConnectorRow {
 
 /** The token endpoint's reasons, as a person reads them. Mirrors `invalidClient` in apps/api. */
 const REFUSALS: Record<string, string> = {
-  secret_missing: "It was made with a secret the app never sends. Reconnect without a client ID.",
+  secret_missing:
+    "Its client ID was made with a secret, and the app never sends one. Make a new client ID without a secret.",
   secret_mismatch:
-    "The secret the app sends doesn't match. Paste the right one, or reconnect without a client ID.",
+    "The secret the app sends does not match its client ID. Paste the right one into the app, or make a client ID without a secret.",
 };
 
 export interface ConnectorState {

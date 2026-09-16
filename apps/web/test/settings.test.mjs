@@ -27,23 +27,30 @@ const row = (over = {}) => ({
   ...over,
 });
 
-test("the assistants that sign themselves in are never asked for a client ID or secret", () => {
-  // The failure this guards: a ChatGPT connector made by hand with a secret, refused at every
-  // sign-in, because the form made the secret look like a reasonable thing to add.
+test("no assistant is ever told to give its connector a secret", () => {
+  // The failure this guards: a ChatGPT connector made with a secret, refused at every sign-in with
+  // "secret missing", because the form made the secret look like a reasonable thing to add.
   for (const id of ["chatgpt", "claude"]) {
     const app = APPS.find((a) => a.id === id);
     assert.equal(app.kind, "oauth");
-    for (const label of ["Client ID", "Secret"]) {
-      const req = app.requirements.find((r) => r.label === label);
-      assert.equal(req?.need, "none", `${id} must not need a ${label}`);
-    }
+    const secret = app.requirements.find((r) => r.label === "Secret");
+    assert.equal(secret?.need, "none", `${id} must not need a secret`);
   }
+  // ChatGPT asks for a client ID, so its steps make one here rather than leaving the field empty.
   const chatgpt = APPS.find((a) => a.id === "chatgpt");
+  assert.equal(chatgpt.requirements.find((r) => r.label === "Client ID").need, "you");
+  assert.ok(chatgpt.manual, "ChatGPT needs the client ID form");
+  assert.equal(chatgpt.manual.callback, "", "its callback comes from ChatGPT's own form");
   const fields = chatgpt.steps.flatMap((s) => s.fields ?? []);
   assert.deepEqual(
     fields.filter(([, v]) => v === null).map(([k]) => k),
-    ["Client ID", "Client secret"],
-    "ChatGPT's steps say to leave both empty",
+    ["Client secret"],
+    "only the secret is left empty",
+  );
+  assert.match(
+    fields.find(([k]) => k === "Client ID")[1],
+    /below/,
+    "the client ID field points at the one made here",
   );
 });
 
@@ -67,7 +74,7 @@ test("Claude's manual callback is filled in, and every app has steps", () => {
 
 test("a connector's state says why it is not working, in order of what matters", () => {
   assert.equal(connectorState(row({ last_error: "secret_missing" })).tone, "bad");
-  assert.match(connectorState(row({ last_error: "secret_missing" })).detail, /without a client ID/);
+  assert.match(connectorState(row({ last_error: "secret_missing" })).detail, /without a secret/);
   assert.equal(connectorState(row({ used: "2026-09-15T16:00:00Z", grants: 1 })).label, "Connected");
   assert.equal(connectorState(row({ grants: 1 })).label, "Signed in");
   assert.equal(connectorState(row()).label, "Approved");
