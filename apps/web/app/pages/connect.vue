@@ -89,8 +89,10 @@ passalong setup     # Claude Code: skill + MCP server</code></pre>
                as an afterthought, when every one of them connects the same way. -->
           <p>
             In the assistant you use, open its connector settings, add a custom connector and paste
-            that address. Leave everything else empty, and if it asks how to sign in, choose OAuth.
-            It opens Passalong and asks you to approve. That's the whole setup.
+            that address. If it asks how to sign in, choose OAuth. It opens Passalong and asks you
+            to approve, and that is the whole setup — unless the app asks for a client ID, as
+            ChatGPT does. Make that in <a href="/hub/settings#apps">your hub</a>, without a secret,
+            and paste it back.
           </p>
           <p>
             You can see every app you have approved, and disconnect it, under Connectors in
