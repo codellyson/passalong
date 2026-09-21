@@ -56,6 +56,9 @@ const facts = computed(() =>
     { label: "from", value: str(meta.value?.author) },
     { label: "sent", value: created.value },
     { label: "project", value: str(meta.value?.source_context) },
+    // A task's own two facts: the repo an agent has to be in to take it, and what it waits for.
+    { label: "for", value: str(meta.value?.target_context) },
+    { label: "waits on", value: list(meta.value?.blocked_by).join(" · ") },
     { label: "assumes", value: list(meta.value?.stack_assumptions).join(" · ") },
   ]
     .filter((f) => f.value)
@@ -73,6 +76,14 @@ const sentence = (names: string[]) =>
  * they filed.
  */
 const isBug = computed(() => str(meta.value?.kind) === "bug");
+
+/**
+ * A task is work nobody has done yet, and the page says so before anyone mistakes Goal and
+ * Acceptance for a record of something finished. It does not say where the task is in its queue:
+ * that is its author's board, and a claim names hosts and worktree paths a share link should not
+ * hand to whoever holds it.
+ */
+const isTask = computed(() => str(meta.value?.kind) === "task");
 
 const cut = computed(() => guide.value?.cut);
 const rest = computed(() => guide.value?.rest);
@@ -347,15 +358,28 @@ usePage({
             they aren't a fix. Fix what Problem describes, then check Verification.
           </p>
 
-          <b class="block font-ui text-base text-fg">Was this sent to you?</b>
-          <p class="mt-1 mb-0 font-ui text-sm text-muted">
-            Tell {{ author }} whether you're taking it. You'll be asked to sign in if you aren't.
-          </p>
-          <p class="mt-3 mb-0 flex flex-wrap items-center gap-2">
-            <a class="btn primary" :href="answer('take')">Take it</a>
-            <a class="btn" :href="answer('pass')">Pass</a>
-            <a class="ml-1 font-ui text-sm" :href="answer('report')">Already on it? Say how it went</a>
-          </p>
+          <!-- A task is not handed to a person, so it is not taken or passed here: an agent takes it
+               from its author's queue. Take and Pass would send an answer nobody is waiting for. -->
+          <template v-if="isTask">
+            <b class="block font-ui text-base text-fg">This is a task: work nobody has done yet.</b>
+            <p class="mt-1 mb-0 font-ui text-sm text-muted">
+              An agent takes it from the queue, works out how to reach Goal, and comes back with a
+              write-up that {{ author }} checks against Acceptance. In
+              {{ str(meta?.target_context) || "a session outside any repo" }}, run
+              <code>passalong work</code> or tell an agent to take the next task.
+            </p>
+          </template>
+          <template v-else>
+            <b class="block font-ui text-base text-fg">Was this sent to you?</b>
+            <p class="mt-1 mb-0 font-ui text-sm text-muted">
+              Tell {{ author }} whether you're taking it. You'll be asked to sign in if you aren't.
+            </p>
+            <p class="mt-3 mb-0 flex flex-wrap items-center gap-2">
+              <a class="btn primary" :href="answer('take')">Take it</a>
+              <a class="btn" :href="answer('pass')">Pass</a>
+              <a class="ml-1 font-ui text-sm" :href="answer('report')">Already on it? Say how it went</a>
+            </p>
+          </template>
           <!-- A plain link, like the rest of this box: the write page is in the hub, which signs
                the reader in first if it needs to. -->
           <p class="mt-3 mb-0 font-ui text-sm text-muted">

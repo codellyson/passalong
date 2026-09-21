@@ -87,7 +87,7 @@ export interface Guide {
   parent_title?: string;
   /** Follow-ups you can read: published guides that name this one as their parent. */
   children?: number;
-  /** "bug" or "transfer"; absent means transfer. */
+  /** "bug", "task" or "transfer"; absent means transfer. */
   kind?: string;
   area?: string;
   severity?: string;
@@ -162,6 +162,35 @@ export interface TeamDetail extends Team {
   }[];
 }
 
+/** Where a task is. Derived by the server on every read — see apps/api/src/claims.ts. */
+export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "review" | "done";
+
+/** One task on the board, as `GET /v1/tasks` sends it. */
+export interface Task {
+  id: string;
+  title: string;
+  /** The repo an agent has to be in to take it; empty for a task for no repo. */
+  target: string;
+  state: TaskState;
+  created: string;
+  /** You wrote it, so ready, approve, reject and release are yours. */
+  mine: boolean;
+  url: string;
+  claim: {
+    agent: string;
+    host: string;
+    repo: string;
+    worktree: string;
+    note: string;
+    report: string;
+    report_title?: string;
+    report_url?: string;
+    pr: string;
+    claimed_at: string;
+    lease_until: string;
+  } | null;
+}
+
 export interface HubData {
   me: Me | null;
   guides: Guide[];
@@ -172,4 +201,5 @@ export interface HubData {
   unread: number;
   tokens: ApiToken[];
   team: TeamDetail | null;
+  tasks: Task[];
 }

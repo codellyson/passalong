@@ -8,7 +8,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as api from "./api.js";
-import { AREAS, BUG_SECTIONS, parse, SECTIONS, template } from "./guide.js";
+import { AREAS, BUG_SECTIONS, parse, SECTIONS, TASK_SECTIONS, template } from "./guide.js";
 import * as passalong from "./passalong.js";
 
 /**
@@ -22,6 +22,30 @@ const VERSION = JSON.parse(
 ).version;
 
 const text = (s) => ({ content: [{ type: "text", text: s }] });
+
+/**
+ * What to say in front of a guide whose kind changes what the reader should do with it.
+ *
+ * The heading text is what an agent keys on, and a bug's or a task's headings are close enough to
+ * a transfer guide's to be treated as one by an agent that never opened the frontmatter. So the
+ * kind is stated before the document, in the imperative. A transfer guide needs nothing: following
+ * it is what an agent does with an unmarked document anyway.
+ */
+function leadFor(meta) {
+  if (meta.kind === "bug")
+    return (
+      "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
+      "— those steps produce the defect. Fix what Problem describes, then check " +
+      "Verification and answer with verify_guide.\n\n"
+    );
+  if (meta.kind === "task")
+    return (
+      "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
+      "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
+      "under Acceptance holds; answer with verify_guide.\n\n"
+    );
+  return "";
+}
 
 /**
  * The rest of the report this issue came from.
@@ -60,9 +84,9 @@ export async function serve() {
     { name: "passalong", version: VERSION },
     {
       instructions:
-        "Passalong hands work between contexts as guides: markdown with frontmatter, in two " +
-        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — the two ask " +
-        "for opposite behaviour.\n" +
+        "Passalong hands work between contexts as guides: markdown with frontmatter, in three " +
+        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — each asks " +
+        "for different behaviour.\n" +
         `kind: transfer (or absent) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +
         "Follow its Steps, adapting anything marked ASSUMES to this codebase; run its " +
         "Verification before declaring done, then verify_guide with the result.\n" +
@@ -86,6 +110,26 @@ export async function serve() {
         "you described instead of attaching is the most useful thing in the report, thrown away. " +
         "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
         "the body, and publish_guide the same id — publishing claims whatever the markdown names. " +
+        "\n" +
+        `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
+        "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
+        "alone, and treat Acceptance as the definition of done. Open it with start_guide, then " +
+        "verify_guide once every Acceptance check holds. When the user asks you to queue work " +
+        "for an agent or write a task, start from guide_template with kind task, fill every " +
+        "section from the conversation and the code — Acceptance as checks a person can run — " +
+        "set target_context to the repo the work is for, and publish_guide. A task lands in " +
+        "Draft, not the queue: tell the user to read it and run `passalong ready <id>`.\n" +
+        "When the user asks you to plan or break down a larger goal, call plan_tasks with the " +
+        "steps in order — each a task with Goal and Acceptance, and `after` naming the earlier " +
+        "steps it needs. They land in Draft; tell the user to read them and run " +
+        "`passalong ready --all`.\n" +
+        "When the user asks you to take work from the queue, call next_task: it claims the oldest " +
+        "ready task for this repo, and no other agent can have it while you do. Call " +
+        "task_progress with a one-line status at each milestone — silence for 30 minutes stalls " +
+        "the task. When Acceptance holds, call finish_task with `markdown`: a transfer guide about " +
+        "what you did (guide_template shows the shape), which it publishes and attaches; the task " +
+        "goes to a person for review, who reads it against Acceptance. If " +
+        "task_progress or finish_task says you no longer hold the task, stop working on it.\n" +
         "When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
         "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or " +
@@ -298,12 +342,7 @@ export async function serve() {
       try {
         const r = await passalong.start(ref, { cwd: cwd || process.cwd() });
         const meta = parse(r.markdown).meta;
-        const lead =
-          meta.kind === "bug"
-            ? "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
-              "— those steps produce the defect. Fix what Problem describes, then check " +
-              "Verification and answer with verify_guide.\n\n"
-            : "";
+        const lead = leadFor(meta);
         // What actually happened to the ack, said plainly. An agent that reports "took it" when
         // nothing was sent is the failure this tool exists to prevent, one step further along.
         const took = r.took
@@ -319,6 +358,147 @@ export async function serve() {
           `${lead}${r.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
             `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->` +
             `\n${passalong.followUpNote(meta)}`,
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "plan_tasks",
+    {
+      title: "Plan a goal as tasks",
+      description:
+        "Break one larger goal into tasks an agent can each finish and a person can each check, " +
+        "written as drafts in order. Give each step a Goal and an Acceptance a person can run. " +
+        "`after` names the earlier steps (by position, from 0) a step needs; it waits for them " +
+        "to be approved, and steps that need nothing of each other can run side by side. Keep a " +
+        "step to one sitting of work in one repo. Nothing runs until the user makes them ready.",
+      inputSchema: {
+        steps: z
+          .array(
+            z.object({
+              title: z.string(),
+              goal: z.string().describe("what is true when this step is done"),
+              acceptance: z.string().describe("checks a person can run, one per line"),
+              context: z.string().optional(),
+              constraints: z.string().optional(),
+              out_of_scope: z.string().optional(),
+              target_context: z
+                .string()
+                .optional()
+                .describe("owner/repo it is for; default is the repo you are in, '' for none"),
+              after: z.array(z.number().int()).optional().describe("earlier steps this one needs"),
+            }),
+          )
+          .min(1)
+          .max(20),
+        cwd: z.string().optional().describe("the repo you are planning from"),
+      },
+    },
+    async ({ steps, cwd }) => {
+      try {
+        const ids = await passalong.planTasks(steps, { cwd: cwd || process.cwd() });
+        return json({
+          drafts: ids.map((id, i) => ({ id, title: steps[i].title, after: steps[i].after || [] })),
+          next: "all in Draft: ask the user to read them, then run `passalong ready --all`",
+        });
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "next_task",
+    {
+      title: "Take the next task",
+      description:
+        "Claim the oldest ready task for the repo this worktree is in, and return it. While you " +
+        "hold it no other agent can take it. If this worktree already holds one, that one comes " +
+        "back instead — one task at a time. Returns nothing to do when the queue is empty.",
+      inputSchema: {
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
+        any: z
+          .boolean()
+          .optional()
+          .describe("take a task for any repo, or for none — only when the user asks for that"),
+      },
+    },
+    async ({ cwd, any }) => {
+      try {
+        const t = await passalong.nextTask({ cwd: cwd || process.cwd(), any: Boolean(any) });
+        if (!t)
+          return text(
+            "No task ready for this repo. Nothing to do — tell the user the queue is empty.",
+          );
+        const how =
+          `\n\n<!-- passalong: task ${t.id} is yours${t.resumed ? " (you already held it — carry on from where it was left)" : ""}; ` +
+          `written to ${t.path}. Call task_progress with a one-line status at each milestone; ` +
+          "30 minutes without one stalls it. When every Acceptance check holds: finish_task with id " +
+          `${t.id} and \`markdown\`, a transfer guide about what you did. -->`;
+        return text(`${leadFor({ kind: "task" })}${t.markdown}${how}`);
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "task_progress",
+    {
+      title: "Report progress on a task",
+      description:
+        "Say you are still working on the task you hold, with a one-line status the board shows. " +
+        "Renews the claim; 30 minutes without this stalls the task. If it answers that you do " +
+        "not hold the task, a person released it: stop working on it.",
+      inputSchema: {
+        id: z.string().describe("the task's id"),
+        note: z.string().optional().describe('one line, e.g. "migrating schema, 2 of 5 steps"'),
+        cwd: z.string().optional().describe("the worktree you are working in"),
+      },
+    },
+    async ({ id, note, cwd }) => {
+      try {
+        return json(await passalong.taskProgress(id, note || "", { cwd: cwd || process.cwd() }));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "finish_task",
+    {
+      title: "Finish a task",
+      description:
+        "Hand a finished task to a person for review. Only once every Acceptance check holds. " +
+        "`markdown` is a transfer guide about the work — this publishes it and attaches it, so " +
+        "there is nothing to publish first. The reviewer reads it against Acceptance: say what " +
+        "you did, what you decided and why, and how you checked each Acceptance line.",
+      inputSchema: {
+        id: z.string().describe("the task's id"),
+        markdown: z
+          .string()
+          .optional()
+          .describe("the transfer guide about this work; start from guide_template"),
+        report: z
+          .string()
+          .optional()
+          .describe("instead of markdown: id of a transfer guide already published about it"),
+        pr: z.string().optional().describe("PR or branch link, when there is one"),
+        note: z.string().optional().describe("one line for the board"),
+        cwd: z.string().optional().describe("the worktree you are working in"),
+      },
+    },
+    async ({ id, markdown, report, pr, note, cwd }) => {
+      try {
+        return json(
+          await passalong.finishTask(id, { markdown, report, pr, note, cwd: cwd || process.cwd() }),
         );
       } catch (err) {
         return fail(err);
@@ -348,16 +528,8 @@ export async function serve() {
     async ({ ref, cwd }) => {
       try {
         const { markdown, path, from } = await passalong.pull(ref, { cwd: cwd || process.cwd() });
-        // The heading text is what an agent keys on, and a bug's headings look enough like a
-        // transfer guide's to be followed by one that never opened the frontmatter. So the kind
-        // is stated in front of the document, in the imperative, every time.
         const meta = parse(markdown).meta;
-        const lead =
-          meta.kind === "bug"
-            ? "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
-              "— those steps produce the defect. Fix what Problem describes, then check " +
-              "Verification and answer with verify_guide.\n\n"
-            : "";
+        const lead = leadFor(meta);
         const siblings = await related(meta);
         // Follow-ups are more context for this guide, so they come with it — after the document,
         // never inside it, so the guide an agent writes back out is still only the guide.
@@ -413,7 +585,8 @@ export async function serve() {
       title: "Publish guide",
       description:
         "Publish a guide from markdown (frontmatter + sections) — a transfer guide by default, or " +
-        "a single bug with `kind: bug`; use file_bugs for more than one. Missing id, created, " +
+        "a single bug with `kind: bug`; use file_bugs for more than one; or a task for work nobody " +
+        "has done yet with `kind: task`. Missing id, created, " +
         "author, and source_context are filled in. A screenshot belongs in the markdown: attach it " +
         "with attach_screenshot and put the line it returns in the body, because publishing claims " +
         "whatever the markdown names. " +
@@ -455,6 +628,14 @@ export async function serve() {
           parent: guide.meta.parent || "",
           notified,
           path,
+          // A task does not go live on publish, and an agent that reports "queued it" has told
+          // the user something untrue. Said in the result so it is said to them.
+          ...(guide.meta.kind === "task" && guide.meta.status === "draft"
+            ? {
+                status: "draft",
+                next: `in Draft: ask the user to read it, then run \`passalong ready ${guide.meta.id}\``,
+              }
+            : {}),
         });
       } catch (err) {
         return fail(err);
@@ -553,15 +734,19 @@ export async function serve() {
       title: "Guide template",
       description:
         "The empty guide skeleton with guidance comments for each section. `kind: bug` gives the " +
-        "bug report skeleton instead, which has a Reproduce section and no Steps.",
+        "bug report skeleton instead, which has a Reproduce section and no Steps. `kind: task` " +
+        "gives a task brief: Goal, Context, Constraints, Acceptance, Out of scope.",
       inputSchema: {
         kind: z
-          .enum(["transfer", "bug"])
+          .enum(["transfer", "bug", "task"])
           .optional()
-          .describe("transfer (default) for finished work to repeat; bug for a defect to fix"),
+          .describe(
+            "transfer (default) for finished work to repeat; bug for a defect to fix; task for " +
+              "work nobody has done yet",
+          ),
       },
     },
-    async ({ kind }) => text(template(kind === "bug" ? { kind: "bug" } : {})),
+    async ({ kind }) => text(template(kind === "bug" || kind === "task" ? { kind } : {})),
   );
 
   server.registerTool(

@@ -35,7 +35,8 @@
     "access": "public"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "test:e2e": "PASSALONG_E2E_API=${PASSALONG_E2E_API:-http://localhost:3001} node --test test/task-flow.e2e.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

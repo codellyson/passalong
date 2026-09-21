@@ -79,12 +79,15 @@ test("every tool it lists is one an agent could act on", async () => {
     "board",
     "create_upload",
     "file_bugs",
+    "finish_task",
     "get_guide",
     "get_report",
     "inbox",
     "log",
+    "next_task",
     "publish_guide",
     "search_guides",
+    "task_progress",
     "verify_guide",
   ]);
   for (const tool of body.result.tools) {

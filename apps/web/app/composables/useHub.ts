@@ -10,7 +10,17 @@
 // the rest — keep their meaning, and `loading` / `updating` say what is still on its way.
 import type { QueryClient, QueryKey } from "@tanstack/vue-query";
 import { keepPreviousData, useQuery } from "@tanstack/vue-query";
-import type { ApiToken, Board, Guide, HubData, LogEntry, Me, Note, TeamDetail } from "~/types/hub";
+import type {
+  ApiToken,
+  Board,
+  Guide,
+  HubData,
+  LogEntry,
+  Me,
+  Note,
+  Task,
+  TeamDetail,
+} from "~/types/hub";
 import { HttpError, SignedOut } from "~/utils/http";
 import {
   dropFromBoard,
@@ -52,6 +62,7 @@ export const hubKeys = {
   tokens: ["tokens"] as const,
   team: (slug: string) => ["team-detail", slug] as const,
   billing: ["billing"] as const,
+  tasks: ["tasks"] as const,
 };
 
 type GuideList = { guides: Guide[] };
@@ -173,6 +184,13 @@ function build(queryClient: QueryClient) {
     queryClient,
   );
 
+  // Its own query, and one whose failure is left out of `loadError`: the task queue is newer than
+  // every other surface here, and a hub that cannot say what is in it is still worth showing.
+  const tasksQ = useQuery(
+    { queryKey: hubKeys.tasks, queryFn: get<{ tasks: Task[] }>("/v1/tasks"), enabled },
+    queryClient,
+  );
+
   const signedIn = computed(() => !ended.value && Boolean(meQ.data.value));
 
   // Once the first answer about the session is in, stop guessing from the cookie.
@@ -192,6 +210,7 @@ function build(queryClient: QueryClient) {
     log: logQ.data.value?.log ?? [],
     tokens: tokensQ.data.value?.tokens ?? [],
     team: teamScoped.value ? (teamQ.data.value ?? null) : null,
+    tasks: tasksQ.data.value?.tasks ?? [],
   }));
 
   /** What has not arrived yet, per endpoint, so each part of a page can wait on its own data. */
@@ -202,6 +221,7 @@ function build(queryClient: QueryClient) {
     notifications: notesQ.isPending.value,
     log: logQ.isPending.value,
     tokens: tokensQ.isPending.value,
+    tasks: tasksQ.isPending.value,
   }));
 
   /** A background refresh of data already on screen: worth a quiet word, never a blank page. */
@@ -379,6 +399,34 @@ function build(queryClient: QueryClient) {
     );
   };
 
+  /**
+   * The task gate, and the one move before it. All four are the author's, and the server says so
+   * if anyone else tries — the board only offers them on your own tasks, so it never has to.
+   * Reject needs a reason for the reason a failed verdict does: the next agent reads it before it
+   * starts again, and "no" on its own teaches it nothing.
+   *
+   * Each moves the row to the column it will land in before the server answers, the way every
+   * other mutation here does, and puts it back if the server refuses.
+   */
+  const moveTask = (t: Task, state: Task["state"], path: string, init: RequestInit) =>
+    change(
+      () => api(path, init),
+      () =>
+        queryClient.setQueryData<{ tasks: Task[] }>(hubKeys.tasks, (old) =>
+          old ? { tasks: old.tasks.map((x) => (x.id === t.id ? { ...x, state } : x)) } : old,
+        ),
+      [hubKeys.tasks],
+    );
+  const onTaskReady = (t: Task) =>
+    moveTask(t, "ready", `/v1/guides/${t.id}/status`, json("PATCH", { status: "published" }));
+  const onApprove = (t: Task) => moveTask(t, "done", `/v1/tasks/${t.id}/approve`, json("POST"));
+  const onReject = (t: Task, why: string) => {
+    const said = why.trim();
+    if (!said) return;
+    return moveTask(t, "ready", `/v1/tasks/${t.id}/reject`, json("POST", { why: said }));
+  };
+  const onRelease = (t: Task) => moveTask(t, "ready", `/v1/tasks/${t.id}/release`, json("POST"));
+
   const readAll = () =>
     change(
       () => api("/v1/notifications/read", json("POST")),
@@ -444,6 +492,10 @@ function build(queryClient: QueryClient) {
     onArchive,
     onRemove,
     onVerdict,
+    onTaskReady,
+    onApprove,
+    onReject,
+    onRelease,
     readAll,
     createTeam,
     signOut,

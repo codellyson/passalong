@@ -84,7 +84,7 @@ const guideSummaryOut = z
   .object({
     id: z.string(),
     title: z.string().optional(),
-    kind: z.string().optional().describe("transfer or bug"),
+    kind: z.string().optional().describe("transfer, bug or task"),
     status: z.string().optional(),
     url: z.string().optional().describe("share link"),
     created: z.string().optional(),
@@ -138,7 +138,7 @@ const logOut = z
 const getGuideOut = z
   .object({
     id: z.string(),
-    kind: z.string().describe("transfer or bug"),
+    kind: z.string().describe("transfer, bug or task"),
     markdown: z.string().describe("the document as published, frontmatter first"),
     follow_ups: z
       .array(z.object({ id: z.string(), title: z.string(), markdown: z.string() }).passthrough())
@@ -422,6 +422,22 @@ export function withEvidence(markdown: string, lines: string[]): string {
  * `openWorldHint` is false for everything that stays inside Passalong. Only attach_screenshot and
  * the tools that take attachments fetch a URL somebody else controls.
  */
+// The task queue's answers. Open like the rest: the routes add fields freely.
+const taskOut = z
+  .object({
+    task: z
+      .object({ id: z.string(), markdown: z.string().optional(), state: z.string().optional() })
+      .passthrough()
+      .nullable(),
+  })
+  .passthrough();
+const progressOut = z
+  .object({ id: z.string(), lease_until: z.string().optional(), note: z.string().optional() })
+  .passthrough();
+const finishOut = z
+  .object({ id: z.string(), state: z.string().optional(), report: z.string().optional() })
+  .passthrough();
+
 const READS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
 const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
@@ -430,9 +446,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     { name: "passalong", version: "0.2.0" },
     {
       instructions:
-        "Passalong hands work between contexts as guides: markdown with frontmatter, in two " +
-        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — the two ask " +
-        "for opposite behaviour.\n" +
+        "Passalong hands work between contexts as guides: markdown with frontmatter, in three " +
+        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — each asks " +
+        "for different behaviour.\n" +
         "kind: transfer (or absent) is a finished implementation to repeat here. Follow its " +
         "Steps, adapting anything marked ASSUMES to this codebase; run its Verification before " +
         "declaring done, then verify_guide with the result.\n" +
@@ -454,7 +470,14 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
         "id. It is listed under the original, and anyone who opens the original, person or agent, " +
-        "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.",
+        "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.\n" +
+        "kind: task is work nobody has done yet. It has no Steps: work out how to reach Goal " +
+        "within Constraints, leave Out of scope alone, and treat Acceptance as the definition of " +
+        "done. verify_guide once every Acceptance check holds.\n" +
+        "To take work from the queue, call next_task with an `agent` name you reuse on every " +
+        "call. task_progress at each milestone — 30 minutes of silence stalls the task. When " +
+        "Acceptance holds, publish_guide a transfer guide about what you did, then finish_task " +
+        "with its id. If either says you no longer hold the task, stop working on it.",
     },
   );
 
@@ -490,20 +513,25 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       description:
         "Fetch one guide's full markdown by id. Read `kind` in its frontmatter before acting: a " +
         "bug is a defect to fix, and its Reproduce section produces the problem rather than " +
-        "solving it. Fetching a teammate's guide tells them the transfer landed.",
+        "solving it; a task is work nobody has done yet, done when its Acceptance holds. Fetching a teammate's guide tells them the transfer landed.",
       inputSchema: { id: z.string().describe("passalong id, e.g. k3mq2xa7") },
       outputSchema: getGuideOut,
     },
     async ({ id }) => {
       const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}`);
       if (res.status >= 400) return failed(res.text);
-      // Said in front of the document, because an agent keys on headings and a bug's headings look
-      // enough like a transfer guide's to be followed by one that never opened the frontmatter.
+      // Said in front of the document, because an agent keys on headings and a bug's or a task's
+      // headings look enough like a transfer guide's to be followed by one that never opened the
+      // frontmatter. Mirrors `leadFor()` in packages/passalong/src/mcp.js.
       const lead = /^kind:\s*bug\s*$/m.test(res.text)
         ? "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions — " +
           "those steps produce the defect. Fix what Problem describes, then check Verification " +
           "and answer with verify_guide.\n\n"
-        : "";
+        : /^kind:\s*task\s*$/m.test(res.text)
+          ? "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out " +
+            "how to reach Goal within Constraints, and leave Out of scope alone. It is done when " +
+            "every check under Acceptance holds; answer with verify_guide.\n\n"
+          : "";
       // A second content block, not text added to the first. The document is handed over as it
       // came — a transfer guide byte for byte — so an agent that writes it back out cannot carry
       // the note into it, and nothing lands in front of `---`. Mirrors `followUpNote()`.
@@ -526,7 +554,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         // The document untouched — no lead, no note — for a client that reads results as data.
         structuredContent: {
           id,
-          kind: bug ? "bug" : "transfer",
+          kind: bug ? "bug" : /^kind:\s*task\s*$/m.test(res.text) ? "task" : "transfer",
           markdown: res.text,
           follow_ups: context.guides,
         },
@@ -598,8 +626,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       // because `attachments` are fetched from wherever the client says they are.
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       description:
-        "Publish a guide from its full markdown — a transfer guide, or a single bug with " +
-        "`kind: bug`. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
+        "Publish a guide from its full markdown — a transfer guide, a single bug with " +
+        "`kind: bug`, or a task with `kind: task`. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
         "is minted and returned. To change a guide, pass the id it came back with; inventing a " +
         "fresh id to retry or to correct one publishes a second copy, and every copy counts " +
         "against the author's synced limit. Created, author and source_context are filled in. " +
@@ -675,6 +703,107 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     async ({ id, taken, note }) =>
       relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/ack`, {
         taken,
+        note: note ?? "",
+      }),
+  );
+
+  // The task queue. A local agent's id comes from its worktree (packages/passalong/src/passalong.js
+  // `agent()`); an assistant over HTTP has no worktree and no session, so it names itself and the
+  // name is the claim's owner. Reusing it on every call is what makes it the same agent.
+  const AGENT = z
+    .string()
+    .regex(/^[a-z0-9-]{8,64}$/, "8 to 64 of a-z, 0-9 and -")
+    .describe("a name for you, the same on every task call, e.g. chat-7f3k2m9q");
+
+  server.registerTool(
+    "next_task",
+    {
+      title: "Take the next task",
+      description:
+        "Claim the oldest ready task for a repo, and return it. While you hold it no other agent " +
+        "can take it. If you already hold one, that one comes back instead — one at a time.",
+      annotations: ADDS,
+      outputSchema: taskOut,
+      inputSchema: {
+        agent: AGENT,
+        repo: z
+          .string()
+          .optional()
+          .describe("owner/repo the work is in; omit for tasks for no repo"),
+        any: z.boolean().optional().describe("take a task for any repo — only when the user asks"),
+      },
+    },
+    async ({ agent, repo, any }) => {
+      const res = await call("POST", "/v1/tasks/next", {
+        agent,
+        repo: repo ?? "",
+        any: any === true,
+      });
+      if (res.status >= 400) return failed(res.text);
+      const parsed = JSON.parse(res.text) as { task: { id: string; markdown: string } | null };
+      const task = parsed.task;
+      if (!task)
+        return {
+          ...text("No task ready. Nothing to do — tell the user the queue is empty."),
+          structuredContent: { task: null },
+        };
+      // Mirrors leadFor() in packages/passalong/src/mcp.js for a task, plus what to do next.
+      return {
+        ...text(
+          "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how " +
+            "to reach Goal within Constraints, and leave Out of scope alone. It is done when every " +
+            `check under Acceptance holds.\n\n${task.markdown}\n\n<!-- passalong: task ${task.id} ` +
+            "is yours. task_progress at each milestone; finish_task with a transfer guide's id when done. -->",
+        ),
+        structuredContent: parsed as Record<string, unknown>,
+      };
+    },
+  );
+
+  server.registerTool(
+    "task_progress",
+    {
+      title: "Report progress on a task",
+      annotations: ADDS,
+      outputSchema: progressOut,
+      description:
+        "Say you are still working on the task you hold, with a one-line status the board shows. " +
+        "30 minutes without this stalls the task. If it says you do not hold the task, stop.",
+      inputSchema: {
+        id: z.string(),
+        agent: AGENT,
+        note: z.string().optional().describe("one line, 280 chars"),
+      },
+    },
+    async ({ id, agent, note }) =>
+      relay(call, "PUT", `/v1/tasks/${encodeURIComponent(id)}/progress`, {
+        agent,
+        ...(note ? { note } : {}),
+      }),
+  );
+
+  server.registerTool(
+    "finish_task",
+    {
+      title: "Finish a task",
+      annotations: ADDS,
+      outputSchema: finishOut,
+      description:
+        "Hand a finished task to a person for review, once every Acceptance check holds. `report` " +
+        "is the id of the transfer guide you published about the work — publish_guide it first.",
+      inputSchema: {
+        id: z.string(),
+        agent: AGENT,
+        report: z.string().describe("id of the transfer guide about this work"),
+        pr: z.string().optional(),
+        note: z.string().optional(),
+      },
+    },
+    async ({ id, agent, report, pr, note }) =>
+      relay(call, "POST", `/v1/tasks/${encodeURIComponent(id)}/finish`, {
+        agent,
+        report,
+        pr: pr ?? "",
         note: note ?? "",
       }),
   );

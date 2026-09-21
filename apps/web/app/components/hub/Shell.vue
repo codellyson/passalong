@@ -114,6 +114,7 @@ const nearLimit = computed(() => {
 
 const tabs = [
   { to: "/hub", label: "Guides" },
+  { to: "/hub/tasks", label: "Tasks" },
   { to: "/hub/log", label: "Your log" },
   { to: "/hub/settings", label: "Settings" },
 ];

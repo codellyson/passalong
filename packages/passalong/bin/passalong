@@ -6,6 +6,13 @@
 //     handed to whoever pulls or starts that guide
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
+//   passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
+//   passalong ready <id...|--all> tasks you have read are ready — an agent may take them now
+//   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
+//   passalong work [--once] [--agent CMD]  run an agent on each ready task here, one after another
+//   passalong approve <id>        the work in review is done
+//   passalong reject <id> <why>   not done: back to Ready, and the next agent reads why
+//   passalong release <id>        take a task back from the agent holding it, stalled or not
 //   passalong attach <image>      upload evidence and print the markdown that points at it
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong start <id|link>     pull it and take it — one command for "I am doing this"
@@ -39,7 +46,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as api from "../src/api.js";
-import { scaffold } from "../src/capture.js";
+import { scaffold, taskScaffold } from "../src/capture.js";
 import { serialize } from "../src/guide.js";
 import * as passalong from "../src/passalong.js";
 import * as store from "../src/store.js";
@@ -125,17 +132,14 @@ const monthOf = (iso) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 
 const commands = {
   async share(f) {
     let path = f._[0];
-    let fromDrafts = false;
     if (!path) {
       const [latest] = store.drafts();
       if (latest) {
         path = latest;
-        fromDrafts = true;
         console.error(`using draft ${path}`);
       } else {
         path = store.draftPath(new Date().toISOString().replace(/[:.]/g, "-"));
         writeFileSync(path, scaffold());
-        fromDrafts = true;
         if (!tty)
           die(`no draft to share; scaffolded ${path} — fill it in and run \`passalong share ${path}\``);
       }
@@ -147,7 +151,10 @@ const commands = {
     const { guide, url, synced, notified, path: saved } = await passalong
       .share(readFileSync(path, "utf8"), { to, follows })
       .catch((e) => die(e.message));
-    if (fromDrafts) store.removeDraft(path);
+    // Any draft that went out is spent, however it was named — a task that failed validation is
+    // re-shared by its path, and leaving it would have the next bare `share` publish it again.
+    // removeDraft() touches nothing outside the drafts directory.
+    store.removeDraft(resolve(path));
     console.log(guide.meta.id);
     console.error(`shared "${guide.meta.title}" → ${saved}`);
     if (guide.meta.parent) console.error(`follows ${guide.meta.parent}`);
@@ -157,6 +164,101 @@ const commands = {
       );
     if (synced) console.error(`link: ${url}`);
     else console.error("not synced (run `passalong login` to sync across machines)");
+  },
+
+  /**
+   * Write a task. It lands in Draft and stays there until `passalong ready`: the gap between the
+   * two is the one moment a person reads what an agent is about to be asked to do.
+   */
+  async task(f) {
+    const sentence = f._.join(" ").trim() || die('usage: passalong task "<what needs doing>"');
+    const path = store.draftPath(`task-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+    writeFileSync(path, taskScaffold(sentence));
+    if (tty && !f["no-edit"]) edit(path);
+    const { guide, synced } = await passalong
+      .share(readFileSync(path, "utf8"))
+      .catch((e) => die(`${e.message}\ndraft kept at ${path} — fix it and run \`passalong share ${path}\``));
+    store.removeDraft(path);
+    const id = guide.meta.id;
+    console.log(id);
+    const target = guide.meta.target_context;
+    console.error(`task "${guide.meta.title}" is in Draft${target ? ` for ${target}` : " (no repo)"}`);
+    console.error(`when an agent may take it: passalong ready ${id}`);
+    if (!synced) console.error("not synced (run `passalong login` — agents elsewhere cannot see it)");
+  },
+
+  async tasks() {
+    const rows = await passalong.tasks().catch((e) => die(e.message));
+    if (!rows.length) return console.error('no tasks yet — write one with: passalong task "<what needs doing>"');
+    for (const t of rows) {
+      const c = t.claim;
+      const who = c ? `  ${c.host || "?"}:${c.worktree.split("/").pop() || "?"}` : "";
+      const said = c?.note ? `  "${c.note}"` : "";
+      console.log(`${t.id}  ${t.state.padEnd(8)} ${t.title}${t.target ? `  [${t.target}]` : ""}${who}${said}`);
+      // What came back, under the task it answers: the thing a reviewer reads before deciding.
+      if (t.state === "review" && c?.report)
+        console.log(`          → ${c.report}  ${c.report_title || "(untitled)"}${c.pr ? `  ${c.pr}` : ""}`);
+    }
+    if (rows.some((t) => t.state === "review"))
+      console.error("\nread a write-up with: passalong open <id> — then approve or reject the task");
+  },
+
+  /**
+   * Work the queue from this worktree until it is empty. The agent is `claude -p` unless --agent or
+   * PASSALONG_AGENT says otherwise, e.g. "claude -p --permission-mode acceptEdits" so it can edit
+   * files without asking — which is yours to decide, not this command's.
+   */
+  async work(f) {
+    const run = await passalong
+      .work({
+        agent: typeof f.agent === "string" ? f.agent : undefined,
+        once: Boolean(f.once),
+        any: Boolean(f.any),
+        onTask: (t) => console.error(`\n→ ${t.id}  ${t.title}${t.resumed ? "  (resuming)" : ""}`),
+      })
+      .catch((e) => die(e.message));
+    for (const id of run.finished) console.log(id);
+    const n = run.finished.length;
+    const done = `${n} task${n === 1 ? "" : "s"} finished and waiting for review`;
+    if (run.stopped === "unfinished")
+      die(
+        `${done}. Stopped: the agent exited with ${run.task} still ${run.state || "open"} — ` +
+          `run again to resume it, or \`passalong release ${run.task}\``,
+      );
+    console.error(`${done}${run.stopped === "empty" ? " — nothing left for this repo" : ""}`);
+    if (n) console.error("review them with: passalong tasks");
+  },
+
+  async approve(f) {
+    const id = f._[0] || die("usage: passalong approve <id>");
+    await passalong.approveTask(id).catch((e) => die(e.message));
+    console.error(`${id} is done`);
+  },
+
+  async reject(f) {
+    const id = f._[0] || die("usage: passalong reject <id> <why>");
+    await passalong.rejectTask(id, f._.slice(1).join(" ")).catch((e) => die(e.message));
+    console.error(`${id} is back in Ready — the next agent reads why`);
+  },
+
+  async release(f) {
+    const id = f._[0] || die("usage: passalong release <id>");
+    await passalong.releaseTask(id).catch((e) => die(e.message));
+    console.error(`${id} is back in Ready — it says where the last agent left it`);
+  },
+
+  async ready(f) {
+    if (f.all) {
+      const ids = await passalong.readyDrafts().catch((e) => die(e.message));
+      if (!ids.length) return console.error("no drafts of yours to make ready");
+      for (const id of ids) console.log(id);
+      return console.error(`${ids.length} task${ids.length === 1 ? "" : "s"} Ready — agents may take them`);
+    }
+    if (!f._.length) die("usage: passalong ready <id...> | --all");
+    for (const id of f._) {
+      const g = await passalong.ready(id).catch((e) => die(e.message));
+      console.error(`${g.meta.id} is Ready — an agent may take it`);
+    }
   },
 
   async pull(f) {

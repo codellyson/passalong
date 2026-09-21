@@ -17,6 +17,23 @@ function git(cwd, ...args) {
   }
 }
 
+/**
+ * One repo, written one way, so a task and the agent asking for work agree on what it is called.
+ * A remote URL becomes `owner/repo` whichever form it came in; anything else is kept, lowercase.
+ * Mirrors `repoKey()` in apps/api/src/claims.ts, which normalises what it stores the same way.
+ */
+export function repoKey(raw) {
+  let s = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  s = s.replace(/\/+$/, "").replace(/\.git$/, "");
+  const url = /^(?:[a-z+]+:\/\/)?(?:[^@/]+@)?[^:/]+[:/](.+\/[^/]+)$/.exec(s);
+  if (url && (s.includes("://") || s.includes("@"))) {
+    return url[1].split("/").filter(Boolean).slice(-2).join("/");
+  }
+  return s;
+}
+
 /** What we can infer about the current context without reading any session. */
 export function context(cwd = process.cwd()) {
   const root = git(cwd, "rev-parse", "--show-toplevel");
@@ -30,7 +47,29 @@ export function context(cwd = process.cwd()) {
   const files = root
     ? git(cwd, "diff", "--name-only", "HEAD~5..HEAD").split("\n").filter(Boolean)
     : [];
-  return { root, name, branch, author, commits, changed, files };
+  // The repo as the task queue names it: its remote when it has one, because two worktrees of one
+  // repo have two folder names and one remote. The folder name when there is no remote.
+  const repo = root ? repoKey(git(cwd, "remote", "get-url", "origin") || name) : "";
+  return { root, name, repo, branch, author, commits, changed, files };
+}
+
+/**
+ * A task draft from one sentence: the sentence as the title and the Goal, the rest left to fill.
+ *
+ * `target_context` defaults to the repo this runs in, because that is the likeliest repo a task
+ * written from inside one is for — and it is in the editor, in the frontmatter, for the author
+ * to change before it goes anywhere. Outside a repo it stays empty, which is a task for no repo.
+ */
+export function taskScaffold(sentence, cwd = process.cwd()) {
+  const c = context(cwd);
+  const md = template({
+    kind: "task",
+    title: sentence,
+    author: c.author,
+    source_context: c.branch && c.branch !== "HEAD" ? `${c.name}@${c.branch}` : c.name,
+    target_context: c.repo,
+  });
+  return md.replace(/^## Goal\n/m, `## Goal\n${sentence}\n`);
 }
 
 /** A draft pre-filled with repo facts. Recent activity is appended as a comment for reference. */

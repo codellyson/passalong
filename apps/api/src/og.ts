@@ -121,11 +121,11 @@ function siteCard(): string {
     <div style="display:flex;color:${C.accent};font-size:26px;font-weight:600;letter-spacing:4px;">PASSALONG</div>
   </div>
   <div style="display:flex;flex-direction:column;">
-    <div style="display:flex;color:${C.fg};font-size:62px;font-weight:600;line-height:1.12;letter-spacing:-2px;">You already solved this.</div>
-    <div style="display:flex;color:${C.accent};font-size:62px;font-weight:600;line-height:1.12;letter-spacing:-2px;margin-top:6px;">Somewhere else, someone is about to solve it again.</div>
+    <div style="display:flex;color:${C.fg};font-size:62px;font-weight:600;line-height:1.12;letter-spacing:-2px;">Agents that never</div>
+    <div style="display:flex;color:${C.accent};font-size:62px;font-weight:600;line-height:1.12;letter-spacing:-2px;margin-top:6px;">start from zero.</div>
   </div>
   <div style="display:flex;align-items:center;border-top:2px solid ${C.line};padding-top:26px;">
-    <div style="display:flex;color:${C.muted};font-size:26px;">Hand finished work to the next repo, machine, session or teammate</div>
+    <div style="display:flex;color:${C.muted};font-size:26px;">Queue work for your agents. Get back what they did, and why.</div>
   </div>
 </div>`;
 }

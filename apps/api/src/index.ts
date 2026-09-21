@@ -29,6 +29,13 @@
 //   PUT    /v1/guides/:id/ack          { taken, note }  the reader's first word back
 //   PUT    /v1/guides/:id/verdict      { ok, note? } → does it actually work?
 //   DELETE /v1/guides/:id              owner only
+//   GET    /v1/tasks                   every task you can see, with its column and its claim
+//   POST   /v1/tasks/next              { agent, host, repo, worktree, any } → claim a task, or null
+//   PUT    /v1/tasks/:id/progress      { agent, note? }  renew the lease, set the board's line
+//   POST   /v1/tasks/:id/finish        { agent, report, pr?, note? } → review
+//   POST   /v1/tasks/:id/approve       author: review → done
+//   POST   /v1/tasks/:id/reject        { why }  author: review → ready, the reason added to the task
+//   POST   /v1/tasks/:id/release       author: claimed or stalled → ready, with where it was left
 //   GET    /g/:id/:key.md              a guide's raw markdown (share link); records a pull
 //   GET    /og.png                     the site's own unfurl card\n//   GET    /g/:id/:key/og.png          the unfurl card for that link
 //   GET    /health                     what CI waits on after a deploy
@@ -70,6 +77,7 @@ import {
   verifyPaystack,
   verifyStripe,
 } from "./billing.js";
+import * as claims from "./claims.js";
 import {
   type MailEnv,
   sendConsumed,
@@ -2736,13 +2744,13 @@ app.put("/v1/guides/:id", async (c) => {
   const created = String(meta.created || existing?.created || t);
 
   await c.env.DB.prepare(
-    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind, parent_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind, parent_id, target)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status, source_context=excluded.source_context,
        tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated,
        team_id=excluded.team_id, to_account_id=excluded.to_account_id, to_group_id=excluded.to_group_id,
        report_id=excluded.report_id, area=excluded.area, severity=excluded.severity, kind=excluded.kind,
-       parent_id=excluded.parent_id`,
+       parent_id=excluded.parent_id, target=excluded.target`,
   )
     .bind(
       id,
@@ -2762,12 +2770,17 @@ app.put("/v1/guides/:id", async (c) => {
       report?.id || "",
       slug(meta.area),
       slug(meta.severity, 8),
-      slug(meta.kind, 16) === "bug" ? "bug" : "",
+      ["bug", "task"].includes(slug(meta.kind, 16)) ? slug(meta.kind, 16) : "",
       parentId,
+      // Only a task is for a repo; on anything else the field means nothing to the queue.
+      slug(meta.kind, 16) === "task" ? claims.repoKey(meta.target_context).slice(0, 200) : "",
     )
     .run();
 
   await claimShots(c, account, id, markdown);
+  // What a task waits for is rewritten from its frontmatter on every publish, like the rest of it.
+  if (slug(meta.kind, 16) === "task")
+    await claims.blockOn(c.env.DB, id, meta.blocked_by || [], { account });
 
   // Tell whoever the guide just became relevant to. Re-publishing an unchanged address is not a
   // new event, so only a *newly* addressed person or a newly shared team hears anything.
@@ -3026,6 +3039,11 @@ app.patch("/v1/guides/:id/status", async (c) => {
       403,
       "Only the author can move a guide back to draft. You can say you're done with it.",
     );
+  // A task's status is its place in the queue: published puts it in front of agents and consumed
+  // is approval. Both are its author's call, through `ready` and the gate — a teammate marking one
+  // consumed would approve work with nobody reading it.
+  if (!found.owner && found.row.kind === "task")
+    return err(c, 403, "Only a task's author moves it: ready, approve, reject or release.");
   const markdown = setField(found.row.markdown, "status", status);
   await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
     .bind(status, markdown, now(), found.row.id)
@@ -3193,6 +3211,191 @@ app.put("/v1/guides/:id/ack", async (c) => {
   });
   count(c, "guide_acked", { taken: body.taken });
   return c.json({ id: found.row.id, taken: body.taken, note });
+});
+
+// ---- tasks -------------------------------------------------------------------------------
+
+// The queue an agent takes work from. See docs/V2.md and claims.ts, which holds every rule; these
+// routes only read the request and say what happened. `agent` is the id a worktree minted for
+// itself, and it is what a claim belongs to — the account alone cannot tell two of its own agents
+// apart, and telling them apart is the whole point of a lock.
+
+/** The agent a request speaks for, or a refusal naming what is missing. */
+function agentOf(c: Ctx, raw: unknown): claims.Agent & Record<string, unknown> {
+  const body = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  return {
+    ...body,
+    account: c.get("account"),
+    // Checked rather than trimmed into shape: two agents whose names differ only in what a cleaner
+    // would strip would end up as one agent, sharing a lock that exists to keep them apart.
+    agent: AGENT_RE.test(String(body.agent ?? "")) ? String(body.agent) : "",
+    host: str(body.host, 120),
+    repo: str(body.repo, 400),
+    worktree: str(body.worktree, 400),
+  };
+}
+
+/**
+ * Tell the other side of a task what just happened to it. `to` is the task's author when an agent
+ * acted, and the account whose agent had it when the author did. notify() drops an event addressed
+ * to whoever caused it, so a person working alone with their own agents hears nothing.
+ */
+async function taskEvent(
+  c: Ctx & { env: Env },
+  id: string,
+  kind: "task_claimed" | "task_finished" | "task_approved" | "task_rejected" | "task_released",
+  to: string,
+  note = "",
+) {
+  const row = await db(c)
+    .prepare("SELECT account_id, team_id FROM guide WHERE id = ?")
+    .bind(id)
+    .first<{ account_id: string; team_id: string }>();
+  if (!row) return;
+  await notify(c.env, {
+    to: to || row.account_id,
+    kind,
+    guide_id: id,
+    actor_id: c.get("account"),
+    team_id: row.team_id,
+    note,
+  });
+}
+
+const AGENT_RE = /^[a-z0-9-]{8,64}$/;
+const NO_AGENT =
+  "send `agent`: 8 to 64 of a-z, 0-9 and -, the same on every call — a local agent's is in its " +
+  "worktree's .passalong/agent.json";
+
+/** One task as the API answers it: where it is, and who has it. */
+function taskView(
+  task: { id: string; title: string; target: string; status: string; created: string },
+  claim: claims.ClaimRow | null,
+  state: claims.TaskState,
+) {
+  return {
+    id: task.id,
+    title: task.title,
+    target: task.target,
+    state,
+    created: task.created,
+    claim: claim
+      ? {
+          agent: claim.agent_id,
+          host: claim.host,
+          repo: claim.repo,
+          worktree: claim.worktree,
+          note: claim.note,
+          report: claim.report_id,
+          pr: claim.pr,
+          claimed_at: claim.claimed_at,
+          lease_until: claim.lease_until,
+        }
+      : null,
+  };
+}
+
+app.get("/v1/tasks", async (c) => {
+  const at = now();
+  const me = c.get("account");
+  const rows = await claims.list(c.env.DB, me, at);
+  return c.json({
+    tasks: rows.map((r) => {
+      const base = origin(c);
+      const v = {
+        ...taskView(r.task, r.claim, r.state),
+        mine: r.task.account_id === me,
+        url: shareUrl(base, r.task),
+      };
+      if (!v.claim) return v;
+      const report_url = r.report_key
+        ? shareUrl(base, { id: v.claim.report, share_key: r.report_key })
+        : "";
+      return { ...v, claim: { ...v.claim, report_title: r.report_title, report_url } };
+    }),
+  });
+});
+
+app.post("/v1/tasks/next", async (c) => {
+  const who = agentOf(c, await c.req.json().catch(() => ({})));
+  if (!who.agent) return err(c, 400, NO_AGENT);
+  const at = now();
+  const got = await claims.next(c.env.DB, who, { at, any: who.any === true });
+  if (!got) return c.json({ task: null });
+  count(c, "task_claimed", { resumed: got.resumed });
+  if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
+  return c.json({
+    task: {
+      ...taskView(got.task, got.claim, claims.stateOf(got.task, got.claim, at)),
+      resumed: got.resumed,
+      markdown: got.task.markdown,
+    },
+  });
+});
+
+app.put("/v1/tasks/:id/progress", async (c) => {
+  const who = agentOf(c, await c.req.json().catch(() => ({})));
+  if (!who.agent) return err(c, 400, NO_AGENT);
+  const note = typeof who.note === "string" ? who.note : null;
+  const claim = await claims.renew(c.env.DB, c.req.param("id"), who, { at: now(), note });
+  // The answer an agent needs to stop: somebody released it, or it was never this agent's.
+  if (!claim) return err(c, 409, "this agent does not hold that task — stop work on it");
+  return c.json({ id: claim.guide_id, lease_until: claim.lease_until, note: claim.note });
+});
+
+app.post("/v1/tasks/:id/finish", async (c) => {
+  const who = agentOf(c, await c.req.json().catch(() => ({})));
+  if (!who.agent) return err(c, 400, NO_AGENT);
+  const report = typeof who.report === "string" ? who.report.trim() : "";
+  if (!report) return err(c, 400, "send `report`: the id of the transfer guide about this work");
+  const done = await claims.finish(c.env.DB, c.req.param("id"), who, {
+    at: now(),
+    report,
+    pr: typeof who.pr === "string" ? who.pr : "",
+    note: typeof who.note === "string" ? who.note : "",
+  });
+  if ("error" in done) return err(c, done.status, done.error);
+  count(c, "task_finished", {});
+  await taskEvent(c, done.claim.guide_id, "task_finished", "");
+  return c.json({ id: done.claim.guide_id, state: "review", report: done.claim.report_id });
+});
+
+// The gate. A person's calls, not an agent's: there is no MCP tool for any of these, because an
+// agent approving work — its own or another's — is the thing the gate exists to stop.
+app.post("/v1/tasks/:id/approve", async (c) => {
+  const r = await claims.approve(c.env.DB, c.req.param("id"), {
+    account: c.get("account"),
+    at: now(),
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "task_approved", {});
+  await taskEvent(c, c.req.param("id"), "task_approved", r.claimant);
+  return c.json({ id: c.req.param("id"), state: r.state });
+});
+
+app.post("/v1/tasks/:id/reject", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { why?: unknown };
+  const r = await claims.reject(c.env.DB, c.req.param("id"), {
+    account: c.get("account"),
+    at: now(),
+    why: typeof body.why === "string" ? body.why : "",
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "task_rejected", {});
+  await taskEvent(c, c.req.param("id"), "task_rejected", r.claimant, body.why as string);
+  return c.json({ id: c.req.param("id"), state: r.state });
+});
+
+app.post("/v1/tasks/:id/release", async (c) => {
+  const r = await claims.release(c.env.DB, c.req.param("id"), {
+    account: c.get("account"),
+    at: now(),
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "task_released", {});
+  await taskEvent(c, c.req.param("id"), "task_released", r.claimant);
+  return c.json({ id: c.req.param("id"), state: r.state });
 });
 
 app.delete("/v1/guides/:id", async (c) => {

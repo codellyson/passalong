@@ -1,6 +1,9 @@
 // The operations Passalong exposes. Both surfaces (bin/passalong and the MCP server) call these,
 // so anything an agent can do through MCP a human can do from the terminal and vice versa.
+import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import * as api from "./api.js";
 import { context } from "./capture.js";
@@ -59,7 +62,10 @@ export async function share(markdown, { cwd = process.cwd(), to, follows } = {})
   const errors = validate(guide);
   if (errors.length)
     throw new PassalongError(`guide is not ready to share:\n  - ${errors.join("\n  - ")}`);
-  if (guide.meta.status === "draft")
+  // A task stays a draft when it is shared. Draft is the column a task waits in until a person
+  // says it is ready for an agent — `ready()` — and an agent that drafts one over MCP comes
+  // through here too, so publishing on share would let a task queue itself with nobody reading it.
+  if (guide.meta.status === "draft" && guide.meta.kind !== "task")
     guide = { ...guide, meta: { ...guide.meta, status: "published" } };
 
   let url = guide.meta.url || null;
@@ -190,17 +196,139 @@ export async function pull(ref, { cwd = process.cwd(), write = true } = {}) {
   }
   let path = null;
   if (write) {
-    const dir = join(cwd, ".passalong");
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    // A pulled guide carries its own share URL in the frontmatter, and that URL needs no account
-    // to read. Committing this directory would publish the guide to anyone who can see the repo,
-    // so the directory ignores itself. Delete this file if you do want guides in the repo.
-    const ignore = join(dir, ".gitignore");
-    if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
-    path = join(dir, `${guide.meta.id}.md`);
+    path = join(localDir(cwd), `${guide.meta.id}.md`);
     writeFileSync(path, serialize(guide));
   }
   return { guide, from, path, markdown: serialize(guide) };
+}
+
+/**
+ * `.passalong/` in a working directory, made if it is missing.
+ *
+ * A pulled guide carries its own share URL in the frontmatter, and that URL needs no account to
+ * read. Committing this directory would publish the guide to anyone who can see the repo, so the
+ * directory ignores itself. Delete its .gitignore if you do want guides in the repo.
+ */
+function localDir(cwd) {
+  const dir = join(cwd, ".passalong");
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const ignore = join(dir, ".gitignore");
+  if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
+  return dir;
+}
+
+/**
+ * Who this worktree is to the task queue, minted the first time it asks.
+ *
+ * A claim belongs to an agent, not an account: one person runs several, and "no two agents on one
+ * task" means nothing if the server cannot tell them apart. The id lives in the worktree's own
+ * `.passalong/agent.json`, so a restarted session in the same worktree is the same agent and gets
+ * its task back, and a second worktree of the same repo is a different agent. Per machine would
+ * let two worktrees on one laptop share a lock; per session would lose the task on every restart.
+ */
+export function agent(cwd = process.cwd()) {
+  const c = context(cwd);
+  const root = c.root || cwd;
+  const file = join(localDir(root), "agent.json");
+  let id = "";
+  try {
+    id = String(JSON.parse(readFileSync(file, "utf8")).id || "");
+  } catch {}
+  if (!/^[a-z0-9]{8,64}$/.test(id)) {
+    id = randomBytes(12).toString("hex");
+    writeFileSync(file, `${JSON.stringify({ id }, null, 2)}\n`);
+  }
+  return { agent: id, host: hostname(), repo: c.repo, worktree: root };
+}
+
+function needsSync(what) {
+  if (!api.loggedIn())
+    throw new PassalongError(
+      `${what} needs sync — the queue lives on the server (run \`passalong login\`)`,
+    );
+}
+
+/** Every task you can see, with where it is and who has it. */
+export async function tasks() {
+  needsSync("the task queue");
+  return (await api.tasks()).tasks;
+}
+
+/**
+ * Take the next task for this worktree's repo, or get back the one this worktree already holds.
+ * `null` when there is nothing to do. The guide is written to `.passalong/<id>.md` like a pull.
+ */
+export async function nextTask({ cwd = process.cwd(), any = false } = {}) {
+  needsSync("taking a task");
+  const { task } = await api.nextTask({ ...agent(cwd), any });
+  if (!task) return null;
+  const guide = parse(task.markdown);
+  const path = join(localDir(agent(cwd).worktree), `${task.id}.md`);
+  writeFileSync(path, task.markdown);
+  store.save(guide);
+  return { ...task, path };
+}
+
+/** Word from the agent holding a task: renews its lease, and `note` becomes the board's line. */
+export async function taskProgress(id, note, { cwd = process.cwd() } = {}) {
+  needsSync("reporting progress");
+  const { agent: a } = agent(cwd);
+  return api.taskProgress(id, note ? { agent: a, note } : { agent: a });
+}
+
+/**
+ * The work is done: the task moves to review with a transfer guide about it attached.
+ *
+ * Pass `markdown` and this writes that guide too, with `parent:` naming the task, so the write-up
+ * and the finish are one step and neither can be skipped or pointed at the wrong guide. Pass
+ * `report` instead when the guide is already published.
+ */
+export async function finishTask(
+  id,
+  { report, markdown, pr = "", note = "", cwd = process.cwd() } = {},
+) {
+  needsSync("finishing a task");
+  if (!report && markdown) {
+    const g = parse(markdown);
+    report = (await share(serialize({ meta: { ...g.meta, parent: id }, body: g.body }), { cwd }))
+      .guide.meta.id;
+  }
+  if (!report)
+    throw new PassalongError(
+      "finishing needs the write-up: `markdown` for a transfer guide about the work, or `report` with the id of one",
+    );
+  return api.finishTask(id, { agent: agent(cwd).agent, report, pr, note });
+}
+
+/**
+ * The gate, a person's three answers to a task. Approve: the work in review is done. Reject: it
+ * goes back to Ready with `why` on it for the next agent. Release: a task an agent holds, live or
+ * stalled, goes back to Ready with a note saying where that agent left it.
+ *
+ * The local copy is dropped after each, so the next read of the task fetches what the server made
+ * of it — a reject or a release rewrites the document, and a stale copy would hide exactly the
+ * line the next reader needs.
+ */
+export async function approveTask(id) {
+  needsSync("approving a task");
+  const r = await api.approveTask(id);
+  store.remove(id);
+  return r;
+}
+
+export async function rejectTask(id, why) {
+  needsSync("rejecting a task");
+  if (!String(why || "").trim()) throw new PassalongError("say why: the next agent reads it");
+  const r = await api.rejectTask(id, why);
+  store.remove(id);
+  return r;
+}
+
+export async function releaseTask(id) {
+  needsSync("releasing a task");
+  const r = await api.releaseTask(id);
+  store.remove(id);
+  return r;
 }
 
 /**
@@ -479,9 +607,139 @@ export async function setStatus(id, status) {
     throw new PassalongError(`status must be one of ${STATUSES.join(", ")}`);
   const { guide } = await resolve(id);
   const next = { ...guide, meta: { ...guide.meta, status } };
-  store.save(next);
+  // The server first. Saved the other way round, a refusal left the local copy saying what the
+  // server had just refused — a teammate's `ready` on someone else's task read as done here.
   if (api.loggedIn() && guide.meta.url) await api.setStatus(id, status);
+  store.save(next);
   return next;
+}
+
+/**
+ * Move a task from Draft to Ready: a person has read it and an agent may take it.
+ *
+ * Only tasks. Every other kind is published the moment it is shared, so "ready" on one would
+ * either do nothing or reopen something archived under a name that does not say so.
+ */
+export async function ready(id) {
+  const { guide } = await resolve(id);
+  if (guide.meta.kind !== "task")
+    throw new PassalongError(`${guide.meta.id || id} is not a task — ready is for tasks in Draft`);
+  if (guide.meta.status !== "draft")
+    throw new PassalongError(`${guide.meta.id} is not in Draft (status: ${guide.meta.status})`);
+  return setStatus(guide.meta.id, "published");
+}
+
+/**
+ * One goal as several tasks, written as drafts in order. Each step may name the earlier steps it
+ * needs by position (`after: [0, 1]`), and those become its `blocked_by`, so the queue hands them
+ * out in an order that works and runs the independent ones side by side.
+ *
+ * Only earlier steps: a step that waits on itself or on a later one is a plan that never finishes,
+ * and it is refused before anything is written rather than discovered as a queue that never moves.
+ * Every step lands in Draft — a wrong decomposition is several agents building the wrong thing at
+ * once, so a person reads the plan before any of it runs.
+ */
+export async function planTasks(steps, { cwd = process.cwd() } = {}) {
+  if (!Array.isArray(steps) || !steps.length)
+    throw new PassalongError("a plan needs at least one step");
+  steps.forEach((step, i) => {
+    for (const j of step.after || [])
+      if (!Number.isInteger(j) || j < 0 || j >= i)
+        throw new PassalongError(
+          `step ${i} ("${step.title}") can only wait on an earlier step, not ${j}`,
+        );
+  });
+  const repo = context(cwd).repo;
+  const ids = [];
+  for (const step of steps) {
+    const section = (name, text) =>
+      String(text || "").trim() ? [`## ${name}`, String(text).trim(), ""] : [];
+    const body = [
+      ...section("Goal", step.goal),
+      ...section("Context", step.context),
+      ...section("Constraints", step.constraints),
+      ...section("Acceptance", step.acceptance),
+      ...section("Out of scope", step.out_of_scope),
+    ].join("\n");
+    const meta = { title: step.title, kind: "task", target_context: step.target_context ?? repo };
+    const after = (step.after || []).map((j) => ids[j]);
+    if (after.length) meta.blocked_by = after;
+    ids.push((await share(serialize({ meta, body }), { cwd })).guide.meta.id);
+  }
+  return ids;
+}
+
+/** What an agent started by `work()` is told. The task itself goes in too, so it cannot start blind. */
+export function workPrompt(t) {
+  return [
+    `You hold passalong task ${t.id}, and no other agent can take it while you do.`,
+    `It is written to ${t.path}; here it is:`,
+    "",
+    t.markdown.trim(),
+    "",
+    "Do it in this repo. There are no Steps: work out how to reach Goal within Constraints, and",
+    "leave Out of scope alone. Call the passalong MCP tool task_progress with id",
+    `${t.id} and a one-line status at each milestone — 30 minutes of silence stalls the task.`,
+    `When every Acceptance check holds, call finish_task with id ${t.id} and \`markdown\`: a`,
+    "transfer guide saying what you did, what you decided and why, and how you checked each",
+    "Acceptance line. If either call says you no longer hold the task, stop.",
+  ].join("\n");
+}
+
+/**
+ * Work the queue from this worktree: take the next task, hand it to an agent, and when the agent
+ * has finished it take the next, until there is nothing left.
+ *
+ * The agent runs in this worktree, so it is the same agent to the queue — its task_progress and
+ * finish_task land on the claim this took. `agent` is a command the prompt is appended to;
+ * `claude -p` by default, or whatever PASSALONG_AGENT says.
+ *
+ * An agent that exits without finishing stops the loop. Asking for the next task would hand the
+ * same one back, since a worktree holds one task at a time, and the loop would run the agent on it
+ * forever. The task stays claimed here, for the next run to resume or a person to release.
+ */
+export async function work({
+  cwd = process.cwd(),
+  agent = process.env.PASSALONG_AGENT || "claude -p",
+  any = false,
+  once = false,
+  onTask = () => {},
+} = {}) {
+  needsSync("working the queue");
+  const [command, ...args] = agent.trim().split(/\s+/);
+  const finished = [];
+  for (;;) {
+    const t = await nextTask({ cwd, any });
+    if (!t) return { finished, stopped: "empty" };
+    onTask(t);
+    const run = spawnSync(command, [...args, workPrompt(t)], {
+      cwd,
+      stdio: "inherit",
+      env: { ...process.env, PASSALONG_TASK: t.id, PASSALONG_TASK_PATH: t.path },
+    });
+    const state = (await tasks()).find((x) => x.id === t.id)?.state;
+    if (state !== "review")
+      return {
+        finished,
+        stopped: "unfinished",
+        task: t.id,
+        state,
+        exit: run.status ?? run.error?.message,
+      };
+    finished.push(t.id);
+    if (once) return { finished, stopped: "once" };
+  }
+}
+
+/**
+ * Make every task you wrote that is still in Draft ready, and return their ids. For the moment a
+ * planner has written several and you have read them all. Only your own: moving a task into the
+ * queue is its author's call.
+ */
+export async function readyDrafts() {
+  const drafts = (await tasks()).filter((t) => t.mine && t.state === "draft");
+  for (const t of drafts) await ready(t.id);
+  return drafts.map((t) => t.id);
 }
 
 export async function remove(id) {
