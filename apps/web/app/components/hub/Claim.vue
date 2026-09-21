@@ -39,6 +39,14 @@ watch(
  * ones in a public breach corpus. Neither is worth a trip to the bottom of the card to read.
  */
 const onPassword = computed(() => Boolean(error.value?.toLowerCase().includes("password")));
+/**
+ * "Another account already uses that email" is about the email, so it goes under the email field.
+ * It used to land in a full-width box below the buttons, away from the one field it was about. The
+ * password is checked first, so a message naming the password never lands here.
+ */
+const onEmail = computed(() =>
+  Boolean(!onPassword.value && error.value && /email/i.test(error.value)),
+);
 
 const label = "block font-ui text-sm font-medium text-fg mb-2";
 const box = "block w-full max-w-sm";
@@ -86,8 +94,10 @@ async function submit(e: Event) {
           placeholder="ada@example.com"
           autocomplete="email"
           v-model="email"
+          :class="onEmail ? 'border-danger' : ''"
           @input="typed = true"
         />
+        <p v-if="onEmail" class="mt-2 mb-0 font-ui text-sm text-danger">{{ error }}</p>
       </div>
 
       <div :class="box">
@@ -105,7 +115,7 @@ async function submit(e: Event) {
         <!-- Said before the round trip rather than after it. The length is the browser's to
              enforce; the breach check is the server's and cannot be, so the field says it is
              coming — a password refused with no warning reads as the form being broken. -->
-        <p v-if="onPassword" class="mt-2 mb-0 font-ui text-sm text-danger">{{ error }}.</p>
+        <p v-if="onPassword" class="mt-2 mb-0 font-ui text-sm text-danger">{{ error }}</p>
         <p v-else class="mt-2 mb-0 font-ui text-sm text-muted">
           At least 8 characters, and not one that appears in a public breach list.
         </p>
@@ -121,7 +131,7 @@ async function submit(e: Event) {
     </form>
 
     <p
-      v-if="error && !onPassword"
+      v-if="error && !onPassword && !onEmail"
       class="m-0 mt-4 rounded-2 border border-danger bg-danger-soft px-3 py-3 font-ui text-sm text-danger"
     >
       {{ error }}
