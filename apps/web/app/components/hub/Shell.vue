@@ -112,9 +112,10 @@ const nearLimit = computed(() => {
   return Boolean(me && me.sync === "free" && me.guides >= me.limit * 0.8);
 });
 
+// Tasks first: the queue is where the day's work comes back for review, so it leads the menu.
 const tabs = [
-  { to: "/hub", label: "Guides" },
   { to: "/hub/tasks", label: "Tasks" },
+  { to: "/hub", label: "Guides" },
   { to: "/hub/log", label: "Your log" },
   { to: "/hub/settings", label: "Settings" },
 ];
