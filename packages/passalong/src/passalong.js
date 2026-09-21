@@ -280,6 +280,37 @@ export async function finishTask(id, { report, pr = "", note = "", cwd = process
 }
 
 /**
+ * The gate, a person's three answers to a task. Approve: the work in review is done. Reject: it
+ * goes back to Ready with `why` on it for the next agent. Release: a task an agent holds, live or
+ * stalled, goes back to Ready with a note saying where that agent left it.
+ *
+ * The local copy is dropped after each, so the next read of the task fetches what the server made
+ * of it — a reject or a release rewrites the document, and a stale copy would hide exactly the
+ * line the next reader needs.
+ */
+export async function approveTask(id) {
+  needsSync("approving a task");
+  const r = await api.approveTask(id);
+  store.remove(id);
+  return r;
+}
+
+export async function rejectTask(id, why) {
+  needsSync("rejecting a task");
+  if (!String(why || "").trim()) throw new PassalongError("say why: the next agent reads it");
+  const r = await api.rejectTask(id, why);
+  store.remove(id);
+  return r;
+}
+
+export async function releaseTask(id) {
+  needsSync("releasing a task");
+  const r = await api.releaseTask(id);
+  store.remove(id);
+  return r;
+}
+
+/**
  * Pull a guide *and* take the handoff: the two halves of starting work, in one call.
  *
  * `pull` says the guide arrived. `ack` says somebody is doing it, which is the thing the sender

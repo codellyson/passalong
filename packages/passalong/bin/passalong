@@ -7,6 +7,9 @@
 //   passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
 //   passalong ready <id>          a task you have read is ready — an agent may take it now
 //   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
+//   passalong approve <id>        the work in review is done
+//   passalong reject <id> <why>   not done: back to Ready, and the next agent reads why
+//   passalong release <id>        take a task back from the agent holding it, stalled or not
 //   passalong attach <image>      upload evidence and print the markdown that points at it
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong start <id|link>     pull it and take it — one command for "I am doing this"
@@ -172,6 +175,24 @@ const commands = {
       const said = c?.note ? `  "${c.note}"` : "";
       console.log(`${t.id}  ${t.state.padEnd(8)} ${t.title}${t.target ? `  [${t.target}]` : ""}${who}${said}`);
     }
+  },
+
+  async approve(f) {
+    const id = f._[0] || die("usage: passalong approve <id>");
+    await passalong.approveTask(id).catch((e) => die(e.message));
+    console.error(`${id} is done`);
+  },
+
+  async reject(f) {
+    const id = f._[0] || die("usage: passalong reject <id> <why>");
+    await passalong.rejectTask(id, f._.slice(1).join(" ")).catch((e) => die(e.message));
+    console.error(`${id} is back in Ready — the next agent reads why`);
+  },
+
+  async release(f) {
+    const id = f._[0] || die("usage: passalong release <id>");
+    await passalong.releaseTask(id).catch((e) => die(e.message));
+    console.error(`${id} is back in Ready — it says where the last agent left it`);
   },
 
   async ready(f) {

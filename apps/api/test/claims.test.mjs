@@ -8,7 +8,18 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { finish, LEASE_MS, list, next, renew, repoKey, stateOf } from "../src/claims.ts";
+import {
+  approve,
+  finish,
+  LEASE_MS,
+  list,
+  next,
+  reject,
+  release,
+  renew,
+  repoKey,
+  stateOf,
+} from "../src/claims.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
@@ -27,6 +38,19 @@ function d1() {
         run: async () => ({ meta: { changes: Number(stmt.run(...args).changes) } }),
       });
       return { ...bound([]), bind: (...args) => bound(args) };
+    },
+    // D1 runs a batch as one transaction: all of it lands or none of it does.
+    async batch(stmts) {
+      sql.exec("BEGIN");
+      try {
+        const out = [];
+        for (const st of stmts) out.push(await st.run());
+        sql.exec("COMMIT");
+        return out;
+      } catch (e) {
+        sql.exec("ROLLBACK");
+        throw e;
+      }
     },
   };
   return db;
@@ -202,4 +226,122 @@ test("a repo is one name however it was written", () => {
     assert.equal(repoKey(raw), "owner/repo", raw);
   assert.equal(repoKey("passalong"), "passalong");
   assert.equal(repoKey(""), "");
+});
+
+/** A task t1 that agent A took and finished with a transfer guide called "report". */
+async function inReview() {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  await next(db, A, { at: T0 });
+  await finish(db, "t1", A, { at: T0, report: "report" });
+  return db;
+}
+
+const stateIn = async (db, id, at = T0) =>
+  (await list(db, "me", at)).find((r) => r.task.id === id)?.state;
+
+test("approving a task in review makes it done", async () => {
+  const db = await inReview();
+  const r = await approve(db, "t1", { account: "me", at: later(1_000) });
+  assert.equal(r.error, undefined);
+  assert.equal(await stateIn(db, "t1"), "done");
+});
+
+test("only the author approves, and only a task in review", async () => {
+  const db = await inReview();
+  assert.equal((await approve(db, "t1", { account: "other", at: T0 })).status, 404);
+  assert.equal(await stateIn(db, "t1"), "review");
+
+  const db2 = d1();
+  seed(db2)("t2");
+  await next(db2, A, { at: T0 });
+  assert.equal(
+    (await approve(db2, "t2", { account: "me", at: T0 })).status,
+    409,
+    "still being worked on",
+  );
+});
+
+test("rejecting sends the task back to Ready, and the next agent reads why", async () => {
+  const db = await inReview();
+  const r = await reject(db, "t1", {
+    account: "me",
+    at: later(1_000),
+    why: "dark mode ignores the OS setting",
+  });
+  assert.equal(r.error, undefined);
+  assert.equal(await stateIn(db, "t1"), "ready");
+  const again = await next(db, B, { at: later(2_000) });
+  assert.equal(again.task.id, "t1", "rejected work is back in the queue for anyone");
+  assert.match(again.task.markdown, /dark mode ignores the OS setting/);
+});
+
+test("a rejection needs a reason, the author, and a task in review", async () => {
+  const db = await inReview();
+  assert.equal((await reject(db, "t1", { account: "me", at: T0, why: "  " })).status, 400);
+  assert.equal((await reject(db, "t1", { account: "other", at: T0, why: "no" })).status, 404);
+  assert.equal(await stateIn(db, "t1"), "review");
+  const db2 = d1();
+  seed(db2)("t2");
+  await next(db2, A, { at: T0 });
+  assert.equal((await reject(db2, "t2", { account: "me", at: T0, why: "no" })).status, 409);
+});
+
+test("releasing a stalled task puts it back, pointing at the work left behind", async () => {
+  const db = d1();
+  seed(db)("t1");
+  const C = {
+    account: "me",
+    agent: "agent-c",
+    repo: "o/r",
+    host: "laptop",
+    worktree: "/src/shop-dark",
+  };
+  await next(db, C, { at: T0 });
+  await renew(db, "t1", C, { at: T0, note: "theme tokens done, toggle next" });
+  const after = later(LEASE_MS + 1);
+  assert.equal(await stateIn(db, "t1", after), "stalled");
+
+  const r = await release(db, "t1", { account: "me", at: after });
+  assert.equal(r.error, undefined);
+  assert.equal(await stateIn(db, "t1", after), "ready");
+  const taken = await next(db, B, { at: after });
+  assert.equal(taken.task.id, "t1");
+  for (const part of [/laptop/, /\/src\/shop-dark/, /theme tokens done, toggle next/])
+    assert.match(taken.task.markdown, part);
+});
+
+test("a live claim can be released too, but not a task nobody holds", async () => {
+  const db = d1();
+  seed(db)("t1");
+  assert.equal(
+    (await release(db, "t1", { account: "me", at: T0 })).status,
+    409,
+    "ready: nobody holds it",
+  );
+  await next(db, A, { at: T0 });
+  assert.equal((await release(db, "t1", { account: "other", at: T0 })).status, 404);
+  assert.equal((await release(db, "t1", { account: "me", at: T0 })).error, undefined);
+  assert.equal(await stateIn(db, "t1"), "ready");
+});
+
+test("an agent whose task was released or rejected is told to stop", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  await next(db, A, { at: T0 });
+  await release(db, "t1", { account: "me", at: T0 });
+  assert.equal(await renew(db, "t1", A, { at: T0, note: "still going" }), null);
+  assert.equal((await finish(db, "t1", A, { at: T0, report: "report" })).status, 409);
+
+  // Rejected, then taken by someone else: the first agent cannot finish over the second.
+  await next(db, A, { at: T0 });
+  await finish(db, "t1", A, { at: T0, report: "report" });
+  await reject(db, "t1", { account: "me", at: T0, why: "wrong" });
+  await next(db, B, { at: T0 });
+  assert.equal(await renew(db, "t1", A, { at: T0, note: null }), null);
+  assert.equal((await finish(db, "t1", A, { at: T0, report: "report" })).status, 409);
 });

@@ -287,3 +287,120 @@ export async function list(
     return { task, claim, state: stateOf(task, claim, at) };
   });
 }
+
+/**
+ * A task this account wrote, with its claim, or a refusal. The gate is the author's: approving,
+ * rejecting and releasing all decide what happens to work somebody asked for, and only they asked.
+ */
+async function authored(
+  db: D1Database,
+  id: string,
+  account: string,
+): Promise<{ markdown: string; claim: ClaimRow | null } | { error: string; status: 404 }> {
+  const g = await db
+    .prepare("SELECT markdown FROM guide WHERE id = ? AND account_id = ? AND kind = 'task'")
+    .bind(id, account)
+    .first<{ markdown: string }>();
+  if (!g)
+    return {
+      status: 404,
+      error: "no such task of yours — only its author decides what happens to it",
+    };
+  return { markdown: g.markdown, claim: await claimOf(db, id) };
+}
+
+/** Set `status:` in a document's frontmatter, so the markdown agrees with the column. */
+const withStatus = (markdown: string, status: string) =>
+  markdown.replace(/^(---\r?\n[\s\S]*?^)status:[^\n]*$/m, `$1status: ${status}`);
+
+/**
+ * The author accepts the work: a task in review is done. Done is the guide's `consumed`, the
+ * status every other finished guide already uses, so it leaves the board and the free tier's
+ * count the same way.
+ */
+export async function approve(
+  db: D1Database,
+  id: string,
+  { account, at }: { account: string; at: string },
+): Promise<{ state: "done" } | { error: string; status: 404 | 409 }> {
+  const t = await authored(db, id, account);
+  if ("error" in t) return t;
+  if (t.claim?.state !== "review")
+    return { status: 409, error: "only a task in review can be approved — nobody has finished it" };
+  await db
+    .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
+    .bind(withStatus(t.markdown, "consumed"), at, id)
+    .run();
+  return { state: "done" };
+}
+
+/**
+ * A line added to the end of a task, under `## Review notes`, which the next agent reads with the
+ * rest of it. The section is made the first time and kept last, so each note goes on its end.
+ */
+function withNote(markdown: string, line: string): string {
+  const body = markdown.trimEnd();
+  const lastHeading = body.match(/^## .*$/gm)?.pop();
+  const head = lastHeading === "## Review notes" ? body : `${body}\n\n## Review notes`;
+  return `${head}\n- ${line}\n`;
+}
+
+/**
+ * The author turns the work down: the task goes back to Ready with the reason on it, and the
+ * claim is gone, so any agent may take it next — including the one that just had it. The reason
+ * is required and it goes into the task itself, because the next agent learns what was wrong from
+ * the document it is handed, not from a note somewhere it will never look.
+ */
+export async function reject(
+  db: D1Database,
+  id: string,
+  { account, at, why }: { account: string; at: string; why: string },
+): Promise<{ state: "ready" } | { error: string; status: 400 | 404 | 409 }> {
+  const reason = String(why ?? "")
+    .trim()
+    .slice(0, 1000);
+  if (!reason)
+    return { status: 400, error: "say why: the next agent reads it before starting again" };
+  const t = await authored(db, id, account);
+  if ("error" in t) return t;
+  if (t.claim?.state !== "review")
+    return { status: 409, error: "only a task in review can be rejected — nobody has finished it" };
+  const markdown = withNote(t.markdown, `${at.slice(0, 10)} rejected: ${reason}`);
+  await db.batch([
+    db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
+    db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
+  ]);
+  return { state: "ready" };
+}
+
+/**
+ * The author takes a task back from the agent holding it, live or stalled: it goes back to Ready,
+ * and any agent may take it next. The agent that had it hears on its next call that it no longer
+ * holds it, and stops.
+ *
+ * What that agent left behind is often half the job, in a worktree on some machine. So the task
+ * says where — host, worktree and its last progress line — and the next agent can go and look
+ * rather than start from nothing.
+ */
+export async function release(
+  db: D1Database,
+  id: string,
+  { account, at }: { account: string; at: string },
+): Promise<{ state: "ready" } | { error: string; status: 404 | 409 }> {
+  const t = await authored(db, id, account);
+  if ("error" in t) return t;
+  const c = t.claim;
+  if (c?.state !== "claimed")
+    return {
+      status: 409,
+      error: c ? "this task is in review — approve or reject it instead" : "nobody holds this task",
+    };
+  const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
+  const said = c.note ? `; last progress: "${c.note}"` : "";
+  const markdown = withNote(t.markdown, `${at.slice(0, 10)} released from ${where}${said}`);
+  await db.batch([
+    db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
+    db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
+  ]);
+  return { state: "ready" };
+}

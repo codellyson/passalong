@@ -33,6 +33,9 @@
 //   POST   /v1/tasks/next              { agent, host, repo, worktree, any } → claim a task, or null
 //   PUT    /v1/tasks/:id/progress      { agent, note? }  renew the lease, set the board's line
 //   POST   /v1/tasks/:id/finish        { agent, report, pr?, note? } → review
+//   POST   /v1/tasks/:id/approve       author: review → done
+//   POST   /v1/tasks/:id/reject        { why }  author: review → ready, the reason added to the task
+//   POST   /v1/tasks/:id/release       author: claimed or stalled → ready, with where it was left
 //   GET    /g/:id/:key.md              a guide's raw markdown (share link); records a pull
 //   GET    /og.png                     the site's own unfurl card\n//   GET    /g/:id/:key/og.png          the unfurl card for that link
 //   GET    /health                     what CI waits on after a deploy
@@ -2818,6 +2821,40 @@ app.post("/v1/tasks/:id/finish", async (c) => {
   if ("error" in done) return err(c, done.status, done.error);
   count(c, "task_finished", {});
   return c.json({ id: done.claim.guide_id, state: "review", report: done.claim.report_id });
+});
+
+// The gate. A person's calls, not an agent's: there is no MCP tool for any of these, because an
+// agent approving work — its own or another's — is the thing the gate exists to stop.
+app.post("/v1/tasks/:id/approve", async (c) => {
+  const r = await claims.approve(c.env.DB, c.req.param("id"), {
+    account: c.get("account"),
+    at: now(),
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "task_approved", {});
+  return c.json({ id: c.req.param("id"), ...r });
+});
+
+app.post("/v1/tasks/:id/reject", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { why?: unknown };
+  const r = await claims.reject(c.env.DB, c.req.param("id"), {
+    account: c.get("account"),
+    at: now(),
+    why: typeof body.why === "string" ? body.why : "",
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "task_rejected", {});
+  return c.json({ id: c.req.param("id"), ...r });
+});
+
+app.post("/v1/tasks/:id/release", async (c) => {
+  const r = await claims.release(c.env.DB, c.req.param("id"), {
+    account: c.get("account"),
+    at: now(),
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "task_released", {});
+  return c.json({ id: c.req.param("id"), ...r });
 });
 
 app.delete("/v1/guides/:id", async (c) => {

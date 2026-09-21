@@ -100,6 +100,8 @@ passalong login                 # optional: sync across machines
 - `passalong task "<what needs doing>"` / `passalong ready <id>` — write a task; it waits in Draft
   until it is ready for an agent
 - `passalong tasks` — every task and its column: draft, ready, claimed, stalled, review, done
+- `passalong approve <id>` / `passalong reject <id> <why>` / `passalong release <id>` — the
+  review gate. A person's commands: an agent never approves or rejects work, its own or another's
 - `passalong mcp` — run the MCP server over stdio
 
 ## MCP tools

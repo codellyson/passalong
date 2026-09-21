@@ -30,6 +30,9 @@ passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to
 passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
 passalong ready <id>          a task you have read is ready — an agent may take it now
 passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
+passalong approve <id>        the work in review is done
+passalong reject <id> <why>   not done: back to Ready, and the next agent reads why
+passalong release <id>        take a task back from the agent holding it, stalled or not
 passalong pull <id|link>      fetch a guide into ./.passalong/ (git-ignored) and print it
 passalong inbox               guides handed to you that you have not pulled yet
 passalong board               waiting on you, in flight, landed, worth keeping
