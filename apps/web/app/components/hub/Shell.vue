@@ -133,8 +133,14 @@ const active = (to: string) =>
   <!-- Wider than the 46rem the rest of the product reads at. That measure is right for a guide
        and wrong for a list: this is the one surface that is scanned rather than read. -->
   <!-- Settings is wider again: it has a section nav beside its content, and the connect sheet puts
-       an app picker beside its steps. -->
-  <main :class="route.path === '/hub/settings' ? 'max-w-[70rem]' : 'max-w-[54rem]'">
+       an app picker beside its steps. Tasks too: its review puts an inbox beside a pane that holds
+       two columns, what was asked against what came back, and at 54rem each column wrapped every
+       Acceptance line to four or five lines. -->
+  <main
+    :class="
+      route.path === '/hub/settings' || route.path === '/hub/tasks' ? 'max-w-[70rem]' : 'max-w-[54rem]'
+    "
+  >
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->
