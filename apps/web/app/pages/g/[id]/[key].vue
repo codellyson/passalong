@@ -51,6 +51,9 @@ const facts = computed(() =>
     { label: "from", value: str(meta.value?.author), mono: false },
     { label: "shared", value: created.value, mono: false },
     { label: "out of", value: str(meta.value?.source_context), mono: true },
+    // A task's own two facts: the repo an agent has to be in to take it, and what it waits for.
+    { label: "for", value: str(meta.value?.target_context), mono: true },
+    { label: "waits on", value: list(meta.value?.blocked_by).join(" · "), mono: true },
     { label: "assumes", value: list(meta.value?.stack_assumptions).join(" · "), mono: false },
   ]
     .filter((f) => f.value)
@@ -68,6 +71,14 @@ const sentence = (names: string[]) =>
  * they filed.
  */
 const isBug = computed(() => str(meta.value?.kind) === "bug");
+
+/**
+ * A task is work nobody has done yet, and the page says so before anyone mistakes Goal and
+ * Acceptance for a record of something finished. It does not say where the task is in its queue:
+ * that is its author's board, and a claim names hosts and worktree paths a share link should not
+ * hand to whoever holds it.
+ */
+const isTask = computed(() => str(meta.value?.kind) === "task");
 
 const cut = computed(() => guide.value?.cut);
 const rest = computed(() => guide.value?.rest);
@@ -244,6 +255,18 @@ usePage({
             An agent takes it with <code>passalong pull {{ id }}</code>; append <code>.md</code> to
             this URL for the markdown.
           </p>
+        </template>
+        <template v-else-if="isTask">
+          <b class="block font-ui text-sm text-fg">This is a task — work nobody has done yet</b>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">
+            An agent takes it from the queue, works out how to reach Goal, and comes back with a
+            write-up that a person checks against Acceptance.
+          </p>
+          <p class="mt-3 mb-0 font-ui text-sm text-muted">
+            In {{ str(meta?.target_context) || "a session outside any repo" }}, tell the agent to take
+            the next task, or read this one with
+          </p>
+          <code class="line">passalong pull {{ url }}</code>
         </template>
         <template v-else>
           <b class="block font-ui text-sm text-fg">Pull this into your context</b>

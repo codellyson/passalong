@@ -342,7 +342,7 @@ export async function approve(
   db: D1Database,
   id: string,
   { account, at }: { account: string; at: string },
-): Promise<{ state: "done" } | { error: string; status: 404 | 409 }> {
+): Promise<{ state: "done"; claimant: string } | { error: string; status: 404 | 409 }> {
   const t = await authored(db, id, account);
   if ("error" in t) return t;
   if (t.claim?.state !== "review")
@@ -351,7 +351,7 @@ export async function approve(
     .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
     .bind(withStatus(t.markdown, "consumed"), at, id)
     .run();
-  return { state: "done" };
+  return { state: "done", claimant: t.claim.account_id };
 }
 
 /**
@@ -375,7 +375,7 @@ export async function reject(
   db: D1Database,
   id: string,
   { account, at, why }: { account: string; at: string; why: string },
-): Promise<{ state: "ready" } | { error: string; status: 400 | 404 | 409 }> {
+): Promise<{ state: "ready"; claimant: string } | { error: string; status: 400 | 404 | 409 }> {
   const reason = String(why ?? "")
     .trim()
     .slice(0, 1000);
@@ -390,7 +390,7 @@ export async function reject(
     db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
     db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
   ]);
-  return { state: "ready" };
+  return { state: "ready", claimant: t.claim.account_id };
 }
 
 /**
@@ -406,7 +406,7 @@ export async function release(
   db: D1Database,
   id: string,
   { account, at }: { account: string; at: string },
-): Promise<{ state: "ready" } | { error: string; status: 404 | 409 }> {
+): Promise<{ state: "ready"; claimant: string } | { error: string; status: 404 | 409 }> {
   const t = await authored(db, id, account);
   if ("error" in t) return t;
   const c = t.claim;
@@ -422,7 +422,7 @@ export async function release(
     db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
     db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
   ]);
-  return { state: "ready" };
+  return { state: "ready", claimant: c.account_id };
 }
 
 /**

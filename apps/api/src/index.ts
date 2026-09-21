@@ -2557,6 +2557,11 @@ app.patch("/v1/guides/:id/status", async (c) => {
     return err(c, 400, `status must be one of ${SETTABLE.join(", ")}`);
   if (!found.owner && !["consumed", "published"].includes(status))
     return err(c, 403, "only the author can promote or draft a guide; you can mark it consumed");
+  // A task's status is its place in the queue: published puts it in front of agents and consumed
+  // is approval. Both are its author's call, through `ready` and the gate — a teammate marking one
+  // consumed would approve work with nobody reading it.
+  if (!found.owner && found.row.kind === "task")
+    return err(c, 403, "only a task's author moves it — ready, approve, reject or release");
   const markdown = setField(found.row.markdown, "status", status);
   await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
     .bind(status, markdown, now(), found.row.id)
@@ -2745,6 +2750,33 @@ function agentOf(c: Ctx, raw: unknown): claims.Agent & Record<string, unknown> {
   };
 }
 
+/**
+ * Tell the other side of a task what just happened to it. `to` is the task's author when an agent
+ * acted, and the account whose agent had it when the author did. notify() drops an event addressed
+ * to whoever caused it, so a person working alone with their own agents hears nothing.
+ */
+async function taskEvent(
+  c: Ctx & { env: Env },
+  id: string,
+  kind: "task_claimed" | "task_finished" | "task_approved" | "task_rejected" | "task_released",
+  to: string,
+  note = "",
+) {
+  const row = await db(c)
+    .prepare("SELECT account_id, team_id FROM guide WHERE id = ?")
+    .bind(id)
+    .first<{ account_id: string; team_id: string }>();
+  if (!row) return;
+  await notify(c.env, {
+    to: to || row.account_id,
+    kind,
+    guide_id: id,
+    actor_id: c.get("account"),
+    team_id: row.team_id,
+    note,
+  });
+}
+
 const AGENT_RE = /^[a-z0-9-]{8,64}$/;
 const NO_AGENT =
   "send `agent`: 8 to 64 of a-z, 0-9 and -, the same on every call — a local agent's is in its " +
@@ -2780,10 +2812,11 @@ function taskView(
 
 app.get("/v1/tasks", async (c) => {
   const at = now();
-  const rows = await claims.list(c.env.DB, c.get("account"), at);
+  const me = c.get("account");
+  const rows = await claims.list(c.env.DB, me, at);
   return c.json({
     tasks: rows.map((r) => {
-      const v = taskView(r.task, r.claim, r.state);
+      const v = { ...taskView(r.task, r.claim, r.state), mine: r.task.account_id === me };
       return v.claim ? { ...v, claim: { ...v.claim, report_title: r.report_title } } : v;
     }),
   });
@@ -2796,6 +2829,7 @@ app.post("/v1/tasks/next", async (c) => {
   const got = await claims.next(c.env.DB, who, { at, any: who.any === true });
   if (!got) return c.json({ task: null });
   count(c, "task_claimed", { resumed: got.resumed });
+  if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
   return c.json({
     task: {
       ...taskView(got.task, got.claim, claims.stateOf(got.task, got.claim, at)),
@@ -2828,6 +2862,7 @@ app.post("/v1/tasks/:id/finish", async (c) => {
   });
   if ("error" in done) return err(c, done.status, done.error);
   count(c, "task_finished", {});
+  await taskEvent(c, done.claim.guide_id, "task_finished", "");
   return c.json({ id: done.claim.guide_id, state: "review", report: done.claim.report_id });
 });
 
@@ -2840,7 +2875,8 @@ app.post("/v1/tasks/:id/approve", async (c) => {
   });
   if ("error" in r) return err(c, r.status, r.error);
   count(c, "task_approved", {});
-  return c.json({ id: c.req.param("id"), ...r });
+  await taskEvent(c, c.req.param("id"), "task_approved", r.claimant);
+  return c.json({ id: c.req.param("id"), state: r.state });
 });
 
 app.post("/v1/tasks/:id/reject", async (c) => {
@@ -2852,7 +2888,8 @@ app.post("/v1/tasks/:id/reject", async (c) => {
   });
   if ("error" in r) return err(c, r.status, r.error);
   count(c, "task_rejected", {});
-  return c.json({ id: c.req.param("id"), ...r });
+  await taskEvent(c, c.req.param("id"), "task_rejected", r.claimant, body.why as string);
+  return c.json({ id: c.req.param("id"), state: r.state });
 });
 
 app.post("/v1/tasks/:id/release", async (c) => {
@@ -2862,7 +2899,8 @@ app.post("/v1/tasks/:id/release", async (c) => {
   });
   if ("error" in r) return err(c, r.status, r.error);
   count(c, "task_released", {});
-  return c.json({ id: c.req.param("id"), ...r });
+  await taskEvent(c, c.req.param("id"), "task_released", r.claimant);
+  return c.json({ id: c.req.param("id"), state: r.state });
 });
 
 app.delete("/v1/guides/:id", async (c) => {

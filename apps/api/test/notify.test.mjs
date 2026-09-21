@@ -32,6 +32,11 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob verified "Add Paystack webhook verification"',
     '@bob says "Add Paystack webhook verification" does not work',
     "@bob joined khaime",
+    '@bob\'s agent took the task "Add Paystack webhook verification"',
+    '@bob\'s agent finished "Add Paystack webhook verification" — it is waiting for your review',
+    '@bob approved "Add Paystack webhook verification"',
+    '@bob sent "Add Paystack webhook verification" back',
+    '@bob took "Add Paystack webhook verification" back from your agent',
   ]);
 });
 
@@ -81,4 +86,11 @@ test("a decline carries its reason, because that is the whole point of saying no
   assert.equal(summary(r).note, "no context on the payments side");
   // "on it" needs no reason, and the line must still read without one.
   assert.equal(line(row({ kind: "taken" })), '@bob is on "Add Paystack webhook verification"');
+});
+
+test("a rejection says why", () => {
+  assert.equal(
+    line(row({ kind: "task_rejected", note: "toggle does nothing on Safari" })),
+    '@bob sent "Add Paystack webhook verification" back: toggle does nothing on Safari',
+  );
 });

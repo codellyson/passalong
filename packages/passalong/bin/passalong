@@ -5,7 +5,7 @@
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
 //   passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
-//   passalong ready <id>          a task you have read is ready — an agent may take it now
+//   passalong ready <id...|--all> tasks you have read are ready — an agent may take them now
 //   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
 //   passalong approve <id>        the work in review is done
 //   passalong reject <id> <why>   not done: back to Ready, and the next agent reads why
@@ -201,9 +201,17 @@ const commands = {
   },
 
   async ready(f) {
-    const id = f._[0] || die("usage: passalong ready <id>");
-    const g = await passalong.ready(id).catch((e) => die(e.message));
-    console.error(`${g.meta.id} is Ready — an agent may take it`);
+    if (f.all) {
+      const ids = await passalong.readyDrafts().catch((e) => die(e.message));
+      if (!ids.length) return console.error("no drafts of yours to make ready");
+      for (const id of ids) console.log(id);
+      return console.error(`${ids.length} task${ids.length === 1 ? "" : "s"} Ready — agents may take them`);
+    }
+    if (!f._.length) die("usage: passalong ready <id...> | --all");
+    for (const id of f._) {
+      const g = await passalong.ready(id).catch((e) => die(e.message));
+      console.error(`${g.meta.id} is Ready — an agent may take it`);
+    }
   },
 
   async pull(f) {

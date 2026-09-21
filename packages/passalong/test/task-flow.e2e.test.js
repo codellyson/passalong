@@ -166,3 +166,92 @@ test("blocked_by in a task's frontmatter holds it until its blocker is approved"
   await p.approveTask(first.id);
   assert.equal(await state(second), "ready");
 });
+
+test("every draft you wrote can be made ready at once", { skip }, async () => {
+  const env = await setup();
+  const { p, serialize, account } = env;
+  const draft = async (title) =>
+    (
+      await p.share(
+        serialize({
+          meta: { title, kind: "task", target_context: `e2e/${account}` },
+          body: "## Goal\ng\n\n## Acceptance\n- a",
+        }),
+      )
+    ).guide.meta.id;
+  const ids = [await draft("Plan step one"), await draft("Plan step two")];
+  const made = await p.readyDrafts();
+  for (const id of ids) assert.ok(made.includes(id), `${id} was made ready`);
+  const states = (await p.tasks()).filter((t) => ids.includes(t.id)).map((t) => t.state);
+  assert.deepEqual(states, ["ready", "ready"]);
+  assert.deepEqual(await p.readyDrafts(), [], "nothing left in Draft");
+});
+
+/** Another account on the same local server, allowed to sync. Returns its token. */
+async function secondAccount() {
+  const { token, account } = await (await fetch(`${API}/v1/accounts`, { method: "POST" })).json();
+  sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
+  return { token, account };
+}
+
+function sql(command) {
+  execFileSync("npx", ["wrangler", "d1", "execute", "passalong", "--local", "--command", command], {
+    cwd: WEB,
+    stdio: "ignore",
+  });
+}
+
+test("in a team, each side hears what the other did to a task — and only the author moves it", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p, serialize, account } = env;
+  const api = await import("../src/api.js");
+  const owner = process.env.PASSALONG_TOKEN;
+  const as = (token) => {
+    process.env.PASSALONG_TOKEN = token;
+  };
+
+  const team = await api.createTeam(`tasks ${Date.now()}`);
+  sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  const { code } = await api.invite(team.slug);
+  const mate = await secondAccount();
+  as(mate.token);
+  await api.join(code);
+  await api.updateMe({ handle: `mate${Date.now().toString(36)}` });
+
+  as(owner);
+  const task = (body) =>
+    serialize({
+      meta: { title: body, kind: "task", target_context: `e2e/${account}` },
+      body: `## Goal\n${body}\n\n## Acceptance\n- a`,
+    });
+  const id = (await p.share(task("Team task"), { to: team.slug })).guide.meta.id;
+  await p.ready(id);
+  const draft = (await p.share(task("Still a draft"), { to: team.slug })).guide.meta.id;
+  await p.activity(); // clears what was unread before this test
+
+  // The teammate can take it, but cannot queue the owner's draft or close the task by status.
+  as(mate.token);
+  await assert.rejects(p.ready(draft), (e) => e.status === 403);
+  await assert.rejects(api.setStatus(id, "consumed"), (e) => e.status === 403);
+  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+  execFileSync("git", ["init", "-q", dir]);
+  execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:e2e/${account}.git`]);
+  assert.equal((await p.nextTask({ cwd: dir })).id, id);
+  await p.finishTask(id, {
+    markdown: "---\ntitle: team done\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    cwd: dir,
+  });
+
+  as(owner);
+  const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
+  assert.match(heard, /agent took the task "Team task"/);
+  assert.match(heard, /agent finished "Team task" — it is waiting for your review/);
+  await p.rejectTask(id, "needs a test");
+
+  as(mate.token);
+  const told = (await p.activity()).notifications.map((n) => n.text).join("\n");
+  assert.match(told, /sent "Team task" back: needs a test/);
+  as(owner);
+});

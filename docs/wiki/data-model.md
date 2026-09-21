@@ -98,7 +98,9 @@ reaches them the same day.
 `id`, `account_id`, `kind`, `guide_id`, `actor_id`, `team_id`, `at`, `times`, `read_at`,
 `emailed_at`, `note`
 
-`kind` is `handoff | shared | pulled | consumed | joined`. Repeated events coalesce into one row
+`kind` is one of `KINDS` in `apps/api/src/notify.ts`: the handoff events (`handoff`, `shared`,
+`taken`, `declined`, `pulled`, `consumed`, `reopened`, `verified`, `failed`, `joined`) and the
+task queue's (`task_claimed`, `task_finished`, `task_approved`, `task_rejected`, `task_released`). Repeated events coalesce into one row
 with `times` incremented and `at` moved forward, rather than piling up — the feed is meant to be
 readable after a week away.
 

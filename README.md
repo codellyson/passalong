@@ -28,7 +28,7 @@ passalong login      # optional: sync guides across machines and get share links
 ```
 passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
 passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
-passalong ready <id>          a task you have read is ready — an agent may take it now
+passalong ready <id...|--all> tasks you have read are ready — an agent may take them now
 passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
 passalong approve <id>        the work in review is done
 passalong reject <id> <why>   not done: back to Ready, and the next agent reads why

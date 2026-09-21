@@ -543,6 +543,17 @@ export async function ready(id) {
   return setStatus(guide.meta.id, "published");
 }
 
+/**
+ * Make every task you wrote that is still in Draft ready, and return their ids. For the moment a
+ * planner has written several and you have read them all. Only your own: moving a task into the
+ * queue is its author's call.
+ */
+export async function readyDrafts() {
+  const drafts = (await tasks()).filter((t) => t.mine && t.state === "draft");
+  for (const t of drafts) await ready(t.id);
+  return drafts.map((t) => t.id);
+}
+
 export async function remove(id) {
   // Server first: if it refuses (not the author), the local copy must survive too.
   if (api.loggedIn()) {

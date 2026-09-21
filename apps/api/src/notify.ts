@@ -12,6 +12,15 @@
 //   failed    someone tried it and it does not — the one people need to see today
 //   joined    someone accepted your invite
 //
+// And the task queue's, between a task's author and whoever's agent has it (docs/V2.md). Each
+// goes to the other party, so a person working alone hears none of them:
+//
+//   task_claimed   a teammate's agent took your task
+//   task_finished  it is done and waiting for your review — the one that needs you
+//   task_approved  the author accepted what your agent did
+//   task_rejected  and sent it back, with why
+//   task_released  and took it back from your agent, which should stop
+//
 // Rows first, delivery second. `line()` renders the one sentence every surface shows (CLI, MCP,
 // hub), so the wording is decided once here rather than three times.
 
@@ -28,6 +37,11 @@ export const KINDS = [
   "verified",
   "failed",
   "joined",
+  "task_claimed",
+  "task_finished",
+  "task_approved",
+  "task_rejected",
+  "task_released",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -477,6 +491,16 @@ export function line(
       return `${who} says ${title} does not work${note}`;
     case "joined":
       return `${who} joined ${r.team || "your team"}`;
+    case "task_claimed":
+      return `${who}'s agent took the task ${title}`;
+    case "task_finished":
+      return `${who}'s agent finished ${title} — it is waiting for your review`;
+    case "task_approved":
+      return `${who} approved ${title}`;
+    case "task_rejected":
+      return `${who} sent ${title} back${note}`;
+    case "task_released":
+      return `${who} took ${title} back from your agent`;
     default:
       return `${who} did something to ${title}`;
   }
