@@ -347,3 +347,32 @@ test("an image a reader cannot load is caught, and an ordinary one is not", () =
   // A link that is not an image is not this check's business.
   assert.deepEqual(unreachableImages("[see](attachment://file_1)"), []);
 });
+
+test("the API description covers what an agent does with a task, and not the review gate", async () => {
+  const { openapi } = await import("../src/openapi.ts");
+  const doc = openapi("https://passalong.dev");
+  for (const [path, method] of [
+    ["/v1/tasks", "get"],
+    ["/v1/tasks/next", "post"],
+    ["/v1/tasks/{id}/progress", "put"],
+    ["/v1/tasks/{id}/finish", "post"],
+  ])
+    assert.ok(doc.paths[path]?.[method], `${method.toUpperCase()} ${path} is described`);
+  // Approve, reject and release are a person's calls. Describing them would invite a model to make
+  // them, which is the one thing the review gate exists to stop, so they stay out, like the
+  // account routes do.
+  for (const gate of ["approve", "reject", "release"])
+    assert.equal(doc.paths[`/v1/tasks/{id}/${gate}`], undefined, `${gate} is not described`);
+  // A task is answered with the task routes: ack and verdict say they refuse one.
+  for (const path of ["/v1/guides/{id}/ack", "/v1/guides/{id}/verdict"])
+    assert.match(doc.paths[path].put.responses[400].description, /task/i, path);
+});
+
+test("the API description says null the way OpenAPI 3.1 does", async () => {
+  const { openapi } = await import("../src/openapi.ts");
+  const doc = openapi("https://passalong.dev");
+  assert.equal(doc.openapi.startsWith("3.1"), true);
+  // `nullable` is OpenAPI 3.0. A 3.1 validator ignores it, so a field that can be null reads as one
+  // that never is, and a client generated from it chokes on the null.
+  assert.doesNotMatch(JSON.stringify(doc), /"nullable"/);
+});
