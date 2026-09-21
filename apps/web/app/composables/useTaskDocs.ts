@@ -1,8 +1,6 @@
 // A task's markdown and its write-up's, split into sections, for the review page.
 //
-// The cache lives here in the browser, outside Nuxt's payload. The prototype kept it in useState,
-// and hydration replaced it with the server's empty copy after the first loads had landed, so the
-// Acceptance column rendered empty. Documents are immutable enough for a page visit: a task is
+// The cache lives here in the browser, outside Nuxt's payload. Documents are immutable enough for a page visit: a task is
 // only rewritten by reject or release, which move it out of review, and a write-up not at all.
 import type { Task } from "~/types/hub";
 import { type Sections, sectionsOf } from "~/utils/task-docs";
@@ -21,7 +19,11 @@ export function useTaskDocs() {
       const res = await fetch(`/v1/guides/${encodeURIComponent(id)}`, { headers });
       // Not cached, so it is asked for again when the token arrives or the item is reopened.
       if (!res.ok) return;
-      cache.value = { ...cache.value, [id]: sectionsOf(await res.text()) };
+      // The body is awaited before the cache is read. Written as one expression, the spread of the
+      // old cache ran first and the await after it, so of a task and its write-up loading together
+      // the second to land wrote back a cache from before the first — and the task vanished.
+      const doc = sectionsOf(await res.text());
+      cache.value = { ...cache.value, [id]: doc };
     } catch {}
   }
 
@@ -31,6 +33,11 @@ export function useTaskDocs() {
     report: t.claim?.report ? (cache.value[t.claim.report] ?? null) : null,
   });
   const loadTask = (t: Task) => Promise.all([load(t.id), load(t.claim?.report || "")]);
+  /** Load both, then hand them back: for a caller that keeps its own copy. */
+  const docsOf = async (t: Task) => {
+    await loadTask(t);
+    return docsFor(t);
+  };
 
-  return { docsFor, loadTask, token };
+  return { docsFor, docsOf, loadTask, token };
 }

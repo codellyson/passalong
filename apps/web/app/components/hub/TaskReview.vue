@@ -19,11 +19,11 @@
 -->
 <script setup lang="ts">
 import type { Task } from "~/types/hub";
-import { checkLines, codeParts } from "~/utils/task-docs";
+import { checkLines, codeParts, type Sections } from "~/utils/task-docs";
 
 const props = defineProps<{ tasks: Task[] }>();
 const { onApprove, onReject, onRelease } = useHub();
-const { docsFor, loadTask, token } = useTaskDocs();
+const { docsOf, token } = useTaskDocs();
 
 const stuck = (t: Task) => /^BLOCKED:/i.test(t.claim?.note || "");
 const groups = computed(() =>
@@ -54,17 +54,30 @@ const selectedId = ref("");
 const selected = computed(
   () => needsYou.value.find((t) => t.id === selectedId.value) ?? needsYou.value[0] ?? null,
 );
-// Started once mounted, not during setup: a load that lands mid-hydration updated the cache but not
-// the "Loading…" the server had rendered, and the first item stayed on it. Again once the hub has its
-// token, since the first pass can run before it has and a refusal is not cached.
+// The review keeps its own copy of the documents, set when they have loaded, so a slow answer for an
+// item you have since left is dropped rather than shown. Loads start once mounted, and again when the
+// hub has its token (a refusal is not cached).
+type Docs = { id: string; task: Sections | null; report: Sections | null };
+const docs = shallowRef<Docs | null>(null);
 onMounted(() => {
-  watch([selected, token], ([t]) => t && loadTask(t), { immediate: true });
+  watch(
+    [selected, token],
+    async ([t]) => {
+      if (!t) return;
+      const d = await docsOf(t);
+      if (selected.value?.id === t.id) docs.value = { id: t.id, ...d };
+    },
+    { immediate: true },
+  );
 });
-
-const docs = computed(() => (selected.value ? docsFor(selected.value) : null));
 const asked = computed(() => checkLines(docs.value?.task?.Acceptance));
 const claimed = computed(() => checkLines(docs.value?.report?.Verification));
-const loading = computed(() => Boolean(selected.value?.state === "review" && !docs.value?.task));
+// Documents that belong to the item you just left count as not loaded, rather than showing its lines.
+const loading = computed(
+  () =>
+    selected.value?.state === "review" &&
+    (docs.value?.id !== selected.value.id || !docs.value?.task),
+);
 
 const flagged = ref<Set<number>>(new Set());
 const note = ref("");
@@ -128,7 +141,7 @@ const press =
         <button
           v-for="t in g.items"
           :key="t.id"
-          class="block w-full rounded-1 border-0 px-2 py-2 text-left transition-[background-color] duration-150 ease-out"
+          class="block w-full rounded-1 border-0 px-2 py-2 text-left transition-[background-color,box-shadow] duration-150 ease-out"
           :class="
             selected?.id === t.id
               ? 'bg-accent-soft shadow-[inset_3px_0_0_var(--accent)]'
@@ -205,7 +218,7 @@ const press =
                   </span>
                   <!-- Quiet until used: a full button on every line outweighed the lines. -->
                   <button
-                    class="shrink-0 rounded-1 border-0 px-1.5 py-0.5 font-ui text-xs"
+                    class="inline-flex shrink-0 items-center gap-1 rounded-1 border-0 px-1.5 py-0.5 font-ui text-xs"
                     :class="[
                       press,
                       flagged.has(i)
@@ -215,7 +228,10 @@ const press =
                     :aria-pressed="flagged.has(i)"
                     :aria-label="flagged.has(i) ? 'Marked not met. Undo' : 'Mark this line not met'"
                     @click="flag(i)"
-                  >{{ flagged.has(i) ? "not met ✕" : "not met?" }}</button>
+                  >
+                    <template v-if="flagged.has(i)">not met<AppIcon name="x" :size="12" /></template>
+                    <template v-else>not met?</template>
+                  </button>
                 </li>
                 <li v-if="!asked.length" class="py-2 font-ui text-sm text-muted">
                   The task has no Acceptance lines to check against.

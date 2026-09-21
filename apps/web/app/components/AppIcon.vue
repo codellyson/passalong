@@ -27,6 +27,8 @@ const PATHS = {
   open: "M7.75 3.75H3.75v8.5h8.5v-4M10 3.75h2.25V6M12.25 3.75l-4.25 4.25",
   /** Opens something below it, and turns over when it is open. */
   reveal: "M4.5 6.5L8 10l3.5-3.5",
+  /** Undoes a mark, the way check makes one. */
+  x: "M5 5l6 6M11 5l-6 6",
 } as const;
 
 /** Dots are drawn as zero-length strokes with a round cap, so their weight *is* the stroke width —

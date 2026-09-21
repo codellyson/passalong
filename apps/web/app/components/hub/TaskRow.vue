@@ -48,6 +48,10 @@ const heard = computed(() => {
   return until ? new Date(Date.parse(until) - 30 * 60 * 1000).toISOString() : "";
 });
 
+/** The press the review's buttons have, so a page of both does not answer two ways. */
+const press =
+  "transition-[scale,background-color,border-color,color,box-shadow] duration-150 ease-out active:not-disabled:scale-[0.96]";
+
 const rejecting = ref(false);
 const why = ref("");
 const field = ref<HTMLTextAreaElement | null>(null);
@@ -130,23 +134,24 @@ function send() {
           @keydown.ctrl.enter="send"
         />
         <div class="mt-2 flex flex-wrap gap-2">
-          <button class="btn primary" :disabled="!why.trim()" @click="send">send it back</button>
-          <button class="btn" @click="rejecting = false">back</button>
+          <button class="btn primary" :class="press" :disabled="!why.trim()" @click="send">send it back</button>
+          <button class="btn" :class="press" @click="rejecting = false">back</button>
         </div>
       </div>
     </div>
 
     <div v-if="t.mine && !rejecting" class="flex shrink-0 items-center gap-2">
       <template v-if="t.state === 'review'">
-        <button class="btn primary sm" @click="onApprove(t)">approve</button>
-        <button class="btn outline danger sm" @click="askWhy">send back</button>
+        <button class="btn primary sm" :class="press" @click="onApprove(t)">approve</button>
+        <button class="btn outline danger sm" :class="press" @click="askWhy">send back</button>
       </template>
       <button
         v-else-if="t.state === 'claimed' || t.state === 'stalled'"
         class="btn outline warn sm"
+        :class="press"
         @click="onRelease(t)"
       >take back</button>
-      <button v-else-if="t.state === 'draft'" class="btn sm" @click="onTaskReady(t)">make ready</button>
+      <button v-else-if="t.state === 'draft'" class="btn sm" :class="press" @click="onTaskReady(t)">make ready</button>
     </div>
   </li>
 </template>
