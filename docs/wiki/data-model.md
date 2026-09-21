@@ -29,7 +29,7 @@ for querying. When they disagree, the markdown is the truth.
 short enough to read aloud — and is not secret on its own. A share link is `/g/<id>/<key>`, so
 knowing an id gets you nothing.
 
-`kind` is `bug` or empty, and empty means `transfer` — every guide written before migration 0007
+`kind` is `bug`, `task` or empty, and empty means `transfer` — every guide written before migration 0007
 is one, and defaulting the other way would have turned the whole table into bug reports. The last
 three are a bug's own: which report it was filed under, which product surface it is on, and how
 badly it is broken (`s1` blocker to `s4` cosmetic). All four are denormalised from frontmatter like

@@ -37,7 +37,8 @@ export interface Meta {
   source_context?: string;
   url?: string;
   /**
-   * What this guide is for: "bug" or "transfer" (the default, and what an absent value means).
+   * What this guide is for: "bug", "task" or "transfer" (the default, and what an absent value
+   * means).
    * The receiving agent behaves differently for each — see KINDS in packages/passalong/src/guide.js.
    */
   kind?: string;

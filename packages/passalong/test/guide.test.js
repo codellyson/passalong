@@ -9,6 +9,7 @@ import {
   serialize,
   stamp,
   stripPlaceholders,
+  TASK_SECTIONS,
   template,
   validate,
 } from "../src/guide.js";
@@ -123,6 +124,26 @@ test("a bug keeps its repro out of Steps", () => {
     body: "## Problem\np\n## Reproduce\n1. x\n## Steps\n1. x",
   };
   assert.ok(validate(mislabelled).some((e) => /Reproduce", not "## Steps/.test(e)));
+});
+
+test("a task is a brief with Acceptance and no Steps", () => {
+  const task = parse(template({ kind: "task", title: "Add dark mode" }));
+  assert.equal(task.meta.kind, "task");
+  assert.deepEqual(Object.keys(sections(task.body)), TASK_SECTIONS);
+  assert.ok(!/^## Steps/m.test(task.body), "a task template must not contain a Steps section");
+  // Left empty rather than defaulted: a task written in one repo is often for another.
+  assert.equal(task.meta.target_context, "");
+
+  const written = {
+    meta: { title: "t", kind: "task", target_context: "owner/repo" },
+    body: "## Goal\ng\n## Acceptance\n- it works",
+  };
+  assert.deepEqual(validate(written), []);
+  assert.equal(parse(serialize(written)).meta.target_context, "owner/repo");
+
+  // Acceptance is what the work is approved against, so a task cannot go out without one.
+  const open = { meta: { title: "t", kind: "task" }, body: "## Goal\ng" };
+  assert.ok(validate(open).some((e) => /## Acceptance/.test(e)));
 });
 
 test("a guide with no kind is still a transfer guide", () => {

@@ -35,11 +35,12 @@ export const SETTABLE = ["draft", "published", "consumed"];
  *
  *   transfer  work that is finished here and should be repeated there — follow the Steps
  *   bug       something broken there — do NOT follow anything; fix it
+ *   task      work nobody has done yet — do what Goal asks, done when Acceptance holds
  *
  * A guide with no `kind` is a transfer guide: every guide written before this existed is one,
  * and defaulting the other way would turn them all into bug reports.
  */
-export const KINDS = ["transfer", "bug"];
+export const KINDS = ["transfer", "bug", "task"];
 
 // Body sections in the order a guide should present them. The heading text is what the
 // receiving agent keys on, so keep these stable.
@@ -98,13 +99,29 @@ export const BUG_LEAD =
   "> **Bug report.** The steps under Reproduce show the problem \u2014 they are not a fix to " +
   "apply. Fix what Problem describes, then check Verification.";
 
+/**
+ * A task's sections: a brief for work nobody has done yet, written before it starts.
+ *
+ * `Acceptance` is the section that matters. It is what a person checks the finished work against
+ * before approving it, so a task without one has no way to be done — which is why it is required.
+ * There is no `Steps`: the agent that takes a task works out how, and what it did comes back as a
+ * transfer guide, which is where Steps belong.
+ */
+export const TASK_SECTIONS = ["Goal", "Context", "Constraints", "Acceptance", "Out of scope"];
+
 /** The sections a guide of this kind presents, in order. */
 export function sectionsFor(kind) {
-  return kind === "bug" ? BUG_SECTIONS : SECTIONS;
+  if (kind === "bug") return BUG_SECTIONS;
+  if (kind === "task") return TASK_SECTIONS;
+  return SECTIONS;
 }
 
 /** The sections it cannot be published without. */
-const REQUIRED = { transfer: ["Problem", "Steps"], bug: ["Problem", "Reproduce"] };
+const REQUIRED = {
+  transfer: ["Problem", "Steps"],
+  bug: ["Problem", "Reproduce"],
+  task: ["Goal", "Acceptance"],
+};
 
 // Fields that hold a list of strings. Everything else is a plain string.
 /**
@@ -245,6 +262,8 @@ const META_ORDER = [
   "created",
   "author",
   "source_context",
+  // Tasks only: the repo the work is for. Optional — a task without one is not tied to a repo.
+  "target_context",
   // Where it came from, in the two senses a guide has one: `source_context` is the repo and branch
   // it was written in, `parent` is the guide it was written *out of*.
   "parent",
@@ -406,6 +425,7 @@ export function bugGuide({
 /** A draft with the section skeleton. Placeholders are HTML comments so they vanish when rendered. */
 export function template(meta = {}) {
   if (meta.kind === "bug") return bugTemplate(meta);
+  if (meta.kind === "task") return taskTemplate(meta);
   const body = [
     "## Problem",
     "<!-- passalong: What was broken or needed, in two or three sentences. -->",
@@ -470,6 +490,46 @@ function bugTemplate(meta = {}) {
       severity: "s3",
       stack_assumptions: [],
       tags: ["bug"],
+      ...meta,
+    },
+    body,
+  });
+}
+
+/**
+ * One task, as a guide: the brief an agent takes before any work exists.
+ *
+ * `target_context` is the repo the work is for, and it is left empty rather than defaulted to the
+ * repo the task was written in: a task written in one repo is often for another, and one aimed at
+ * the wrong repo is picked up by the wrong agent.
+ */
+function taskTemplate(meta = {}) {
+  const body = [
+    "## Goal",
+    "<!-- passalong: What should be true when this is done, in two or three sentences. -->",
+    "",
+    "## Context",
+    "<!-- passalong: What the agent needs to know first: where the code lives, what exists already, links. -->",
+    "",
+    "## Constraints",
+    "<!-- passalong: What must not change, what to use or avoid, limits on scope or approach. -->",
+    "",
+    "## Acceptance",
+    "<!-- passalong: How a person checks it is done: commands, expected output, behaviour to see. -->",
+    "",
+    "## Out of scope",
+    "<!-- passalong: What looks related but is not part of this task. -->",
+  ].join("\n");
+  return serialize({
+    meta: {
+      title: "",
+      kind: "task",
+      author: "",
+      source_context: "",
+      target_context: "",
+      status: "draft",
+      stack_assumptions: [],
+      tags: [],
       ...meta,
     },
     body,

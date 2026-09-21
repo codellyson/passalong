@@ -2329,7 +2329,7 @@ app.put("/v1/guides/:id", async (c) => {
       report?.id || "",
       slug(meta.area),
       slug(meta.severity, 8),
-      slug(meta.kind, 16) === "bug" ? "bug" : "",
+      ["bug", "task"].includes(slug(meta.kind, 16)) ? slug(meta.kind, 16) : "",
       parentId,
     )
     .run();

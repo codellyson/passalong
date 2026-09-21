@@ -70,7 +70,7 @@ export interface Guide {
   /** The report this issue belongs to, when it is one — see migrations/0006_reports.sql. */
   report?: string;
   report_title?: string;
-  /** "bug" or "transfer"; absent means transfer. */
+  /** "bug", "task" or "transfer"; absent means transfer. */
   kind?: string;
   area?: string;
   severity?: string;

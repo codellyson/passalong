@@ -4,6 +4,8 @@
 //   passalong share [file] [--to TARGET]  publish a guide → id + link
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
+//   passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
+//   passalong ready <id>          a task you have read is ready — an agent may take it now
 //   passalong attach <image>      upload evidence and print the markdown that points at it
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong start <id|link>     pull it and take it — one command for "I am doing this"
@@ -36,7 +38,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as api from "../src/api.js";
-import { scaffold } from "../src/capture.js";
+import { scaffold, taskScaffold } from "../src/capture.js";
 import { serialize } from "../src/guide.js";
 import * as passalong from "../src/passalong.js";
 import * as store from "../src/store.js";
@@ -107,17 +109,14 @@ const monthOf = (iso) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 
 const commands = {
   async share(f) {
     let path = f._[0];
-    let fromDrafts = false;
     if (!path) {
       const [latest] = store.drafts();
       if (latest) {
         path = latest;
-        fromDrafts = true;
         console.error(`using draft ${path}`);
       } else {
         path = store.draftPath(new Date().toISOString().replace(/[:.]/g, "-"));
         writeFileSync(path, scaffold());
-        fromDrafts = true;
         if (!tty)
           die(`no draft to share; scaffolded ${path} — fill it in and run \`passalong share ${path}\``);
       }
@@ -128,7 +127,10 @@ const commands = {
     const { guide, url, synced, notified, path: saved } = await passalong
       .share(readFileSync(path, "utf8"), { to })
       .catch((e) => die(e.message));
-    if (fromDrafts) store.removeDraft(path);
+    // Any draft that went out is spent, however it was named — a task that failed validation is
+    // re-shared by its path, and leaving it would have the next bare `share` publish it again.
+    // removeDraft() touches nothing outside the drafts directory.
+    store.removeDraft(resolve(path));
     console.log(guide.meta.id);
     console.error(`shared "${guide.meta.title}" → ${saved}`);
     if (guide.meta.team)
@@ -137,6 +139,33 @@ const commands = {
       );
     if (synced) console.error(`link: ${url}`);
     else console.error("not synced (run `passalong login` to sync across machines)");
+  },
+
+  /**
+   * Write a task. It lands in Draft and stays there until `passalong ready`: the gap between the
+   * two is the one moment a person reads what an agent is about to be asked to do.
+   */
+  async task(f) {
+    const sentence = f._.join(" ").trim() || die('usage: passalong task "<what needs doing>"');
+    const path = store.draftPath(`task-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+    writeFileSync(path, taskScaffold(sentence));
+    if (tty && !f["no-edit"]) edit(path);
+    const { guide, synced } = await passalong
+      .share(readFileSync(path, "utf8"))
+      .catch((e) => die(`${e.message}\ndraft kept at ${path} — fix it and run \`passalong share ${path}\``));
+    store.removeDraft(path);
+    const id = guide.meta.id;
+    console.log(id);
+    const target = guide.meta.target_context;
+    console.error(`task "${guide.meta.title}" is in Draft${target ? ` for ${target}` : " (no repo)"}`);
+    console.error(`when an agent may take it: passalong ready ${id}`);
+    if (!synced) console.error("not synced (run `passalong login` — agents elsewhere cannot see it)");
+  },
+
+  async ready(f) {
+    const id = f._[0] || die("usage: passalong ready <id>");
+    const g = await passalong.ready(id).catch((e) => die(e.message));
+    console.error(`${g.meta.id} is Ready — an agent may take it`);
   },
 
   async pull(f) {

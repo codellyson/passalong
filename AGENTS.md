@@ -94,7 +94,7 @@ public one, for agents *using* Passalong rather than changing it.
   `POST /v1/mcp`, for assistants that add remote servers. The HTTP one owns no logic — each tool
   dispatches back through the app's own routes with the caller's bearer token, so a rule lives in
   the route and nowhere else. Stateless on purpose: nothing subscribes, so nothing needs a session.
-- **A guide has a kind, and the two ask opposite things of whoever receives one.** `transfer`
+- **A guide has a kind, and each asks something different of whoever receives one.** `transfer`
   (or absent — every guide written before migration 0007 is one) is finished work to repeat:
   follow its `Steps`. `bug` is a defect to fix where it is. A bug's repro goes under `## Reproduce`
   and **never** `## Steps`, because `Steps` is the heading the MCP server tells every agent to
@@ -103,6 +103,10 @@ public one, for agents *using* Passalong rather than changing it.
   Steps section, and the document itself carries a line saying what it is, because the route
   serving a share link cannot add one: `api.byLink` pulls through that route and re-serialises what
   it gets, so anything decorated on there would be written to disk and published back.
+  `task` is work nobody has done yet (`docs/V2.md`): `Goal`, `Context`, `Constraints`,
+  `Acceptance`, `Out of scope`, and no `Steps` — how is the taker's to work out, and what they did
+  comes back as a transfer guide. `Acceptance` is required because it is what the work is approved
+  against.
 - **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
   people can take and answer for separately — one document holding six has one verdict, and "four
   of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is

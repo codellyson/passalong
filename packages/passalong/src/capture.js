@@ -33,6 +33,25 @@ export function context(cwd = process.cwd()) {
   return { root, name, branch, author, commits, changed, files };
 }
 
+/**
+ * A task draft from one sentence: the sentence as the title and the Goal, the rest left to fill.
+ *
+ * `target_context` defaults to the repo this runs in, because that is the likeliest repo a task
+ * written from inside one is for — and it is in the editor, in the frontmatter, for the author
+ * to change before it goes anywhere. Outside a repo it stays empty, which is a task for no repo.
+ */
+export function taskScaffold(sentence, cwd = process.cwd()) {
+  const c = context(cwd);
+  const md = template({
+    kind: "task",
+    title: sentence,
+    author: c.author,
+    source_context: c.branch && c.branch !== "HEAD" ? `${c.name}@${c.branch}` : c.name,
+    target_context: c.root ? c.name : "",
+  });
+  return md.replace(/^## Goal\n/m, `## Goal\n${sentence}\n`);
+}
+
 /** A draft pre-filled with repo facts. Recent activity is appended as a comment for reference. */
 export function scaffold(cwd = process.cwd()) {
   const c = context(cwd);

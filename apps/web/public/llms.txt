@@ -16,8 +16,8 @@ the author with all of their content.
 A share link looks like `https://passalong.dev/g/<id>/<key>`. Append `.md` for the raw markdown,
 or `?view=verify` for the view that leads with what to check and folds the implementation away.
 
-0. Check `kind` in the frontmatter first. `bug` and `transfer` ask for opposite things — see
-   "Two kinds of guide" below. Absent means `transfer`.
+0. Check `kind` in the frontmatter first. `transfer`, `bug` and `task` each ask for something
+   different — see "Three kinds of guide" below. Absent means `transfer`.
 1. Read the guide. `Verification` is what "done" means; `Gotchas` is what already went wrong.
 2. Anything under `stack_assumptions` in the frontmatter is what the author's environment was.
    Adapt those to the current codebase rather than copying them.
@@ -26,16 +26,20 @@ or `?view=verify` for the view that leads with what to check and folds the imple
    not. The reason reaches the author the same day. This is the part that makes the next guide
    better, so do not skip it.
 
-## Two kinds of guide
+## Three kinds of guide
 
-`kind:` in the frontmatter says what a guide is for. The two ask for opposite behaviour, so read
-it before acting on anything.
+`kind:` in the frontmatter says what a guide is for. Each asks for different behaviour, so read it
+before acting on anything.
 
 - `kind: transfer` (or absent) — finished work to repeat here. Follow its `Steps`.
 - `kind: bug` — a defect to fix where it is. It has no `Steps` and nothing in it is a procedure to
   apply: `Reproduce` is how to see the bug and running it produces the bug, `Verification` is the
   behaviour that should have happened. Fix the defect, then check `Verification` and report back.
   A bug report is not broken because you reproduced it.
+- `kind: task` — work nobody has done yet. Its sections are `Goal`, `Context`, `Constraints`,
+  `Acceptance` and `Out of scope`. It has no `Steps`: work out how to reach `Goal` within
+  `Constraints`, leave `Out of scope` alone, and treat `Acceptance` as what "done" means. A task
+  may name the repo it is for in `target_context`.
 
 Bugs are often filed in sets. `report:` names the parent a set was filed under; `GET /v1/reports/
 <id>` returns the rest of it. Fix only the issue you were given unless you were asked for more.
@@ -44,7 +48,7 @@ Bugs are often filed in sets. `report:` names the parent a set was filed under; 
 
 Frontmatter fields, in order: `id`, `title`, `kind`, `created`, `author`, `source_context`,
 `status`, `team`, `to`, `stack_assumptions` (list), `tags` (list). Bugs also carry `report`,
-`area` and `severity` (`s1` blocker to `s4` cosmetic).
+`area` and `severity` (`s1` blocker to `s4` cosmetic). Tasks may carry `target_context`.
 
 `to:` is who is being asked, inside the `team:` it names. `@handle` asks one person and outranks
 everything else in their inbox; `#group` asks the people who do a thing, reaches every one of them,

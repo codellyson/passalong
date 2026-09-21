@@ -21,15 +21,15 @@
 const GUIDE = {
   type: "object",
   description:
-    "One guide. A transfer guide is finished work to repeat; a bug is a defect to fix. `kind` says which.",
+    "One guide. A transfer guide is finished work to repeat; a bug is a defect to fix; a task is work nobody has done yet. `kind` says which.",
   properties: {
     id: { type: "string", example: "k3mq2xa7" },
     title: { type: "string" },
     kind: {
       type: "string",
-      enum: ["transfer", "bug"],
+      enum: ["transfer", "bug", "task"],
       description:
-        "transfer: follow its Steps. bug: fix what Problem describes — Reproduce shows the defect and must not be run as a remedy.",
+        "transfer: follow its Steps. bug: fix what Problem describes — Reproduce shows the defect and must not be run as a remedy. task: reach Goal within Constraints; done when Acceptance holds.",
     },
     status: {
       type: "string",

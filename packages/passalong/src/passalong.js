@@ -55,7 +55,10 @@ export async function share(markdown, { cwd = process.cwd(), to } = {}) {
   const errors = validate(guide);
   if (errors.length)
     throw new PassalongError(`guide is not ready to share:\n  - ${errors.join("\n  - ")}`);
-  if (guide.meta.status === "draft")
+  // A task stays a draft when it is shared. Draft is the column a task waits in until a person
+  // says it is ready for an agent — `ready()` — and an agent that drafts one over MCP comes
+  // through here too, so publishing on share would let a task queue itself with nobody reading it.
+  if (guide.meta.status === "draft" && guide.meta.kind !== "task")
     guide = { ...guide, meta: { ...guide.meta, status: "published" } };
 
   let url = guide.meta.url || null;
@@ -399,6 +402,21 @@ export async function setStatus(id, status) {
   store.save(next);
   if (api.loggedIn() && guide.meta.url) await api.setStatus(id, status);
   return next;
+}
+
+/**
+ * Move a task from Draft to Ready: a person has read it and an agent may take it.
+ *
+ * Only tasks. Every other kind is published the moment it is shared, so "ready" on one would
+ * either do nothing or reopen something archived under a name that does not say so.
+ */
+export async function ready(id) {
+  const { guide } = await resolve(id);
+  if (guide.meta.kind !== "task")
+    throw new PassalongError(`${guide.meta.id || id} is not a task — ready is for tasks in Draft`);
+  if (guide.meta.status !== "draft")
+    throw new PassalongError(`${guide.meta.id} is not in Draft (status: ${guide.meta.status})`);
+  return setStatus(guide.meta.id, "published");
 }
 
 export async function remove(id) {

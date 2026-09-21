@@ -109,9 +109,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     { name: "passalong", version: "0.2.0" },
     {
       instructions:
-        "Passalong hands work between contexts as guides: markdown with frontmatter, in two " +
-        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — the two ask " +
-        "for opposite behaviour.\n" +
+        "Passalong hands work between contexts as guides: markdown with frontmatter, in three " +
+        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — each asks " +
+        "for different behaviour.\n" +
         "kind: transfer (or absent) is a finished implementation to repeat here. Follow its " +
         "Steps, adapting anything marked ASSUMES to this codebase; run its Verification before " +
         "declaring done, then verify_guide with the result.\n" +
@@ -120,7 +120,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "the behaviour that should have happened. Fix the defect, then check Verification and " +
         "verify_guide with the result. A bug report is not broken because you reproduced it.\n" +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
-        "file_bugs with all of them at once; each becomes a guide someone can take on its own.",
+        "file_bugs with all of them at once; each becomes a guide someone can take on its own.\n" +
+        "kind: task is work nobody has done yet. It has no Steps: work out how to reach Goal " +
+        "within Constraints, leave Out of scope alone, and treat Acceptance as the definition of " +
+        "done. verify_guide once every Acceptance check holds.",
     },
   );
 
@@ -152,19 +155,24 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       description:
         "Fetch one guide's full markdown by id. Read `kind` in its frontmatter before acting: a " +
         "bug is a defect to fix, and its Reproduce section produces the problem rather than " +
-        "solving it. Fetching a teammate's guide tells them the transfer landed.",
+        "solving it; a task is work nobody has done yet, done when its Acceptance holds. Fetching a teammate's guide tells them the transfer landed.",
       inputSchema: { id: z.string().describe("passalong id, e.g. k3mq2xa7") },
     },
     async ({ id }) => {
       const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}`);
       if (res.status >= 400) return failed(res.text);
-      // Said in front of the document, because an agent keys on headings and a bug's headings look
-      // enough like a transfer guide's to be followed by one that never opened the frontmatter.
+      // Said in front of the document, because an agent keys on headings and a bug's or a task's
+      // headings look enough like a transfer guide's to be followed by one that never opened the
+      // frontmatter. Mirrors `leadFor()` in packages/passalong/src/mcp.js.
       const lead = /^kind:\s*bug\s*$/m.test(res.text)
         ? "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions — " +
           "those steps produce the defect. Fix what Problem describes, then check Verification " +
           "and answer with verify_guide.\n\n"
-        : "";
+        : /^kind:\s*task\s*$/m.test(res.text)
+          ? "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out " +
+            "how to reach Goal within Constraints, and leave Out of scope alone. It is done when " +
+            "every check under Acceptance holds; answer with verify_guide.\n\n"
+          : "";
       return text(lead + res.text);
     },
   );
@@ -224,8 +232,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     {
       title: "Publish guide",
       description:
-        "Publish a guide from its full markdown — a transfer guide, or a single bug with " +
-        "`kind: bug`. Use file_bugs for more than one bug. Missing id, created, author and " +
+        "Publish a guide from its full markdown — a transfer guide, a single bug with " +
+        "`kind: bug`, or a task with `kind: task`. Use file_bugs for more than one bug. Missing id, created, author and " +
         "source_context are filled in. Addressing is frontmatter: `team:` and `to:`.",
       inputSchema: {
         id: z

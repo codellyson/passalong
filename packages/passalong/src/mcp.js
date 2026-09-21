@@ -8,7 +8,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as api from "./api.js";
-import { AREAS, BUG_SECTIONS, parse, SECTIONS, template } from "./guide.js";
+import { AREAS, BUG_SECTIONS, parse, SECTIONS, TASK_SECTIONS, template } from "./guide.js";
 import * as passalong from "./passalong.js";
 
 /**
@@ -22,6 +22,30 @@ const VERSION = JSON.parse(
 ).version;
 
 const text = (s) => ({ content: [{ type: "text", text: s }] });
+
+/**
+ * What to say in front of a guide whose kind changes what the reader should do with it.
+ *
+ * The heading text is what an agent keys on, and a bug's or a task's headings are close enough to
+ * a transfer guide's to be treated as one by an agent that never opened the frontmatter. So the
+ * kind is stated before the document, in the imperative. A transfer guide needs nothing: following
+ * it is what an agent does with an unmarked document anyway.
+ */
+function leadFor(meta) {
+  if (meta.kind === "bug")
+    return (
+      "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
+      "— those steps produce the defect. Fix what Problem describes, then check " +
+      "Verification and answer with verify_guide.\n\n"
+    );
+  if (meta.kind === "task")
+    return (
+      "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
+      "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
+      "under Acceptance holds; answer with verify_guide.\n\n"
+    );
+  return "";
+}
 
 /**
  * The rest of the report this issue came from.
@@ -60,9 +84,9 @@ export async function serve() {
     { name: "passalong", version: VERSION },
     {
       instructions:
-        "Passalong hands work between contexts as guides: markdown with frontmatter, in two " +
-        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — the two ask " +
-        "for opposite behaviour.\n" +
+        "Passalong hands work between contexts as guides: markdown with frontmatter, in three " +
+        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — each asks " +
+        "for different behaviour.\n" +
         `kind: transfer (or absent) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +
         "Follow its Steps, adapting anything marked ASSUMES to this codebase; run its " +
         "Verification before declaring done, then verify_guide with the result.\n" +
@@ -80,7 +104,15 @@ export async function serve() {
         "ok true once the behaviour it describes actually holds. A bug report is not broken " +
         "because you reproduced it. " +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
-        "file_bugs with all of them at once; each becomes a guide someone can take on its own. " +
+        "file_bugs with all of them at once; each becomes a guide someone can take on its own.\n" +
+        `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
+        "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
+        "alone, and treat Acceptance as the definition of done. Open it with start_guide, then " +
+        "verify_guide once every Acceptance check holds. When the user asks you to queue work " +
+        "for an agent or write a task, start from guide_template with kind task, fill every " +
+        "section from the conversation and the code — Acceptance as checks a person can run — " +
+        "set target_context to the repo the work is for, and publish_guide. A task lands in " +
+        "Draft, not the queue: tell the user to read it and run `passalong ready <id>`.\n" +
         "When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
         "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or " +
@@ -284,12 +316,7 @@ export async function serve() {
       try {
         const r = await passalong.start(ref, { cwd: cwd || process.cwd() });
         const meta = parse(r.markdown).meta;
-        const lead =
-          meta.kind === "bug"
-            ? "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
-              "— those steps produce the defect. Fix what Problem describes, then check " +
-              "Verification and answer with verify_guide.\n\n"
-            : "";
+        const lead = leadFor(meta);
         // What actually happened to the ack, said plainly. An agent that reports "took it" when
         // nothing was sent is the failure this tool exists to prevent, one step further along.
         const took = r.took
@@ -332,16 +359,8 @@ export async function serve() {
     async ({ ref, cwd }) => {
       try {
         const { markdown, path, from } = await passalong.pull(ref, { cwd: cwd || process.cwd() });
-        // The heading text is what an agent keys on, and a bug's headings look enough like a
-        // transfer guide's to be followed by one that never opened the frontmatter. So the kind
-        // is stated in front of the document, in the imperative, every time.
         const meta = parse(markdown).meta;
-        const lead =
-          meta.kind === "bug"
-            ? "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
-              "— those steps produce the defect. Fix what Problem describes, then check " +
-              "Verification and answer with verify_guide.\n\n"
-            : "";
+        const lead = leadFor(meta);
         const siblings = await related(meta);
         // After the document, with the other trailing comments, not in front of it. An
         // instruction that arrives with the payload is what gets read — but anything before the
@@ -393,7 +412,8 @@ export async function serve() {
       title: "Publish guide",
       description:
         "Publish a guide from markdown (frontmatter + sections) — a transfer guide by default, or " +
-        "a single bug with `kind: bug`; use file_bugs for more than one. Missing id, created, " +
+        "a single bug with `kind: bug`; use file_bugs for more than one; or a task for work nobody " +
+        "has done yet with `kind: task`. Missing id, created, " +
         'author, and source_context are filled in. `to` addresses it to a team ("khaime") or a ' +
         'teammate ("khaime/lukman"), who is notified. Returns the id and share link.',
       inputSchema: {
@@ -423,6 +443,14 @@ export async function serve() {
           to: guide.meta.to || "",
           notified,
           path,
+          // A task does not go live on publish, and an agent that reports "queued it" has told
+          // the user something untrue. Said in the result so it is said to them.
+          ...(guide.meta.kind === "task" && guide.meta.status === "draft"
+            ? {
+                status: "draft",
+                next: `in Draft: ask the user to read it, then run \`passalong ready ${guide.meta.id}\``,
+              }
+            : {}),
         });
       } catch (err) {
         return fail(err);
@@ -511,15 +539,19 @@ export async function serve() {
       title: "Guide template",
       description:
         "The empty guide skeleton with guidance comments for each section. `kind: bug` gives the " +
-        "bug report skeleton instead, which has a Reproduce section and no Steps.",
+        "bug report skeleton instead, which has a Reproduce section and no Steps. `kind: task` " +
+        "gives a task brief: Goal, Context, Constraints, Acceptance, Out of scope.",
       inputSchema: {
         kind: z
-          .enum(["transfer", "bug"])
+          .enum(["transfer", "bug", "task"])
           .optional()
-          .describe("transfer (default) for finished work to repeat; bug for a defect to fix"),
+          .describe(
+            "transfer (default) for finished work to repeat; bug for a defect to fix; task for " +
+              "work nobody has done yet",
+          ),
       },
     },
-    async ({ kind }) => text(template(kind === "bug" ? { kind: "bug" } : {})),
+    async ({ kind }) => text(template(kind === "bug" || kind === "task" ? { kind } : {})),
   );
 
   server.registerTool(
