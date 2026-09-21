@@ -2345,6 +2345,9 @@ app.put("/v1/guides/:id", async (c) => {
     .run();
 
   await claimShots(c, account, id, markdown);
+  // What a task waits for is rewritten from its frontmatter on every publish, like the rest of it.
+  if (slug(meta.kind, 16) === "task")
+    await claims.blockOn(c.env.DB, id, meta.blocked_by || [], { account });
 
   // Tell whoever the guide just became relevant to. Re-publishing an unchanged address is not a
   // new event, so only a *newly* addressed person or a newly shared team hears anything.

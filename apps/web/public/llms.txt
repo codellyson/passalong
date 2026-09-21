@@ -39,7 +39,8 @@ before acting on anything.
 - `kind: task` — work nobody has done yet. Its sections are `Goal`, `Context`, `Constraints`,
   `Acceptance` and `Out of scope`. It has no `Steps`: work out how to reach `Goal` within
   `Constraints`, leave `Out of scope` alone, and treat `Acceptance` as what "done" means. A task
-  may name the repo it is for in `target_context`.
+  may name the repo it is for in `target_context`, and the tasks it waits for in `blocked_by`: it
+  is not handed out until a person has approved each of those.
 
 Bugs are often filed in sets. `report:` names the parent a set was filed under; `GET /v1/reports/
 <id>` returns the rest of it. Fix only the issue you were given unless you were asked for more.
@@ -48,7 +49,7 @@ Bugs are often filed in sets. `report:` names the parent a set was filed under; 
 
 Frontmatter fields, in order: `id`, `title`, `kind`, `created`, `author`, `source_context`,
 `status`, `team`, `to`, `stack_assumptions` (list), `tags` (list). Bugs also carry `report`,
-`area` and `severity` (`s1` blocker to `s4` cosmetic). Tasks may carry `target_context`.
+`area` and `severity` (`s1` blocker to `s4` cosmetic). Tasks may carry `target_context` and `blocked_by` (a list of task ids it waits for).
 
 `to:` is who is being asked, inside the `team:` it names. `@handle` asks one person and outranks
 everything else in their inbox; `#group` asks the people who do a thing, reaches every one of them,

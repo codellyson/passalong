@@ -47,6 +47,10 @@ export interface Meta {
    * parent is an ordinary guide somebody pulled, and this is what they learned doing it.
    */
   parent?: string;
+  /** Tasks only: the repo it is for. See migrations/0018_claims.sql. */
+  target_context?: string;
+  /** Tasks only: ids of the tasks it waits for. See migrations/0019_blocks.sql. */
+  blocked_by?: string[];
   /** The report this guide is one issue of — see migrations/0006_reports.sql. */
   report?: string;
   /** Where the issue is, inside its report. Free text on purpose; see `AREAS`. */
@@ -123,7 +127,7 @@ export function tagList(raw: unknown): string[] {
   return [...new Set(list.map(tag).filter(Boolean))];
 }
 
-const LIST_FIELDS = new Set(["tags", "stack_assumptions"]);
+const LIST_FIELDS = new Set(["tags", "stack_assumptions", "blocked_by"]);
 
 function scalar(raw: string): string {
   const v = raw.trim();

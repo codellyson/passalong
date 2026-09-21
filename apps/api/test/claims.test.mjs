@@ -10,6 +10,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   approve,
+  blockOn,
   finish,
   LEASE_MS,
   list,
@@ -352,4 +353,37 @@ test("a task in review lists the title of the write-up it came back with", async
   assert.equal(row.report_title, "task report");
   const [waiting] = (await list(db, "me", T0)).filter((r) => r.task.id === "report");
   assert.equal(waiting, undefined, "the write-up is not a task");
+});
+
+test("a task waits for the tasks it is blocked by, until a person approves them", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("schema", { created: T0 });
+  guide("api", { created: later(1) });
+  guide("report", { kind: "", target: "" });
+  await blockOn(db, "api", ["schema"], { account: "me" });
+  assert.equal(await stateIn(db, "api"), "blocked");
+
+  // The only unblocked task goes first, and the blocked one is not handed out behind it.
+  assert.equal((await next(db, A, { at: T0 })).task.id, "schema");
+  assert.equal(await next(db, B, { at: T0 }), null);
+
+  // Finished is not enough: an agent saying it is done does not unblock anything.
+  await finish(db, "schema", A, { at: T0, report: "report" });
+  assert.equal(await next(db, B, { at: T0 }), null);
+  assert.equal(await stateIn(db, "api"), "blocked");
+
+  await approve(db, "schema", { account: "me", at: T0 });
+  assert.equal(await stateIn(db, "api"), "ready");
+  assert.equal((await next(db, B, { at: T0 })).task.id, "api");
+});
+
+test("a task can only be blocked by tasks its author can see, and never by itself", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("mine");
+  guide("theirs", { account: "other" });
+  const kept = await blockOn(db, "mine", ["theirs", "mine", "nosuch"], { account: "me" });
+  assert.deepEqual(kept, []);
+  assert.equal(await stateIn(db, "mine"), "ready");
 });

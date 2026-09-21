@@ -149,7 +149,7 @@ export function tagList(raw) {
   return [...new Set(list.map(tag).filter(Boolean))];
 }
 
-const LIST_FIELDS = new Set(["stack_assumptions", "tags"]);
+const LIST_FIELDS = new Set(["stack_assumptions", "tags", "blocked_by"]);
 
 // IDs are short enough to type and say out loud. 8 chars from a 31-letter alphabet with the
 // look-alikes removed (0/o, 1/l/i) is ~40 bits: plenty for addressing, not a secret.
@@ -242,7 +242,9 @@ export function parseFrontmatter(text) {
       listKey = null;
     }
   }
-  for (const k of LIST_FIELDS) if (meta[k] === undefined) meta[k] = [];
+  // Only the lists every guide has. `blocked_by` is a task's, and defaulting it would write an
+  // empty one into every guide anybody re-shares.
+  for (const k of ["stack_assumptions", "tags"]) if (meta[k] === undefined) meta[k] = [];
   // Both ends of this module: what it reads and what it writes are in one style, so a guide
   // written before there was a rule comes back normalised and goes out normalised.
   meta.tags = tagList(meta.tags);
@@ -264,6 +266,9 @@ const META_ORDER = [
   "source_context",
   // Tasks only: the repo the work is for. Optional — a task without one is not tied to a repo.
   "target_context",
+  // Tasks only: the tasks this one waits for, by id. It is not handed to an agent until a person
+  // has approved each of them. See migrations/0019_blocks.sql.
+  "blocked_by",
   // Where it came from, in the two senses a guide has one: `source_context` is the repo and branch
   // it was written in, `parent` is the guide it was written *out of*.
   "parent",

@@ -21,7 +21,7 @@ export const NOTE_MAX = 280;
  * stored: `stalled` in particular is only "claimed, and the lease is in the past", and storing it
  * would need something running on a clock to write it.
  */
-export type TaskState = "draft" | "ready" | "claimed" | "stalled" | "review" | "done";
+export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "review" | "done";
 
 export interface ClaimRow {
   guide_id: string;
@@ -81,13 +81,13 @@ export function repoKey(raw: unknown): string {
 
 /** The column a task is in. `claim` is null when nobody has taken it. */
 export function stateOf(
-  guide: { status: string },
+  guide: { status: string; blocked?: number | boolean },
   claim: Pick<ClaimRow, "state" | "lease_until"> | null,
   at: string,
 ): TaskState {
   if (guide.status === "consumed") return "done";
   if (guide.status === "draft") return "draft";
-  if (!claim) return "ready";
+  if (!claim) return guide.blocked ? "blocked" : "ready";
   if (claim.state === "review") return "review";
   return claim.lease_until > at ? "claimed" : "stalled";
 }
@@ -97,6 +97,10 @@ const leaseFrom = (at: string) => new Date(Date.parse(at) + LEASE_MS).toISOStrin
 // A task the account may see: its own, or one shared to a team it is in.
 const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
   (SELECT team_id FROM membership WHERE account_id = ?1)))`;
+
+// Waiting on a task a person has not approved yet. See migrations/0019_blocks.sql.
+const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN guide x ON x.id = b.blocker_id
+  WHERE b.guide_id = g.id AND x.status <> 'consumed')`;
 
 /**
  * Hand this agent a task, or `null` when there is nothing for it.
@@ -138,7 +142,7 @@ export async function next(
       `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created
          FROM guide g
         WHERE g.kind = 'task' AND g.status = 'published' AND ${VISIBLE} ${where}
-          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id) AND NOT ${BLOCKED}
         ORDER BY g.created, g.id LIMIT 20`,
     )
     .bind(...(any ? [who.account] : [who.account, repo]))
@@ -275,11 +279,11 @@ export async function list(
   const [tasks, claims] = await Promise.all([
     db
       .prepare(
-        `SELECT g.id, g.account_id, g.title, g.status, g.target, g.created FROM guide g
-          WHERE g.kind = 'task' AND ${VISIBLE} ORDER BY g.created, g.id LIMIT 200`,
+        `SELECT g.id, g.account_id, g.title, g.status, g.target, g.created, ${BLOCKED} AS blocked
+           FROM guide g WHERE g.kind = 'task' AND ${VISIBLE} ORDER BY g.created, g.id LIMIT 200`,
       )
       .bind(account)
-      .all<Omit<TaskRow, "markdown">>(),
+      .all<Omit<TaskRow, "markdown"> & { blocked: number }>(),
     db
       .prepare(
         // The write-up's title rides along, so a reviewer scanning the board sees what came back
@@ -419,4 +423,37 @@ export async function release(
     db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
   ]);
   return { state: "ready" };
+}
+
+/**
+ * Set what a task waits for, replacing whatever it waited for before. Returns the ids kept.
+ *
+ * Only tasks the author can see are kept, and never the task itself: naming someone else's task
+ * would let a stranger's queue decide when yours moves, and a task blocked by itself never moves.
+ * Anything else is dropped rather than refused, the way an unresolvable `parent:` is — a
+ * `blocked_by:` written against a task that was since deleted should not make the document
+ * unpublishable by its own author.
+ */
+export async function blockOn(
+  db: D1Database,
+  id: string,
+  ids: string[],
+  { account }: { account: string },
+): Promise<string[]> {
+  const wanted = [...new Set(ids.map(String))].filter((b) => b && b !== id).slice(0, 50);
+  const kept: string[] = [];
+  for (const b of wanted) {
+    const ok = await db
+      .prepare(`SELECT 1 FROM guide g WHERE g.id = ?2 AND g.kind = 'task' AND ${VISIBLE}`)
+      .bind(account, b)
+      .first();
+    if (ok) kept.push(b);
+  }
+  await db.batch([
+    db.prepare("DELETE FROM task_block WHERE guide_id = ?").bind(id),
+    ...kept.map((b) =>
+      db.prepare("INSERT INTO task_block (guide_id, blocker_id) VALUES (?, ?)").bind(id, b),
+    ),
+  ]);
+  return kept;
 }

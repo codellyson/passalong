@@ -136,3 +136,33 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
   assert.equal(await state(), "done");
   assert.equal(parse((await p.pull(id, { write: false })).markdown).meta.status, "consumed");
 });
+
+test("blocked_by in a task's frontmatter holds it until its blocker is approved", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p, serialize, account } = env;
+  const first = await readyTask(env, "Schema first");
+  const waits = serialize({
+    meta: {
+      title: "API on the schema",
+      kind: "task",
+      target_context: `e2e/${account}`,
+      blocked_by: [first.id],
+    },
+    body: "## Goal\nAPI.\n\n## Acceptance\n- it answers",
+  });
+  const second = (await p.share(waits, { cwd: first.dir })).guide.meta.id;
+  await p.ready(second);
+  const state = async (id) => (await p.tasks()).find((t) => t.id === id)?.state;
+  assert.equal(await state(second), "blocked");
+
+  assert.equal((await p.nextTask({ cwd: first.dir })).id, first.id);
+  await p.finishTask(first.id, {
+    markdown: "---\ntitle: schema\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    cwd: first.dir,
+  });
+  assert.equal(await state(second), "blocked", "finished is not approved");
+  await p.approveTask(first.id);
+  assert.equal(await state(second), "ready");
+});

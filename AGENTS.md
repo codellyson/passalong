@@ -106,7 +106,10 @@ public one, for agents *using* Passalong rather than changing it.
   `task` is work nobody has done yet (`docs/V2.md`): `Goal`, `Context`, `Constraints`,
   `Acceptance`, `Out of scope`, and no `Steps` — how is the taker's to work out, and what they did
   comes back as a transfer guide. `Acceptance` is required because it is what the work is approved
-  against.
+  against. `blocked_by:` is the one list field only tasks have, so the parser defaults
+  `stack_assumptions` and `tags` and nothing else — defaulting it would write `blocked_by: []` into
+  every guide anybody re-shares. A blocker counts as finished when a person approved it, never when
+  an agent finished it.
 - **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
   people can take and answer for separately — one document holding six has one verdict, and "four
   of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is

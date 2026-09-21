@@ -273,3 +273,12 @@ test("a parent is optional, and a malformed one is caught before publish", () =>
     "a guide cannot follow itself",
   ]);
 });
+
+test("a guide that never named blockers does not grow a blocked_by line", () => {
+  const out = serialize(parse("---\ntitle: t\n---\n\n## Problem\np"));
+  assert.ok(!/blocked_by/.test(out), out);
+  const task = parse(
+    "---\ntitle: t\nkind: task\nblocked_by: [abc12345, def67890]\n---\n\n## Goal\ng",
+  );
+  assert.deepEqual(task.meta.blocked_by, ["abc12345", "def67890"]);
+});
