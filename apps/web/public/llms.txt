@@ -110,7 +110,7 @@ passalong login                 # optional: sync across machines
 `passalong setup` registers a stdio MCP server exposing: `publish_guide`, `file_bugs`,
 `start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`,
 `verify_guide`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`, `next_task`,
-`task_progress`, `finish_task`. `start_guide` and
+`task_progress`, `finish_task`, `plan_tasks`. `start_guide` and
 `attach_screenshot` need passalong 0.3 or later; an older install exposes the rest, so fall back to
 `get_guide` then `ack_guide` if `start_guide` is not there.
 
@@ -140,6 +140,10 @@ the `![](...)` line to paste into the body, and publishing claims whatever the m
 attach first, publish after. Locally it takes a path on the machine. Over the hosted server it
 takes a file the client passes in, which today means ChatGPT on the web; the ChatGPT mobile apps
 send file references the server cannot download.
+
+`plan_tasks` turns one larger goal into draft tasks in order; each step's `after` names the
+earlier steps it waits for, which become its `blocked_by`. Nothing runs until the user makes them
+ready (`passalong ready --all`). It is on the local server only.
 
 `next_task`, `task_progress` and `finish_task` are the task queue. `next_task` claims the oldest
 ready task for the repo you are in and returns it; while you hold it no other agent can have it,

@@ -255,3 +255,52 @@ test("in a team, each side hears what the other did to a task — and only the a
   assert.match(told, /sent "Team task" back: needs a test/);
   as(owner);
 });
+
+test("a plan becomes draft tasks, each waiting on the steps it names", { skip }, async () => {
+  const env = await setup();
+  const { p, account } = env;
+  const target = `e2e/${account}`;
+  const ids = await p.planTasks([
+    {
+      title: "Plan: schema",
+      goal: "A theme table.",
+      acceptance: "- migration applies",
+      target_context: target,
+    },
+    {
+      title: "Plan: API",
+      goal: "Read the theme.",
+      acceptance: "- GET /theme answers",
+      target_context: target,
+      after: [0],
+    },
+    {
+      title: "Plan: UI",
+      goal: "Use it.",
+      acceptance: "- the hub switches",
+      target_context: target,
+      after: [0, 1],
+    },
+  ]);
+  assert.equal(ids.length, 3);
+  const byId = async () => new Map((await p.tasks()).map((t) => [t.id, t.state]));
+  let states = await byId();
+  assert.deepEqual(
+    ids.map((id) => states.get(id)),
+    ["draft", "draft", "draft"],
+    "a plan is read before it runs",
+  );
+
+  await p.readyDrafts();
+  states = await byId();
+  assert.deepEqual(
+    ids.map((id) => states.get(id)),
+    ["ready", "blocked", "blocked"],
+  );
+
+  await assert.rejects(
+    p.planTasks([{ title: "x", goal: "g", acceptance: "- a", after: [0] }]),
+    /earlier step/,
+    "a step can only wait on one before it, so a plan cannot loop",
+  );
+});

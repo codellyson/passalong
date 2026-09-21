@@ -113,6 +113,10 @@ export async function serve() {
         "section from the conversation and the code — Acceptance as checks a person can run — " +
         "set target_context to the repo the work is for, and publish_guide. A task lands in " +
         "Draft, not the queue: tell the user to read it and run `passalong ready <id>`.\n" +
+        "When the user asks you to plan or break down a larger goal, call plan_tasks with the " +
+        "steps in order — each a task with Goal and Acceptance, and `after` naming the earlier " +
+        "steps it needs. They land in Draft; tell the user to read them and run " +
+        "`passalong ready --all`.\n" +
         "When the user asks you to take work from the queue, call next_task: it claims the oldest " +
         "ready task for this repo, and no other agent can have it while you do. Call " +
         "task_progress with a one-line status at each milestone — silence for 30 minutes stalls " +
@@ -338,6 +342,51 @@ export async function serve() {
           `${lead}${r.markdown}${siblings}` +
             `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->`,
         );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "plan_tasks",
+    {
+      title: "Plan a goal as tasks",
+      description:
+        "Break one larger goal into tasks an agent can each finish and a person can each check, " +
+        "written as drafts in order. Give each step a Goal and an Acceptance a person can run. " +
+        "`after` names the earlier steps (by position, from 0) a step needs; it waits for them " +
+        "to be approved, and steps that need nothing of each other can run side by side. Keep a " +
+        "step to one sitting of work in one repo. Nothing runs until the user makes them ready.",
+      inputSchema: {
+        steps: z
+          .array(
+            z.object({
+              title: z.string(),
+              goal: z.string().describe("what is true when this step is done"),
+              acceptance: z.string().describe("checks a person can run, one per line"),
+              context: z.string().optional(),
+              constraints: z.string().optional(),
+              out_of_scope: z.string().optional(),
+              target_context: z
+                .string()
+                .optional()
+                .describe("owner/repo it is for; default is the repo you are in, '' for none"),
+              after: z.array(z.number().int()).optional().describe("earlier steps this one needs"),
+            }),
+          )
+          .min(1)
+          .max(20),
+        cwd: z.string().optional().describe("the repo you are planning from"),
+      },
+    },
+    async ({ steps, cwd }) => {
+      try {
+        const ids = await passalong.planTasks(steps, { cwd: cwd || process.cwd() });
+        return json({
+          drafts: ids.map((id, i) => ({ id, title: steps[i].title, after: steps[i].after || [] })),
+          next: "all in Draft: ask the user to read them, then run `passalong ready --all`",
+        });
       } catch (err) {
         return fail(err);
       }

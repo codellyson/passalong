@@ -523,8 +523,10 @@ export async function setStatus(id, status) {
     throw new PassalongError(`status must be one of ${STATUSES.join(", ")}`);
   const { guide } = await resolve(id);
   const next = { ...guide, meta: { ...guide.meta, status } };
-  store.save(next);
+  // The server first. Saved the other way round, a refusal left the local copy saying what the
+  // server had just refused — a teammate's `ready` on someone else's task read as done here.
   if (api.loggedIn() && guide.meta.url) await api.setStatus(id, status);
+  store.save(next);
   return next;
 }
 
@@ -541,6 +543,46 @@ export async function ready(id) {
   if (guide.meta.status !== "draft")
     throw new PassalongError(`${guide.meta.id} is not in Draft (status: ${guide.meta.status})`);
   return setStatus(guide.meta.id, "published");
+}
+
+/**
+ * One goal as several tasks, written as drafts in order. Each step may name the earlier steps it
+ * needs by position (`after: [0, 1]`), and those become its `blocked_by`, so the queue hands them
+ * out in an order that works and runs the independent ones side by side.
+ *
+ * Only earlier steps: a step that waits on itself or on a later one is a plan that never finishes,
+ * and it is refused before anything is written rather than discovered as a queue that never moves.
+ * Every step lands in Draft — a wrong decomposition is several agents building the wrong thing at
+ * once, so a person reads the plan before any of it runs.
+ */
+export async function planTasks(steps, { cwd = process.cwd() } = {}) {
+  if (!Array.isArray(steps) || !steps.length)
+    throw new PassalongError("a plan needs at least one step");
+  steps.forEach((step, i) => {
+    for (const j of step.after || [])
+      if (!Number.isInteger(j) || j < 0 || j >= i)
+        throw new PassalongError(
+          `step ${i} ("${step.title}") can only wait on an earlier step, not ${j}`,
+        );
+  });
+  const repo = context(cwd).repo;
+  const ids = [];
+  for (const step of steps) {
+    const section = (name, text) =>
+      String(text || "").trim() ? [`## ${name}`, String(text).trim(), ""] : [];
+    const body = [
+      ...section("Goal", step.goal),
+      ...section("Context", step.context),
+      ...section("Constraints", step.constraints),
+      ...section("Acceptance", step.acceptance),
+      ...section("Out of scope", step.out_of_scope),
+    ].join("\n");
+    const meta = { title: step.title, kind: "task", target_context: step.target_context ?? repo };
+    const after = (step.after || []).map((j) => ids[j]);
+    if (after.length) meta.blocked_by = after;
+    ids.push((await share(serialize({ meta, body }), { cwd })).guide.meta.id);
+  }
+  return ids;
 }
 
 /**
