@@ -78,6 +78,9 @@ test("finishing with the write-up publishes it as the task's report", { skip }, 
   assert.equal(row.state, "review");
   assert.equal(row.claim.report, done.report);
   assert.equal(row.claim.report_title, "Dark mode, done", "the board names what came back");
+  // Both links a reviewer follows: the task, and what came back for it.
+  assert.match(row.url, new RegExp(`/g/${id}/[a-z0-9]+$`));
+  assert.match(row.claim.report_url, new RegExp(`/g/${done.report}/[a-z0-9]+$`));
   const report = parse((await p.pull(done.report, { write: false })).markdown).meta;
   assert.equal(report.title, "Dark mode, done");
   assert.equal(report.parent, id, "the write-up says which task it answers");

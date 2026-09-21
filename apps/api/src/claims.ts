@@ -73,7 +73,7 @@ export function repoKey(raw: unknown): string {
   s = s.replace(/\/+$/, "").replace(/\.git$/, "");
   const url = /^(?:[a-z+]+:\/\/)?(?:[^@/]+@)?[^:/]+[:/](.+\/[^/]+)$/.exec(s);
   if (url && (s.includes("://") || s.includes("@"))) {
-    const parts = url[1].split("/").filter(Boolean);
+    const parts = (url[1] ?? "").split("/").filter(Boolean);
     return parts.slice(-2).join("/");
   }
   return s;
@@ -270,31 +270,34 @@ export async function list(
   at: string,
 ): Promise<
   {
-    task: Omit<TaskRow, "markdown">;
+    task: Omit<TaskRow, "markdown"> & { share_key: string };
     claim: ClaimRow | null;
     state: TaskState;
     report_title: string;
+    report_key: string;
   }[]
 > {
   const [tasks, claims] = await Promise.all([
     db
       .prepare(
-        `SELECT g.id, g.account_id, g.title, g.status, g.target, g.created, ${BLOCKED} AS blocked
+        `SELECT g.id, g.account_id, g.title, g.status, g.target, g.created, g.share_key,
+                ${BLOCKED} AS blocked
            FROM guide g WHERE g.kind = 'task' AND ${VISIBLE} ORDER BY g.created, g.id LIMIT 200`,
       )
       .bind(account)
-      .all<Omit<TaskRow, "markdown"> & { blocked: number }>(),
+      .all<Omit<TaskRow, "markdown"> & { share_key: string; blocked: number }>(),
     db
       .prepare(
         // The write-up's title rides along, so a reviewer scanning the board sees what came back
         // without opening it. Only a guide the same account can see is named.
-        `SELECT c.*, COALESCE(r.title, '') AS report_title FROM claim c
+        `SELECT c.*, COALESCE(r.title, '') AS report_title, COALESCE(r.share_key, '') AS report_key
+           FROM claim c
            JOIN guide g ON g.id = c.guide_id
            LEFT JOIN guide r ON r.id = c.report_id AND r.account_id = c.account_id
           WHERE g.kind = 'task' AND ${VISIBLE}`,
       )
       .bind(account)
-      .all<ClaimRow & { report_title: string }>(),
+      .all<ClaimRow & { report_title: string; report_key: string }>(),
   ]);
   const byTask = new Map(claims.results.map((c) => [c.guide_id, c]));
   return tasks.results.map((task) => {
@@ -304,6 +307,7 @@ export async function list(
       claim,
       state: stateOf(task, claim, at),
       report_title: claim?.report_title || "",
+      report_key: claim?.report_key || "",
     };
   });
 }

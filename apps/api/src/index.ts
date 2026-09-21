@@ -2816,8 +2816,17 @@ app.get("/v1/tasks", async (c) => {
   const rows = await claims.list(c.env.DB, me, at);
   return c.json({
     tasks: rows.map((r) => {
-      const v = { ...taskView(r.task, r.claim, r.state), mine: r.task.account_id === me };
-      return v.claim ? { ...v, claim: { ...v.claim, report_title: r.report_title } } : v;
+      const base = origin(c);
+      const v = {
+        ...taskView(r.task, r.claim, r.state),
+        mine: r.task.account_id === me,
+        url: shareUrl(base, r.task),
+      };
+      if (!v.claim) return v;
+      const report_url = r.report_key
+        ? shareUrl(base, { id: v.claim.report, share_key: r.report_key })
+        : "";
+      return { ...v, claim: { ...v.claim, report_title: r.report_title, report_url } };
     }),
   });
 });

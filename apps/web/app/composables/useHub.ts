@@ -1,7 +1,7 @@
 // The hub's state and everything that mutates it — what `App()` in apps/api/public/hub.js held in
 // closures. It is a composable rather than props threaded through eight components because the
 // same `api` and `reload` were being handed down three levels; the state itself is unchanged.
-import type { Guide, HubData, LogEntry, Me } from "~/types/hub";
+import type { Guide, HubData, LogEntry, Me, Task } from "~/types/hub";
 
 const KEY = "passalong.token";
 /** The session cookie's name, as apps/api sets it. Only its presence is ever read here. */
@@ -16,6 +16,7 @@ const EMPTY: HubData = {
   unread: 0,
   tokens: [],
   team: null,
+  tasks: [],
 };
 
 /** localStorage, but a browser with storage blocked must still be able to use the page. */
@@ -146,6 +147,10 @@ export function useHub() {
         call<{ log: LogEntry[] }>("/v1/log?limit=200"),
         call<{ tokens: HubData["tokens"] }>("/v1/tokens"),
       ]);
+      // Its own call, and one that may fail without taking the hub down with it: the task queue is
+      // newer than every other surface here, and a board that cannot say what is in it is still a
+      // board worth showing the rest of.
+      const tasks = await call<{ tasks: Task[] }>("/v1/tasks").catch(() => ({ tasks: [] }));
       const team =
         scope.value !== "all" && scope.value !== "mine"
           ? await call<HubData["team"]>(`/v1/teams/${encodeURIComponent(scope.value)}`)
@@ -159,6 +164,7 @@ export function useHub() {
         unread: activity.unread,
         tokens: tokens.tokens,
         team,
+        tasks: tasks.tasks,
       };
       signedIn.value = true;
       expired.value = false;
@@ -238,6 +244,22 @@ export function useHub() {
     return guarded(() => api(`/v1/guides/${g.id}/verdict`, json("PUT", { ok, note: said })));
   };
 
+  /**
+   * The task gate, and the one move before it. All four are the author's, and the server says so
+   * if anyone else tries — the board only offers them on your own tasks, so it never has to.
+   * Reject needs a reason for the reason a failed verdict does: the next agent reads it before it
+   * starts again, and "no" on its own teaches it nothing.
+   */
+  const onTaskReady = (t: Task) =>
+    guarded(() => api(`/v1/guides/${t.id}/status`, json("PATCH", { status: "published" })));
+  const onApprove = (t: Task) => guarded(() => api(`/v1/tasks/${t.id}/approve`, json("POST")));
+  const onReject = (t: Task, why: string) => {
+    const said = why.trim();
+    if (!said) return;
+    return guarded(() => api(`/v1/tasks/${t.id}/reject`, json("POST", { why: said })));
+  };
+  const onRelease = (t: Task) => guarded(() => api(`/v1/tasks/${t.id}/release`, json("POST")));
+
   const readAll = () => guarded(() => api("/v1/notifications/read", json("POST")));
 
   async function createTeam(name: string) {
@@ -284,6 +306,10 @@ export function useHub() {
     onArchive,
     onRemove,
     onVerdict,
+    onTaskReady,
+    onApprove,
+    onReject,
+    onRelease,
     readAll,
     createTeam,
     signOut,
