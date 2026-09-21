@@ -144,7 +144,9 @@ public one, for agents *using* Passalong rather than changing it.
   focused control, a coloured callout. A row inside a list sits flush, so it rounds its ends to the
   list's own radius; nested surfaces with a small inset nest their radii (outer = inner + padding —
   the `.menu` is 16px because its items are 8px inside 8px). Every `.btn` presses to
-  `scale(0.96)`; `.static` opts out.
+  `scale(0.96)`; `.static` opts out. A button in the same row as an input or a code well is a
+  full-height `.btn`, not `.btn sm`: the field is `--control-h`, and a small button beside it
+  sits off its line.
 - **Long values are shortened by unit, never by pixel.** `shorten()` (`app/utils/shorten.ts`) drops
   whole words, then whole path segments, so what is left is a repo name or a host and not
   `techchak-backend (https://g…`. Do not reach for `truncate` on a value a person has to read, and
