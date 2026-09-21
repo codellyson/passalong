@@ -31,19 +31,19 @@ const groups = computed(() =>
     {
       key: "review",
       title: "Waiting for review",
-      tone: "text-accent",
+      tone: "bg-accent",
       items: props.tasks.filter((t) => t.mine && t.state === "review"),
     },
     {
       key: "stuck",
       title: "Stuck on you",
-      tone: "text-danger",
+      tone: "bg-danger",
       items: props.tasks.filter((t) => t.mine && t.state === "claimed" && stuck(t)),
     },
     {
       key: "quiet",
       title: "Went quiet",
-      tone: "text-warn",
+      tone: "bg-warn",
       items: props.tasks.filter((t) => t.mine && t.state === "stalled"),
     },
   ].filter((g) => g.items.length),
@@ -131,17 +131,22 @@ const press =
 <template>
   <div v-if="needsYou.length" class="grid items-start gap-5 md:grid-cols-[17rem_minmax(0,1fr)]">
     <nav class="rounded-[var(--r-3)] bg-raised p-2 shadow-edge" aria-label="Needs you">
-      <section v-for="g in groups" :key="g.key" class="mt-1 first:mt-0">
+      <!-- Quiet headings, room between groups. The headings were bold, spaced capitals in the group's
+           colour, and at 4px apart the groups ran together: every line in the list was shouting.
+           The colour moves to a dot, which still sorts the groups at a glance, and the heading
+           steps back so the titles are what you read. -->
+      <section v-for="g in groups" :key="g.key" class="mt-3 flex flex-col gap-1 first:mt-0">
         <h2
-          class="m-0 px-2 pt-2 pb-1 font-ui text-xs font-semibold uppercase tracking-widest"
-          :class="g.tone"
+          class="m-0 flex items-center gap-2 px-3 pt-2 pb-1 font-ui text-xs font-medium tracking-wide text-muted uppercase"
         >
-          {{ g.title }} · {{ g.items.length }}
+          <span class="size-1.5 shrink-0 rounded-pill" :class="g.tone" aria-hidden="true" />
+          {{ g.title }}
+          <span class="tabular-nums">{{ g.items.length }}</span>
         </h2>
         <button
           v-for="t in g.items"
           :key="t.id"
-          class="block w-full rounded-1 border-0 px-2 py-2 text-left transition-[background-color,box-shadow] duration-150 ease-out"
+          class="block w-full rounded-1 border-0 px-3 py-2 text-left transition-[background-color,box-shadow] duration-150 ease-out"
           :class="
             selected?.id === t.id
               ? 'bg-accent-soft shadow-[inset_3px_0_0_var(--accent)]'
@@ -151,7 +156,7 @@ const press =
           @click="pick(t.id)"
         >
           <span class="block font-ui text-sm font-semibold leading-snug text-fg">{{ t.title }}</span>
-          <span class="mt-0.5 line-clamp-2 font-ui text-xs text-muted">
+          <span class="mt-1 line-clamp-2 font-ui text-xs text-muted">
             {{
               g.key === "review"
                 ? t.claim?.report_title
