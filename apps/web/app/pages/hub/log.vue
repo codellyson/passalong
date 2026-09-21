@@ -21,7 +21,7 @@ usePage({
   noindex: true,
 });
 
-const { data } = useHub();
+const { data, loading, failed, refresh } = useHub();
 
 /** The one genuinely controlled input on the page, as on the guides page. */
 const q = ref("");
@@ -82,16 +82,23 @@ const months = computed(() => {
 
 <template>
   <HubShell heading="Your log">
-    <template #sub>What you passed along, newest first.</template>
+    <template #sub>What you've sent, opened and answered, newest first.</template>
 
-    <p v-if="!data.log.length" class="empty">
-      Nothing yet. Your log fills up as you share guides, take delivery of them, and answer them —
-      <code>passalong share</code> writes the first line.
+    <!-- Failed is not empty: "Nothing yet" would tell someone with a year of work that they have
+         none. -->
+    <p v-if="failed.log" class="empty" role="alert">
+      Your log didn't load.
+      <button class="linkish" type="button" @click="refresh(hubKeys.log)">Try again</button>
+    </p>
+    <HubSkeleton v-else-if="loading.log" variant="lines" :rows="6" label="Loading your log" />
+    <p v-else-if="!data.log.length" class="empty">
+      Nothing yet. Your log fills up as you send guides, open them, and answer them.
+      <NuxtLink to="/hub/write">Write your first guide</NuxtLink>
     </p>
 
     <template v-else>
       <div class="toolbar">
-        <input v-model="q" type="search" placeholder="search title, repo, reason" />
+        <input v-model="q" type="search" placeholder="Search your log" aria-label="Search your log" />
       </div>
 
       <p v-if="!visible.length" class="empty">Nothing in your log matches.</p>
@@ -117,7 +124,11 @@ const months = computed(() => {
               class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-l-2 border-line border-b-line py-3 pl-3 last:border-b-0"
               :class="STRIPE[e.act] ?? 'border-l-transparent'"
             >
-              <span class="w-20 shrink-0 font-code text-xs text-muted">{{ e.at.slice(0, 10) }}</span>
+              <time
+                class="w-20 shrink-0 font-ui text-xs text-muted tabular-nums"
+                :datetime="e.at"
+                :title="new Date(e.at).toLocaleString()"
+              >{{ new Date(e.at).toLocaleDateString(undefined, { day: "numeric", month: "short" }) }}</time>
               <!-- The sentence is the link, styled as the sentence it is. Underlining it renders
                    twelve rows of rule and, worse, claims a verdict's reason is a link as well. -->
               <a
@@ -126,14 +137,14 @@ const months = computed(() => {
                 target="_blank"
                 rel="noopener"
               >{{ e.text }}</a>
-              <AppShorten v-if="e.repo" :value="e.repo" class="font-code text-xs text-muted" />
+              <AppShorten v-if="e.repo" :value="e.repo" class="font-ui text-xs text-muted" />
             </li>
           </ul>
         </section>
 
         <p class="mt-8 font-ui text-sm text-muted">
           Showing {{ visible.length }} of {{ data.log.length }}.
-          <b class="text-fg">This is what you passed along, not everything you worked on.</b>
+          <b class="text-fg">This is what you sent and answered, not everything you worked on.</b>
           Work that never became a guide has no line here, so a quiet month is not necessarily a
           quiet month.
         </p>

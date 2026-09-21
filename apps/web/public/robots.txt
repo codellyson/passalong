@@ -5,3 +5,6 @@ Disallow: /g/
 Disallow: /v1/
 Disallow: /hub
 Disallow: /join
+Disallow: /theme
+
+Sitemap: https://passalong.dev/sitemap.xml

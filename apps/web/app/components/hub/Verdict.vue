@@ -1,17 +1,20 @@
 <!--
-  The verdict moment: someone telling the author that the work they handed over does not hold up.
+  The verdict: telling whoever sent a guide whether it worked.
 
-  Two answers and one note, which is the product rule — a reason is required, capped at 280
-  characters server-side, and there is no reply to it. What this replaces is `prompt()`: no visible
-  cap, no way back once dismissed, and a blank submit that cancelled without a word. It opens on
-  the row it is about, so the thing being judged stays in view while you write.
+  Two answers and one note, which is the product rule — a failure needs a reason, capped at 280
+  characters server-side, and there is no reply to it. It opens on the row it is about, so the
+  thing being judged stays in view while you write.
 
   "It worked" is one click. Only a failure has anything to collect.
 -->
 <script setup lang="ts">
 import type { Guide } from "~/types/hub";
 
-const props = defineProps<{ g: Guide }>();
+const props = defineProps<{
+  g: Guide;
+  /** Open on the reason: the row's own "It didn't work" has already been chosen. */
+  why?: boolean;
+}>();
 const emit = defineEmits<{ done: [] }>();
 
 const { onVerdict } = useHub();
@@ -19,12 +22,13 @@ const { onVerdict } = useHub();
 /** The server's limit, mirrored so the field can show it rather than silently truncating. */
 const MAX = 280;
 
-const why = ref(false);
+const why = ref(Boolean(props.why));
 const note = ref("");
 const field = ref<HTMLTextAreaElement | null>(null);
 
 const left = computed(() => MAX - note.value.length);
 const ready = computed(() => note.value.trim().length > 0);
+const sender = computed(() => fromName(props.g) || "The sender");
 
 function worked() {
   onVerdict(props.g, true);
@@ -35,6 +39,16 @@ async function askWhy() {
   why.value = true;
   await nextTick();
   field.value?.focus();
+}
+
+onMounted(() => {
+  if (why.value) field.value?.focus();
+});
+
+/** Opened on the reason, there is no question to go back to: back closes it. */
+function back() {
+  if (props.why) emit("done");
+  else why.value = false;
 }
 
 function send() {
@@ -48,19 +62,26 @@ function send() {
   <div
     class="mt-2 w-full rounded-2 border p-3"
     :class="why ? 'border-danger bg-danger-soft' : 'border-line-strong bg-surface'"
-    @keydown.esc="why ? (why = false) : emit('done')"
+    @keydown.esc="why ? back() : emit('done')"
   >
     <template v-if="!why">
-      <p class="m-0 font-ui text-sm font-semibold text-fg">Did it work?</p>
+      <p class="m-0 font-ui text-sm font-semibold text-fg">How did it go?</p>
       <p class="mt-1 mb-2 font-ui text-xs text-muted">
-        <b class="font-medium text-fg">@{{ g.from || "the author" }}</b> finds out either way. This
-        is the only signal they get.
+        <b class="font-medium text-fg">{{ sender }}</b> finds out either way. It's the only signal
+        they get.
       </p>
       <div class="flex flex-wrap gap-2">
-        <button class="btn primary" @click="worked">it worked</button>
-        <button class="btn outline danger" @click="askWhy">it doesn't</button>
-        <button class="btn" @click="emit('done')">not now</button>
+        <button class="btn primary" @click="worked">It worked</button>
+        <button class="btn outline danger" @click="askWhy">It didn't work</button>
+        <button class="btn" @click="emit('done')">Not yet</button>
       </div>
+      <!-- Someone who has just done the work knows what the guide was missing, so this is where
+           adding that context is offered — not in a menu they have to know to open. -->
+      <p class="mt-3 mb-0 font-ui text-xs text-muted">
+        Was something missing from the guide?
+        <NuxtLink :to="{ path: '/hub/write', query: { follows: g.id } }">Add a follow-up</NuxtLink>
+        with the extra context, so the next person has it.
+      </p>
     </template>
 
     <template v-else>
@@ -68,7 +89,7 @@ function send() {
         What went wrong?
       </label>
       <p class="mt-1 mb-2 font-ui text-xs text-muted">
-        One note, no reply — say the thing that would have saved you.
+        One note, no reply. Say the thing that would have saved you time.
       </p>
 
       <textarea
@@ -77,19 +98,24 @@ function send() {
         v-model="note"
         rows="2"
         :maxlength="MAX"
-        placeholder="the flag it tells you to set does not exist on this version"
+        placeholder="The setting it tells you to change doesn't exist in this version."
         class="block w-full resize-y rounded-1 border border-line-strong bg-raised p-2 font-ui text-sm text-fg"
         @keydown.meta.enter="send"
         @keydown.ctrl.enter="send"
       />
 
       <div class="mt-2 flex flex-wrap items-center gap-2">
-        <button class="btn primary" :disabled="!ready" @click="send">send it back</button>
-        <button class="btn" @click="why = false">back</button>
+        <button class="btn primary" :disabled="!ready" @click="send">Send it</button>
+        <button class="btn" @click="back">Back</button>
         <span class="ml-auto font-ui text-xs" :class="left > 40 ? 'text-muted' : 'text-danger'">
-          {{ left }} left
+          {{ left }} characters left
         </span>
       </div>
+      <p class="mt-3 mb-0 font-ui text-xs text-muted">
+        Know what the guide needs?
+        <NuxtLink :to="{ path: '/hub/write', query: { follows: g.id } }">Add a follow-up</NuxtLink>
+        — this note is one line; a follow-up is context everyone who opens the guide gets.
+      </p>
     </template>
   </div>
 </template>

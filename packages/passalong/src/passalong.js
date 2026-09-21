@@ -40,7 +40,7 @@ export function parseTarget(to) {
  * logged in. `to` addresses it: "team", "team/@handle", or "team/#group". Returns
  * { guide, path, url, synced }.
  */
-export async function share(markdown, { cwd = process.cwd(), to } = {}) {
+export async function share(markdown, { cwd = process.cwd(), to, follows } = {}) {
   const c = context(cwd);
   const raw = parse(markdown);
   let guide = stamp(
@@ -53,6 +53,10 @@ export async function share(markdown, { cwd = process.cwd(), to } = {}) {
   const target = parseTarget(to);
   if (target.team) guide.meta.team = target.team;
   if (target.to) guide.meta.to = target.to;
+  // `follows` names the guide this one came out of: an id, a share link, or a pulled .md file. An id
+  // is used as it is; a link or a file is read for the id in its own frontmatter. `validate()` below
+  // is what refuses a guide that names itself.
+  if (follows) guide.meta.parent = await resolveId(String(follows).trim());
   if (guide.meta.to && !guide.meta.team)
     throw new PassalongError("`to:` needs a team — address a handoff as team/handle");
   const errors = validate(guide);
@@ -418,6 +422,85 @@ export async function attach(file, { name = "" } = {}) {
     );
   const shot = await api.uploadShot(readFileSync(file), type, name || basename(file));
   return { ...shot, markdown: `![${name || basename(file)}](${shot.url})` };
+}
+
+/**
+ * The line a guide arrives with, saying what a follow-up is and how to write one.
+ *
+ * A follow-up is more context for a guide, written as its own guide with `parent` naming the
+ * original — a missing detail, a step that needed explaining, what changed since, what someone
+ * found doing it. Whoever opens the original, person or agent, gets its follow-ups with it, which
+ * is why context belongs there rather than in a one-line verdict note.
+ *
+ * Trailing, like the handoff nudge, so it never sits in front of the frontmatter. It is here and
+ * not only in the server's instructions because an agent reads the payload it is working from and
+ * skims everything else — the same reason the bug lead is inside the document. For a bug, the
+ * context worth adding is usually the fix, when it is worth repeating somewhere else: that is a
+ * transfer guide, and the bug is what it adds context to.
+ */
+export function followUpNote(meta = {}) {
+  if (!meta.id) return "";
+  if (meta.kind === "bug")
+    return (
+      "<!-- passalong: once this is fixed, if the fix is worth repeating somewhere else, that is " +
+      "more context for this bug: publish it as a transfer guide with publish_guide " +
+      `parent=${meta.id}, and whoever opens this bug gets it too. -->`
+    );
+  return (
+    "<!-- passalong: a follow-up is more context for this guide, written as its own guide. If " +
+    "this guide needs more — a missing detail, a step that needed explaining, what changed since, " +
+    `what you found doing it — publish that with publish_guide parent=${meta.id}, and whoever ` +
+    "opens this guide gets it too. -->"
+  );
+}
+
+/** What heads a guide's follow-ups when they are handed to an agent. Same words on both servers. */
+export const FOLLOW_UPS_LEAD =
+  "FOLLOW-UPS — more context added to this guide, oldest first. Read them before acting; where " +
+  "one contradicts the original, the follow-up is newer.";
+
+/**
+ * A guide's follow-ups as the server lists them, oldest first, or [] when there are none, when
+ * sync is off, or when anything goes wrong. Context is never worth failing a pull over: the guide
+ * itself is what was asked for, and it is already in hand.
+ *
+ * Only with sync, because follow-ups live on the server and are scoped to what this account can
+ * read — the same condition `resolve()` uses to look a guide up there. Fetching them records no
+ * pull on them: reading context for a guide is not opening those guides.
+ *
+ * `markdown` asks for each one's content too (capped server-side). The api calls are injectable
+ * so this can be tested without a network.
+ */
+export async function followUpGuides(
+  meta = {},
+  { markdown = false, children = api.children, loggedIn = api.loggedIn } = {},
+) {
+  if (!meta.id || !loggedIn()) return [];
+  try {
+    const { guides = [] } = await children(meta.id, { markdown });
+    const listed = (Array.isArray(guides) ? guides : []).filter((g) => g?.id);
+    // With content the server already sends oldest first; the plain listing is newest first.
+    return markdown ? listed : listed.reverse();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A guide's follow-ups with their content, formatted to go after the document for an agent — the
+ * same shape the remote server's get_guide returns — or "" when there are none.
+ */
+export async function followUps(meta = {}, deps = {}) {
+  const guides = (await followUpGuides(meta, { ...deps, markdown: true })).filter(
+    (g) => typeof g.markdown === "string",
+  );
+  if (!guides.length) return "";
+  return [
+    FOLLOW_UPS_LEAD,
+    ...guides.map(
+      (g) => `--- follow-up ${g.id}: ${g.title || "untitled"} ---\n${g.markdown.trimEnd()}`,
+    ),
+  ].join("\n\n");
 }
 
 /** Local guides merged with synced ones (by id), newest first, optionally filtered. */

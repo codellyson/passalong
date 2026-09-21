@@ -45,14 +45,21 @@ const GUIDE = {
     pulls: { type: "integer", description: "How many times it has been taken." },
     mine: { type: "boolean" },
     from: { type: "string", description: "Handle of whoever shared it." },
+    from_name: {
+      type: "string",
+      description: "Whoever sent it, as a person reads them: their name, else @handle, else @id.",
+    },
     team: { type: "string" },
+    team_name: { type: "string", description: "The team's display name, or empty." },
     to: { type: "string", description: "Handle it was addressed to, if anyone." },
+    to_name: { type: "string", description: "Who it was sent to, by name, or empty." },
     to_group: {
       type: "string",
       description:
         "Group inside the team it was handed to, if any. Reaches every member; the first to " +
         "take it clears it from the others.",
     },
+    to_group_name: { type: "string", description: "That group's display name, or empty." },
     for_me: { type: "boolean", description: "You were named, rather than being in the team." },
     source_context: { type: "string" },
     tags: { type: "array", items: { type: "string" } },
@@ -67,6 +74,7 @@ const GUIDE = {
       properties: {
         ok: { type: "boolean" },
         by: { type: "string" },
+        by_name: { type: "string" },
         note: { type: "string" },
         at: { type: "string", format: "date-time" },
       },
@@ -76,6 +84,11 @@ const GUIDE = {
       items: { type: "string" },
       description: "Handles of the people who said they are on it.",
     },
+    taken_by_names: {
+      type: "array",
+      items: { type: "string" },
+      description: "The same people as taken_by, in the same order, by name.",
+    },
     declined: {
       type: "array",
       description: "Who handed it back, and why. Only its author can re-home it.",
@@ -83,6 +96,7 @@ const GUIDE = {
         type: "object",
         properties: {
           by: { type: "string" },
+          by_name: { type: "string" },
           note: { type: "string" },
           at: { type: "string", format: "date-time" },
         },
@@ -193,7 +207,10 @@ export function openapi(origin: string) {
           description:
             "Frontmatter carries the addressing: `team:` and `to:` hand it over, `kind: bug` " +
             "makes it a bug report, `report:` files it under a report. A bug's repro belongs " +
-            "under `## Reproduce`, never `## Steps`.",
+            "under `## Reproduce`, never `## Steps`. `parent:` names the guide this one came out of " +
+            "— or send `parent` beside `markdown` and it is written into the frontmatter for you. " +
+            "Choose a new id only for a new guide. To change one, PUT to the id it was published " +
+            "under: a different id publishes a second copy, and each counts against the synced limit.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -210,6 +227,12 @@ export function openapi(origin: string) {
                       type: "string",
                       description: "The whole document, frontmatter first.",
                     },
+                    parent: {
+                      type: "string",
+                      description:
+                        "Optional id of the guide this one came out of. Written into the " +
+                        "frontmatter as `parent:`, so the stored document is the same either way.",
+                    },
                   },
                 },
               },
@@ -220,6 +243,33 @@ export function openapi(origin: string) {
             200: { description: "Updated." },
             201: { description: "Created." },
             400: { description: "The document or its addressing is not valid." },
+          },
+        },
+      },
+      "/v1/guides/{id}/children": {
+        get: {
+          operationId: "listFollowUps",
+          summary: "The guides that came out of this one, one level down.",
+          description:
+            "Guides whose `parent:` names this one — its follow-ups, more context for it — " +
+            "filtered to what you can read. One level: walk it for more. Newest first, up to 100, " +
+            "as summaries. With `markdown=1`, each summary also carries the follow-up's `markdown`, " +
+            "oldest first (context reads in the order it was added), at most 20, and any one over " +
+            "32 KB is cut with a marker saying so. Neither form counts as opening the follow-ups.",
+          parameters: [
+            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "markdown",
+              in: "query",
+              required: false,
+              description:
+                "1 to include each follow-up's markdown, oldest first, capped at 20 and 32 KB each",
+              schema: { type: "string", enum: ["1"] },
+            },
+          ],
+          responses: {
+            200: { description: "The follow-ups.", content: { "application/json": {} } },
+            404: { description: "No such guide." },
           },
         },
       },
@@ -406,6 +456,44 @@ export function openapi(origin: string) {
             201: { description: "Stored." },
             415: { description: "Not an image type we store." },
             501: { description: "This deployment has no screenshot storage." },
+          },
+        },
+      },
+      "/v1/uploads": {
+        post: {
+          operationId: "createUploadLink",
+          summary: "Get a one-time link that takes a screenshot's bytes without a credential.",
+          description:
+            "For something that holds an image as a file but cannot send your token with it, " +
+            "such as an agent's code sandbox. The link works once and expires in 10 minutes.",
+          requestBody: {
+            required: false,
+            content: {
+              "application/json": {
+                schema: { type: "object", properties: { name: { type: "string" } } },
+              },
+            },
+          },
+          responses: {
+            201: { description: "The link, as upload_url, and when it expires." },
+            429: { description: "Too many unused links are open." },
+          },
+        },
+      },
+      "/v1/uploads/{token}": {
+        put: {
+          operationId: "sendToUploadLink",
+          summary: "Send an image's raw bytes to an upload link. POST works too.",
+          description:
+            "png, jpeg, webp or gif, up to 5MB, recognised from the bytes. Returns the shot and " +
+            "the markdown line to put in a guide.",
+          security: [],
+          parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: { required: true, content: { "application/octet-stream": {} } },
+          responses: {
+            201: { description: "Stored." },
+            410: { description: "The link expired or was already used." },
+            415: { description: "Not an image type we store." },
           },
         },
       },

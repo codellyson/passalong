@@ -267,7 +267,7 @@ const META_ORDER = [
   // Tasks only: the repo the work is for. Optional — a task without one is not tied to a repo.
   "target_context",
   // Tasks only: the tasks this one waits for, by id. It is not handed to an agent until a person
-  // has approved each of them. See migrations/0019_blocks.sql.
+  // has approved each of them. See migrations/0022_blocks.sql.
   "blocked_by",
   // Where it came from, in the two senses a guide has one: `source_context` is the repo and branch
   // it was written in, `parent` is the guide it was written *out of*.
@@ -329,6 +329,24 @@ export function sections(body) {
   return out;
 }
 
+/**
+ * Image targets no reader will ever load. Mirrors `unreachableImages` in apps/api/src/guide.ts,
+ * which is the authority and refuses the publish; this lets a local share fail before the network.
+ *
+ * Only a foreign scheme counts — `attachment://`, `blob:`, `file:`, `data:`. `https:` is left alone
+ * because embedding an image you host is legitimate, and a relative path is left alone because it
+ * has always been accepted.
+ */
+export function unreachableImages(markdown) {
+  const bad = [...String(markdown).matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)/g)]
+    .map((m) => m[1].trim())
+    .filter((target) => {
+      const scheme = /^([a-z][a-z0-9+.\-]*):/i.exec(target);
+      return Boolean(scheme) && !/^https?$/i.test(scheme[1]);
+    });
+  return [...new Set(bad)];
+}
+
 /** Problems that make a guide unfit to publish. Empty array means it is fine. */
 export function validate({ meta, body }) {
   const errors = [];
@@ -359,6 +377,12 @@ export function validate({ meta, body }) {
     errors.push('a bug uses "## Reproduce", not "## Steps" — an agent executes Steps');
   }
   if (body.includes("<!-- passalong:")) errors.push("template placeholders are still in the body");
+  // An agent that has a file id but never called attach_screenshot writes the id as if it were a
+  // link. It publishes, and stores a guide whose screenshot was never uploaded anywhere.
+  for (const target of unreachableImages(body))
+    errors.push(
+      `${target} is not a URL a reader can load — attach the image first and use the URL it returns`,
+    );
   return errors;
 }
 
@@ -392,7 +416,26 @@ export function bugGuide({
   report = "",
   environment = "",
   status = "published",
+  evidence = [],
 } = {}) {
+  /**
+   * Screenshots, as markdown inside the document.
+   *
+   * They go under Problem rather than a heading of their own, because for a visual defect the
+   * picture *is* the problem statement and a bug's sections are a fixed set — a seventh heading
+   * would change the shape every reader keys on to add a line that already belongs in the first
+   * one.
+   *
+   * Naming them in the body is also the only thing that binds them: `claimShots` claims whatever
+   * the markdown points at, scoped to the author, so a URL listed anywhere else would upload
+   * evidence that no guide owns and the nightly sweep deletes.
+   */
+  const shots = (Array.isArray(evidence) ? evidence : [evidence])
+    .map((s) => String(s ?? "").trim())
+    .filter(Boolean)
+    // A caller that already has the markdown line from `attach_screenshot` passes it through
+    // whole; one holding just the URL gets it wrapped. Both reach the same document.
+    .map((s) => (s.startsWith("![") ? s : `![evidence](${s})`));
   const body = [
     // Written into the document, not added by whatever served it.
     //
@@ -405,10 +448,13 @@ export function bugGuide({
     "",
     "## Problem",
     problem.trim() || "_No description given._",
+  ];
+  if (shots.length) body.push("", ...shots);
+  body.push(
     "",
     "## Reproduce",
     reproduce.trim() || "_Not recorded — the description above is what there is._",
-  ];
+  );
   // Both are optional and both are worse than absent when empty: a Verification heading with
   // nothing under it says nobody knows what fixed looks like, on the section a fixer reads first.
   if (verification.trim()) body.push("", "## Verification", verification.trim());

@@ -47,9 +47,9 @@ export interface Meta {
    * parent is an ordinary guide somebody pulled, and this is what they learned doing it.
    */
   parent?: string;
-  /** Tasks only: the repo it is for. See migrations/0018_claims.sql. */
+  /** Tasks only: the repo it is for. See migrations/0021_claims.sql. */
   target_context?: string;
-  /** Tasks only: ids of the tasks it waits for. See migrations/0019_blocks.sql. */
+  /** Tasks only: ids of the tasks it waits for. See migrations/0022_blocks.sql. */
   blocked_by?: string[];
   /** The report this guide is one issue of — see migrations/0006_reports.sql. */
   report?: string;
@@ -185,6 +185,36 @@ function items(inner: string): string[] {
 export function shotIds(markdown: string): string[] {
   const found = markdown.matchAll(/\/v1\/shots\/([a-z0-9]{6,16})\b/g);
   return [...new Set([...found].map((m) => m[1] as string))];
+}
+
+/**
+ * Image targets in a document that no reader will ever load.
+ *
+ * A guide travels as markdown to whoever holds its link, so an image reference is only worth
+ * anything if it resolves for someone who is not the author. A client-internal handle does not:
+ * ChatGPT filed a bug with `![shot](attachment://file_0000…)`, which is its own file id wrapped in
+ * a scheme it invented, and the publish succeeded because nothing looked. The guide is stored with
+ * a dead image and the screenshot it names was never uploaded at all.
+ *
+ * Told, not inferred — the tool descriptions and the server instructions both say to attach with
+ * `attach_screenshot` first, and an agent composing markdown still reached for a URI. So this is
+ * the check at the one place every surface goes through, which is where the product's other
+ * load-bearing rules live.
+ *
+ * Only a foreign *scheme* counts. `https:` is left alone even when it points somewhere else
+ * entirely, because embedding an image you host is legitimate and this is not a link checker. A
+ * relative path is left alone too: it is also broken in a document that travels, but it has
+ * always been accepted and breaking it here would refuse guides that publish today.
+ */
+export function unreachableImages(markdown: string): string[] {
+  const found = markdown.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)/g);
+  const bad = [...found]
+    .map((m) => (m[1] as string).trim())
+    .filter((target) => {
+      const scheme = /^([a-z][a-z0-9+.\-]*):/i.exec(target);
+      return Boolean(scheme) && !/^https?$/i.test(scheme?.[1] || "");
+    });
+  return [...new Set(bad)];
 }
 
 export function split(markdown: string): { front: string; body: string } | null {
@@ -342,4 +372,29 @@ export function verifyLayout(body: string): {
     by,
     hasVerification: Boolean(by.Verification),
   };
+}
+
+/**
+ * How many follow-ups `GET /v1/guides/:id/children?markdown=1` hands over with their content, and
+ * how much of any one. A follow-up is context an agent reads before acting on the original, so it
+ * rides in the same context window: a guide that collected fifty long follow-ups must not crowd
+ * out the guide itself. Past the cap a reader still has the ids to pull the rest one at a time.
+ */
+export const FOLLOW_UPS_MAX = 20;
+export const FOLLOW_UP_BYTES = 32 * 1024;
+
+/**
+ * A follow-up's markdown, cut to `FOLLOW_UP_BYTES` with a marker saying so. Bytes, not characters,
+ * because the budget is what a response and a context window hold; a cut that lands inside a
+ * multi-byte character drops that character rather than emitting half of it.
+ */
+export function clipFollowUp(id: string, markdown: string, max = FOLLOW_UP_BYTES): string {
+  const bytes = new TextEncoder().encode(markdown);
+  if (bytes.length <= max) return markdown;
+  // Not fatal (the default), so a torn final character decodes as U+FFFD and is dropped.
+  const head = new TextDecoder().decode(bytes.slice(0, max)).replace(/\uFFFD$/, "");
+  return (
+    `${head}\n\n[passalong: follow-up truncated at ${Math.round(max / 1024)} KB of ` +
+    `${Math.round(bytes.length / 1024)} KB — pull ${id} for the whole guide]\n`
+  );
 }

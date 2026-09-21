@@ -25,11 +25,14 @@ export interface Me {
       member of a paid team syncs without a ceiling and is still on `free` themselves. */
   plan: string;
   teams: Team[];
+  /** Name, else @handle, else @account id — worked out by the API. */
+  display?: string;
 }
 
 export interface Verdict {
   ok: boolean;
   by: string | null;
+  by_name?: string;
   note: string | null;
 }
 
@@ -50,6 +53,12 @@ export interface Guide {
   team: string | null;
   to: string | null;
   from: string | null;
+  /** Display names worked out by the API: name, else @handle, else @account id. */
+  from_name?: string;
+  to_name?: string;
+  team_name?: string;
+  to_group_name?: string;
+  taken_by_names?: string[];
   source_context: string | null;
   tags: string[];
   stack_assumptions: string[];
@@ -70,6 +79,14 @@ export interface Guide {
   /** The report this issue belongs to, when it is one — see migrations/0006_reports.sql. */
   report?: string;
   report_title?: string;
+  /**
+   * The guide this one came out of — see migrations/0015_lineage.sql. The title is only filled when
+   * you can read the parent, so an id with no title is a parent in a team you are not in.
+   */
+  parent?: string;
+  parent_title?: string;
+  /** Follow-ups you can read: published guides that name this one as their parent. */
+  children?: number;
   /** "bug", "task" or "transfer"; absent means transfer. */
   kind?: string;
   area?: string;
@@ -82,6 +99,7 @@ export interface Guide {
 /** Someone handing a guide back, and why. The reason is the whole reason to say no out loud. */
 export interface Declined {
   by: string;
+  by_name?: string;
   note: string;
   at: string;
 }
@@ -135,7 +153,13 @@ export interface TeamDetail extends Team {
   members_count?: number;
   /** How many channels are connected. Never their URLs — those are credentials for rooms. */
   channels?: number;
-  members: { handle: string | null; name: string | null; role: string; joined: string }[];
+  members: {
+    handle: string | null;
+    name: string | null;
+    role: string;
+    joined: string;
+    display?: string;
+  }[];
 }
 
 /** Where a task is. Derived by the server on every read — see apps/api/src/claims.ts. */

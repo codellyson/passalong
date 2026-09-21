@@ -1,6 +1,6 @@
 /**
  * Tasks an agent can take: the queue, the claim, the lease. See docs/V2.md and
- * migrations/0018_claims.sql.
+ * migrations/0021_claims.sql.
  *
  * The one rule this module exists to keep: no two agents ever hold the same task. The claim's
  * primary key is the lock, and a lease that runs out does not release it — a card whose agent
@@ -98,7 +98,7 @@ const leaseFrom = (at: string) => new Date(Date.parse(at) + LEASE_MS).toISOStrin
 const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
   (SELECT team_id FROM membership WHERE account_id = ?1)))`;
 
-// Waiting on a task a person has not approved yet. See migrations/0019_blocks.sql.
+// Waiting on a task a person has not approved yet. See migrations/0022_blocks.sql.
 const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN guide x ON x.id = b.blocker_id
   WHERE b.guide_id = g.id AND x.status <> 'consumed')`;
 

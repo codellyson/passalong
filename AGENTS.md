@@ -22,7 +22,12 @@ public one, for agents *using* Passalong rather than changing it.
     `verify_guide`, `file_bugs`, `attach_screenshot`. `start_guide` is the one an agent should
     reach for on work it means to do: it pulls and takes the handoff together. `get_guide` only
     reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a
-    client-passed file over HTTP (`openai/fileParams`).
+    client-passed file over HTTP (`openai/fileParams`). Over HTTP, `publish_guide` and `file_bugs`
+    also take a top-level `attachments` file array. `openai/fileParams` only accepts top-level
+    fields, so a `file_bugs` issue names its files by position rather than holding them. Only
+    ChatGPT fills file inputs, so the HTTP server also has `create_upload`: a one-time link
+    (`POST /v1/uploads`, spent by `PUT /v1/uploads/:token` without a credential) that an agent's
+    sandbox sends the file to with curl. See `apps/api/src/uploads.ts`.
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to
@@ -439,7 +444,13 @@ public one, for agents *using* Passalong rather than changing it.
   styles; put styles in `public/styles.css`. `font-src` is same-origin only: fonts are served
   from `public/fonts`, never a CDN, for the same reason Preact is vendored.
 - **Guide pages are `noindex`** and `robots.txt` disallows `/g/`. The share key is the secret, so
-  the page must never end up in a search index.
+  the page must never end up in a search index. Everything under `/g/` also sends
+  `x-robots-tag: noindex, nofollow, noarchive` (route rule in `nuxt.config.ts`, and `VIEW_HEADERS`
+  in `apps/api/src/index.ts` for the raw `.md`): a disallowed page's meta is never read, and the
+  `.md` has no `<head>`. No canonical link on a noindex page either.
+- **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
+  `application/ld+json` when deciding whether a page runs script; without that the landing would
+  get the hub's nonce policy.
 
 ## Workflow
 

@@ -106,6 +106,7 @@ passalong login                 # optional: sync across machines
 - `passalong work [--once] [--agent CMD]` — from a worktree, run an agent (`claude -p` by default)
   on each ready task for its repo, one after another, until the queue is empty
 - `passalong mcp` — run the MCP server over stdio
+- `passalong version` — print the installed version (also `-v`, `--version`)
 
 ## MCP tools
 
@@ -143,6 +144,28 @@ attach first, publish after. Locally it takes a path on the machine. Over the ho
 takes a file the client passes in, which today means ChatGPT on the web; the ChatGPT mobile apps
 send file references the server cannot download.
 
+An image the user showed you is evidence, not context. Attach it *before* filing or publishing and
+pass what `attach_screenshot` returns as that issue's `evidence` — describing a screenshot you were
+given, instead of attaching it, throws away the most useful thing in the report. A guide already
+filed without one is not stuck: `get_guide` it, add the markdown line to the body, and
+`publish_guide` the same id. Publishing claims whatever the markdown names, every time, so a
+re-publish picks the image up.
+
+`publish_guide` needs no id for a new guide: leave it out and one is minted and returned. To change a
+guide, pass the id it came back with. Inventing a fresh id to retry or to correct a guide publishes a
+second copy, and every copy counts against the author's synced limit.
+
+A follow-up is more context for a guide, written as a guide of its own and linked under the
+original. When a guide needs more context — a missing detail, a step that needed explaining, what
+changed since, what you found doing it — publish that context with `parent` set to the guide's id on
+`publish_guide`, or `passalong share --follows <id>`. A follow-up is a whole guide, not a reply: it
+has its own id, verdicts and pulls. `parent` on `publish_guide` and `--follows` need passalong 0.3.1
+or later.
+
+Whoever opens the original gets its follow-ups too. `get_guide` and `start_guide` return them after
+the guide, oldest first; read them before acting, and where one disagrees with the original, the
+follow-up is newer. The guide's share page lists them above the document.
+
 `plan_tasks` turns one larger goal into draft tasks in order; each step's `after` names the
 earlier steps it waits for, which become its `blocked_by`. Nothing runs until the user makes them
 ready (`passalong ready --all`). It is on the local server only.
@@ -160,14 +183,29 @@ same `agent` name on every call.
 
 `file_bugs` files defects you found but are not fixing — from a test run, a QA pass, a review — as
 one report. Each issue becomes a guide with its own id, share link and verdict, so any of them can
-be handed to whoever fixes it. Send them in one call rather than one call each.
+be handed to whoever fixes it. Send them in one call rather than one call each. Each issue takes
+`evidence`: the screenshot lines for that bug, which land under its Problem section.
 
 The same server is also hosted, for assistants that add remote MCP servers rather than running
 one: `https://passalong.dev/v1/mcp`, Streamable HTTP, authenticated with a bearer token. It carries
 most of these tools — everything except the ones that touch a working directory. `start_guide` is
 one of those, so over the hosted server take a handoff with `ack_guide` and fetch it with
 `get_guide`, which there returns the markdown without writing it anywhere. `attach_screenshot` is
-on both, shaped for where it runs: a path locally, a client-passed file over HTTP. A local server is
+on both, shaped for where it runs: a path locally, a client-passed file over HTTP. Over HTTP,
+`publish_guide` and `file_bugs` also take the files themselves in a top-level `attachments` array,
+so a client that passes files needs one call: `publish_guide` puts each image under Problem (or at
+the end), and each `file_bugs` issue lists the positions of its own files in `attachments: [0]` —
+with one issue, every file goes to it. A client that lists tools once and caches them has to be
+refreshed to see these fields.
+
+Only ChatGPT fills a file input. An agent that holds the image as a file instead — Claude's code
+sandbox, or anything that can run a command — calls `create_upload` on the hosted server. It returns
+a one-time link, good for 10 minutes, and the command that sends the file to it:
+`curl -sS --fail-with-body -X PUT --data-binary @IMAGE_PATH '<link>'`. Run it where the file is;
+the JSON it prints has `markdown`, the line to put in the guide body or pass as `evidence`. The
+bytes go straight to Passalong and never through the conversation, so never base64 an image into a
+tool call. If the command cannot reach `passalong.dev`, the sandbox's network settings are blocking
+it, and the user has to allow that domain for code execution. A local server is
 still better where you can run one: it works offline and knows which repo you are in.
 
 Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for Gemini

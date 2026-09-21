@@ -41,7 +41,7 @@ const urlFor = (id: string | null) =>
         class="btn sm"
         @click="readAll"
       >
-        mark all read
+        Mark all read
       </button>
     </div>
 
@@ -57,7 +57,7 @@ const urlFor = (id: string | null) =>
 
     <details v-if="echoes.length" class="mt-2">
       <summary class="cursor-pointer font-ui text-sm text-muted hover:text-fg">
-        {{ plural(echoes.length, "line") }} about guides already on the board
+        {{ plural(echoes.length, "more update") }} about guides already in your list
       </summary>
       <ul class="notes">
         <li v-for="n in echoes" :key="n.id" :class="['note', { unread: !n.read }]">

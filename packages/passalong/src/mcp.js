@@ -104,7 +104,13 @@ export async function serve() {
         "ok true once the behaviour it describes actually holds. A bug report is not broken " +
         "because you reproduced it. " +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
-        "file_bugs with all of them at once; each becomes a guide someone can take on its own.\n" +
+        "file_bugs with all of them at once; each becomes a guide someone can take on its own. " +
+        "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
+        "attach it with attach_screenshot and pass what it returns as `evidence` — a screenshot " +
+        "you described instead of attaching is the most useful thing in the report, thrown away. " +
+        "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
+        "the body, and publish_guide the same id — publishing claims whatever the markdown names. " +
+        "\n" +
         `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
         "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
         "alone, and treat Acceptance as the definition of done. Open it with start_guide, then " +
@@ -133,7 +139,13 @@ export async function serve() {
         "shows whether the guides they handed off have landed. When the user asks what they have " +
         "been working on, or wants a standup or a summary of a period, call log — but say that it " +
         "holds what they passed along and not everything they did. Gotchas are " +
-        "the highest-value section: record what failed and why.",
+        "the highest-value section: record what failed and why.\n" +
+        "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
+        "more context — a missing detail, a step that needed explaining, what changed since, what " +
+        "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
+        "id. It is listed under the original, and anyone who opens the original, person or agent, " +
+        "gets it too. get_guide and start_guide return a guide's follow-ups after it; read them " +
+        "before acting.",
     },
   );
 
@@ -261,7 +273,10 @@ export async function serve() {
       description:
         "After following a guide's Verification section, report the result. This is the only way " +
         "the author learns their handoff did not land — `set_guide_status consumed` says it was " +
-        "implemented, this says it actually works. A failing verdict must say what went wrong.",
+        "implemented, this says it actually works. A failing verdict must say what went wrong. " +
+        "If the guide needs more context than a one-line note holds — a missing detail, a step " +
+        "that needed explaining, what you found doing it — publish that as a follow-up: its own " +
+        "guide, with publish_guide `parent` set to this id. Whoever opens this guide then gets it too.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         ok: z.boolean().describe("true if the Verification steps passed"),
@@ -338,9 +353,11 @@ export async function serve() {
               ? `NOT taken (${r.ack_error}) — retry with ack_guide before reporting that you have it`
               : "not logged in, so no handoff was taken";
         const siblings = await related(meta);
+        const context = await passalong.followUps(meta);
         return text(
-          `${lead}${r.markdown}${siblings}` +
-            `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->`,
+          `${lead}${r.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
+            `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->` +
+            `\n${passalong.followUpNote(meta)}`,
         );
       } catch (err) {
         return fail(err);
@@ -514,15 +531,19 @@ export async function serve() {
         const meta = parse(markdown).meta;
         const lead = leadFor(meta);
         const siblings = await related(meta);
+        // Follow-ups are more context for this guide, so they come with it — after the document,
+        // never inside it, so the guide an agent writes back out is still only the guide.
+        const context = await passalong.followUps(meta);
         // After the document, with the other trailing comments, not in front of it. An
         // instruction that arrives with the payload is what gets read — but anything before the
         // opening `---` stops the frontmatter being frontmatter, and this fires on every guide
         // anyone was handed rather than only on bugs. The bug lead stays where it is: it is a
         // warning against executing the document, so being read first is its whole job.
         return text(
-          `${lead}${markdown}${siblings}` +
+          `${lead}${markdown}${siblings}${context ? `\n\n${context}` : ""}` +
             `\n\n<!-- passalong: ${from}; written to ${path} -->` +
-            `\n${passalong.handoffNudge(meta)}`,
+            `\n${passalong.handoffNudge(meta)}` +
+            `\n${passalong.followUpNote(meta)}`,
         );
       } catch (err) {
         return fail(err);
@@ -566,7 +587,10 @@ export async function serve() {
         "Publish a guide from markdown (frontmatter + sections) — a transfer guide by default, or " +
         "a single bug with `kind: bug`; use file_bugs for more than one; or a task for work nobody " +
         "has done yet with `kind: task`. Missing id, created, " +
-        'author, and source_context are filled in. `to` addresses it to a team ("khaime") or a ' +
+        "author, and source_context are filled in. A screenshot belongs in the markdown: attach it " +
+        "with attach_screenshot and put the line it returns in the body, because publishing claims " +
+        "whatever the markdown names. " +
+        '`to` addresses it to a team ("khaime") or a ' +
         'teammate ("khaime/lukman"), who is notified. Returns the id and share link.',
       inputSchema: {
         markdown: z.string().describe("full guide markdown; start from guide_template"),
@@ -578,13 +602,21 @@ export async function serve() {
           .string()
           .optional()
           .describe("directory the work happened in, used to infer source_context"),
+        parent: z
+          .string()
+          .optional()
+          .describe(
+            "id or share link of the guide this one adds context to — set it and this is " +
+              "published as that guide's follow-up: listed under it, and read by whoever opens it",
+          ),
       },
     },
-    async ({ markdown, to, cwd }) => {
+    async ({ markdown, to, cwd, parent }) => {
       try {
         const { guide, url, synced, notified, path } = await passalong.share(markdown, {
           cwd: cwd || process.cwd(),
           to,
+          follows: parent,
         });
         return json({
           id: guide.meta.id,
@@ -593,6 +625,7 @@ export async function serve() {
           synced,
           team: guide.meta.team || "",
           to: guide.meta.to || "",
+          parent: guide.meta.parent || "",
           notified,
           path,
           // A task does not go live on publish, and an agent that reports "queued it" has told
@@ -619,7 +652,10 @@ export async function serve() {
         "publishes each issue as its own guide — its own id, share link, and verdict — so a " +
         "reviewer can hand any one of them to whoever fixes it. Use this after a test run, a QA " +
         "pass, or a review that turned up defects; use publish_guide instead for work you " +
-        "finished and want repeated elsewhere. Needs sync (`passalong login`).",
+        "finished and want repeated elsewhere. If there is a screenshot of any of this, it is " +
+        "evidence: call attach_screenshot first and pass what it returns as that issue's " +
+        "`evidence`. Describing a screenshot instead of attaching it throws away the most useful " +
+        "thing in the report. Needs sync (`passalong login`).",
       inputSchema: {
         title: z
           .string()
@@ -636,6 +672,13 @@ export async function serve() {
         issues: z
           .array(
             z.object({
+              evidence: z
+                .array(z.string())
+                .default([])
+                .describe(
+                  "screenshot URLs from attach_screenshot, or the markdown lines it returned; " +
+                    "they go under Problem, where a reader looks first",
+                ),
               title: z.string().describe("what is broken, in one line"),
               problem: z
                 .string()

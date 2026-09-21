@@ -250,7 +250,7 @@ test("in a team, each side hears what the other did to a task — and only the a
   as(owner);
   const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
   assert.match(heard, /agent took the task "Team task"/);
-  assert.match(heard, /agent finished "Team task" — it is waiting for your review/);
+  assert.match(heard, /agent finished "Team task", and it is waiting for your review/);
   await p.rejectTask(id, "needs a test");
 
   as(mate.token);

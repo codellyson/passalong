@@ -29,6 +29,34 @@ test("hosts that serve are left alone", () => {
   }
 });
 
+test("plain http on a serving host is upgraded, and stays on its host", () => {
+  assert.equal(
+    canonicalRedirect("http://passalong.dev/connect?x=1", "passalong.dev", "http"),
+    "https://passalong.dev/connect?x=1",
+  );
+  assert.equal(
+    canonicalRedirect(
+      "http://internal.example/g/abcdefgh/key123",
+      "passalong.kreativekorna.com",
+      "http",
+    ),
+    "https://passalong.kreativekorna.com/g/abcdefgh/key123",
+  );
+  // www goes straight to the https apex rather than taking two hops.
+  assert.equal(
+    canonicalRedirect("http://www.passalong.dev/", "www.passalong.dev", "http"),
+    "https://passalong.dev/",
+  );
+});
+
+test("the scheme is only believed from the header, so nothing loops", () => {
+  // A runtime that rebuilt the URL as http: must not redirect an https visitor to themselves.
+  assert.equal(canonicalRedirect("http://passalong.dev/", "passalong.dev"), null);
+  assert.equal(canonicalRedirect("http://passalong.dev/", "passalong.dev", "https"), null);
+  // Local development is http and is never upgraded.
+  assert.equal(canonicalRedirect("http://localhost:3000/", "localhost:3000", "http"), null);
+});
+
 test("a lookalike host is not mistaken for www", () => {
   assert.equal(canonicalRedirect("https://www.passalong.dev.evil.test/hub"), null);
 });

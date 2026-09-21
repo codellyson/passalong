@@ -64,6 +64,17 @@ empty until some document names it. Deleting a guide deletes its shots and their
 upload nobody ever referenced is swept nightly once it is a day old — claiming happens minutes
 after upload at worst, so a shorter window would race a tester who is still typing.
 
+## upload
+
+`hash`, `account_id`, `name`, `created`, `expires`, `used`
+
+A one-time link that takes one screenshot without a credential, for an agent sandbox that holds the
+image as a file. The token is a bearer credential, so only its SHA-256 is kept. `expires` is ten
+minutes after `created`; `used` is empty until the link is spent, and spending is a single
+`UPDATE … WHERE used = '' AND expires > now`. What the link creates is an ordinary `shot` owned by
+`account_id`, named `name`. Spent and expired rows for an account are deleted whenever it mints a
+new link, which is the only time anything reads them.
+
 ## team, membership, invite
 
 - `team`: `id`, `slug`, `name`, `created_by`, `created`

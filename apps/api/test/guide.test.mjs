@@ -13,6 +13,7 @@ import {
   split,
   tag,
   tagList,
+  unreachableImages,
 } from "../src/guide.ts";
 
 const DOC = `---
@@ -322,4 +323,27 @@ test("parseMeta reads a parent, which needs no rule of its own", () => {
   const m = parseMeta(`---\nid: k3mq2xa7\ntitle: One\nparent: zx9y8w42\n---\n\n## Problem\nx\n`);
   assert.equal(m.parent, "zx9y8w42");
   assert.equal(parseMeta(DOC).parent, undefined, "and a guide without one says nothing");
+});
+
+test("an image a reader cannot load is caught, and an ordinary one is not", () => {
+  // The case that shipped: ChatGPT wrapped its own file id in a scheme it invented, and the guide
+  // published with a dead picture and no upload behind it.
+  assert.deepEqual(
+    unreachableImages("![Teams page](attachment://file_00000000399c82119527546cfeeb8b9c)"),
+    ["attachment://file_00000000399c82119527546cfeeb8b9c"],
+  );
+  for (const target of [
+    "blob:https://chatgpt.com/abc",
+    "file:///tmp/a.png",
+    "data:image/png;base64,iVBOR",
+  ]) {
+    assert.deepEqual(unreachableImages(`![x](${target})`), [target], `${target} should be caught`);
+  }
+  // Left alone: an uploaded shot, an image hosted elsewhere, and a relative path that has always
+  // published. This is a check for handles only one client can read, not a link checker.
+  assert.deepEqual(unreachableImages("![a](https://passalong.dev/v1/shots/abc123)"), []);
+  assert.deepEqual(unreachableImages("![a](http://example.com/a.png)"), []);
+  assert.deepEqual(unreachableImages("![a](./diagram.png)"), []);
+  // A link that is not an image is not this check's business.
+  assert.deepEqual(unreachableImages("[see](attachment://file_1)"), []);
 });

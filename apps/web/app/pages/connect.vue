@@ -11,6 +11,11 @@
   stopped being true when the endpoint shipped. What stays true is the shape of the answer: what a
   tool can do here is decided by how it talks, not by whose tool it is.
 
+  A third time, the other way round: it went on saying a client that signs in only with OAuth could
+  not connect, after the OAuth flow and the hub's connector form had shipped — and it never said
+  what Claude's callback URL is, which is the one field that form cannot be filled in without. It
+  also counted the tools, and the count went stale. They are described now, not numbered.
+
   Laid out like the landing: sections separated by space and a hairline rather than four bordered
   cards in a grid. A page where every block is a card has no hierarchy left to spend, and this one
   is a list of alternatives — peers, which read as peers when nothing is boxed.
@@ -19,19 +24,24 @@
   CSP. Nothing here is interactive, so nothing here needs to be.
 -->
 <script setup lang="ts">
+import { APEX } from "#api/hosts";
+import { published } from "#shared/pages";
+
+/** The kinds section links the full format once that page is written, and not before. */
+const formatPublished = published("/docs/guide-format");
+
 usePage({
-  title: "Connect Passalong",
+  title: "Set up Passalong in Claude Code, Cursor, ChatGPT or any MCP app",
   description:
     "Use Passalong from Claude Code, Cursor, Gemini or any HTTP client — what each one can do, and how to set it up.",
+  url: `${APEX}/connect`,
+  image: `${APEX}/og.png`,
 });
 </script>
 
 <template>
   <main class="wide landing">
-    <nav class="masthead">
-      <AppBrand />
-      <a class="btn" href="/hub">Sign in</a>
-    </nav>
+    <AppMasthead />
 
     <header class="hero">
       <p class="eyebrow">Three ways in</p>
@@ -65,21 +75,83 @@ passalong setup     # Claude Code: skill + MCP server</code></pre>
       </section>
 
       <section>
-        <p class="eyebrow">ChatGPT · anything that adds remote MCP servers</p>
+        <p class="eyebrow">Claude · ChatGPT · Cursor · any assistant with MCP connectors</p>
         <h2>Point it at a URL</h2>
         <div class="say">
           <p>
             Assistants that add outside tools add them as MCP servers reached over a URL. Paste
-            this as the server URL and authenticate with a bearer token from
-            <a href="/hub/settings">your hub</a> — the same named, revocable token everything else
-            here uses. You get nine tools: search and read guides, your inbox and board, publish a
-            guide, file a set of bugs, say whether you are taking one, and say whether it worked.
+            this as the server URL. You get every tool that does not need a working directory:
+            search and read guides, your inbox, board and log, publish a guide, file a set of bugs
+            with their screenshots, say whether you are taking one, and say whether it worked.
           </p>
           <pre><code>https://passalong.dev/v1/mcp</code></pre>
-          <p class="caveat">
-            <b>If the client will only authenticate with OAuth</b>, it cannot connect yet. This
-            server takes a bearer token and does not run an OAuth flow, and no setting on your end
-            changes that.
+          <!-- Written once, for whichever assistant you use. It read as a Claude page with ChatGPT
+               as an afterthought, when every one of them connects the same way. -->
+          <p>
+            In the assistant you use, open its connector settings, add a custom connector and paste
+            that address. If it asks how to sign in, choose OAuth. It opens Passalong and asks you
+            to approve, and that is the whole setup — unless the app asks for a client ID, as
+            ChatGPT does. Make that in <a href="/hub/settings#apps">your hub</a>, without a secret,
+            and paste it back.
+          </p>
+          <p>
+            You can see every app you have approved, and disconnect it, under Connectors in
+            <a href="/hub/settings">your hub's settings</a>.
+          </p>
+          <p>
+            <b>Apps that send a header</b> can skip approving and use a token from
+            <a href="/hub/settings">your hub</a> — the same named, revocable token the CLI and the
+            API use.
+          </p>
+          <details>
+            <summary>Set up a connector manually</summary>
+            <p>
+              Only for an app that asks you for a client ID instead of taking the address. In
+              <a href="/hub/settings">your hub's settings</a>, open "Set up a connector manually",
+              give it the app's callback address, and paste the client ID it gives you back into
+              the app. Leave "This app keeps a secret" off unless the app demands one.
+            </p>
+            <p>Claude's callback address, if you set Claude up this way, is:</p>
+            <pre><code>https://claude.ai/api/mcp/auth_callback</code></pre>
+          </details>
+        </div>
+      </section>
+
+      <!-- Per assistant, because this is the one thing that does differ by vendor: MCP has no
+           standard file input yet, so how an image reaches a tool depends on the client. Each
+           route below was checked working before it was written here. -->
+      <section id="screenshots">
+        <p class="eyebrow">Screenshots · evidence for a bug</p>
+        <h2>Attach the screenshot</h2>
+        <div class="say">
+          <p>
+            Attach the image in your chat and ask for the bug to be filed with it. The screenshot
+            goes into the guide itself, under Problem, so whoever opens the link sees it. How the
+            file gets there depends on the assistant.
+          </p>
+          <p>
+            <b>ChatGPT</b> hands the file to Passalong itself. Attach it in ChatGPT on the web; the
+            mobile apps send a reference the server cannot download.
+          </p>
+          <p>
+            <b>Claude</b> sends the file from its code sandbox to a one-time upload link. Allow
+            <code>passalong.dev</code> in the network settings for Claude's code execution, or the
+            sandbox cannot reach it and the upload fails.
+          </p>
+          <p>
+            <b>Claude Code, Cursor and other local setups</b> read the image from disk: give the
+            agent the file's path.
+          </p>
+          <p>
+            <b>Scripts</b> send the raw bytes with a token, or ask for an upload link and send them
+            there with no token at all. The link works once and expires in ten minutes.
+          </p>
+          <pre><code>curl -H "authorization: Bearer $TOKEN" \
+  -H "content-type: image/png" --data-binary @shot.png \
+  https://passalong.dev/v1/shots</code></pre>
+          <p>
+            Either way the answer includes the markdown line that points at the image. Put it in the
+            guide, and publishing keeps the file for as long as the guide exists.
           </p>
         </div>
       </section>
@@ -131,6 +203,10 @@ passalong setup     # Claude Code: skill + MCP server</code></pre>
         Agents that pull a guide through MCP are told this before they see the document, and the
         document says it too — so a tool that fetched a share link over plain HTTP is not left
         guessing.
+      </p>
+      <p v-if="formatPublished" class="caveat">
+        Every field and heading, and what a receiving agent does with each, is in
+        <a href="/docs/guide-format">the guide format</a>.
       </p>
     </section>
 

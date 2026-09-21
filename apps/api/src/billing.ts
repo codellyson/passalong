@@ -283,6 +283,13 @@ async function call(url: string, secret: string, body: unknown, method = "POST")
  * when somebody is sent to a checkout page, so until that event arrives there is nothing stored to
  * look it up by. See `PlanChange.team_id` and `PlanChange.account_id`.
  */
+/**
+ * What a person sees when this deployment has no keys for the provider they chose. The hub prints
+ * a refusal verbatim, and "not configured on this deployment" is a sentence for whoever runs the
+ * server, not for whoever is trying to pay.
+ */
+export const PAYMENTS_NOT_SET_UP = "Payments aren't set up yet. Try again later.";
+
 export async function startCheckout(
   provider: Provider,
   keys: BillingKeys,
@@ -301,7 +308,7 @@ export async function startCheckout(
   if (provider === "stripe") {
     const secret = keys.STRIPE_SECRET || "";
     const price = keys.STRIPE_PRICE || "";
-    if (!secret || !price) throw new BillingError("stripe is not configured on this deployment");
+    if (!secret || !price) throw new BillingError(PAYMENTS_NOT_SET_UP);
     // Stripe's API is form-encoded, not JSON, and nested keys are bracketed. Written out rather
     // than reached for a library: the SDK is a large dependency on a Worker for two calls.
     const form = new URLSearchParams({
@@ -334,7 +341,7 @@ export async function startCheckout(
 
   const secret = keys.PAYSTACK_SECRET || "";
   const plan = keys.PAYSTACK_PLAN || "";
-  if (!secret || !plan) throw new BillingError("paystack is not configured on this deployment");
+  if (!secret || !plan) throw new BillingError(PAYMENTS_NOT_SET_UP);
   const body = await call("https://api.paystack.co/transaction/initialize", secret, {
     email,
     plan,
@@ -365,11 +372,12 @@ export async function setSeats(
 ): Promise<void> {
   if (provider === "paystack")
     throw new BillingError(
-      "Paystack subscriptions cannot change quantity after they start. Cancel this one and " +
-        "subscribe again with the number of seats you need.",
+      "Paystack can't change the number of seats on a plan that has already started. Cancel it " +
+        "with the manage-subscription link in your Paystack receipt email, then choose the plan " +
+        "again in Settings with the seats you need.",
     );
   const secret = keys.STRIPE_SECRET || "";
-  if (!secret) throw new BillingError("stripe is not configured on this deployment");
+  if (!secret) throw new BillingError(PAYMENTS_NOT_SET_UP);
   const sub = await call(
     `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
     secret,
@@ -377,7 +385,11 @@ export async function setSeats(
     "GET",
   );
   const item = ((sub.items as { data?: { id?: string }[] } | undefined)?.data ?? [])[0];
-  if (!item?.id) throw new BillingError("that subscription has nothing to change the seats on");
+  if (!item?.id)
+    throw new BillingError(
+      "We couldn't find the seats on this plan. Try again later, or cancel it from the billing " +
+        "link in your Stripe receipt and choose the plan again in Settings.",
+    );
   const form = new URLSearchParams({
     "items[0][id]": item.id,
     "items[0][quantity]": String(seats),

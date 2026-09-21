@@ -55,8 +55,235 @@ export function authorizationServerMetadata(origin: string) {
     code_challenge_methods_supported: ["S256"],
     scopes_supported: [MCP_SCOPE],
     revocation_endpoint: `${origin}/v1/oauth/revoke`,
+    // RFC 7591. What lets someone connect by pasting one address: the client reads this document,
+    // registers itself, and sends the person to approve — no connector form, no copied client id.
+    // Under /v1/ with the token endpoint, because it is the machine-facing half too.
+    registration_endpoint: `${origin}/v1/oauth/register`,
     service_documentation: `${origin}/connect`,
   };
+}
+
+// ---- dynamic client registration ----------------------------------------------------------------
+
+/** A registration nobody approved is forgotten after this long. See oauth-clients.ts. */
+export const DYNAMIC_TTL_MS = 24 * 3600_000;
+export const MAX_REDIRECT_URIS = 5;
+export const MAX_URI_LENGTH = 2000;
+export const MAX_CLIENT_NAME = 60;
+
+/** What a client registered itself as, after every rule below has been applied. */
+export interface Registration {
+  client_name: string;
+  redirect_uris: string[];
+  client_uri: string;
+}
+
+export type RegistrationResult =
+  | { ok: true; registration: Registration }
+  | {
+      ok: false;
+      error: "invalid_redirect_uri" | "invalid_client_metadata";
+      error_description: string;
+    };
+
+/**
+ * A loopback host, per RFC 8252 §7.3 and §8.3.
+ *
+ * `localhost` is included because the brief for this server names it, and because a native client
+ * on the person's own machine is exactly who uses it — though the RFC prefers the IP literals,
+ * since `localhost` can be resolved to something else by a hostile resolver.
+ */
+export function isLoopback(hostname: string): boolean {
+  return hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "localhost";
+}
+
+/**
+ * Why a redirect URI cannot be registered, or null when it can.
+ *
+ * - https, or http only for loopback (RFC 8252 §7.3): a code sent over plain http to anything
+ *   else is readable by everyone on the path.
+ * - No fragment (RFC 6749 §3.1.2): the code is appended to the query, and a fragment makes where
+ *   it lands ambiguous.
+ * - No wildcards: a `*` is not a URL character a client needs, and matching one is how an
+ *   authorization server turns into an open redirector. Redirects are exact-matched in any case.
+ * - No userinfo: `https://claude.ai@evil.test/` reads as claude.ai to a person and goes to evil.test.
+ * - Bounded length, so the column cannot be used as storage.
+ */
+export function redirectUriProblem(uri: unknown): string | null {
+  if (typeof uri !== "string" || !uri) return "a redirect URI must be a non-empty string";
+  if (uri.length > MAX_URI_LENGTH)
+    return `a redirect URI must be under ${MAX_URI_LENGTH} characters`;
+  if (uri.includes("*")) return "wildcards are not allowed in redirect URIs";
+  if (uri.includes("#")) return "a redirect URI must not contain a fragment";
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch {
+    return "a redirect URI must be an absolute URL";
+  }
+  if (url.username || url.password) return "a redirect URI must not contain credentials";
+  if (url.protocol === "https:") return null;
+  if (url.protocol === "http:" && isLoopback(url.hostname)) return null;
+  return "redirect URIs must use https, or http only for 127.0.0.1, [::1] or localhost";
+}
+
+/**
+ * A name as a person will read it on the consent screen.
+ *
+ * Control characters and bidirectional overrides are removed — the second because a name can use
+ * them to display as something it does not contain. Capped, because a name is a label. The
+ * consent screen shows the redirect host beside it regardless, so a registration calling itself
+ * "Passalong" still says where it is going to send you.
+ */
+export function cleanClientName(name: unknown): string {
+  if (typeof name !== "string") return "";
+  return (
+    name
+      // Whitespace first, so a newline becomes a space rather than gluing two words together.
+      .replace(/\s+/g, " ")
+      .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "")
+      .trim()
+      .slice(0, MAX_CLIENT_NAME)
+  );
+}
+
+/** The host a redirect goes to, as the consent screen and the connectors list show it. */
+export function redirectHost(uri: string): string {
+  try {
+    return new URL(uri).host;
+  } catch {
+    return "";
+  }
+}
+
+const GRANT_TYPES = new Set(["authorization_code", "refresh_token"]);
+
+/**
+ * RFC 7591 §2, applied.
+ *
+ * Only what this server can honour is accepted. Where the RFC lets the server substitute its own
+ * value (§3.2.1) it does, rather than refusing: `token_endpoint_auth_method` is always `none` and
+ * `scope` is always `mcp`, because a registration nobody has approved must not be able to ask for
+ * a secret or a wider scope, and a client asking for either still works as a public client with
+ * PKCE. Grant and response types a client cannot use are refused, since substituting would promise
+ * a flow it did not ask for.
+ */
+export function validateRegistration(body: unknown): RegistrationResult {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return bad("invalid_client_metadata", "the registration must be a JSON object");
+  }
+  const b = body as Record<string, unknown>;
+
+  const uris = b.redirect_uris;
+  if (!Array.isArray(uris) || uris.length === 0) {
+    return bad("invalid_redirect_uri", "redirect_uris is required and must list at least one URI");
+  }
+  if (uris.length > MAX_REDIRECT_URIS) {
+    return bad(
+      "invalid_redirect_uri",
+      `at most ${MAX_REDIRECT_URIS} redirect URIs may be registered`,
+    );
+  }
+  for (const uri of uris) {
+    const problem = redirectUriProblem(uri);
+    if (problem) return bad("invalid_redirect_uri", problem);
+  }
+
+  if (b.grant_types !== undefined) {
+    if (!Array.isArray(b.grant_types) || !b.grant_types.every((g) => GRANT_TYPES.has(String(g)))) {
+      return bad(
+        "invalid_client_metadata",
+        "grant_types may only include authorization_code and refresh_token",
+      );
+    }
+  }
+  if (b.response_types !== undefined) {
+    if (!Array.isArray(b.response_types) || !b.response_types.every((r) => r === "code")) {
+      return bad("invalid_client_metadata", 'response_types may only include "code"');
+    }
+  }
+
+  // Kept only when it is an https URL of sane length; it is metadata, never followed or rendered.
+  const clientUri =
+    typeof b.client_uri === "string" &&
+    b.client_uri.length <= MAX_URI_LENGTH &&
+    /^https:\/\/[^\s]+$/.test(b.client_uri)
+      ? b.client_uri
+      : "";
+
+  return {
+    ok: true,
+    registration: {
+      client_name: cleanClientName(b.client_name),
+      redirect_uris: [...new Set(uris as string[])],
+      client_uri: clientUri,
+    },
+  };
+}
+
+function bad(
+  error: "invalid_redirect_uri" | "invalid_client_metadata",
+  error_description: string,
+): RegistrationResult {
+  return { ok: false, error, error_description };
+}
+
+/** The RFC 7591 §3.2.1 response for a client this server has just registered. */
+export function registrationResponse(
+  id: string,
+  issuedAt: Date,
+  registration: Registration,
+): Record<string, unknown> {
+  return {
+    client_id: id,
+    client_id_issued_at: Math.floor(issuedAt.getTime() / 1000),
+    // No secret, so it never expires on that account; the registration itself lapses if nobody
+    // approves it (DYNAMIC_TTL_MS).
+    client_secret_expires_at: 0,
+    client_name: registration.client_name || undefined,
+    client_uri: registration.client_uri || undefined,
+    redirect_uris: registration.redirect_uris,
+    token_endpoint_auth_method: "none",
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    scope: MCP_SCOPE,
+  };
+}
+
+/**
+ * The redirect to use for a client with one or more registered addresses, or null to refuse.
+ *
+ * Exact match against any registered URI. Omitting it is only allowed when there is exactly one to
+ * fall back to (RFC 6749 §3.1.2.3). The one relaxation is RFC 8252 §7.3: for a loopback redirect
+ * the port is chosen by the native app at runtime, so it is ignored — scheme, host and path must
+ * still match.
+ */
+export function pickRedirect(registered: string[], asked: string | undefined): string | null {
+  if (!asked) return registered.length === 1 ? (registered[0] as string) : null;
+  for (const uri of registered) {
+    if (timingSafeEqual(uri, asked)) return asked;
+  }
+  let a: URL;
+  try {
+    a = new URL(asked);
+  } catch {
+    return null;
+  }
+  if (a.protocol !== "http:" || !isLoopback(a.hostname)) return null;
+  for (const uri of registered) {
+    try {
+      const r = new URL(uri);
+      if (
+        r.protocol === "http:" &&
+        r.hostname === a.hostname &&
+        r.pathname === a.pathname &&
+        r.search === a.search
+      ) {
+        return asked;
+      }
+    } catch {}
+  }
+  return null;
 }
 
 /**
@@ -86,6 +313,45 @@ export async function pkceMatches(verifier: string, challenge: string): Promise<
     .replace(/\//g, "_")
     .replace(/=+$/, "");
   return timingSafeEqual(encoded, challenge);
+}
+
+/** Why the token endpoint refused to authenticate a client. */
+export type ClientRefusal = "unknown_client" | "secret_missing" | "secret_mismatch";
+
+/**
+ * Decide whether a client authenticated at the token endpoint, and if not, why.
+ *
+ * `invalid_client` on its own is all a connector's settings page shows, and three different
+ * mistakes produce it: an id that was revoked or mistyped, a connector created with a secret that
+ * the app was never given, and a secret pasted wrong. Each needs a different fix, so each is named.
+ * None of this leaks anything worth having — a client id is not a secret, it travels in every
+ * authorization URL — and the secret itself is still compared without timing.
+ */
+export function clientRefusal(
+  client: { secret_hash: string } | null,
+  presentedSecretHash: string,
+  presentedSecret: string,
+): ClientRefusal | null {
+  if (!client) return "unknown_client";
+  if (!client.secret_hash) return null;
+  if (!presentedSecret) return "secret_missing";
+  return timingSafeEqual(client.secret_hash, presentedSecretHash) ? null : "secret_mismatch";
+}
+
+/** The RFC 6749 §5.2 body for a refusal, with a description a person setting up a connector can act on. */
+export function invalidClient(reason: ClientRefusal) {
+  const description = {
+    unknown_client:
+      "no active client with this client_id: it was mistyped, revoked, or never approved. Reconnect " +
+      "with only the server URL and no client ID, or make a new connector in Settings.",
+    secret_missing:
+      "this client was created with a secret, and none was sent. Paste its client secret into the " +
+      "connector, or reconnect with only the server URL and no client ID.",
+    secret_mismatch:
+      "the client secret does not match this client. It was shown once, when the connector was " +
+      "made; if it is lost, make a new connector in Settings.",
+  }[reason];
+  return { error: "invalid_client", error_description: description };
 }
 
 /** Compare without leaking where two secrets diverge. */

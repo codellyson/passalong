@@ -15,6 +15,12 @@
   no script here, and there never will be.
 -->
 <script setup lang="ts">
+import { APEX } from "#api/hosts";
+import { published } from "#shared/pages";
+
+/** The closer points at the docs once they are written, and not before. */
+const docsPublished = published("/docs");
+
 usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
@@ -25,8 +31,10 @@ usePage({
     "Queue work for your agents and get back what they did and why — across repos, machines and teammates.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
-  // switches on the moment there is something to show.
-  image: `${useRequestURL().origin}/og.png`,
+  // switches on the moment there is something to show. The apex rather than the serving host, so
+  // the legacy host's copy of this page points at the same card and the same canonical.
+  image: `${APEX}/og.png`,
+  url: `${APEX}/`,
 });
 
 /**
@@ -50,6 +58,87 @@ const PRICING = {
 };
 
 /**
+ * What a search engine is told about the product, as JSON-LD.
+ *
+ * Built from PRICING so the price in the markup cannot drift from the price on the page. A data
+ * block rather than script: browsers never execute it, so the landing's CSP, which allows no script
+ * at all, is untouched — and server/plugins/csp.ts knows not to count it as one.
+ *
+ * Only what the page itself says. No ratings or reviews: there are none to cite.
+ */
+const perMonth = (amount: string) => Number(amount.replace(/[^0-9.]/g, ""));
+const STRUCTURED = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${APEX}/#organization`,
+      name: "Passalong",
+      url: `${APEX}/`,
+      logo: `${APEX}/icon-512.png`,
+      email: PRICING.contact,
+      sameAs: [
+        "https://www.npmjs.com/package/passalong",
+        "https://github.com/codellyson/passalong",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${APEX}/#website`,
+      name: "Passalong",
+      url: `${APEX}/`,
+      publisher: { "@id": `${APEX}/#organization` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${APEX}/#software`,
+      name: "Passalong",
+      url: `${APEX}/`,
+      description:
+        "Hand finished work from one repo, machine, agent session or teammate to the next, as a transfer guide an AI agent can act on. A CLI, an MCP server and a sync service.",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "macOS, Linux, Windows",
+      publisher: { "@id": `${APEX}/#organization` },
+      offers: [
+        {
+          "@type": "Offer",
+          name: "Local",
+          description: "The CLI against a local store, with no account.",
+          price: 0,
+          priceCurrency: "USD",
+        },
+        {
+          "@type": "Offer",
+          name: "Solo",
+          price: perMonth(PRICING.solo.amount),
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: perMonth(PRICING.solo.amount),
+            priceCurrency: "USD",
+            billingDuration: "P1M",
+          },
+        },
+        {
+          "@type": "Offer",
+          name: "Team",
+          description: `Three seats, ${PRICING.team.extra}.`,
+          price: perMonth(PRICING.team.amount),
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: perMonth(PRICING.team.amount),
+            priceCurrency: "USD",
+            billingDuration: "P1M",
+          },
+        },
+      ],
+    },
+  ],
+};
+useHead({ script: [{ type: "application/ld+json", innerHTML: JSON.stringify(STRUCTURED) }] });
+
+/**
  * The specimen guide, as fields rather than as a text file.
  *
  * The page used to print the markdown source: twenty-five lines of monospace, which is the
@@ -60,9 +149,11 @@ const PRICING = {
  */
 const SPECIMEN = {
   title: "Backfill order totals without locking the table",
+  // No id and no repo@branch: the guide page stopped leading with either, and the specimen of it
+  // should not teach a visitor that guides are named by strings like those.
   facts: [
-    { label: "ID", value: "ejdq3v8q", mono: true },
-    { label: "From", value: "orders-api@main", mono: true },
+    { label: "From", value: "Ada Okafor" },
+    { label: "Project", value: "orders-api" },
     { label: "Assumes", value: "Postgres 16 \u00b7 Node 22" },
   ],
   tags: ["migrations", "backfill"],
@@ -93,19 +184,17 @@ const SPECIMEN = {
 
 <template>
   <main class="wide landing">
-    <nav class="masthead">
-      <AppBrand />
-      <!-- One, not two. The hub *is* the sign-in, so a masthead offering both was the same door
-           twice. This is for the returning visitor; the claim below is for everyone else. -->
-      <a class="btn" href="/hub">Sign in</a>
-    </nav>
+    <AppMasthead />
 
     <header class="hero">
-      <p class="eyebrow">For developers running more than one agent</p>
-      <h1>
+      <!-- The h1 names what the product is, because that is what a search engine reads first and
+           the claim below never says it. The claim keeps the display type as a <p class="headline">:
+           same look, no longer the page's heading. -->
+      <h1 class="eyebrow">Transfer guides and a task queue for AI coding agents</h1>
+      <p class="headline">
         Agents that never<br>
         <span class="turn">start from zero.</span>
-      </h1>
+      </p>
       <p class="lede">
         Every agent session starts blank. Passalong hands the next one the whole story — what was
         decided, why, and how to check it — in another repo, on another machine, for a teammate, or
@@ -113,7 +202,7 @@ const SPECIMEN = {
       </p>
       <p class="ways">
         <a class="go" href="/hub">Open your hub</a>
-        <a class="quiet" href="https://www.npmjs.com/package/passalong">or install the CLI</a>
+        <a class="quiet" href="https://www.npmjs.com/package/passalong">or install the command-line tool</a>
       </p>
     </header>
 
@@ -137,7 +226,7 @@ const SPECIMEN = {
         <dl class="facts">
           <div v-for="f in SPECIMEN.facts" :key="f.label">
             <dt>{{ f.label }}</dt>
-            <dd :class="f.mono ? 'font-code' : ''">{{ f.value }}</dd>
+            <dd>{{ f.value }}</dd>
           </div>
         </dl>
 
@@ -153,34 +242,35 @@ const SPECIMEN = {
     </section>
     <p class="under">
       That is what lands in the next session, and what a teammate opens in a browser. Underneath it
-      is plain markdown with frontmatter — in your repo, in your hub, and in
-      <code>passalong export</code> if you ever want out.
+      is plain markdown: in your repo, in your hub, and yours to export whenever you want out.
     </p>
 
-    <section class="steps" aria-label="How a transfer works">
+    <!-- Told as what a person does, not as the flags that do it. The addressing syntax and the
+         pull command are real and documented on /connect; on the front page they made the product
+         read as a CLI you have to learn before anything happens. -->
+    <section class="steps" aria-label="How sending a guide works">
       <article>
         <p class="n">01</p>
         <h2>Finish the work</h2>
         <p>
-          In an agent session, say <em>“pass this along”</em>, or run <code>passalong share</code>.
-          It distills what you just did into a guide.
+          In Claude Code, say <em>“pass this along”</em>. Or write it in your hub. Either way the
+          work becomes a guide: what was wrong, what you did, and how to check it.
         </p>
       </article>
       <article>
         <p class="n">02</p>
-        <h2>Hand it over</h2>
+        <h2>Send it</h2>
         <p>
-          Trim the draft. You get a short id and a link. Address it to a teammate with
-          <code>--to team/@them</code>, or to the people who do a thing with
-          <code>team/#group</code>.
+          Send it to a teammate, or to the group of people who do that kind of work. They get an
+          email with a link.
         </p>
       </article>
       <article>
         <p class="n">03</p>
-        <h2>Pick it up anywhere</h2>
+        <h2>They pick it up</h2>
         <p>
-          Run <code>passalong pull &lt;id&gt;</code> in the other context, or paste the link to an
-          agent. Nothing to install on the receiving end.
+          They open the link, say they're taking it, and later tell you whether it worked. An agent
+          can pick it up from the same link. Nothing to install on the receiving end.
         </p>
       </article>
     </section>
@@ -191,9 +281,9 @@ const SPECIMEN = {
         <span class="turn">A guide gets picked up.</span>
       </h2>
       <p>
-        Whoever takes it says whether they are on it, and says whether it worked when they have run
-        it — so the person who handed it over never has to ask, and never finds out a week later
-        that nobody did.
+        Whoever takes it says they're taking it, and says whether it worked once they've tried it,
+        so the person who sent it never has to ask, and never finds out a week later that nobody
+        did.
       </p>
     </section>
 
@@ -259,8 +349,8 @@ const SPECIMEN = {
             {{ PRICING.solo.amount }}<span>{{ PRICING.solo.period }}</span>
           </p>
           <p>
-            Every guide you write, synced across your machines with no ceiling, the task queue for
-            your agents, and an MCP endpoint of your own so any agent you use can search them.
+            Every guide you write, on every machine you use, with no limit, the task queue for your
+            agents, and a private connection any assistant you use can search.
           </p>
         </article>
 
@@ -270,9 +360,9 @@ const SPECIMEN = {
             {{ PRICING.team.amount }}<span>{{ PRICING.team.period }}, {{ PRICING.team.extra }}</span>
           </p>
           <p>
-            A shared workspace, handoffs addressed to a person or to the people who do a thing, one
-            task queue for everyone's agents, and a team MCP endpoint every member's agents can
-            search —
+            A shared space, guides sent to a person or to the group who does that kind of work, one
+            task queue for everyone's agents, and a team connection every member's assistants can
+            search,
             <b>for everyone in the team, including the members who never paid for a seat.</b>
           </p>
         </article>
@@ -307,7 +397,9 @@ const SPECIMEN = {
       <!-- The install line lives here rather than in a panel of its own. Writing guides takes one
            command; reading one takes nothing at all, and that asymmetry is the product. -->
       <p class="reassure">
-        <code>npm i -g passalong</code> to write them — and nothing at all to install to read one.
+        Write them in your hub, in Claude Code, or with <code>npm i -g passalong</code>. Reading one
+        needs nothing installed at all.
+        <template v-if="docsPublished"><a href="/docs">The docs</a> cover the rest.</template>
       </p>
     </section>
 

@@ -47,6 +47,24 @@ export type Kind = (typeof KINDS)[number];
 
 export type NotifyEnv = MailEnv & { DB: D1Database };
 
+/**
+ * What a person is called wherever the product names them: the name they gave, else their handle,
+ * else the account id — which is ugly, and still a person rather than "someone".
+ *
+ * Here rather than in a module of its own because every test that reads a sentence imports this
+ * file, and a value import of a sibling `.ts` is what Node's type stripping cannot resolve.
+ */
+export function displayName(a: {
+  id: string;
+  handle?: string | null;
+  name?: string | null;
+}): string {
+  const name = (a.name || "").trim();
+  if (name) return name;
+  if (a.handle) return `@${a.handle}`;
+  return `@${a.id}`;
+}
+
 export interface Event {
   /** Account being told. Ignored when it is the actor: nobody needs telling what they just did. */
   to: string;
@@ -75,8 +93,13 @@ export interface Row {
   read_at: string;
   note: string;
   title: string;
+  /** The actor's handle. '' for an anonymous reader, and for an account that never chose one. */
   actor: string;
+  /** The actor's own name, as they typed it. Read through `displayName`, never shown raw. */
+  actor_real: string;
+  /** The team's slug, and its name. */
   team: string;
+  team_name: string;
 }
 
 /** Record one event and, if it is new, deliver it. Never throws; callers are on the write path. */
@@ -315,6 +338,41 @@ const cards = (url: string) => {
 /** How many channels one team's event will fan out to. A bound, not a policy. */
 const MAX_CHANNELS = 8;
 
+/** The service behind a webhook, as its owner would name it. */
+export function roomName(url: string): string {
+  try {
+    const host = new URL(url).hostname;
+    if (host === "chat.googleapis.com") return "Google Chat";
+    if (host.endsWith("slack.com")) return "Slack";
+    if (host === "discord.com" || host === "discordapp.com" || host.endsWith(".discord.com"))
+      return "Discord";
+  } catch {
+    // Not a URL we can read; name it generically.
+  }
+  return "The channel";
+}
+
+/**
+ * A channel's refusal, as the team's owner reads it in settings: who refused, the status in
+ * parentheses for anyone who needs it, and the next step. Never the provider's raw body — that is
+ * logged, and it is a paragraph of somebody else's JSON.
+ */
+export function refusal(room: string, status: number): string {
+  const next =
+    status === 404 || status === 410
+      ? "The webhook may have been removed — paste a new one."
+      : status === 401 || status === 403
+        ? "The webhook no longer has permission to post — paste a new one."
+        : status === 429
+          ? "It's getting too many messages. Later ones should go through."
+          : status >= 500
+            ? "It's having trouble right now. Later messages should go through."
+            : status >= 300 && status < 400
+              ? "The address points somewhere else — paste the webhook exactly as it was given to you."
+              : "It didn't accept the message. If this keeps happening, paste a new webhook.";
+  return `${room} refused the message (${status}). ${next}`;
+}
+
 export interface ChannelRow {
   id: string;
   url: string;
@@ -350,15 +408,21 @@ export async function post(
     if (!res.ok) {
       // The status alone is not a diagnosis. Chat answers a malformed card with a 400 that names
       // the offending field — "Cannot find field: r" — and throwing that away cost a day of a room
-      // being quiet with `refused with 400` as the only evidence. It is read back into the hub, so
-      // it is capped and it is the provider's own words rather than anything of ours.
+      // being quiet with `refused with 400` as the only evidence. So the provider's own words are
+      // logged in full. What is stored is read back into the hub as-is, so it is a sentence for
+      // the team's owner: who refused, the status, and what to do about it.
       const said = await res.text().catch(() => "");
-      error = said
-        ? `refused with ${res.status}: ${said.replace(/\s+/g, " ").slice(0, 160)}`
-        : `refused with ${res.status}`;
+      console.error(
+        "channel refused",
+        channel.id,
+        res.status,
+        said.replace(/\s+/g, " ").slice(0, 500),
+      );
+      error = refusal(roomName(channel.url), res.status);
     }
   } catch (err) {
-    error = (err as Error).message || "did not answer";
+    console.error("channel unreachable", channel.id, (err as Error).message);
+    error = `${roomName(channel.url)} didn't answer. Check the webhook address, or try again later.`;
   }
 
   // Written only when the state changes, so a healthy channel costs no writes at all.
@@ -418,7 +482,9 @@ export async function notifyAll(env: NotifyEnv, tos: string[], e: Omit<Event, "t
 }
 
 const FEED_SQL = `SELECT n.id, n.kind, n.guide_id, n.actor_id, n.team_id, n.at, n.times, n.read_at, n.note,
-         COALESCE(g.title, '') AS title, COALESCE(a.handle, '') AS actor, COALESCE(t.slug, '') AS team
+         COALESCE(g.title, '') AS title, COALESCE(a.handle, '') AS actor,
+         COALESCE(a.name, '') AS actor_real, COALESCE(t.slug, '') AS team,
+         COALESCE(t.name, '') AS team_name
   FROM notification n
   LEFT JOIN guide g ON g.id = n.guide_id
   LEFT JOIN account a ON a.id = n.actor_id
@@ -462,39 +528,70 @@ export async function markRead(env: NotifyEnv, account: string, ids?: number[]):
   return meta.changes ?? 0;
 }
 
-/** The single sentence a notification reads as. Every surface shows this string. */
-export function line(
-  r: Pick<Row, "kind" | "actor" | "title" | "team" | "times"> & { note?: string },
-): string {
-  const who = r.actor ? `@${r.actor}` : "someone with the link";
+export interface LineFacts {
+  kind: Kind;
+  title: string;
+  times: number;
+  note?: string;
+  /** Who did it, already a display name. When absent it is worked out from the three below. */
+  actor_name?: string;
+  actor_id?: string;
+  /** Handle. */
+  actor?: string;
+  actor_real?: string;
+  /** Team slug, and its name — the name wins. */
+  team?: string;
+  team_name?: string;
+  /**
+   * Who a guide was sent to, by name. Set only for a room: a channel is read by everyone in it, so
+   * a handoff posted there says who it went to rather than "you".
+   */
+  to?: string;
+}
+
+/**
+ * The single sentence a notification reads as. Every surface shows this string.
+ *
+ * One vocabulary, the same everywhere a person reads about a guide: sent, opened, taking, passed
+ * on, worked or didn't work, done with. A person is their display name, a team is its name, and
+ * "Someone" is kept for the one actor who has no account at all — an anonymous share-link reader.
+ */
+export function line(r: LineFacts): string {
+  const who =
+    r.actor_name ||
+    (r.actor_id || r.actor
+      ? displayName({ id: r.actor_id || "", handle: r.actor, name: r.actor_real })
+      : "Someone");
   const title = r.title ? `"${r.title}"` : "a guide";
-  const more = r.times > 1 ? ` (${r.times}×)` : "";
+  const team = r.team_name || r.team || "";
   const note = r.note ? `: ${r.note}` : "";
   switch (r.kind) {
     case "handoff":
-      return `${who} handed you ${title}${r.team ? ` in ${r.team}` : ""}`;
+      return r.to
+        ? `${who} sent ${title} to ${r.to}${team ? ` in ${team}` : ""}`
+        : `${who} sent you ${title}${team ? ` in ${team}` : ""}`;
     case "shared":
-      return `${who} shared ${title} with ${r.team || "your team"}`;
+      return `${who} shared ${title} with ${team || "your team"}`;
     case "taken":
-      return `${who} is on ${title}${note}`;
+      return `${who} is taking ${title}${note}`;
     case "declined":
       return `${who} passed on ${title}${note}`;
     case "pulled":
-      return `${who} pulled ${title}${more}`;
+      return `${who} opened ${title}${r.times > 1 ? ` ${r.times} times` : ""}`;
     case "consumed":
-      return `${who} marked ${title} consumed`;
+      return `${who} is done with ${title}`;
     case "reopened":
-      return `${who} put ${title} back on your board`;
+      return `${who} put ${title} back on your list`;
     case "verified":
-      return `${who} verified ${title}${note}`;
+      return `${who} said ${title} worked${note}`;
     case "failed":
-      return `${who} says ${title} does not work${note}`;
+      return `${who} said ${title} didn't work${note}`;
     case "joined":
-      return `${who} joined ${r.team || "your team"}`;
+      return `${who} joined ${team || "your team"}`;
     case "task_claimed":
       return `${who}'s agent took the task ${title}`;
     case "task_finished":
-      return `${who}'s agent finished ${title} — it is waiting for your review`;
+      return `${who}'s agent finished ${title}, and it is waiting for your review`;
     case "task_approved":
       return `${who} approved ${title}`;
     case "task_rejected":
@@ -502,16 +599,22 @@ export function line(
     case "task_released":
       return `${who} took ${title} back from your agent`;
     default:
-      return `${who} did something to ${title}`;
+      return `${who} did something with ${title}`;
   }
 }
+
+/** The actor as a person reads them. '' only for an anonymous share-link reader. */
+const actorName = (r: Pick<Row, "actor_id" | "actor" | "actor_real">) =>
+  r.actor_id ? displayName({ id: r.actor_id, handle: r.actor, name: r.actor_real }) : "";
 
 export const summary = (r: Row) => ({
   id: r.id,
   kind: r.kind,
   guide: r.guide_id,
   actor: r.actor,
+  actor_name: actorName(r),
   team: r.team,
+  team_name: r.team_name || "",
   title: r.title,
   at: r.at,
   times: r.times,

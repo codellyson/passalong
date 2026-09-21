@@ -89,6 +89,8 @@ import {
 } from "./email.js";
 import {
   AREAS,
+  clipFollowUp,
+  FOLLOW_UPS_MAX,
   type Meta,
   parseMeta,
   SETTABLE,
@@ -100,11 +102,13 @@ import {
   slug,
   tag,
   tagList,
+  unreachableImages,
 } from "./guide.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
 import {
   announce,
+  displayName,
   feed,
   line,
   markRead,
@@ -117,19 +121,44 @@ import {
 } from "./notify.js";
 import {
   authorizationServerMetadata,
+  clientRefusal,
+  DYNAMIC_TTL_MS,
   errorRedirect,
+  invalidClient,
   MCP_SCOPE,
-  type OAuthClientRow,
+  pickRedirect,
   pkceMatches,
   protectedResourceMetadata,
-  redirectAllowed,
+  redirectHost,
+  registrationResponse,
   timingSafeEqual,
+  validateRegistration,
 } from "./oauth.js";
+import {
+  clearRefusal,
+  disconnect,
+  findClient,
+  listConnectors,
+  recordApproval,
+  recordRefusal,
+  registrationCutoff,
+  saveRegistration,
+  sweepRegistrations,
+  tokenClient,
+} from "./oauth-clients.js";
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
 import { acceptsNewWork, type Ceiling, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
 import { SHOT_TYPES, shotKey } from "./shots.js";
+import {
+  isUploadToken,
+  publicUpload,
+  sniffImage,
+  UPLOAD_OPEN_MAX,
+  UPLOAD_PREFIX,
+  UPLOAD_TTL_MS,
+} from "./uploads.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -141,6 +170,8 @@ type Env = MailEnv &
         every other route exactly as before. */
     SHOTS?: R2Bucket;
     ACCOUNT_LIMIT?: RateLimiter;
+    /** Per-IP throttle on OAuth dynamic client registration, the other unauthenticated write. */
+    OAUTH_REGISTER_LIMIT?: RateLimiter;
     /** "0" closes the free ceiling to new accounts. Unset means it is still open — see quota.ts. */
     FREE_SIGNUP?: string;
     /** Billing. Optional, like every other integration here: without them a deployment runs
@@ -189,8 +220,19 @@ function count(
   }
 }
 
+/**
+ * A refusal, as `{ message }`. The hub prints `message` verbatim, so every one a person can reach
+ * says what happened in their terms and what to do next: names rather than slugs or ids, and no
+ * field names, endpoints or HTTP verbs. Refusals only an agent or the CLI can reach may carry more
+ * detail, but are still sentences.
+ */
 const err = (c: { json: (o: unknown, s: number) => Response }, status: number, message: string) =>
   c.json({ message }, status);
+
+const GUIDE_GONE =
+  "This guide isn't available any more. It may have been deleted or moved to a team you're not in.";
+const REPORT_GONE = "This report doesn't exist or was deleted.";
+const NOT_AN_EMAIL = "That doesn't look like an email address. Check it and try again.";
 
 // Share links are built from the request origin. Under `wrangler dev` a custom-domain route makes
 // requests look like they came from production, so local dev overrides it via .dev.vars.
@@ -251,10 +293,12 @@ interface ReportRow {
 }
 interface VerdictRow {
   guide_id: string;
+  account_id: string;
   ok: number;
   note: string;
   at: string;
   handle: string;
+  name: string;
 }
 interface AckRow {
   guide_id: string;
@@ -263,6 +307,7 @@ interface AckRow {
   note: string;
   at: string;
   handle: string;
+  name: string;
 }
 interface PullRow {
   guide_id: string;
@@ -300,16 +345,55 @@ async function teamBySlug(c: Ctx, slug: string): Promise<(TeamRow & { role: stri
     .first<TeamRow & { role: string }>();
 }
 
+/**
+ * Who can fix a team's plan, by name, for the refusal that needs them. Looked up only on the way to
+ * refusing, so an invite that works costs nothing extra.
+ */
+async function ownerName(c: { env: Env }, teamId: string): Promise<string> {
+  const owner = await db(c)
+    .prepare(
+      `SELECT a.id, a.handle, a.name FROM membership m JOIN account a ON a.id = m.account_id
+       WHERE m.team_id = ? AND m.role = 'owner' ORDER BY m.joined LIMIT 1`,
+    )
+    .bind(teamId)
+    .first<{ id: string; handle: string; name: string }>();
+  return owner ? `the team owner, ${displayName(owner)},` : "the team owner";
+}
+
+/**
+ * D1 refuses a statement binding more than 100 parameters ("too many SQL variables"), and a page of
+ * guides is up to 200 rows, so every `IN (?, …)` over a page runs in slices and the results are
+ * joined. `extra` is how many parameters the statement binds besides the ids. A LIMIT in the
+ * statement applies per slice, which only ever returns more, never less.
+ */
+const D1_MAX_PARAMS = 100;
+async function inSlices<T>(
+  ids: string[],
+  extra: number,
+  run: (slice: string[], marks: string) => Promise<T[]>,
+): Promise<T[]> {
+  const size = D1_MAX_PARAMS - extra;
+  const slices: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) slices.push(ids.slice(i, i + size));
+  const results = await Promise.all(slices.map((s) => run(s, s.map(() => "?").join(","))));
+  return results.flat();
+}
+
 async function accounts(c: { env: Env }, ids: string[]): Promise<Map<string, AccountRow>> {
   const map = new Map<string, AccountRow>();
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return map;
-  const { results } = await db(c)
-    .prepare(
-      `SELECT id, handle, name, email FROM account WHERE id IN (${unique.map(() => "?").join(",")})`,
-    )
-    .bind(...unique)
-    .all<AccountRow>();
+  const results = await inSlices(
+    unique,
+    0,
+    async (slice, marks) =>
+      (
+        await db(c)
+          .prepare(`SELECT id, handle, name, email FROM account WHERE id IN (${marks})`)
+          .bind(...slice)
+          .all<AccountRow>()
+      ).results,
+  );
   for (const a of results) map.set(a.id, a);
   return map;
 }
@@ -318,15 +402,22 @@ async function accounts(c: { env: Env }, ids: string[]): Promise<Map<string, Acc
 async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, PullRow[]>> {
   const map = new Map<string, PullRow[]>();
   if (!rows.length) return map;
-  const { results } = await db(c)
-    .prepare(
-      `SELECT p.guide_id, p.account_id, p.via, p.at, COALESCE(a.handle, '') AS handle
-       FROM pull p LEFT JOIN account a ON a.id = p.account_id
-       WHERE p.guide_id IN (${rows.map(() => "?").join(",")})
-       ORDER BY p.at DESC LIMIT 500`,
-    )
-    .bind(...rows.map((r) => r.id))
-    .all<PullRow>();
+  const results = await inSlices(
+    rows.map((r) => r.id),
+    0,
+    async (slice, marks) =>
+      (
+        await db(c)
+          .prepare(
+            `SELECT p.guide_id, p.account_id, p.via, p.at, COALESCE(a.handle, '') AS handle
+             FROM pull p LEFT JOIN account a ON a.id = p.account_id
+             WHERE p.guide_id IN (${marks})
+             ORDER BY p.at DESC LIMIT 500`,
+          )
+          .bind(...slice)
+          .all<PullRow>()
+      ).results,
+  );
   const owner = new Map(rows.map((r) => [r.id, r.account_id]));
   for (const p of results) {
     if (p.account_id && p.account_id === owner.get(p.guide_id)) continue;
@@ -341,15 +432,23 @@ async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<strin
 async function verdicts(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, VerdictRow[]>> {
   const map = new Map<string, VerdictRow[]>();
   if (!rows.length) return map;
-  const { results } = await db(c)
-    .prepare(
-      `SELECT v.guide_id, v.ok, v.note, v.at, COALESCE(a.handle, '') AS handle
-       FROM verdict v LEFT JOIN account a ON a.id = v.account_id
-       WHERE v.guide_id IN (${rows.map(() => "?").join(",")})
-       ORDER BY v.at DESC LIMIT 200`,
-    )
-    .bind(...rows.map((r) => r.id))
-    .all<VerdictRow>();
+  const results = await inSlices(
+    rows.map((r) => r.id),
+    0,
+    async (slice, marks) =>
+      (
+        await db(c)
+          .prepare(
+            `SELECT v.guide_id, v.account_id, v.ok, v.note, v.at,
+                    COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
+             FROM verdict v LEFT JOIN account a ON a.id = v.account_id
+             WHERE v.guide_id IN (${marks})
+             ORDER BY v.at DESC LIMIT 200`,
+          )
+          .bind(...slice)
+          .all<VerdictRow>()
+      ).results,
+  );
   for (const v of results) map.set(v.guide_id, [...(map.get(v.guide_id) || []), v]);
   return map;
 }
@@ -363,18 +462,40 @@ async function verdicts(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, 
 async function acks(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, AckRow[]>> {
   const map = new Map<string, AckRow[]>();
   if (!rows.length) return map;
-  const { results } = await db(c)
-    .prepare(
-      `SELECT k.guide_id, k.account_id, k.taken, k.note, k.at, COALESCE(a.handle, '') AS handle
-       FROM ack k LEFT JOIN account a ON a.id = k.account_id
-       WHERE k.guide_id IN (${rows.map(() => "?").join(",")})
-       ORDER BY k.at DESC LIMIT 200`,
-    )
-    .bind(...rows.map((r) => r.id))
-    .all<AckRow>();
+  const results = await inSlices(
+    rows.map((r) => r.id),
+    0,
+    async (slice, marks) =>
+      (
+        await db(c)
+          .prepare(
+            `SELECT k.guide_id, k.account_id, k.taken, k.note, k.at,
+                    COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
+             FROM ack k LEFT JOIN account a ON a.id = k.account_id
+             WHERE k.guide_id IN (${marks})
+             ORDER BY k.at DESC LIMIT 200`,
+          )
+          .bind(...slice)
+          .all<AckRow>()
+      ).results,
+  );
   for (const k of results) map.set(k.guide_id, [...(map.get(k.guide_id) || []), k]);
   return map;
 }
+
+/**
+ * A person by id, as a sentence names them — see `displayName`. '' when there is no id at all, so
+ * an unaddressed guide reads as unaddressed. An id whose account row is gone still names somebody.
+ */
+function nameOf(people: Map<string, AccountRow>, id: string): string {
+  if (!id) return "";
+  const a = people.get(id);
+  return displayName({ id, handle: a?.handle, name: a?.name });
+}
+
+/** A verdict or an ack, which carry their author's handle and name joined onto the row. */
+const personName = (r: { account_id: string; handle: string; name: string }) =>
+  r.account_id ? displayName({ id: r.account_id, handle: r.handle, name: r.name }) : "someone";
 
 async function summaries(c: Ctx, rows: GuideRow[]) {
   const me = c.get("account");
@@ -390,27 +511,69 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   // One lookup for the page, not one per row. A guide handed to a group has to say which one, or
   // its row reads as a team-wide share and nobody treats it as theirs.
   const groupIds = [...new Set(rows.map((r) => r.to_group_id).filter(Boolean))];
-  const groups = new Map<string, string>();
-  if (groupIds.length) {
-    const { results } = await c.env.DB.prepare(
-      `SELECT id, slug FROM team_group WHERE id IN (${groupIds.map(() => "?").join(",")})`,
-    )
-      .bind(...groupIds)
-      .all<{ id: string; slug: string }>();
-    for (const g of results) groups.set(g.id, g.slug);
-  }
+  const groups = new Map<string, { slug: string; name: string }>();
+  const groupRows = await inSlices(
+    groupIds,
+    0,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(`SELECT id, slug, name FROM team_group WHERE id IN (${marks})`)
+          .bind(...slice)
+          .all<{ id: string; slug: string; name: string }>()
+      ).results,
+  );
+  for (const g of groupRows) groups.set(g.id, { slug: g.slug, name: g.name.trim() || g.slug });
   // A row that belongs to a report says so by name, not by id: "part of Pre-release sweep" is a
   // link someone follows, and a bare eight characters is not.
   const reportIds = [...new Set(rows.map((r) => r.report_id).filter(Boolean))];
   const reportTitles = new Map<string, string>();
-  if (reportIds.length) {
-    const { results } = await c.env.DB.prepare(
-      `SELECT id, title FROM report WHERE id IN (${reportIds.map(() => "?").join(",")})`,
-    )
-      .bind(...reportIds)
-      .all<{ id: string; title: string }>();
-    for (const row of results) reportTitles.set(row.id, row.title);
-  }
+  const reportRows = await inSlices(
+    reportIds,
+    0,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(`SELECT id, title FROM report WHERE id IN (${marks})`)
+          .bind(...slice)
+          .all<{ id: string; title: string }>()
+      ).results,
+  );
+  for (const row of reportRows) reportTitles.set(row.id, row.title);
+  // A guide that came out of another says so by name, the way a report row does: "follows
+  // Migrating the worker" is a link somebody follows, and eight characters are not. Both lookups
+  // are scoped to what this caller can read. A follow-up published into a team you are in must not
+  // hand you the title of a parent from a team you are not in, and a count of children you cannot
+  // open is a number about things you are not allowed to see.
+  const readable =
+    "(account_id = ? OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?))";
+  const parentIds = [...new Set(rows.map((r) => r.parent_id).filter(Boolean))];
+  const parentTitles = new Map<string, string>();
+  const parentRows = await inSlices(
+    parentIds,
+    2,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(`SELECT id, title FROM guide WHERE id IN (${marks}) AND ${readable}`)
+          .bind(...slice, me, me)
+          .all<{ id: string; title: string }>()
+      ).results,
+  );
+  for (const row of parentRows) parentTitles.set(row.id, row.title);
+  const childCounts = new Map<string, number>();
+  const childRows = await inSlices(
+    rows.map((r) => r.id),
+    2,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(
+          `SELECT parent_id, COUNT(*) AS n FROM guide
+            WHERE parent_id IN (${marks}) AND status <> 'draft' AND ${readable}
+            GROUP BY parent_id`,
+        )
+          .bind(...slice, me, me)
+          .all<{ parent_id: string; n: number }>()
+      ).results,
+  );
+  for (const row of childRows) childCounts.set(row.parent_id, Number(row.n));
   return rows.map((r) => {
     const heard = said.get(r.id) || [];
     // The latest word, plus whether anyone's standing verdict is still negative.
@@ -432,29 +595,44 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       url: shareUrl(base, r),
       mine: r.account_id === me,
       from: people.get(r.account_id)?.handle || "",
+      from_name: nameOf(people, r.account_id),
       team: teams.get(r.team_id)?.slug || "",
+      team_name: teams.get(r.team_id)?.name || "",
       to: people.get(r.to_account_id)?.handle || "",
+      to_name: nameOf(people, r.to_account_id),
       // The group it was handed to, by name. A deleted group keeps its id on the row rather than
       // rewriting history to say it went nowhere, so this can be empty while the id is not.
-      to_group: groups.get(r.to_group_id) || "",
+      to_group: groups.get(r.to_group_id)?.slug || "",
+      to_group_name: groups.get(r.to_group_id)?.name || "",
       for_me: r.to_account_id === me,
       report: r.report_id || "",
       report_title: reportTitles.get(r.report_id) || "",
+      parent: r.parent_id || "",
+      parent_title: parentTitles.get(r.parent_id) || "",
+      children: childCounts.get(r.id) || 0,
       area: r.area || "",
       severity: r.severity || "",
       // Empty means transfer, which is what every guide written before bug reports existed is.
       kind: r.kind || "transfer",
       verdict: latest
-        ? { ok: Boolean(latest.ok), by: latest.handle, note: latest.note, at: latest.at }
+        ? {
+            ok: Boolean(latest.ok),
+            by: latest.handle,
+            by_name: personName(latest),
+            note: latest.note,
+            at: latest.at,
+          }
         : null,
       failing: heard.some((v) => !v.ok),
       // The first word back, before any work: who said they are on it, and who passed. A decline
       // is carried in full — the reason is the whole reason to say no out loud, exactly as it is
       // for a failing verdict.
       taken_by: answers.filter((k) => k.taken).map((k) => k.handle || "someone"),
+      // Parallel to `taken_by`, index for index: the same people, as a person reads them.
+      taken_by_names: answers.filter((k) => k.taken).map(personName),
       declined: answers
         .filter((k) => !k.taken)
-        .map((k) => ({ by: k.handle, note: k.note, at: k.at })),
+        .map((k) => ({ by: k.handle, by_name: personName(k), note: k.note, at: k.at })),
       // Your own standing answer, so the row can offer the other one rather than asking again.
       my_ack: own ? { taken: Boolean(own.taken), note: own.note, at: own.at } : null,
       pulled_by: (pulls.get(r.id) || []).map((p) => ({
@@ -480,6 +658,9 @@ const PUBLIC = new Set([
   // RFC 7009: a client handing a credential back must never be refused for not having one. Being
   // told no here would leave the token live, which is the opposite of what was asked for.
   "POST /v1/oauth/revoke",
+  // RFC 7591: a client registers before anyone has a credential to give it. What it registers
+  // grants nothing until a signed-in person approves it; see the route.
+  "POST /v1/oauth/register",
   "POST /v1/accounts",
   "POST /v1/auth/signup",
   "POST /v1/auth/login",
@@ -564,6 +745,7 @@ app.use("/v1/*", async (c, next) => {
   }
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
   if (publicShot(c.req.method, c.req.path)) return next();
+  if (publicUpload(c.req.method, c.req.path)) return next();
   if (publicWebhook(c.req.method, c.req.path)) return next();
 
   const auth = c.req.header("authorization") || "";
@@ -604,7 +786,11 @@ app.use("/v1/*", async (c, next) => {
     if (!row) {
       return c.req.path === "/v1/mcp"
         ? unauthorizedResource(origin(c), "invalid_token", "token not recognized, or revoked")
-        : err(c, 401, "token not recognized, or revoked — mint a new one in your hub");
+        : err(
+            c,
+            401,
+            "That token isn't recognized, or it was revoked. Make a new one in your hub.",
+          );
     }
     c.set("account", row.account_id);
     // Best effort, off the response path: knowing a token is unused is what makes it safe to
@@ -624,7 +810,7 @@ app.use("/v1/*", async (c, next) => {
     )
       .bind(await sha256(sid), now())
       .first<{ account_id: string }>();
-    if (!row) return err(c, 401, "session expired — sign in again");
+    if (!row) return err(c, 401, "Your session has ended. Sign in again to carry on.");
     c.set("account", row.account_id);
     return next();
   }
@@ -634,7 +820,7 @@ app.use("/v1/*", async (c, next) => {
   if (c.req.path === "/v1/mcp") {
     return unauthorizedResource(origin(c), "invalid_request", "authorization required");
   }
-  return err(c, 401, "not signed in — sign in at /hub, or send a token from your hub");
+  return err(c, 401, "You're not signed in. Sign in to carry on, or use a token from your hub.");
 });
 
 async function startSession(c: Ctx, account: string): Promise<string> {
@@ -651,7 +837,7 @@ app.post("/v1/accounts", async (c) => {
     const ip = c.req.header("cf-connecting-ip") || "unknown";
     const { success } = await c.env.ACCOUNT_LIMIT.limit({ key: ip });
     if (!success)
-      return err(c, 429, "too many accounts created from this address; try again in a minute");
+      return err(c, 429, "Too many accounts were made from this address. Try again in a minute.");
   }
   const id = rid(10);
   const token = `pa_${rand(32)}`;
@@ -678,14 +864,15 @@ const cred = async (c: { req: { json: () => Promise<unknown> } }) => {
 };
 
 /** Same shape whatever went wrong: which half of a login failed is not the caller's business. */
-const BAD_LOGIN = "email or password is wrong";
+const BAD_LOGIN =
+  "That email and password don't match. Try again, or use Forgot your password? to set a new one.";
 
 /** Every place a password is set runs the same two checks: long enough, and not already public. */
 async function passwordRefusal(password: string): Promise<string | null> {
   const problem = passwordProblem(password);
   if (problem) return problem;
   if (await isBreached(password))
-    return "that password appears in a public breach list — please pick another";
+    return "That password has shown up in a public list of leaked passwords. Choose a different one.";
   return null;
 }
 
@@ -693,16 +880,21 @@ app.post("/v1/auth/signup", async (c) => {
   if (c.env.ACCOUNT_LIMIT) {
     const ip = c.req.header("cf-connecting-ip") || "unknown";
     const { success } = await c.env.ACCOUNT_LIMIT.limit({ key: ip });
-    if (!success) return err(c, 429, "too many sign-ups from this address; try again in a minute");
+    if (!success) return err(c, 429, "Too many sign-ups from this address. Try again in a minute.");
   }
   const { email, password } = await cred(c);
-  if (!EMAIL_RE.test(email)) return err(c, 400, "that does not look like an email address");
+  if (!EMAIL_RE.test(email)) return err(c, 400, NOT_AN_EMAIL);
   const refusal = await passwordRefusal(password);
   if (refusal) return err(c, 400, refusal);
   const taken = await c.env.DB.prepare("SELECT id FROM account WHERE email = ?")
     .bind(email)
     .first();
-  if (taken) return err(c, 409, "an account already uses that email — sign in instead");
+  if (taken)
+    return err(
+      c,
+      409,
+      "There's already an account with that email. Sign in with it instead, or use a different email.",
+    );
 
   const id = rid(10);
   await c.env.DB.prepare(
@@ -751,12 +943,18 @@ app.post("/v1/auth/password", async (c) => {
   const refusal = await passwordRefusal(password);
   if (refusal) return err(c, 400, refusal);
   const address = email || me?.email || "";
-  if (!EMAIL_RE.test(address)) return err(c, 400, "an email is needed to sign in with a password");
+  if (!EMAIL_RE.test(address))
+    return err(c, 400, "Add an email address so you can sign in with your password.");
   if (address !== me?.email) {
     const taken = await c.env.DB.prepare("SELECT id FROM account WHERE email = ? AND id <> ?")
       .bind(address, account)
       .first();
-    if (taken) return err(c, 409, "an account already uses that email");
+    if (taken)
+      return err(
+        c,
+        409,
+        "Another account already uses that email. Sign in with that email instead, or use a different one.",
+      );
   }
   await c.env.DB.prepare("UPDATE account SET email = ?, password_hash = ? WHERE id = ?")
     .bind(address, await hashPassword(password), account)
@@ -799,7 +997,12 @@ app.post("/v1/auth/reset", async (c) => {
   )
     .bind(hash, now())
     .first<{ account_id: string }>();
-  if (!row) return err(c, 400, "that reset link has expired or already been used");
+  if (!row)
+    return err(
+      c,
+      400,
+      "That reset link has expired or was already used. Ask for a new one from the sign-in page.",
+    );
   await c.env.DB.batch([
     c.env.DB.prepare("UPDATE account SET password_hash = ? WHERE id = ?").bind(
       await hashPassword(b.password as string),
@@ -846,7 +1049,7 @@ app.delete("/v1/tokens/:id", async (c) => {
   )
     .bind(now(), c.req.param("id"), c.get("account"))
     .run();
-  if (!meta.changes) return err(c, 404, "no such token");
+  if (!meta.changes) return err(c, 404, "That token doesn't exist or was already revoked.");
   return c.json({ id: c.req.param("id"), revoked: true });
 });
 
@@ -873,6 +1076,7 @@ app.get("/v1/me", async (c) => {
     account,
     handle: me?.handle || "",
     name: me?.name || "",
+    display: displayName({ id: account, handle: me?.handle, name: me?.name }),
     email: me?.email || "",
     teams,
     // What is counted, not what exists: an archived guide takes up no room, so a warning drawn
@@ -938,11 +1142,16 @@ app.patch("/v1/me", async (c) => {
   const binds: unknown[] = [];
   if (patch.handle !== undefined) {
     const h = patch.handle.trim().toLowerCase().replace(/^@/, "");
-    if (!HANDLE_RE.test(h)) return err(c, 400, "handle: 2–31 chars, a–z 0–9 and dashes");
+    if (!HANDLE_RE.test(h))
+      return err(
+        c,
+        400,
+        "Choose 2 to 31 letters, numbers or dashes, starting with a letter or number.",
+      );
     const taken = await c.env.DB.prepare("SELECT id FROM account WHERE handle = ? AND id <> ?")
       .bind(h, account)
       .first();
-    if (taken) return err(c, 409, `handle @${h} is taken`);
+    if (taken) return err(c, 409, `@${h} is already taken. Try another.`);
     sets.push("handle = ?");
     binds.push(h);
   }
@@ -952,11 +1161,12 @@ app.patch("/v1/me", async (c) => {
   }
   if (patch.email !== undefined) {
     const e = patch.email.trim().toLowerCase();
-    if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return err(c, 400, "email does not look valid");
+    if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return err(c, 400, NOT_AN_EMAIL);
     sets.push("email = ?");
     binds.push(e);
   }
-  if (!sets.length) return err(c, 400, "nothing to update: send handle, name, or email");
+  if (!sets.length)
+    return err(c, 400, "There was nothing to save. Change your handle, name or email first.");
   await c.env.DB.prepare(`UPDATE account SET ${sets.join(", ")} WHERE id = ?`)
     .bind(...binds, account)
     .run();
@@ -980,9 +1190,9 @@ app.post("/v1/teams", async (c) => {
   const account = c.get("account");
   const { name } = (await c.req.json().catch(() => ({}))) as { name?: string };
   const clean = (name || "").trim().slice(0, 60);
-  if (clean.length < 2) return err(c, 400, "team needs a name");
+  if (clean.length < 2) return err(c, 400, "Give the team a name at least 2 characters long.");
   let slug = slugify(clean);
-  if (slug.length < 2) return err(c, 400, "team name needs some letters or digits");
+  if (slug.length < 2) return err(c, 400, "A team name needs some letters or numbers in it.");
   for (let i = 2; i < 50; i++) {
     const taken = await c.env.DB.prepare("SELECT id FROM team WHERE slug = ?").bind(slug).first();
     if (!taken) break;
@@ -1009,13 +1219,13 @@ app.get("/v1/teams", async (c) => {
 
 app.get("/v1/teams/:slug", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
   const { results: members } = await c.env.DB.prepare(
-    `SELECT a.handle, a.name, m.role, m.joined FROM membership m JOIN account a ON a.id = m.account_id
+    `SELECT a.id, a.handle, a.name, m.role, m.joined FROM membership m JOIN account a ON a.id = m.account_id
      WHERE m.team_id = ? ORDER BY m.joined`,
   )
     .bind(team.id)
-    .all<{ handle: string; name: string; role: string; joined: string }>();
+    .all<{ id: string; handle: string; name: string; role: string; joined: string }>();
   const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM guide WHERE team_id = ?")
     .bind(team.id)
     .first<{ n: number }>();
@@ -1027,7 +1237,8 @@ app.get("/v1/teams/:slug", async (c) => {
     name: team.name,
     role: team.role,
     created: team.created,
-    members,
+    // `display` is what a sentence calls them; the id is already what it falls back to.
+    members: members.map((m) => ({ ...m, display: displayName(m) })),
     guides: n?.n ?? 0,
     channels: chCount?.n ?? 0,
     plan: team.plan,
@@ -1048,7 +1259,7 @@ app.get("/v1/teams/:slug", async (c) => {
  */
 app.get("/v1/teams/:slug/channels", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
   const { results } = await c.env.DB.prepare(
     `SELECT id, name, created, failures, last_error, substr(url, 1, 40) AS hint
      FROM team_channel WHERE team_id = ? ORDER BY created`,
@@ -1074,20 +1285,25 @@ app.get("/v1/teams/:slug/channels", async (c) => {
 
 app.post("/v1/teams/:slug/channels", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's channels");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change its channels. Ask them to do it.");
   const body = await c.req
     .json<{ name?: string; url?: string }>()
     .catch(() => ({}) as { name?: string; url?: string });
 
   const url = String(body.url ?? "").trim();
   if (!webhookAllowed(url)) {
-    return err(c, 400, "the channel URL must be https, with no credentials in it");
+    return err(
+      c,
+      400,
+      "Paste the full webhook address from Slack, Discord or Google Chat. It should start with https://.",
+    );
   }
   const { n } = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM team_channel WHERE team_id = ?")
     .bind(team.id)
     .first<{ n: number }>()) ?? { n: 0 };
-  if (n >= 8) return err(c, 400, "a team keeps up to 8 channels; remove one first");
+  if (n >= 8) return err(c, 400, "A team can have up to 8 channels. Remove one to add another.");
 
   const id = rid(12);
   await c.env.DB.prepare(
@@ -1100,30 +1316,33 @@ app.post("/v1/teams/:slug/channels", async (c) => {
 
 app.delete("/v1/teams/:slug/channels/:id", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's channels");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change its channels. Ask them to do it.");
   const { meta } = await c.env.DB.prepare("DELETE FROM team_channel WHERE id = ? AND team_id = ?")
     .bind(c.req.param("id"), team.id)
     .run();
-  if (!meta.changes) return err(c, 404, "no such channel");
+  if (!meta.changes)
+    return err(c, 404, "That channel has already been removed. Refresh to see the current list.");
   return c.json({ id: c.req.param("id"), removed: true });
 });
 
 /** Post a line to one channel so someone can watch it arrive. Owners only. */
 app.post("/v1/teams/:slug/channels/:id/test", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only an owner can test the team's channels");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner") return err(c, 403, "Only the team's owner can test its channels.");
   const channel = await c.env.DB.prepare(
     "SELECT id, url, failures FROM team_channel WHERE id = ? AND team_id = ?",
   )
     .bind(c.req.param("id"), team.id)
     .first<{ id: string; url: string; failures: number }>();
-  if (!channel) return err(c, 404, "no such channel");
+  if (!channel)
+    return err(c, 404, "That channel has already been removed. Refresh to see the current list.");
   const result = await post(
     c.env,
     channel,
-    `Passalong is connected to ${team.slug}. Verdicts and handoffs will arrive here.`,
+    `Passalong is connected to ${team.name}. You'll see guides being sent and answered here.`,
   );
   // The channel's own answer, because "it did not arrive" is otherwise unattributable.
   return c.json({ delivered: result.ok, status: result.status, error: result.error });
@@ -1138,7 +1357,7 @@ app.post("/v1/teams/:slug/channels/:id/test", async (c) => {
  */
 app.get("/v1/teams/:slug/groups", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
   const { results } = await c.env.DB.prepare(
     `SELECT g.id, g.slug, g.name, g.created, COALESCE(a.handle, '') AS handle
      FROM team_group g
@@ -1169,26 +1388,32 @@ app.get("/v1/teams/:slug/groups", async (c) => {
 
 app.post("/v1/teams/:slug/groups", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's groups");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change its groups. Ask them to do it.");
   const body = await c.req
     .json<{ slug?: string; name?: string }>()
     .catch(() => ({}) as { slug?: string; name?: string });
   // The same normalisation a tag gets, because this is written by hand in frontmatter and two
   // spellings of one group is two addresses that look like one.
   const wanted = tag(body.slug ?? "");
-  if (!wanted) return err(c, 400, "a group needs a name: letters, digits and hyphens");
+  if (!wanted) return err(c, 400, "Give the group a name using letters, numbers and dashes.");
   const { n } = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM team_group WHERE team_id = ?")
     .bind(team.id)
     .first<{ n: number }>()) ?? { n: 0 };
-  if (n >= 20) return err(c, 400, "a team keeps up to 20 groups; remove one first");
+  if (n >= 20) return err(c, 400, "A team can have up to 20 groups. Remove one to add another.");
   const id = rid(12);
   const made = await c.env.DB.prepare(
     "INSERT INTO team_group (id, team_id, slug, name, created) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
   )
     .bind(id, team.id, wanted, String(body.name || "").slice(0, 60), now())
     .run();
-  if (!made.meta.changes) return err(c, 409, `${team.slug} already has a group called #${wanted}`);
+  if (!made.meta.changes)
+    return err(
+      c,
+      409,
+      `${team.name} already has a group called #${wanted}. Choose a different name.`,
+    );
   return c.json({ group: { id, slug: wanted, name: body.name || "", members: [] } }, 201);
 });
 
@@ -1200,12 +1425,13 @@ app.post("/v1/teams/:slug/groups", async (c) => {
  */
 app.put("/v1/teams/:slug/groups/:id/members", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's groups");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change its groups. Ask them to do it.");
   const group = await c.env.DB.prepare("SELECT id FROM team_group WHERE id = ? AND team_id = ?")
     .bind(c.req.param("id"), team.id)
     .first<{ id: string }>();
-  if (!group) return err(c, 404, "no such group");
+  if (!group) return err(c, 404, "That group has been removed. Refresh to see the current groups.");
   const body = await c.req
     .json<{ handles?: string[] }>()
     .catch(() => ({}) as { handles?: string[] });
@@ -1226,7 +1452,12 @@ app.put("/v1/teams/:slug/groups/:id/members", async (c) => {
     : [];
   const missing = handles.filter((h) => !found.some((f) => f.handle === h));
   if (missing.length)
-    return err(c, 400, `not in ${team.slug}: ${missing.map((h) => `@${h}`).join(", ")}`);
+    return err(
+      c,
+      400,
+      `${missing.map((h) => `@${h}`).join(", ")} ${missing.length === 1 ? "isn't" : "aren't"} ` +
+        `in ${team.name}. Invite them to the team first.`,
+    );
 
   const writes = [c.env.DB.prepare("DELETE FROM group_member WHERE group_id = ?").bind(group.id)];
   for (const f of found) {
@@ -1243,8 +1474,9 @@ app.put("/v1/teams/:slug/groups/:id/members", async (c) => {
 
 app.delete("/v1/teams/:slug/groups/:id", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only an owner can change the team's groups");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change its groups. Ask them to do it.");
   // Guides already handed to it keep the id: the row says who it went to, and rewriting history
   // to say it went to nobody is a worse answer than naming a group that no longer exists.
   await c.env.DB.prepare("DELETE FROM team_group WHERE id = ? AND team_id = ?")
@@ -1256,10 +1488,10 @@ app.delete("/v1/teams/:slug/groups/:id", async (c) => {
 app.post("/v1/teams/:slug/invites", async (c) => {
   const account = c.get("account");
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
   const { email } = (await c.req.json().catch(() => ({}))) as { email?: string };
   const to = (email || "").trim().toLowerCase();
-  if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return err(c, 400, "email does not look valid");
+  if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return err(c, 400, NOT_AN_EMAIL);
   const code = rid(12);
   await c.env.DB.prepare(
     "INSERT INTO invite (code, team_id, email, created_by, created) VALUES (?, ?, ?, ?, ?)",
@@ -1273,7 +1505,7 @@ app.post("/v1/teams/:slug/invites", async (c) => {
     mailed = await sendInvite(c.env, {
       to,
       team: team.name,
-      by: me?.name || (me?.handle ? `@${me.handle}` : "a teammate"),
+      by: displayName({ id: account, handle: me?.handle, name: me?.name }),
       url,
     });
   }
@@ -1294,7 +1526,8 @@ app.post("/v1/invites/:code/accept", async (c) => {
       used_by: string;
       created_by: string;
     }>();
-  if (!inv) return err(c, 404, "invite not found");
+  if (!inv)
+    return err(c, 404, "This invite doesn't work any more. Ask whoever sent it for a new link.");
   const already = await c.env.DB.prepare(
     "SELECT role FROM membership WHERE team_id = ? AND account_id = ?",
   )
@@ -1315,15 +1548,15 @@ app.post("/v1/invites/:code/accept", async (c) => {
       return err(
         c,
         402,
-        `${inv.slug} is read-only: its subscription lapsed, so it is not taking new members. ` +
-          "Everything already in it can still be read.",
+        `${inv.name}'s plan has lapsed, so it isn't taking new members right now. ` +
+          `Ask ${await ownerName(c, inv.team_id)} to renew it, then open this invite again.`,
       );
     if (room && seatsFull(room.plan, room.seats, room.members))
       return err(
         c,
         402,
-        `${inv.slug} has filled all ${room.seats} of its seats. Someone has to leave, or the team ` +
-          "needs another seat, before this invite can be accepted.",
+        `${inv.name} is using all ${room.seats} of its seats. ` +
+          `Ask ${await ownerName(c, inv.team_id)} to add a seat, then open this invite again.`,
       );
     await c.env.DB.batch([
       c.env.DB.prepare(
@@ -1418,34 +1651,114 @@ async function dropShots(c: Ctx, guide: string) {
 app.post("/v1/shots", async (c) => {
   const account = c.get("account");
   const bucket = c.env.SHOTS;
-  if (!bucket) return err(c, 501, "this deployment has no screenshot storage configured");
+  if (!bucket) return err(c, 501, "Screenshots can't be uploaded here right now.");
 
   const type = (c.req.header("content-type") || "").split(";")[0]?.trim() || "";
   const ext = SHOT_TYPES[type];
-  if (!ext) return err(c, 415, `screenshots must be ${Object.keys(SHOT_TYPES).join(", ")}`);
+  if (!ext) return err(c, 415, "That file isn't an image. Use a PNG, JPEG, WebP or GIF.");
 
   const body = await c.req.arrayBuffer();
-  if (!body.byteLength) return err(c, 400, "empty upload");
-  if (body.byteLength > SHOT_MAX) return err(c, 413, "screenshots are capped at 5MB");
+  if (!body.byteLength) return err(c, 400, "That file is empty. Choose the image again.");
+  if (body.byteLength > SHOT_MAX)
+    return err(c, 413, "That image is over 5 MB. Use a smaller screenshot.");
 
+  const shot = await storeShot(c, bucket, account, type, body, c.req.header("x-shot-name") || "");
+  return c.json({ shot }, 201);
+});
+
+/**
+ * Write one screenshot: the object, then the row that says whose it is. Shared by the direct
+ * upload and the upload link, so there is one place a shot comes into being.
+ */
+async function storeShot(
+  c: Ctx,
+  bucket: R2Bucket,
+  account: string,
+  type: string,
+  body: ArrayBuffer,
+  name: string,
+) {
   const id = rid(12);
   await bucket.put(shotKey(id, type), body, { httpMetadata: { contentType: type } });
   await c.env.DB.prepare(
     "INSERT INTO shot (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, '', ?, ?, ?, ?)",
   )
-    .bind(
-      id,
-      account,
-      String(c.req.header("x-shot-name") || "").slice(0, 120),
-      type,
-      body.byteLength,
-      now(),
-    )
+    .bind(id, account, String(name).slice(0, 120), type, body.byteLength, now())
     .run();
-  return c.json(
-    { shot: { id, url: `${origin(c)}/v1/shots/${id}`, type, bytes: body.byteLength } },
-    201,
-  );
+  return { id, url: `${origin(c)}/v1/shots/${id}`, type, bytes: body.byteLength };
+}
+
+/**
+ * Mint an upload link: somewhere an agent's sandbox can send an image it holds as a file.
+ *
+ * See uploads.ts for why this exists. Minting needs the account, because the link uploads as that
+ * account; using it does not, because the thing using it has no credential. Spent and expired links
+ * for the account are cleared here rather than on a cron — they are tiny, and this is the only
+ * moment anything reads them.
+ */
+app.post("/v1/uploads", async (c) => {
+  const account = c.get("account");
+  if (!c.env.SHOTS) return err(c, 501, "Screenshots can't be uploaded here right now.");
+  const body = (await c.req.json().catch(() => ({}))) as { name?: unknown };
+  const at = now();
+  await c.env.DB.prepare("DELETE FROM upload WHERE account_id = ? AND (expires <= ? OR used <> '')")
+    .bind(account, at)
+    .run();
+  const open = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM upload WHERE account_id = ?")
+    .bind(account)
+    .first<{ n: number }>();
+  if (Number(open?.n || 0) >= UPLOAD_OPEN_MAX) {
+    return err(
+      c,
+      429,
+      "Too many upload links are open. Use one, or wait ten minutes for them to expire.",
+    );
+  }
+  const token = `${UPLOAD_PREFIX}${rand(32)}`;
+  const expires = new Date(Date.now() + UPLOAD_TTL_MS).toISOString();
+  const name =
+    typeof body.name === "string" ? body.name.replace(/[^\x20-\x7e]/g, "").slice(0, 120) : "";
+  await c.env.DB.prepare(
+    "INSERT INTO upload (hash, account_id, name, created, expires) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(await sha256(token), account, name, at, expires)
+    .run();
+  return c.json({ upload_url: `${origin(c)}/v1/uploads/${token}`, expires }, 201);
+});
+
+/**
+ * Send an image to an upload link. No credential: the link is the authorization, and the
+ * middleware lets exactly this shape through (`publicUpload`).
+ *
+ * Everything that can be checked without the link is checked before the link is spent, so a wrong
+ * file does not burn it. Spending is one conditional UPDATE, so two uploads racing for the same link
+ * cannot both win.
+ */
+app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
+  const token = c.req.param("token");
+  if (!isUploadToken(token)) return c.notFound();
+  const bucket = c.env.SHOTS;
+  if (!bucket) return err(c, 501, "Screenshots can't be uploaded here right now.");
+
+  const body = await c.req.arrayBuffer();
+  if (!body.byteLength) return err(c, 400, "That file is empty. Check the path you sent.");
+  if (body.byteLength > SHOT_MAX)
+    return err(c, 413, "That image is over 5 MB. Use a smaller screenshot.");
+  const type = sniffImage(body);
+  if (!type) return err(c, 415, "That file isn't an image. Use a PNG, JPEG, WebP or GIF.");
+
+  const at = now();
+  const ticket = await c.env.DB.prepare(
+    "UPDATE upload SET used = ? WHERE hash = ? AND used = '' AND expires > ? RETURNING account_id, name",
+  )
+    .bind(at, await sha256(token), at)
+    .first<{ account_id: string; name: string }>();
+  if (!ticket) {
+    return err(c, 410, "That upload link has expired or was already used. Ask for a new one.");
+  }
+  const shot = await storeShot(c, bucket, ticket.account_id, type, body, ticket.name);
+  const label = (ticket.name || "screenshot").replace(/[[\]]/g, "");
+  return c.json({ shot, markdown: `![${label}](${shot.url})` }, 201);
 });
 
 /**
@@ -1498,18 +1811,33 @@ app.post("/v1/reports", async (c) => {
   let toAccount: AccountRow | null = null;
   if (body.team) {
     team = await teamBySlug(c, String(body.team));
-    if (!team) return err(c, 400, `you are not in a team called "${body.team}"`);
+    if (!team)
+      return err(
+        c,
+        400,
+        `You're not in a team called "${body.team}". Check the name, or ask to be invited.`,
+      );
   }
   if (body.to) {
     const handle = String(body.to).replace(/^@/, "").toLowerCase();
-    if (!team) return err(c, 400, "`to` needs a `team` — a report goes to a teammate");
+    if (!team)
+      return err(
+        c,
+        400,
+        "A report can only be sent to someone inside a team. Choose the team first.",
+      );
     toAccount = await c.env.DB.prepare(
       `SELECT a.id, a.handle, a.name, a.email FROM account a JOIN membership m ON m.account_id = a.id
        WHERE a.handle = ? AND m.team_id = ?`,
     )
       .bind(handle, team.id)
       .first<AccountRow>();
-    if (!toAccount) return err(c, 400, `@${handle} is not a member of ${team.slug}`);
+    if (!toAccount)
+      return err(
+        c,
+        400,
+        `@${handle} isn't in ${team.name}. Check the handle, or invite them to the team first.`,
+      );
   }
 
   const id = rid(8);
@@ -1539,17 +1867,17 @@ app.post("/v1/reports", async (c) => {
 app.get("/v1/reports/:id", async (c) => {
   const account = c.get("account");
   const id = c.req.param("id");
-  if (!ID_RE.test(id)) return err(c, 400, "invalid report id");
+  if (!ID_RE.test(id)) return err(c, 400, REPORT_GONE);
   const row = await c.env.DB.prepare("SELECT * FROM report WHERE id = ?")
     .bind(id)
     .first<ReportRow>();
   // A report you cannot see is one that does not exist: which reports an account has is not
   // something a 403 should confirm.
-  if (!row) return err(c, 404, "no such report");
+  if (!row) return err(c, 404, REPORT_GONE);
   const mine = row.account_id === account;
   const teams = await myTeams(c);
   const shared = row.team_id && teams.some((t) => t.id === row.team_id);
-  if (!mine && !shared) return err(c, 404, "no such report");
+  if (!mine && !shared) return err(c, 404, REPORT_GONE);
 
   const { results } = await c.env.DB.prepare(
     "SELECT * FROM guide WHERE report_id = ? ORDER BY area, created",
@@ -1566,11 +1894,11 @@ app.get("/v1/reports/:id", async (c) => {
 app.patch("/v1/reports/:id", async (c) => {
   const account = c.get("account");
   const id = c.req.param("id");
-  if (!ID_RE.test(id)) return err(c, 400, "invalid report id");
+  if (!ID_RE.test(id)) return err(c, 400, REPORT_GONE);
   const row = await c.env.DB.prepare("SELECT * FROM report WHERE id = ?")
     .bind(id)
     .first<ReportRow>();
-  if (!row || row.account_id !== account) return err(c, 404, "no such report");
+  if (!row || row.account_id !== account) return err(c, 404, REPORT_GONE);
 
   const body = await c.req
     .json<{ title?: string; environment?: string; team?: string; to?: string }>()
@@ -1584,7 +1912,12 @@ app.patch("/v1/reports/:id", async (c) => {
       to_account_id = "";
     } else {
       const team = await teamBySlug(c, String(body.team));
-      if (!team) return err(c, 400, `you are not in a team called "${body.team}"`);
+      if (!team)
+        return err(
+          c,
+          400,
+          `You're not in a team called "${body.team}". Check the name, or ask to be invited.`,
+        );
       team_id = team.id;
     }
   }
@@ -1592,14 +1925,24 @@ app.patch("/v1/reports/:id", async (c) => {
     const handle = String(body.to).replace(/^@/, "").toLowerCase();
     if (!handle) to_account_id = "";
     else {
-      if (!team_id) return err(c, 400, "`to` needs a `team` — a report goes to a teammate");
+      if (!team_id)
+        return err(
+          c,
+          400,
+          "A report can only be sent to someone inside a team. Choose the team first.",
+        );
       const person = await c.env.DB.prepare(
         `SELECT a.id, a.handle, a.name, a.email FROM account a JOIN membership m ON m.account_id = a.id
          WHERE a.handle = ? AND m.team_id = ?`,
       )
         .bind(handle, team_id)
         .first<AccountRow>();
-      if (!person) return err(c, 400, `@${handle} is not on that team`);
+      if (!person)
+        return err(
+          c,
+          400,
+          `@${handle} isn't in that team. Check the handle, or invite them to the team first.`,
+        );
       to_account_id = person.id;
     }
   }
@@ -1670,8 +2013,11 @@ async function reportSummary(c: Ctx, row: ReportRow, issues: GuideRow[]) {
     updated: row.updated,
     mine: row.account_id === c.get("account"),
     from: people.get(row.account_id)?.handle || "",
+    from_name: nameOf(people, row.account_id),
     team: teams.get(row.team_id)?.slug || "",
+    team_name: teams.get(row.team_id)?.name || "",
     to: people.get(row.to_account_id)?.handle || "",
+    to_name: nameOf(people, row.to_account_id),
     issues: summarised.length,
     open: summarised.filter((i) => i.status === "draft").length,
     failing: summarised.filter((i) => i.failing).length,
@@ -1697,7 +2043,12 @@ app.get("/v1/guides", async (c) => {
     binds.push(account, ...ids);
   } else {
     const team = teams.find((t) => t.slug === scope);
-    if (!team) return err(c, 404, `you are not in a team called "${scope}"`);
+    if (!team)
+      return err(
+        c,
+        404,
+        `You're not in a team called "${scope}". Check the name, or ask to be invited.`,
+      );
     where = "team_id = ?";
     binds.push(team.id);
   }
@@ -1845,7 +2196,11 @@ app.get("/v1/log", async (c) => {
   // A malformed `since` compares lexicographically against ISO timestamps and silently returns
   // either everything or nothing, so it is refused rather than guessed at.
   if (since && !SINCE_RE.test(since))
-    return err(c, 400, "since must be a date: 2026, 2026-09, 2026-09-11, or a full ISO instant");
+    return err(
+      c,
+      400,
+      "The since filter needs a date, like 2026, 2026-09, 2026-09-11 or a full ISO time.",
+    );
   const rows = await logFeed(c.env, c.get("account"), {
     repo: (c.req.query("repo") || "").trim(),
     since,
@@ -1863,7 +2218,7 @@ app.get("/v1/log", async (c) => {
 // the one that was signed.
 app.post("/v1/billing/webhook/:provider", async (c) => {
   const named = c.req.param("provider");
-  if (!isProvider(named)) return err(c, 404, "no such billing provider");
+  if (!isProvider(named)) return err(c, 404, "That billing provider isn't supported.");
   const provider: Provider = named;
   const raw = await c.req.text();
 
@@ -1961,14 +2316,19 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
 app.post("/v1/subscribe", async (c) => {
   const account = c.get("account");
   const { provider } = (await c.req.json().catch(() => ({}))) as { provider?: string };
-  if (!provider || !isProvider(provider)) return err(c, 400, "provider must be stripe or paystack");
+  if (!provider || !isProvider(provider))
+    return err(c, 400, "Choose Stripe or Paystack to pay with.");
 
   const me = await c.env.DB.prepare("SELECT email, plan FROM account WHERE id = ?")
     .bind(account)
     .first<{ email: string; plan: string }>();
-  if (me?.plan === "solo") return err(c, 400, "this account is already on Solo");
+  if (me?.plan === "solo") return err(c, 400, "You're already on the Solo plan.");
   if (!me?.email)
-    return err(c, 400, "add an email to your account first — the receipt has to go somewhere");
+    return err(
+      c,
+      400,
+      "Add an email address to your account first, so the receipt has somewhere to go.",
+    );
 
   try {
     const checkout = await startCheckout(provider, c.env, {
@@ -1983,7 +2343,9 @@ app.post("/v1/subscribe", async (c) => {
     return err(
       c,
       502,
-      e instanceof BillingError ? e.message : "could not reach the payment provider",
+      e instanceof BillingError
+        ? e.message
+        : "We couldn't reach the payment provider. Try again in a moment.",
     );
   }
 });
@@ -1992,15 +2354,17 @@ app.post("/v1/subscribe", async (c) => {
 // does not touch card details, which is also why there is no form here to build.
 app.post("/v1/teams/:slug/subscribe", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only the team's owner can change its plan");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change its plan. Ask them to do it.");
   const { provider, seats } = (await c.req.json().catch(() => ({}))) as {
     provider?: string;
     seats?: number;
   };
-  if (!provider || !isProvider(provider)) return err(c, 400, "provider must be stripe or paystack");
+  if (!provider || !isProvider(provider))
+    return err(c, 400, "Choose Stripe or Paystack to pay with.");
   const wanted = Math.trunc(Number(seats)) || 0;
-  if (wanted < 1) return err(c, 400, "a subscription needs at least one seat");
+  if (wanted < 1) return err(c, 400, "Choose at least one seat.");
 
   const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
     .bind(team.id)
@@ -2011,14 +2375,18 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
     return err(
       c,
       400,
-      `${team.slug} already has ${members?.n} members — buy at least that many seats`,
+      `${team.name} already has ${members?.n} members, so choose at least ${members?.n} seats.`,
     );
 
   const me = await c.env.DB.prepare("SELECT email FROM account WHERE id = ?")
     .bind(c.get("account"))
     .first<{ email: string }>();
   if (!me?.email)
-    return err(c, 400, "add an email to your account first — the receipt has to go somewhere");
+    return err(
+      c,
+      400,
+      "Add an email address to your account first, so the receipt has somewhere to go.",
+    );
 
   try {
     const checkout = await startCheckout(provider, c.env, {
@@ -2033,7 +2401,9 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
     return err(
       c,
       502,
-      e instanceof BillingError ? e.message : "could not reach the payment provider",
+      e instanceof BillingError
+        ? e.message
+        : "We couldn't reach the payment provider. Try again in a moment.",
     );
   }
 });
@@ -2043,13 +2413,20 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
 // a refusal aimed at whoever joins next rather than at the person doing it.
 app.patch("/v1/teams/:slug/seats", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "no such team, or you are not a member");
-  if (team.role !== "owner") return err(c, 403, "only the team's owner can change its seats");
-  if (team.plan !== "team") return err(c, 400, `${team.slug} is not on a paid plan`);
-  if (!team.subscription_id) return err(c, 400, "this team has no subscription to change");
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change its seats. Ask them to do it.");
+  if (team.plan !== "team")
+    return err(c, 400, `${team.name} isn't on a paid plan, so there are no seats to change.`);
+  if (!team.subscription_id)
+    return err(
+      c,
+      400,
+      `${team.name} has no subscription to change. Choose a plan in Settings first.`,
+    );
   const { seats } = (await c.req.json().catch(() => ({}))) as { seats?: number };
   const wanted = Math.trunc(Number(seats)) || 0;
-  if (wanted < 1) return err(c, 400, "a subscription needs at least one seat");
+  if (wanted < 1) return err(c, 400, "Choose at least one seat.");
   const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
     .bind(team.id)
     .first<{ n: number }>();
@@ -2057,7 +2434,7 @@ app.patch("/v1/teams/:slug/seats", async (c) => {
     return err(
       c,
       400,
-      `${team.slug} has ${members?.n} members — remove someone before dropping to ${wanted} seat${wanted === 1 ? "" : "s"}`,
+      `${team.name} has ${members?.n} members. Remove someone before dropping to ${wanted} seat${wanted === 1 ? "" : "s"}.`,
     );
 
   // Stripe ids are `sub_...`; Paystack's are `SUB_...`. The subscription itself says which provider
@@ -2069,7 +2446,9 @@ app.patch("/v1/teams/:slug/seats", async (c) => {
     return err(
       c,
       502,
-      e instanceof BillingError ? e.message : "could not reach the payment provider",
+      e instanceof BillingError
+        ? e.message
+        : "We couldn't reach the payment provider. Try again in a moment.",
     );
   }
   // The provider's webhook is what writes the number: one source for what is paid for, and it is
@@ -2123,7 +2502,8 @@ const LINEAGE_MAX = 8;
 app.put("/v1/guides/:id", async (c) => {
   const account = c.get("account");
   const id = c.req.param("id");
-  if (!ID_RE.test(id)) return err(c, 400, "invalid guide id");
+  if (!ID_RE.test(id))
+    return err(c, 400, "That isn't a valid guide id. Use 6 to 12 lowercase letters and numbers.");
   // The document, either as itself or wrapped in JSON.
   //
   // `text/markdown` is the honest shape and what the CLI sends: the guide *is* the body. But an
@@ -2134,8 +2514,13 @@ app.put("/v1/guides/:id", async (c) => {
     (c.req.header("content-type") || "").split(";")[0]?.trim() === "application/json";
   let markdown = "";
   if (sentJson) {
-    const wrapper = await c.req.json<{ markdown?: unknown }>().catch(() => null);
+    const wrapper = await c.req.json<{ markdown?: unknown; parent?: unknown }>().catch(() => null);
     if (typeof wrapper?.markdown === "string") markdown = wrapper.markdown;
+    // A caller composing a tool call can name the parent beside the document rather than edit
+    // frontmatter by hand. It is written *into* the frontmatter, so the stored guide is exactly the
+    // document it would be had the author typed `parent:` — the markdown stays the one source.
+    if (markdown.trim() && typeof wrapper?.parent === "string" && wrapper.parent.trim())
+      markdown = setField(markdown, "parent", wrapper.parent.trim());
   } else {
     markdown = await c.req.text();
   }
@@ -2144,21 +2529,28 @@ app.put("/v1/guides/:id", async (c) => {
       c,
       400,
       sentJson
-        ? 'empty guide; send {"markdown": "---\\ntitle: ...\\n---\\n\\n## Problem ..."}'
-        : 'empty body; send the guide as text/markdown, or JSON as {"markdown": "..."}',
+        ? 'The guide is empty. Send {"markdown": "---\\ntitle: ...\\n---\\n\\n## Problem ..."}.'
+        : 'The guide is empty. Send it as text/markdown, or as JSON: {"markdown": "..."}.',
     );
   }
-  if (markdown.length > 512 * 1024) return err(c, 413, "guide is over 512KB");
+  if (markdown.length > 512 * 1024)
+    return err(c, 413, "This guide is over 512 KB. Move large logs or files out and link to them.");
   const meta: Meta = parseMeta(markdown);
-  if (meta.id && meta.id !== id) return err(c, 400, "frontmatter id does not match the URL");
-  if (!meta.title) return err(c, 400, "frontmatter needs a title");
+  if (meta.id && meta.id !== id)
+    return err(c, 400, "The id in the guide's frontmatter doesn't match the id it is saved under.");
+  if (!meta.title) return err(c, 400, "The guide needs a title. Add title: to its frontmatter.");
 
   // Addressing: `team: <slug>` puts the guide in a team; `to: <handle>` hands it to a member.
   let team: (TeamRow & { role: string }) | null = null;
   let toAccount: AccountRow | null = null;
   if (meta.team) {
     team = await teamBySlug(c, String(meta.team));
-    if (!team) return err(c, 400, `you are not in a team called "${meta.team}"`);
+    if (!team)
+      return err(
+        c,
+        400,
+        `You're not in a team called "${meta.team}". Check the team in the guide, or ask to be invited.`,
+      );
     // Read-only, not closed: everything already in the team stays readable, pullable and
     // answerable, and this is the one door that shuts. 402 rather than 403 — nobody lacks
     // permission, the subscription lapsed, and the two are fixed in completely different places.
@@ -2166,25 +2558,35 @@ app.put("/v1/guides/:id", async (c) => {
       return err(
         c,
         402,
-        `${team.slug} is read-only: its subscription lapsed. Everything in it can still be read, ` +
-          "pulled and answered — renew to hand over anything new. Sharing without `team:` still works.",
+        `${team.name}'s plan has lapsed, so it can't take new guides. Everything already in it ` +
+          "can still be read and answered. Ask the team owner to renew.",
       );
   }
   // `to:` names either a person or a group, and the sigil says which: `@ada` is one teammate,
   // `#frontend` is the people who do a thing. Both need a `team:` — an address is only meaningful
   // inside the room it belongs to.
-  let toGroup: { id: string; slug: string } | null = null;
+  let toGroup: { id: string; slug: string; name: string } | null = null;
   if (meta.to) {
     const raw = String(meta.to).trim();
-    if (!team) return err(c, 400, "`to:` needs a `team:` — a handoff goes to a teammate");
+    if (!team)
+      return err(
+        c,
+        400,
+        "To send a guide to a person or a group, also say which team it's in (team: in the frontmatter).",
+      );
     if (raw.startsWith("#")) {
       const wanted = tag(raw.slice(1));
       toGroup = await c.env.DB.prepare(
-        "SELECT id, slug FROM team_group WHERE slug = ? AND team_id = ?",
+        "SELECT id, slug, name FROM team_group WHERE slug = ? AND team_id = ?",
       )
         .bind(wanted, team.id)
-        .first<{ id: string; slug: string }>();
-      if (!toGroup) return err(c, 400, `${team.slug} has no group called #${wanted}`);
+        .first<{ id: string; slug: string; name: string }>();
+      if (!toGroup)
+        return err(
+          c,
+          400,
+          `${team.name} has no group called #${wanted}. Check the name in the team's settings.`,
+        );
     } else {
       const handle = raw.replace(/^@/, "").toLowerCase();
       toAccount = await c.env.DB.prepare(
@@ -2193,7 +2595,12 @@ app.put("/v1/guides/:id", async (c) => {
       )
         .bind(handle, team.id)
         .first<AccountRow>();
-      if (!toAccount) return err(c, 400, `@${handle} is not a member of ${team.slug}`);
+      if (!toAccount)
+        return err(
+          c,
+          400,
+          `@${handle} isn't in ${team.name}. Check the handle, or invite them to the team first.`,
+        );
     }
   }
 
@@ -2204,12 +2611,15 @@ app.put("/v1/guides/:id", async (c) => {
   let report: ReportRow | null = null;
   if (meta.report) {
     const wanted = String(meta.report);
-    if (!ID_RE.test(wanted)) return err(c, 400, "`report:` is not a valid report id");
+    if (!ID_RE.test(wanted))
+      return err(c, 400, "The report named in this guide isn't a valid report id.");
     report = await c.env.DB.prepare("SELECT * FROM report WHERE id = ?")
       .bind(wanted)
       .first<ReportRow>();
-    if (!report) return err(c, 400, `no report called "${wanted}"`);
-    if (report.account_id !== account) return err(c, 403, "that report belongs to another account");
+    if (!report)
+      return err(c, 400, `There's no report called "${wanted}". Check the report id in the guide.`);
+    if (report.account_id !== account)
+      return err(c, 403, "That report belongs to another account, so this guide can't join it.");
   }
 
   // `parent:` is the guide this one came out of — someone pulled that, did the work, and wrote
@@ -2228,7 +2638,8 @@ app.put("/v1/guides/:id", async (c) => {
   let parentId = "";
   if (meta.parent) {
     const wanted = String(meta.parent);
-    if (wanted === id) return err(c, 400, "a guide cannot follow itself");
+    if (wanted === id)
+      return err(c, 400, "A guide can't follow itself. Point parent: at a different guide.");
     const parent = ID_RE.test(wanted) ? await readableGuide(c, wanted) : null;
     if (parent) {
       // Walk up from the parent. Two things end the walk: reaching this guide, which would close a
@@ -2237,16 +2648,39 @@ app.put("/v1/guides/:id", async (c) => {
       // opens — and it is also what keeps this walk bounded on data that already went wrong.
       let at = parent.row.parent_id;
       for (let hop = 0; at && hop < LINEAGE_MAX; hop++) {
-        if (at === id) return err(c, 400, "that would make a guide its own ancestor");
+        if (at === id)
+          return err(
+            c,
+            400,
+            "That parent would make this guide its own ancestor. Point parent: at a different guide.",
+          );
         const up = await c.env.DB.prepare("SELECT parent_id FROM guide WHERE id = ?")
           .bind(at)
           .first<{ parent_id: string }>();
         at = up?.parent_id || "";
       }
-      if (at) return err(c, 400, `a chain of guides stops at ${LINEAGE_MAX}`);
+      if (at)
+        return err(
+          c,
+          400,
+          `A chain of guides can be at most ${LINEAGE_MAX} deep. Leave parent: off to start a new one.`,
+        );
       parentId = parent.row.id;
     }
   }
+
+  // An image nobody but the author's own client can load is not evidence, and a publish that
+  // accepts one stores a guide with a dead picture in it. Refused rather than stripped: the
+  // screenshot is usually the most useful thing in a bug report, so the answer is to upload it,
+  // not to quietly drop the line naming it.
+  const unreachable = unreachableImages(markdown);
+  if (unreachable.length)
+    return err(
+      c,
+      400,
+      `An image in this guide (${unreachable[0]}) is on your computer, so nobody else can see it. ` +
+        "Upload it first, then use the link you get back. Agents: use the attach_screenshot tool.",
+    );
 
   const existing = await c.env.DB.prepare(
     "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id FROM guide WHERE id = ?",
@@ -2266,7 +2700,7 @@ app.put("/v1/guides/:id", async (c) => {
       >
     >();
   if (existing && existing.account_id !== account)
-    return err(c, 403, "that id belongs to another account");
+    return err(c, 403, "That guide id is already used by another account. Choose a different id.");
 
   // Frontmatter still round-trips `promoted`, because the document is the record and a guide shared
   // a month ago must re-share today. It cannot be acquired, though: only a guide already carrying
@@ -2290,10 +2724,9 @@ app.put("/v1/guides/:id", async (c) => {
         c,
         402,
         room.plan === "none"
-          ? "syncing guides needs a plan — subscribe at /hub/settings. Everything local still " +
-              "works: `passalong share` writes to this machine with or without one."
-          : `your plan keeps ${room.limit} active synced guides; archive some in the hub (or ` +
-              "`passalong done <id>`) to make room, or remove them",
+          ? "Syncing guides needs a plan. Choose one in Settings."
+          : `You're using all ${room.limit} guides on your plan. Archive a finished guide to ` +
+              "make room, or choose a bigger plan in Settings.",
       );
     }
   }
@@ -2358,7 +2791,7 @@ app.put("/v1/guides/:id", async (c) => {
   const newlyShared = team && existing?.team_id !== team.id;
   if (addressed || handedToGroup || newlyShared) {
     const me = (await accounts(c, [account])).get(account);
-    const fromHandle = me?.handle || "someone";
+    const fromName = displayName({ id: account, handle: me?.handle, name: me?.name });
     if (addressed && toAccount) {
       await notify(c.env, {
         to: toAccount.id,
@@ -2370,7 +2803,7 @@ app.put("/v1/guides/:id", async (c) => {
         mail: async () => {
           notified = await sendHandoff(c.env, {
             to: toAccount.email,
-            fromHandle,
+            fromName,
             title: String(meta.title),
             id,
             url,
@@ -2413,18 +2846,25 @@ app.put("/v1/guides/:id", async (c) => {
       });
     }
     if (team) {
-      // The room hears who it went to, in the words it was addressed with: a handle, a #group, or
-      // the team itself. "handed you" is right for the first two — somebody was asked.
+      // The room hears who it went to: a person, a group, or the team itself. Never "you" — a
+      // channel is read by everyone in it, so "sent you" would be wrong for all but one of them.
       const kind = toAccount || toGroup ? "handoff" : "shared";
-      const where = toAccount
-        ? `${team.slug} / @${toAccount.handle}`
+      const to = toAccount
+        ? displayName(toAccount)
         : toGroup
-          ? `${team.slug} / #${toGroup.slug}`
-          : team.slug;
+          ? toGroup.name.trim() || `#${toGroup.slug}`
+          : "";
       await announce(c.env, {
         kind,
         team_id: team.id,
-        text: line({ kind, actor: fromHandle, title: String(meta.title), team: where, times: 1 }),
+        text: line({
+          kind,
+          actor_name: fromName,
+          title: String(meta.title),
+          team_name: team.name,
+          to,
+          times: 1,
+        }),
         title: String(meta.title),
         url,
       });
@@ -2498,9 +2938,8 @@ async function recordPull(
       ? () =>
           sendPulled(c.env, {
             to: people.get(row.account_id)?.email || "",
-            byHandle: people.get(account)?.handle || "",
+            byName: nameOf(people, account),
             title: row.title,
-            id: row.id,
             url: shareUrl(origin(c), row),
           })
       : undefined,
@@ -2534,14 +2973,53 @@ async function recordReceipt(c: Ctx, row: GuideRow, via: string) {
 
 app.get("/v1/guides/:id", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
+  if (!found) return err(c, 404, GUIDE_GONE);
   await recordPull(c, found.row, c.get("account"), "cli");
   return c.text(found.row.markdown, 200, { "content-type": "text/markdown; charset=utf-8" });
 });
 
+/**
+ * The guides that came out of this one, one level down.
+ *
+ * One level rather than the tree: a caller can walk it, and a recursive query returning every
+ * descendant of a guide that travelled is a response nobody renders. Readable on the parent is the
+ * gate, and each child is filtered again on its own — a follow-up published into a team you are
+ * not in does not appear under a guide you can see. Drafts are not children yet.
+ *
+ * `?markdown=1` is the reader's form: a follow-up is more context for the guide, so whoever opens
+ * the original — an agent through get_guide or start_guide, a person through `passalong pull` —
+ * gets the follow-ups' content with it. That form is oldest first, because context reads in the
+ * order it was added and a later follow-up may build on or correct an earlier one; at most
+ * `FOLLOW_UPS_MAX` of them, each clipped by `clipFollowUp`. Without it the listing is newest first,
+ * up to 100, summaries only, as the hub has always read it.
+ *
+ * Neither form records a pull on the children. Fetching context for a guide is not the reader
+ * opening those guides: a pull row moves a guide into its author's "landed" queue and mails them,
+ * and a follow-up nobody chose to open must not tell its author it was picked up.
+ */
+app.get("/v1/guides/:id/children", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const account = c.get("account");
+  const withMarkdown = ["1", "true"].includes(c.req.query("markdown") || "");
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM guide WHERE parent_id = ? AND status <> 'draft'
+       AND (account_id = ? OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?))
+     ORDER BY created ${withMarkdown ? "ASC" : "DESC"} LIMIT ?`,
+  )
+    .bind(found.row.id, account, account, withMarkdown ? FOLLOW_UPS_MAX : 100)
+    .all<GuideRow>();
+  const guides = await summaries(c, results);
+  if (!withMarkdown) return c.json({ guides });
+  const markdown = new Map(results.map((r) => [r.id, clipFollowUp(r.id, r.markdown)]));
+  return c.json({
+    guides: guides.map((g) => ({ ...g, markdown: markdown.get(g.id) || "" })),
+  });
+});
+
 app.patch("/v1/guides/:id/status", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, "no such guide");
+  if (!found) return err(c, 404, GUIDE_GONE);
   const { status } = (await c.req.json().catch(() => ({}))) as { status?: string };
   // `promoted` is readable and no longer settable, so it is refused by name rather than by being
   // missing from a list — an installed CLI still calls this, and "must be one of ..." would read
@@ -2550,18 +3028,22 @@ app.patch("/v1/guides/:id/status", async (c) => {
     return err(
       c,
       400,
-      "`promoted` was retired: a guide's pull count already says how travelled it is. " +
+      "Promoted was retired: how often a guide is opened already says how far it has travelled. " +
         "Guides that carry it keep it.",
     );
   if (!status || !(SETTABLE as readonly string[]).includes(status))
-    return err(c, 400, `status must be one of ${SETTABLE.join(", ")}`);
+    return err(c, 400, `A guide's status can only be ${SETTABLE.join(", ")}.`);
   if (!found.owner && !["consumed", "published"].includes(status))
-    return err(c, 403, "only the author can promote or draft a guide; you can mark it consumed");
+    return err(
+      c,
+      403,
+      "Only the author can move a guide back to draft. You can say you're done with it.",
+    );
   // A task's status is its place in the queue: published puts it in front of agents and consumed
   // is approval. Both are its author's call, through `ready` and the gate — a teammate marking one
   // consumed would approve work with nobody reading it.
   if (!found.owner && found.row.kind === "task")
-    return err(c, 403, "only a task's author moves it — ready, approve, reject or release");
+    return err(c, 403, "Only a task's author moves it: ready, approve, reject or release.");
   const markdown = setField(found.row.markdown, "status", status);
   await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
     .bind(status, markdown, now(), found.row.id)
@@ -2592,9 +3074,9 @@ app.patch("/v1/guides/:id/status", async (c) => {
       mail: () =>
         sendConsumed(c.env, {
           to: people.get(found.row.account_id)?.email || "",
-          byHandle: people.get(account)?.handle || "someone",
+          byName: nameOf(people, account),
           title: found.row.title,
-          id: found.row.id,
+          url: shareUrl(origin(c), found.row),
         }),
     });
   }
@@ -2608,14 +3090,16 @@ const NOTE_MAX = 280;
 
 app.put("/v1/guides/:id/verdict", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
+  if (!found) return err(c, 404, GUIDE_GONE);
   const account = c.get("account");
   const body = (await c.req.json().catch(() => ({}))) as { ok?: boolean; note?: string };
-  if (typeof body.ok !== "boolean") return err(c, 400, "send { ok: true } or { ok: false }");
+  if (typeof body.ok !== "boolean")
+    return err(c, 400, 'Say whether it worked: send {"ok": true} or {"ok": false}.');
   const note = (body.note || "").trim().slice(0, NOTE_MAX);
   // One line, not a thread. Saying "it doesn't work" without saying how helps nobody, and
   // anything longer than this is a conversation the product deliberately does not host.
-  if (!body.ok && !note) return err(c, 400, "say what went wrong: send a note with { ok: false }");
+  if (!body.ok && !note)
+    return err(c, 400, "Say what went wrong, so the author knows what to fix.");
 
   await c.env.DB.prepare(
     `INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES (?, ?, ?, ?, ?)
@@ -2636,9 +3120,8 @@ app.put("/v1/guides/:id/verdict", async (c) => {
     mail: () =>
       sendVerdict(c.env, {
         to: people.get(found.row.account_id)?.email || "",
-        byHandle: people.get(account)?.handle || "",
+        byName: nameOf(people, account),
         title: found.row.title,
-        id: found.row.id,
         url: shareUrl(origin(c), found.row),
         ok: body.ok === true,
         note,
@@ -2651,9 +3134,8 @@ app.put("/v1/guides/:id/verdict", async (c) => {
     team_id: found.row.team_id,
     text: line({
       kind: body.ok ? "verified" : "failed",
-      actor: people.get(account)?.handle || "",
+      actor_name: nameOf(people, account),
       title: found.row.title,
-      team: "",
       times: 1,
     }),
     title: found.row.title,
@@ -2678,17 +3160,22 @@ app.put("/v1/guides/:id/verdict", async (c) => {
  */
 app.put("/v1/guides/:id/ack", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, "no such guide (or it is not in one of your teams)");
+  if (!found) return err(c, 404, GUIDE_GONE);
   const account = c.get("account");
   // The author is not a party to this. They can see who answered; answering their own handoff
   // would be telling themselves something they already know.
-  if (found.owner) return err(c, 403, "this is the reader's answer; your own guide has none");
+  if (found.owner)
+    return err(c, 403, "This is your own guide, so there's nothing to take or pass on.");
   const body = (await c.req.json().catch(() => ({}))) as { taken?: boolean; note?: string };
   if (typeof body.taken !== "boolean")
-    return err(c, 400, "send { taken: true } to take it, or { taken: false } to pass");
+    return err(
+      c,
+      400,
+      'Say whether you\'re taking it: send {"taken": true}, or {"taken": false} with a reason.',
+    );
   const note = (body.note || "").trim().slice(0, NOTE_MAX);
   if (!body.taken && !note)
-    return err(c, 400, "say why you are passing: send a note with { taken: false }");
+    return err(c, 400, "Say why you're passing it on, so the sender knows what to do next.");
 
   await c.env.DB.prepare(
     `INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES (?, ?, ?, ?, ?)
@@ -2714,9 +3201,8 @@ app.put("/v1/guides/:id/ack", async (c) => {
     team_id: found.row.team_id,
     text: line({
       kind,
-      actor: people.get(account)?.handle || "",
+      actor_name: nameOf(people, account),
       title: found.row.title,
-      team: "",
       times: 1,
     }),
     title: found.row.title,
@@ -2914,8 +3400,8 @@ app.post("/v1/tasks/:id/release", async (c) => {
 
 app.delete("/v1/guides/:id", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, "no such guide");
-  if (!found.owner) return err(c, 403, "only the author can remove a guide");
+  if (!found) return err(c, 404, GUIDE_GONE);
+  if (!found.owner) return err(c, 403, "Only the author can delete a guide.");
   // Before the guide, so a failure leaves the guide to try again rather than orphaning its
   // evidence with nothing left pointing at it.
   await dropShots(c, found.row.id);
@@ -2940,6 +3426,8 @@ const VIEW_HEADERS = {
     "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' https: data:; manifest-src 'self'; base-uri 'none'; form-action 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
+  // A share link is for whoever holds it. The raw markdown has no <head> for a noindex meta.
+  "x-robots-tag": "noindex, nofollow, noarchive",
 };
 
 app.get("/g/:id/:key{.+\\.md}", async (c) => {
@@ -2963,7 +3451,12 @@ app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c)));
 app.get("/g/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
   if (!row) return c.text("no such guide", 404, VIEW_HEADERS);
-  return renderOgImage(c.env, c.req.url, { id: row.id, meta: parseMeta(row.markdown) });
+  const people = await accounts(c, [row.account_id]);
+  return renderOgImage(c.env, c.req.url, {
+    id: row.id,
+    meta: parseMeta(row.markdown),
+    from: nameOf(people, row.account_id),
+  });
 });
 
 /**
@@ -3057,16 +3550,18 @@ app.get("/.well-known/oauth-protected-resource/v1/mcp", (c) =>
  */
 app.get("/oauth/authorize", async (c) => {
   const q = c.req.query();
-  const client = q.client_id
-    ? await c.env.DB.prepare("SELECT * FROM oauth_client WHERE id = ? AND revoked = ''")
-        .bind(q.client_id)
-        .first<OAuthClientRow>()
-    : null;
-  if (!client) return c.text("unknown client_id", 400);
-  if (!redirectAllowed(client.redirect_uri, q.redirect_uri)) {
-    return c.text("redirect_uri does not match the one registered for this client", 400);
-  }
-  const redirect = q.redirect_uri || client.redirect_uri;
+  // A person is looking at this response, and neither problem can be sent back to the client: an
+  // unknown client has nowhere trusted to go, and a mismatched redirect is the address we must not
+  // use. So both go to the consent page, which says what to do in words rather than a status line.
+  const problem = (kind: string) => c.redirect(`${origin(c)}/oauth/consent?problem=${kind}`, 302);
+  const client = await findClient(
+    c.env.DB,
+    q.client_id || "",
+    registrationCutoff(new Date(), DYNAMIC_TTL_MS),
+  );
+  if (!client) return problem("unknown_client");
+  const redirect = pickRedirect(client.redirect_uris, q.redirect_uri);
+  if (!redirect) return problem("redirect_mismatch");
 
   if (q.response_type !== "code") {
     return c.redirect(
@@ -3081,8 +3576,102 @@ app.get("/oauth/authorize", async (c) => {
   const url = new URL(`${origin(c)}/oauth/consent`);
   for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
   url.searchParams.set("redirect_uri", redirect);
-  url.searchParams.set("client_name", client.name || client.id);
+  // The page does not take the name from its own address bar — anyone can write a link to
+  // /oauth/consent with any name in it. It asks /v1/oauth/consent, which reads the database.
+  url.searchParams.delete("client_name");
   return c.redirect(url.toString(), 302);
+});
+
+/**
+ * RFC 7591 dynamic client registration: how Claude or ChatGPT connect from one pasted address.
+ *
+ * Unauthenticated, because that is what it is for. The rules that make that safe:
+ *
+ * - A registration grants nothing. It is stored in `oauth_registration`, which the token endpoint
+ *   never reads; it becomes a client only when a signed-in person approves it on the consent page,
+ *   and approval takes the session cookie, never a bearer token (/v1/oauth/approve).
+ * - Public clients only. `token_endpoint_auth_method` is always `none`, so no secret exists to
+ *   leak, and PKCE with S256 is required at authorize and checked at the token endpoint.
+ * - Redirect URIs: https, or http for loopback only; no fragments, wildcards or userinfo; at most
+ *   five, each under 2000 characters (validateRegistration in oauth.ts). At authorize they are
+ *   exact-matched, with only the RFC 8252 loopback-port allowance.
+ * - `client_name` is capped and stripped of control and bidi characters, and the consent page
+ *   shows the redirect host beside it, so a registration cannot pass itself off as someone else.
+ * - Throttled per IP with its own rate-limit binding, the body is capped, and registrations
+ *   nobody approved are deleted after 24 hours — here, lazily, and by the nightly sweep.
+ */
+app.post("/v1/oauth/register", async (c) => {
+  const refuse = (status: number, error: string, description: string) =>
+    c.json({ error, error_description: description }, status as 400, {
+      "cache-control": "no-store",
+    });
+
+  if (c.env.OAUTH_REGISTER_LIMIT) {
+    const ip = c.req.header("cf-connecting-ip") || "unknown";
+    const { success } = await c.env.OAUTH_REGISTER_LIMIT.limit({ key: ip });
+    if (!success) {
+      return c.json(
+        {
+          error: "too_many_requests",
+          error_description: "too many registrations from this address; try again in a minute",
+        },
+        429,
+        { "retry-after": "60", "cache-control": "no-store" },
+      );
+    }
+  }
+
+  // A registration is a few hundred bytes. Anything much larger is not one.
+  const raw = await c.req.text().catch(() => "");
+  if (raw.length > 16_000) {
+    return refuse(400, "invalid_client_metadata", "the registration is too large");
+  }
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return refuse(400, "invalid_client_metadata", "the registration must be a JSON object");
+  }
+  const result = validateRegistration(body);
+  if (!result.ok) return refuse(400, result.error, result.error_description);
+
+  const issued = new Date();
+  const id = `pa_client_${rid(24)}`;
+  await saveRegistration(c.env.DB, id, result.registration, issued.toISOString());
+
+  // Lazy expiry, off the response path, so the table cannot grow between nightly sweeps.
+  try {
+    c.executionCtx.waitUntil(
+      sweepRegistrations(c.env.DB, registrationCutoff(issued, DYNAMIC_TTL_MS)).catch(() => 0),
+    );
+  } catch {}
+  count(c, "oauth_registered", {});
+  return c.json(registrationResponse(id, issued, result.registration), 201, {
+    "cache-control": "no-store",
+  });
+});
+
+/**
+ * What the consent page shows: the client's name and where approving sends you.
+ *
+ * Read from the database rather than the page's query string, so a hand-written link cannot put a
+ * different name on the screen. The host is the one the code will actually be sent to.
+ */
+app.get("/v1/oauth/consent", async (c) => {
+  const q = c.req.query();
+  const client = await findClient(
+    c.env.DB,
+    q.client_id || "",
+    registrationCutoff(new Date(), DYNAMIC_TTL_MS),
+  );
+  if (!client) return err(c, 404, "unknown client_id");
+  const redirect = pickRedirect(client.redirect_uris, q.redirect_uri);
+  if (!redirect) return err(c, 400, "redirect_uri does not match one registered for this client");
+  return c.json({
+    name: client.name,
+    host: redirectHost(redirect),
+    registered: client.registered,
+  });
 });
 
 /**
@@ -3111,26 +3700,29 @@ app.post("/v1/oauth/approve", async (c) => {
     code_challenge?: string;
   };
   const body = await c.req.json<Approval>().catch(() => ({}) as Approval);
-  const client = body.client_id
-    ? await c.env.DB.prepare("SELECT * FROM oauth_client WHERE id = ? AND revoked = ''")
-        .bind(body.client_id)
-        .first<OAuthClientRow>()
-    : null;
+  const client = await findClient(
+    c.env.DB,
+    body.client_id || "",
+    registrationCutoff(new Date(), DYNAMIC_TTL_MS),
+  );
   if (!client) return err(c, 400, "unknown client_id");
-  if (!redirectAllowed(client.redirect_uri, body.redirect_uri)) {
-    return err(c, 400, "redirect_uri does not match the one registered");
-  }
+  const redirect = pickRedirect(client.redirect_uris, body.redirect_uri);
+  if (!redirect) return err(c, 400, "redirect_uri does not match the one registered");
   if (!body.code_challenge) return err(c, 400, "PKCE with S256 is required");
+
+  // The step that lets a client get a token at all. A self-registered client becomes a real one
+  // here, owned by the person approving, and appears in their Settings → Connectors from now on.
+  await recordApproval(c.env.DB, client, account, now());
 
   const code = await issueCode(c.env.DB, {
     client_id: client.id,
     account_id: account,
     challenge: body.code_challenge,
     method: "S256",
-    redirect_uri: body.redirect_uri || client.redirect_uri,
+    redirect_uri: redirect,
     scope: MCP_SCOPE,
   });
-  const url = new URL(body.redirect_uri || client.redirect_uri);
+  const url = new URL(redirect);
   url.searchParams.set("code", code);
   if (body.state) url.searchParams.set("state", body.state);
   count(c, "oauth_granted", {});
@@ -3152,20 +3744,48 @@ app.post("/v1/oauth/token", async (c) => {
   let clientId = field("client_id");
   let clientSecret = field("client_secret");
   const basic = c.req.header("authorization") || "";
-  if (basic.startsWith("Basic ")) {
-    const [id, secret] = atob(basic.slice(6)).split(":");
-    clientId = decodeURIComponent(id || "");
-    clientSecret = decodeURIComponent(secret || "");
+  const usedBasic = basic.startsWith("Basic ");
+  if (usedBasic) {
+    // A malformed header is a client that failed to authenticate, not a server error.
+    try {
+      const decoded = atob(basic.slice(6));
+      const colon = decoded.indexOf(":");
+      clientId = decodeURIComponent(colon < 0 ? decoded : decoded.slice(0, colon));
+      clientSecret = decodeURIComponent(colon < 0 ? "" : decoded.slice(colon + 1));
+    } catch {
+      clientId = "";
+      clientSecret = "";
+    }
   }
 
-  const client = clientId
-    ? await c.env.DB.prepare("SELECT * FROM oauth_client WHERE id = ? AND revoked = ''")
-        .bind(clientId)
-        .first<OAuthClientRow>()
-    : null;
-  if (!client) return c.json({ error: "invalid_client" }, 401);
-  if (client.secret_hash && !timingSafeEqual(client.secret_hash, await sha256(clientSecret))) {
-    return c.json({ error: "invalid_client" }, 401);
+  // Approved clients only: a self-registration nobody has approved is not in the table this reads.
+  const client = await tokenClient(c.env.DB, clientId);
+  const refusal = clientRefusal(
+    client,
+    clientSecret ? await sha256(clientSecret) : "",
+    clientSecret,
+  );
+  if (refusal || !client) {
+    const reason = refusal ?? "unknown_client";
+    // The reason and the method, never the secret: this is what `wrangler tail` shows when a
+    // connector's settings page says only that it failed.
+    console.warn(
+      JSON.stringify({
+        event: "oauth_token_refused",
+        reason,
+        client_id: clientId.slice(0, 64),
+        method: usedBasic ? "client_secret_basic" : clientSecret ? "client_secret_post" : "none",
+      }),
+    );
+    // Kept on the client when there is one, so Settings can show the reason beside the connector
+    // instead of leaving it in a log line nobody reads.
+    if (client) await recordRefusal(c.env.DB, client.id, reason, now());
+    // RFC 6749 §5.2: a client that tried HTTP Basic is told which scheme to retry with.
+    return c.json(
+      invalidClient(reason),
+      401,
+      usedBasic ? { "www-authenticate": 'Basic realm="passalong"' } : {},
+    );
   }
 
   const grantType = field("grant_type");
@@ -3178,6 +3798,7 @@ app.post("/v1/oauth/token", async (c) => {
       .bind(await sha256(presented), client.id)
       .first<{ access_hash: string; account_id: string; scope: string }>();
     if (!row) return c.json({ error: "invalid_grant" }, 400);
+    await clearRefusal(c.env.DB, client.id);
     // Rotation: the old pair goes as the new one is written, so a refresh token is worth one use.
     return c.json(
       await issueTokens(
@@ -3218,6 +3839,7 @@ app.post("/v1/oauth/token", async (c) => {
     .bind(now(), row.code)
     .run();
   count(c, "oauth_token_issued", {});
+  await clearRefusal(c.env.DB, client.id);
   return c.json(
     await issueTokens(c.env.DB, {
       client_id: client.id,
@@ -3240,16 +3862,15 @@ app.post("/v1/oauth/revoke", async (c) => {
   return c.body(null, 200);
 });
 
-/** The clients you have registered, and what each one is currently holding. */
+/**
+ * The connectors you can see and disconnect: the ones you created, and the ones you approved.
+ * `host` is where each sends its codes, which is how a person recognises "claude.ai".
+ */
 app.get("/v1/oauth/clients", async (c) => {
-  const { results } = await c.env.DB.prepare(
-    `SELECT c.id, c.name, c.redirect_uri, c.created, c.secret_hash <> '' AS confidential,
-            (SELECT COUNT(*) FROM oauth_token t WHERE t.client_id = c.id) AS grants
-     FROM oauth_client c WHERE c.account_id = ? AND c.revoked = '' ORDER BY c.created DESC`,
-  )
-    .bind(c.get("account"))
-    .all();
-  return c.json({ clients: results });
+  const clients = await listConnectors(c.env.DB, c.get("account"));
+  return c.json({
+    clients: clients.map((client) => ({ ...client, host: redirectHost(client.redirect_uri) })),
+  });
 });
 
 /**
@@ -3288,19 +3909,12 @@ app.post("/v1/oauth/clients", async (c) => {
 
 app.delete("/v1/oauth/clients/:id", async (c) => {
   const id = c.req.param("id");
-  const owned = await c.env.DB.prepare(
-    "SELECT id FROM oauth_client WHERE id = ? AND account_id = ?",
-  )
-    .bind(id, c.get("account"))
-    .first<{ id: string }>();
-  if (!owned) return err(c, 404, "no such client");
-  // Revoke the client and everything it holds: a connector you have removed should stop working
-  // now, not in an hour when its access token happens to expire.
-  await c.env.DB.batch([
-    c.env.DB.prepare("UPDATE oauth_client SET revoked = ? WHERE id = ?").bind(now(), id),
-    c.env.DB.prepare("DELETE FROM oauth_token WHERE client_id = ?").bind(id),
-    c.env.DB.prepare("DELETE FROM oauth_code WHERE client_id = ?").bind(id),
-  ]);
+  // Everything it holds for you stops working now, not in an hour when its access token happens
+  // to expire. A connector you created is revoked outright; one you approved is disconnected from
+  // you — see disconnect() in oauth-clients.ts for why those differ.
+  if (!(await disconnect(c.env.DB, id, c.get("account"), now()))) {
+    return err(c, 404, "no such client");
+  }
   return c.json({ id, revoked: true });
 });
 
@@ -3310,11 +3924,12 @@ app.get("/health", (c) => c.json({ ok: true }));
 // pages — `/`, `/g/:id/:key`, `/hub`, `/join/:code`, `/reset` and the 404 itself — are Nuxt's,
 // and a request that matches none of the routes above never reaches here: apps/web's middleware
 // only hands over `/v1/*`, `/health` and the two machine routes.
-app.notFound((c) => err(c, 404, "no such route"));
+app.notFound((c) => err(c, 404, "There's nothing at this address."));
 
+// The real error goes to the log. The person gets a sentence that is true and says what to do.
 app.onError((e, c) => {
   console.error(e);
-  return err(c, 500, "internal error");
+  return err(c, 500, "Something went wrong on our side. Try again in a moment.");
 });
 
 export default app;

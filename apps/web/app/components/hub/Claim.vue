@@ -7,6 +7,9 @@
   labels once anyone started typing, and put both of its refusals at the bottom of the card.
 -->
 <script setup lang="ts">
+/** `bare` on Settings: just the form, inside a section that already says what it is for. */
+defineProps<{ bare?: boolean }>();
+
 const { data, api, json, setToken, load } = useHub();
 const error = ref<string | null>(null);
 
@@ -38,12 +41,14 @@ async function submit(e: Event) {
 </script>
 
 <template>
-  <section v-if="needed" class="identity needed">
-    <h2>Add a way to sign in</h2>
-    <p class="muted">
-      This account only exists as a token. Set an email and password and you can sign in from any
-      browser — and recover it if the token is lost.
-    </p>
+  <section v-if="needed" :class="bare ? '' : 'identity needed'">
+    <template v-if="!bare">
+      <h2>Add a way to sign in</h2>
+      <p class="muted">
+        Right now you're only signed in on this browser. Add an email and password to sign in
+        anywhere else, and to get back in if this browser forgets you.
+      </p>
+    </template>
 
     <form class="flex flex-col gap-4" @submit.prevent="submit">
       <div :class="box">

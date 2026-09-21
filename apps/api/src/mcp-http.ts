@@ -41,10 +41,227 @@ const failed = (value: string) => ({
   isError: true,
 });
 
-/** Hand a route's answer back as it came, so a tool never invents an error the API did not give. */
+/**
+ * Hand a route's answer back as it came, so a tool never invents an error the API did not give.
+ *
+ * The same JSON goes out twice: as text, which every client reads, and as `structuredContent`,
+ * which is what a tool with an output schema has to return. A route that answered with something
+ * other than a JSON object is a failure here, since the SDK would refuse the result anyway.
+ */
 async function relay(call: Call, method: string, path: string, body?: unknown) {
   const res = await call(method, path, body);
-  return res.status >= 400 ? failed(res.text) : text(res.text);
+  if (res.status >= 400) return failed(res.text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(res.text);
+  } catch {
+    return failed(`unexpected response from ${path}: ${res.text.slice(0, 200)}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return failed(`unexpected response from ${path}: ${res.text.slice(0, 200)}`);
+  }
+  return { ...text(res.text), structuredContent: parsed as Record<string, unknown> };
+}
+
+/**
+ * Output schemas: what each tool hands back, for clients that read results as data.
+ *
+ * Every object passes through fields it does not name, and almost every field is optional. The
+ * routes are the source of truth and add fields freely; a schema that closed the object, or
+ * required a field a route stopped sending, would turn a working tool into a validation error.
+ * What is named here is what a caller is likely to act on.
+ */
+const verdictOut = z
+  .object({
+    ok: z.boolean().optional(),
+    by: z.string().optional(),
+    note: z.string().optional(),
+    at: z.string().optional(),
+  })
+  .passthrough();
+
+const guideSummaryOut = z
+  .object({
+    id: z.string(),
+    title: z.string().optional(),
+    kind: z.string().optional().describe("transfer, bug or task"),
+    status: z.string().optional(),
+    url: z.string().optional().describe("share link"),
+    created: z.string().optional(),
+    updated: z.string().optional(),
+    source_context: z.string().optional(),
+    from: z.string().optional(),
+    team: z.string().optional(),
+    to: z.string().optional(),
+    for_me: z.boolean().optional(),
+    report: z.string().optional(),
+    parent: z.string().optional(),
+    children: z.number().optional(),
+    area: z.string().optional(),
+    severity: z.string().optional(),
+    verdict: verdictOut.nullable().optional(),
+    failing: z.boolean().optional(),
+  })
+  .passthrough();
+
+const guidesOut = z.object({ guides: z.array(guideSummaryOut) }).passthrough();
+
+const boardOut = z
+  .object({
+    waiting: z.array(guideSummaryOut).optional().describe("handed to you, not taken"),
+    failing: z.array(guideSummaryOut).optional().describe("yours, with a failing verdict"),
+    in_flight: z.array(guideSummaryOut).optional().describe("handed over, no answer yet"),
+    landed: z.array(guideSummaryOut).optional().describe("handed over and verified"),
+    unread: z.number().optional(),
+  })
+  .passthrough();
+
+const logOut = z
+  .object({
+    log: z.array(
+      z
+        .object({
+          act: z.string().optional(),
+          at: z.string().optional(),
+          guide: z.string().optional(),
+          title: z.string().optional(),
+          repo: z.string().optional(),
+          url: z.string().optional(),
+          note: z.string().optional(),
+          text: z.string().optional().describe("the act as one readable line"),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+const getGuideOut = z
+  .object({
+    id: z.string(),
+    kind: z.string().describe("transfer, bug or task"),
+    markdown: z.string().describe("the document as published, frontmatter first"),
+    follow_ups: z
+      .array(z.object({ id: z.string(), title: z.string(), markdown: z.string() }).passthrough())
+      .describe("more context published under this guide, oldest first"),
+  })
+  .passthrough();
+
+const publishOut = z
+  .object({
+    id: z.string(),
+    url: z.string().optional().describe("share link"),
+    status: z.string().optional(),
+    created: z.boolean().optional().describe("false when an existing guide was replaced"),
+    team: z.string().optional(),
+    to: z.string().optional(),
+  })
+  .passthrough();
+
+const ackOut = z
+  .object({ id: z.string(), taken: z.boolean().optional(), note: z.string().optional() })
+  .passthrough();
+
+const verdictResultOut = z
+  .object({ id: z.string(), ok: z.boolean().optional(), note: z.string().optional() })
+  .passthrough();
+
+const fileBugsOut = z
+  .object({
+    report: z
+      .object({
+        id: z.string(),
+        title: z.string().optional(),
+        environment: z.string().optional(),
+      })
+      .passthrough(),
+    issues: z.array(
+      z.object({ id: z.string(), url: z.string().optional(), title: z.string() }).passthrough(),
+    ),
+  })
+  .passthrough();
+
+const uploadOut = z
+  .object({
+    upload_url: z.string().describe("one-time link that takes the image's bytes"),
+    expires: z.string().describe("when the link stops working"),
+    command: z.string().describe("the curl command to run where the file is"),
+  })
+  .passthrough();
+
+const shotOut = z
+  .object({
+    id: z.string(),
+    url: z.string(),
+    markdown: z.string().describe("the line to put in the guide body"),
+  })
+  .passthrough();
+
+const reportOut = z
+  .object({
+    report: z
+      .object({
+        id: z.string(),
+        title: z.string().optional(),
+        environment: z.string().optional(),
+        issues: z.number().optional(),
+        open: z.number().optional(),
+        failing: z.number().optional(),
+        areas: z
+          .array(
+            z
+              .object({ area: z.string().optional(), issues: z.array(guideSummaryOut).optional() })
+              .passthrough(),
+          )
+          .optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+/**
+ * What heads a guide's follow-ups when they are handed to an agent. Mirrors `FOLLOW_UPS_LEAD` in
+ * packages/passalong/src/passalong.js, so an agent reads the same words from either server.
+ */
+export const FOLLOW_UPS_LEAD =
+  "FOLLOW-UPS — more context added to this guide, oldest first. Read them before acting; where " +
+  "one contradicts the original, the follow-up is newer.";
+
+/**
+ * A guide's follow-ups with their content, formatted to go after the document — or "" when there
+ * are none or anything fails. A follow-up is more context for the guide, so whoever opens the
+ * original gets them; but context is never worth failing the tool over, since the guide itself is
+ * what was asked for. `?markdown=1` records no pull on the children: reading context for a guide is
+ * not opening those guides.
+ */
+async function followUps(
+  call: Call,
+  id: string,
+): Promise<{ text: string; guides: { id: string; title: string; markdown: string }[] }> {
+  const none = { text: "", guides: [] };
+  try {
+    const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}/children?markdown=1`);
+    if (res.status >= 400) return none;
+    const { guides = [] } = JSON.parse(res.text) as {
+      guides?: { id?: string; title?: string; markdown?: unknown }[];
+    };
+    const withContent = guides
+      .filter((g) => g?.id && typeof g.markdown === "string")
+      .map((g) => ({
+        id: String(g.id),
+        title: g.title || "untitled",
+        markdown: String(g.markdown).trimEnd(),
+      }));
+    if (!withContent.length) return none;
+    return {
+      text: [
+        FOLLOW_UPS_LEAD,
+        ...withContent.map((g) => `--- follow-up ${g.id}: ${g.title} ---\n${g.markdown}`),
+      ].join("\n\n"),
+      guides: withContent,
+    };
+  } catch {
+    return none;
+  }
 }
 
 /**
@@ -104,6 +321,126 @@ function fetchable(raw: string): URL | null {
   return url;
 }
 
+/**
+ * A file a client passes in, in the shape `openai/fileParams` requires: all four properties
+ * declared, only `download_url` and `file_id` required. The client fills it; the model never sees
+ * the bytes. Only a top-level input field can be declared a file — which is why the attachments on
+ * file_bugs sit beside `issues` and each issue points at them by position.
+ */
+const fileInput = z.object({
+  download_url: z.string().describe("where the file can be fetched (https)"),
+  file_id: z.string().describe("the host's id for the file"),
+  mime_type: z.string().optional().describe("image/png, image/jpeg, image/webp, image/gif"),
+  file_name: z.string().optional().describe("original filename, used as the label"),
+});
+type FileInput = z.infer<typeof fileInput>;
+
+/**
+ * Fetch a client-passed file and store it through `POST /v1/shots`. Returns the markdown line that
+ * points at it, or the reason it could not be stored. Shared by every tool that takes a file, so
+ * the SSRF guard and the size bound are written once.
+ */
+async function storeFile(
+  call: Call,
+  file: FileInput,
+): Promise<{ line: string; shot: { id: string; url: string } } | { error: string }> {
+  const url = fetchable(file.download_url);
+  if (!url) {
+    return {
+      error:
+        "download_url has to be a public https URL. If the image is a file you hold — in a code " +
+        "sandbox or on disk — call create_upload and run the command it returns instead.",
+    };
+  }
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    return { error: `could not fetch the file (${(err as Error).message})` };
+  }
+  if (!res.ok) return { error: `could not fetch the file: ${res.status} ${res.statusText}` };
+  // The declared length is a hint and a lie is free, so the bytes are what gets measured.
+  const bytes = await res.arrayBuffer();
+  if (bytes.byteLength > FETCH_MAX) return { error: "that file is too large to attach" };
+  if (!bytes.byteLength) return { error: "that file is empty" };
+  // The client's mime_type is what it says the file is; the host's own content-type is what it
+  // served. Prefer the served one — `/v1/shots` keys storage off this and refuses what it does
+  // not know, so being wrong here is a 415 rather than a mislabelled image.
+  const served = (res.headers.get("content-type") || "").split(";")[0]?.trim();
+  const type = served || file.mime_type || "";
+  const up = await call("POST", "/v1/shots", bytes, {
+    contentType: type,
+    headers: file.file_name ? { "x-shot-name": file.file_name.replace(/[^\x20-\x7e]/g, "") } : {},
+  });
+  if (up.status >= 400) return { error: up.text };
+  const shot = (JSON.parse(up.text) as { shot: { id: string; url: string } }).shot;
+  const label = (file.file_name || "screenshot").replace(/[[\]]/g, "");
+  return { line: `![${label}](${shot.url})`, shot };
+}
+
+/** Store every file in order, stopping at the first that fails and naming which one it was. */
+async function storeFiles(
+  call: Call,
+  files: FileInput[],
+): Promise<{ lines: string[] } | { error: string }> {
+  const lines: string[] = [];
+  for (const [i, file] of files.entries()) {
+    const stored = await storeFile(call, file);
+    if ("error" in stored) {
+      const name = file.file_name ? ` (${file.file_name})` : "";
+      return { error: `attachment ${i}${name}: ${stored.error}` };
+    }
+    lines.push(stored.line);
+  }
+  return { lines };
+}
+
+/**
+ * Put evidence lines into a guide's markdown: at the end of its Problem section when it has one,
+ * where a bug's reader looks first and where `bugDocument` puts them; otherwise at the end.
+ */
+export function withEvidence(markdown: string, lines: string[]): string {
+  if (!lines.length) return markdown;
+  const block = lines.join("\n");
+  const problem = /^## Problem[ \t]*$/m.exec(markdown);
+  if (problem) {
+    const after = problem.index + problem[0].length;
+    const next = /^## /m.exec(markdown.slice(after));
+    if (next) {
+      const at = after + next.index;
+      return `${markdown.slice(0, at).trimEnd()}\n\n${block}\n\n${markdown.slice(at)}`;
+    }
+  }
+  return `${markdown.trimEnd()}\n\n${block}\n`;
+}
+
+/**
+ * What each tool does to the world, said out loud. MCP's defaults for a tool that says nothing are
+ * the worst case — it writes, it may destroy, it reaches outside — and a client acts on them:
+ * ChatGPT badged every tool here, `inbox` included, as a destructive public write.
+ *
+ * `openWorldHint` is false for everything that stays inside Passalong. Only attach_screenshot and
+ * the tools that take attachments fetch a URL somebody else controls.
+ */
+// The task queue's answers. Open like the rest: the routes add fields freely.
+const taskOut = z
+  .object({
+    task: z
+      .object({ id: z.string(), markdown: z.string().optional(), state: z.string().optional() })
+      .passthrough()
+      .nullable(),
+  })
+  .passthrough();
+const progressOut = z
+  .object({ id: z.string(), lease_until: z.string().optional(), note: z.string().optional() })
+  .passthrough();
+const finishOut = z
+  .object({ id: z.string(), state: z.string().optional(), report: z.string().optional() })
+  .passthrough();
+
+const READS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
+const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
+
 export function buildServer(call: Call, vocabulary: Vocabulary) {
   const server = new McpServer(
     { name: "passalong", version: "0.2.0" },
@@ -121,6 +458,19 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "verify_guide with the result. A bug report is not broken because you reproduced it.\n" +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
         "file_bugs with all of them at once; each becomes a guide someone can take on its own.\n" +
+        "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
+        "attach it with attach_screenshot and pass what it returns as `evidence` — a screenshot " +
+        "you described instead of attaching is the most useful thing in the report, thrown away. " +
+        "If you hold the image as a file rather than as a file input — in a code sandbox, or on " +
+        "disk — call create_upload and run the command it returns; never base64 an image into a " +
+        "tool call. " +
+        "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
+        "the body, and publish_guide the same id — publishing claims whatever the markdown names.\n" +
+        "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
+        "more context — a missing detail, a step that needed explaining, what changed since, what " +
+        "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
+        "id. It is listed under the original, and anyone who opens the original, person or agent, " +
+        "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.\n" +
         "kind: task is work nobody has done yet. It has no Steps: work out how to reach Goal " +
         "within Constraints, leave Out of scope alone, and treat Acceptance as the definition of " +
         "done. verify_guide once every Acceptance check holds.\n" +
@@ -135,6 +485,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "search_guides",
     {
       title: "Search guides",
+      annotations: READS,
       description:
         "Search guides by words in the title, tags, stack or body. Returns summaries, not the " +
         "documents — follow up with get_guide.",
@@ -142,6 +493,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         q: z.string().optional().describe("words to match"),
         scope: z.string().optional().describe('"all" (default), "mine", or a team slug'),
       },
+      outputSchema: guidesOut,
     },
     async ({ q, scope }) => {
       const query = new URLSearchParams();
@@ -156,11 +508,14 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "get_guide",
     {
       title: "Get guide",
+      // Not read-only: fetching a teammate's guide records a pull, and that tells them it landed.
+      annotations: ADDS,
       description:
         "Fetch one guide's full markdown by id. Read `kind` in its frontmatter before acting: a " +
         "bug is a defect to fix, and its Reproduce section produces the problem rather than " +
         "solving it; a task is work nobody has done yet, done when its Acceptance holds. Fetching a teammate's guide tells them the transfer landed.",
       inputSchema: { id: z.string().describe("passalong id, e.g. k3mq2xa7") },
+      outputSchema: getGuideOut,
     },
     async ({ id }) => {
       const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}`);
@@ -177,7 +532,33 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
             "how to reach Goal within Constraints, and leave Out of scope alone. It is done when " +
             "every check under Acceptance holds; answer with verify_guide.\n\n"
           : "";
-      return text(lead + res.text);
+      // A second content block, not text added to the first. The document is handed over as it
+      // came — a transfer guide byte for byte — so an agent that writes it back out cannot carry
+      // the note into it, and nothing lands in front of `---`. Mirrors `followUpNote()`.
+      const bug = /^kind:\s*bug\s*$/m.test(res.text);
+      const note = bug
+        ? "<!-- passalong: once this is fixed, if the fix is worth repeating somewhere else, " +
+          `that is more context for this bug: publish it as a transfer guide with publish_guide ` +
+          `parent=${id}, and whoever opens this bug gets it too. -->`
+        : "<!-- passalong: a follow-up is more context for this guide, written as its own guide. " +
+          "If this guide needs more — a missing detail, a step that needed explaining, what " +
+          "changed since, what you found doing it — publish that with publish_guide " +
+          `parent=${id}, and whoever opens this guide gets it too. -->`;
+      const context = await followUps(call, id);
+      return {
+        content: [
+          { type: "text" as const, text: lead + res.text },
+          ...(context.text ? [{ type: "text" as const, text: context.text }] : []),
+          { type: "text" as const, text: note },
+        ],
+        // The document untouched — no lead, no note — for a client that reads results as data.
+        structuredContent: {
+          id,
+          kind: bug ? "bug" : /^kind:\s*task\s*$/m.test(res.text) ? "task" : "transfer",
+          markdown: res.text,
+          follow_ups: context.guides,
+        },
+      };
     },
   );
 
@@ -185,8 +566,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "inbox",
     {
       title: "Inbox",
+      annotations: READS,
       description: "Guides handed to you or your teams that nobody has taken yet.",
       inputSchema: {},
+      outputSchema: guidesOut,
     },
     async () => relay(call, "GET", "/v1/inbox"),
   );
@@ -195,10 +578,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "board",
     {
       title: "Board",
+      annotations: READS,
       description:
         "What is waiting on you and what you handed over, in queues: waiting, not working, in " +
         "flight, landed.",
       inputSchema: {},
+      outputSchema: boardOut,
     },
     async () => relay(call, "GET", "/v1/board"),
   );
@@ -207,6 +592,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "log",
     {
       title: "What this user did",
+      annotations: READS,
       description:
         "This user's own acts on guides, newest first: published, pulled, and every verdict and " +
         "ack they gave, each with a rendered `text` line and the guide's repo. Use it for 'what " +
@@ -221,6 +607,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           .optional()
           .describe("only what happened on or after: 2026, 2026-09, or 2026-09-11"),
       },
+      outputSchema: logOut,
     },
     async ({ repo, since }) => {
       const query = new URLSearchParams();
@@ -235,25 +622,69 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "publish_guide",
     {
       title: "Publish guide",
+      // Destructive because passing an existing id replaces that guide's document. Open world
+      // because `attachments` are fetched from wherever the client says they are.
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       description:
         "Publish a guide from its full markdown — a transfer guide, a single bug with " +
-        "`kind: bug`, or a task with `kind: task`. Use file_bugs for more than one bug. Missing id, created, author and " +
-        "source_context are filled in. Addressing is frontmatter: `team:` and `to:`.",
+        "`kind: bug`, or a task with `kind: task`. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
+        "is minted and returned. To change a guide, pass the id it came back with; inventing a " +
+        "fresh id to retry or to correct one publishes a second copy, and every copy counts " +
+        "against the author's synced limit. Created, author and source_context are filled in. " +
+        "Addressing is frontmatter: `team:` and `to:`. A screenshot the user attached " +
+        "is evidence: pass it in `attachments` and it is stored and put in the body under Problem " +
+        "(or at the end). A line from attach_screenshot already in the markdown works too, " +
+        "because publishing claims whatever the markdown names.",
       inputSchema: {
+        attachments: z
+          .array(fileInput)
+          .optional()
+          .describe("images the user attached, filled in by the client; each lands in the body"),
         id: z
           .string()
-          .describe("passalong id: 6-12 lowercase letters and digits, chosen by you if new"),
+          .optional()
+          .describe(
+            "omit for a new guide; to update one, the id it was published under — never a new one",
+          ),
         markdown: z.string().describe("the whole document, frontmatter first"),
+        parent: z
+          .string()
+          .optional()
+          .describe(
+            "id of the guide this one adds context to — set it and this is published as that " +
+              "guide's follow-up: listed under it, and read by whoever opens it",
+          ),
       },
+      outputSchema: publishOut,
+      _meta: { "openai/fileParams": ["attachments"] },
     },
-    async ({ id, markdown }) =>
-      relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}`, { markdown }),
+    // `parent` rides beside the document and the route writes it into the frontmatter, so a model
+    // never has to edit YAML to record where its work came from.
+    //
+    // The id is minted here when none is given. Requiring one made the model name every guide
+    // itself, and a model that re-files names it again: one bug reached a hub as three guides,
+    // `khaimeteam4`, `5` and `6`. The route's answer carries the id, so the caller has it to reuse.
+    //
+    // Attachments are stored before the guide is written, so a file that cannot be fetched fails
+    // the call instead of publishing a guide that names evidence it does not have.
+    async ({ id, markdown, parent, attachments }) => {
+      const stored = await storeFiles(call, attachments ?? []);
+      if ("error" in stored) return failed(stored.error);
+      const document = withEvidence(markdown, stored.lines);
+      return relay(
+        call,
+        "PUT",
+        `/v1/guides/${encodeURIComponent(id || newId())}`,
+        parent ? { markdown: document, parent } : { markdown: document },
+      );
+    },
   );
 
   server.registerTool(
     "ack_guide",
     {
       title: "Say whether you are taking it",
+      annotations: ADDS,
       description:
         "The first word back on a guide handed to you, before any work: take it, or pass it " +
         "back. Passing must say why — an unanswered handoff is indistinguishable from one nobody " +
@@ -267,6 +698,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           .optional()
           .describe("required when taken is false: why it is not yours; one line, 280 chars"),
       },
+      outputSchema: ackOut,
     },
     async ({ id, taken, note }) =>
       relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/ack`, {
@@ -290,6 +722,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       description:
         "Claim the oldest ready task for a repo, and return it. While you hold it no other agent " +
         "can take it. If you already hold one, that one comes back instead — one at a time.",
+      annotations: ADDS,
+      outputSchema: taskOut,
       inputSchema: {
         agent: AGENT,
         repo: z
@@ -306,15 +740,23 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         any: any === true,
       });
       if (res.status >= 400) return failed(res.text);
-      const { task } = JSON.parse(res.text) as { task: { id: string; markdown: string } | null };
-      if (!task) return text("No task ready. Nothing to do — tell the user the queue is empty.");
+      const parsed = JSON.parse(res.text) as { task: { id: string; markdown: string } | null };
+      const task = parsed.task;
+      if (!task)
+        return {
+          ...text("No task ready. Nothing to do — tell the user the queue is empty."),
+          structuredContent: { task: null },
+        };
       // Mirrors leadFor() in packages/passalong/src/mcp.js for a task, plus what to do next.
-      return text(
-        "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
-          "reach Goal within Constraints, and leave Out of scope alone. It is done when every " +
-          `check under Acceptance holds.\n\n${task.markdown}\n\n<!-- passalong: task ${task.id} ` +
-          "is yours. task_progress at each milestone; finish_task with a transfer guide's id when done. -->",
-      );
+      return {
+        ...text(
+          "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how " +
+            "to reach Goal within Constraints, and leave Out of scope alone. It is done when every " +
+            `check under Acceptance holds.\n\n${task.markdown}\n\n<!-- passalong: task ${task.id} ` +
+            "is yours. task_progress at each milestone; finish_task with a transfer guide's id when done. -->",
+        ),
+        structuredContent: parsed as Record<string, unknown>,
+      };
     },
   );
 
@@ -322,6 +764,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "task_progress",
     {
       title: "Report progress on a task",
+      annotations: ADDS,
+      outputSchema: progressOut,
       description:
         "Say you are still working on the task you hold, with a one-line status the board shows. " +
         "30 minutes without this stalls the task. If it says you do not hold the task, stop.",
@@ -342,6 +786,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "finish_task",
     {
       title: "Finish a task",
+      annotations: ADDS,
+      outputSchema: finishOut,
       description:
         "Hand a finished task to a person for review, once every Acceptance check holds. `report` " +
         "is the id of the transfer guide you published about the work — publish_guide it first.",
@@ -366,14 +812,19 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "verify_guide",
     {
       title: "Say whether it worked",
+      annotations: ADDS,
       description:
         "Answer for a guide you took. The single most valuable thing to report back, and the " +
-        "only way the sender learns their handoff did not land. A failure must say why.",
+        "only way the sender learns their handoff did not land. A failure must say why. If the " +
+        "guide needs more context than a one-line note holds — a missing detail, a step that " +
+        "needed explaining, what you found doing it — publish that as a follow-up: its own guide, " +
+        "with publish_guide `parent` set to this id. Whoever opens this guide then gets it too.",
       inputSchema: {
         id: z.string(),
         ok: z.boolean().describe("true if it holds up"),
         note: z.string().optional().describe("required when ok is false; one line, 280 chars"),
       },
+      outputSchema: verdictResultOut,
     },
     async ({ id, ok, note }) =>
       relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/verdict`, {
@@ -386,11 +837,25 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "file_bugs",
     {
       title: "File bugs",
+      // Every issue is a new guide, so nothing is replaced; attachments are fetched from outside.
+      annotations: { ...ADDS, openWorldHint: true },
       description:
         "File defects you found but are not fixing, as one report. Each issue becomes its own " +
         "guide — own id, share link and verdict — so any of them can be handed to whoever fixes " +
-        "it. Send them all in one call rather than one call each.",
+        "it. Send them all in one call rather than one call each. If the user showed you an " +
+        "image of any of this, it is evidence: pass the files in `attachments` and list each " +
+        "file's position in the issue it belongs to (`attachments: [0]`); with one issue, every " +
+        "file goes to it. A URL or line from attach_screenshot or create_upload goes in " +
+        "`evidence` instead. " +
+        "Describing a screenshot you were given, instead of attaching it, throws away the most " +
+        "useful thing in the report.",
       inputSchema: {
+        attachments: z
+          .array(fileInput)
+          .optional()
+          .describe(
+            "images the user attached, filled in by the client; each issue names its own by position",
+          ),
         title: z.string().optional().describe('what the sweep was, e.g. "Checkout pass, 8 Sep"'),
         environment: z.string().optional().describe("production, staging or development"),
         to: z
@@ -400,6 +865,17 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         issues: z
           .array(
             z.object({
+              evidence: z
+                .array(z.string())
+                .default([])
+                .describe(
+                  "screenshot URLs from attach_screenshot, or the markdown lines it returned; " +
+                    "they go under Problem, where a reader looks first",
+                ),
+              attachments: z
+                .array(z.number().int().min(0))
+                .default([])
+                .describe("positions in the top-level `attachments` that show this issue, from 0"),
               title: z.string().describe("what is broken, in one line"),
               problem: z.string().describe("what is broken and what it stops someone doing"),
               reproduce: z
@@ -417,8 +893,34 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
           .min(1),
         cwd: z.string().optional().describe("ignored; this server has no working directory"),
       },
+      outputSchema: fileBugsOut,
+      _meta: { "openai/fileParams": ["attachments"] },
     },
-    async ({ title, environment, to, issues }) => {
+    async ({ title, environment, to, issues, attachments: files = [] }) => {
+      // Which issue each file belongs to is settled before anything is written. A guess — every
+      // file on every issue, or the unclaimed ones on the first — puts one bug's screenshot on
+      // another bug, which is worse than no screenshot. With a single issue there is nothing to
+      // guess.
+      const claims = issues.map((issue) =>
+        issues.length === 1 && !issue.attachments.length
+          ? files.map((_, i) => i)
+          : issue.attachments,
+      );
+      const out = claims.flat().find((i) => i >= files.length);
+      if (out !== undefined) {
+        return failed(`an issue names attachment ${out}, but only ${files.length} were passed`);
+      }
+      const unclaimed = files.map((_, i) => i).filter((i) => !claims.some((c) => c.includes(i)));
+      if (unclaimed.length) {
+        return failed(
+          `attachment ${unclaimed.join(", ")} belongs to no issue: list each file's position in ` +
+            "the `attachments` of the issue it shows",
+        );
+      }
+      // Stored before the report opens, so a file that cannot be fetched leaves nothing half-filed.
+      const stored = await storeFiles(call, files);
+      if ("error" in stored) return failed(stored.error);
+
       // The report first, because each issue's frontmatter names it.
       const [team, handle] = String(to || "").split("/");
       const opened = await call("POST", "/v1/reports", {
@@ -433,10 +935,14 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       // One at a time: they are writes to the same account against a rate limit, and a partial
       // failure should be able to say which issues already landed.
       const filed: { id: string; url: string; title: string }[] = [];
-      for (const issue of issues) {
+      for (const [n, issue] of issues.entries()) {
         const id = newId();
         const markdown = bugDocument({
           ...issue,
+          evidence: [
+            ...issue.evidence,
+            ...[...new Set(claims[n])].map((i) => stored.lines[i] as string),
+          ],
           report: report.id,
           environment,
           team,
@@ -450,7 +956,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         }
         filed.push({ id, url: (JSON.parse(res.text) as { url: string }).url, title: issue.title });
       }
-      return text(JSON.stringify({ report, issues: filed }, null, 2));
+      const result = { report, issues: filed };
+      return { ...text(JSON.stringify(result, null, 2)), structuredContent: result };
     },
   );
 
@@ -474,24 +981,16 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "attach_screenshot",
     {
       title: "Attach a screenshot",
+      annotations: { ...ADDS, openWorldHint: true },
       description:
         "Store an image a user attached, so a bug report can point at it. Returns the markdown to " +
         `put in the guide body — evidence lives in the document, not beside it. ${vocabulary.shotTypes}. ` +
         "Call this before file_bugs or publish_guide, then paste the returned line into the " +
         "issue's Problem or Reproduce section; publishing claims whatever the markdown names.",
       inputSchema: {
-        file: z
-          .object({
-            download_url: z.string().describe("where the file can be fetched (https)"),
-            file_id: z.string().describe("the host's id for the file"),
-            mime_type: z
-              .string()
-              .optional()
-              .describe("image/png, image/jpeg, image/webp, image/gif"),
-            file_name: z.string().optional().describe("original filename, used as the label"),
-          })
-          .describe("the attached image, filled in by the client"),
+        file: fileInput.describe("the attached image, filled in by the client"),
       },
+      outputSchema: shotOut,
       // The field names a client fills with files. Expressed with zod rather than the `$defs` /
       // `$ref` the Apps SDK reference writes out: the wire schema is the same object with the same
       // four properties, and one schema language in this file is worth more than matching a
@@ -499,37 +998,62 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       _meta: { "openai/fileParams": ["file"] },
     },
     async ({ file }) => {
-      const url = fetchable(file.download_url);
-      if (!url) return failed("download_url has to be a public https URL");
-      let res: Response;
-      try {
-        res = await fetch(url);
-      } catch (err) {
-        return failed(`could not fetch the file (${(err as Error).message})`);
-      }
-      if (!res.ok) return failed(`could not fetch the file: ${res.status} ${res.statusText}`);
-      // The declared length is a hint and a lie is free, so the bytes are what gets measured.
-      const bytes = await res.arrayBuffer();
-      if (bytes.byteLength > FETCH_MAX) return failed("that file is too large to attach");
-      if (!bytes.byteLength) return failed("that file is empty");
-      // The client's mime_type is what it says the file is; the host's own content-type is what it
-      // served. Prefer the served one — `/v1/shots` keys storage off this and refuses what it does
-      // not know, so being wrong here is a 415 rather than a mislabelled image.
-      const served = (res.headers.get("content-type") || "").split(";")[0]?.trim();
-      const type = served || file.mime_type || "";
-      const up = await call("POST", "/v1/shots", bytes, {
-        contentType: type,
-        headers: file.file_name
-          ? { "x-shot-name": file.file_name.replace(/[^\x20-\x7e]/g, "") }
-          : {},
-      });
-      if (up.status >= 400) return failed(up.text);
-      const shot = JSON.parse(up.text) as { shot: { id: string; url: string } };
-      const label = file.file_name || "screenshot";
-      return text(
-        `${JSON.stringify(shot.shot, null, 2)}\n\n` +
-          `Put this in the guide body:\n![${label}](${shot.shot.url})`,
-      );
+      const stored = await storeFile(call, file);
+      if ("error" in stored) return failed(stored.error);
+      return {
+        ...text(
+          `${JSON.stringify(stored.shot, null, 2)}\n\nPut this in the guide body:\n${stored.line}`,
+        ),
+        structuredContent: { ...stored.shot, markdown: stored.line },
+      };
+    },
+  );
+
+  /**
+   * Evidence, from an agent that holds the image as a file: Claude's sandbox, or anything else that
+   * can run a command but cannot fill a file input.
+   *
+   * The link is minted here and the bytes go to it from wherever the file is, so they never pass
+   * through the model. The route in index.ts spends the link and stores the shot.
+   */
+  server.registerTool(
+    "create_upload",
+    {
+      title: "Get an upload link",
+      annotations: ADDS,
+      description:
+        "For an image you hold as a file — in a code sandbox, or on disk — that you cannot pass " +
+        "as a file input. Returns a one-time link and the curl command that sends the file to " +
+        "it. Run the command where the file is, with IMAGE_PATH replaced by the file's path; its " +
+        "JSON response has `markdown`, the line to put in the guide body or pass as file_bugs " +
+        "`evidence`. The link works once and expires in 10 minutes, so ask for one per image, " +
+        "right before sending it. The bytes go straight to Passalong and never through the " +
+        "conversation — never base64 an image into a tool call instead. If the command cannot " +
+        "reach passalong.dev, the sandbox's network settings block it: tell the user to allow " +
+        "that domain for code execution.",
+      inputSchema: {
+        name: z.string().optional().describe("label for the image, e.g. its filename"),
+      },
+      outputSchema: uploadOut,
+    },
+    async ({ name }) => {
+      const res = await call("POST", "/v1/uploads", { name: name ?? "" });
+      if (res.status >= 400) return failed(res.text);
+      const { upload_url, expires } = JSON.parse(res.text) as {
+        upload_url: string;
+        expires: string;
+      };
+      // PUT spelled out, and no content-type: the route reads the type from the bytes, so the one
+      // thing an agent could get wrong in this command is not in it.
+      const command = `curl -sS --fail-with-body -X PUT --data-binary @IMAGE_PATH '${upload_url}'`;
+      return {
+        ...text(
+          `Upload link (one use, expires ${expires}):\n${upload_url}\n\n` +
+            `Run this where the file is, with IMAGE_PATH replaced by its path:\n${command}\n\n` +
+            "The response's `markdown` is the line to put in the guide body.",
+        ),
+        structuredContent: { upload_url, expires, command },
+      };
     },
   );
 
@@ -537,8 +1061,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     "get_report",
     {
       title: "Get report",
+      annotations: READS,
       description: "One bug report and its issues, grouped by product area.",
       inputSchema: { id: z.string() },
+      outputSchema: reportOut,
     },
     async ({ id }) => relay(call, "GET", `/v1/reports/${encodeURIComponent(id)}`),
   );
@@ -571,6 +1097,7 @@ function bugDocument(issue: {
   environment?: string;
   team?: string;
   to?: string;
+  evidence?: string[];
 }) {
   const front = [
     `title: ${quote(issue.title)}`,
@@ -586,16 +1113,23 @@ function bugDocument(issue: {
   const tags = ["bug", issue.environment, issue.area].filter(Boolean) as string[];
   front.push(`tags: [${tags.map(quote).join(", ")}]`);
 
+  // Under Problem, not a heading of their own: for a visual defect the picture *is* the problem
+  // statement, and a bug's sections are a fixed set. Naming them in the body is also what binds
+  // them — `claimShots` claims whatever the markdown points at, so a URL anywhere else uploads
+  // evidence no guide owns and the nightly sweep takes it.
+  const shots = (issue.evidence || [])
+    .map((s) => String(s ?? "").trim())
+    .filter(Boolean)
+    .map((s) => (s.startsWith("![") ? s : `![evidence](${s})`));
   const body = [
     "> **Bug report.** The steps under Reproduce show the problem — they are not a fix to apply. " +
       "Fix what Problem describes, then check Verification.",
     "",
     "## Problem",
     issue.problem.trim() || "_No description given._",
-    "",
-    "## Reproduce",
-    issue.reproduce.trim() || "_Not recorded._",
   ];
+  if (shots.length) body.push("", ...shots);
+  body.push("", "## Reproduce", issue.reproduce.trim() || "_Not recorded._");
   if (issue.verification?.trim()) body.push("", "## Verification", issue.verification.trim());
   if (issue.gotchas?.trim()) body.push("", "## Gotchas", issue.gotchas.trim());
   return `---\n${front.join("\n")}\n---\n\n${body.join("\n")}\n`;

@@ -1,53 +1,84 @@
 <!--
-  Everything the three hub pages have in common: the credential, the load, the sign-in gate, the
-  masthead, the error line and the footer. It is a component rather than a Nuxt layout because the
-  signed-out state is not a page — /hub, /hub/guides and /hub/settings all collapse to the same
-  sign-in card, and a layout would have to render a heading above it that describes a screen the
-  visitor cannot see. That is how a signed-out visitor once ended up being told these were "Your
-  transfers".
+  Everything the hub pages have in common: the credential, the load, the sign-in gate, the top
+  bar, the error line and the plan banners. It is a component rather than a Nuxt layout because
+  the signed-out state is not a page — every /hub route collapses to the same sign-in card, and a
+  layout would have to render a heading above it that describes a screen the visitor cannot see.
+
+  The top bar holds only places (Guides, Your log, Settings) and two menus: New, for making a
+  guide, and you. It used to carry a large "Your transfers" heading, a sentence of counts computed
+  differently from the counts below it, team chips labelled with slugs, and a "Report a bug" tab
+  that was a verb among places. Each page now names itself, and the guides page counts its own
+  sections.
 -->
 <script setup lang="ts">
+import { useQuery } from "@tanstack/vue-query";
+
 withDefaults(
   defineProps<{
-    /** "Your transfers" everywhere the page is about guides; settings names itself. */
+    /** The page's own title. The guides page draws its own, with the team picker in it. */
     heading?: string;
   }>(),
-  { heading: "Your transfers" },
+  { heading: "" },
 );
 
 // Every form on these pages submits through JavaScript, and the CSP's `form-action 'none'` blocks
-// the native fallback, so without script the hub cannot do anything. Say so, and point at the
-// surface that has no such requirement.
+// the native fallback, so without script the hub cannot do anything. Say so, and say what still
+// works.
 //
 // It goes in through `useHead` rather than sitting in the template because a browser with script
 // *enabled* parses the contents of <noscript> as plain text, while Vue's server render emits it as
-// markup — so hydration finds a text node where it expected a <p> and reports a mismatch. Injected
-// into the document, it is never part of the tree Vue tries to reconcile.
+// markup — so hydration finds a text node where it expected a <p> and reports a mismatch.
 useHead({
   noscript: [
     {
       tagPosition: "bodyOpen",
       innerHTML:
-        "<p><b>Passalong</b> — the hub needs JavaScript. The CLI does not: <code>passalong list</code>.</p>",
+        "<p><b>Passalong</b> needs JavaScript to show your guides. A guide's own link still opens without it.</p>",
     },
   ],
 });
 
-const { data, signedIn, maybe, expired, scope, error, adoptToken, setToken, load, signOut } =
-  useHub();
+const {
+  data,
+  signedIn,
+  maybe,
+  expired,
+  error,
+  loadError,
+  meFailed,
+  adoptToken,
+  setToken,
+  start,
+  load,
+  api,
+} = useHub();
+
+/**
+ * Whether this deployment takes money at all. The limit banners link to plans, and a link to a page
+ * that says "Paid plans aren't available yet" is a dead end, so the link only appears when there is
+ * something there to choose. Same query and key as the plan blocks on Settings.
+ */
+const { data: billing } = useQuery({
+  queryKey: hubKeys.billing,
+  queryFn: () => api<{ stripe: string; paystack: string }>("/v1/billing"),
+  enabled: signedIn,
+  staleTime: Number.POSITIVE_INFINITY,
+});
+const plansOffered = computed(() =>
+  (["stripe", "paystack"] as const).some((p) => billing.value?.[p] && billing.value[p] !== "unset"),
+);
 const route = useRoute();
 
 // Nothing is fetched during SSR: neither credential is visible from the server, so the first
 // render is always the signed-out screen and the client decides from there.
 onMounted(() => {
   adoptToken();
-  // Moving between hub pages remounts this shell. The state it would fetch is already in memory
-  // and every mutation reloads on its own, so a tab switch is not a reason to refetch five
-  // endpoints.
-  if (!signedIn.value) load();
+  // Moving between hub pages remounts this shell. That must not refetch: the queries are shared
+  // and cached, and calling `load()` here invalidated all of them on every navigation, which
+  // restarted every retry — so a server that was failing kept the page on its skeleton forever and
+  // the error never got the chance to show. `start()` only begins loading the first time.
+  start();
 });
-
-watch(scope, () => load());
 
 function onToken(t: string) {
   setToken(t);
@@ -61,19 +92,11 @@ function onSignedIn() {
   load({ dropToken: true });
 }
 
-const waiting = computed(() => data.value.board?.waiting.length ?? 0);
-
-/**
- * Teams whose subscription lapsed, so the hub says it before a terminal does.
- *
- * Same reasoning as the quota warning below: the refusal happens at `passalong share`, on a machine
- * where nothing can explain itself beyond one line of stderr. This is the only place the state is
- * visible before it bites.
- */
+/** Teams whose plan lapsed, so the hub says it before a share is refused somewhere else. */
 const lapsed = computed(() => (data.value.me?.teams ?? []).filter((t) => t.plan === "lapsed"));
 
 /**
- * Warn before the limit bites, not after: the share that fails happens in a terminal.
+ * Warn before the limit bites, not after.
  *
  * Keyed on the plan name rather than on the number. A falsy `limit` used to mean "no ceiling", and
  * now an account with no plan also has no number — so truthiness alone would tell somebody who may
@@ -89,178 +112,140 @@ const nearLimit = computed(() => {
   return Boolean(me && me.sync === "free" && me.guides >= me.limit * 0.8);
 });
 
-// Counting is the whole point of it: the pages below say which guides, this says how much there is
-// to care about before you have read anything. Small numbers are spelled out because it is a
-// sentence, not a stat line.
-const WORDS = ["Nothing", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
-const word = (n: number) => WORDS[n] ?? String(n);
+const tabs = [
+  { to: "/hub", label: "Guides" },
+  { to: "/hub/tasks", label: "Tasks" },
+  { to: "/hub/log", label: "Your log" },
+  { to: "/hub/settings", label: "Settings" },
+];
 
-/** A plain sum: /v1/board's four sender buckets are disjoint in SQL, so nothing is counted twice. */
-const handed = computed(() => {
-  const b = data.value.board;
-  if (!b) return 0;
-  return b.failing.length + b.in_flight.length + b.landed.length;
-});
-
-const standing = computed(() => {
-  const w = waiting.value;
-  const m = handed.value;
-  const first = w
-    ? `${word(w)} thing${w === 1 ? " waits" : "s wait"} on you.`
-    : "Nothing waits on you.";
-  const second = m
-    ? `${word(m)} of yours ${m === 1 ? "is" : "are"} out there.`
-    : "Nothing of yours is out there.";
-  return `${first} ${second}`;
-});
-
-const tabs = computed(() => [
-  { to: "/hub", label: "Board", count: waiting.value || null },
-  {
-    to: "/hub/guides",
-    // Archived ones are on a shelf inside that page, not in this number: the count is meant to
-    // say how much there is to look at, and the point of archiving is that there is less.
-    label: "All guides",
-    count: data.value.guides.filter((g) => g.status !== "consumed").length || null,
-  },
-  // No count. The other two numbers say how much is waiting; a log has nothing waiting in it, and
-  // a number beside it would only ever be "how much have you done", which is the stat line this
-  // page exists without.
-  // Counted by what needs you: work an agent has finished and nobody has looked at yet.
-  {
-    to: "/hub/tasks",
-    label: "Tasks",
-    count: data.value.tasks.filter((t) => t.mine && t.state === "review").length || null,
-  },
-  { to: "/hub/log", label: "Your log", count: null },
-  // The one tab that is a verb. Everything else here is a place; this is the thing you came to do
-  // when what you have is a list of bugs rather than a guide you already wrote somewhere else.
-  { to: "/hub/report", label: "Report a bug", count: null },
-  { to: "/hub/settings", label: "Settings", count: null },
-]);
+/** The pages that are about one guide or one report belong under Guides. */
+const active = (to: string) =>
+  to === "/hub"
+    ? route.path === "/hub" ||
+      route.path === "/hub/write" ||
+      route.path.startsWith("/hub/answer") ||
+      route.path.startsWith("/hub/report")
+    : route.path === to;
 </script>
 
 <template>
   <!-- Wider than the 46rem the rest of the product reads at. That measure is right for a guide
-       and wrong for a board: this is the one surface that is scanned rather than read. -->
-  <main class="max-w-[54rem]">
+       and wrong for a list: this is the one surface that is scanned rather than read. -->
+  <!-- Settings is wider again: it has a section nav beside its content, and the connect sheet puts
+       an app picker beside its steps. -->
+  <main :class="route.path === '/hub/settings' ? 'max-w-[70rem]' : 'max-w-[54rem]'">
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
-         refresh and every click of the logo — which is a full page load. -->
+         refresh. -->
+    <!-- Not when `/v1/me` failed for a reason other than a 401. That is a server that did not
+         answer, not a session that ended, and showing the sign-in card for it tells someone who is
+         signed in that they are not. -->
     <HubSignIn
-      v-if="!signedIn && !maybe"
-      :error="error"
+      v-if="!signedIn && !maybe && !meFailed"
+      :error="error || loadError"
       :expired="expired"
       @token="onToken"
       @signed-in="onSignedIn"
     />
 
     <section v-else class="hub">
-      <!-- The rule under the tab bar is the one this page needs, so the header gives up its own. -->
-      <header class="mb-3 border-b-0 pb-0">
-        <div class="flex flex-wrap items-center justify-between gap-3">
+      <header class="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
           <AppBrand to="/hub" />
-          <HubScopes />
+          <nav class="flex flex-wrap gap-1" aria-label="Hub">
+            <NuxtLink
+              v-for="t in tabs"
+              :key="t.to"
+              :to="t.to"
+              class="rounded-1 px-3 py-1.5 font-ui text-sm no-underline transition-colors"
+              :class="
+                active(t.to)
+                  ? 'bg-surface font-semibold text-fg'
+                  : 'font-medium text-muted hover:text-fg'
+              "
+              :aria-current="active(t.to) ? 'page' : undefined"
+            >
+              {{ t.label }}
+            </NuxtLink>
+          </nav>
         </div>
-        <h1>{{ heading }}</h1>
-        <div class="meta">
-          <span><slot name="sub">{{ standing }}</slot> <a href="/">What is Passalong?</a></span>
+        <div v-if="signedIn" class="flex items-center gap-2">
+          <HubNewMenu />
+          <HubAccountMenu />
         </div>
       </header>
 
-      <!-- The page you are on is the one thing this bar has to say, so it says it with weight and
-           a rule rather than a filled pill: these are three places, not three filters, and the
-           chips below them already mean "filter". -->
-      <nav class="mb-6 flex flex-wrap gap-1 border-b border-line">
-        <NuxtLink
-          v-for="t in tabs"
-          :key="t.to"
-          :to="t.to"
-          class="-mb-px border-b-2 px-3 py-2 font-ui text-sm no-underline transition-colors"
-          :class="
-            route.path === t.to
-              ? 'border-b-accent font-semibold text-fg'
-              : 'border-b-transparent font-medium text-muted hover:text-fg'
-          "
-        >
-          {{ t.label }}
-          <span v-if="t.count" class="ml-1 font-code text-xs text-muted">{{ t.count }}</span>
-        </NuxtLink>
-      </nav>
+      <template v-if="heading">
+        <h1 class="mt-0">{{ heading }}</h1>
+        <p v-if="$slots.sub" class="-mt-2 mb-6 font-ui text-sm text-muted"><slot name="sub" /></p>
+      </template>
 
       <!-- A failed call used to be one red sentence, with no way to tell whether the page you are
-           looking at is stale and nothing to do about it but reload. -->
+           looking at is stale and nothing to do about it but reload. The sentence itself comes
+           from the server, which words it for a person. -->
       <div
-        v-if="error"
+        v-if="error || loadError"
+        role="alert"
         class="mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3"
       >
         <div class="min-w-0 grow basis-64">
-          <p class="m-0 font-ui text-sm font-semibold text-danger">That did not go through</p>
-          <p class="mt-1 mb-0 font-ui text-sm text-muted">
-            {{ error }} — what you can see may be out of date.
+          <p class="m-0 font-ui text-sm font-semibold text-danger">
+            {{ error ? "That didn't work" : "Your guides didn't load" }}
           </p>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ error || loadError }}</p>
         </div>
         <button class="btn outline danger sm" @click="load()">Try again</button>
         <button class="btn sm" @click="error = null">Dismiss</button>
       </div>
 
-      <!-- Read-only, and specific about which half: everything in the team can still be read and
-           answered, and only new work is refused. A banner that said "read-only" and stopped would
-           have people assuming their guides were gone. -->
+      <!-- Specific about which half stops: everything in the team can still be read and answered,
+           and only new guides are refused. -->
       <p
         v-for="t in lapsed"
         :key="t.slug"
         class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
       >
-        <b class="text-fg">{{ t.name }} is read-only.</b>
-        Its subscription lapsed. Everything already in it can still be read, pulled and answered —
-        what stops is handing over anything new, and anyone else joining. Sharing a guide without a
-        team is unaffected.
+        <b class="text-fg">{{ t.name }} can't take new guides right now.</b>
+        Its plan has lapsed. Everything already in it can still be read and answered, and nobody new
+        can join. {{ t.role === "owner" ? "Renew it in Settings." : "Ask the team owner to renew it." }}
       </p>
 
-      <!-- No plan at all is a different sentence from being near a ceiling: there is no number to
-           be under and nothing to archive, so the only useful thing to say is where to fix it. -->
       <p
         v-if="noPlan"
         class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
       >
-        <b class="text-fg">Syncing needs a plan.</b>
-        <code>passalong share</code> will be refused until there is one. Anything already synced
-        stays exactly where it is, and everything local still works.
-        <NuxtLink to="/hub/settings">See plans</NuxtLink>
+        <b class="text-fg">Sending guides needs a plan.</b>
+        Guides you already have stay where they are.
+        <NuxtLink v-if="plansOffered" to="/hub/settings#plan">Choose a plan</NuxtLink>
       </p>
 
-      <!-- The ceiling stops `passalong share` server-side. Saying so here is the only warning
-           anyone gets before the next share fails from a terminal. -->
       <p
         v-if="nearLimit"
         class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
       >
-        <b class="text-fg">{{ data.me?.guides }} of {{ data.me?.limit }} synced guides used.</b>
-        <template v-if="full">
-          The next <code>passalong share</code> will be refused — archive one you are done with.
+        <b class="text-fg">You're using {{ data.me?.guides }} of {{ data.me?.limit }} guides on the free plan.</b>
+        <template v-if="full"> New guides can't be sent until you make room.</template>
+        Archiving a finished guide frees a space.
+        <NuxtLink :to="{ path: '/hub', query: { done: '1' } }">Show Done</NuxtLink>
+        <template v-if="plansOffered">
+          ·
+          <NuxtLink to="/hub/settings#plan">See plans</NuxtLink>
         </template>
-        <template v-else>The free tier stops at this number.</template>
-        <NuxtLink to="/hub/guides">See what is synced</NuxtLink>
       </p>
 
       <!-- Between the guess and the answer there is no data, so the page's own empty states would
-           read as facts — "nothing is on your board yet" is a sentence, not a spinner, and it is
-           the wrong one to show someone whose board is about to appear. -->
-      <p v-if="!signedIn" class="font-ui text-sm text-muted">Loading your board…</p>
-      <slot v-else />
-
-      <!-- The quota used to be repeated here. It is one line in the tokens section of settings
-           now, which is where someone who has hit it is going to end up anyway. -->
-      <footer>
-        <template v-if="data.me">
-          <NuxtLink to="/hub/settings">
-            {{ data.me.handle ? `@${data.me.handle}` : `account ${data.me.account}` }}
-          </NuxtLink>
-          {{ " · " }}
-        </template>
-        <a href="#" @click.prevent="signOut">sign out</a>
-      </footer>
+           read as facts — "nothing is waiting on you" is the wrong sentence to show someone whose
+           list is about to appear. -->
+      <!-- Once the session check has failed for good, the banner above is the whole message: a
+           skeleton under it would promise a list that is not coming. -->
+      <div v-if="!signedIn && !meFailed" class="flex flex-col gap-6">
+        <span class="block h-6 w-48 rounded-pill bg-line-strong" aria-hidden="true" />
+        <HubSkeleton :rows="4" label="Loading your guides" />
+      </div>
+      <!-- Only for a known session. After a failed session check the banner is the page: the
+           slot would render its empty states ("Nothing is waiting on you") as if they were facts. -->
+      <slot v-else-if="signedIn" />
     </section>
   </main>
 </template>

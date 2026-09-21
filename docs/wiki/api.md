@@ -65,6 +65,13 @@ a document the CLI would accept. A report is the parent that keeps a set togethe
 | `GET /v1/reports` | account | Yours, newest first, with counts |
 | `POST /v1/shots` | account | Raw image bytes with a content-type — png, jpeg, webp, gif, ≤5MB. Not multipart: one file per request. |
 | `GET /v1/shots/:id` | **anyone with the id** | Like the guide that embeds it. An image behind a login renders as a broken image in the document it was pasted into. |
+| `POST /v1/uploads` | account | `{ name? }` → `{ upload_url, expires }`: a one-time link for one screenshot. Ten minutes, 20 open per account (429 past that). |
+| `PUT` or `POST /v1/uploads/:token` | **anyone with the link** | Raw image bytes, no credential. The type is read from the bytes, not the header. → `{ shot, markdown }`; 410 once spent or expired. |
+
+An upload link exists for something that holds an image as a file and cannot send a credential with
+it — in practice, Claude's code sandbox. See `src/uploads.ts`. The link is stored hashed, and it is
+spent by one conditional `UPDATE`, so two uploads racing for it cannot both land. Everything that can
+be checked without spending it (size, type) is checked first, so a wrong file does not burn the link.
 
 A report you cannot see answers 404, not 403: which reports an account has is not something a
 status code should confirm.
@@ -78,13 +85,26 @@ in, and a fresh server per request is correct on a runtime that may hand the nex
 different isolate.
 
 It sits under `/v1/` so the credential middleware has already run: the bearer token that
-authenticates everything else authenticates this. It does **not** run an OAuth flow, so a client
-that will only authenticate that way cannot connect.
+authenticates everything else authenticates this, and so does a connector's OAuth access token,
+which reaches this endpoint and nothing else (see [auth](auth.md)).
 
 The tools reimplement nothing — each is a name, a description and a schema mapped onto a route
-above, dispatched back through the app with the caller's header. Eight of them: `search_guides`,
-`get_guide`, `inbox`, `board`, `publish_guide`, `verify_guide`, `file_bugs`, `get_report`. The stdio
-server has two more that touch a working directory, which a hosted server does not have.
+above, dispatched back through the app with the caller's account. They are `search_guides`,
+`get_guide`, `inbox`, `board`, `log`, `publish_guide`, `ack_guide`, `verify_guide`, `file_bugs`,
+`attach_screenshot`, `create_upload` and `get_report`. The stdio server has the ones that touch a
+working directory, which a hosted server does not. Every tool declares annotations and an output
+schema, and returns `structuredContent` beside its text.
+
+A screenshot reaches this server one of two ways, because MCP has no standard file input yet:
+
+- **ChatGPT** fills a file input. `attach_screenshot`, and the top-level `attachments` on
+  `publish_guide` and `file_bugs`, are declared through `openai/fileParams`; ChatGPT passes a
+  `download_url` and the tool fetches it (public https only) and stores it through `/v1/shots`. Only
+  top-level fields can be files, which is why a `file_bugs` issue names its attachments by position.
+- **Claude** has the file in its code sandbox and nothing to put it in. `create_upload` mints an
+  upload link and returns the `curl` command that sends the file to it; the bytes go from the
+  sandbox to the API and never through the model. The sandbox has to be allowed to reach
+  `passalong.dev`. A tool passed a sandbox path instead of a URL answers by naming `create_upload`.
 
 `src/mcp-http.ts` takes its vocabulary as an argument rather than importing `./guide.js`: a sibling
 imported that way makes the module unloadable under Node's type stripping, which is what keeps the

@@ -130,21 +130,22 @@ export async function logFeed(
 export function line(r: Pick<LogRow, "act" | "title" | "detail">): string {
   const title = r.title ? `"${r.title}"` : "a guide";
   const why = r.detail ? `: ${r.detail}` : "";
+  // The `act` values are the API's and stay as they are; the sentence uses the words a person uses.
   switch (r.act) {
     case "published":
-      return `published ${title}`;
+      return `sent ${title}`;
     case "pulled":
-      return `pulled ${title}`;
+      return `opened ${title}`;
     case "works":
-      return `said ${title} works`;
+      return `said ${title} worked`;
     case "broken":
-      return `said ${title} is broken${why}`;
+      return `said ${title} didn't work${why}`;
     case "took":
       return `took ${title}`;
     case "passed":
-      return `passed ${title} back${why}`;
+      return `passed on ${title}${why}`;
     default:
-      return `did something to ${title}`;
+      return `did something with ${title}`;
   }
 }
 

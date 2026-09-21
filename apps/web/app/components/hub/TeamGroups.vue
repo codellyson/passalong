@@ -10,6 +10,7 @@
   ends up half-added.
 -->
 <script setup lang="ts">
+import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 
 interface Group {
@@ -22,9 +23,21 @@ interface Group {
 
 const props = defineProps<{ team: TeamDetail }>();
 
-const { api, json } = useHub();
+const { api, json, signedIn } = useHub();
+const queryClient = useQueryClient();
 
-const groups = ref<Group[]>([]);
+const key = computed(() => ["groups", props.team.slug] as const);
+const {
+  data: loaded,
+  isPending: loadingGroups,
+  error: loadFailed,
+} = useQuery({
+  queryKey: key,
+  queryFn: async () =>
+    (await api<{ groups: Group[] }>(`/v1/teams/${props.team.slug}/groups`))?.groups ?? [],
+  enabled: signedIn,
+});
+const groups = computed(() => loaded.value ?? []);
 const adding = ref(false);
 const slug = ref("");
 const busy = ref(false);
@@ -43,15 +56,16 @@ const handles = computed(() =>
   (props.team.members || []).map((m) => m.handle).filter((h): h is string => Boolean(h)),
 );
 
-async function load() {
-  try {
-    groups.value =
-      (await api<{ groups: Group[] }>(`/v1/teams/${props.team.slug}/groups`))?.groups || [];
-  } catch (e) {
-    trouble.value = (e as Error).message;
-  }
-}
-onMounted(load);
+/** A member by name. Groups store handles, so this is the lookup back to the person. */
+const nameOf = (handle: string) => {
+  const m = (props.team.members || []).find((x) => x.handle === handle);
+  return m ? m.display || personName(m.name, m.handle) : `@${handle}`;
+};
+
+const load = () => queryClient.invalidateQueries({ queryKey: key.value });
+watch(loadFailed, (e) => {
+  if (e) trouble.value = e.message;
+});
 
 async function add() {
   if (busy.value || !slug.value.trim()) return;
@@ -112,26 +126,27 @@ async function drop(g: Group) {
   <!-- A hairline and an indent, the same as the channels below it: this belongs to the team above
        rather than being a card inside a card inside a section. -->
   <div class="mt-2 border-t border-line pt-2 pl-3">
-    <ul v-if="groups.length" class="m-0 flex list-none flex-col gap-3 p-0">
+    <HubSkeleton v-if="loadingGroups" variant="lines" :rows="2" label="Loading groups" />
+    <ul v-else-if="groups.length" class="m-0 flex list-none flex-col gap-3 p-0">
       <li v-for="g in groups" :key="g.id" class="flex flex-col gap-2">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <code class="font-code text-sm text-fg">#{{ g.slug }}</code>
+          <b class="font-ui text-sm font-semibold text-fg">{{ g.name || g.slug }}</b>
           <span v-if="g.members.length" class="font-ui text-sm text-muted">
-            {{ g.members.map((h) => `@${h}`).join(", ") }}
+            {{ g.members.map(nameOf).join(", ") }}
           </span>
-          <!-- An empty group is an address that reaches nobody, and a guide handed to it lands
-               in no inbox at all. Said plainly, because it looks like it is working. -->
-          <span v-else class="font-ui text-sm text-warn">nobody in it — nothing sent here arrives</span>
+          <!-- An empty group reaches nobody, and a guide sent to it lands with no one at all.
+               Said plainly, because it looks like it is working. -->
+          <span v-else class="font-ui text-sm text-warn">Nobody in it yet, so guides sent here reach no one</span>
           <span class="ml-auto flex flex-wrap items-center gap-2">
             <button class="btn sm" :disabled="busy" @click="edit(g)">
-              {{ editing === g.id ? "cancel" : "who is in it" }}
+              {{ editing === g.id ? "Cancel" : "Choose who's in it" }}
             </button>
             <template v-if="removing === g.id">
               <span class="font-ui text-sm text-muted">Guides already sent keep the name.</span>
               <button class="btn outline danger sm" @click="drop(g)">Remove it</button>
               <button class="btn sm" @click="removing = null">Keep it</button>
             </template>
-            <button v-else class="btn destructive sm" @click="removing = g.id">remove</button>
+            <button v-else class="btn destructive sm" @click="removing = g.id">Remove</button>
           </span>
         </div>
 
@@ -147,14 +162,14 @@ async function drop(g: Group) {
               class="w-auto"
               :checked="picked.has(h)"
               @change="toggle(h)"
-            >@{{ h }}
+            >{{ nameOf(h) }}
           </label>
-          <button class="btn primary sm" :disabled="busy" @click="save(g)">save who is in it</button>
+          <button class="btn primary sm" :disabled="busy" @click="save(g)">Save</button>
         </div>
       </li>
     </ul>
     <p v-else class="m-0 font-ui text-sm text-muted">
-      No groups. A guide goes to one person or to everybody.
+      No groups yet. Without one, a guide goes to one person or to the whole team.
     </p>
 
     <form v-if="adding" class="appears mt-2 flex flex-wrap items-end gap-3" @submit.prevent="add">
@@ -169,13 +184,12 @@ async function drop(g: Group) {
       </button>
       <button class="btn sm" type="button" @click="adding = false; slug = ''">Cancel</button>
       <p class="m-0 basis-full font-ui text-sm text-muted">
-        Hand something to it with <code class="font-code">to: {{ team.slug }}/#{{ slug.trim() || "frontend" }}</code>
-        in the frontmatter. It reaches everyone in the group, and the first to say they are on it
-        takes it off the others' boards.
+        A guide sent to the group reaches everyone in it, and the first person to take it takes it
+        off everyone else's list. Agents can send to it by name too.
       </p>
     </form>
     <button v-else class="btn sm mt-2" @click="adding = true">
-      <AppIcon name="plus" />new group
+      <AppIcon name="plus" />New group
     </button>
 
     <p v-if="trouble" class="mt-2 mb-0 font-ui text-sm text-danger">{{ trouble }}</p>
