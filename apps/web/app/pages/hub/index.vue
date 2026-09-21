@@ -143,11 +143,13 @@ const doneOpen = computed(() => showDone.value || searching.value);
           <p v-else class="m-0 font-ui text-sm text-muted">
             <!-- Said once, quietly, and only for a refresh of what is already on screen. -->
             <span v-if="updating || scopeChanging" role="status" class="mr-2 text-muted">Updating…</span>
-            <a href="#needs">{{ lanes.needs.length }} need you</a>
+            <!-- A count is a link only when there is something to jump to: three underlined links,
+                 two of them to "nothing", was a busy line that went nowhere. -->
+            <component :is="lanes.needs.length ? 'a' : 'span'" :href="lanes.needs.length ? '#needs' : undefined">{{ lanes.needs.length }} need you</component>
             ·
-            <a href="#sent">{{ sentCount }} you sent {{ sentCount === 1 ? "is" : "are" }} still out</a>
+            <component :is="sentCount ? 'a' : 'span'" :href="sentCount ? '#sent' : undefined">{{ sentCount }} you sent {{ sentCount === 1 ? "is" : "are" }} still out</component>
             ·
-            <a href="#done" @click="showDone = true">{{ lanes.done.length }} done</a>
+            <component :is="lanes.done.length ? 'a' : 'span'" :href="lanes.done.length ? '#done' : undefined" @click="showDone = true">{{ lanes.done.length }} done</component>
           </p>
         </div>
         <div class="toolbar m-0 min-w-[14rem] grow basis-56 sm:max-w-xs">
@@ -215,22 +217,26 @@ const doneOpen = computed(() => showDone.value || searching.value);
       </section>
 
       <section id="done" aria-labelledby="lane-done" class="flex scroll-mt-4 flex-col gap-3">
-        <button
-          type="button"
-          class="flex w-full cursor-pointer items-center justify-between rounded-3 border-0 bg-raised px-4 py-3 text-left shadow-edge transition-[box-shadow] duration-150 ease-out hover:shadow-edge-hover"
-          :aria-expanded="doneOpen"
-          @click="showDone = !showDone"
-        >
-          <span id="lane-done" class="flex items-baseline gap-2 text-h3 font-bold text-fg">
-            Done
-            <span v-if="!waiting" class="font-ui text-sm font-normal text-muted tabular-nums">{{ lanes.done.length }}</span>
-          </span>
-          <AppIcon
-            name="reveal"
-            class="text-muted transition-[rotate] duration-150 ease-out"
-            :class="doneOpen ? 'rotate-180' : ''"
-          />
-        </button>
+        <!-- The same heading as the two lanes above, with the chevron as its disclosure. It was a raised
+             card, so the one lane that holds the least urgent work was the one drawn as an object. -->
+        <h2 class="m-0">
+          <button
+            type="button"
+            class="flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left"
+            :aria-expanded="doneOpen"
+            @click="showDone = !showDone"
+          >
+            <span id="lane-done" class="flex items-baseline gap-2 text-h3 font-bold text-fg">
+              Done
+              <span v-if="!waiting" class="font-ui text-sm font-normal text-muted tabular-nums">{{ lanes.done.length }}</span>
+            </span>
+            <AppIcon
+              name="reveal"
+              class="text-muted transition-[rotate] duration-150 ease-out"
+              :class="doneOpen ? 'rotate-180' : ''"
+            />
+          </button>
+        </h2>
         <template v-if="doneOpen">
           <ul v-if="lanes.done.length" class="m-0 list-none rounded-3 bg-raised shadow-edge p-0">
             <HubInboxRow v-for="r in lanes.done" :key="r.g.id" :row="r" />

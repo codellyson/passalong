@@ -14,6 +14,25 @@ const { data, api, json, setToken, load } = useHub();
 const error = ref<string | null>(null);
 
 const needed = computed(() => Boolean(data.value.me) && !data.value.me?.has_password);
+/**
+ * On the board this is a notice first and a form only when asked for: the same one-line band
+ * Settings shows, so the state reads one way wherever it appears. It used to be the whole form in
+ * an accent-ringed panel, half the page, above the work the page is for.
+ */
+const open = ref(false);
+/**
+ * The email is kept here, not bound with `:value`: Vue writes `:value` back on every re-render, and
+ * the hub refetches the account when the window regains focus, which could wipe what was typed.
+ */
+const email = ref("");
+const typed = ref(false);
+watch(
+  () => data.value.me?.email,
+  (v) => {
+    if (!typed.value) email.value = v || "";
+  },
+  { immediate: true },
+);
 
 /**
  * Both refusals worth designing for are about the password: it is too short, or it is one of the
@@ -27,7 +46,7 @@ const box = "block w-full max-w-sm";
 async function submit(e: Event) {
   // Read first, then set state — the inputs are uncontrolled, as everywhere else in the hub.
   const f = e.target as HTMLFormElement;
-  const body = { email: field(f, "email"), password: field(f, "password") };
+  const body = { email: email.value, password: field(f, "password") };
   error.value = null;
   try {
     await api("/v1/auth/password", json("POST", body));
@@ -41,16 +60,21 @@ async function submit(e: Event) {
 </script>
 
 <template>
-  <section v-if="needed" :class="bare ? '' : 'identity needed'">
-    <template v-if="!bare">
-      <h2>Add a way to sign in</h2>
-      <p class="muted">
-        Right now you're only signed in on this browser. Add an email and password to sign in
-        anywhere else, and to get back in if this browser forgets you.
+  <section v-if="needed" :class="bare ? '' : 'mb-8 flex flex-col gap-4'">
+    <div
+      v-if="!bare"
+      class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2 bg-warn-soft px-4 py-3"
+    >
+      <p class="m-0 grow basis-72 font-ui text-sm text-fg">
+        <b>You're only signed in on this browser.</b> Add a password to sign in anywhere else, and to
+        get back in if this browser forgets you.
       </p>
-    </template>
+      <button v-if="!open" class="btn primary sm" type="button" @click="open = true">
+        Add a password
+      </button>
+    </div>
 
-    <form class="flex flex-col gap-4" @submit.prevent="submit">
+    <form v-if="bare || open" class="appears flex flex-col gap-4" @submit.prevent="submit">
       <div :class="box">
         <label :class="label" for="claim-email">Email</label>
         <input
@@ -61,7 +85,8 @@ async function submit(e: Event) {
           required
           placeholder="ada@example.com"
           autocomplete="email"
-          :value="data.me?.email || ''"
+          v-model="email"
+          @input="typed = true"
         />
       </div>
 
@@ -88,6 +113,10 @@ async function submit(e: Event) {
 
       <div class="flex flex-wrap gap-2">
         <button class="primary" type="submit">Save</button>
+        <!-- Opened from the notice, so it can be put away again without saving anything. -->
+        <button v-if="!bare" class="btn" type="button" @click="open = false; error = null">
+          Cancel
+        </button>
       </div>
     </form>
 

@@ -736,9 +736,10 @@ select:focus {
   box-shadow: none;
   outline: none;
 }
+/* Mono where the content is code: a token, an invite. Not search: what you type there is words, and a
+   search box in the code face was the one field on the page that looked like something else. */
 input[name="token"],
-.invite-paste input,
-.hub input[type="search"] {
+.invite-paste input {
   font-family: var(--font-mono);
   font-size: var(--t-sm);
 }
