@@ -38,6 +38,14 @@ const where = computed(() => {
   return [c.host, tree].filter(Boolean).join(":");
 });
 
+/** Whose agent has it: yours, or a teammate's. */
+const by = computed(() => {
+  const b = props.t.claim?.by;
+  if (!b || b.you) return "Your agent";
+  const name = personName(b.name, b.handle);
+  return name ? `${name}'s agent` : "A teammate's agent";
+});
+
 /**
  * When the agent was last heard from. The lease runs 30 minutes from its last call (LEASE_MS in
  * apps/api/src/claims.ts), so that is the lease less 30 minutes — the lease itself is when it
@@ -104,7 +112,7 @@ function send() {
         <code class="shrink-0 font-code">{{ t.id }}</code>
         <span v-if="t.target" class="font-code"><AppShorten :value="t.target" :max="28" /></span>
         <span v-else>no repo</span>
-        <span v-if="where" class="font-code">{{ where }}</span>
+        <span v-if="where">{{ by }} · <span class="font-code">{{ where }}</span></span>
       </div>
 
       <div

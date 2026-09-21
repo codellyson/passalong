@@ -188,6 +188,8 @@ export interface Task {
     pr: string;
     claimed_at: string;
     lease_until: string;
+    /** Whose agent has it. A teammate's agent can take your task. */
+    by?: { handle: string; name: string; you: boolean };
   } | null;
 }
 

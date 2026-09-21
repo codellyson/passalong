@@ -275,6 +275,8 @@ export async function list(
     state: TaskState;
     report_title: string;
     report_key: string;
+    /** Whose agent has it: a teammate's agent can take your task. Null until one does. */
+    by: { handle: string; name: string; you: boolean } | null;
   }[]
 > {
   const [tasks, claims] = await Promise.all([
@@ -290,14 +292,18 @@ export async function list(
       .prepare(
         // The write-up's title rides along, so a reviewer scanning the board sees what came back
         // without opening it. Only a guide the same account can see is named.
-        `SELECT c.*, COALESCE(r.title, '') AS report_title, COALESCE(r.share_key, '') AS report_key
+        `SELECT c.*, COALESCE(r.title, '') AS report_title, COALESCE(r.share_key, '') AS report_key,
+                COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
            FROM claim c
            JOIN guide g ON g.id = c.guide_id
+           LEFT JOIN account a ON a.id = c.account_id
            LEFT JOIN guide r ON r.id = c.report_id AND r.account_id = c.account_id
           WHERE g.kind = 'task' AND ${VISIBLE}`,
       )
       .bind(account)
-      .all<ClaimRow & { report_title: string; report_key: string }>(),
+      .all<
+        ClaimRow & { report_title: string; report_key: string; by_handle: string; by_name: string }
+      >(),
   ]);
   const byTask = new Map(claims.results.map((c) => [c.guide_id, c]));
   return tasks.results.map((task) => {
@@ -308,6 +314,9 @@ export async function list(
       state: stateOf(task, claim, at),
       report_title: claim?.report_title || "",
       report_key: claim?.report_key || "",
+      by: claim
+        ? { handle: claim.by_handle, name: claim.by_name, you: claim.account_id === account }
+        : null,
     };
   });
 }

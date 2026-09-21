@@ -404,3 +404,23 @@ test("a reason over several lines stays one note in the task", async () => {
     /\n- 2026-09-21 rejected: Not met: one row per guide\n  Not met: titles are escaped\n/,
   );
 });
+
+test("a claimed task names the person whose agent has it", async () => {
+  const db = d1();
+  const guide = seed(db);
+  db.raw.prepare("UPDATE account SET handle = 'ada', name = 'Ada Lovelace' WHERE id = 'other'").run();
+  // A teammate's agent can take your task only through a team you share.
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tm', 'tm', 'T', 'me', '${T0}');
+               INSERT INTO membership (team_id, account_id, joined) VALUES ('tm', 'me', '${T0}'), ('tm', 'other', '${T0}');`);
+  guide("t1");
+  guide("t2", { created: later(1) });
+  db.raw.exec("UPDATE guide SET team_id = 'tm'");
+  await next(db, { ...A, account: "other" }, { at: T0 });
+  const rows = await list(db, "me", T0);
+  const t1 = rows.find((r) => r.task.id === "t1");
+  assert.deepEqual(t1.by, { handle: "ada", name: "Ada Lovelace", you: false });
+  assert.equal(rows.find((r) => r.task.id === "t2").by, null, "nobody has an unclaimed task");
+  await next(db, B, { at: T0 });
+  const mine = (await list(db, "me", T0)).find((r) => r.task.id === "t2");
+  assert.equal(mine.by.you, true);
+});

@@ -3320,11 +3320,11 @@ app.get("/v1/tasks", async (c) => {
         mine: r.task.account_id === me,
         url: shareUrl(base, r.task),
       };
-      if (!v.claim) return v;
+      if (!v.claim || !r.by) return v;
       const report_url = r.report_key
         ? shareUrl(base, { id: v.claim.report, share_key: r.report_key })
         : "";
-      return { ...v, claim: { ...v.claim, report_title: r.report_title, report_url } };
+      return { ...v, claim: { ...v.claim, report_title: r.report_title, report_url, by: r.by } };
     }),
   });
 });
