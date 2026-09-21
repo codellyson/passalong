@@ -320,7 +320,7 @@ test("work takes tasks one after another until the queue is empty", { skip }, as
     { cwd: dir },
   );
   for (const id of ids) await p.ready(id);
-  const agent = `node ${join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-agent.mjs")}`;
+  const agent = `node ${join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "fake-agent.mjs")}`;
 
   const run = await p.work({ cwd: dir, agent });
   assert.deepEqual(run.finished, ids);
@@ -346,7 +346,7 @@ test("work stops when an agent exits without finishing, instead of looping on it
     { cwd: dir },
   );
   await p.ready(id);
-  const agent = `node ${join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-agent.mjs")}`;
+  const agent = `node ${join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "fake-agent.mjs")}`;
   process.env.FAKE_AGENT_GIVES_UP = "1";
   try {
     const run = await p.work({ cwd: dir, agent });
