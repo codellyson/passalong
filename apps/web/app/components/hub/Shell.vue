@@ -176,9 +176,13 @@ const active = (to: string) =>
             </NuxtLink>
           </nav>
         </div>
-        <div v-if="signedIn" class="flex items-center gap-2">
-          <HubNewMenu />
-          <HubAccountMenu />
+        <div class="flex items-center gap-2">
+          <!-- Reachable signed in or out: the sign-in screen is as likely as any to be too bright. -->
+          <AppThemeToggle />
+          <template v-if="signedIn">
+            <HubNewMenu />
+            <HubAccountMenu />
+          </template>
         </div>
       </header>
 

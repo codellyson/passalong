@@ -17,6 +17,7 @@ const docs = published("/docs");
     <AppBrand />
     <p class="doors">
       <a v-if="docs" class="quiet" href="/docs">Docs</a>
+      <AppThemeToggle />
       <!-- One sign-in, not two. The hub *is* the sign-in, so a masthead offering both was the same
            door twice. This is for the returning visitor; the page below is for everyone else. -->
       <a class="btn" href="/hub">Sign in</a>

@@ -87,12 +87,11 @@ const step =
               <label class="mb-2 block font-ui text-sm font-medium text-fg" for="first-handle">
                 How teammates mention you
               </label>
-              <div class="flex items-center gap-1 rounded-1 border border-line-strong bg-raised pl-3 focus-within:border-accent">
-                <span class="text-sm text-muted">@</span>
+              <div class="affix">
+                <span class="affix-mark" aria-hidden="true">@</span>
                 <input
                   id="first-handle"
                   v-model="handle"
-                  class="w-full border-0 bg-transparent px-0 py-2 pr-3 focus:outline-none"
                   required
                   spellcheck="false"
                   pattern="[a-z0-9][a-z0-9-]{1,30}"

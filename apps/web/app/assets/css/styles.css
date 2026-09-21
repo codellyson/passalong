@@ -693,6 +693,49 @@ select:focus {
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+/* A field with something fixed in front of the value, like the @ before a handle. The wrapper is the
+   field — border, hover, focus ring, error — and the input inside it is bare. The wrapper used to be
+   the box while the input kept its own focus ring, so focusing drew a second rounded box inside the
+   first. Any `.affix > input` is plain text on the wrapper's surface, whatever state it is in. */
+.affix {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  height: var(--control-h);
+  padding-left: var(--s-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-1);
+  background: var(--surface-raised);
+  transition:
+    border-color var(--motion) ease,
+    box-shadow var(--motion) ease;
+}
+.affix:hover {
+  border-color: var(--muted);
+}
+.affix:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.affix.invalid {
+  border-color: var(--danger);
+}
+.affix > .affix-mark {
+  color: var(--muted);
+  font: var(--control-text) / 1 var(--font-sans);
+}
+.affix > input,
+.affix > input:hover,
+.affix > input:focus {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 var(--s-4) 0 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
 input[name="token"],
 .invite-paste input,
 .hub input[type="search"] {
