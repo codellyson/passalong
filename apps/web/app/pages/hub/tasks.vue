@@ -1,12 +1,13 @@
 <!--
-  The task queue, as columns read top to bottom rather than side by side: this is a page that is
-  scanned for the one thing that needs you, and a row of seven narrow columns on a laptop is a row
-  of seven truncated titles.
+  The task queue, led by what needs you.
 
-  Ordered by who has to act. Review first — an agent finished and is waiting on you. Stalled next —
-  an agent went quiet holding something. Then what is moving, what is queued, what is waiting on
-  another task, what you have not released yet, and last what is done, folded away because it
-  needs nothing.
+  The top of the page is the review: an inbox of your tasks that are waiting on you, and beside it
+  the one you picked, with what you asked for next to what the agent says it checked (HubTaskReview).
+  That is where the time goes and where the page used to create friction, so it gets the space.
+
+  Everything else — what is moving, queued, waiting on another task, still a draft, or done —
+  follows as the plain list it was, grouped by column, because it needs a glance rather than a
+  decision. A teammate's task that needs its author lands here too: the review is yours to give.
 -->
 <script setup lang="ts">
 import type { Task } from "~/types/hub";
@@ -19,16 +20,23 @@ usePage({
 
 const { data } = useHub();
 
+/** In the review inbox: yours, and waiting on you. Mirrors the groups in HubTaskReview. */
+const needsYou = (t: Task) =>
+  t.mine &&
+  (t.state === "review" ||
+    t.state === "stalled" ||
+    (t.state === "claimed" && /^BLOCKED:/i.test(t.claim?.note || "")));
+
 const COLUMNS: { state: Task["state"]; title: string; note: string }[] = [
   {
     state: "review",
-    title: "Waiting for review",
-    note: "An agent finished. Read what came back, then approve or send it back.",
+    title: "Waiting for its author",
+    note: "A teammate's task, finished and waiting on them.",
   },
   {
     state: "stalled",
     title: "Stalled",
-    note: "The agent went quiet. It is still locked to that agent until you take it back.",
+    note: "The agent went quiet. It is still locked to that agent.",
   },
   { state: "claimed", title: "In progress", note: "An agent has it." },
   {
@@ -44,12 +52,14 @@ const COLUMNS: { state: Task["state"]; title: string; note: string }[] = [
   { state: "draft", title: "Draft", note: "Not in the queue until you make them ready." },
 ];
 
-const byState = computed(() => {
+const rest = computed(() => {
   const out = new Map<Task["state"], Task[]>();
-  for (const t of data.value.tasks) out.set(t.state, [...(out.get(t.state) || []), t]);
+  for (const t of data.value.tasks)
+    if (!needsYou(t)) out.set(t.state, [...(out.get(t.state) || []), t]);
   return out;
 });
-const done = computed(() => byState.value.get("done") || []);
+const waiting = computed(() => data.value.tasks.filter(needsYou).length);
+const done = computed(() => rest.value.get("done") || []);
 </script>
 
 <template>
@@ -68,19 +78,24 @@ const done = computed(() => byState.value.get("done") || []);
     </div>
 
     <template v-else>
+      <HubTaskReview :tasks="data.tasks" />
+      <p v-if="!waiting" class="m-0 font-ui text-sm text-muted">
+        Nothing needs you. Anything an agent finishes lands here for you to review.
+      </p>
+
       <template v-for="col in COLUMNS" :key="col.state">
-        <section v-if="byState.get(col.state)?.length" class="mt-8 first:mt-0">
+        <section v-if="rest.get(col.state)?.length" class="mt-10">
           <h2 class="m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted">
-            {{ col.title }} · {{ byState.get(col.state)?.length }}
+            {{ col.title }} · {{ rest.get(col.state)?.length }}
           </h2>
           <p class="mt-1 mb-3 font-ui text-sm text-muted">{{ col.note }}</p>
           <ul class="m-0 list-none overflow-hidden rounded-2 border border-line p-0">
-            <HubTaskRow v-for="t in byState.get(col.state)" :key="t.id" :t="t" />
+            <HubTaskRow v-for="t in rest.get(col.state)" :key="t.id" :t="t" />
           </ul>
         </section>
       </template>
 
-      <details v-if="done.length" class="mt-8">
+      <details v-if="done.length" class="mt-10">
         <summary class="cursor-pointer font-ui text-xs font-semibold uppercase tracking-widest text-muted">
           Done · {{ done.length }}
         </summary>

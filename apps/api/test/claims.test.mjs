@@ -387,3 +387,20 @@ test("a task can only be blocked by tasks its author can see, and never by itsel
   assert.deepEqual(kept, []);
   assert.equal(await stateIn(db, "mine"), "ready");
 });
+
+test("a reason over several lines stays one note in the task", async () => {
+  const db = await inReview();
+  await reject(db, "t1", {
+    account: "me",
+    at: T0,
+    why: "Not met: one row per guide\nNot met: titles are escaped",
+  });
+  const back = await next(db, B, { at: T0 });
+  const notes = back.task.markdown.split("## Review notes")[1];
+  // Every line of it belongs to the one bullet: a line that fell out of the list would read as
+  // loose text after it, and the next note would start a second list.
+  assert.match(
+    notes,
+    /\n- 2026-09-21 rejected: Not met: one row per guide\n  Not met: titles are escaped\n/,
+  );
+});

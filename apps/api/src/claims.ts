@@ -366,7 +366,14 @@ function withNote(markdown: string, line: string): string {
   const body = markdown.trimEnd();
   const lastHeading = body.match(/^## .*$/gm)?.pop();
   const head = lastHeading === "## Review notes" ? body : `${body}\n\n## Review notes`;
-  return `${head}\n- ${line}\n`;
+  // Continuation lines are indented so a reason over several lines stays inside its one bullet:
+  // unindented, the second line reads as loose text and the next note opens a second list.
+  const item = line
+    .split(/\r?\n/)
+    .map((l) => l.trimEnd())
+    .filter(Boolean)
+    .join("\n  ");
+  return `${head}\n- ${item}\n`;
 }
 
 /**
