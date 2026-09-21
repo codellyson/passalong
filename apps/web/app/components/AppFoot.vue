@@ -9,7 +9,7 @@
   <footer class="site-foot">
     <div class="who">
       <AppBrand />
-      <p>Finished work, handed over.<br>Between repos, machines and people.</p>
+      <p>Agents that never start from zero.<br>Between repos, machines, agents and people.</p>
     </div>
     <nav>
       <p class="eyebrow">Product</p>

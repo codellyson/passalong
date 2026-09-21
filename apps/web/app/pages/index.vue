@@ -18,11 +18,11 @@
 usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
-  title: "Passalong — hand finished work to the next repo or agent",
+  title: "Passalong — agents that never start from zero",
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:
-    "A baton pass between repos, machines, agent sessions and teammates — finished work, in a form the next agent can act on.",
+    "Queue work for your agents and get back what they did and why — across repos, machines and teammates.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
   // switches on the moment there is something to show.
@@ -101,16 +101,15 @@ const SPECIMEN = {
     </nav>
 
     <header class="hero">
-      <p class="eyebrow">Finished work, handed over</p>
+      <p class="eyebrow">For developers running more than one agent</p>
       <h1>
-        You already solved this.<br>
-        Somewhere else, someone
-        <span class="turn">is about to solve it again.</span>
+        Agents that never<br>
+        <span class="turn">start from zero.</span>
       </h1>
       <p class="lede">
-        Passalong takes what an agent session just worked out — the problem, the decisions, the
-        steps, how to check it, and what went wrong on the way — and hands it to the next repo,
-        machine or teammate in a form they can act on.
+        Every agent session starts blank. Passalong hands the next one the whole story — what was
+        decided, why, and how to check it — in another repo, on another machine, for a teammate, or
+        from a queue of tasks you review as they come back.
       </p>
       <p class="ways">
         <a class="go" href="/hub">Open your hub</a>
@@ -198,6 +197,51 @@ const SPECIMEN = {
       </p>
     </section>
 
+    <!--
+      The queue: the same document pointed the other way. A guide is work done, handed on; a task
+      is work to do, handed out — and what comes back from it is a guide. Said as three steps in the
+      same layout as the three above, because it is the same loop with one more person in it: you,
+      at the end, deciding whether it is done.
+
+      Every sentence here is something the product does today. No "coming soon" — a landing page
+      that promises is one that has to be rewritten the week it is found out.
+    -->
+    <section class="statement">
+      <p class="eyebrow">The task queue</p>
+      <h2>
+        Queue the work.<br>
+        <span class="turn">Read what comes back.</span>
+      </h2>
+    </section>
+    <!-- Closer to its heading than the page's section gap: the three steps are that heading's, not
+         a section of their own. -->
+    <section class="steps mt-10" aria-label="How the task queue works">
+      <article>
+        <p class="n">01</p>
+        <h2>Write the task</h2>
+        <p>
+          <code>passalong task "add dark mode"</code>, or ask an agent to plan a larger goal. Each
+          task says what done looks like, and waits in Draft until you have read it.
+        </p>
+      </article>
+      <article>
+        <p class="n">02</p>
+        <h2>Agents take it</h2>
+        <p>
+          Run <code>passalong work</code> in the repo, or tell any agent to take the next task. One
+          agent per task — never two on the same one — and a task waits for the ones it depends on.
+        </p>
+      </article>
+      <article>
+        <p class="n">03</p>
+        <h2>You decide it is done</h2>
+        <p>
+          Each task comes back with a write-up of what was done and how it was checked. Approve it,
+          or send it back with a reason the next agent reads first.
+        </p>
+      </article>
+    </section>
+
     <!-- Two tiers as peers under one hairline, not two bordered cards side by side. A card on every
          block is what `/connect` was fixed for: it spends the emphasis evenly and leaves none for
          the thing that matters, which here is the last line of the team column. -->
@@ -215,8 +259,8 @@ const SPECIMEN = {
             {{ PRICING.solo.amount }}<span>{{ PRICING.solo.period }}</span>
           </p>
           <p>
-            Every guide you write, synced across your machines with no ceiling, and an MCP endpoint
-            of your own so any agent you use can search them.
+            Every guide you write, synced across your machines with no ceiling, the task queue for
+            your agents, and an MCP endpoint of your own so any agent you use can search them.
           </p>
         </article>
 
@@ -226,8 +270,9 @@ const SPECIMEN = {
             {{ PRICING.team.amount }}<span>{{ PRICING.team.period }}, {{ PRICING.team.extra }}</span>
           </p>
           <p>
-            A shared workspace, handoffs addressed to a person or to the people who do a thing, and a
-            team MCP endpoint every member's agents can search —
+            A shared workspace, handoffs addressed to a person or to the people who do a thing, one
+            task queue for everyone's agents, and a team MCP endpoint every member's agents can
+            search —
             <b>for everyone in the team, including the members who never paid for a seat.</b>
           </p>
         </article>
@@ -250,10 +295,10 @@ const SPECIMEN = {
     </section>
 
     <section class="closer">
-      <p class="eyebrow">When the next one starts</p>
+      <p class="eyebrow">When the next session starts</p>
       <h2>
-        Somewhere to put<br>
-        <span class="turn">what you just worked out.</span>
+        Give it the whole story<br>
+        <span class="turn">instead of a blank page.</span>
       </h2>
       <p class="ways">
         <a class="go" href="/hub">Open your hub</a>
