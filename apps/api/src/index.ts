@@ -2778,7 +2778,12 @@ function taskView(
 app.get("/v1/tasks", async (c) => {
   const at = now();
   const rows = await claims.list(c.env.DB, c.get("account"), at);
-  return c.json({ tasks: rows.map((r) => taskView(r.task, r.claim, r.state)) });
+  return c.json({
+    tasks: rows.map((r) => {
+      const v = taskView(r.task, r.claim, r.state);
+      return v.claim ? { ...v, claim: { ...v.claim, report_title: r.report_title } } : v;
+    }),
+  });
 });
 
 app.post("/v1/tasks/next", async (c) => {

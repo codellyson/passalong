@@ -116,8 +116,9 @@ export async function serve() {
         "When the user asks you to take work from the queue, call next_task: it claims the oldest " +
         "ready task for this repo, and no other agent can have it while you do. Call " +
         "task_progress with a one-line status at each milestone — silence for 30 minutes stalls " +
-        "the task. When Acceptance holds, publish a transfer guide about what you did " +
-        "(publish_guide), then finish_task with its id; the task goes to a person for review. If " +
+        "the task. When Acceptance holds, call finish_task with `markdown`: a transfer guide about " +
+        "what you did (guide_template shows the shape), which it publishes and attaches; the task " +
+        "goes to a person for review, who reads it against Acceptance. If " +
         "task_progress or finish_task says you no longer hold the task, stop working on it.\n" +
         "When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
@@ -372,8 +373,8 @@ export async function serve() {
         const how =
           `\n\n<!-- passalong: task ${t.id} is yours${t.resumed ? " (you already held it — carry on from where it was left)" : ""}; ` +
           `written to ${t.path}. Call task_progress with a one-line status at each milestone; ` +
-          "30 minutes without one stalls it. When every Acceptance check holds: publish_guide a " +
-          `transfer guide about what you did, then finish_task with id ${t.id} and that guide's id. -->`;
+          "30 minutes without one stalls it. When every Acceptance check holds: finish_task with id " +
+          `${t.id} and \`markdown\`, a transfer guide about what you did. -->`;
         return text(`${leadFor({ kind: "task" })}${t.markdown}${how}`);
       } catch (err) {
         return fail(err);
@@ -410,21 +411,28 @@ export async function serve() {
       title: "Finish a task",
       description:
         "Hand a finished task to a person for review. Only once every Acceptance check holds. " +
-        "`report` is the id of the transfer guide you published about the work (publish_guide " +
-        "first): the reviewer reads it against Acceptance, so write what you did, why, and how " +
-        "you checked it.",
+        "`markdown` is a transfer guide about the work — this publishes it and attaches it, so " +
+        "there is nothing to publish first. The reviewer reads it against Acceptance: say what " +
+        "you did, what you decided and why, and how you checked each Acceptance line.",
       inputSchema: {
         id: z.string().describe("the task's id"),
-        report: z.string().describe("id of the transfer guide you published about this work"),
+        markdown: z
+          .string()
+          .optional()
+          .describe("the transfer guide about this work; start from guide_template"),
+        report: z
+          .string()
+          .optional()
+          .describe("instead of markdown: id of a transfer guide already published about it"),
         pr: z.string().optional().describe("PR or branch link, when there is one"),
         note: z.string().optional().describe("one line for the board"),
         cwd: z.string().optional().describe("the worktree you are working in"),
       },
     },
-    async ({ id, report, pr, note, cwd }) => {
+    async ({ id, markdown, report, pr, note, cwd }) => {
       try {
         return json(
-          await passalong.finishTask(id, { report, pr, note, cwd: cwd || process.cwd() }),
+          await passalong.finishTask(id, { markdown, report, pr, note, cwd: cwd || process.cwd() }),
         );
       } catch (err) {
         return fail(err);

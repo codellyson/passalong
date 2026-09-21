@@ -345,3 +345,11 @@ test("an agent whose task was released or rejected is told to stop", async () =>
   assert.equal(await renew(db, "t1", A, { at: T0, note: null }), null);
   assert.equal((await finish(db, "t1", A, { at: T0, report: "report" })).status, 409);
 });
+
+test("a task in review lists the title of the write-up it came back with", async () => {
+  const db = await inReview();
+  const [row] = (await list(db, "me", T0)).filter((r) => r.task.id === "t1");
+  assert.equal(row.report_title, "task report");
+  const [waiting] = (await list(db, "me", T0)).filter((r) => r.task.id === "report");
+  assert.equal(waiting, undefined, "the write-up is not a task");
+});

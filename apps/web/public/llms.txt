@@ -144,9 +144,10 @@ send file references the server cannot download.
 ready task for the repo you are in and returns it; while you hold it no other agent can have it,
 and if you already hold one you get that one back. Call `task_progress` with a one-line status at
 each milestone: 30 minutes without one stalls the task, which keeps it locked to you but flags it
-to a person. When every `Acceptance` check holds, publish a transfer guide about what you did and
-call `finish_task` with its id — the task goes to a person for review, who reads that guide
-against `Acceptance`. If either call says you no longer hold the task, a person released it: stop.
+to a person. When every `Acceptance` check holds, call `finish_task` with `markdown`: a transfer
+guide about what you did, which it publishes with `parent:` naming the task and attaches. The task
+goes to a person for review, who reads that guide against `Acceptance`. Over the hosted server,
+`publish_guide` the guide first and pass its id as `report`. If either call says you no longer hold the task, a person released it: stop.
 Locally the agent is the worktree, from `.passalong/agent.json`; over the hosted server, pass the
 same `agent` name on every call.
 

@@ -174,7 +174,12 @@ const commands = {
       const who = c ? `  ${c.host || "?"}:${c.worktree.split("/").pop() || "?"}` : "";
       const said = c?.note ? `  "${c.note}"` : "";
       console.log(`${t.id}  ${t.state.padEnd(8)} ${t.title}${t.target ? `  [${t.target}]` : ""}${who}${said}`);
+      // What came back, under the task it answers: the thing a reviewer reads before deciding.
+      if (t.state === "review" && c?.report)
+        console.log(`          → ${c.report}  ${c.report_title || "(untitled)"}${c.pr ? `  ${c.pr}` : ""}`);
     }
+    if (rows.some((t) => t.state === "review"))
+      console.error("\nread a write-up with: passalong open <id> — then approve or reject the task");
   },
 
   async approve(f) {

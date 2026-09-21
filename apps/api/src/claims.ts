@@ -264,7 +264,14 @@ export async function list(
   db: D1Database,
   account: string,
   at: string,
-): Promise<{ task: Omit<TaskRow, "markdown">; claim: ClaimRow | null; state: TaskState }[]> {
+): Promise<
+  {
+    task: Omit<TaskRow, "markdown">;
+    claim: ClaimRow | null;
+    state: TaskState;
+    report_title: string;
+  }[]
+> {
   const [tasks, claims] = await Promise.all([
     db
       .prepare(
@@ -275,16 +282,25 @@ export async function list(
       .all<Omit<TaskRow, "markdown">>(),
     db
       .prepare(
-        `SELECT c.* FROM claim c JOIN guide g ON g.id = c.guide_id
+        // The write-up's title rides along, so a reviewer scanning the board sees what came back
+        // without opening it. Only a guide the same account can see is named.
+        `SELECT c.*, COALESCE(r.title, '') AS report_title FROM claim c
+           JOIN guide g ON g.id = c.guide_id
+           LEFT JOIN guide r ON r.id = c.report_id AND r.account_id = c.account_id
           WHERE g.kind = 'task' AND ${VISIBLE}`,
       )
       .bind(account)
-      .all<ClaimRow>(),
+      .all<ClaimRow & { report_title: string }>(),
   ]);
   const byTask = new Map(claims.results.map((c) => [c.guide_id, c]));
   return tasks.results.map((task) => {
     const claim = byTask.get(task.id) || null;
-    return { task, claim, state: stateOf(task, claim, at) };
+    return {
+      task,
+      claim,
+      state: stateOf(task, claim, at),
+      report_title: claim?.report_title || "",
+    };
   });
 }
 

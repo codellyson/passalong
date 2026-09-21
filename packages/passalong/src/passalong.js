@@ -271,11 +271,27 @@ export async function taskProgress(id, note, { cwd = process.cwd() } = {}) {
   return api.taskProgress(id, note ? { agent: a, note } : { agent: a });
 }
 
-/** The work is done: `report` is the transfer guide about it. The task moves to review. */
-export async function finishTask(id, { report, pr = "", note = "", cwd = process.cwd() } = {}) {
+/**
+ * The work is done: the task moves to review with a transfer guide about it attached.
+ *
+ * Pass `markdown` and this writes that guide too, with `parent:` naming the task, so the write-up
+ * and the finish are one step and neither can be skipped or pointed at the wrong guide. Pass
+ * `report` instead when the guide is already published.
+ */
+export async function finishTask(
+  id,
+  { report, markdown, pr = "", note = "", cwd = process.cwd() } = {},
+) {
   needsSync("finishing a task");
+  if (!report && markdown) {
+    const g = parse(markdown);
+    report = (await share(serialize({ meta: { ...g.meta, parent: id }, body: g.body }), { cwd }))
+      .guide.meta.id;
+  }
   if (!report)
-    throw new PassalongError("finishing needs `report`: the id of a transfer guide about the work");
+    throw new PassalongError(
+      "finishing needs the write-up: `markdown` for a transfer guide about the work, or `report` with the id of one",
+    );
   return api.finishTask(id, { agent: agent(cwd).agent, report, pr, note });
 }
 

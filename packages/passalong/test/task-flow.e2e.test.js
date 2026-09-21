@@ -18,30 +18,74 @@ import { fileURLToPath } from "node:url";
 const API = process.env.PASSALONG_E2E_API;
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "apps", "web");
 
-test("a task goes round: reject, release, approve", {
-  skip: !API && "PASSALONG_E2E_API not set",
-}, async () => {
-  assert.match(API, /^http:\/\/localhost[:/]/, "only ever against a local server");
-  const { token, account } = await (await fetch(`${API}/v1/accounts`, { method: "POST" })).json();
-  execFileSync(
-    "npx",
-    [
-      "wrangler",
-      "d1",
-      "execute",
-      "passalong",
-      "--local",
-      "--command",
-      `UPDATE account SET plan = 'solo' WHERE id = '${account}'`,
-    ],
-    { cwd: WEB, stdio: "ignore" },
-  );
-  process.env.PASSALONG_API = API;
-  process.env.PASSALONG_TOKEN = token;
-  process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-e2e-"));
-  const { parse, serialize } = await import("../src/guide.js");
-  const p = await import("../src/passalong.js");
+/** One account allowed to sync, and the CLI's operations pointed at it. Made once per file. */
+let ready;
+function setup() {
+  ready ??= (async () => {
+    assert.match(API, /^http:\/\/localhost[:/]/, "only ever against a local server");
+    const { token, account } = await (await fetch(`${API}/v1/accounts`, { method: "POST" })).json();
+    execFileSync(
+      "npx",
+      [
+        "wrangler",
+        "d1",
+        "execute",
+        "passalong",
+        "--local",
+        "--command",
+        `UPDATE account SET plan = 'solo' WHERE id = '${account}'`,
+      ],
+      { cwd: WEB, stdio: "ignore" },
+    );
+    process.env.PASSALONG_API = API;
+    process.env.PASSALONG_TOKEN = token;
+    process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-e2e-"));
+    const guide = await import("../src/guide.js");
+    const p = await import("../src/passalong.js");
+    return { account, p, ...guide };
+  })();
+  return ready;
+}
 
+/** A fresh worktree of this account's own repo, and a ready task for it. */
+async function readyTask({ account, p, serialize }, title) {
+  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+  execFileSync("git", ["init", "-q", dir]);
+  execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:e2e/${account}.git`]);
+  const task = serialize({
+    meta: { title, kind: "task", target_context: `e2e/${account}` },
+    body: "## Goal\nDark mode.\n\n## Acceptance\n- the hub follows the OS setting",
+  });
+  const id = (await p.share(task, { cwd: dir })).guide.meta.id;
+  await p.ready(id);
+  return { id, dir };
+}
+
+const skip = !API && "PASSALONG_E2E_API not set";
+
+test("finishing with the write-up publishes it as the task's report", { skip }, async () => {
+  const env = await setup();
+  const { p, parse } = env;
+  const { id, dir } = await readyTask(env, "Report on finish");
+  assert.equal((await p.nextTask({ cwd: dir })).id, id);
+  const md = "---\ntitle: Dark mode, done\n---\n\n## Problem\np\n\n## Steps\n1. tokens\n";
+  const done = await p.finishTask(id, {
+    markdown: md,
+    pr: "https://github.com/e2e/x/pull/1",
+    cwd: dir,
+  });
+  const row = (await p.tasks()).find((t) => t.id === id);
+  assert.equal(row.state, "review");
+  assert.equal(row.claim.report, done.report);
+  assert.equal(row.claim.report_title, "Dark mode, done", "the board names what came back");
+  const report = parse((await p.pull(done.report, { write: false })).markdown).meta;
+  assert.equal(report.title, "Dark mode, done");
+  assert.equal(report.parent, id, "the write-up says which task it answers");
+});
+
+test("a task goes round: reject, release, approve", { skip }, async () => {
+  const env = await setup();
+  const { account, p, parse, serialize } = env;
   const worktree = () => {
     const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
     execFileSync("git", ["init", "-q", dir]);
