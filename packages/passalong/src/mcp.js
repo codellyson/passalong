@@ -130,11 +130,11 @@ export async function serve() {
         "ready task for this repo, and no other agent can have it while you do. Call " +
         "task_progress with a one-line status at each milestone — silence for 30 minutes stalls " +
         "the task. When Acceptance holds, call finish_task with `markdown`: a transfer guide about " +
-        "what you did (guide_template shows the shape), which it publishes and attaches; the task " +
+        "what you did (guide_template kind transfer shows the shape), which it publishes and attaches; the task " +
         "goes to a person for review, who reads it against Acceptance. If " +
         "task_progress or finish_task says you no longer hold the task, stop working on it.\n" +
         "When the user asks to pass along, hand off, or " +
-        "share what was just done, distill the session into a guide (guide_template shows the " +
+        "share what was just done, distill the session into a guide (guide_template kind transfer shows the " +
         "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or " +
         "team/#group for the people who do a thing. " +
         "At the start of work, inbox shows guides teammates have handed to this user — open one " +
@@ -490,7 +490,7 @@ export async function serve() {
         markdown: z
           .string()
           .optional()
-          .describe("the transfer guide about this work; start from guide_template"),
+          .describe("the transfer guide about this work; start from guide_template with kind transfer"),
         report: z
           .string()
           .optional()
@@ -738,20 +738,20 @@ export async function serve() {
     {
       title: "Guide template",
       description:
-        "The empty guide skeleton with guidance comments for each section. `kind: bug` gives the " +
-        "bug report skeleton instead, which has a Reproduce section and no Steps. `kind: task` " +
-        "gives a task brief: Goal, Context, Constraints, Acceptance, Out of scope.",
+        "The empty guide skeleton with guidance comments for each section. By default a task " +
+        "brief: Goal, Context, Constraints, Acceptance, Out of scope. `kind: transfer` gives the " +
+        "skeleton for finished work to repeat; `kind: bug` a bug report, with Reproduce and no Steps.",
       inputSchema: {
         kind: z
           .enum(["transfer", "bug", "task"])
           .optional()
           .describe(
-            "transfer (default) for finished work to repeat; bug for a defect to fix; task for " +
-              "work nobody has done yet",
+            "task (default) for work nobody has done yet; transfer for finished work to repeat; " +
+              "bug for a defect to fix",
           ),
       },
     },
-    async ({ kind }) => text(template(kind === "bug" || kind === "task" ? { kind } : {})),
+    async ({ kind }) => text(template(kind ? { kind } : {})),
   );
 
   server.registerTool(

@@ -76,6 +76,7 @@ export function taskScaffold(sentence, cwd = process.cwd()) {
 export function scaffold(cwd = process.cwd()) {
   const c = context(cwd);
   let md = template({
+    kind: "transfer",
     title: "",
     author: c.author,
     source_context: c.branch && c.branch !== "HEAD" ? `${c.name}@${c.branch}` : c.name,

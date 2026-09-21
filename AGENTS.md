@@ -106,7 +106,8 @@ public one, for agents *using* Passalong rather than changing it.
   dispatches back through the app's own routes with the caller's bearer token, so a rule lives in
   the route and nowhere else. Stateless on purpose: nothing subscribes, so nothing needs a session.
 - **A guide has a kind, and each asks something different of whoever receives one.** `transfer`
-  (or absent — every guide written before migration 0007 is one) is finished work to repeat:
+  (or absent — every guide written before migration 0007 is one, and every installed client still
+  writes one that way; the API stores it spelled out since migration 0023) is finished work to repeat:
   follow its `Steps`. `bug` is a defect to fix where it is. A bug's repro goes under `## Reproduce`
   and **never** `## Steps`, because `Steps` is the heading the MCP server tells every agent to
   follow — a repro under it means an agent reproduces the defect, checks the Verification, finds it

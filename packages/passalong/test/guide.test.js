@@ -13,6 +13,7 @@ import {
   template,
   validate,
 } from "../src/guide.js";
+import { scaffold } from "../src/capture.js";
 
 const SAMPLE = `---
 id: k3mq2xa7
@@ -79,7 +80,7 @@ test("sections keys on ## headings", () => {
 });
 
 test("validate rejects an untouched template and accepts a filled one", () => {
-  const t = parse(template({ title: "x" }));
+  const t = parse(template({ kind: "transfer", title: "x" }));
   assert.ok(validate(t).some((e) => /placeholders/.test(e)));
   const stripped = { meta: t.meta, body: stripPlaceholders(t.body) };
   assert.ok(validate(stripped).some((e) => /Problem/.test(e)));
@@ -103,6 +104,15 @@ test("ids are short, unambiguous, and unique enough", () => {
   const ids = new Set(Array.from({ length: 500 }, () => newId()));
   assert.equal(ids.size, 500);
   for (const id of ids) assert.match(id, /^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
+});
+
+test("a new guide is a task unless it says otherwise", () => {
+  // Most guides assign work. Every template writes its kind out, because a guide with no kind:
+  // line means a transfer to every client already installed.
+  assert.equal(parse(template({ title: "x" })).meta.kind, "task");
+  assert.equal(parse(template({ kind: "transfer", title: "x" })).meta.kind, "transfer");
+  assert.match(template({ kind: "transfer", title: "x" }), /^kind: transfer$/m);
+  assert.match(scaffold(), /^kind: transfer$/m, "capturing finished work is a transfer");
 });
 
 test("a bug keeps its repro out of Steps", () => {

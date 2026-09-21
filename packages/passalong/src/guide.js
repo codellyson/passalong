@@ -475,8 +475,10 @@ export function bugGuide({
 
 /** A draft with the section skeleton. Placeholders are HTML comments so they vanish when rendered. */
 export function template(meta = {}) {
+  // A task unless asked otherwise: most guides assign work. The transfer skeleton writes its kind
+  // out, since an absent kind: still means transfer to every client already installed.
   if (meta.kind === "bug") return bugTemplate(meta);
-  if (meta.kind === "task") return taskTemplate(meta);
+  if (meta.kind !== "transfer") return taskTemplate(meta);
   const body = [
     "## Problem",
     "<!-- passalong: What was broken or needed, in two or three sentences. -->",
@@ -505,6 +507,7 @@ export function template(meta = {}) {
       stack_assumptions: [],
       tags: [],
       ...meta,
+      kind: "transfer",
     },
     body,
   });

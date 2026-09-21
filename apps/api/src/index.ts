@@ -2770,7 +2770,8 @@ app.put("/v1/guides/:id", async (c) => {
       report?.id || "",
       slug(meta.area),
       slug(meta.severity, 8),
-      ["bug", "task"].includes(slug(meta.kind, 16)) ? slug(meta.kind, 16) : "",
+      // Spelled out, never empty: no kind: line is a transfer, as it always was (migration 0023).
+      ["bug", "task"].includes(slug(meta.kind, 16)) ? slug(meta.kind, 16) : "transfer",
       parentId,
       // Only a task is for a repo; on anything else the field means nothing to the queue.
       slug(meta.kind, 16) === "task" ? claims.repoKey(meta.target_context).slice(0, 200) : "",
