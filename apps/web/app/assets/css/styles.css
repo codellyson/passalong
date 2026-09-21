@@ -966,10 +966,56 @@ details.more summary:hover {
   color: var(--fg);
 }
 
+/* A page with nothing on it yet. It says what the page is for, in a heading, and then the one thing
+   to do about it: a button, or a command to copy when the thing is done from a terminal. A bare
+   centred sentence said "empty" without saying what would ever be here, and a command set inline
+   in that sentence wrapped mid-phrase with nothing to copy it by.
+
+   Page-level only. An empty section inside a page — a lane, a team's groups — keeps its one muted
+   line beside the section's own heading and action; a block like this would outweigh them. */
 .empty {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: var(--s-8) var(--s-5);
   color: var(--muted);
-  padding: var(--s-7) 0;
   text-align: center;
+  text-wrap: pretty;
+}
+.empty h2 {
+  margin: 0 0 var(--s-2);
+  /* h2, not h3: h3 is the body size, so the heading only differed by its weight. */
+  font: 600 var(--t-h2) / 1.3 var(--font-sans);
+  color: var(--fg);
+}
+.empty p {
+  margin: 0;
+}
+.empty p + p {
+  margin-top: var(--s-2);
+}
+.empty .actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-5);
+}
+/* A command, set as one unbroken line with its copy button: the well and the button share the
+   control height, like every field and button that sit in a row. */
+.empty .command {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  height: var(--control-h);
+  padding: 0 var(--s-3);
+  overflow-x: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-1);
+  background: var(--surface-raised);
+  color: var(--fg);
+  font: var(--t-sm) / 1 var(--font-mono);
+  white-space: nowrap;
 }
 .empty pre {
   display: inline-block;

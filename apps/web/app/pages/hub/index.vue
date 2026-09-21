@@ -57,6 +57,12 @@ const followed = computed(() =>
   follows.value ? data.value.guides.find((g) => g.id === follows.value) || null : null,
 );
 const searching = computed(() => Boolean(q.value.trim() || follows.value));
+/** Back to the whole list: the search box, and a `?follows=` narrowing if one came in on the URL. */
+function clearSearch() {
+  q.value = "";
+  if (route.query.q || route.query.follows)
+    navigateTo({ query: { ...route.query, q: undefined, follows: undefined } }, { replace: true });
+}
 
 const fromBoard = computed(() => boardStates(data.value.board));
 const me = computed(() => data.value.me?.handle || null);
@@ -179,6 +185,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
         </ul>
         <p v-else class="m-0 font-ui text-sm text-muted">
           {{ searching ? "Nothing waiting on you matches." : "Nothing is waiting on you." }}
+          <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
         </p>
       </section>
 
@@ -202,6 +209,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
         </ul>
         <p v-else class="m-0 font-ui text-sm text-muted">
           {{ searching ? "Nothing you sent matches." : "Nothing you sent is still out." }}
+          <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
           <NuxtLink v-if="!searching" to="/hub/write">Write a guide</NuxtLink>
         </p>
       </section>

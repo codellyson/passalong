@@ -22,6 +22,9 @@ usePage({
 
 const { data } = useHub();
 
+/** The first command a new queue needs, set once so the text shown and the text copied agree. */
+const FIRST = 'passalong task "what needs doing"';
+
 /** In the review inbox: yours, and waiting on you. Mirrors the groups in HubTaskReview. */
 const needsYou = (t: Task) =>
   t.mine &&
@@ -69,14 +72,19 @@ const done = computed(() => rest.value.get("done") || []);
     <template #sub>Work queued for agents, and what came back.</template>
 
     <div v-if="!data.tasks.length" class="empty">
-      <p class="mt-0">
-        No tasks yet. Write one with <code>passalong task "what needs doing"</code>, or ask an agent
-        to plan a larger goal — it lands here as drafts for you to read.
+      <h2>No tasks yet</h2>
+      <p>
+        A task is work for an agent: what done looks like, and what to leave alone. Write one from a
+        terminal, or ask an agent to plan a larger goal. Either way it waits here as a draft until
+        you have read it.
       </p>
-      <p class="mb-0">
-        Then, in the repo it is for, run <code>passalong work</code> or tell an agent to take the
-        next task.
-      </p>
+      <div class="actions">
+        <code class="command">{{ FIRST }}</code>
+        <button class="btn" type="button" @click="copy(FIRST, $event.currentTarget)">
+          <AppIcon name="copy" /><span data-label>Copy</span>
+        </button>
+      </div>
+      <p class="mt-4">Then run <code>passalong work</code> in the repo it is for.</p>
     </div>
 
     <template v-else>
