@@ -64,3 +64,24 @@ test("ready refuses anything that is not a task", async () => {
   assert.equal(guide.meta.status, "published");
   await assert.rejects(passalong.ready(guide.meta.id), /not a task/);
 });
+
+test("an agent started by work is told to commit what it did, under the task's id", () => {
+  const prompt = passalong.workPrompt({
+    id: "ab12cd34",
+    path: "/x/ab12cd34.md",
+    markdown: "## Goal\ng",
+  });
+  assert.match(prompt, /commit/i);
+  assert.match(prompt, /ab12cd34/);
+  assert.match(prompt, /pr`?.*commit|commit.*`?pr/i, "and to hand the commit to finish_task");
+});
+
+test("an agent that cannot finish is told to say why where the board shows it", () => {
+  const prompt = passalong.workPrompt({
+    id: "ab12cd34",
+    path: "/x/ab12cd34.md",
+    markdown: "## Goal\ng",
+  });
+  assert.match(prompt, /BLOCKED:/);
+  assert.match(prompt, /task_progress[^.]*BLOCKED|BLOCKED[^.]*task_progress/);
+});

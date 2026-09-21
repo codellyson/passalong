@@ -58,6 +58,29 @@ passalong setup               install the Claude Code capture skill + register t
 passalong mcp                 run the MCP server over stdio
 ```
 
+## Working the task queue unattended
+
+`passalong work` runs `claude -p` on each ready task for the repo you are in, one after another.
+The agent runs headless, so it can only use the tools you allow up front. A task that needs a
+command you did not allow ends up blocked: the agent says so on the board with a
+`BLOCKED:` progress note and stops. To allow tools, point `--agent` (or `PASSALONG_AGENT`) at a
+small script:
+
+```sh
+#!/bin/sh
+# The prompt must come first: --allowedTools takes any number of values and would swallow it.
+exec claude -p "$@" --permission-mode acceptEdits \
+  --allowedTools "mcp__passalong__*,Bash(npm test:*),Bash(node:*),Bash(git add:*),Bash(git commit:*),Bash(chmod:*)"
+```
+
+```sh
+passalong work --agent ./agent.sh
+```
+
+Each agent commits its change as `<task id>: …` and hands the hash to `finish_task`, so you
+review one task's change at a time. Then `passalong approve <id>`, or
+`passalong reject <id> <why>`: the next agent reads the reason before it starts again.
+
 ## The guide
 
 Plain markdown with frontmatter. Yours to edit, grep, and commit.
@@ -126,7 +149,7 @@ you see which ones keep travelling — there is nothing to mark them as, and not
 claude mcp add passalong -- passalong mcp     # or the equivalent stdio config
 ```
 
-Tools: `publish_guide` (with `to`), `file_bugs`, `start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`, `verify_guide`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`.
+Tools: `publish_guide` (with `to`), `file_bugs`, `start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`, `verify_guide`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`, and for the task queue `plan_tasks`, `next_task`, `task_progress`, `finish_task`.
 
 The same server is hosted at `https://passalong.dev/v1/mcp` for assistants that add remote MCP servers. A screenshot reaches it differently by assistant — ChatGPT passes the file, Claude sends it from its code sandbox to a one-time upload link (`create_upload`, with `passalong.dev` allowed in its network settings), and a local server reads a path. [passalong.dev/connect](https://passalong.dev/connect#screenshots) has the steps.
 

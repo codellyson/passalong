@@ -90,8 +90,13 @@ function send() {
         <a :href="t.claim.report_url || undefined" target="_blank" rel="noopener">{{
           t.claim.report_title || t.claim.report
         }}</a>
-        <template v-if="t.claim.pr">
+        <!-- `pr` is whatever the agent had: a PR link when there is one, and more often the hash
+             of the commit it made, which has nowhere to link to from here. -->
+        <template v-if="t.claim.pr && /^https?:\/\//.test(t.claim.pr)">
           · <a :href="t.claim.pr" target="_blank" rel="noopener">the change</a>
+        </template>
+        <template v-else-if="t.claim.pr">
+          · commit <code class="font-code">{{ t.claim.pr.slice(0, 7) }}</code>
         </template>
       </p>
 

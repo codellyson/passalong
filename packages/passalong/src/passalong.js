@@ -680,9 +680,17 @@ export function workPrompt(t) {
     "Do it in this repo. There are no Steps: work out how to reach Goal within Constraints, and",
     "leave Out of scope alone. Call the passalong MCP tool task_progress with id",
     `${t.id} and a one-line status at each milestone — 30 minutes of silence stalls the task.`,
-    `When every Acceptance check holds, call finish_task with id ${t.id} and \`markdown\`: a`,
-    "transfer guide saying what you did, what you decided and why, and how you checked each",
-    "Acceptance line. If either call says you no longer hold the task, stop.",
+    "When every Acceptance check holds, commit what you changed as one commit whose message",
+    `starts with "${t.id}: " — several tasks share this worktree, and a reviewer reads each one's`,
+    "change on its own. Then call finish_task with id",
+    `${t.id}, \`pr\` set to that commit's hash, and \`markdown\`: a transfer guide saying what you`,
+    "did, what you decided and why, and how you checked each Acceptance line. If either call",
+    "says you no longer hold the task, stop.",
+    "",
+    "Nobody reads what you print: this session runs unattended. If something only a person can",
+    "do stands between you and an Acceptance line — a permission, a secret, a decision — call",
+    `task_progress with id ${t.id} and a note starting "BLOCKED: " that says exactly what you`,
+    "need, leave the task unfinished and uncommitted, and stop. The board shows that note.",
   ].join("\n");
 }
 
