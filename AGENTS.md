@@ -35,6 +35,12 @@ public one, for agents *using* Passalong rather than changing it.
   - `src/guide.ts` mirrors the format defined in `packages/passalong/src/guide.js` — change both.
     apps/web aliases this file and `analytics.ts` as `#api/*`.
   - `src/og.ts` reads its fonts through the `ASSETS` binding, which is **apps/web's** assets now.
+  - `src/claims.ts` — the task queue (`docs/V2.md`): claim, lease, gate, `blocked_by`. Imports no
+    sibling so `test/claims.test.mjs` can run it against real SQLite with every migration. The lock
+    is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked.
+  - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running
+    local server (`npm run test:e2e`, skipped by `npm test`). It puts its accounts on a plan in the
+    *local* D1 with `wrangler d1 execute --local`, so it refuses any API that is not localhost.
 - `apps/web` — Nuxt 4 on a Cloudflare Worker. **This is the deployed Worker**: every page (`/`,
   `/g/:id/:key`, `/hub`, `/join/:code`, `/reset`, and the 404 in `app/error.vue`), the static
   assets, and — mounted — the whole of `apps/api`. It owns the three custom domains and is what CI
