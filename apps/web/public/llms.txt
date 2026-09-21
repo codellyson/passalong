@@ -97,13 +97,17 @@ passalong login                 # optional: sync across machines
 - `passalong team create|invite|join|use` — teams
 - `passalong me [--handle H]` — how teammates address you
 - `passalong take <id>` / `passalong pass <id> <why>` — whether you are doing what you were handed
+- `passalong task "<what needs doing>"` / `passalong ready <id>` — write a task; it waits in Draft
+  until it is ready for an agent
+- `passalong tasks` — every task and its column: draft, ready, claimed, stalled, review, done
 - `passalong mcp` — run the MCP server over stdio
 
 ## MCP tools
 
 `passalong setup` registers a stdio MCP server exposing: `publish_guide`, `file_bugs`,
 `start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`,
-`verify_guide`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`. `start_guide` and
+`verify_guide`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`, `next_task`,
+`task_progress`, `finish_task`. `start_guide` and
 `attach_screenshot` need passalong 0.3 or later; an older install exposes the rest, so fall back to
 `get_guide` then `ack_guide` if `start_guide` is not there.
 
@@ -133,6 +137,16 @@ the `![](...)` line to paste into the body, and publishing claims whatever the m
 attach first, publish after. Locally it takes a path on the machine. Over the hosted server it
 takes a file the client passes in, which today means ChatGPT on the web; the ChatGPT mobile apps
 send file references the server cannot download.
+
+`next_task`, `task_progress` and `finish_task` are the task queue. `next_task` claims the oldest
+ready task for the repo you are in and returns it; while you hold it no other agent can have it,
+and if you already hold one you get that one back. Call `task_progress` with a one-line status at
+each milestone: 30 minutes without one stalls the task, which keeps it locked to you but flags it
+to a person. When every `Acceptance` check holds, publish a transfer guide about what you did and
+call `finish_task` with its id — the task goes to a person for review, who reads that guide
+against `Acceptance`. If either call says you no longer hold the task, a person released it: stop.
+Locally the agent is the worktree, from `.passalong/agent.json`; over the hosted server, pass the
+same `agent` name on every call.
 
 `file_bugs` files defects you found but are not fixing — from a test run, a QA pass, a review — as
 one report. Each issue becomes a guide with its own id, share link and verdict, so any of them can

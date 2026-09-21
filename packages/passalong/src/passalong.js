@@ -1,6 +1,8 @@
 // The operations Passalong exposes. Both surfaces (bin/passalong and the MCP server) call these,
 // so anything an agent can do through MCP a human can do from the terminal and vice versa.
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import * as api from "./api.js";
 import { context } from "./capture.js";
@@ -189,17 +191,92 @@ export async function pull(ref, { cwd = process.cwd(), write = true } = {}) {
   }
   let path = null;
   if (write) {
-    const dir = join(cwd, ".passalong");
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    // A pulled guide carries its own share URL in the frontmatter, and that URL needs no account
-    // to read. Committing this directory would publish the guide to anyone who can see the repo,
-    // so the directory ignores itself. Delete this file if you do want guides in the repo.
-    const ignore = join(dir, ".gitignore");
-    if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
-    path = join(dir, `${guide.meta.id}.md`);
+    path = join(localDir(cwd), `${guide.meta.id}.md`);
     writeFileSync(path, serialize(guide));
   }
   return { guide, from, path, markdown: serialize(guide) };
+}
+
+/**
+ * `.passalong/` in a working directory, made if it is missing.
+ *
+ * A pulled guide carries its own share URL in the frontmatter, and that URL needs no account to
+ * read. Committing this directory would publish the guide to anyone who can see the repo, so the
+ * directory ignores itself. Delete its .gitignore if you do want guides in the repo.
+ */
+function localDir(cwd) {
+  const dir = join(cwd, ".passalong");
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const ignore = join(dir, ".gitignore");
+  if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
+  return dir;
+}
+
+/**
+ * Who this worktree is to the task queue, minted the first time it asks.
+ *
+ * A claim belongs to an agent, not an account: one person runs several, and "no two agents on one
+ * task" means nothing if the server cannot tell them apart. The id lives in the worktree's own
+ * `.passalong/agent.json`, so a restarted session in the same worktree is the same agent and gets
+ * its task back, and a second worktree of the same repo is a different agent. Per machine would
+ * let two worktrees on one laptop share a lock; per session would lose the task on every restart.
+ */
+export function agent(cwd = process.cwd()) {
+  const c = context(cwd);
+  const root = c.root || cwd;
+  const file = join(localDir(root), "agent.json");
+  let id = "";
+  try {
+    id = String(JSON.parse(readFileSync(file, "utf8")).id || "");
+  } catch {}
+  if (!/^[a-z0-9]{8,64}$/.test(id)) {
+    id = randomBytes(12).toString("hex");
+    writeFileSync(file, `${JSON.stringify({ id }, null, 2)}\n`);
+  }
+  return { agent: id, host: hostname(), repo: c.repo, worktree: root };
+}
+
+function needsSync(what) {
+  if (!api.loggedIn())
+    throw new PassalongError(
+      `${what} needs sync — the queue lives on the server (run \`passalong login\`)`,
+    );
+}
+
+/** Every task you can see, with where it is and who has it. */
+export async function tasks() {
+  needsSync("the task queue");
+  return (await api.tasks()).tasks;
+}
+
+/**
+ * Take the next task for this worktree's repo, or get back the one this worktree already holds.
+ * `null` when there is nothing to do. The guide is written to `.passalong/<id>.md` like a pull.
+ */
+export async function nextTask({ cwd = process.cwd(), any = false } = {}) {
+  needsSync("taking a task");
+  const { task } = await api.nextTask({ ...agent(cwd), any });
+  if (!task) return null;
+  const guide = parse(task.markdown);
+  const path = join(localDir(agent(cwd).worktree), `${task.id}.md`);
+  writeFileSync(path, task.markdown);
+  store.save(guide);
+  return { ...task, path };
+}
+
+/** Word from the agent holding a task: renews its lease, and `note` becomes the board's line. */
+export async function taskProgress(id, note, { cwd = process.cwd() } = {}) {
+  needsSync("reporting progress");
+  const { agent: a } = agent(cwd);
+  return api.taskProgress(id, note ? { agent: a, note } : { agent: a });
+}
+
+/** The work is done: `report` is the transfer guide about it. The task moves to review. */
+export async function finishTask(id, { report, pr = "", note = "", cwd = process.cwd() } = {}) {
+  needsSync("finishing a task");
+  if (!report)
+    throw new PassalongError("finishing needs `report`: the id of a transfer guide about the work");
+  return api.finishTask(id, { agent: agent(cwd).agent, report, pr, note });
 }
 
 /**

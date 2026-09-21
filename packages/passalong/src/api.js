@@ -98,6 +98,12 @@ export const remove = (id) => call(`/v1/guides/${id}`, { method: "DELETE" });
 export const verdict = (id, ok, note = "") =>
   call(`/v1/guides/${id}/verdict`, { method: "PUT", body: { ok, note } });
 
+export const tasks = () => call("/v1/tasks");
+export const nextTask = (body) => call("/v1/tasks/next", { method: "POST", body });
+export const taskProgress = (id, body) =>
+  call(`/v1/tasks/${encodeURIComponent(id)}/progress`, { method: "PUT", body });
+export const finishTask = (id, body) =>
+  call(`/v1/tasks/${encodeURIComponent(id)}/finish`, { method: "POST", body });
 export const ack = (id, taken, note = "") =>
   call(`/v1/guides/${id}/ack`, { method: "PUT", body: { taken, note } });
 

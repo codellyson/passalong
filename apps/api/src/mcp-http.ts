@@ -123,7 +123,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "file_bugs with all of them at once; each becomes a guide someone can take on its own.\n" +
         "kind: task is work nobody has done yet. It has no Steps: work out how to reach Goal " +
         "within Constraints, leave Out of scope alone, and treat Acceptance as the definition of " +
-        "done. verify_guide once every Acceptance check holds.",
+        "done. verify_guide once every Acceptance check holds.\n" +
+        "To take work from the queue, call next_task with an `agent` name you reuse on every " +
+        "call. task_progress at each milestone — 30 minutes of silence stalls the task. When " +
+        "Acceptance holds, publish_guide a transfer guide about what you did, then finish_task " +
+        "with its id. If either says you no longer hold the task, stop working on it.",
     },
   );
 
@@ -267,6 +271,93 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     async ({ id, taken, note }) =>
       relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/ack`, {
         taken,
+        note: note ?? "",
+      }),
+  );
+
+  // The task queue. A local agent's id comes from its worktree (packages/passalong/src/passalong.js
+  // `agent()`); an assistant over HTTP has no worktree and no session, so it names itself and the
+  // name is the claim's owner. Reusing it on every call is what makes it the same agent.
+  const AGENT = z
+    .string()
+    .regex(/^[a-z0-9-]{8,64}$/, "8 to 64 of a-z, 0-9 and -")
+    .describe("a name for you, the same on every task call, e.g. chat-7f3k2m9q");
+
+  server.registerTool(
+    "next_task",
+    {
+      title: "Take the next task",
+      description:
+        "Claim the oldest ready task for a repo, and return it. While you hold it no other agent " +
+        "can take it. If you already hold one, that one comes back instead — one at a time.",
+      inputSchema: {
+        agent: AGENT,
+        repo: z
+          .string()
+          .optional()
+          .describe("owner/repo the work is in; omit for tasks for no repo"),
+        any: z.boolean().optional().describe("take a task for any repo — only when the user asks"),
+      },
+    },
+    async ({ agent, repo, any }) => {
+      const res = await call("POST", "/v1/tasks/next", {
+        agent,
+        repo: repo ?? "",
+        any: any === true,
+      });
+      if (res.status >= 400) return failed(res.text);
+      const { task } = JSON.parse(res.text) as { task: { id: string; markdown: string } | null };
+      if (!task) return text("No task ready. Nothing to do — tell the user the queue is empty.");
+      // Mirrors leadFor() in packages/passalong/src/mcp.js for a task, plus what to do next.
+      return text(
+        "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
+          "reach Goal within Constraints, and leave Out of scope alone. It is done when every " +
+          `check under Acceptance holds.\n\n${task.markdown}\n\n<!-- passalong: task ${task.id} ` +
+          "is yours. task_progress at each milestone; finish_task with a transfer guide's id when done. -->",
+      );
+    },
+  );
+
+  server.registerTool(
+    "task_progress",
+    {
+      title: "Report progress on a task",
+      description:
+        "Say you are still working on the task you hold, with a one-line status the board shows. " +
+        "30 minutes without this stalls the task. If it says you do not hold the task, stop.",
+      inputSchema: {
+        id: z.string(),
+        agent: AGENT,
+        note: z.string().optional().describe("one line, 280 chars"),
+      },
+    },
+    async ({ id, agent, note }) =>
+      relay(call, "PUT", `/v1/tasks/${encodeURIComponent(id)}/progress`, {
+        agent,
+        ...(note ? { note } : {}),
+      }),
+  );
+
+  server.registerTool(
+    "finish_task",
+    {
+      title: "Finish a task",
+      description:
+        "Hand a finished task to a person for review, once every Acceptance check holds. `report` " +
+        "is the id of the transfer guide you published about the work — publish_guide it first.",
+      inputSchema: {
+        id: z.string(),
+        agent: AGENT,
+        report: z.string().describe("id of the transfer guide about this work"),
+        pr: z.string().optional(),
+        note: z.string().optional(),
+      },
+    },
+    async ({ id, agent, report, pr, note }) =>
+      relay(call, "POST", `/v1/tasks/${encodeURIComponent(id)}/finish`, {
+        agent,
+        report,
+        pr: pr ?? "",
         note: note ?? "",
       }),
   );

@@ -113,6 +113,12 @@ export async function serve() {
         "section from the conversation and the code — Acceptance as checks a person can run — " +
         "set target_context to the repo the work is for, and publish_guide. A task lands in " +
         "Draft, not the queue: tell the user to read it and run `passalong ready <id>`.\n" +
+        "When the user asks you to take work from the queue, call next_task: it claims the oldest " +
+        "ready task for this repo, and no other agent can have it while you do. Call " +
+        "task_progress with a one-line status at each milestone — silence for 30 minutes stalls " +
+        "the task. When Acceptance holds, publish a transfer guide about what you did " +
+        "(publish_guide), then finish_task with its id; the task goes to a person for review. If " +
+        "task_progress or finish_task says you no longer hold the task, stop working on it.\n" +
         "When the user asks to pass along, hand off, or " +
         "share what was just done, distill the session into a guide (guide_template shows the " +
         "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or " +
@@ -330,6 +336,95 @@ export async function serve() {
         return text(
           `${lead}${r.markdown}${siblings}` +
             `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->`,
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "next_task",
+    {
+      title: "Take the next task",
+      description:
+        "Claim the oldest ready task for the repo this worktree is in, and return it. While you " +
+        "hold it no other agent can take it. If this worktree already holds one, that one comes " +
+        "back instead — one task at a time. Returns nothing to do when the queue is empty.",
+      inputSchema: {
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
+        any: z
+          .boolean()
+          .optional()
+          .describe("take a task for any repo, or for none — only when the user asks for that"),
+      },
+    },
+    async ({ cwd, any }) => {
+      try {
+        const t = await passalong.nextTask({ cwd: cwd || process.cwd(), any: Boolean(any) });
+        if (!t)
+          return text(
+            "No task ready for this repo. Nothing to do — tell the user the queue is empty.",
+          );
+        const how =
+          `\n\n<!-- passalong: task ${t.id} is yours${t.resumed ? " (you already held it — carry on from where it was left)" : ""}; ` +
+          `written to ${t.path}. Call task_progress with a one-line status at each milestone; ` +
+          "30 minutes without one stalls it. When every Acceptance check holds: publish_guide a " +
+          `transfer guide about what you did, then finish_task with id ${t.id} and that guide's id. -->`;
+        return text(`${leadFor({ kind: "task" })}${t.markdown}${how}`);
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "task_progress",
+    {
+      title: "Report progress on a task",
+      description:
+        "Say you are still working on the task you hold, with a one-line status the board shows. " +
+        "Renews the claim; 30 minutes without this stalls the task. If it answers that you do " +
+        "not hold the task, a person released it: stop working on it.",
+      inputSchema: {
+        id: z.string().describe("the task's id"),
+        note: z.string().optional().describe('one line, e.g. "migrating schema, 2 of 5 steps"'),
+        cwd: z.string().optional().describe("the worktree you are working in"),
+      },
+    },
+    async ({ id, note, cwd }) => {
+      try {
+        return json(await passalong.taskProgress(id, note || "", { cwd: cwd || process.cwd() }));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "finish_task",
+    {
+      title: "Finish a task",
+      description:
+        "Hand a finished task to a person for review. Only once every Acceptance check holds. " +
+        "`report` is the id of the transfer guide you published about the work (publish_guide " +
+        "first): the reviewer reads it against Acceptance, so write what you did, why, and how " +
+        "you checked it.",
+      inputSchema: {
+        id: z.string().describe("the task's id"),
+        report: z.string().describe("id of the transfer guide you published about this work"),
+        pr: z.string().optional().describe("PR or branch link, when there is one"),
+        note: z.string().optional().describe("one line for the board"),
+        cwd: z.string().optional().describe("the worktree you are working in"),
+      },
+    },
+    async ({ id, report, pr, note, cwd }) => {
+      try {
+        return json(
+          await passalong.finishTask(id, { report, pr, note, cwd: cwd || process.cwd() }),
         );
       } catch (err) {
         return fail(err);

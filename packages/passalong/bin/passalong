@@ -6,6 +6,7 @@
 //     thing — quote that one, since a shell may read the # as a comment
 //   passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
 //   passalong ready <id>          a task you have read is ready — an agent may take it now
+//   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
 //   passalong attach <image>      upload evidence and print the markdown that points at it
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong start <id|link>     pull it and take it — one command for "I am doing this"
@@ -160,6 +161,17 @@ const commands = {
     console.error(`task "${guide.meta.title}" is in Draft${target ? ` for ${target}` : " (no repo)"}`);
     console.error(`when an agent may take it: passalong ready ${id}`);
     if (!synced) console.error("not synced (run `passalong login` — agents elsewhere cannot see it)");
+  },
+
+  async tasks() {
+    const rows = await passalong.tasks().catch((e) => die(e.message));
+    if (!rows.length) return console.error('no tasks yet — write one with: passalong task "<what needs doing>"');
+    for (const t of rows) {
+      const c = t.claim;
+      const who = c ? `  ${c.host || "?"}:${c.worktree.split("/").pop() || "?"}` : "";
+      const said = c?.note ? `  "${c.note}"` : "";
+      console.log(`${t.id}  ${t.state.padEnd(8)} ${t.title}${t.target ? `  [${t.target}]` : ""}${who}${said}`);
+    }
   },
 
   async ready(f) {

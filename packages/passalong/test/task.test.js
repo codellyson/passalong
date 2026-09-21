@@ -25,8 +25,23 @@ test("a task sentence becomes the title and the Goal", () => {
   assert.equal(g.meta.kind, "task");
   assert.equal(g.meta.title, "Add dark mode");
   assert.match(g.body, /^## Goal\nAdd dark mode\n/m);
-  // Inside a repo, the task is for that repo until its author says otherwise.
-  assert.equal(g.meta.target_context, dir.split("/").pop());
+  // Inside a repo, the task is for that repo until its author says otherwise. With no remote, the
+  // repo is its folder name.
+  assert.equal(g.meta.target_context, dir.split("/").pop().toLowerCase());
+  // With one, it is the remote: two worktrees of one repo have two folder names and one remote.
+  execFileSync("git", ["-C", dir, "remote", "add", "origin", "git@github.com:Owner/Repo.git"]);
+  assert.equal(parse(taskScaffold("x", dir)).meta.target_context, "owner/repo");
+});
+
+test("a worktree is one agent, and keeps being the same one", () => {
+  const dir = mkdtempSync(join(tmpdir(), "passalong-repo-"));
+  execFileSync("git", ["init", "-q", dir]);
+  const first = passalong.agent(dir);
+  assert.match(first.agent, /^[a-f0-9]{24}$/);
+  assert.equal(passalong.agent(dir).agent, first.agent, "a restarted session is the same agent");
+  const other = mkdtempSync(join(tmpdir(), "passalong-repo-"));
+  execFileSync("git", ["init", "-q", other]);
+  assert.notEqual(passalong.agent(other).agent, first.agent, "another worktree is another agent");
 });
 
 test("a task outside any repo is for no repo", () => {
