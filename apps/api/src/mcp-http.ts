@@ -473,7 +473,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.\n" +
         "kind: task is work nobody has done yet. It has no Steps: work out how to reach Goal " +
         "within Constraints, leave Out of scope alone, and treat Acceptance as the definition of " +
-        "done. verify_guide once every Acceptance check holds.\n" +
+        "done. A task has its own tools, and the guide ones do not work on it: take it with " +
+        "next_task (never ack_guide), report with task_progress, and hand it in with finish_task " +
+        "(never verify_guide).\n" +
         "To take work from the queue, call next_task with an `agent` name you reuse on every " +
         "call. task_progress at each milestone — 30 minutes of silence stalls the task. When " +
         "Acceptance holds, publish_guide a transfer guide about what you did, then finish_task " +
@@ -530,7 +532,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         : /^kind:\s*task\s*$/m.test(res.text)
           ? "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out " +
             "how to reach Goal within Constraints, and leave Out of scope alone. It is done when " +
-            "every check under Acceptance holds; answer with verify_guide.\n\n"
+            "every check under Acceptance holds. Reading it here does not make it yours: take it " +
+            "with next_task, then report with task_progress and hand it in with finish_task, not " +
+            "verify_guide.\n\n"
           : "";
       // A second content block, not text added to the first. The document is handed over as it
       // came — a transfer guide byte for byte — so an agent that writes it back out cannot carry

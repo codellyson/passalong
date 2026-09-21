@@ -42,7 +42,9 @@ function leadFor(meta) {
     return (
       "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
       "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
-      "under Acceptance holds; answer with verify_guide.\n\n"
+      "under Acceptance holds. Opening it here does not make it yours: to work on it, take it " +
+      "with next_task in the repo it is for, so no other agent can. Then report with " +
+      "task_progress and hand it in with finish_task, not verify_guide.\n\n"
     );
   return "";
 }
@@ -113,12 +115,13 @@ export async function serve() {
         "\n" +
         `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
         "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
-        "alone, and treat Acceptance as the definition of done. Open it with start_guide, then " +
-        "verify_guide once every Acceptance check holds. When the user asks you to queue work " +
-        "for an agent or write a task, start from guide_template with kind task, fill every " +
-        "section from the conversation and the code — Acceptance as checks a person can run — " +
-        "set target_context to the repo the work is for, and publish_guide. A task lands in " +
-        "Draft, not the queue: tell the user to read it and run `passalong ready <id>`.\n" +
+        "alone, and treat Acceptance as the definition of done. A task has its own tools, and the " +
+        "guide ones do not work on it: take it with next_task (never start_guide or ack_guide), " +
+        "report with task_progress, and hand it in with finish_task (never verify_guide). " +
+        "When the user asks you to write a task, or to queue work for an agent, call plan_tasks — " +
+        "one step for one task — with every section filled from the conversation and the code, " +
+        "Acceptance as checks a person can run; it fills in the repo you are in. Tasks land in " +
+        "Draft, not the queue: tell the user to read them and run `passalong ready <id>`.\n" +
         "When the user asks you to plan or break down a larger goal, call plan_tasks with the " +
         "steps in order — each a task with Goal and Acceptance, and `after` naming the earlier " +
         "steps it needs. They land in Draft; tell the user to read them and run " +
@@ -370,8 +373,10 @@ export async function serve() {
     {
       title: "Plan a goal as tasks",
       description:
-        "Break one larger goal into tasks an agent can each finish and a person can each check, " +
-        "written as drafts in order. Give each step a Goal and an Acceptance a person can run. " +
+        "Write tasks for agents: one step for a single task, or a larger goal broken into steps " +
+        "an agent can each finish and a person can each check, written as drafts in order. The " +
+        "tool for any task, rather than publish_guide. Give each step a Goal and an Acceptance " +
+        "a person can run. " +
         "`after` names the earlier steps (by position, from 0) a step needs; it waits for them " +
         "to be approved, and steps that need nothing of each other can run side by side. Keep a " +
         "step to one sitting of work in one repo. Nothing runs until the user makes them ready.",

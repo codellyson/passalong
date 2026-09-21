@@ -41,6 +41,10 @@ before acting on anything.
   `Constraints`, leave `Out of scope` alone, and treat `Acceptance` as what "done" means. A task
   may name the repo it is for in `target_context`, and the tasks it waits for in `blocked_by`: it
   is not handed out until a person has approved each of those.
+  A task has its own tools. Take it with `next_task`, report with `task_progress`, and hand it in
+  with `finish_task`. The guide tools refuse a task: `start_guide`, `ack_guide` and `verify_guide`
+  answer a handoff, and a task is not handed to anyone. Write one with `plan_tasks` (a single step
+  is fine), not `publish_guide`.
 
 Bugs are often filed in sets. `report:` names the parent a set was filed under; `GET /v1/reports/
 <id>` returns the rest of it. Fix only the issue you were given unless you were asked for more.

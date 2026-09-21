@@ -8,7 +8,7 @@
 // so it is put on the solo plan in the *local* D1 with `wrangler d1 execute --local`. That only
 // works against a local server whose database is apps/web's — never point this at a real one.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -24,19 +24,7 @@ function setup() {
   ready ??= (async () => {
     assert.match(API, /^http:\/\/localhost[:/]/, "only ever against a local server");
     const { token, account } = await (await fetch(`${API}/v1/accounts`, { method: "POST" })).json();
-    execFileSync(
-      "npx",
-      [
-        "wrangler",
-        "d1",
-        "execute",
-        "passalong",
-        "--local",
-        "--command",
-        `UPDATE account SET plan = 'solo' WHERE id = '${account}'`,
-      ],
-      { cwd: WEB, stdio: "ignore" },
-    );
+    await sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
     process.env.PASSALONG_API = API;
     process.env.PASSALONG_TOKEN = token;
     process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-e2e-"));
@@ -193,14 +181,39 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
 /** Another account on the same local server, allowed to sync. Returns its token. */
 async function secondAccount() {
   const { token, account } = await (await fetch(`${API}/v1/accounts`, { method: "POST" })).json();
-  sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
+  await sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
   return { token, account };
 }
 
+/**
+ * A statement against the local D1, through wrangler. Resolved when wrangler prints success, and
+ * the process is then stopped: `wrangler d1 execute --local` can finish its write and not exit, and
+ * waiting for the exit hung the whole suite. Anything else — a failure, or no answer in 90s — throws.
+ */
 function sql(command) {
-  execFileSync("npx", ["wrangler", "d1", "execute", "passalong", "--local", "--command", command], {
-    cwd: WEB,
-    stdio: "ignore",
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "npx",
+      ["wrangler", "d1", "execute", "passalong", "--local", "--command", command],
+      { cwd: WEB, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    let out = "";
+    const done = (err) => {
+      clearTimeout(timer);
+      child.kill();
+      err ? reject(err) : resolve();
+    };
+    const timer = setTimeout(() => done(new Error(`no answer from wrangler: ${command}`)), 90_000);
+    child.stdout.on("data", (b) => {
+      out += b;
+      if (/"success":\s*true/.test(out)) done();
+    });
+    child.stderr.on("data", (b) => {
+      out += b;
+    });
+    child.on("exit", (code) => {
+      if (code) done(new Error(`wrangler exited ${code}: ${out.slice(-400)}`));
+    });
   });
 }
 
@@ -216,7 +229,7 @@ test("in a team, each side hears what the other did to a task — and only the a
   };
 
   const team = await api.createTeam(`tasks ${Date.now()}`);
-  sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
   const { code } = await api.invite(team.slug);
   const mate = await secondAccount();
   as(mate.token);
@@ -364,4 +377,16 @@ test("work stops when an agent exits without finishing, instead of looping on it
     "claimed",
     "still this worktree's",
   );
+});
+
+test("a task is answered with the task tools, and the guide ones say so", { skip }, async () => {
+  const env = await setup();
+  const { p } = env;
+  const api = await import("../src/api.js");
+  const { id } = await readyTask(env, "Answered the wrong way");
+  // A verdict or an ack on a task would be an answer nobody reads: its author reviews it from the
+  // queue. Both are refused, and the refusal names the tools that do the job.
+  const task = /next_task|task_progress|finish_task/;
+  await assert.rejects(p.verdict(id, true, ""), (e) => e.status === 400 && task.test(e.message));
+  await assert.rejects(api.ack(id, true, ""), (e) => e.status === 400 && task.test(e.message));
 });

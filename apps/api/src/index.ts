@@ -3088,9 +3088,20 @@ app.patch("/v1/guides/:id/status", async (c) => {
 // and holds one value, while a verdict belongs to whoever tried it and can be negative.
 const NOTE_MAX = 280;
 
+/**
+ * A task is not answered like a handoff. It is taken from the queue, reported on and handed in for
+ * review (next_task, task_progress, finish_task); an ack or a verdict on one is an answer its author
+ * never reads, because they review it from the queue. Refused before anything else, so the reply
+ * names the tools that do the job rather than some other rule the request happened to break.
+ */
+const TASK_TOOLS =
+  "This is a task, not a handoff. Take it with next_task, report with task_progress, and hand it " +
+  "in with finish_task; its author reviews it from the task queue.";
+
 app.put("/v1/guides/:id/verdict", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
+  if (found.row.kind === "task") return err(c, 400, TASK_TOOLS);
   const account = c.get("account");
   const body = (await c.req.json().catch(() => ({}))) as { ok?: boolean; note?: string };
   if (typeof body.ok !== "boolean")
@@ -3161,6 +3172,7 @@ app.put("/v1/guides/:id/verdict", async (c) => {
 app.put("/v1/guides/:id/ack", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
+  if (found.row.kind === "task") return err(c, 400, TASK_TOOLS);
   const account = c.get("account");
   // The author is not a party to this. They can see who answered; answering their own handoff
   // would be telling themselves something they already know.
