@@ -1,5 +1,6 @@
 // The operations Passalong exposes. Both surfaces (bin/passalong and the MCP server) call these,
 // so anything an agent can do through MCP a human can do from the terminal and vice versa.
+import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
@@ -583,6 +584,68 @@ export async function planTasks(steps, { cwd = process.cwd() } = {}) {
     ids.push((await share(serialize({ meta, body }), { cwd })).guide.meta.id);
   }
   return ids;
+}
+
+/** What an agent started by `work()` is told. The task itself goes in too, so it cannot start blind. */
+export function workPrompt(t) {
+  return [
+    `You hold passalong task ${t.id}, and no other agent can take it while you do.`,
+    `It is written to ${t.path}; here it is:`,
+    "",
+    t.markdown.trim(),
+    "",
+    "Do it in this repo. There are no Steps: work out how to reach Goal within Constraints, and",
+    "leave Out of scope alone. Call the passalong MCP tool task_progress with id",
+    `${t.id} and a one-line status at each milestone — 30 minutes of silence stalls the task.`,
+    `When every Acceptance check holds, call finish_task with id ${t.id} and \`markdown\`: a`,
+    "transfer guide saying what you did, what you decided and why, and how you checked each",
+    "Acceptance line. If either call says you no longer hold the task, stop.",
+  ].join("\n");
+}
+
+/**
+ * Work the queue from this worktree: take the next task, hand it to an agent, and when the agent
+ * has finished it take the next, until there is nothing left.
+ *
+ * The agent runs in this worktree, so it is the same agent to the queue — its task_progress and
+ * finish_task land on the claim this took. `agent` is a command the prompt is appended to;
+ * `claude -p` by default, or whatever PASSALONG_AGENT says.
+ *
+ * An agent that exits without finishing stops the loop. Asking for the next task would hand the
+ * same one back, since a worktree holds one task at a time, and the loop would run the agent on it
+ * forever. The task stays claimed here, for the next run to resume or a person to release.
+ */
+export async function work({
+  cwd = process.cwd(),
+  agent = process.env.PASSALONG_AGENT || "claude -p",
+  any = false,
+  once = false,
+  onTask = () => {},
+} = {}) {
+  needsSync("working the queue");
+  const [command, ...args] = agent.trim().split(/\s+/);
+  const finished = [];
+  for (;;) {
+    const t = await nextTask({ cwd, any });
+    if (!t) return { finished, stopped: "empty" };
+    onTask(t);
+    const run = spawnSync(command, [...args, workPrompt(t)], {
+      cwd,
+      stdio: "inherit",
+      env: { ...process.env, PASSALONG_TASK: t.id, PASSALONG_TASK_PATH: t.path },
+    });
+    const state = (await tasks()).find((x) => x.id === t.id)?.state;
+    if (state !== "review")
+      return {
+        finished,
+        stopped: "unfinished",
+        task: t.id,
+        state,
+        exit: run.status ?? run.error?.message,
+      };
+    finished.push(t.id);
+    if (once) return { finished, stopped: "once" };
+  }
 }
 
 /**

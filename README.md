@@ -30,6 +30,7 @@ passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to
 passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
 passalong ready <id...|--all> tasks you have read are ready — an agent may take them now
 passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
+passalong work [--once] [--agent CMD]  run an agent on each ready task here, one after another
 passalong approve <id>        the work in review is done
 passalong reject <id> <why>   not done: back to Ready, and the next agent reads why
 passalong release <id>        take a task back from the agent holding it, stalled or not

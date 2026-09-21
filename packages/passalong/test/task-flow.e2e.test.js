@@ -304,3 +304,61 @@ test("a plan becomes draft tasks, each waiting on the steps it names", { skip },
     "a step can only wait on one before it, so a plan cannot loop",
   );
 });
+
+test("work takes tasks one after another until the queue is empty", { skip }, async () => {
+  const env = await setup();
+  const { p, account } = env;
+  const repo = `e2e/${account}-work`;
+  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+  execFileSync("git", ["init", "-q", dir]);
+  execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:${repo}.git`]);
+  const ids = await p.planTasks(
+    [
+      { title: "Work: one", goal: "g", acceptance: "- a", target_context: repo },
+      { title: "Work: two", goal: "g", acceptance: "- a", target_context: repo, after: [] },
+    ],
+    { cwd: dir },
+  );
+  for (const id of ids) await p.ready(id);
+  const agent = `node ${join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-agent.mjs")}`;
+
+  const run = await p.work({ cwd: dir, agent });
+  assert.deepEqual(run.finished, ids);
+  assert.equal(run.stopped, "empty");
+  const states = new Map((await p.tasks()).map((t) => [t.id, t.state]));
+  assert.deepEqual(
+    ids.map((id) => states.get(id)),
+    ["review", "review"],
+  );
+});
+
+test("work stops when an agent exits without finishing, instead of looping on it", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p, account } = env;
+  const repo = `e2e/${account}-quit`;
+  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+  execFileSync("git", ["init", "-q", dir]);
+  execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:${repo}.git`]);
+  const [id] = await p.planTasks(
+    [{ title: "Work: quits", goal: "g", acceptance: "- a", target_context: repo }],
+    { cwd: dir },
+  );
+  await p.ready(id);
+  const agent = `node ${join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-agent.mjs")}`;
+  process.env.FAKE_AGENT_GIVES_UP = "1";
+  try {
+    const run = await p.work({ cwd: dir, agent });
+    assert.deepEqual(run.finished, []);
+    assert.equal(run.stopped, "unfinished");
+    assert.equal(run.task, id);
+  } finally {
+    delete process.env.FAKE_AGENT_GIVES_UP;
+  }
+  assert.equal(
+    (await p.tasks()).find((t) => t.id === id).state,
+    "claimed",
+    "still this worktree's",
+  );
+});

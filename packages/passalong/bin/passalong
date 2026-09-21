@@ -7,6 +7,7 @@
 //   passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
 //   passalong ready <id...|--all> tasks you have read are ready — an agent may take them now
 //   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
+//   passalong work [--once] [--agent CMD]  run an agent on each ready task here, one after another
 //   passalong approve <id>        the work in review is done
 //   passalong reject <id> <why>   not done: back to Ready, and the next agent reads why
 //   passalong release <id>        take a task back from the agent holding it, stalled or not
@@ -180,6 +181,32 @@ const commands = {
     }
     if (rows.some((t) => t.state === "review"))
       console.error("\nread a write-up with: passalong open <id> — then approve or reject the task");
+  },
+
+  /**
+   * Work the queue from this worktree until it is empty. The agent is `claude -p` unless --agent or
+   * PASSALONG_AGENT says otherwise, e.g. "claude -p --permission-mode acceptEdits" so it can edit
+   * files without asking — which is yours to decide, not this command's.
+   */
+  async work(f) {
+    const run = await passalong
+      .work({
+        agent: typeof f.agent === "string" ? f.agent : undefined,
+        once: Boolean(f.once),
+        any: Boolean(f.any),
+        onTask: (t) => console.error(`\n→ ${t.id}  ${t.title}${t.resumed ? "  (resuming)" : ""}`),
+      })
+      .catch((e) => die(e.message));
+    for (const id of run.finished) console.log(id);
+    const n = run.finished.length;
+    const done = `${n} task${n === 1 ? "" : "s"} finished and waiting for review`;
+    if (run.stopped === "unfinished")
+      die(
+        `${done}. Stopped: the agent exited with ${run.task} still ${run.state || "open"} — ` +
+          `run again to resume it, or \`passalong release ${run.task}\``,
+      );
+    console.error(`${done}${run.stopped === "empty" ? " — nothing left for this repo" : ""}`);
+    if (n) console.error("review them with: passalong tasks");
   },
 
   async approve(f) {
