@@ -165,6 +165,22 @@
   --shadow-2:
     0 2px 4px light-dark(rgb(28 27 25 / 0.04), rgb(0 0 0 / 0.25)),
     0 8px 24px light-dark(rgb(28 27 25 / 0.07), rgb(0 0 0 / 0.35));
+  /* The edge of a raised surface, drawn as a shadow rather than a border: a 1px ring and a little
+     depth. It is transparent, so it reads the same on any background a card lands on, where a
+     fixed border colour was only ever right on one. Dark mode is the ring alone, because layered
+     depth is invisible on a dark ground. Structure — dividers, table rules, inputs, a selected or
+     focused state — stays a border. `--edge-ring` is split out so a state can recolour the ring
+     (see .panel) without redrawing the depth. */
+  --edge-ring: light-dark(oklch(0 0 0 / 0.06), oklch(1 0 0 / 0.08));
+  --edge-ring-hover: light-dark(oklch(0 0 0 / 0.08), oklch(1 0 0 / 0.13));
+  --edge-depth:
+    0 1px 2px -1px light-dark(oklch(0 0 0 / 0.06), transparent),
+    0 2px 4px 0 light-dark(oklch(0 0 0 / 0.04), transparent);
+  --edge-depth-hover:
+    0 1px 2px -1px light-dark(oklch(0 0 0 / 0.08), transparent),
+    0 2px 4px 0 light-dark(oklch(0 0 0 / 0.06), transparent);
+  --edge-shadow: 0 0 0 1px var(--edge-ring), var(--edge-depth);
+  --edge-shadow-hover: 0 0 0 1px var(--edge-ring-hover), var(--edge-depth-hover);
 }
 
 /* A choice a reader made, carried in a cookie and stamped on the root by the server. Without the
@@ -424,7 +440,13 @@ button.primary,
     background-color var(--motion) ease,
     border-color var(--motion) ease,
     color var(--motion) ease,
-    box-shadow var(--motion) ease;
+    box-shadow var(--motion) ease,
+    scale var(--motion) ease-out;
+}
+/* Pressed, a button gives a little: scale(0.96), never less, and a transition so letting go midway
+   springs back rather than snapping. `.static` turns it off where the motion would distract. */
+:is(.btn, button.primary):active:not(:disabled, .static) {
+  scale: 0.96;
 }
 /* Ghost: the default, and the one there are most of.
    Its edge is `--line`, not `--line-strong`. A settings page carries seven of these — copy a link,
@@ -550,9 +572,13 @@ button.primary[disabled],
   gap: 0.125rem;
   padding: var(--s-2);
   background: var(--surface-raised);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-2);
-  box-shadow: var(--shadow-2);
+  /* 16px: an 8px item inside 8px of padding. At 10px the items' corners sat visibly off the
+     menu's own. */
+  border-radius: var(--r-3);
+  /* Floats over the page, so its edge is a ring on top of the lift shadow, not a border. */
+  box-shadow:
+    0 0 0 1px var(--edge-ring),
+    var(--shadow-2);
 }
 .menu-item {
   display: flex;
@@ -680,9 +706,12 @@ input[name="token"],
 .identity,
 .panel {
   background: var(--surface-raised);
-  border: 1px solid var(--edge, var(--line));
   border-radius: var(--r-3);
-  box-shadow: var(--shadow-1);
+  /* The ring takes `--edge` when a state sets one (.identity.needed), and the plain ring otherwise:
+     one line either way, never a border and a ring side by side. */
+  box-shadow:
+    0 0 0 1px var(--edge, var(--edge-ring)),
+    var(--edge-depth);
   padding: var(--s-2) var(--s-5) var(--s-5);
   margin-bottom: var(--s-5);
 }
@@ -746,7 +775,6 @@ input[name="token"],
    `.identity.needed h2` rule would sit above every later `.x h2` and make each one a descending
    selector — the trap this file is written to avoid. */
 .identity {
-  --edge: var(--line);
   --head: var(--fg);
 }
 .identity.needed {
@@ -831,9 +859,8 @@ input[name="token"],
 
 .authcard {
   background: var(--surface-raised);
-  border: 1px solid var(--line);
   border-radius: var(--r-3);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--edge-shadow);
   padding: var(--s-5);
   text-align: left;
 }
@@ -1141,8 +1168,8 @@ form.join label {
    picture of it: the serif headings, the labelled fact row, the tags. */
 .specimen {
   margin: var(--gap) 0 var(--s-4);
-  border: 1px solid var(--line);
   border-radius: var(--r-3);
+  box-shadow: var(--edge-shadow);
   background: var(--surface-raised);
   padding: var(--s-6) var(--s-6) var(--s-7);
 }
@@ -1635,10 +1662,14 @@ article.prose blockquote {
 article.prose figure {
   margin: var(--s-5) 0;
 }
+/* A screenshot's edge is an outline at a tenth of pure black (white in dark), drawn inside the image.
+   A tinted line — the old `--line` border — picked up the page colour and read as dirt on the edge
+   of the picture; pure black or white at low opacity reads as depth on any image. */
 article.prose figure img {
   display: block;
-  border: 1px solid var(--line);
   border-radius: var(--r-2);
+  outline: 1px solid light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
+  outline-offset: -1px;
 }
 article.prose figcaption {
   margin-top: var(--s-2);

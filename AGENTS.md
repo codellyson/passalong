@@ -137,6 +137,14 @@ public one, for agents *using* Passalong rather than changing it.
   `mt-8` between sections. Half-steps are off the scale — `-1.5`, `-2.5` and `-3.5` were all in use
   and one relationship had four different values, which is what made the interface look unfinished
   before anyone could say why. `-0.5` is the one exception: 2px inside a chip is a sub-unit.
+- **A raised surface's edge is a shadow; a border is structure.** Cards, list containers, panels,
+  menus and the sign-in card take `shadow-edge` (`--edge-shadow` in styles.css: a 1px ring plus a
+  little depth in light, the ring alone in dark), never `border border-line`. Borders stay where
+  they separate or state something: dividers, table rules, inputs and code wells, a selected or
+  focused control, a coloured callout. A row inside a list sits flush, so it rounds its ends to the
+  list's own radius; nested surfaces with a small inset nest their radii (outer = inner + padding —
+  the `.menu` is 16px because its items are 8px inside 8px). Every `.btn` presses to
+  `scale(0.96)`; `.static` opts out.
 - **Long values are shortened by unit, never by pixel.** `shorten()` (`app/utils/shorten.ts`) drops
   whole words, then whole path segments, so what is left is a repo name or a host and not
   `techchak-backend (https://g…`. Do not reach for `truncate` on a value a person has to read, and

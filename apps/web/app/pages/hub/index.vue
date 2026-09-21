@@ -174,7 +174,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
           <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ lanes.needs.length }}</span>
         </h2>
         <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
-        <ul v-else-if="lanes.needs.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
+        <ul v-else-if="lanes.needs.length" class="m-0 list-none rounded-3 bg-raised shadow-edge p-0">
           <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />
         </ul>
         <p v-else class="m-0 font-ui text-sm text-muted">
@@ -194,7 +194,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
           <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ sentCount }}</span>
         </h2>
         <HubSkeleton v-if="waiting" :rows="2" label="Loading what you sent" />
-        <ul v-else-if="lanes.sent.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
+        <ul v-else-if="lanes.sent.length" class="m-0 list-none rounded-3 bg-raised shadow-edge p-0">
           <template v-for="e in lanes.sent" :key="'row' in e ? e.row.g.id : `report-${e.group.report}`">
             <HubInboxRow v-if="'row' in e" :row="e.row" />
             <HubReportRow v-else :group="e.group" :open="searching" />
@@ -209,7 +209,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
       <section id="done" aria-labelledby="lane-done" class="flex scroll-mt-4 flex-col gap-3">
         <button
           type="button"
-          class="flex w-full cursor-pointer items-center justify-between rounded-3 border border-line bg-raised px-4 py-3 text-left hover:border-line-strong"
+          class="flex w-full cursor-pointer items-center justify-between rounded-3 border-0 bg-raised px-4 py-3 text-left shadow-edge transition-[box-shadow] duration-150 ease-out hover:shadow-edge-hover"
           :aria-expanded="doneOpen"
           @click="showDone = !showDone"
         >
@@ -219,12 +219,12 @@ const doneOpen = computed(() => showDone.value || searching.value);
           </span>
           <AppIcon
             name="reveal"
-            class="text-muted transition-transform"
+            class="text-muted transition-[rotate] duration-150 ease-out"
             :class="doneOpen ? 'rotate-180' : ''"
           />
         </button>
         <template v-if="doneOpen">
-          <ul v-if="lanes.done.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
+          <ul v-if="lanes.done.length" class="m-0 list-none rounded-3 bg-raised shadow-edge p-0">
             <HubInboxRow v-for="r in lanes.done" :key="r.g.id" :row="r" />
           </ul>
           <p v-else class="m-0 font-ui text-sm text-muted">

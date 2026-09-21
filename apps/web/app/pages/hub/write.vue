@@ -189,7 +189,7 @@ const box =
       </p>
       <div
         v-else-if="follows"
-        class="h-16 rounded-2 border border-line bg-raised"
+        class="h-16 rounded-2 bg-raised shadow-edge"
         role="status"
         aria-label="Finding the guide this follows"
       />

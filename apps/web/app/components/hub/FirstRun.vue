@@ -73,7 +73,7 @@ const step =
             Nothing can be sent to you until teammates have something to call you.
           </p>
 
-          <form class="mt-3 flex max-w-md flex-col gap-3 rounded-2 border border-line bg-raised p-4" @submit.prevent="claim">
+          <form class="mt-3 flex max-w-md flex-col gap-3 rounded-2 bg-raised shadow-edge p-4" @submit.prevent="claim">
             <div>
               <label class="mb-2 block font-ui text-sm font-medium text-fg" for="first-name">Your name</label>
               <input id="first-name" v-model="name" class="w-full" required placeholder="Ada Okafor" autocomplete="name" />
@@ -127,14 +127,14 @@ const step =
         </p>
 
         <div class="mt-3 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
-          <div class="flex flex-col gap-2 rounded-2 border border-line bg-raised p-4">
+          <div class="flex flex-col gap-2 rounded-2 bg-raised shadow-edge p-4">
             <b class="font-ui text-sm text-fg">Write it here</b>
             <p class="m-0 font-ui text-sm text-muted">
               Describe the problem, what you did, and how someone checks it worked.
             </p>
             <NuxtLink to="/hub/write" class="btn primary sm mt-auto self-start">Write a guide</NuxtLink>
           </div>
-          <div class="flex flex-col gap-2 rounded-2 border border-line bg-raised p-4">
+          <div class="flex flex-col gap-2 rounded-2 bg-raised shadow-edge p-4">
             <b class="font-ui text-sm text-fg">From Claude Code or a terminal</b>
             <p class="m-0 font-ui text-sm text-muted">
               At the end of a session, say <b class="font-medium text-fg">“pass this along”</b> in

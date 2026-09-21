@@ -30,7 +30,7 @@ const WIDTHS = ["w-3/5", "w-2/5", "w-1/2", "w-2/3", "w-1/3"];
     <ul
       v-if="variant === 'list'"
       aria-hidden="true"
-      class="m-0 list-none rounded-3 border border-line bg-raised p-0"
+      class="m-0 list-none rounded-3 bg-raised shadow-edge p-0"
     >
       <li
         v-for="i in rows"

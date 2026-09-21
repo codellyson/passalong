@@ -141,7 +141,7 @@ const initials = (label: string) =>
       v-for="t in details"
       :id="`team-${t.slug}`"
       :key="t.slug"
-      class="scroll-mt-6 rounded-2 border border-line bg-raised"
+      class="scroll-mt-6 rounded-2 bg-raised shadow-edge"
     >
       <!-- A div, not <header>: the global header rule adds its own padding and margin, and it
            outranks utility classes — it put a gap above the tabs. -->

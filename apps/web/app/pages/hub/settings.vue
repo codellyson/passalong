@@ -191,7 +191,7 @@ const noteTone: Record<string, string> = {
       </nav>
 
       <div class="flex min-w-0 flex-col">
-        <section v-if="items.length" class="mb-8 rounded-2 border border-line bg-raised" aria-labelledby="needs-h">
+        <section v-if="items.length" class="mb-8 rounded-2 bg-raised shadow-edge" aria-labelledby="needs-h">
           <!-- A div, not <header>: the global header rule's padding and margin outrank utilities. -->
           <div class="flex items-baseline gap-2 border-b border-line px-4 py-3">
             <h2 id="needs-h" class="m-0 font-ui text-base font-semibold text-fg">Needs you</h2>

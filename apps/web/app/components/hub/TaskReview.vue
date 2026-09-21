@@ -14,7 +14,7 @@
   Sending back is done on the line it is about. Marking any Acceptance line "not met" locks Approve,
   says why, and writes the reason the next agent reads first; a note adds to it or stands alone.
 
-  Surfaces: both panes are 16px with the raise shadow. The inbox is 8px padding around 8px rows, so
+  Surfaces: both panes are 16px with the edge shadow. The inbox is 8px padding around 8px rows, so
   the corners nest. Buttons press to scale(0.96).
 -->
 <script setup lang="ts">
@@ -130,7 +130,7 @@ const press =
 
 <template>
   <div v-if="needsYou.length" class="grid items-start gap-5 md:grid-cols-[17rem_minmax(0,1fr)]">
-    <nav class="rounded-[var(--r-3)] bg-raised p-2 shadow-raise" aria-label="Needs you">
+    <nav class="rounded-[var(--r-3)] bg-raised p-2 shadow-edge" aria-label="Needs you">
       <section v-for="g in groups" :key="g.key" class="mt-1 first:mt-0">
         <h2
           class="m-0 px-2 pt-2 pb-1 font-ui text-xs font-semibold uppercase tracking-widest"
@@ -167,7 +167,7 @@ const press =
     <article
       v-if="selected"
       ref="pane"
-      class="scroll-mt-4 rounded-[var(--r-3)] bg-raised p-6 shadow-raise"
+      class="scroll-mt-4 rounded-[var(--r-3)] bg-raised p-6 shadow-edge"
     >
       <header class="mb-5">
         <h2 class="m-0 text-xl leading-snug">
@@ -307,13 +307,11 @@ const press =
           <div class="mt-3 flex flex-wrap items-center gap-2">
             <button
               class="btn primary"
-              :class="press"
               :disabled="busy || loading || flagged.size > 0 || !!note.trim()"
               @click="act(() => onApprove(selected!))"
             >approve</button>
             <button
               class="btn outline danger"
-              :class="press"
               :disabled="busy || !reason"
               @click="act(() => onReject(selected!, reason))"
             >
@@ -352,7 +350,6 @@ const press =
         <div class="mt-4">
           <button
             class="btn outline warn"
-            :class="press"
             :disabled="busy"
             @click="act(() => onRelease(selected!))"
           >take back</button>

@@ -66,4 +66,7 @@
 
   --shadow-raise: var(--shadow-1);
   --shadow-lift: var(--shadow-2);
+  /* The edge of a raised card: a ring and a little depth. See --edge-shadow in styles.css. */
+  --shadow-edge: var(--edge-shadow);
+  --shadow-edge-hover: var(--edge-shadow-hover);
 }

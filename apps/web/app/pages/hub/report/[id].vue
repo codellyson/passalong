@@ -70,7 +70,7 @@ const team = computed(() =>
 
 <template>
   <HubShell>
-    <p v-if="trouble" class="rounded-3 border border-line bg-raised px-4 py-3 font-ui text-sm text-danger">
+    <p v-if="trouble" class="rounded-3 bg-raised shadow-edge px-4 py-3 font-ui text-sm text-danger">
       {{ trouble }} <NuxtLink to="/hub">Go to your guides</NuxtLink>
     </p>
 
@@ -92,7 +92,7 @@ const team = computed(() =>
       <section
         v-for="group in report.areas"
         :key="group.area || 'none'"
-        class="overflow-hidden rounded-3 border border-line bg-raised"
+        class="overflow-hidden rounded-3 bg-raised shadow-edge"
       >
         <div class="flex flex-wrap items-baseline gap-3 border-b border-line bg-surface px-4 py-3">
           <h2 class="m-0 font-ui text-h3 font-semibold">{{ areaLabel(group.area) }}</h2>

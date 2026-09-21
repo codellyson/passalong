@@ -9,7 +9,7 @@
   follows as the plain list it was, grouped by column, because it needs a glance rather than a
   decision. A teammate's task that needs its author lands here too: the review is yours to give.
 -->
-<!-- The lists take their edge from the same raise shadow and 16px radius as the review above them;
+<!-- The lists take their edge from the same edge shadow and 16px radius as the review above them;
      one page, one kind of surface. The rows keep their inset hairlines, which are dividers. -->
 <script setup lang="ts">
 import type { Task } from "~/types/hub";
@@ -91,7 +91,7 @@ const done = computed(() => rest.value.get("done") || []);
             {{ col.title }} · {{ rest.get(col.state)?.length }}
           </h2>
           <p class="mt-1 mb-3 font-ui text-sm text-muted">{{ col.note }}</p>
-          <ul class="m-0 list-none overflow-hidden rounded-[var(--r-3)] p-0 shadow-raise">
+          <ul class="m-0 list-none overflow-hidden rounded-[var(--r-3)] p-0 shadow-edge">
             <HubTaskRow v-for="t in rest.get(col.state)" :key="t.id" :t="t" />
           </ul>
         </section>
@@ -101,7 +101,7 @@ const done = computed(() => rest.value.get("done") || []);
         <summary class="cursor-pointer font-ui text-xs font-semibold uppercase tracking-widest text-muted">
           Done · {{ done.length }}
         </summary>
-        <ul class="m-0 mt-3 list-none overflow-hidden rounded-[var(--r-3)] p-0 shadow-raise">
+        <ul class="m-0 mt-3 list-none overflow-hidden rounded-[var(--r-3)] p-0 shadow-edge">
           <HubTaskRow v-for="t in done" :key="t.id" :t="t" />
         </ul>
       </details>

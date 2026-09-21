@@ -153,7 +153,7 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
   <div class="flex flex-col gap-4">
     <div
       v-if="connect.open"
-      class="grid overflow-hidden rounded-2 border border-line bg-raised md:grid-cols-[13rem_1fr]"
+      class="grid overflow-hidden rounded-2 bg-raised shadow-edge md:grid-cols-[13rem_1fr]"
     >
       <div
         ref="picker"
