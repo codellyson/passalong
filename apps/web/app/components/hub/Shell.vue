@@ -112,15 +112,14 @@ const nearLimit = computed(() => {
   return Boolean(me && me.sync === "free" && me.guides >= me.limit * 0.8);
 });
 
-// Tasks first: the queue is where the day's work comes back for review, so it leads the menu.
+// One page for all work, whatever its kind (docs/V2.md §11): tasks and handoffs used to be two.
 const tabs = [
-  { to: "/hub/tasks", label: "Tasks" },
-  { to: "/hub", label: "Guides" },
+  { to: "/hub", label: "Work" },
   { to: "/hub/log", label: "Your log" },
   { to: "/hub/settings", label: "Settings" },
 ];
 
-/** The pages that are about one guide or one report belong under Guides. */
+/** The pages that are about one guide or one report belong under Work. */
 const active = (to: string) =>
   to === "/hub"
     ? route.path === "/hub" ||
@@ -138,7 +137,7 @@ const active = (to: string) =>
        Acceptance line to four or five lines. -->
   <main
     :class="
-      route.path === '/hub/settings' || route.path === '/hub/tasks' ? 'max-w-[70rem]' : 'max-w-[54rem]'
+      route.path === '/hub/settings' || route.path === '/hub' ? 'max-w-[70rem]' : 'max-w-[54rem]'
     "
   >
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the

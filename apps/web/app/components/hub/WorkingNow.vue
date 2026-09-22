@@ -42,9 +42,11 @@ const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "
 </script>
 
 <template>
-  <section v-if="props.rows.length" aria-labelledby="working-h" class="mb-10">
-    <h2 id="working-h" class="m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted">
-      Working now · {{ props.rows.length }}
+  <section v-if="props.rows.length" aria-labelledby="working-h" class="scroll-mt-4">
+    <!-- The same heading as the hub's other sections: this is one of them. -->
+    <h2 id="working-h" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
+      Working now
+      <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ props.rows.length }}</span>
     </h2>
     <p class="mt-1 mb-3 font-ui text-sm text-muted">Each agent holds one thing until it hands it in.</p>
     <ul class="m-0 list-none overflow-hidden rounded-[var(--r-3)] bg-raised p-0 shadow-edge">
