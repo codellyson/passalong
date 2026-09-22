@@ -147,6 +147,12 @@ stop, and tell the user. The older names are the same calls: `start_guide` and `
 `take`, `task_progress` is `progress`, `finish_task` and `verify_guide` are `hand_in`, and
 `ack_guide` is `take` or `pass`.
 
+Before publishing, check what is already open: `take` with no id, or `work` over the hosted server,
+shows what you hold. Work this session answers that you already hold is `hand_in`, not a second
+guide. Work that never left a branch the team can see has crossed no boundary, so publish what is
+still *open* from it — a bug or a task — rather than a write-up of the fix. "Update the passalong"
+and the like are ambiguous: ask whether it means hand in, follow up, or publish.
+
 Open a guide you mean to act on with `take`, not `get_guide`. `get_guide` is the same fetch without
 saying you are on it — for reading a guide you have not committed to. You have to be able to read
 something to decide it is not yours.

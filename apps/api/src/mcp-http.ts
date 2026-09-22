@@ -548,6 +548,16 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "apply: Reproduce is how to see the bug and running it produces the bug, Verification is " +
         "the behaviour that should have happened. Fix the defect, then check Verification and " +
         "hand_in with the result. A bug report is not broken because you reproduced it.\n" +
+        "BEFORE PUBLISHING ANYTHING, CHECK WHAT IS ALREADY OPEN: call work, or take with no id, " +
+        "and see what you hold. If this session's work answers something you hold, hand_in that — " +
+        "never publish a second guide about it. A transfer guide is for work that has to cross a " +
+        "boundary: another repo, another machine, a teammate without your branch. Work you " +
+        "committed and pushed where the team can already see it has crossed no boundary, and a " +
+        "guide about it is one more thing for somebody to read and review; what is worth " +
+        "publishing from a session like that is what is still open, as a bug or a task. " +
+        '"Update the passalong", "add this to passalong" and the like are ambiguous — hand in ' +
+        "what you hold, add a follow-up, or publish something new? Ask which, in one line, rather " +
+        "than publishing and leaving the user to undo it.\n" +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
         "file_bugs with all of them at once; each becomes a guide someone can take on its own.\n" +
         "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
@@ -934,7 +944,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       // because `attachments` are fetched from wherever the client says they are.
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       description:
-        "Publish a guide from its full markdown — a transfer guide, a single bug with " +
+        "Publish a guide from its full markdown. Check what is already open first (work): if this " +
+        "session answers something you hold, hand_in that instead, and if the work never left a " +
+        "branch the team can see, publish what is still open as a bug or a task rather than a " +
+        "write-up of the fix. A transfer guide, a single bug with " +
         "`kind: bug`, or a task with `kind: task`. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
         "is minted and returned. To change a guide, pass the id it came back with; inventing a " +
         "fresh id to retry or to correct one publishes a second copy, and every copy counts " +

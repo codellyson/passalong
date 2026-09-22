@@ -1239,3 +1239,31 @@ test("the board says what you may give to someone else, and to whom, so the app 
     "everyone, each teammate (by id without an @name), each group",
   );
 });
+
+test("a vague ask to 'update passalong' is answered by checking what you hold, not by publishing", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: PROTOCOL,
+          capabilities: {},
+          clientInfo: { name: "t", version: "1" },
+        },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  const said = body.result.instructions;
+  // Work already committed on a branch the team can see has not crossed a boundary, and a guide
+  // for it is one more thing to review. Hand in what you hold, or ask; do not publish by default.
+  assert.match(said, /hand_in/);
+  assert.match(said, /ask which/i);
+  assert.match(said, /has not crossed|crossed no boundary|never left/i);
+  const publish = body.result.instructions;
+  assert.match(publish, /before publishing/i);
+});

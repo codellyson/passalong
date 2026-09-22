@@ -150,6 +150,16 @@ export async function serve() {
         "session into a guide (guide_template kind transfer shows the shape) and call " +
         "publish_guide, with `to` as team, team/@handle for one teammate, or team/#group for the " +
         "people who do a thing. " +
+        "BEFORE PUBLISHING ANYTHING, CHECK WHAT IS ALREADY OPEN: call take with no id, or read the " +
+        "inbox, and see what you hold. If this session's work answers something you hold, hand_in " +
+        "that — never publish a second guide about it. A transfer guide is for work that has to " +
+        "cross a boundary: another repo, another machine, a teammate without your branch. Work you " +
+        "committed and pushed where the team can already see it has crossed no boundary, and a " +
+        "guide about it is one more thing for somebody to read and review; what is worth " +
+        "publishing from a session like that is what is still open, as a bug or a task. " +
+        '"Update the passalong", "add this to passalong" and the like are ambiguous — hand in ' +
+        "what you hold, add a follow-up, or publish something new? Ask which, in one line, rather " +
+        "than publishing and leaving the user to undo it. " +
         "At the start of work, inbox shows guides teammates have handed to this user — take one " +
         "to start it — and activity shows whether the guides they handed off have landed. When " +
         "the user asks what they have been working on, or wants a standup or a summary of a " +
@@ -721,7 +731,10 @@ export async function serve() {
     {
       title: "Publish guide",
       description:
-        "Publish a guide from markdown (frontmatter + sections) — a transfer guide by default, or " +
+        "Publish a guide from markdown (frontmatter + sections). Check what you hold first (take " +
+        "with no id): if this session answers something you hold, hand_in that instead, and if the " +
+        "work never left a branch the team can see, publish what is still open as a bug or a task " +
+        "rather than a write-up of the fix. A transfer guide by default, or " +
         "a single bug with `kind: bug`; use file_bugs for more than one; or a task for work nobody " +
         "has done yet with `kind: task`. Missing id, created, " +
         "author, and source_context are filled in. A screenshot belongs in the markdown: attach it " +

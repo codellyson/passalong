@@ -9,6 +9,24 @@ You are turning this session into a **transfer guide**: executable context for a
 different place. The reader is an AI agent (with a developer watching) that has none of this
 session's history. Write for execution, not for permanence.
 
+## Before you write anything
+
+**Check what is already open, and whether a guide is wanted at all.** Run `passalong now` (or
+`take` with no id over MCP) to see what this worktree holds and what was handed to you.
+
+- **The session answers something you hold** — hand it in (`passalong hand_in <id> …`) instead.
+  Publishing a second guide about it leaves two records of one piece of work.
+- **The work never left this repo** — committed and pushed on a branch the team can already see,
+  with a pull request to review — then it has crossed no boundary, and a transfer guide is one more
+  thing for somebody to read. What is worth publishing from a session like that is what is *still
+  open*: file it as a bug (`kind: bug`) or a task, not as a write-up of the fix.
+- **The ask is vague** — "update the passalong", "add this to passalong", "log this" — it may mean
+  hand in what you hold, add a follow-up to a guide, or publish something new. Ask which, in one
+  line. Publishing the wrong thing costs somebody a review, and the author a guide to delete.
+
+A transfer guide earns its place when the work has to cross a boundary: another repo, another
+machine, another agent session, or a teammate without your branch.
+
 ## Procedure
 
 1. **Pick the one thing to transfer.** If the user named it (`/passalong-capture <what>` or
