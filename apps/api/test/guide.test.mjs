@@ -371,8 +371,15 @@ test("the API description covers what an agent does with a task, and not the rev
     ["/v1/tasks/next", "post"],
     ["/v1/tasks/{id}/progress", "put"],
     ["/v1/tasks/{id}/finish", "post"],
+    ["/v1/take", "post"],
+    ["/v1/guides/{id}/progress", "put"],
+    ["/v1/guides/{id}/hand_in", "post"],
+    ["/v1/guides/{id}/pass", "post"],
+    ["/v1/working", "get"],
   ])
     assert.ok(doc.paths[path]?.[method], `${method.toUpperCase()} ${path} is described`);
+  // Every verb's answer says what to call next; a client generated from the spec should see it.
+  assert.ok(doc.components.schemas.Next, "the next-step shape is described");
   // Approve, reject and release are a person's calls. Describing them would invite a model to make
   // them, which is the one thing the review gate exists to stop, so they stay out, like the
   // account routes do.

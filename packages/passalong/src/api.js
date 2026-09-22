@@ -46,10 +46,14 @@ async function call(path, { method = "GET", body, auth = true, raw = false } = {
   if (!res.ok) {
     const text = await res.text();
     let message = text;
+    let parsed = {};
     try {
-      message = JSON.parse(text).message || text;
+      parsed = JSON.parse(text);
+      message = parsed.message || text;
     } catch {}
-    throw new ApiError(res.status, message || res.statusText);
+    // The whole answer rides along: a refusal can carry `next`, `say` or `holder`, which is what
+    // an agent needs to decide what to do instead.
+    throw Object.assign(new ApiError(res.status, message || res.statusText), { body: parsed });
   }
   return raw ? res.text() : res.json();
 }
@@ -116,6 +120,14 @@ export const rejectTask = (id, why) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/reject`, { method: "POST", body: { why } });
 export const releaseTask = (id) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });
+/** The four verbs every guide answers to. See docs/V2.md §11. */
+export const take = (body) => call("/v1/take", { method: "POST", body });
+export const progress = (id, body) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/progress`, { method: "PUT", body });
+export const handIn = (id, body) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/hand_in`, { method: "POST", body });
+export const pass = (id, body) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/pass`, { method: "POST", body });
 export const ack = (id, taken, note = "") =>
   call(`/v1/guides/${id}/ack`, { method: "PUT", body: { taken, note } });
 

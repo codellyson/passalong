@@ -3090,14 +3090,13 @@ app.patch("/v1/guides/:id/status", async (c) => {
 const NOTE_MAX = 280;
 
 /**
- * A task is not answered like a handoff. It is taken from the queue, reported on and handed in for
- * review (next_task, task_progress, finish_task); an ack or a verdict on one is an answer its author
- * never reads, because they review it from the queue. Refused before anything else, so the reply
- * names the tools that do the job rather than some other rule the request happened to break.
+ * A raw ack or verdict on a task. Both carry no agent, and a task is only ever held by one: taken
+ * with take, handed in with hand_in and its write-up, which its author reviews. So these refuse it
+ * and name the calls that do the job. The MCP tools under these old names already route there.
  */
 const TASK_TOOLS =
-  "This is a task, not a handoff. Take it with next_task, report with task_progress, and hand it " +
-  "in with finish_task; its author reviews it from the task queue.";
+  "This is a task: take it with POST /v1/take (the take tool), and hand it in with its write-up " +
+  "via POST /v1/guides/{id}/hand_in (the hand_in tool); its author reviews it.";
 
 /**
  * "It worked" or "it didn't", from someone who tried it: stored, receipted, and told to the author

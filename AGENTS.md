@@ -17,11 +17,14 @@ public one, for agents *using* Passalong rather than changing it.
     **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
-  - `src/mcp.js` — MCP tools: `search_guides`, `inbox`, `board`, `activity`, `log`, `start_guide`,
-    `get_guide`, `publish_guide`, `guide_template`, `set_guide_status`, `ack_guide`,
-    `verify_guide`, `file_bugs`, `attach_screenshot`. `start_guide` is the one an agent should
-    reach for on work it means to do: it pulls and takes the handoff together. `get_guide` only
-    reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a
+  - `src/mcp.js` — MCP tools. `take`, `progress`, `hand_in` and `pass` work every kind of guide
+    (docs/V2.md §11); each answer ends with the server's `next` (`steps()` in
+    apps/api/src/claims.ts). `start_guide`, `ack_guide`, `verify_guide`, `next_task`,
+    `task_progress` and `finish_task` are kept as those four under their old names — one
+    implementation each, never a second copy. Also `search_guides`, `inbox`, `board`, `activity`,
+    `log`, `get_guide`, `publish_guide`, `guide_template`, `set_guide_status`, `file_bugs`,
+    `attach_screenshot`, `plan_tasks`. `take` is the one an agent should reach for on work it means
+    to do. `get_guide` only reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a
     client-passed file over HTTP (`openai/fileParams`). Over HTTP, `publish_guide` and `file_bugs`
     also take a top-level `attachments` file array. `openai/fileParams` only accepts top-level
     fields, so a `file_bugs` issue names its files by position rather than holding them. Only

@@ -31,6 +31,7 @@ or `?view=verify` for the view that leads with what to check and folds the imple
 `kind:` in the frontmatter says what a guide is for. Each asks for different behaviour, so read it
 before acting on anything.
 
+- `kind: task` is the default for a new guide; a guide with no `kind:` line is a transfer.
 - `kind: transfer` (or absent) — finished work to repeat here. Follow its `Steps`.
 - `kind: bug` — a defect to fix where it is. It has no `Steps` and nothing in it is a procedure to
   apply: `Reproduce` is how to see the bug and running it produces the bug, `Verification` is the
@@ -41,10 +42,9 @@ before acting on anything.
   `Constraints`, leave `Out of scope` alone, and treat `Acceptance` as what "done" means. A task
   may name the repo it is for in `target_context`, and the tasks it waits for in `blocked_by`: it
   is not handed out until a person has approved each of those.
-  A task has its own tools. Take it with `next_task`, report with `task_progress`, and hand it in
-  with `finish_task`. The guide tools refuse a task: `start_guide`, `ack_guide` and `verify_guide`
-  answer a handoff, and a task is not handed to anyone. Write one with `plan_tasks` (a single step
-  is fine), not `publish_guide`.
+  Write one with `plan_tasks` (a single step is fine), not `publish_guide`.
+
+Every kind is worked with the same four calls — see "MCP tools" below.
 
 Bugs are often filed in sets. `report:` names the parent a set was filed under; `GET /v1/reports/
 <id>` returns the rest of it. Fix only the issue you were given unless you were asked for more.
@@ -114,26 +114,34 @@ passalong login                 # optional: sync across machines
 
 ## MCP tools
 
-`passalong setup` registers a stdio MCP server exposing: `publish_guide`, `file_bugs`,
-`start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`,
-`verify_guide`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`, `next_task`,
-`task_progress`, `finish_task`, `plan_tasks`. `start_guide` and
-`attach_screenshot` need passalong 0.3 or later; an older install exposes the rest, so fall back to
-`get_guide` then `ack_guide` if `start_guide` is not there.
+`passalong setup` registers a stdio MCP server exposing: `take`, `progress`, `hand_in`, `pass`,
+`publish_guide`, `file_bugs`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`,
+`attach_screenshot`, `inbox`, `board`, `activity`, `log`, `plan_tasks`, and, kept for older prompts,
+`start_guide`, `ack_guide`, `verify_guide`, `next_task`, `task_progress`, `finish_task`.
 
-Open a guide you mean to act on with `start_guide`, not `get_guide`. Both return the same markdown;
-`start_guide` also says you are on it, and between handing work over and hearing it worked that is
-the only signal the sender gets. Follow its `Steps`, adapt anything marked as an assumption, run
-its `Verification`, then `verify_guide` with the result.
+Every guide, whatever its kind, is worked with four calls:
 
-`get_guide` is the same fetch without the answer — for reading a guide you have not committed to.
-Fetching is not committing, which is why they are two tools: you have to be able to read something
-to decide it is not yours.
+- `take` — say you are doing it, and get it. With an id, that guide; with none, the next thing
+  waiting for you. While you hold it nobody else can take it in that repo — a task has one taker,
+  a handoff one per repo — and its sender sees you are on it. You hold one thing at a time. If
+  somebody else has it, the refusal says who: tell the user instead of doing the work twice.
+- `progress` — a one-line note at each milestone. 30 minutes without one marks it stalled: still
+  yours, but flagged to a person.
+- `hand_in` — done here. A task hands in `markdown`, a transfer guide about what you did, which is
+  published with `parent:` naming the task and reviewed by its author against `Acceptance` (over
+  the hosted server, `publish_guide` it first and pass its id as `report`). A handoff or a bug
+  hands in `ok` — did its `Verification` hold — and a `note` when it did not.
+- `pass` — not yours, or stuck: give it back with the reason, which goes to whoever is next.
 
-`ack_guide` is that answer on its own, and the way to say no. Passing must say why — an unanswered
-handoff looks exactly like one nobody has noticed, so the sender learns in a week rather than a
-minute. Taking it leaves it on your board; passing puts it back on its author's. Taking your own
-guide does nothing: an author is not a party to their own handoff.
+Every answer ends with `next`: the calls that make sense from here, with when and why. When the
+move is to make no call — you no longer hold it, or nothing is waiting — it says so in `say`:
+stop, and tell the user. The older names are the same calls: `start_guide` and `next_task` are
+`take`, `task_progress` is `progress`, `finish_task` and `verify_guide` are `hand_in`, and
+`ack_guide` is `take` or `pass`.
+
+Open a guide you mean to act on with `take`, not `get_guide`. `get_guide` is the same fetch without
+saying you are on it — for reading a guide you have not committed to. You have to be able to read
+something to decide it is not yours.
 
 `log` is this user's own acts, newest first — what they published, what they took delivery of, and
 every verdict and ack they gave, each with a ready-made `text` line and the guide's repo. It answers
@@ -166,7 +174,7 @@ changed since, what you found doing it — publish that context with `parent` se
 has its own id, verdicts and pulls. `parent` on `publish_guide` and `--follows` need passalong 0.3.1
 or later.
 
-Whoever opens the original gets its follow-ups too. `get_guide` and `start_guide` return them after
+Whoever opens the original gets its follow-ups too. `get_guide` and `take` return them after
 the guide, oldest first; read them before acting, and where one disagrees with the original, the
 follow-up is newer. The guide's share page lists them above the document.
 
@@ -174,14 +182,6 @@ follow-up is newer. The guide's share page lists them above the document.
 earlier steps it waits for, which become its `blocked_by`. Nothing runs until the user makes them
 ready (`passalong ready --all`). It is on the local server only.
 
-`next_task`, `task_progress` and `finish_task` are the task queue. `next_task` claims the oldest
-ready task for the repo you are in and returns it; while you hold it no other agent can have it,
-and if you already hold one you get that one back. Call `task_progress` with a one-line status at
-each milestone: 30 minutes without one stalls the task, which keeps it locked to you but flags it
-to a person. When every `Acceptance` check holds, call `finish_task` with `markdown`: a transfer
-guide about what you did, which it publishes with `parent:` naming the task and attaches. The task
-goes to a person for review, who reads that guide against `Acceptance`. Over the hosted server,
-`publish_guide` the guide first and pass its id as `report`. If either call says you no longer hold the task, a person released it: stop.
 Locally the agent is the worktree, from `.passalong/agent.json`; over the hosted server, pass the
 same `agent` name on every call.
 
@@ -192,9 +192,8 @@ be handed to whoever fixes it. Send them in one call rather than one call each. 
 
 The same server is also hosted, for assistants that add remote MCP servers rather than running
 one: `https://passalong.dev/v1/mcp`, Streamable HTTP, authenticated with a bearer token. It carries
-most of these tools — everything except the ones that touch a working directory. `start_guide` is
-one of those, so over the hosted server take a handoff with `ack_guide` and fetch it with
-`get_guide`, which there returns the markdown without writing it anywhere. `attach_screenshot` is
+most of these tools — everything except the ones that touch a working directory. `take` there
+returns the markdown without writing it anywhere. `attach_screenshot` is
 on both, shaped for where it runs: a path locally, a client-passed file over HTTP. Over HTTP,
 `publish_guide` and `file_bugs` also take the files themselves in a top-level `attachments` array,
 so a client that passes files needs one call: `publish_guide` puts each image under Problem (or at

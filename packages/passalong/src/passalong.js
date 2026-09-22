@@ -301,6 +301,61 @@ export async function finishTask(
 }
 
 /**
+ * The four verbs every guide answers to, whatever its kind (docs/V2.md §11). Each answer carries
+ * `next`, the calls that make sense from here, and `say` when the move is to stop.
+ *
+ * take: this worktree's agent takes guide `id`, or with no id the next one waiting for it. The
+ * document is written to `.passalong/<id>.md`, like a pull, so the agent works from a file.
+ */
+export async function take(id, { cwd = process.cwd(), any = false } = {}) {
+  needsSync("taking work");
+  const who = agent(cwd);
+  const r = await api.take({ ...who, ...(id ? { id: await resolveId(id) } : {}), any });
+  if (!r.guide?.markdown) return r;
+  const path = join(localDir(who.worktree), `${r.guide.id}.md`);
+  writeFileSync(path, r.guide.markdown);
+  store.save(parse(r.guide.markdown));
+  return { ...r, path };
+}
+
+/** Word from the agent that holds it: the lease starts again, and `note` is what the hub shows. */
+export async function progress(id, note, { cwd = process.cwd() } = {}) {
+  needsSync("reporting progress");
+  return api.progress(id, { agent: agent(cwd).agent, ...(note ? { note } : {}) });
+}
+
+/**
+ * Done here. A task hands in a write-up — `markdown`, published with `parent:` naming the task, or
+ * `report`, the id of one already published — for its author to review against Acceptance. Any
+ * other guide hands in whether its Verification held: `ok`, and a `note` when it did not.
+ */
+export async function handIn(
+  id,
+  { ok, note = "", markdown, report, pr = "", cwd = process.cwd() } = {},
+) {
+  needsSync("handing work in");
+  if (!report && markdown) {
+    const g = parse(markdown);
+    report = (await share(serialize({ meta: { ...g.meta, parent: id }, body: g.body }), { cwd }))
+      .guide.meta.id;
+  }
+  return api.handIn(id, {
+    agent: agent(cwd).agent,
+    note,
+    ...(report ? { report, pr } : {}),
+    ...(typeof ok === "boolean" ? { ok } : {}),
+  });
+}
+
+/** Not this agent's to do: what it held is open again, and `why` goes to whoever is next. */
+export async function pass(id, why, { cwd = process.cwd() } = {}) {
+  needsSync("passing work");
+  if (!String(why || "").trim())
+    throw new PassalongError("say why you are passing it, so whoever is next knows");
+  return api.pass(id, { agent: agent(cwd).agent, why });
+}
+
+/**
  * The gate, a person's three answers to a task. Approve: the work in review is done. Reject: it
  * goes back to Ready with `why` on it for the next agent. Release: a task an agent holds, live or
  * stalled, goes back to Ready with a note saying where that agent left it.
@@ -380,9 +435,8 @@ export function handoffNudge(meta = {}) {
   if (!meta.to && !meta.team) return "";
   return (
     "<!-- passalong: this guide was handed to someone. If you are about to do the work, call " +
-    "start_guide instead of get_guide — it takes the handoff so the sender stops guessing. " +
-    "If you are only reading, or it turns out not to be yours, answer with ack_guide taken=false " +
-    "and a reason. -->"
+    "take instead of get_guide — it takes the handoff so the sender stops guessing. " +
+    "If you are only reading, or it turns out not to be yours, answer with pass with a reason. -->"
   );
 }
 
@@ -678,18 +732,18 @@ export function workPrompt(t) {
     t.markdown.trim(),
     "",
     "Do it in this repo. There are no Steps: work out how to reach Goal within Constraints, and",
-    "leave Out of scope alone. Call the passalong MCP tool task_progress with id",
+    "leave Out of scope alone. Call the passalong MCP tool progress with id",
     `${t.id} and a one-line status at each milestone — 30 minutes of silence stalls the task.`,
     "When every Acceptance check holds, commit what you changed as one commit whose message",
     `starts with "${t.id}: " — several tasks share this worktree, and a reviewer reads each one's`,
-    "change on its own. Then call finish_task with id",
+    "change on its own. Then call hand_in with id",
     `${t.id}, \`pr\` set to that commit's hash, and \`markdown\`: a transfer guide saying what you`,
     "did, what you decided and why, and how you checked each Acceptance line. If either call",
     "says you no longer hold the task, stop.",
     "",
     "Nobody reads what you print: this session runs unattended. If something only a person can",
     "do stands between you and an Acceptance line — a permission, a secret, a decision — call",
-    `task_progress with id ${t.id} and a note starting "BLOCKED: " that says exactly what you`,
+    `progress with id ${t.id} and a note starting "BLOCKED: " that says exactly what you`,
     "need, leave the task unfinished and uncommitted, and stop. The board shows that note.",
   ].join("\n");
 }
@@ -698,8 +752,8 @@ export function workPrompt(t) {
  * Work the queue from this worktree: take the next task, hand it to an agent, and when the agent
  * has finished it take the next, until there is nothing left.
  *
- * The agent runs in this worktree, so it is the same agent to the queue — its task_progress and
- * finish_task land on the claim this took. `agent` is a command the prompt is appended to;
+ * The agent runs in this worktree, so it is the same agent to the queue — its progress and
+ * hand_in land on the claim this took. `agent` is a command the prompt is appended to;
  * `claude -p` by default, or whatever PASSALONG_AGENT says.
  *
  * An agent that exits without finishing stops the loop. Asking for the next task would hand the

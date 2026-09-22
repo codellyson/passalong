@@ -87,18 +87,18 @@ const TASK = [
   { h: "Out of scope", note: "What looks related and is not part of this task." },
 ];
 
-/** The tools that answer a task, in the order they are used. */
+/** The four calls every guide is worked with, whatever its kind, in the order they are used. */
 const TASK_TOOLS = [
-  { name: "plan_tasks", note: "Write tasks: one step for one task, or a goal broken into steps." },
   {
-    name: "next_task",
-    note: "Take the oldest ready task for your repo. No other agent can have it while you do.",
+    name: "take",
+    note: "Say you are doing it, and get it: by id, or the next one waiting. Nobody else can take it there while you hold it.",
   },
-  { name: "task_progress", note: "A one-line status. Thirty minutes without one stalls the task." },
+  { name: "progress", note: "A one-line note at each milestone. Thirty minutes without one marks it stalled." },
   {
-    name: "finish_task",
-    note: "Hand it in with a transfer guide about the work. A person reviews it.",
+    name: "hand_in",
+    note: "Done here. A task hands in a write-up for its author to review; a handoff or a bug, whether it worked.",
   },
+  { name: "pass", note: "Not yours, or stuck: give it back with the reason for whoever is next." },
 ];
 
 /** A minimal transfer guide. TODO(copy): replace with a real, short example. */
@@ -204,9 +204,8 @@ tags: [TODO]
             </template>
           </dl>
           <p>
-            A task has its own tools. <code>start_guide</code>, <code>ack_guide</code> and
-            <code>verify_guide</code> answer a handoff, and a task is not handed to anyone, so they
-            refuse one.
+            Every kind is worked with the same four calls, and each answer ends with what to call
+            next. Write tasks with <code>plan_tasks</code>.
           </p>
           <dl class="kinds">
             <template v-for="t in TASK_TOOLS" :key="t.name">

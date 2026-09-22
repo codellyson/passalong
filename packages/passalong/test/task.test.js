@@ -73,7 +73,7 @@ test("an agent started by work is told to commit what it did, under the task's i
   });
   assert.match(prompt, /commit/i);
   assert.match(prompt, /ab12cd34/);
-  assert.match(prompt, /pr`?.*commit|commit.*`?pr/i, "and to hand the commit to finish_task");
+  assert.match(prompt, /pr`?.*commit|commit.*`?pr/i, "and to hand the commit in with hand_in");
 });
 
 test("an agent that cannot finish is told to say why where the board shows it", () => {
@@ -83,5 +83,5 @@ test("an agent that cannot finish is told to say why where the board shows it", 
     markdown: "## Goal\ng",
   });
   assert.match(prompt, /BLOCKED:/);
-  assert.match(prompt, /task_progress[^.]*BLOCKED|BLOCKED[^.]*task_progress/);
+  assert.match(prompt, /progress[^.]*BLOCKED|BLOCKED[^.]*progress/);
 });

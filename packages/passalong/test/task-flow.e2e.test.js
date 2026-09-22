@@ -9,7 +9,7 @@
 // works against a local server whose database is apps/web's — never point this at a real one.
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -386,7 +386,7 @@ test("a task is answered with the task tools, and the guide ones say so", { skip
   const { id } = await readyTask(env, "Answered the wrong way");
   // A verdict or an ack on a task would be an answer nobody reads: its author reviews it from the
   // queue. Both are refused, and the refusal names the tools that do the job.
-  const task = /next_task|task_progress|finish_task/;
+  const task = /take[^.]*hand_in|hand_in[^.]*take/;
   await assert.rejects(p.verdict(id, true, ""), (e) => e.status === 400 && task.test(e.message));
   await assert.rejects(api.ack(id, true, ""), (e) => e.status === 400 && task.test(e.message));
 });
@@ -432,4 +432,31 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
   assert.equal(gone.status, 409);
   assert.match(gone.say, /stop/i, "an agent that lost its claim is told to stop");
   assert.equal((await call("POST", "/v1/take", { ...b, id: h })).guide.agent, b.agent);
+});
+
+test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handoff alike", { skip }, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { dir } = await readyTask(env, "Verbs on a task");
+
+  // No id: the next thing waiting in this repo — oldest first, so maybe a task an earlier test
+  // left ready. The document lands where a pull would put it.
+  const took = await p.take(undefined, { cwd: dir });
+  const id = took.guide.id;
+  assert.equal(took.guide.kind, "task");
+  assert.match(readFileSync(took.path, "utf8"), new RegExp(took.guide.title));
+  assert.deepEqual(took.next.map((s) => s.tool), ["progress", "hand_in", "pass"]);
+
+  assert.equal((await p.progress(id, "halfway", { cwd: dir })).note, "halfway");
+  const md = "---\ntitle: Verbs, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const handed = await p.handIn(id, { markdown: md, cwd: dir });
+  assert.equal(handed.state, "review");
+  assert.deepEqual(handed.next.map((s) => s.tool), ["take"]);
+
+  // A handoff by id: taken, then passed with the reason, and free for the next agent.
+  const h = (await p.share("---\ntitle: A handoff\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n", { cwd: dir }))
+    .guide.meta.id;
+  assert.equal((await p.take(h, { cwd: dir })).guide.kind, "transfer");
+  await assert.rejects(p.pass(h, "", { cwd: dir }), /why/);
+  assert.deepEqual((await p.pass(h, "not mine", { cwd: dir })).next.map((s) => s.tool), ["take"]);
 });

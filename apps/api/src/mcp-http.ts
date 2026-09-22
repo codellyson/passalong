@@ -63,6 +63,60 @@ async function relay(call: Call, method: string, path: string, body?: unknown) {
   return { ...text(res.text), structuredContent: parsed as Record<string, unknown> };
 }
 
+/** The part of a verb's answer that says what to do next. See steps() in claims.ts. */
+type Answer = { next?: { tool: string; when: string; why: string }[]; say?: string };
+
+/** `next` and `say`, as the last thing an agent reads. Mirrors nextNote() in the local server. */
+function nextNote({ next = [], say = "" }: Answer, id = "") {
+  const lines = next.map(
+    (s) => `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})`,
+  );
+  if (say) lines.unshift(`  ${say}`);
+  return lines.length ? `<!-- passalong: next:\n${lines.join("\n")}\n-->` : "";
+}
+
+/** A refusal, with the server's own next move when it sent one: usually, stop. */
+function refused(raw: string) {
+  try {
+    const parsed = JSON.parse(raw) as Answer & { message?: string };
+    const note = nextNote(parsed);
+    return failed(`${parsed.message || raw}${note ? `\n${note}` : ""}`);
+  } catch {
+    return failed(raw);
+  }
+}
+
+/** A verb's answer: the route's JSON as data, and as text with what to call next after it. */
+async function answer(call: Call, method: string, path: string, id: string, body: unknown) {
+  const res = await call(method, path, body);
+  if (res.status >= 400) return refused(res.text);
+  let parsed: Answer & Record<string, unknown>;
+  try {
+    parsed = JSON.parse(res.text);
+  } catch {
+    return failed(`unexpected response from ${path}: ${res.text.slice(0, 200)}`);
+  }
+  const note = nextNote(parsed, id);
+  return { ...text(`${res.text}${note ? `\n${note}` : ""}`), structuredContent: parsed };
+}
+
+/** What to say in front of a guide, by kind. Mirrors leadFor() in packages/passalong/src/mcp.js. */
+function leadFor(kind: string) {
+  if (kind === "bug")
+    return (
+      "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions — " +
+      "those steps produce the defect. Fix what Problem describes, then check Verification and " +
+      "answer with hand_in.\n\n"
+    );
+  if (kind === "task")
+    return (
+      "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
+      "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
+      "under Acceptance holds.\n\n"
+    );
+  return "";
+}
+
 /**
  * Output schemas: what each tool hands back, for clients that read results as data.
  *
@@ -434,6 +488,16 @@ const taskOut = z
 const progressOut = z
   .object({ id: z.string(), lease_until: z.string().optional(), note: z.string().optional() })
   .passthrough();
+const takeOut = z
+  .object({
+    guide: z
+      .object({ id: z.string(), kind: z.string().optional(), markdown: z.string().optional() })
+      .passthrough()
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
+const passOut = z.object({ id: z.string(), passed: z.boolean().optional() }).passthrough();
 const finishOut = z
   .object({ id: z.string(), state: z.string().optional(), report: z.string().optional() })
   .passthrough();
@@ -448,14 +512,25 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       instructions:
         "Passalong hands work between contexts as guides: markdown with frontmatter, in three " +
         "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — each asks " +
-        "for different behaviour.\n" +
-        "kind: transfer (or absent) is a finished implementation to repeat here. Follow its " +
-        "Steps, adapting anything marked ASSUMES to this codebase; run its Verification before " +
-        "declaring done, then verify_guide with the result.\n" +
+        "for different behaviour. Every kind is worked with the same four calls, each with an " +
+        "`agent` name you reuse on every call: take (with an id, or none for the next ready task " +
+        "for `repo`) says you are doing it and returns it — nobody else can take it there while " +
+        "you hold it. progress with a one-line note at each milestone; 30 minutes of silence " +
+        "marks it stalled. hand_in when done. pass, with the reason, when it is not yours or you " +
+        "are stuck. Every answer ends with `next`: what to call now. Follow it, and when it says " +
+        "to stop, stop. If take says somebody else has it, tell the user instead of doing the " +
+        "work twice.\n" +
+        "kind: task (the default) is work nobody has done yet. It has no Steps: work out how to " +
+        "reach Goal within Constraints, leave Out of scope alone, and treat Acceptance as the " +
+        "definition of done. When Acceptance holds, publish_guide a transfer guide about what you " +
+        "did, then hand_in with its id as `report`.\n" +
+        "kind: transfer (or no kind: line) is a finished implementation to repeat here. Follow " +
+        "its Steps, adapting anything marked ASSUMES to this codebase; run its Verification, then " +
+        "hand_in with ok and, when it failed, a note saying what went wrong.\n" +
         "kind: bug is a defect to FIX here. It has no Steps and nothing in it is a procedure to " +
         "apply: Reproduce is how to see the bug and running it produces the bug, Verification is " +
         "the behaviour that should have happened. Fix the defect, then check Verification and " +
-        "verify_guide with the result. A bug report is not broken because you reproduced it.\n" +
+        "hand_in with the result. A bug report is not broken because you reproduced it.\n" +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
         "file_bugs with all of them at once; each becomes a guide someone can take on its own.\n" +
         "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
@@ -471,15 +546,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
         "id. It is listed under the original, and anyone who opens the original, person or agent, " +
         "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.\n" +
-        "kind: task is work nobody has done yet. It has no Steps: work out how to reach Goal " +
-        "within Constraints, leave Out of scope alone, and treat Acceptance as the definition of " +
-        "done. A task has its own tools, and the guide ones do not work on it: take it with " +
-        "next_task (never ack_guide), report with task_progress, and hand it in with finish_task " +
-        "(never verify_guide).\n" +
-        "To take work from the queue, call next_task with an `agent` name you reuse on every " +
-        "call. task_progress at each milestone — 30 minutes of silence stalls the task. When " +
-        "Acceptance holds, publish_guide a transfer guide about what you did, then finish_task " +
-        "with its id. If either says you no longer hold the task, stop working on it.",
+        "Older prompts may name next_task, task_progress, finish_task, ack_guide or " +
+        "verify_guide: they still work, as take, progress, hand_in and the handoff answers.",
     },
   );
 
@@ -525,17 +593,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
       // Said in front of the document, because an agent keys on headings and a bug's or a task's
       // headings look enough like a transfer guide's to be followed by one that never opened the
       // frontmatter. Mirrors `leadFor()` in packages/passalong/src/mcp.js.
-      const lead = /^kind:\s*bug\s*$/m.test(res.text)
-        ? "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions — " +
-          "those steps produce the defect. Fix what Problem describes, then check Verification " +
-          "and answer with verify_guide.\n\n"
-        : /^kind:\s*task\s*$/m.test(res.text)
-          ? "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out " +
-            "how to reach Goal within Constraints, and leave Out of scope alone. It is done when " +
-            "every check under Acceptance holds. Reading it here does not make it yours: take it " +
-            "with next_task, then report with task_progress and hand it in with finish_task, not " +
-            "verify_guide.\n\n"
-          : "";
+      const kind = /^kind:\s*(bug|task)\s*$/m.exec(res.text)?.[1] ?? "";
+      const lead =
+        leadFor(kind) +
+        (kind
+          ? "Reading it here does not make it yours: to work on it, call take with its id.\n\n"
+          : "");
       // A second content block, not text added to the first. The document is handed over as it
       // came — a transfer guide byte for byte — so an agent that writes it back out cannot carry
       // the note into it, and nothing lands in front of `---`. Mirrors `followUpNote()`.
@@ -719,82 +782,155 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
     .regex(/^[a-z0-9-]{8,64}$/, "8 to 64 of a-z, 0-9 and -")
     .describe("a name for you, the same on every task call, e.g. chat-7f3k2m9q");
 
+  // ---- the four verbs (docs/V2.md §11) --------------------------------------------------------
+  // take, progress, hand_in and pass work every kind of guide. next_task, task_progress and
+  // finish_task are kept for older prompts and call the same code.
+
+  async function doTake(args: { agent: string; id?: string; repo?: string; any?: boolean }) {
+    const res = await call("POST", "/v1/take", {
+      agent: args.agent,
+      ...(args.id ? { id: args.id } : {}),
+      repo: args.repo ?? "",
+      any: args.any === true,
+    });
+    if (res.status >= 400) return refused(res.text);
+    const parsed = JSON.parse(res.text) as Answer & {
+      guide: { id: string; kind?: string; markdown?: string; resumed?: boolean } | null;
+    };
+    const g = parsed.guide;
+    if (!g)
+      return {
+        ...text(nextNote(parsed) || "Nothing is waiting for you. Tell the user, and stop."),
+        structuredContent: parsed as Record<string, unknown>,
+      };
+    return {
+      ...text(
+        `${leadFor(g.kind || "")}${g.markdown ?? ""}\n\n<!-- passalong: ${g.id} is yours` +
+          `${g.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->\n` +
+          nextNote(parsed, g.id),
+      ),
+      structuredContent: parsed as Record<string, unknown>,
+    };
+  }
+
+  const doProgress = (args: { id: string; agent: string; note?: string }) =>
+    answer(call, "PUT", `/v1/guides/${encodeURIComponent(args.id)}/progress`, args.id, {
+      agent: args.agent,
+      ...(args.note ? { note: args.note } : {}),
+    });
+
+  const doHandIn = (args: {
+    id: string;
+    agent: string;
+    ok?: boolean;
+    note?: string;
+    report?: string;
+    pr?: string;
+  }) =>
+    answer(call, "POST", `/v1/guides/${encodeURIComponent(args.id)}/hand_in`, args.id, {
+      agent: args.agent,
+      note: args.note ?? "",
+      ...(args.report ? { report: args.report, pr: args.pr ?? "" } : {}),
+      ...(typeof args.ok === "boolean" ? { ok: args.ok } : {}),
+    });
+
+  const takeIn = {
+    agent: AGENT,
+    id: z.string().optional().describe("passalong id; leave out for the next thing waiting for you"),
+    repo: z.string().optional().describe("owner/repo the work is in; omit for work for no repo"),
+    any: z.boolean().optional().describe("a task for another repo — only when the user asks"),
+  };
+
+  server.registerTool(
+    "take",
+    {
+      title: "Take work",
+      annotations: ADDS,
+      outputSchema: takeOut,
+      description:
+        "Say you are doing it, and get it. With `id`, that guide — any kind: a task, a bug, a " +
+        "handoff. With no id, the next ready task for `repo`. While you hold it no other agent " +
+        "can take it there, and its sender sees you are on it. One at a time. If somebody else " +
+        "has it, the answer says who: tell the user rather than doing the work twice. Every " +
+        "answer ends with what to call next.",
+      inputSchema: takeIn,
+    },
+    async (args) => doTake(args),
+  );
+
   server.registerTool(
     "next_task",
     {
-      title: "Take the next task",
-      description:
-        "Claim the oldest ready task for a repo, and return it. While you hold it no other agent " +
-        "can take it. If you already hold one, that one comes back instead — one at a time.",
+      title: "Take the next task (same as take with no id)",
       annotations: ADDS,
-      outputSchema: taskOut,
-      inputSchema: {
-        agent: AGENT,
-        repo: z
-          .string()
-          .optional()
-          .describe("owner/repo the work is in; omit for tasks for no repo"),
-        any: z.boolean().optional().describe("take a task for any repo — only when the user asks"),
-      },
+      outputSchema: takeOut,
+      description: "Kept for older prompts: exactly take with no id.",
+      inputSchema: { agent: AGENT, repo: takeIn.repo, any: takeIn.any },
     },
-    async ({ agent, repo, any }) => {
-      const res = await call("POST", "/v1/tasks/next", {
-        agent,
-        repo: repo ?? "",
-        any: any === true,
-      });
-      if (res.status >= 400) return failed(res.text);
-      const parsed = JSON.parse(res.text) as { task: { id: string; markdown: string } | null };
-      const task = parsed.task;
-      if (!task)
-        return {
-          ...text("No task ready. Nothing to do — tell the user the queue is empty."),
-          structuredContent: { task: null },
-        };
-      // Mirrors leadFor() in packages/passalong/src/mcp.js for a task, plus what to do next.
-      return {
-        ...text(
-          "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how " +
-            "to reach Goal within Constraints, and leave Out of scope alone. It is done when every " +
-            `check under Acceptance holds.\n\n${task.markdown}\n\n<!-- passalong: task ${task.id} ` +
-            "is yours. task_progress at each milestone; finish_task with a transfer guide's id when done. -->",
-        ),
-        structuredContent: parsed as Record<string, unknown>,
-      };
+    async (args) => doTake(args),
+  );
+
+  const progressIn = {
+    id: z.string(),
+    agent: AGENT,
+    note: z.string().optional().describe("one line, 280 chars"),
+  };
+
+  server.registerTool(
+    "progress",
+    {
+      title: "Report progress",
+      annotations: ADDS,
+      outputSchema: progressOut,
+      description:
+        "Say you are still on what you hold, with a one-line note the hub shows. 30 minutes " +
+        "without one marks it stalled. If the answer says you no longer hold it, stop.",
+      inputSchema: progressIn,
     },
+    async (args) => doProgress(args),
   );
 
   server.registerTool(
     "task_progress",
     {
-      title: "Report progress on a task",
+      title: "Report progress (same as progress)",
       annotations: ADDS,
       outputSchema: progressOut,
+      description: "Kept for older prompts: exactly progress.",
+      inputSchema: progressIn,
+    },
+    async (args) => doProgress(args),
+  );
+
+  server.registerTool(
+    "hand_in",
+    {
+      title: "Hand it in",
+      annotations: ADDS,
+      outputSchema: finishOut,
       description:
-        "Say you are still working on the task you hold, with a one-line status the board shows. " +
-        "30 minutes without this stalls the task. If it says you do not hold the task, stop.",
+        "Done here. A task: `report`, the id of a transfer guide you published about the work " +
+        "(publish_guide it first) — its author reviews it against Acceptance. A handoff or a bug: " +
+        "`ok`, whether its Verification held, and `note` saying what went wrong when it did not.",
       inputSchema: {
         id: z.string(),
         agent: AGENT,
-        note: z.string().optional().describe("one line, 280 chars"),
+        ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
+        note: z.string().optional().describe("one line; required when ok is false"),
+        report: z.string().optional().describe("task: id of the transfer guide about this work"),
+        pr: z.string().optional().describe("task: PR or branch link"),
       },
     },
-    async ({ id, agent, note }) =>
-      relay(call, "PUT", `/v1/tasks/${encodeURIComponent(id)}/progress`, {
-        agent,
-        ...(note ? { note } : {}),
-      }),
+    async (args) => doHandIn(args),
   );
 
   server.registerTool(
     "finish_task",
     {
-      title: "Finish a task",
+      title: "Finish a task (same as hand_in)",
       annotations: ADDS,
       outputSchema: finishOut,
-      description:
-        "Hand a finished task to a person for review, once every Acceptance check holds. `report` " +
-        "is the id of the transfer guide you published about the work — publish_guide it first.",
+      description: "Kept for older prompts: exactly hand_in, for a task.",
       inputSchema: {
         id: z.string(),
         agent: AGENT,
@@ -803,13 +939,26 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         note: z.string().optional(),
       },
     },
-    async ({ id, agent, report, pr, note }) =>
-      relay(call, "POST", `/v1/tasks/${encodeURIComponent(id)}/finish`, {
-        agent,
-        report,
-        pr: pr ?? "",
-        note: note ?? "",
-      }),
+    async (args) => doHandIn(args),
+  );
+
+  server.registerTool(
+    "pass",
+    {
+      title: "Pass it",
+      annotations: ADDS,
+      outputSchema: passOut,
+      description:
+        "Not yours to do, or you are stuck: give it back with the reason. It is open again, and " +
+        "the reason goes to whoever is next — say why, or they start where silence left them.",
+      inputSchema: {
+        id: z.string(),
+        agent: AGENT,
+        why: z.string().describe("one line: why it is not yours, or where you got stuck"),
+      },
+    },
+    async ({ id, agent, why }) =>
+      answer(call, "POST", `/v1/guides/${encodeURIComponent(id)}/pass`, id, { agent, why }),
   );
 
   server.registerTool(
