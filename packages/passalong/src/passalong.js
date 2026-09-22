@@ -376,18 +376,31 @@ export async function now({ cwd = process.cwd() } = {}) {
   // Read, never minted: the hooks run in every repo a session opens, and a worktree that has never
   // taken anything has no agent — and should not be given a .passalong/ folder for asking.
   const who = knownAgent(cwd);
-  const { working } = await api.working();
-  const held = (who.agent && working.find((w) => w.agent === who.agent && w.by?.you)) || null;
-  const waiting = { ready: 0, inbox: 0 };
-  if (!held) {
-    const [t, i] = await Promise.allSettled([api.tasks(), api.inbox()]);
-    if (t.status === "fulfilled")
-      waiting.ready = t.value.tasks.filter(
-        (x) => x.state === "ready" && x.target === who.repo,
-      ).length;
-    if (i.status === "fulfilled") waiting.inbox = i.value.guides.length;
-  }
-  return { held, waiting, agent: who.agent };
+  const [w, t, i, h] = await Promise.allSettled([
+    api.working(),
+    api.tasks(),
+    api.inbox(),
+    api.handedIn(),
+  ]);
+  if (w.status === "rejected") throw w.reason;
+  const held =
+    (who.agent && w.value.working.find((x) => x.agent === who.agent && x.by?.you)) || null;
+  const tasks = t.status === "fulfilled" ? t.value.tasks : [];
+  const waiting = {
+    ready: tasks.filter((x) => x.state === "ready" && x.target === who.repo).length,
+    inbox: i.status === "fulfilled" ? i.value.guides.length : 0,
+  };
+  // Everything waiting on the person, the way the hub's Needs you counts it: their tasks handed in
+  // or stuck, handoffs of theirs handed in, and guides handed to them.
+  const review = tasks.filter(
+    (x) =>
+      x.mine &&
+      (x.state === "review" ||
+        x.state === "stalled" ||
+        (x.state === "claimed" && /^BLOCKED:/i.test(x.claim?.note || ""))),
+  ).length;
+  const handed = h.status === "fulfilled" ? h.value.handed_in.length : 0;
+  return { held, waiting, needs: review + handed + waiting.inbox, agent: who.agent };
 }
 
 /**

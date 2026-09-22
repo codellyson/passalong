@@ -111,7 +111,8 @@ passalong login                 # optional: sync across machines
   on each ready task for its repo, one after another, until the queue is empty
 - `passalong now` — what this worktree's agent holds, and what is waiting. `--hook session|stop`
   is what the Claude Code hooks from `setup` call: told at session start, stopped once before
-  ending with work nobody has handed in
+  ending with work nobody has handed in. `--statusline` is the Claude Code status line `setup`
+  adds: what this worktree holds, how much needs you, how much is ready here
 - `passalong mcp` — run the MCP server over stdio
 - `passalong version` — print the installed version (also `-v`, `--version`)
 
@@ -196,7 +197,10 @@ be handed to whoever fixes it. Send them in one call rather than one call each. 
 The same server is also hosted, for assistants that add remote MCP servers rather than running
 one: `https://passalong.dev/v1/mcp`, Streamable HTTP, authenticated with a bearer token. It carries
 most of these tools — everything except the ones that touch a working directory. `take` there
-returns the markdown without writing it anywhere. `attach_screenshot` is
+returns the markdown without writing it anywhere. It also has `work`: everything that needs the
+user, who is on what, and what is open, in one read. Hosts that support MCP Apps (Claude, ChatGPT)
+draw it as a board in the conversation (`ui://passalong/work`); it is read-only, and its buttons
+open the hub, where approving and sending back happen. `attach_screenshot` is
 on both, shaped for where it runs: a path locally, a client-passed file over HTTP. Over HTTP,
 `publish_guide` and `file_bugs` also take the files themselves in a top-level `attachments` array,
 so a client that passes files needs one call: `publish_guide` puts each image under Problem (or at

@@ -497,6 +497,20 @@ const takeOut = z
       .optional(),
   })
   .passthrough();
+const workItem = z.object({ id: z.string(), title: z.string().optional() }).passthrough();
+const workOut = z
+  .object({
+    hub: z.string().optional(),
+    counts: z
+      .object({ needs: z.number(), working: z.number(), open: z.number(), done: z.number() })
+      .partial()
+      .passthrough()
+      .optional(),
+    needs: z.array(workItem).optional(),
+    working: z.array(workItem).optional(),
+    ready: z.array(workItem).optional(),
+  })
+  .passthrough();
 const passOut = z.object({ id: z.string(), passed: z.boolean().optional() }).passthrough();
 const finishOut = z
   .object({ id: z.string(), state: z.string().optional(), report: z.string().optional() })
@@ -505,7 +519,7 @@ const finishOut = z
 const READS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
 const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
-export function buildServer(call: Call, vocabulary: Vocabulary) {
+export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https://passalong.dev") {
   const server = new McpServer(
     { name: "passalong", version: "0.2.0" },
     {
@@ -548,6 +562,159 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
         "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.\n" +
         "Older prompts may name next_task, task_progress, finish_task, ack_guide or " +
         "verify_guide: they still work, as take, progress, hand_in and the handoff answers.",
+    },
+  );
+
+  // ---- the work board, drawn as an MCP App where the host can (docs/V2.md §11) ----------------
+  //
+  // One read of everything: what needs you, who is on what, what is open. Hosts that draw MCP Apps
+  // (Claude, ChatGPT) show it as a live board in the conversation; every other host gets the same
+  // answer as text. The board is read-only on purpose. Approving or sending work back is a person's
+  // decision, and a tool the app could press is a tool a host that ignores `visibility` would hand
+  // the model — so the board's buttons open the hub, where that decision is made.
+
+  const WORK_UI = "ui://passalong/work";
+
+  server.registerResource(
+    "work-board",
+    WORK_UI,
+    {
+      title: "Your work",
+      description: "What needs you, who is working on what, and what is open.",
+      mimeType: "text/html;profile=mcp-app",
+      _meta: { ui: { prefersBorder: true, csp: { connectDomains: [], resourceDomains: [] } } },
+    },
+    async () => ({
+      contents: [{ uri: WORK_UI, mimeType: "text/html;profile=mcp-app", text: WORK_APP_HTML }],
+    }),
+  );
+
+  server.registerTool(
+    "work",
+    {
+      title: "Your work",
+      annotations: READS,
+      outputSchema: workOut,
+      description:
+        "Show the user their work at a glance: what needs them (work handed in for review, agents " +
+        "stuck on them, guides handed to them), who is working on what right now, and what is open. " +
+        "Use it when the user asks what is going on, what needs them, or who is on what. Hosts " +
+        "that support MCP Apps draw it as a board; review happens in the hub it links to.",
+      inputSchema: {},
+      _meta: { ui: { resourceUri: WORK_UI }, "ui/resourceUri": WORK_UI },
+    },
+    async () => {
+      const get = async <T>(path: string, fallback: T): Promise<T> => {
+        const res = await call("GET", path);
+        if (res.status >= 400) return fallback;
+        try {
+          return JSON.parse(res.text) as T;
+        } catch {
+          return fallback;
+        }
+      };
+      type T = {
+        id: string;
+        title: string;
+        state: string;
+        mine: boolean;
+        url: string;
+        claim: { note?: string } | null;
+      };
+      type W = {
+        id: string;
+        title: string;
+        kind: string;
+        state: string;
+        note: string;
+        url: string;
+        by: { name: string; handle: string; you: boolean };
+      };
+      type H = {
+        id: string;
+        title: string;
+        place: string;
+        note: string;
+        url: string;
+        by: { name: string; handle: string };
+      };
+      const [{ tasks }, { working }, { handed_in }, { guides }] = await Promise.all([
+        get<{ tasks: T[] }>("/v1/tasks", { tasks: [] }),
+        get<{ working: W[] }>("/v1/working", { working: [] }),
+        get<{ handed_in: H[] }>("/v1/handed_in", { handed_in: [] }),
+        get<{ guides: { id: string; title: string; url: string }[] }>("/v1/inbox", { guides: [] }),
+      ]);
+      const hub = `${origin}/hub`;
+      const who = (b: { name?: string; handle?: string }) =>
+        b.name || (b.handle ? `@${b.handle}` : "A teammate");
+      const stuck = (t: T) => /^BLOCKED:/i.test(t.claim?.note || "");
+      const needs = [
+        ...tasks
+          .filter(
+            (t) =>
+              t.mine &&
+              (t.state === "review" ||
+                t.state === "stalled" ||
+                (t.state === "claimed" && stuck(t))),
+          )
+          .map((t) => ({
+            id: t.id,
+            title: t.title,
+            kind: "task",
+            why:
+              t.state === "review"
+                ? "handed in for your review"
+                : t.state === "stalled"
+                  ? "its agent went quiet"
+                  : `stuck on you: ${t.claim?.note?.replace(/^BLOCKED:\s*/i, "")}`,
+            url: `${hub}?tab=needs`,
+          })),
+        ...handed_in.map((h) => ({
+          id: h.id,
+          title: h.title,
+          kind: "handoff",
+          why: `${who(h.by)} handed it in${h.note ? `: “${h.note}”` : ""}`,
+          url: `${hub}?tab=needs`,
+        })),
+        ...guides.map((g) => ({
+          id: g.id,
+          title: g.title,
+          kind: "guide",
+          why: "sent to you",
+          url: g.url,
+        })),
+      ];
+      const ready = tasks.filter((t) => t.state === "ready");
+      const open = tasks.filter((t) => ["ready", "blocked", "draft"].includes(t.state)).length;
+      const board = {
+        hub,
+        counts: {
+          needs: needs.length,
+          working: working.length,
+          open,
+          done: tasks.filter((t) => t.state === "done").length,
+        },
+        needs,
+        working: working.map((w) => ({
+          id: w.id,
+          title: w.title,
+          kind: w.kind,
+          who: w.by.you ? "You" : who(w.by),
+          note: w.note,
+          stalled: w.state === "stalled",
+          url: w.url,
+        })),
+        ready: ready.slice(0, 5).map((t) => ({ id: t.id, title: t.title, url: t.url })),
+      };
+      const lines = [
+        `${needs.length} need you · ${working.length} being worked on · ${open} open`,
+        ...needs.map((n) => `- needs you: ${n.title} (${n.id}) — ${n.why}`),
+        ...board.working.map(
+          (w) => `- ${w.who} on ${w.title} (${w.id})${w.note ? ` — “${w.note}”` : ""}`,
+        ),
+        `Review in the hub: ${hub}`,
+      ];
+      return { ...text(lines.join("\n")), structuredContent: board };
     },
   );
 
@@ -1309,7 +1476,7 @@ export async function handleMcp(
     // that carries exactly one event is a stream for the sake of it.
     enableJsonResponse: true,
   });
-  const server = buildServer(call, vocabulary);
+  const server = buildServer(call, vocabulary, new URL(request.url).origin);
   await server.connect(transport);
   try {
     return await transport.handleRequest(request);
@@ -1318,3 +1485,145 @@ export async function handleMcp(
     await server.close().catch(() => {});
   }
 }
+
+/**
+ * The work board as an MCP App: one self-contained page the host draws in a sandboxed frame.
+ *
+ * It speaks the MCP Apps protocol (2026-01-26) over postMessage: `ui/initialize` to start, then it
+ * draws whatever `ui/notifications/tool-result` carries. Refresh calls the `work` tool again; every
+ * link goes through `ui/open-link`, because a sandboxed frame cannot navigate on its own. Nothing is
+ * loaded from anywhere, so it needs no CSP domains. Colours follow the host's theme when it says
+ * one, and the system's when it does not.
+ */
+const WORK_APP_HTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your work</title>
+<style>
+  :root { --bg:#fbfaf7; --fg:#1c1b19; --muted:#6b675f; --line:#e7e3da; --raised:#ffffff; --accent:#b5451b; --ok:#3f6b45; --warn:#9a6a12; color-scheme: light; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#141310; --fg:#ece8df; --muted:#a39e93; --line:#2e2b25; --raised:#1c1a16; --accent:#e5825a; --ok:#86c493; --warn:#e0b25c; color-scheme: dark; } }
+  :root[data-theme="dark"] { --bg:#141310; --fg:#ece8df; --muted:#a39e93; --line:#2e2b25; --raised:#1c1a16; --accent:#e5825a; --ok:#86c493; --warn:#e0b25c; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .counts { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .counts b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+  h2 { margin: 16px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  ul { margin: 0; padding: 0; list-style: none; border-radius: 12px; background: var(--raised); box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+  li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; }
+  li + li { border-top: 1px solid var(--line); }
+  .dot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 99px; background: var(--accent); }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.idle { background: var(--muted); opacity: .45; }
+  .grow { min-width: 0; flex: 1; }
+  .title { font-weight: 600; overflow-wrap: anywhere; }
+  .sub { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .id { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+  .clear { padding: 10px 12px; border-radius: 12px; background: var(--raised); box-shadow: 0 0 0 1px var(--line); color: var(--muted); }
+  .clear b { color: var(--fg); }
+  button { font: inherit; font-size: 13px; cursor: pointer; border-radius: 8px; padding: 6px 10px; border: 0; box-shadow: 0 0 0 1px var(--line); background: var(--raised); color: var(--fg); transition: scale .15s; }
+  button:active { scale: .96; }
+  button.primary { background: var(--accent); color: #fff; box-shadow: none; }
+  .actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .link { flex: none; padding: 4px 8px; }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app"><p class="empty">Loading your work…</p></div>
+<script>
+(() => {
+  let seq = 0;
+  const pending = new Map();
+  const post = (msg) => window.parent.postMessage(msg, "*");
+  const request = (method, params) => new Promise((resolve) => {
+    const id = ++seq;
+    pending.set(id, resolve);
+    post({ jsonrpc: "2.0", id, method, params });
+  });
+  const notify = (method, params) => post({ jsonrpc: "2.0", method, params: params || {} });
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const app = document.getElementById("app");
+  let board = null;
+
+  function theme(ctx) {
+    const t = ctx && (ctx.theme || (ctx.hostContext && ctx.hostContext.theme));
+    if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+  }
+
+  function size() {
+    notify("ui/notifications/size-changed", { height: document.documentElement.scrollHeight });
+  }
+
+  function open(url) {
+    if (url) request("ui/open-link", { url });
+  }
+
+  function row(dot, title, sub, id, url, label) {
+    return '<li><span class="dot ' + dot + '"></span><div class="grow"><div class="title">' + esc(title) +
+      '</div><div class="sub">' + sub + (id ? ' <span class="id">' + esc(id) + '</span>' : "") + '</div></div>' +
+      (url ? '<button class="link" data-url="' + esc(url) + '">' + esc(label || "Open") + '</button>' : "") + '</li>';
+  }
+
+  function render(b) {
+    if (!b || !b.counts) return;
+    board = b;
+    const c = b.counts;
+    let html = '<div class="top"><div><h1>Your work</h1><p class="counts"><b>' + c.needs + '</b> need you · <b>' +
+      c.working + '</b> being worked on · <b>' + c.open + '</b> open · <b>' + c.done + '</b> done</p></div></div>';
+    html += '<h2>Needs you</h2>';
+    html += b.needs && b.needs.length
+      ? '<ul>' + b.needs.map((n) => row("", n.title, esc(n.why), n.id, n.url, n.kind === "guide" ? "Open" : "Review")).join("") + '</ul>'
+      : '<div class="clear"><b>Nothing needs you.</b> Work handed in, or sent to you, lands here.</div>';
+    if (b.working && b.working.length) {
+      html += '<h2>Working now</h2><ul>' + b.working.map((w) => row(w.stalled ? "warn" : "ok", w.title,
+        esc(w.who) + (w.stalled ? " · went quiet" : "") + (w.note ? " · “" + esc(w.note) + "”" : ""), w.id, w.url, "Open")).join("") + '</ul>';
+    }
+    if (b.ready && b.ready.length) {
+      html += '<h2>Ready for an agent</h2><ul>' + b.ready.map((t) => row("idle", t.title, "waiting for the next agent in its repo", t.id, t.url, "Open")).join("") + '</ul>';
+    }
+    html += '<div class="actions"><button class="primary" data-url="' + esc(b.hub) + '">Open the hub</button><button id="refresh">Refresh</button></div>';
+    app.innerHTML = html;
+    size();
+  }
+
+  app.addEventListener("click", (e) => {
+    const t = e.target.closest("button");
+    if (!t) return;
+    if (t.id === "refresh") {
+      t.disabled = true;
+      request("tools/call", { name: "work", arguments: {} }).then((r) => {
+        t.disabled = false;
+        render(r && r.structuredContent);
+      });
+    } else open(t.dataset.url);
+  });
+
+  window.addEventListener("message", (e) => {
+    const m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.id != null && pending.has(m.id) && ("result" in m || "error" in m)) {
+      const done = pending.get(m.id);
+      pending.delete(m.id);
+      done(m.result || null);
+      return;
+    }
+    if (m.method === "ui/notifications/tool-result") render(m.params && m.params.structuredContent);
+    if (m.method === "ui/notifications/host-context-changed") theme(m.params);
+  });
+
+  new ResizeObserver(size).observe(document.body);
+  request("ui/initialize", {
+    protocolVersion: "2026-01-26",
+    clientInfo: { name: "passalong-work", version: "1.0.0" },
+    appCapabilities: {},
+  }).then((r) => {
+    theme(r);
+    notify("ui/notifications/initialized");
+  });
+})();
+</script>
+</body>
+</html>`;

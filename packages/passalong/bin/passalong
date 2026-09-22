@@ -41,7 +41,8 @@
 //   passalong now                 what this worktree holds and what is waiting (the hooks call --hook)
 //   passalong mcp                 run the MCP server over stdio
 //   passalong version             print the installed version (also -v, --version)
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -129,6 +130,53 @@ async function listFollowUps(meta) {
 const MONTHS = "January February March April May June July August September October November December".split(" ");
 /** "September 2026" from an ISO timestamp, without pulling in a date library for one heading. */
 const monthOf = (iso) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
+
+// ---- the status line cache --------------------------------------------------------------------------
+
+/** One small file per working directory, so two sessions in two repos each see their own. */
+const statusPath = (cwd) =>
+  join(store.HOME, "statusline", `${createHash("sha1").update(cwd).digest("hex").slice(0, 16)}.json`);
+
+function writeStatus(cwd, text) {
+  const p = statusPath(cwd);
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify({ at: Date.now(), text }));
+}
+
+/** How old a cached line may be before a refresh is started behind it. */
+const STATUS_TTL_MS = 30_000;
+
+/**
+ * Print the cached line for this directory at once, and when it is stale start a detached refresh
+ * that writes the next one. The first run in a directory prints a placeholder; the refresh lands
+ * within a second or two, and the next update shows it. Offline or signed out, it says nothing.
+ */
+async function statusLine() {
+  let input = {};
+  if (!process.stdin.isTTY) {
+    let raw = "";
+    for await (const chunk of process.stdin) raw += chunk;
+    try {
+      input = JSON.parse(raw || "{}");
+    } catch {}
+  }
+  if (!api.loggedIn()) return;
+  const cwd = input.workspace?.current_dir || input.cwd || process.cwd();
+  let cached = null;
+  try {
+    cached = JSON.parse(readFileSync(statusPath(cwd), "utf8"));
+  } catch {}
+  process.stdout.write(cached?.text ?? "passalong");
+  if (!cached || Date.now() - cached.at > STATUS_TTL_MS) {
+    // Marked fresh before the refresh starts, so a burst of updates starts one refresh, not ten.
+    writeStatus(cwd, cached?.text ?? "passalong");
+    spawn(process.execPath, [fileURLToPath(import.meta.url), "now", "--statusline-refresh", cwd], {
+      detached: true,
+      stdio: "ignore",
+      env: process.env,
+    }).unref();
+  }
+}
 
 const commands = {
   async share(f) {
@@ -598,14 +646,18 @@ const commands = {
     // over them, and a no-op when they are already there.
     const settingsPath = join(homedir(), ".claude", "settings.json");
     try {
-      const { withHooks } = await import("../src/hooks.js");
+      const { withHooks, withStatusLine } = await import("../src/hooks.js");
       const before = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, "utf8")) : {};
-      const after = withHooks(before);
+      const after = withStatusLine(withHooks(before));
+      if (before.statusLine && before.statusLine.command !== "passalong now --statusline")
+        console.error(
+          "you already have a status line, so it was left alone. To show Passalong in it, call `passalong now --statusline` from your script",
+        );
       if (JSON.stringify(after) === JSON.stringify(before)) console.error("Claude Code hooks already installed");
       else {
         mkdirSync(dirname(settingsPath), { recursive: true });
         writeFileSync(settingsPath, `${JSON.stringify(after, null, 2)}\n`);
-        console.error(`installed Claude Code hooks (session start, stop) → ${settingsPath}`);
+        console.error(`installed Claude Code hooks (session start, stop) and status line → ${settingsPath}`);
       }
     } catch (err) {
       console.error(`could not install Claude Code hooks (${err.message}); ${settingsPath} left as it was`);
@@ -621,7 +673,18 @@ const commands = {
    * nothing at all when anything goes wrong — a hook must never get in the way of a session.
    */
   async now(f) {
-    const { nowText, stopVerdict } = await import("../src/hooks.js");
+    const { nowText, statusText, stopVerdict } = await import("../src/hooks.js");
+    // The status line: printed from a cache, refreshed behind it. Claude Code cancels a status
+    // line still running when the next update comes, so this never waits on the network.
+    if (f.statusline) return statusLine(f);
+    if (f["statusline-refresh"]) {
+      const cwd = typeof f["statusline-refresh"] === "string" ? f["statusline-refresh"] : process.cwd();
+      try {
+        const r = await passalong.now({ cwd });
+        writeStatus(cwd, statusText({ held: r.held, needs: r.needs, ready: r.waiting.ready }));
+      } catch {}
+      return;
+    }
     if (!f.hook) {
       const r = await passalong.now();
       console.log(nowText(r) || "Nothing held here, and nothing waiting.");
