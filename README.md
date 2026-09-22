@@ -8,7 +8,7 @@ the problem, the decisions and why, the steps, how to verify, and what went wron
 
 ```sh
 npm i -g passalong
-passalong setup      # installs the Claude Code capture skill, the MCP server and two hooks
+passalong setup      # installs the Claude Code capture skill, the MCP server, two hooks and a status line
 passalong login      # optional: sync guides across machines and get share links
 ```
 
@@ -144,7 +144,7 @@ you see which ones keep travelling — there is nothing to mark them as, and not
 
 ## MCP
 
-`passalong setup` registers the server with Claude Code, and adds two hooks to `~/.claude/settings.json`: at session start the agent is told what its worktree holds (`passalong now --hook session`), and a session that still holds work is stopped once and told to hand it in, pass it, or leave a progress note (`passalong now --hook stop`). Both say nothing when offline or signed out. For other clients:
+`passalong setup` registers the server with Claude Code, and adds two hooks to `~/.claude/settings.json`: at session start the agent is told what its worktree holds (`passalong now --hook session`), and a session that still holds work is stopped once and told to hand it in, pass it, or leave a progress note (`passalong now --hook stop`). Both say nothing when offline or signed out. It also adds a status line, `passalong now --statusline`, showing what this worktree holds and how much needs you; it prints from a local cache refreshed in the background, and a status line you already have is never replaced. For other clients:
 
 ```sh
 claude mcp add passalong -- passalong mcp     # or the equivalent stdio config

@@ -608,3 +608,23 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
   assert.match(heard, /accepted your work on "Stream the invoice PDF"/);
   as(owner);
 });
+
+test("the status line shows what this worktree holds, from a cache it refreshes itself", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { dir } = await readyTask(env, "Shown in the status line");
+  const took = await p.take(undefined, { cwd: dir });
+  const bin = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "passalong");
+  const input = JSON.stringify({ workspace: { current_dir: dir } });
+  // The refresh is what the status line starts in the background; run it in the foreground here.
+  execFileSync(process.execPath, [bin, "now", "--statusline-refresh", dir], { env: process.env });
+  const line = execFileSync(process.execPath, [bin, "now", "--statusline"], {
+    input,
+    env: process.env,
+  }).toString();
+  assert.match(line, new RegExp(`▸ ${took.guide.id}`));
+  assert.doesNotMatch(line, /\n/);
+  await p.pass(took.guide.id, "testing the status line", { cwd: dir });
+});

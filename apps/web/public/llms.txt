@@ -111,7 +111,8 @@ passalong login                 # optional: sync across machines
   on each ready task for its repo, one after another, until the queue is empty
 - `passalong now` — what this worktree's agent holds, and what is waiting. `--hook session|stop`
   is what the Claude Code hooks from `setup` call: told at session start, stopped once before
-  ending with work nobody has handed in
+  ending with work nobody has handed in. `--statusline` is the Claude Code status line `setup`
+  adds: what this worktree holds, how much needs you, how much is ready here
 - `passalong mcp` — run the MCP server over stdio
 - `passalong version` — print the installed version (also `-v`, `--version`)
 

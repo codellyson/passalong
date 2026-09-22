@@ -2,7 +2,15 @@
 // it starts, whether it may stop, and how the hooks are merged into settings. See docs/V2.md §11.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { HOOK, nowText, stopVerdict, withHooks } from "../src/hooks.js";
+import {
+  HOOK,
+  nowText,
+  STATUS_LINE,
+  statusText,
+  stopVerdict,
+  withHooks,
+  withStatusLine,
+} from "../src/hooks.js";
 
 const HELD = {
   id: "k3mq2xa7",
@@ -58,4 +66,36 @@ test("setup adds both hooks once, and keeps everything else in settings", () => 
   assert.deepEqual(commands("Stop"), ["say done", HOOK.stop]);
   assert.deepEqual(withHooks(after), after, "running setup again changes nothing");
   assert.equal(before.hooks.Stop.length, 1, "the settings passed in are not changed");
+});
+
+// ---- the status line (docs/V2.md §11) -------------------------------------------------------------
+
+test("the status line names what you hold, and what needs you", () => {
+  const line = statusText({ held: HELD, needs: 2, ready: 5 });
+  assert.match(line, /k3mq2xa7/);
+  assert.match(line, /429 in place/);
+  assert.match(line, /2 need you/);
+  assert.match(line, /5 ready/);
+  assert.doesNotMatch(line, /\n/, "one line");
+});
+
+test("a long note is cut, a stalled hold says so, and a quiet day says clear", () => {
+  const long = statusText({ held: { ...HELD, note: "x".repeat(200) }, needs: 0, ready: 0 });
+  assert.ok(long.length < 90, `kept short: ${long.length}`);
+  assert.match(statusText({ held: { ...HELD, state: "stalled" }, needs: 0, ready: 0 }), /stalled/);
+  assert.equal(statusText({ held: null, needs: 0, ready: 0 }), "passalong · clear");
+  assert.equal(statusText({ held: null, needs: 1, ready: 0 }), "passalong · 1 needs you");
+});
+
+test("setup adds the status line only where there is none, and never replaces one", () => {
+  const added = withStatusLine({ model: "opus" });
+  assert.deepEqual(added.statusLine, {
+    type: "command",
+    command: STATUS_LINE,
+    refreshInterval: 30,
+  });
+  assert.equal(added.model, "opus");
+  const theirs = { statusLine: { type: "command", command: "~/my-line.sh" } };
+  assert.deepEqual(withStatusLine(theirs), theirs, "someone else's status line is left alone");
+  assert.deepEqual(withStatusLine(added), added, "running setup again changes nothing");
 });

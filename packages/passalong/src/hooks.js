@@ -80,3 +80,47 @@ export function withHooks(settings = {}) {
   }
   return out;
 }
+
+// ---- the status line -------------------------------------------------------------------------------
+//
+// Claude Code draws a status line from a command's output, under the prompt, all session long. It is
+// the one place a person sees what their agent holds without asking. The command is
+// `passalong now --statusline`, which prints from a local cache and refreshes it in the background:
+// Claude Code cancels a status line that is still running when the next update arrives, so a
+// network call in the foreground would leave the line blank.
+
+/** The status line command, as written into settings. */
+export const STATUS_LINE = "passalong now --statusline";
+
+/** Keep a one-line note to what fits beside everything else in a terminal footer. */
+const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/**
+ * One line: what this worktree's agent holds, then what needs you and what is ready here.
+ * `needs` counts everything waiting on the person: work handed in for review, agents stuck on
+ * them, and guides handed to them.
+ */
+export function statusText({ held, needs = 0, ready = 0 }) {
+  const parts = [];
+  if (held) {
+    const said = held.note ? ` "${clip(held.note, 32)}"` : "";
+    parts.push(`▸ ${held.id}${held.state === "stalled" ? " (stalled)" : ""}${said}`);
+  } else parts.push("passalong");
+  if (needs) parts.push(`${needs} need${needs === 1 ? "s" : ""} you`);
+  if (ready) parts.push(`${ready} ready`);
+  if (parts.length === 1 && !held) parts.push("clear");
+  return parts.join(" · ");
+}
+
+/**
+ * Settings with the status line added, when there is none. A status line someone already has is
+ * theirs — a script with their git branch or their context meter — and setup never replaces it.
+ * `refreshInterval` keeps it current while the session sits idle.
+ */
+export function withStatusLine(settings = {}) {
+  if (settings.statusLine) return settings;
+  return {
+    ...structuredClone(settings),
+    statusLine: { type: "command", command: STATUS_LINE, refreshInterval: 30 },
+  };
+}
