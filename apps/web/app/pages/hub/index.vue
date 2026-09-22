@@ -172,7 +172,15 @@ const doneTasks = computed(() => tasks.value.filter((t) => t.state === "done"));
 
 // ---- the counts line -------------------------------------------------------------------------
 
-const needsCount = computed(() => reviewCount.value + lanes.value.needs.length);
+/** Handoffs you wrote that somebody handed in, narrowed by the search like everything else. */
+const handedIn = computed(() =>
+  data.value.handedIn.filter(
+    (h) => !follows.value && hit([h.title, h.id, h.note, h.place, h.by.name, h.by.handle]),
+  ),
+);
+const needsCount = computed(
+  () => reviewCount.value + handedIn.value.length + lanes.value.needs.length,
+);
 const workingCount = computed(() => data.value.working.length);
 const openCount = computed(() => openTaskCount.value + sentCount.value);
 const doneCount = computed(() => doneTasks.value.length + lanes.value.done.length);
@@ -251,6 +259,15 @@ const list = "m-0 list-none overflow-hidden rounded-3 bg-raised p-0 shadow-edge"
             Needs you <span :class="count">{{ needsCount }}</span>
           </h2>
           <HubTaskReview :tasks="tasks" />
+          <div v-if="handedIn.length">
+            <h3 :class="sub">Handed in · {{ handedIn.length }}</h3>
+            <p class="mt-1 mb-3 font-ui text-sm text-muted">
+              Handoffs you sent, done where they went. Close them, or send one back with why.
+            </p>
+            <ul :class="list">
+              <HubHandedInRow v-for="h in handedIn" :key="`${h.id}-${h.place}`" :h="h" />
+            </ul>
+          </div>
           <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
           <ul v-else-if="lanes.needs.length" :class="list">
             <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />

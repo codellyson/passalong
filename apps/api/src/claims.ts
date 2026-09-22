@@ -14,6 +14,13 @@
 /** How long a claim holds without word from its agent. Every progress call starts it again. */
 export const LEASE_MS = 30 * 60 * 1000;
 
+/**
+ * How long a person's hold lasts. A person taking a handoff in the browser does not report
+ * progress every half hour the way an agent does, and "went quiet" after thirty minutes would be
+ * a lie about somebody who is simply working. A week, then it reads as stalled like anything else.
+ */
+export const PERSON_LEASE_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** The longest progress line kept. It is a status, not a log. */
 export const NOTE_MAX = 280;
 
@@ -97,7 +104,7 @@ export function stateOf(
   return claim.lease_until > at ? "claimed" : "stalled";
 }
 
-const leaseFrom = (at: string) => new Date(Date.parse(at) + LEASE_MS).toISOString();
+const leaseFrom = (at: string, ms = LEASE_MS) => new Date(Date.parse(at) + ms).toISOString();
 
 // A task the account may see: its own, or one shared to a team it is in.
 const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
@@ -215,7 +222,16 @@ export async function take(
   db: D1Database,
   id: string,
   who: Agent,
-  { at }: { at: string },
+  {
+    at,
+    many = false,
+    leaseMs = LEASE_MS,
+  }: {
+    at: string;
+    /** A person, not an agent: they may hold several things at once. */
+    many?: boolean;
+    leaseMs?: number;
+  },
 ): Promise<{ task: TaskRow & { kind: string }; claim: ClaimRow; resumed: boolean } | Refusal> {
   const g = await db
     .prepare(
@@ -229,9 +245,11 @@ export async function take(
 
   const held = await db
     .prepare(
-      "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' LIMIT 1",
+      many
+        ? "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' AND guide_id = ?"
+        : "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' ORDER BY guide_id = ? DESC LIMIT 1",
     )
-    .bind(who.agent, who.account)
+    .bind(who.agent, who.account, id)
     .first<{ guide_id: string }>();
   if (held?.guide_id === id) {
     const claim = await renew(db, id, who, { at, note: null });
@@ -275,7 +293,7 @@ export async function take(
       repo,
       String(who.worktree || "").slice(0, 400),
       at,
-      leaseFrom(at),
+      leaseFrom(at, leaseMs),
       at,
     )
     .run();
@@ -791,4 +809,105 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
     case "not_held":
       return { next: [], say: "You no longer hold this. Stop working on it, and tell the person." };
   }
+}
+
+/**
+ * Handoffs and bugs this account wrote that somebody handed in, waiting on the author to close.
+ * One row per hand-in: a handoff repeated in two repos is two. Tasks are not here; their gate is
+ * approve and reject, from the task list.
+ */
+export async function handedIn(
+  db: D1Database,
+  account: string,
+): Promise<
+  {
+    guide: { id: string; title: string; kind: string; share_key: string };
+    claim: ClaimRow;
+    by: { handle: string; name: string };
+  }[]
+> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.*, g.title AS g_title, g.kind AS g_kind, g.share_key AS g_share_key,
+              COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
+         FROM claim c
+         JOIN guide g ON g.id = c.guide_id
+         LEFT JOIN account a ON a.id = c.account_id
+        WHERE c.state = 'review' AND g.kind <> 'task' AND g.account_id = ?
+        ORDER BY c.updated DESC LIMIT 100`,
+    )
+    .bind(account)
+    .all<
+      ClaimRow & {
+        g_title: string;
+        g_kind: string;
+        g_share_key: string;
+        by_handle: string;
+        by_name: string;
+      }
+    >();
+  return results.map(({ g_title, g_kind, g_share_key, by_handle, by_name, ...claim }) => ({
+    guide: { id: claim.guide_id, title: g_title, kind: g_kind, share_key: g_share_key },
+    claim,
+    by: { handle: by_handle, name: by_name },
+  }));
+}
+
+/** A handoff or bug this account wrote, with its markdown, or a refusal. */
+async function authoredGuide(
+  db: D1Database,
+  id: string,
+  account: string,
+): Promise<{ markdown: string } | { error: string; status: 404 }> {
+  const g = await db
+    .prepare("SELECT markdown FROM guide WHERE id = ? AND account_id = ? AND kind <> 'task'")
+    .bind(id, account)
+    .first<{ markdown: string }>();
+  return g || { status: 404, error: "no such guide of yours — only its author closes it" };
+}
+
+/**
+ * The author accepts what was handed in: the guide is done, the way an approved task is — archived
+ * as `consumed` — and every claim on it goes, handed in or not. Returns who had it, to tell them.
+ */
+export async function closeHandedIn(
+  db: D1Database,
+  id: string,
+  { account, at }: { account: string; at: string },
+): Promise<{ claimants: string[] } | { error: string; status: 404 }> {
+  const g = await authoredGuide(db, id, account);
+  if ("error" in g) return g;
+  const { results } = await db
+    .prepare("SELECT DISTINCT account_id FROM claim WHERE guide_id = ?")
+    .bind(id)
+    .all<{ account_id: string }>();
+  await db.batch([
+    db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
+    db
+      .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
+      .bind(withStatus(g.markdown, "consumed"), at, id),
+  ]);
+  return { claimants: results.map((r) => r.account_id) };
+}
+
+/**
+ * The author turns one hand-in down: that repo's claim goes, so the handoff is open there again,
+ * and the reason goes to whoever handed it in. The reason is required, as it is for a task.
+ */
+export async function sendBackHandedIn(
+  db: D1Database,
+  id: string,
+  { account, place, why }: { account: string; at: string; place: string; why: string },
+): Promise<{ claimant: string } | { error: string; status: 400 | 404 | 409 }> {
+  if (!String(why ?? "").trim())
+    return { status: 400, error: "say why: whoever takes it next should know what was missing" };
+  const g = await authoredGuide(db, id, account);
+  if ("error" in g) return g;
+  const c = await db
+    .prepare("SELECT account_id FROM claim WHERE guide_id = ? AND place = ? AND state = 'review'")
+    .bind(id, place)
+    .first<{ account_id: string }>();
+  if (!c) return { status: 409, error: "nothing handed in there to send back" };
+  await db.prepare("DELETE FROM claim WHERE guide_id = ? AND place = ?").bind(id, place).run();
+  return { claimant: c.account_id };
 }

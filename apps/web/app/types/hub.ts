@@ -211,6 +211,22 @@ export interface Working {
   lease_until: string;
 }
 
+/** A handoff or bug you wrote that somebody handed in, waiting on you. See GET /v1/handed_in. */
+export interface HandedIn {
+  id: string;
+  title: string;
+  kind: string;
+  url: string;
+  /** The repo it was handed in from; '' for a person in the browser. What send-back names. */
+  place: string;
+  by: { handle: string; name: string };
+  agent: string;
+  host: string;
+  worktree: string;
+  note: string;
+  at: string;
+}
+
 export interface HubData {
   me: Me | null;
   guides: Guide[];
@@ -223,4 +239,5 @@ export interface HubData {
   team: TeamDetail | null;
   tasks: Task[];
   working: Working[];
+  handedIn: HandedIn[];
 }

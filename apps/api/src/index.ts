@@ -3206,6 +3206,12 @@ app.put("/v1/guides/:id/verdict", async (c) => {
     return err(c, 400, "Say what went wrong, so the author knows what to fix.");
 
   await recordVerdict(c, found.row, body.ok, note);
+  // Said in the browser by the person holding it: that is handing it in, so the hold moves to
+  // waiting on the author, who closes it or sends it back. No hold, nothing to move.
+  await claims.handIn(c.env.DB, found.row.id, { account, agent: personAgent(account) }, {
+    at: now(),
+    note,
+  });
   return c.json({ id: found.row.id, ok: body.ok, note });
 });
 
@@ -3240,8 +3246,23 @@ app.put("/v1/guides/:id/ack", async (c) => {
     return err(c, 400, "Say why you're passing it on, so the sender knows what to do next.");
 
   await recordAck(c, found.row, body.taken, note);
+  // A person taking it in the browser holds it, like an agent does, so Working now shows them. A
+  // week's hold, not half an hour's, and several at once: people do not post progress. Passing
+  // lets go of that hold. Best effort — the ack is the answer the sender waits for, and it stands.
+  const person = { account, agent: personAgent(account), repo: "" };
+  const at = now();
+  if (body.taken)
+    await claims.take(c.env.DB, found.row.id, person, {
+      at,
+      many: true,
+      leaseMs: claims.PERSON_LEASE_MS,
+    });
+  else await claims.pass(c.env.DB, found.row.id, person, { at, why: note || "passed" });
   return c.json({ id: found.row.id, taken: body.taken, note });
 });
+
+/** The claim-holder a person is when they take something in the browser, rather than an agent. */
+const personAgent = (account: string) => `person-${account.toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
 
 // ---- tasks -------------------------------------------------------------------------------
 
@@ -3661,6 +3682,73 @@ app.post("/v1/guides/:id/pass", async (c) => {
     await recordAck(c, found.row, false, why.trim().slice(0, NOTE_MAX));
   }
   return c.json({ id: found.row.id, passed: true, ...claims.steps(found.row.kind, "passed") });
+});
+
+// ---- the author's close on a handed-in handoff or bug -------------------------------------------
+
+/** Handoffs and bugs you wrote that somebody handed in, waiting for you to close or send back. */
+app.get("/v1/handed_in", async (c) => {
+  const base = origin(c);
+  const rows = await claims.handedIn(c.env.DB, c.get("account"));
+  return c.json({
+    handed_in: rows.map((r) => ({
+      id: r.guide.id,
+      title: r.guide.title,
+      kind: r.guide.kind,
+      url: shareUrl(base, r.guide),
+      place: r.claim.place,
+      by: r.by,
+      agent: r.claim.agent_id,
+      host: r.claim.host,
+      worktree: r.claim.worktree,
+      note: r.claim.note,
+      at: r.claim.updated,
+    })),
+  });
+});
+
+/** Accept what was handed in: the guide is done, and whoever had it is told. */
+app.post("/v1/guides/:id/close", async (c) => {
+  const r = await claims.closeHandedIn(c.env.DB, c.req.param("id"), {
+    account: c.get("account"),
+    at: now(),
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  const found = await readableGuide(c, c.req.param("id"));
+  for (const to of r.claimants)
+    await notify(c.env, {
+      to,
+      kind: "closed",
+      guide_id: c.req.param("id"),
+      actor_id: c.get("account"),
+      team_id: found?.row.team_id || "",
+    });
+  count(c, "handoff_closed", {});
+  return c.json({ id: c.req.param("id"), state: "done" });
+});
+
+/** Turn one repo's hand-in down, with why: it is open there again, and its taker is told. */
+app.post("/v1/guides/:id/send_back", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { place?: unknown; why?: unknown };
+  const why = typeof body.why === "string" ? body.why.trim().slice(0, 1000) : "";
+  const r = await claims.sendBackHandedIn(c.env.DB, c.req.param("id"), {
+    account: c.get("account"),
+    at: now(),
+    place: typeof body.place === "string" ? body.place : "",
+    why,
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  const found = await readableGuide(c, c.req.param("id"));
+  await notify(c.env, {
+    to: r.claimant,
+    kind: "sent_back",
+    guide_id: c.req.param("id"),
+    actor_id: c.get("account"),
+    team_id: found?.row.team_id || "",
+    note: why,
+  });
+  count(c, "handoff_sent_back", {});
+  return c.json({ id: c.req.param("id"), state: "open" });
 });
 
 app.delete("/v1/guides/:id", async (c) => {

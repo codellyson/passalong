@@ -14,6 +14,7 @@ import type {
   ApiToken,
   Board,
   Guide,
+  HandedIn,
   HubData,
   LogEntry,
   Me,
@@ -65,6 +66,7 @@ export const hubKeys = {
   billing: ["billing"] as const,
   tasks: ["tasks"] as const,
   working: ["working"] as const,
+  handedIn: ["handed-in"] as const,
 };
 
 type GuideList = { guides: Guide[] };
@@ -199,6 +201,12 @@ function build(queryClient: QueryClient) {
     queryClient,
   );
 
+  // Handoffs you wrote that somebody handed in, waiting on you to close. Left out of `loadError`.
+  const handedInQ = useQuery(
+    { queryKey: hubKeys.handedIn, queryFn: get<{ handed_in: HandedIn[] }>("/v1/handed_in"), enabled },
+    queryClient,
+  );
+
   const signedIn = computed(() => !ended.value && Boolean(meQ.data.value));
 
   // Once the first answer about the session is in, stop guessing from the cookie.
@@ -220,6 +228,7 @@ function build(queryClient: QueryClient) {
     team: teamScoped.value ? (teamQ.data.value ?? null) : null,
     tasks: tasksQ.data.value?.tasks ?? [],
     working: workingQ.data.value?.working ?? [],
+    handedIn: handedInQ.data.value?.handed_in ?? [],
   }));
 
   /** What has not arrived yet, per endpoint, so each part of a page can wait on its own data. */
@@ -346,6 +355,9 @@ function build(queryClient: QueryClient) {
     hubKeys.board,
     hubKeys.notifications,
     hubKeys.log,
+    // Taking or answering in the browser holds it, or hands it in: both lists move.
+    hubKeys.working,
+    hubKeys.handedIn,
   ];
 
   /**
@@ -428,6 +440,32 @@ function build(queryClient: QueryClient) {
     );
   const onTaskReady = (t: Task) =>
     moveTask(t, "ready", `/v1/guides/${t.id}/status`, json("PATCH", { status: "published" }));
+  /**
+   * The author's close on a handoff or bug somebody handed in: accept it, which archives the guide,
+   * or send that repo's hand-in back with why. The row leaves the list before the server answers.
+   */
+  const dropHandedIn = (h: HandedIn) =>
+    queryClient.setQueryData<{ handed_in: HandedIn[] }>(hubKeys.handedIn, (old) =>
+      old
+        ? { handed_in: old.handed_in.filter((x) => !(x.id === h.id && x.place === h.place)) }
+        : old,
+    );
+  const onCloseHandedIn = (h: HandedIn) =>
+    change(
+      () => api(`/v1/guides/${h.id}/close`, json("POST")),
+      () =>
+        queryClient.setQueryData<{ handed_in: HandedIn[] }>(hubKeys.handedIn, (old) =>
+          old ? { handed_in: old.handed_in.filter((x) => x.id !== h.id) } : old,
+        ),
+      [hubKeys.handedIn, hubKeys.allGuides, hubKeys.board, hubKeys.working],
+    );
+  const onSendBackHandedIn = (h: HandedIn, why: string) =>
+    change(
+      () => api(`/v1/guides/${h.id}/send_back`, json("POST", { place: h.place, why })),
+      () => dropHandedIn(h),
+      [hubKeys.handedIn, hubKeys.working],
+    );
+
   const onApprove = (t: Task) => moveTask(t, "done", `/v1/tasks/${t.id}/approve`, json("POST"));
   const onReject = (t: Task, why: string) => {
     const said = why.trim();
@@ -503,6 +541,8 @@ function build(queryClient: QueryClient) {
     onVerdict,
     onTaskReady,
     onApprove,
+    onCloseHandedIn,
+    onSendBackHandedIn,
     onReject,
     onRelease,
     readAll,

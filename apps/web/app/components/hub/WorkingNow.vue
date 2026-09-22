@@ -16,8 +16,12 @@ const props = defineProps<{ rows: Working[] }>();
 
 const who = (w: Working) => (w.by.you ? "You" : personName(w.by.name, w.by.handle) || "A teammate");
 
+/** A person who took it in the browser, rather than an agent. They hold it for a week, not 30 minutes. */
+const person = (w: Working) => w.agent.startsWith("person-");
+
 /** The host and the last part of the worktree path, as TaskRow shows it. */
 const where = (w: Working) => {
+  if (person(w)) return "in the browser";
   const tree = w.worktree.split("/").filter(Boolean).pop() || "";
   return [w.host, tree].filter(Boolean).join(":") || w.agent;
 };
@@ -47,7 +51,7 @@ const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "
       Working now
       <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ props.rows.length }}</span>
     </h2>
-    <p class="mt-1 mb-3 font-ui text-sm text-muted">Each agent holds one thing until it hands it in.</p>
+    <p class="mt-1 mb-3 font-ui text-sm text-muted">Each agent holds one thing until it hands it in; people can hold several.</p>
     <ul class="m-0 list-none overflow-hidden rounded-[var(--r-3)] bg-raised p-0 shadow-edge">
       <li
         v-for="w in props.rows"
@@ -86,7 +90,8 @@ const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "
           :class="w.state === 'stalled' ? 'text-warn' : 'text-muted'"
         >
           <span class="size-2 rounded-pill" :class="w.state === 'stalled' ? 'bg-warn' : 'bg-ok'" aria-hidden="true" />
-          {{ w.state === "stalled" ? "went quiet" : "heard" }} {{ rel(heard(w)) }}
+          <template v-if="person(w)">took it {{ rel(w.claimed_at) }}</template>
+          <template v-else>{{ w.state === "stalled" ? "went quiet" : "heard" }} {{ rel(heard(w)) }}</template>
         </span>
       </li>
     </ul>

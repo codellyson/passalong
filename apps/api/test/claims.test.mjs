@@ -11,16 +11,20 @@ import { fileURLToPath } from "node:url";
 import {
   approve,
   blockOn,
+  closeHandedIn,
   finish,
+  handedIn,
   handIn,
   LEASE_MS,
   list,
   next,
+  PERSON_LEASE_MS,
   pass,
   reject,
   release,
   renew,
   repoKey,
+  sendBackHandedIn,
   stateOf,
   steps,
   take,
@@ -574,4 +578,64 @@ test("every answer says what to do next, and an answer to stop says to stop", ()
   assert.match(steps("", "nothing").say, /nothing/i);
   assert.deepEqual(tools(steps("", "not_held")), []);
   assert.match(steps("", "not_held").say, /stop/i);
+});
+
+// ---- people, and the author's close on a handoff ------------------------------------------------
+
+const PERSON = { account: "other", agent: "person-other", repo: "" };
+
+function teamed(db) {
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tm', 'tm', 'T', 'me', '${T0}');
+               INSERT INTO membership (team_id, account_id, joined) VALUES ('tm', 'me', '${T0}'), ('tm', 'other', '${T0}');
+               UPDATE guide SET team_id = 'tm';`);
+}
+
+test("a person taking handoffs in the browser can hold several, and is not stalled in half an hour", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  guide("h2", { kind: "transfer", target: "" });
+  teamed(db);
+  const opts = { at: T0, many: true, leaseMs: PERSON_LEASE_MS };
+  assert.equal((await take(db, "h1", PERSON, opts)).claim.agent_id, "person-other");
+  assert.equal((await take(db, "h2", PERSON, opts)).claim.guide_id, "h2", "a person is not one-at-a-time");
+  const rows = await working(db, "me", later(LEASE_MS + 1));
+  assert.deepEqual(rows.map((r) => r.state), ["claimed", "claimed"], "still live after 30 minutes");
+});
+
+test("the author sees what was handed in on a handoff, and can close it", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  teamed(db);
+  const ada = { account: "other", agent: "agent-ada1", repo: "o/r" };
+  await take(db, "h1", ada, { at: T0 });
+  await handIn(db, "h1", ada, { at: T0, note: "worked in o/r" });
+  const [row] = await handedIn(db, "me");
+  assert.equal(row.guide.id, "h1");
+  assert.equal(row.claim.note, "worked in o/r");
+  assert.equal(row.claim.place, "o/r");
+  assert.deepEqual(await handedIn(db, "other"), [], "only the author's to close");
+
+  assert.equal((await closeHandedIn(db, "h1", { account: "other", at: T0 })).status, 404);
+  const closed = await closeHandedIn(db, "h1", { account: "me", at: T0 });
+  assert.deepEqual(closed.claimants, ["other"]);
+  assert.equal(db.raw.prepare("SELECT status FROM guide WHERE id = 'h1'").get().status, "consumed");
+  assert.deepEqual(await handedIn(db, "me"), []);
+});
+
+test("the author can send one repo's hand-in back with a reason, and it is open there again", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  teamed(db);
+  const ada = { account: "other", agent: "agent-ada1", repo: "o/r" };
+  await take(db, "h1", ada, { at: T0 });
+  await handIn(db, "h1", ada, { at: T0, note: "done" });
+  const at = { account: "me", at: T0, place: "o/r" };
+  assert.equal((await sendBackHandedIn(db, "h1", { ...at, why: "" })).status, 400);
+  const back = await sendBackHandedIn(db, "h1", { ...at, why: "the migration never ran" });
+  assert.equal(back.claimant, "other");
+  assert.deepEqual(await handedIn(db, "me"), []);
+  assert.equal((await take(db, "h1", ada, { at: T0 })).resumed, false, "open to take again");
 });

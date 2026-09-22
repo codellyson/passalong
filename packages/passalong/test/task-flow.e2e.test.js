@@ -539,3 +539,65 @@ test("the hook commands: a session is told what it holds, and stopped once befor
   });
   assert.equal(existsSync(join(bare, ".passalong")), false);
 });
+
+test("a handoff in the browser: taking it holds it, saying it worked hands it in, and its author closes it", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const api = await import("../src/api.js");
+  const owner = process.env.PASSALONG_TOKEN;
+  const as = (token) => {
+    process.env.PASSALONG_TOKEN = token;
+  };
+  const call = async (method, path, body) => {
+    const res = await fetch(`${API}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return { status: res.status, ...(await res.json()) };
+  };
+
+  const team = await api.createTeam(`handoffs ${Date.now()}`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  const { code } = await api.invite(team.slug);
+  const mate = await secondAccount();
+  as(mate.token);
+  await api.join(code);
+
+  as(owner);
+  const md = "---\ntitle: Stream the invoice PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const id = (await p.share(md, { to: team.slug })).guide.meta.id;
+
+  // The teammate takes it the way the browser does, and shows in Working now as a person.
+  as(mate.token);
+  await api.ack(id, true, "");
+  as(owner);
+  const held = (await call("GET", "/v1/working")).working.find((w) => w.id === id);
+  assert.match(held.agent, /^person-/);
+  assert.equal(held.state, "claimed");
+
+  // "It worked" from the browser hands it in: out of working, into the author's list.
+  as(mate.token);
+  await api.verdict(id, true, "streams fine now");
+  as(owner);
+  assert.equal((await call("GET", "/v1/working")).working.find((w) => w.id === id), undefined);
+  const [waiting] = (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id);
+  assert.equal(waiting.note, "streams fine now");
+
+  // Only the author closes it; closing archives it and tells the teammate.
+  as(mate.token);
+  assert.equal((await call("POST", `/v1/guides/${id}/close`)).status, 404);
+  await p.activity();
+  as(owner);
+  assert.equal((await call("POST", `/v1/guides/${id}/close`)).state, "done");
+  assert.deepEqual((await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id), []);
+  as(mate.token);
+  const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
+  assert.match(heard, /accepted your work on "Stream the invoice PDF"/);
+  as(owner);
+});

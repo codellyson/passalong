@@ -21,6 +21,11 @@
 //   task_rejected  and sent it back, with why
 //   task_released  and took it back from your agent, which should stop
 //
+// And the author's close on a handoff or a bug somebody handed in (docs/V2.md §11):
+//
+//   closed         the author accepted what you handed in, and the guide is done
+//   sent_back      the author turned it down in your repo, with why
+//
 // Rows first, delivery second. `line()` renders the one sentence every surface shows (CLI, MCP,
 // hub), so the wording is decided once here rather than three times.
 
@@ -42,6 +47,8 @@ export const KINDS = [
   "task_approved",
   "task_rejected",
   "task_released",
+  "closed",
+  "sent_back",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -598,6 +605,10 @@ export function line(r: LineFacts): string {
       return `${who} sent ${title} back${note}`;
     case "task_released":
       return `${who} took ${title} back from your agent`;
+    case "closed":
+      return `${who} accepted your work on ${title}, and closed it`;
+    case "sent_back":
+      return `${who} sent ${title} back${note}`;
     default:
       return `${who} did something with ${title}`;
   }
