@@ -391,7 +391,9 @@ test("a task is answered with the task tools, and the guide ones say so", { skip
   await assert.rejects(api.ack(id, true, ""), (e) => e.status === 400 && task.test(e.message));
 });
 
-test("one set of verbs for every kind: take, progress, hand_in, pass, each saying what is next", { skip }, async () => {
+test("one set of verbs for every kind: take, progress, hand_in, pass, each saying what is next", {
+  skip,
+}, async () => {
   const { p } = await setup();
   const call = async (method, path, body) => {
     const res = await fetch(`${API}${path}`, {
@@ -404,8 +406,11 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
     });
     return { status: res.status, ...(await res.json()) };
   };
-  const h = (await p.share("---\ntitle: Stream the PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n"))
-    .guide.meta.id;
+  const h = (
+    await p.share(
+      "---\ntitle: Stream the PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    )
+  ).guide.meta.id;
   const a = { agent: "e2e-agent-aaaa", repo: "e2e/one", host: "mac", worktree: "/w/a" };
   const b = { agent: "e2e-agent-bbbb", repo: "e2e/one" };
   const c = { agent: "e2e-agent-cccc", repo: "e2e/two" };
@@ -413,7 +418,10 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
   const took = await call("POST", "/v1/take", { ...a, id: h });
   assert.equal(took.guide.kind, "transfer");
   assert.match(took.guide.markdown, /Stream the PDF/);
-  assert.deepEqual(took.next.map((s) => s.tool), ["progress", "hand_in", "pass"]);
+  assert.deepEqual(
+    took.next.map((s) => s.tool),
+    ["progress", "hand_in", "pass"],
+  );
 
   const clash = await call("POST", "/v1/take", { ...b, id: h });
   assert.equal(clash.status, 409);
@@ -427,14 +435,19 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
   // Your own guide: nobody to hand it in to, and the claim is still yours to pass.
   assert.equal((await call("POST", `/v1/guides/${h}/hand_in`, { ...a, ok: true })).status, 403);
   const passed = await call("POST", `/v1/guides/${h}/pass`, { ...a, why: "wrong repo after all" });
-  assert.deepEqual(passed.next.map((s) => s.tool), ["take"]);
+  assert.deepEqual(
+    passed.next.map((s) => s.tool),
+    ["take"],
+  );
   const gone = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "still going" });
   assert.equal(gone.status, 409);
   assert.match(gone.say, /stop/i, "an agent that lost its claim is told to stop");
   assert.equal((await call("POST", "/v1/take", { ...b, id: h })).guide.agent, b.agent);
 });
 
-test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handoff alike", { skip }, async () => {
+test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handoff alike", {
+  skip,
+}, async () => {
   const env = await setup();
   const { p } = env;
   const { dir } = await readyTask(env, "Verbs on a task");
@@ -445,23 +458,38 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
   const id = took.guide.id;
   assert.equal(took.guide.kind, "task");
   assert.match(readFileSync(took.path, "utf8"), new RegExp(took.guide.title));
-  assert.deepEqual(took.next.map((s) => s.tool), ["progress", "hand_in", "pass"]);
+  assert.deepEqual(
+    took.next.map((s) => s.tool),
+    ["progress", "hand_in", "pass"],
+  );
 
   assert.equal((await p.progress(id, "halfway", { cwd: dir })).note, "halfway");
   const md = "---\ntitle: Verbs, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
   const handed = await p.handIn(id, { markdown: md, cwd: dir });
   assert.equal(handed.state, "review");
-  assert.deepEqual(handed.next.map((s) => s.tool), ["take"]);
+  assert.deepEqual(
+    handed.next.map((s) => s.tool),
+    ["take"],
+  );
 
   // A handoff by id: taken, then passed with the reason, and free for the next agent.
-  const h = (await p.share("---\ntitle: A handoff\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n", { cwd: dir }))
-    .guide.meta.id;
+  const h = (
+    await p.share(
+      "---\ntitle: A handoff\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      { cwd: dir },
+    )
+  ).guide.meta.id;
   assert.equal((await p.take(h, { cwd: dir })).guide.kind, "transfer");
   await assert.rejects(p.pass(h, "", { cwd: dir }), /why/);
-  assert.deepEqual((await p.pass(h, "not mine", { cwd: dir })).next.map((s) => s.tool), ["take"]);
+  assert.deepEqual(
+    (await p.pass(h, "not mine", { cwd: dir })).next.map((s) => s.tool),
+    ["take"],
+  );
 });
 
-test("now says what this worktree holds, for the session-start and stop hooks", { skip }, async () => {
+test("now says what this worktree holds, for the session-start and stop hooks", {
+  skip,
+}, async () => {
   const env = await setup();
   const { p } = env;
   const { dir } = await readyTask(env, "Held across a restart");
@@ -473,18 +501,27 @@ test("now says what this worktree holds, for the session-start and stop hooks", 
   assert.equal((await p.now({ cwd: dir })).held, null);
 });
 
-test("the hook commands: a session is told what it holds, and stopped once before ending", { skip }, async () => {
+test("the hook commands: a session is told what it holds, and stopped once before ending", {
+  skip,
+}, async () => {
   const env = await setup();
   const { p } = env;
   const { dir } = await readyTask(env, "Hooked");
   const took = await p.take(undefined, { cwd: dir });
   const bin = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "passalong");
   const run = (hook, input = "") =>
-    execFileSync(process.execPath, [bin, "now", "--hook", hook], { cwd: dir, input, env: process.env }).toString();
+    execFileSync(process.execPath, [bin, "now", "--hook", hook], {
+      cwd: dir,
+      input,
+      env: process.env,
+    }).toString();
 
   const started = JSON.parse(run("session"));
   assert.equal(started.hookSpecificOutput.hookEventName, "SessionStart");
-  assert.match(started.hookSpecificOutput.additionalContext, new RegExp(`You hold ${took.guide.id}`));
+  assert.match(
+    started.hookSpecificOutput.additionalContext,
+    new RegExp(`You hold ${took.guide.id}`),
+  );
 
   const stop = JSON.parse(run("stop", JSON.stringify({ stop_hook_active: false })));
   assert.equal(stop.decision, "block");
@@ -496,6 +533,9 @@ test("the hook commands: a session is told what it holds, and stopped once befor
   // A repo that never took anything is not given a .passalong/ folder for being asked.
   const bare = mkdtempSync(join(tmpdir(), "passalong-bare-"));
   execFileSync("git", ["init", "-q", bare]);
-  execFileSync(process.execPath, [bin, "now", "--hook", "session"], { cwd: bare, env: process.env });
+  execFileSync(process.execPath, [bin, "now", "--hook", "session"], {
+    cwd: bare,
+    env: process.env,
+  });
   assert.equal(existsSync(join(bare, ".passalong")), false);
 });

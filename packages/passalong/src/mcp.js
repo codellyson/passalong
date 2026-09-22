@@ -96,7 +96,10 @@ export function nextNote({ next = [], say = "" } = {}, id = "") {
 /** A refusal that carries the server's own next move, when it sent one. */
 const failWith = (err) => {
   const said = nextNote(err.body || {});
-  return { content: [{ type: "text", text: said ? `${err.message}\n${said}` : err.message }], isError: true };
+  return {
+    content: [{ type: "text", text: said ? `${err.message}\n${said}` : err.message }],
+    isError: true,
+  };
 };
 
 export async function serve() {
@@ -161,7 +164,6 @@ export async function serve() {
     },
   );
 
-
   // ---- the four verbs (docs/V2.md §11) --------------------------------------------------------
   // One implementation each. The older tool names above call these too, so an agent following an
   // old prompt gets exactly what one following a new prompt gets.
@@ -181,7 +183,8 @@ export async function serve() {
         const r = await passalong.pull(id, { cwd: dir });
         return text(
           `${leadFor(parse(r.markdown).meta)}${r.markdown}\n\n<!-- passalong: not logged in, so ` +
-            "nobody was told you took it; written to " + `${r.path} -->`,
+            "nobody was told you took it; written to " +
+            `${r.path} -->`,
         );
       }
       const r = await passalong.take(id, { cwd: dir, any: Boolean(any) });
@@ -342,7 +345,10 @@ export async function serve() {
         id: z.string().describe("passalong id"),
         taken: z.boolean().describe("true if you are doing it; false hands it back"),
         note: z.string().default("").describe("why it is not yours (required when taken is false)"),
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
     async ({ id, taken, note, cwd }) =>
@@ -358,7 +364,10 @@ export async function serve() {
         id: z.string().describe("passalong id"),
         ok: z.boolean().describe("true if the Verification steps passed"),
         note: z.string().default("").describe("what went wrong (required when ok is false)"),
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
     async (args) => doHandIn(args),
@@ -397,7 +406,10 @@ export async function serve() {
         "one call. Use it the moment you are going to do the work.",
       inputSchema: {
         ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
     async ({ ref, cwd }) => doTake({ id: ref, cwd }),
@@ -458,8 +470,14 @@ export async function serve() {
         "Kept for older prompts: exactly take with no id. Takes the next guide waiting for this " +
         "worktree's agent, or gives back the one it already holds.",
       inputSchema: {
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
-        any: z.boolean().optional().describe("any repo, or none — only when the user asks for that"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
+        any: z
+          .boolean()
+          .optional()
+          .describe("any repo, or none — only when the user asks for that"),
       },
     },
     async ({ cwd, any }) => doTake({ cwd, any }),
@@ -473,7 +491,10 @@ export async function serve() {
       inputSchema: {
         id: z.string().describe("the id of what you hold"),
         note: z.string().optional().describe("one line"),
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
     async (args) => doProgress(args),
@@ -490,7 +511,10 @@ export async function serve() {
         report: z.string().optional().describe("instead of markdown: id of one already published"),
         pr: z.string().optional().describe("PR or branch link, when there is one"),
         note: z.string().optional().describe("one line for the hub"),
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
     async (args) => doHandIn(args),
@@ -508,9 +532,18 @@ export async function serve() {
         "answer says who — tell the user rather than doing the work twice. Every answer ends with " +
         "what to call next.",
       inputSchema: {
-        id: z.string().optional().describe("passalong id or share link; leave out for the next one"),
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
-        any: z.boolean().optional().describe("a task for another repo, or none — only when the user asks"),
+        id: z
+          .string()
+          .optional()
+          .describe("passalong id or share link; leave out for the next one"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
+        any: z
+          .boolean()
+          .optional()
+          .describe("a task for another repo, or none — only when the user asks"),
       },
     },
     async (args) => doTake(args),
@@ -526,7 +559,10 @@ export async function serve() {
       inputSchema: {
         id: z.string().describe("the id of what you hold"),
         note: z.string().optional().describe('one line, e.g. "migrating schema, 2 of 5 steps"'),
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
     async (args) => doProgress(args),
@@ -546,10 +582,19 @@ export async function serve() {
         id: z.string().describe("passalong id"),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),
-        markdown: z.string().optional().describe("task: the write-up; start from guide_template kind transfer"),
-        report: z.string().optional().describe("task, instead of markdown: id of a write-up already published"),
+        markdown: z
+          .string()
+          .optional()
+          .describe("task: the write-up; start from guide_template kind transfer"),
+        report: z
+          .string()
+          .optional()
+          .describe("task, instead of markdown: id of a write-up already published"),
         pr: z.string().optional().describe("task: PR or branch link, when there is one"),
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
     async (args) => doHandIn(args),
@@ -566,7 +611,10 @@ export async function serve() {
       inputSchema: {
         id: z.string().describe("passalong id"),
         why: z.string().describe("one line: why it is not yours, or where you got stuck"),
-        cwd: z.string().optional().describe("the worktree you are working in; default is the server's cwd"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
     async (args) => doPass(args),

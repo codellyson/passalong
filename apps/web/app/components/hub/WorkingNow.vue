@@ -14,8 +14,7 @@ import type { Working } from "~/types/hub";
 
 const props = defineProps<{ rows: Working[] }>();
 
-const who = (w: Working) =>
-  w.by.you ? "You" : personName(w.by.name, w.by.handle) || "A teammate";
+const who = (w: Working) => (w.by.you ? "You" : personName(w.by.name, w.by.handle) || "A teammate");
 
 /** The host and the last part of the worktree path, as TaskRow shows it. */
 const where = (w: Working) => {

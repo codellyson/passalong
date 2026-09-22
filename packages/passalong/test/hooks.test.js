@@ -22,7 +22,10 @@ test("a session starts knowing what this worktree holds, and what to do about it
 });
 
 test("with nothing held it says what is waiting, and with nothing at all it says nothing", () => {
-  assert.match(nowText({ held: null, waiting: { ready: 2, inbox: 1 } }), /2 ready tasks for this repo/);
+  assert.match(
+    nowText({ held: null, waiting: { ready: 2, inbox: 1 } }),
+    /2 ready tasks for this repo/,
+  );
   assert.match(nowText({ held: null, waiting: { ready: 2, inbox: 1 } }), /1 guide handed to you/);
   assert.equal(nowText({ held: null, waiting: { ready: 0, inbox: 0 } }), "");
 });

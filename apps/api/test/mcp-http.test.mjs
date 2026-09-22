@@ -982,7 +982,9 @@ test("take works any guide by id, and ends with what to call next", async () => 
   const { call, seen } = recorder({
     "POST /v1/take": { status: 200, text: JSON.stringify(answer) },
   });
-  const body = await read(await handleMcp(callTool("take", { agent: "chat-7f3k2m9q", id: "k3mq2xa7" }), call, VOCAB));
+  const body = await read(
+    await handleMcp(callTool("take", { agent: "chat-7f3k2m9q", id: "k3mq2xa7" }), call, VOCAB),
+  );
   assert.deepEqual(seen[0].body, { agent: "chat-7f3k2m9q", id: "k3mq2xa7", repo: "", any: false });
   const said = body.result.content[0].text;
   assert.match(said, /## Steps/);
@@ -991,16 +993,29 @@ test("take works any guide by id, and ends with what to call next", async () => 
 
 test("the old task tools are the new verbs under their old names", async () => {
   const { call, seen } = recorder({
-    "POST /v1/take": { status: 200, text: JSON.stringify({ guide: null, next: [], say: "Nothing here. Stop." }) },
+    "POST /v1/take": {
+      status: 200,
+      text: JSON.stringify({ guide: null, next: [], say: "Nothing here. Stop." }),
+    },
   });
-  const body = await read(await handleMcp(callTool("next_task", { agent: "chat-7f3k2m9q" }), call, VOCAB));
+  const body = await read(
+    await handleMcp(callTool("next_task", { agent: "chat-7f3k2m9q" }), call, VOCAB),
+  );
   assert.equal(seen[0].path, "/v1/take");
   assert.match(body.result.content[0].text, /Nothing here\. Stop\./);
   const { call: c2, seen: s2 } = recorder();
-  await handleMcp(callTool("task_progress", { id: "t1", agent: "chat-7f3k2m9q", note: "half" }), c2, VOCAB);
+  await handleMcp(
+    callTool("task_progress", { id: "t1", agent: "chat-7f3k2m9q", note: "half" }),
+    c2,
+    VOCAB,
+  );
   assert.equal(s2[0].path, "/v1/guides/t1/progress");
   const { call: c3, seen: s3 } = recorder();
-  await handleMcp(callTool("finish_task", { id: "t1", agent: "chat-7f3k2m9q", report: "r1" }), c3, VOCAB);
+  await handleMcp(
+    callTool("finish_task", { id: "t1", agent: "chat-7f3k2m9q", report: "r1" }),
+    c3,
+    VOCAB,
+  );
   assert.equal(s3[0].path, "/v1/guides/t1/hand_in");
 });
 
@@ -1008,10 +1023,16 @@ test("a refusal to stop says to stop", async () => {
   const { call } = recorder({
     "PUT /v1/guides/t1/progress": {
       status: 409,
-      text: JSON.stringify({ message: "this agent does not hold that", next: [], say: "You no longer hold this. Stop." }),
+      text: JSON.stringify({
+        message: "this agent does not hold that",
+        next: [],
+        say: "You no longer hold this. Stop.",
+      }),
     },
   });
-  const body = await read(await handleMcp(callTool("progress", { id: "t1", agent: "chat-7f3k2m9q" }), call, VOCAB));
+  const body = await read(
+    await handleMcp(callTool("progress", { id: "t1", agent: "chat-7f3k2m9q" }), call, VOCAB),
+  );
   assert.equal(body.result.isError, true);
   assert.match(body.result.content[0].text, /Stop\./);
 });

@@ -382,7 +382,9 @@ export async function now({ cwd = process.cwd() } = {}) {
   if (!held) {
     const [t, i] = await Promise.allSettled([api.tasks(), api.inbox()]);
     if (t.status === "fulfilled")
-      waiting.ready = t.value.tasks.filter((x) => x.state === "ready" && x.target === who.repo).length;
+      waiting.ready = t.value.tasks.filter(
+        (x) => x.state === "ready" && x.target === who.repo,
+      ).length;
     if (i.status === "fulfilled") waiting.inbox = i.value.guides.length;
   }
   return { held, waiting, agent: who.agent };

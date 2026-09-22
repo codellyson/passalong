@@ -836,7 +836,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary) {
 
   const takeIn = {
     agent: AGENT,
-    id: z.string().optional().describe("passalong id; leave out for the next thing waiting for you"),
+    id: z
+      .string()
+      .optional()
+      .describe("passalong id; leave out for the next thing waiting for you"),
     repo: z.string().optional().describe("owner/repo the work is in; omit for work for no repo"),
     any: z.boolean().optional().describe("a task for another repo — only when the user asks"),
   };

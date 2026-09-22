@@ -18,4 +18,5 @@ export const ASKS = {
 } as const;
 
 /** More context on a guide, added by the agent that just did the work. */
-export const followUpAsk = (id: string) => `Add a Passalong follow-up to guide ${id} with what we learned`;
+export const followUpAsk = (id: string) =>
+  `Add a Passalong follow-up to guide ${id} with what we learned`;

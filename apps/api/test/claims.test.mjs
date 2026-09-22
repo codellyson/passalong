@@ -12,16 +12,16 @@ import {
   approve,
   blockOn,
   finish,
+  handIn,
   LEASE_MS,
   list,
   next,
+  pass,
   reject,
   release,
   renew,
   repoKey,
   stateOf,
-  handIn,
-  pass,
   steps,
   take,
   working,
@@ -413,7 +413,9 @@ test("a reason over several lines stays one note in the task", async () => {
 test("a claimed task names the person whose agent has it", async () => {
   const db = d1();
   const guide = seed(db);
-  db.raw.prepare("UPDATE account SET handle = 'ada', name = 'Ada Lovelace' WHERE id = 'other'").run();
+  db.raw
+    .prepare("UPDATE account SET handle = 'ada', name = 'Ada Lovelace' WHERE id = 'other'")
+    .run();
   // A teammate's agent can take your task only through a team you share.
   db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tm', 'tm', 'T', 'me', '${T0}');
                INSERT INTO membership (team_id, account_id, joined) VALUES ('tm', 'me', '${T0}'), ('tm', 'other', '${T0}');`);
@@ -525,8 +527,15 @@ test("an agent passes what it holds: it is free again, and a task says why for t
   assert.equal(passed.kind, "task");
   assert.equal(await stateIn(db, "t1"), "ready");
   const md = db.raw.prepare("SELECT markdown FROM guide WHERE id = 't1'").get().markdown;
-  assert.match(md, /## Review notes\n- 2026-09-21 passed from mac:\/w\/shop: needs a design decision first/);
-  assert.equal((await pass(db, "t1", A, { at: T0, why: "again" })).status, 409, "nothing left to pass");
+  assert.match(
+    md,
+    /## Review notes\n- 2026-09-21 passed from mac:\/w\/shop: needs a design decision first/,
+  );
+  assert.equal(
+    (await pass(db, "t1", A, { at: T0, why: "again" })).status,
+    409,
+    "nothing left to pass",
+  );
   assert.equal((await take(db, "t1", B, { at: T0 })).claim.agent_id, "agent-b");
 });
 
@@ -539,7 +548,11 @@ test("handing in a handoff moves its claim out of working and into waiting on it
   assert.equal(done.claim.state, "review");
   assert.equal(done.claim.note, "applied, tests pass");
   assert.deepEqual(await working(db, "me", T0), []);
-  assert.equal((await handIn(db, "h1", B, { at: T0, note: "" })).status, 409, "only the taker hands in");
+  assert.equal(
+    (await handIn(db, "h1", B, { at: T0, note: "" })).status,
+    409,
+    "only the taker hands in",
+  );
   // Free again for a new piece of work.
   guide("h2", { kind: "transfer", target: "" });
   assert.equal((await take(db, "h2", A, { at: T0 })).claim.guide_id, "h2");
@@ -550,7 +563,10 @@ test("every answer says what to do next, and an answer to stop says to stop", ()
   assert.deepEqual(tools(steps("task", "taken")), ["progress", "hand_in", "pass"]);
   assert.deepEqual(tools(steps("transfer", "taken")), ["progress", "hand_in", "pass"]);
   assert.match(steps("task", "taken").next.find((x) => x.tool === "hand_in").when, /Acceptance/);
-  assert.match(steps("transfer", "taken").next.find((x) => x.tool === "hand_in").when, /Verification/);
+  assert.match(
+    steps("transfer", "taken").next.find((x) => x.tool === "hand_in").when,
+    /Verification/,
+  );
   assert.match(steps("bug", "taken").next.find((x) => x.tool === "hand_in").when, /Verification/);
   assert.deepEqual(tools(steps("task", "handed_in")), ["take"]);
   assert.deepEqual(tools(steps("task", "passed")), ["take"]);

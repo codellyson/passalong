@@ -93,7 +93,10 @@ const TASK_TOOLS = [
     name: "take",
     note: "Say you are doing it, and get it: by id, or the next one waiting. Nobody else can take it there while you hold it.",
   },
-  { name: "progress", note: "A one-line note at each milestone. Thirty minutes without one marks it stalled." },
+  {
+    name: "progress",
+    note: "A one-line note at each milestone. Thirty minutes without one marks it stalled.",
+  },
   {
     name: "hand_in",
     note: "Done here. A task hands in a write-up for its author to review; a handoff or a bug, whether it worked.",

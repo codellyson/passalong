@@ -489,7 +489,10 @@ export function openapi(origin: string) {
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: agentBody({ note: { type: "string", maxLength: 280 } }),
           responses: {
-            200: json200("Renewed.", withNext({ id: { type: "string" }, note: { type: "string" } })),
+            200: json200(
+              "Renewed.",
+              withNext({ id: { type: "string" }, note: { type: "string" } }),
+            ),
             409: NOT_HELD,
           },
         },
@@ -522,7 +525,10 @@ export function openapi(origin: string) {
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: agentBody({ why: { type: "string", maxLength: 1000 } }, ["why"]),
           responses: {
-            200: json200("Open again; the reason goes to whoever is next.", withNext({ id: { type: "string" } })),
+            200: json200(
+              "Open again; the reason goes to whoever is next.",
+              withNext({ id: { type: "string" } }),
+            ),
             400: { description: "No reason given." },
             409: NOT_HELD,
           },

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { scaffold } from "../src/capture.js";
 import {
   bugGuide,
   ID_RE,
@@ -13,7 +14,6 @@ import {
   template,
   validate,
 } from "../src/guide.js";
-import { scaffold } from "../src/capture.js";
 
 const SAMPLE = `---
 id: k3mq2xa7

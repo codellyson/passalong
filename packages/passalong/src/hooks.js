@@ -37,8 +37,10 @@ export function nowText({ held, waiting = {} }) {
     return lines.join("\n");
   }
   const parts = [];
-  if (waiting.ready) parts.push(plural(waiting.ready, "ready task for this repo", "ready tasks for this repo"));
-  if (waiting.inbox) parts.push(plural(waiting.inbox, "guide handed to you", "guides handed to you"));
+  if (waiting.ready)
+    parts.push(plural(waiting.ready, "ready task for this repo", "ready tasks for this repo"));
+  if (waiting.inbox)
+    parts.push(plural(waiting.inbox, "guide handed to you", "guides handed to you"));
   if (!parts.length) return "";
   return `Passalong: ${parts.join(" and ")}. Call take with no id to start the next one, when the user wants that.`;
 }

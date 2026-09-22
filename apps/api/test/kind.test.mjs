@@ -27,7 +27,10 @@ test("a guide stored without a kind is a transfer once migrated", () => {
   guide.run("task", T0, T0, "task");
   for (const f of files.slice(at)) sql.exec(readFileSync(join(MIGRATIONS, f), "utf8"));
   const kinds = Object.fromEntries(
-    sql.prepare("SELECT id, kind FROM guide").all().map((r) => [r.id, r.kind]),
+    sql
+      .prepare("SELECT id, kind FROM guide")
+      .all()
+      .map((r) => [r.id, r.kind]),
   );
   assert.deepEqual(kinds, { old: "transfer", bug: "bug", task: "task" });
 });

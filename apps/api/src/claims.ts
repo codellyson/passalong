@@ -184,7 +184,10 @@ export async function next(
 
 /** The claim on one task, or null. A task has one place, so at most one claim. */
 export function claimOf(db: D1Database, id: string): Promise<ClaimRow | null> {
-  return db.prepare("SELECT * FROM claim WHERE guide_id = ? AND place = ''").bind(id).first<ClaimRow>();
+  return db
+    .prepare("SELECT * FROM claim WHERE guide_id = ? AND place = ''")
+    .bind(id)
+    .first<ClaimRow>();
 }
 
 /** This agent's claim on a guide, of any kind, or null. */
@@ -241,7 +244,10 @@ export async function take(
     };
 
   if (g.status !== "published")
-    return { status: 409, error: `${id} is not open to take: it is ${g.status === "draft" ? "a draft" : "done"}` };
+    return {
+      status: 409,
+      error: `${id} is not open to take: it is ${g.status === "draft" ? "a draft" : "done"}`,
+    };
   const task = g.kind === "task";
   if (task && g.blocked)
     return { status: 409, error: `${id} waits for tasks nobody has approved yet` };
@@ -303,7 +309,14 @@ export async function working(
   at: string,
 ): Promise<
   {
-    guide: { id: string; title: string; kind: string; target: string; share_key: string; account_id: string };
+    guide: {
+      id: string;
+      title: string;
+      kind: string;
+      target: string;
+      share_key: string;
+      account_id: string;
+    };
     claim: ClaimRow;
     state: HeldState;
     by: { handle: string; name: string; you: boolean };
@@ -332,19 +345,21 @@ export async function working(
         by_name: string;
       }
     >();
-  return results.map(({ g_title, g_kind, g_target, g_share_key, g_account, by_handle, by_name, ...claim }) => ({
-    guide: {
-      id: claim.guide_id,
-      title: g_title,
-      kind: g_kind,
-      target: g_target,
-      share_key: g_share_key,
-      account_id: g_account,
-    },
-    claim,
-    state: claim.lease_until > at ? "claimed" : "stalled",
-    by: { handle: by_handle, name: by_name, you: claim.account_id === account },
-  }));
+  return results.map(
+    ({ g_title, g_kind, g_target, g_share_key, g_account, by_handle, by_name, ...claim }) => ({
+      guide: {
+        id: claim.guide_id,
+        title: g_title,
+        kind: g_kind,
+        target: g_target,
+        share_key: g_share_key,
+        account_id: g_account,
+      },
+      claim,
+      state: claim.lease_until > at ? "claimed" : "stalled",
+      by: { handle: by_handle, name: by_name, you: claim.account_id === account },
+    }),
+  );
 }
 
 /**
@@ -699,7 +714,15 @@ export async function handIn(
       `UPDATE claim SET state = 'review', note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
     )
-    .bind(String(note ?? "").trim().slice(0, NOTE_MAX), at, id, who.agent, who.account)
+    .bind(
+      String(note ?? "")
+        .trim()
+        .slice(0, NOTE_MAX),
+      at,
+      id,
+      who.agent,
+      who.account,
+    )
     .run();
   const claim = res.meta.changes === 1 ? await claimFor(db, id, who) : null;
   return claim
@@ -761,7 +784,10 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
     case "passed":
       return { next: again };
     case "nothing":
-      return { next: [], say: "Nothing is waiting for this agent here. Tell the person, and stop." };
+      return {
+        next: [],
+        say: "Nothing is waiting for this agent here. Tell the person, and stop.",
+      };
     case "not_held":
       return { next: [], say: "You no longer hold this. Stop working on it, and tell the person." };
   }

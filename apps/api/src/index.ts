@@ -3479,7 +3479,14 @@ const stopWith = (c: Ctx & { json: (b: unknown, s: 409) => Response }, message: 
 /** A guide as the verbs answer it: enough to act on, the document itself when it was just taken. */
 function heldView(
   base: string,
-  g: { id: string; title: string; kind: string; target: string; share_key?: string; markdown?: string },
+  g: {
+    id: string;
+    title: string;
+    kind: string;
+    target: string;
+    share_key?: string;
+    markdown?: string;
+  },
   claim: claims.ClaimRow,
 ) {
   return {
@@ -3518,7 +3525,10 @@ app.post("/v1/take", async (c) => {
       .first<{ kind: string; share_key: string }>();
     const kind = row?.kind || "task";
     return c.json({
-      guide: { ...heldView(base, { ...got.task, kind, share_key: row?.share_key }, got.claim), resumed: got.resumed },
+      guide: {
+        ...heldView(base, { ...got.task, kind, share_key: row?.share_key }, got.claim),
+        resumed: got.resumed,
+      },
       ...claims.steps(kind, "taken"),
     });
   }
@@ -3529,7 +3539,13 @@ app.post("/v1/take", async (c) => {
       {
         message: got.error,
         holder: got.holder
-          ? { agent: got.holder.agent_id, host: got.holder.host, repo: got.holder.repo, worktree: got.holder.worktree, note: got.holder.note }
+          ? {
+              agent: got.holder.agent_id,
+              host: got.holder.host,
+              repo: got.holder.repo,
+              worktree: got.holder.worktree,
+              note: got.holder.note,
+            }
           : undefined,
       },
       got.status,
@@ -3547,7 +3563,10 @@ app.post("/v1/take", async (c) => {
     .bind(id)
     .first<{ share_key: string }>();
   return c.json({
-    guide: { ...heldView(base, { ...got.task, share_key: share?.share_key }, got.claim), resumed: got.resumed },
+    guide: {
+      ...heldView(base, { ...got.task, share_key: share?.share_key }, got.claim),
+      resumed: got.resumed,
+    },
     ...claims.steps(got.task.kind, "taken"),
   });
 });
@@ -3604,7 +3623,11 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   }
 
   if (typeof who.ok !== "boolean")
-    return err(c, 400, 'Say whether its Verification held: send "ok": true, or "ok": false with a note.');
+    return err(
+      c,
+      400,
+      'Say whether its Verification held: send "ok": true, or "ok": false with a note.',
+    );
   if (!who.ok && !note) return err(c, 400, "Say what went wrong, so the author knows what to fix.");
   if (found.owner) return err(c, 403, "This is your own guide: there is nobody to hand it in to.");
   await recordVerdict(c, found.row, who.ok, note);
