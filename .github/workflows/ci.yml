@@ -118,5 +118,7 @@ jobs:
           done
           # A page and the API, so the smoke test covers both halves of the one Worker now that
           # `/health` alone would pass with every page broken.
-          curl -fsS https://passalong.dev/ | grep -q 'class="brand"'
+          # The brand's class, not its whole attribute: utilities ride along on it (`brand shrink-0`),
+          # and matching the full string failed a good deploy when one was added.
+          curl -fsS https://passalong.dev/ | grep -qE 'class="brand[ "]'
           curl -fsS https://passalong.dev/v1/me -o /dev/null -w '%{http_code}' | grep -q 401
