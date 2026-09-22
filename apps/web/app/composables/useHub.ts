@@ -203,7 +203,11 @@ function build(queryClient: QueryClient) {
 
   // Handoffs you wrote that somebody handed in, waiting on you to close. Left out of `loadError`.
   const handedInQ = useQuery(
-    { queryKey: hubKeys.handedIn, queryFn: get<{ handed_in: HandedIn[] }>("/v1/handed_in"), enabled },
+    {
+      queryKey: hubKeys.handedIn,
+      queryFn: get<{ handed_in: HandedIn[] }>("/v1/handed_in"),
+      enabled,
+    },
     queryClient,
   );
 

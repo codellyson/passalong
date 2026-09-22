@@ -570,7 +570,8 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
   await api.join(code);
 
   as(owner);
-  const md = "---\ntitle: Stream the invoice PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const md =
+    "---\ntitle: Stream the invoice PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
   const id = (await p.share(md, { to: team.slug })).guide.meta.id;
 
   // The teammate takes it the way the browser does, and shows in Working now as a person.
@@ -585,7 +586,10 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
   as(mate.token);
   await api.verdict(id, true, "streams fine now");
   as(owner);
-  assert.equal((await call("GET", "/v1/working")).working.find((w) => w.id === id), undefined);
+  assert.equal(
+    (await call("GET", "/v1/working")).working.find((w) => w.id === id),
+    undefined,
+  );
   const [waiting] = (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id);
   assert.equal(waiting.note, "streams fine now");
 
@@ -595,7 +599,10 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
   await p.activity();
   as(owner);
   assert.equal((await call("POST", `/v1/guides/${id}/close`)).state, "done");
-  assert.deepEqual((await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id), []);
+  assert.deepEqual(
+    (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id),
+    [],
+  );
   as(mate.token);
   const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
   assert.match(heard, /accepted your work on "Stream the invoice PDF"/);

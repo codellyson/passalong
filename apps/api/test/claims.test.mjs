@@ -598,9 +598,17 @@ test("a person taking handoffs in the browser can hold several, and is not stall
   teamed(db);
   const opts = { at: T0, many: true, leaseMs: PERSON_LEASE_MS };
   assert.equal((await take(db, "h1", PERSON, opts)).claim.agent_id, "person-other");
-  assert.equal((await take(db, "h2", PERSON, opts)).claim.guide_id, "h2", "a person is not one-at-a-time");
+  assert.equal(
+    (await take(db, "h2", PERSON, opts)).claim.guide_id,
+    "h2",
+    "a person is not one-at-a-time",
+  );
   const rows = await working(db, "me", later(LEASE_MS + 1));
-  assert.deepEqual(rows.map((r) => r.state), ["claimed", "claimed"], "still live after 30 minutes");
+  assert.deepEqual(
+    rows.map((r) => r.state),
+    ["claimed", "claimed"],
+    "still live after 30 minutes",
+  );
 });
 
 test("the author sees what was handed in on a handoff, and can close it", async () => {

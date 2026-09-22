@@ -3208,10 +3208,15 @@ app.put("/v1/guides/:id/verdict", async (c) => {
   await recordVerdict(c, found.row, body.ok, note);
   // Said in the browser by the person holding it: that is handing it in, so the hold moves to
   // waiting on the author, who closes it or sends it back. No hold, nothing to move.
-  await claims.handIn(c.env.DB, found.row.id, { account, agent: personAgent(account) }, {
-    at: now(),
-    note,
-  });
+  await claims.handIn(
+    c.env.DB,
+    found.row.id,
+    { account, agent: personAgent(account) },
+    {
+      at: now(),
+      note,
+    },
+  );
   return c.json({ id: found.row.id, ok: body.ok, note });
 });
 
@@ -3262,7 +3267,8 @@ app.put("/v1/guides/:id/ack", async (c) => {
 });
 
 /** The claim-holder a person is when they take something in the browser, rather than an agent. */
-const personAgent = (account: string) => `person-${account.toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
+const personAgent = (account: string) =>
+  `person-${account.toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
 
 // ---- tasks -------------------------------------------------------------------------------
 
