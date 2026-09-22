@@ -274,10 +274,11 @@ a:hover {
   color: var(--accent);
   text-decoration: none;
 }
+/* No radius here: the mark carries its own corner (rx 14 on a 64 grid). An 8px radius on top of it
+   at 18px was 44% of the side, and turned the square mark into a circle. */
 .brand img {
   width: 1.15rem;
   height: 1.15rem;
-  border-radius: var(--r-1);
 }
 
 header {
