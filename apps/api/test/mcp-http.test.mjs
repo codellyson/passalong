@@ -74,26 +74,21 @@ test("every tool it lists is one an agent could act on", async () => {
   const body = await read(res);
   const names = body.result.tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
-    "ack_guide",
     "assign",
     "attach_screenshot",
     "board",
     "create_upload",
     "file_bugs",
-    "finish_task",
     "get_guide",
     "get_report",
     "hand_in",
     "inbox",
     "log",
-    "next_task",
     "pass",
     "progress",
     "publish_guide",
     "search_guides",
     "take",
-    "task_progress",
-    "verify_guide",
     "work",
   ]);
   for (const tool of body.result.tools) {
@@ -336,28 +331,19 @@ test("a failure part-way through says which issues already landed", async () => 
   assert.match(body.result.content[0].text, /filed 1 of 2 issues/);
 });
 
-test("acking maps onto the route, and passing carries its reason", async () => {
+test("passing carries its reason to the route", async () => {
   const { call, seen } = recorder({
-    "PUT /v1/guides/k3mq2xa7/ack": { status: 200, text: '{"id":"k3mq2xa7","taken":false}' },
+    "POST /v1/guides/k3mq2xa7/pass": { status: 200, text: '{"id":"k3mq2xa7","passed":true}' },
   });
   const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 9,
-      method: "tools/call",
-      params: {
-        name: "ack_guide",
-        arguments: { id: "k3mq2xa7", taken: false, note: "no context on payments" },
-      },
-    }),
+    callTool("pass", { id: "k3mq2xa7", agent: "chat-7f3k2m9q", why: "no context on payments" }),
     call,
     VOCAB,
   );
   assert.equal(res.status, 200);
-  const sent = seen[0];
-  assert.equal(sent.method, "PUT");
-  assert.equal(sent.path, "/v1/guides/k3mq2xa7/ack");
-  assert.deepEqual(sent.body, { taken: false, note: "no context on payments" });
+  assert.equal(seen[0].method, "POST");
+  assert.equal(seen[0].path, "/v1/guides/k3mq2xa7/pass");
+  assert.deepEqual(seen[0].body, { agent: "chat-7f3k2m9q", why: "no context on payments" });
 });
 
 test("every tool says what it does to the world, so a client does not assume the worst", async () => {
@@ -993,32 +979,39 @@ test("take works any guide by id, and ends with what to call next", async () => 
   assert.match(said, /next:\n\s+hand_in k3mq2xa7 — when you ran its Verification here/);
 });
 
-test("the old task tools are the new verbs under their old names", async () => {
-  const { call, seen } = recorder({
-    "POST /v1/take": {
-      status: 200,
-      text: JSON.stringify({ guide: null, next: [], say: "Nothing here. Stop." }),
-    },
-  });
-  const body = await read(
-    await handleMcp(callTool("next_task", { agent: "chat-7f3k2m9q" }), call, VOCAB),
+test("the old tool names are gone, and the instructions say what replaced them", async () => {
+  // Ten tools for four jobs, each pair described almost the same way, is a list a model misreads.
+  const { call } = recorder();
+  const list = await read(
+    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
   );
-  assert.equal(seen[0].path, "/v1/take");
-  assert.match(body.result.content[0].text, /Nothing here\. Stop\./);
-  const { call: c2, seen: s2 } = recorder();
-  await handleMcp(
-    callTool("task_progress", { id: "t1", agent: "chat-7f3k2m9q", note: "half" }),
-    c2,
-    VOCAB,
+  const names = list.result.tools.map((t) => t.name);
+  for (const gone of [
+    "next_task",
+    "task_progress",
+    "finish_task",
+    "ack_guide",
+    "verify_guide",
+    "start_guide",
+  ])
+    assert.ok(!names.includes(gone), `${gone} should be gone`);
+  const hello = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: PROTOCOL,
+          capabilities: {},
+          clientInfo: { name: "t", version: "1" },
+        },
+      }),
+      call,
+      VOCAB,
+    ),
   );
-  assert.equal(s2[0].path, "/v1/guides/t1/progress");
-  const { call: c3, seen: s3 } = recorder();
-  await handleMcp(
-    callTool("finish_task", { id: "t1", agent: "chat-7f3k2m9q", report: "r1" }),
-    c3,
-    VOCAB,
-  );
-  assert.equal(s3[0].path, "/v1/guides/t1/hand_in");
+  assert.match(hello.result.instructions, /those are gone: take, progress, hand_in and pass/);
 });
 
 test("a refusal to stop says to stop", async () => {

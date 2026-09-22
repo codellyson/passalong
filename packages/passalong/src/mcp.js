@@ -368,45 +368,6 @@ export async function serve() {
   );
 
   server.registerTool(
-    "ack_guide",
-    {
-      title: "Take it or pass it (same as take / pass)",
-      description:
-        "Kept for older prompts: taken=true is take with this id, taken=false is pass with `note` " +
-        "as the reason.",
-      inputSchema: {
-        id: z.string().describe("passalong id"),
-        taken: z.boolean().describe("true if you are doing it; false hands it back"),
-        note: z.string().default("").describe("why it is not yours (required when taken is false)"),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
-      },
-    },
-    async ({ id, taken, note, cwd }) =>
-      taken ? doTake({ id, cwd }) : doPass({ id, why: note || "", cwd }),
-  );
-
-  server.registerTool(
-    "verify_guide",
-    {
-      title: "Report whether it works (same as hand_in)",
-      description: "Kept for older prompts: exactly hand_in with `ok` and `note`.",
-      inputSchema: {
-        id: z.string().describe("passalong id"),
-        ok: z.boolean().describe("true if the Verification steps passed"),
-        note: z.string().default("").describe("what went wrong (required when ok is false)"),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
-      },
-    },
-    async (args) => doHandIn(args),
-  );
-
-  server.registerTool(
     "activity",
     {
       title: "Activity",
@@ -428,24 +389,6 @@ export async function serve() {
         return fail(err);
       }
     },
-  );
-
-  server.registerTool(
-    "start_guide",
-    {
-      title: "Start work on a guide (same as take with an id)",
-      description:
-        "Kept for older prompts: exactly take with this id — say you are doing it and get it in " +
-        "one call. Use it the moment you are going to do the work.",
-      inputSchema: {
-        ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
-      },
-    },
-    async ({ ref, cwd }) => doTake({ id: ref, cwd }),
   );
 
   server.registerTool(
@@ -493,64 +436,6 @@ export async function serve() {
         return fail(err);
       }
     },
-  );
-
-  server.registerTool(
-    "next_task",
-    {
-      title: "Take the next task (same as take with no id)",
-      description:
-        "Kept for older prompts: exactly take with no id. Takes the next guide waiting for this " +
-        "worktree's agent, or gives back the one it already holds.",
-      inputSchema: {
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
-        any: z
-          .boolean()
-          .optional()
-          .describe("any repo, or none — only when the user asks for that"),
-      },
-    },
-    async ({ cwd, any }) => doTake({ cwd, any }),
-  );
-
-  server.registerTool(
-    "task_progress",
-    {
-      title: "Report progress (same as progress)",
-      description: "Kept for older prompts: exactly progress.",
-      inputSchema: {
-        id: z.string().describe("the id of what you hold"),
-        note: z.string().optional().describe("one line"),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
-      },
-    },
-    async (args) => doProgress(args),
-  );
-
-  server.registerTool(
-    "finish_task",
-    {
-      title: "Finish a task (same as hand_in)",
-      description: "Kept for older prompts: exactly hand_in, for a task.",
-      inputSchema: {
-        id: z.string().describe("the task's id"),
-        markdown: z.string().optional().describe("the transfer guide about this work"),
-        report: z.string().optional().describe("instead of markdown: id of one already published"),
-        pr: z.string().optional().describe("PR or branch link, when there is one"),
-        note: z.string().optional().describe("one line for the hub"),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
-      },
-    },
-    async (args) => doHandIn(args),
   );
 
   server.registerTool(

@@ -20,8 +20,9 @@ public one, for agents *using* Passalong rather than changing it.
   - `src/mcp.js` — MCP tools. `take`, `progress`, `hand_in` and `pass` work every kind of guide
     (docs/V2.md §11); each answer ends with the server's `next` (`steps()` in
     apps/api/src/claims.ts). `start_guide`, `ack_guide`, `verify_guide`, `next_task`,
-    `task_progress` and `finish_task` are kept as those four under their old names — one
-    implementation each, never a second copy. Also `search_guides`, `inbox`, `board`, `activity`,
+    `task_progress` and `finish_task` are gone: ten tools for four jobs, each pair described
+    almost the same way, is a list a model misreads — which is how a session published a guide
+    for work already pushed. One tool per job, one implementation each. Also `search_guides`, `inbox`, `board`, `activity`,
     `log`, `get_guide`, `publish_guide`, `guide_template`, `set_guide_status`, `file_bugs`,
     `attach_screenshot`, `plan_tasks`. `take` is the one an agent should reach for on work it means
     to do. `get_guide` only reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a

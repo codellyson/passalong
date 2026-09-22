@@ -3006,7 +3006,7 @@ app.get("/v1/guides/:id", async (c) => {
  * not in does not appear under a guide you can see. Drafts are not children yet.
  *
  * `?markdown=1` is the reader's form: a follow-up is more context for the guide, so whoever opens
- * the original — an agent through get_guide or start_guide, a person through `passalong pull` —
+ * the original — an agent through get_guide or take, a person through `passalong pull` —
  * gets the follow-ups' content with it. That form is oldest first, because context reads in the
  * order it was added and a later follow-up may build on or correct an earlier one; at most
  * `FOLLOW_UPS_MAX` of them, each clipped by `clipFollowUp`. Without it the listing is newest first,

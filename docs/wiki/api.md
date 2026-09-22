@@ -90,7 +90,7 @@ which reaches this endpoint and nothing else (see [auth](auth.md)).
 
 The tools reimplement nothing — each is a name, a description and a schema mapped onto a route
 above, dispatched back through the app with the caller's account. They are `search_guides`,
-`get_guide`, `inbox`, `board`, `log`, `publish_guide`, `ack_guide`, `verify_guide`, `file_bugs`,
+`get_guide`, `inbox`, `board`, `log`, `publish_guide`, `take`, `progress`, `hand_in`, `pass`, `file_bugs`,
 `attach_screenshot`, `create_upload` and `get_report`. The stdio server has the ones that touch a
 working directory, which a hosted server does not. Every tool declares annotations and an output
 schema, and returns `structuredContent` beside its text.

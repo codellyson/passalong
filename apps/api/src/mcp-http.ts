@@ -573,8 +573,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
         "id. It is listed under the original, and anyone who opens the original, person or agent, " +
         "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.\n" +
-        "Older prompts may name next_task, task_progress, finish_task, ack_guide or " +
-        "verify_guide: they still work, as take, progress, hand_in and the handoff answers.",
+        "If you were taught next_task, task_progress, finish_task, ack_guide or verify_guide, " +
+        "those are gone: take, progress, hand_in and pass do all of it, for every kind of guide.",
     },
   );
 
@@ -1001,33 +1001,6 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     },
   );
 
-  server.registerTool(
-    "ack_guide",
-    {
-      title: "Say whether you are taking it",
-      annotations: ADDS,
-      description:
-        "The first word back on a guide handed to you, before any work: take it, or pass it " +
-        "back. Passing must say why — an unanswered handoff is indistinguishable from one nobody " +
-        "has noticed, and the sender finds out in a week instead of a minute. Answer this when " +
-        "you pick up an inbox, then verify_guide once you have actually run it.",
-      inputSchema: {
-        id: z.string(),
-        taken: z.boolean().describe("true if you are doing it; false hands it back"),
-        note: z
-          .string()
-          .optional()
-          .describe("required when taken is false: why it is not yours; one line, 280 chars"),
-      },
-      outputSchema: ackOut,
-    },
-    async ({ id, taken, note }) =>
-      relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/ack`, {
-        taken,
-        note: note ?? "",
-      }),
-  );
-
   // The task queue. A local agent's id comes from its worktree (packages/passalong/src/passalong.js
   // `agent()`); an assistant over HTTP has no worktree and no session, so it names itself and the
   // name is the claim's owner. Reusing it on every call is what makes it the same agent.
@@ -1037,8 +1010,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     .describe("a name for you, the same on every task call, e.g. chat-7f3k2m9q");
 
   // ---- the four verbs (docs/V2.md §11) --------------------------------------------------------
-  // take, progress, hand_in and pass work every kind of guide. next_task, task_progress and
-  // finish_task are kept for older prompts and call the same code.
+  // take, progress, hand_in and pass work every kind of guide. They replaced next_task,
+  // task_progress, finish_task, start_guide, ack_guide and verify_guide, which are gone: ten tools
+  // for four jobs, each pair described almost the same way, is a list a model misreads.
 
   async function doTake(args: { agent: string; id?: string; repo?: string; any?: boolean }) {
     const res = await call("POST", "/v1/take", {
@@ -1115,18 +1089,6 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     async (args) => doTake(args),
   );
 
-  server.registerTool(
-    "next_task",
-    {
-      title: "Take the next task (same as take with no id)",
-      annotations: ADDS,
-      outputSchema: takeOut,
-      description: "Kept for older prompts: exactly take with no id.",
-      inputSchema: { agent: AGENT, repo: takeIn.repo, any: takeIn.any },
-    },
-    async (args) => doTake(args),
-  );
-
   const progressIn = {
     id: z.string(),
     agent: AGENT,
@@ -1142,18 +1104,6 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       description:
         "Say you are still on what you hold, with a one-line note the hub shows. 30 minutes " +
         "without one marks it stalled. If the answer says you no longer hold it, stop.",
-      inputSchema: progressIn,
-    },
-    async (args) => doProgress(args),
-  );
-
-  server.registerTool(
-    "task_progress",
-    {
-      title: "Report progress (same as progress)",
-      annotations: ADDS,
-      outputSchema: progressOut,
-      description: "Kept for older prompts: exactly progress.",
       inputSchema: progressIn,
     },
     async (args) => doProgress(args),
@@ -1182,24 +1132,6 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
   );
 
   server.registerTool(
-    "finish_task",
-    {
-      title: "Finish a task (same as hand_in)",
-      annotations: ADDS,
-      outputSchema: finishOut,
-      description: "Kept for older prompts: exactly hand_in, for a task.",
-      inputSchema: {
-        id: z.string(),
-        agent: AGENT,
-        report: z.string().describe("id of the transfer guide about this work"),
-        pr: z.string().optional(),
-        note: z.string().optional(),
-      },
-    },
-    async (args) => doHandIn(args),
-  );
-
-  server.registerTool(
     "pass",
     {
       title: "Pass it",
@@ -1216,31 +1148,6 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     },
     async ({ id, agent, why }) =>
       answer(call, "POST", `/v1/guides/${encodeURIComponent(id)}/pass`, id, { agent, why }),
-  );
-
-  server.registerTool(
-    "verify_guide",
-    {
-      title: "Say whether it worked",
-      annotations: ADDS,
-      description:
-        "Answer for a guide you took. The single most valuable thing to report back, and the " +
-        "only way the sender learns their handoff did not land. A failure must say why. If the " +
-        "guide needs more context than a one-line note holds — a missing detail, a step that " +
-        "needed explaining, what you found doing it — publish that as a follow-up: its own guide, " +
-        "with publish_guide `parent` set to this id. Whoever opens this guide then gets it too.",
-      inputSchema: {
-        id: z.string(),
-        ok: z.boolean().describe("true if it holds up"),
-        note: z.string().optional().describe("required when ok is false; one line, 280 chars"),
-      },
-      outputSchema: verdictResultOut,
-    },
-    async ({ id, ok, note }) =>
-      relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/verdict`, {
-        ok,
-        note: note ?? "",
-      }),
   );
 
   server.registerTool(
