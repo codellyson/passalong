@@ -159,37 +159,35 @@ const active = (to: string) =>
            as the frame around the page rather than one more row of tabs inside it — which is what
            the page's own tabs (Needs you, Working now…) now are. A div, not <header>: the global
            header rule adds its own border, padding and margin, and it outranks utility classes.
-           The full-bleed background is a shadow spread past the column and clipped to the bar's
-           height, so the bar can stay inside <main> and keep its measure. -->
+           The full-bleed background and its hairline are a pseudo-element one viewport wide behind
+           the bar, so the bar stays inside <main> and keeps its measure. It was a shadow clipped to
+           the bar's height, and the clip cut off the bar's own menus. -->
       <div
-        class="sticky top-0 z-30 -mt-12 mb-8 border-b border-line bg-raised/85 py-2.5 shadow-[0_0_0_100vmax_color-mix(in_oklab,var(--surface-raised)_85%,transparent)] backdrop-blur-md [clip-path:inset(0_-100vmax)]"
+        class="sticky top-0 z-30 -mt-12 mb-8 py-2.5 before:absolute before:inset-y-0 before:left-1/2 before:-z-10 before:w-screen before:-translate-x-1/2 before:border-b before:border-line before:bg-raised/85 before:backdrop-blur-md before:content-['']"
       >
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-6">
+        <!-- One row at every width. On a phone the brand is its mark, New is a plus, the account
+             is an avatar, and the theme switch moves into the account menu. -->
+        <div class="flex items-center gap-2 sm:gap-6">
           <AppBrand to="/hub" compact />
-          <!-- On a phone the links take their own row under the brand and the controls, so the bar
-               is two tidy rows rather than whatever wrapping made of one. -->
           <nav
-            class="order-last -mx-1 flex w-full gap-1 overflow-x-auto [scrollbar-width:none] sm:order-none sm:mx-0 sm:w-auto"
+            class="flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1"
             aria-label="Hub"
           >
             <NuxtLink
               v-for="t in tabs"
               :key="t.to"
               :to="t.to"
-              class="rounded-pill px-3 py-1.5 font-ui text-sm whitespace-nowrap no-underline transition-colors"
-              :class="
-                active(t.to)
-                  ? 'bg-fg font-semibold text-bg'
-                  : 'font-medium text-muted hover:bg-surface hover:text-fg'
-              "
+              class="rounded-1 px-2.5 py-1.5 font-ui text-sm whitespace-nowrap no-underline transition-colors sm:px-3"
+              :class="active(t.to) ? 'font-semibold text-fg' : 'font-medium text-muted hover:text-fg'"
               :aria-current="active(t.to) ? 'page' : undefined"
             >
               {{ t.label }}
             </NuxtLink>
           </nav>
-          <div class="ml-auto flex items-center gap-2">
-            <!-- Reachable signed in or out: the sign-in screen is as likely as any to be too bright. -->
-            <AppThemeToggle />
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+            <!-- Reachable signed in or out: the sign-in screen is as likely as any to be too bright.
+                 Signed in on a phone it is in the account menu instead, to keep the bar one row. -->
+            <AppThemeToggle :class="signedIn ? 'max-sm:hidden' : ''" />
             <template v-if="signedIn">
               <HubNewMenu />
               <HubAccountMenu />

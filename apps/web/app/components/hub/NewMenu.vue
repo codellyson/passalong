@@ -30,15 +30,17 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
   <div ref="root" class="relative" @keydown.esc="open = false">
     <button
       type="button"
-      class="btn primary sm"
+      class="btn primary sm max-sm:size-8 max-sm:p-0"
       :aria-expanded="open"
       aria-haspopup="menu"
+      aria-label="New"
       @click="open = !open"
     >
-      New
-      <AppIcon name="reveal" />
+      <AppIcon name="plus" class="sm:hidden" />
+      <span class="max-sm:hidden">New</span>
+      <AppIcon name="reveal" class="max-sm:hidden" />
     </button>
-    <div v-if="open" class="menu w-80" role="menu">
+    <div v-if="open" class="menu w-80 max-sm:fixed max-sm:inset-x-4 max-sm:top-14 max-sm:w-auto" role="menu">
       <p class="menu-note mt-0 mb-1">Ask your agent. Click one to copy what to say:</p>
       <button
         v-for="item in ITEMS"

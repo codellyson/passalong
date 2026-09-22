@@ -12,5 +12,10 @@ withDefaults(defineProps<{ to?: string; compact?: boolean }>(), { to: "/", compa
 <template>
   <!-- `compact`: on a narrow phone the name goes to screen readers only and the mark stays, so the
        hub's navbar keeps the brand and its controls on one row. -->
-  <a class="brand" :href="to"><img src="/favicon.svg" alt="" /><span :class="compact ? 'max-[26rem]:sr-only' : ''">Passalong</span></a>
+  <a class="brand shrink-0" :href="to"
+    ><img src="/favicon.svg" alt="" class="shrink-0" :class="compact ? 'max-[26rem]:size-7' : ''" /><span
+      :class="compact ? 'max-[26rem]:sr-only' : ''"
+      >Passalong</span
+    ></a
+  >
 </template>

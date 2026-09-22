@@ -31,11 +31,19 @@ const ICON = { "": "system", light: "sun", dark: "moon" } as const;
 const next = computed(() => NEXT[now.value]);
 const href = computed(() => `/theme?to=${next.value}&back=${encodeURIComponent(route.fullPath)}`);
 const label = computed(() => `Appearance: ${NAME[now.value]}. Switch to ${NAME[next.value]}`);
+
+/** `row`: a labelled menu item rather than an icon button, for the account menu on a phone. */
+defineProps<{ row?: boolean }>();
 </script>
 
 <template>
   <!-- nofollow, like AppTheme: every page carries one with its own `back`. -->
-  <a class="btn icon" :href="href" rel="nofollow" :aria-label="label">
+  <a v-if="row" class="menu-item" :href="href" rel="nofollow" :aria-label="label">
+    <AppIcon :name="ICON[now]" class="shrink-0 text-muted" />
+    <span>Appearance</span>
+    <span class="ml-auto text-xs text-muted capitalize">{{ NAME[now] }}</span>
+  </a>
+  <a v-else class="btn icon" :href="href" rel="nofollow" :aria-label="label">
     <AppIcon :name="ICON[now]" />
   </a>
 </template>
