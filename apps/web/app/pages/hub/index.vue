@@ -181,6 +181,8 @@ const handedIn = computed(() =>
 const needsCount = computed(
   () => reviewCount.value + handedIn.value.length + lanes.value.needs.length,
 );
+/** Nothing needs you, and nothing is being searched for: the section folds to one line. */
+const clear = computed(() => !waiting.value && !needsCount.value && !searching.value);
 const workingCount = computed(() => data.value.working.length);
 const openCount = computed(() => openTaskCount.value + sentCount.value);
 const doneCount = computed(() => doneTasks.value.length + lanes.value.done.length);
@@ -221,7 +223,8 @@ const list = "m-0 list-none overflow-hidden rounded-3 bg-raised p-0 shadow-edge"
           <p v-else class="m-0 font-ui text-sm text-muted">
             <span v-if="updating || scopeChanging" role="status" class="mr-2 text-muted">Updating…</span>
             <!-- A count is a link only when there is something to jump to. -->
-            <component :is="needsCount ? 'a' : 'span'" :href="needsCount ? '#needs' : undefined">{{ needsCount }} need you</component>
+            <a v-if="needsCount" href="#needs">{{ needsCount }} need{{ needsCount === 1 ? "s" : "" }} you</a>
+            <span v-else>Nothing needs you</span>
             ·
             <component :is="workingCount ? 'a' : 'span'" :href="workingCount ? '#working-h' : undefined">{{ workingCount }} being worked on</component>
             ·
@@ -248,7 +251,23 @@ const list = "m-0 list-none overflow-hidden rounded-3 bg-raised p-0 shadow-edge"
       <!-- A list that failed to load draws nothing rather than its empty state: the shell's banner
            already says what happened and offers Try again. -->
       <template v-if="!unavailable">
+        <!-- All clear is one quiet line, not a section. A heading, a zero and a sentence saying there
+             is nothing here spent the top of the page — the place people look first — on nothing. -->
         <section
+          v-if="clear"
+          id="needs"
+          aria-label="Needs you"
+          class="-mb-4 flex items-center gap-3 rounded-3 bg-surface px-4 py-3 font-ui text-sm"
+        >
+          <span class="grid size-6 shrink-0 place-items-center rounded-pill bg-ok-soft text-ok" aria-hidden="true">
+            <AppIcon name="check" />
+          </span>
+          <p class="m-0 text-pretty">
+            <b class="font-semibold text-fg">Nothing needs you.</b>{{ " " }}<span class="text-muted">Work an agent hands in, or a teammate sends you, lands here.</span>
+          </p>
+        </section>
+        <section
+          v-else
           id="needs"
           aria-labelledby="lane-needs"
           class="flex scroll-mt-4 flex-col gap-3 transition-opacity"
@@ -273,8 +292,8 @@ const list = "m-0 list-none overflow-hidden rounded-3 bg-raised p-0 shadow-edge"
             <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />
           </ul>
           <p v-if="!waiting && !needsCount" class="m-0 font-ui text-sm text-muted">
-            {{ searching ? "Nothing waiting on you matches." : "Nothing is waiting on you. Anything an agent hands in lands here." }}
-            <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
+            Nothing waiting on you matches.
+            <button class="linkish" type="button" @click="clearSearch">Clear search</button>
           </p>
         </section>
 
