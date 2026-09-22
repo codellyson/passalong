@@ -698,3 +698,23 @@ test("reassigning takes the work back from whoever the new assignment leaves out
   await take(db, "t1", OTHER, { at: T0 });
   assert.deepEqual(await dropOutside(db, "t1", { accounts: null, at: T0, why: "x" }), []);
 });
+
+test("a team's handoff a teammate already said worked is not taken again, and says who did it", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "", account: "me" });
+  teamed(db);
+  db.raw.prepare("UPDATE account SET handle = 'ada' WHERE id = 'other'").run();
+  db.raw
+    .prepare(
+      "INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES ('h1', 'other', 1, 'streams now', ?)",
+    )
+    .run(T0);
+  const third = { account: "me", agent: "agent-third", repo: "o/elsewhere" };
+  const refused = await take(db, "h1", third, { at: T0 });
+  assert.equal(refused.status, 409);
+  assert.match(refused.error, /@ada already said it worked/);
+  // Addressed to someone by name, it is theirs to repeat whatever a teammate said.
+  db.raw.exec("UPDATE guide SET to_account_id = 'me' WHERE id = 'h1'");
+  assert.equal((await take(db, "h1", third, { at: T0 })).claim.agent_id, "agent-third");
+});

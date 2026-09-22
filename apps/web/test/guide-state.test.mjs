@@ -58,3 +58,34 @@ test("a guide you passed on is in transit for you no longer", () => {
     "taking it leaves you owing the sender a verdict",
   );
 });
+
+// A guide sent to a team or a group asks one of them, not each of them. Once a teammate has taken
+// it or said how it went, it is not waiting on the rest — leaving it in their Needs you is how two
+// people end up doing the same work.
+test("a team's guide a teammate already handled is not waiting on you", () => {
+  const worked = guide({
+    team: "acme",
+    verdict: { ok: true, by: "ada", by_name: "Ada", note: "", at: "t" },
+  });
+  assert.equal(stateOf(worked, new Map(), "me"), null, "Ada said it worked: nothing owed by me");
+
+  const taken = guide({ team: "acme", taken_by: ["ada"], taken_by_names: ["Ada"] });
+  assert.equal(stateOf(taken, new Map(), "me"), null, "Ada is on it: nothing owed by me");
+
+  // Still yours when it was asked of you, or when you took it yourself.
+  const named = guide({
+    team: "acme",
+    for_me: true,
+    verdict: { ok: true, by: "ada", note: "", at: "t" },
+  });
+  assert.equal(stateOf(named, new Map(), "me").key, "unjudged");
+  const mineToo = guide({
+    team: "acme",
+    taken_by: ["ada", "me"],
+    my_ack: { taken: true, note: "", at: "t" },
+  });
+  assert.equal(stateOf(mineToo, new Map(), "me").key, "unjudged");
+
+  // Nobody has touched it: you opened it, so how it went is still yours to say.
+  assert.equal(stateOf(guide({ team: "acme" }), new Map(), "me").key, "unjudged");
+});

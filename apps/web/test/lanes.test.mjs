@@ -111,3 +111,15 @@ test("the follow-up dock is an address: open, close, and room for four", async (
     "def456",
   ]);
 });
+
+test("a team's guide a teammate handled says who, instead of asking you", () => {
+  const g = {
+    id: "a1",
+    mine: false,
+    team: "acme",
+    verdict: { ok: true, by: "ada", by_name: "Ada", note: "", at: "t" },
+  };
+  assert.equal(statusLine({ g, state: null }).text, "Ada said it worked");
+  const t = { id: "a2", mine: false, team: "acme", taken_by: ["bo"], taken_by_names: ["Bo"] };
+  assert.equal(statusLine({ g: t, state: null }).text, "Bo is taking it");
+});

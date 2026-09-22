@@ -784,3 +784,49 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
   );
   as(owner);
 });
+
+test("a team's guide one teammate said worked stops asking the others, so nobody redoes it", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const api = await import("../src/api.js");
+  const owner = process.env.PASSALONG_TOKEN;
+  const as = (token) => {
+    process.env.PASSALONG_TOKEN = token;
+  };
+  const team = await api.createTeam(`nodouble ${Date.now()}`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  const joinTeam = async () => {
+    as(owner);
+    const { code } = await api.invite(team.slug);
+    const who = await secondAccount();
+    as(who.token);
+    await api.join(code);
+    return who;
+  };
+  const ada = await joinTeam();
+  const bo = await joinTeam();
+
+  as(owner);
+  const md =
+    "---\ntitle: Fix the invoice total\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const id = (await p.share(md, { to: team.slug })).guide.meta.id;
+
+  // Both see it waiting. Ada does it and says it worked — without saying "on it" first.
+  as(bo.token);
+  assert.ok(
+    (await api.inbox()).guides.some((g) => g.id === id),
+    "Bo sees it before anyone answers",
+  );
+  as(ada.token);
+  await api.verdict(id, true, "totals match now");
+
+  // Bo is no longer asked, and Bo's agent is told Ada did it rather than doing it again.
+  as(bo.token);
+  assert.ok(!(await api.inbox()).guides.some((g) => g.id === id), "not waiting on Bo any more");
+  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+  execFileSync("git", ["init", "-q", dir]);
+  await assert.rejects(p.take(id, { cwd: dir }), /already said it worked/);
+  as(owner);
+});

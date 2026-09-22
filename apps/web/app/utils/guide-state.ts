@@ -153,6 +153,12 @@ export function boardStates(board: Board | null): Map<string, GuideState> {
   return out;
 }
 
+/** A teammate took it, or said how it went. `me` is your @handle, which `taken_by` lists. */
+export function handledByOthers(g: Guide, me: string | null): boolean {
+  const others = (g.taken_by ?? []).filter((h) => h !== me);
+  return others.length > 0 || Boolean(g.verdict && g.verdict.by !== me);
+}
+
 export function stateOf(
   g: Guide,
   fromBoard: Map<string, GuideState>,
@@ -164,6 +170,12 @@ export function stateOf(
   // Handed to you and off the board, which happens the moment you pull it — or the moment you
   // pass on it, which takes it off your board for good. Nothing is in transit for you after that.
   if (!g.mine && g.my_ack && !g.my_ack.taken) return null;
+
+  // Sent to a team or a group, and a teammate has already taken it or said how it went. It asked
+  // one of you, not each of you: it is not waiting on you, and showing it as though it were is how
+  // a second person starts work somebody has already done. Unless it was asked of you by name, or
+  // you took it yourself — then it is still yours to answer.
+  if (!g.mine && !g.for_me && !g.my_ack?.taken && handledByOthers(g, me)) return null;
 
   // Handed to you and off the board. Whether it still needs you is whether you have answered.
   if (!g.mine) {

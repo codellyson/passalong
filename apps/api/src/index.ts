@@ -2091,19 +2091,36 @@ async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
        -- Passing on something takes it off your board and puts it back on its author's. Saying
        -- "on it" does not: you still owe the work, so it stays where you will see it.
        AND id NOT IN (SELECT guide_id FROM ack WHERE account_id = ? AND taken = 0)
-       -- Somebody else took it. That only clears a guide addressed to more than one person: when
-       -- a group or a team was asked, one person saying "I'm on it" is the answer for all of them,
-       -- and leaving it in everyone else's lane is how five people each assume it is theirs. A
-       -- guide with your handle on it was asked of you, and nobody else answering ends that.
+       -- Somebody else took it, holds it, or said how it went. That only clears a guide addressed
+       -- to more than one person: when a group or a team was asked, one person answering is the
+       -- answer for all of them, and leaving it in everyone else's lane is how two people end up
+       -- doing the same work. "On it" was the only answer counted once, so a teammate who did the
+       -- work and said it worked — without saying "on it" first — left it waiting on everyone
+       -- else. A guide with your handle on it was asked of you, and nobody else answering ends that.
        AND (to_account_id = ?
-            OR id NOT IN (SELECT guide_id FROM ack WHERE taken = 1 AND account_id <> ?))
+            OR (id NOT IN (SELECT guide_id FROM ack WHERE taken = 1 AND account_id <> ?)
+                AND id NOT IN (SELECT guide_id FROM verdict WHERE account_id <> ?)
+                AND id NOT IN (SELECT guide_id FROM claim WHERE account_id <> ?)))
      -- Named beats dropped. Someone writing your handle chose you; a guide shared with a team you
      -- happen to be in chose nobody, and a group sits between the two — so the lane reads in that
      -- order rather than by age alone, which buried what was addressed to you under the rest.
      ORDER BY CASE WHEN to_account_id = ? THEN 0 WHEN to_group_id <> '' THEN 1 ELSE 2 END,
               created DESC LIMIT ?`,
   )
-    .bind(account, account, account, ...ids, account, account, account, account, account, limit)
+    .bind(
+      account,
+      account,
+      account,
+      ...ids,
+      account,
+      account,
+      account,
+      account,
+      account,
+      account,
+      account,
+      limit,
+    )
     .all<GuideRow>();
   return results;
 }
