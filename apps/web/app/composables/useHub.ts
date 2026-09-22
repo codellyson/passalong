@@ -20,6 +20,7 @@ import type {
   Note,
   Task,
   TeamDetail,
+  Working,
 } from "~/types/hub";
 import { HttpError, SignedOut } from "~/utils/http";
 import {
@@ -63,6 +64,7 @@ export const hubKeys = {
   team: (slug: string) => ["team-detail", slug] as const,
   billing: ["billing"] as const,
   tasks: ["tasks"] as const,
+  working: ["working"] as const,
 };
 
 type GuideList = { guides: Guide[] };
@@ -191,6 +193,12 @@ function build(queryClient: QueryClient) {
     queryClient,
   );
 
+  // Who is working on what, across every kind of guide. Left out of `loadError` like the tasks.
+  const workingQ = useQuery(
+    { queryKey: hubKeys.working, queryFn: get<{ working: Working[] }>("/v1/working"), enabled },
+    queryClient,
+  );
+
   const signedIn = computed(() => !ended.value && Boolean(meQ.data.value));
 
   // Once the first answer about the session is in, stop guessing from the cookie.
@@ -211,6 +219,7 @@ function build(queryClient: QueryClient) {
     tokens: tokensQ.data.value?.tokens ?? [],
     team: teamScoped.value ? (teamQ.data.value ?? null) : null,
     tasks: tasksQ.data.value?.tasks ?? [],
+    working: workingQ.data.value?.working ?? [],
   }));
 
   /** What has not arrived yet, per endpoint, so each part of a page can wait on its own data. */
@@ -415,7 +424,7 @@ function build(queryClient: QueryClient) {
         queryClient.setQueryData<{ tasks: Task[] }>(hubKeys.tasks, (old) =>
           old ? { tasks: old.tasks.map((x) => (x.id === t.id ? { ...x, state } : x)) } : old,
         ),
-      [hubKeys.tasks],
+      [hubKeys.tasks, hubKeys.working],
     );
   const onTaskReady = (t: Task) =>
     moveTask(t, "ready", `/v1/guides/${t.id}/status`, json("PATCH", { status: "published" }));

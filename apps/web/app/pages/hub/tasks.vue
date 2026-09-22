@@ -88,7 +88,7 @@ const done = computed(() => rest.value.get("done") || []);
     </div>
 
     <template v-else>
-      <HubWorkingNow :tasks="data.tasks" />
+      <HubWorkingNow :rows="data.working" />
       <HubTaskReview :tasks="data.tasks" />
       <p v-if="!waiting" class="m-0 font-ui text-sm text-muted">
         Nothing needs you. Anything an agent finishes lands here for you to review.

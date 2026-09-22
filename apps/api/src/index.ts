@@ -3330,6 +3330,33 @@ app.get("/v1/tasks", async (c) => {
   });
 });
 
+/**
+ * Who is working on what: every guide someone holds right now, of every kind, that this account
+ * can see. One row per taker — a handoff repeated in two repos is two rows. See claims.working().
+ */
+app.get("/v1/working", async (c) => {
+  const base = origin(c);
+  const rows = await claims.working(c.env.DB, c.get("account"), now());
+  return c.json({
+    working: rows.map((r) => ({
+      id: r.guide.id,
+      title: r.guide.title,
+      kind: r.guide.kind,
+      target: r.guide.target,
+      url: shareUrl(base, r.guide),
+      state: r.state,
+      by: r.by,
+      agent: r.claim.agent_id,
+      host: r.claim.host,
+      repo: r.claim.repo,
+      worktree: r.claim.worktree,
+      note: r.claim.note,
+      claimed_at: r.claim.claimed_at,
+      lease_until: r.claim.lease_until,
+    })),
+  });
+});
+
 app.post("/v1/tasks/next", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);

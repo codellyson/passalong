@@ -20,6 +20,8 @@ import {
   renew,
   repoKey,
   stateOf,
+  take,
+  working,
 } from "../src/claims.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
@@ -423,4 +425,89 @@ test("a claimed task names the person whose agent has it", async () => {
   await next(db, B, { at: T0 });
   const mine = (await list(db, "me", T0)).find((r) => r.task.id === "t2");
   assert.equal(mine.by.you, true);
+});
+
+// ---- one claim model for every kind (docs/V2.md §11) -------------------------------------------
+
+const C = { account: "me", agent: "agent-c", repo: "o/other" };
+
+test("a handoff has one taker per repo: a second agent in the same repo is told who has it", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  const first = await take(db, "h1", A, { at: T0 });
+  assert.equal(first.claim.agent_id, "agent-a");
+  assert.equal(first.resumed, false);
+  const second = await take(db, "h1", B, { at: later(1) });
+  assert.equal(second.status, 409);
+  assert.equal(second.holder.agent_id, "agent-a", "the refusal names the agent that has it");
+});
+
+test("the same handoff can be taken once in each repo", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  assert.equal((await take(db, "h1", A, { at: T0 })).claim.repo, "o/r");
+  assert.equal((await take(db, "h1", C, { at: T0 })).claim.repo, "o/other");
+});
+
+test("a task has one taker whatever repo the agent is in", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  assert.equal((await take(db, "t1", A, { at: T0 })).claim.agent_id, "agent-a");
+  const elsewhere = await take(db, "t1", { ...C, any: true }, { at: T0 });
+  assert.equal(elsewhere.status, 409);
+  assert.equal(await next(db, C, { at: T0, any: true }), null);
+});
+
+test("a task taken by id from the wrong repo is refused, and says which repo", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const wrong = await take(db, "t1", C, { at: T0 });
+  assert.equal(wrong.status, 400);
+  assert.match(wrong.error, /o\/r/);
+});
+
+test("an agent holds one thing at a time, and taking it again resumes it", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("h1", { kind: "transfer", target: "" });
+  await take(db, "t1", A, { at: T0 });
+  const again = await take(db, "t1", A, { at: later(1) });
+  assert.equal(again.resumed, true);
+  const other = await take(db, "h1", A, { at: later(2) });
+  assert.equal(other.status, 409);
+  assert.match(other.error, /t1/, "it is told what it already holds");
+});
+
+test("a draft cannot be taken, and neither can a blocked task", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("d1", { status: "draft" });
+  guide("t1");
+  guide("t2", { created: later(1) });
+  await blockOn(db, "t2", ["t1"], { account: "me" });
+  assert.equal((await take(db, "d1", A, { at: T0 })).status, 409);
+  assert.equal((await take(db, "t2", A, { at: T0 })).status, 409);
+});
+
+test("working names every guide someone holds, of every kind, with who holds it", async () => {
+  const db = d1();
+  const guide = seed(db);
+  db.raw.prepare("UPDATE account SET handle = 'me-h' WHERE id = 'me'").run();
+  guide("t1");
+  guide("h1", { kind: "transfer", target: "" });
+  guide("b1", { kind: "bug", target: "" });
+  await take(db, "t1", A, { at: T0 });
+  await take(db, "h1", C, { at: T0 });
+  const rows = await working(db, "me", later(LEASE_MS + 1));
+  assert.deepEqual(rows.map((r) => [r.guide.id, r.guide.kind, r.state]).sort(), [
+    ["h1", "transfer", "stalled"],
+    ["t1", "task", "stalled"],
+  ]);
+  assert.equal(rows[0].by.handle, "me-h");
+  assert.equal(rows[0].by.you, true);
 });

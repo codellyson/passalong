@@ -193,6 +193,24 @@ export interface Task {
   } | null;
 }
 
+/** One guide someone is working on right now, of any kind. See GET /v1/working. */
+export interface Working {
+  id: string;
+  title: string;
+  kind: string;
+  target: string;
+  url: string;
+  state: "claimed" | "stalled";
+  by: { handle: string; name: string; you: boolean };
+  agent: string;
+  host: string;
+  repo: string;
+  worktree: string;
+  note: string;
+  claimed_at: string;
+  lease_until: string;
+}
+
 export interface HubData {
   me: Me | null;
   guides: Guide[];
@@ -204,4 +222,5 @@ export interface HubData {
   tokens: ApiToken[];
   team: TeamDetail | null;
   tasks: Task[];
+  working: Working[];
 }

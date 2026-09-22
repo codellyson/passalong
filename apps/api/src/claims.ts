@@ -1,8 +1,9 @@
 /**
- * Tasks an agent can take: the queue, the claim, the lease. See docs/V2.md and
- * migrations/0021_claims.sql.
+ * Guides an agent can take: the queue, the claim, the lease. See docs/V2.md and
+ * migrations/0021_claims.sql and 0024_claim_place.sql.
  *
- * The one rule this module exists to keep: no two agents ever hold the same task. The claim's
+ * The one rule this module exists to keep: no two agents ever hold the same work in the same place.
+ * A task has one place, so one taker; a handoff can be repeated once in each repo. The claim's
  * primary key is the lock, and a lease that runs out does not release it — a card whose agent
  * went quiet is `stalled`, still locked, until a person releases it or the same agent comes back.
  *
@@ -25,6 +26,8 @@ export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | 
 
 export interface ClaimRow {
   guide_id: string;
+  /** The lock's second half: '' for a task, the taker's repo for anything else. */
+  place: string;
   account_id: string;
   agent_id: string;
   host: string;
@@ -56,6 +59,8 @@ export interface Agent {
   host?: string;
   repo?: string;
   worktree?: string;
+  /** Take a task from outside the repo it is for. */
+  any?: boolean;
 }
 
 /**
@@ -155,7 +160,7 @@ export async function next(
         `INSERT INTO claim (guide_id, account_id, agent_id, host, repo, worktree, state,
                             claimed_at, lease_until, updated)
          VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?)
-         ON CONFLICT(guide_id) DO NOTHING`,
+         ON CONFLICT(guide_id, place) DO NOTHING`,
       )
       .bind(
         task.id,
@@ -170,16 +175,176 @@ export async function next(
       )
       .run();
     if (res.meta.changes === 1) {
-      const claim = await claimOf(db, task.id);
+      const claim = await claimFor(db, task.id, who);
       if (claim) return { task, claim, resumed: false };
     }
   }
   return null;
 }
 
-/** The claim on one task, or null. */
+/** The claim on one task, or null. A task has one place, so at most one claim. */
 export function claimOf(db: D1Database, id: string): Promise<ClaimRow | null> {
-  return db.prepare("SELECT * FROM claim WHERE guide_id = ?").bind(id).first<ClaimRow>();
+  return db.prepare("SELECT * FROM claim WHERE guide_id = ? AND place = ''").bind(id).first<ClaimRow>();
+}
+
+/** This agent's claim on a guide, of any kind, or null. */
+function claimFor(db: D1Database, id: string, who: Agent): Promise<ClaimRow | null> {
+  return db
+    .prepare("SELECT * FROM claim WHERE guide_id = ? AND agent_id = ? AND account_id = ?")
+    .bind(id, who.agent, who.account)
+    .first<ClaimRow>();
+}
+
+type Refusal = { error: string; status: 400 | 404 | 409; holder?: ClaimRow };
+
+/**
+ * This agent takes one guide, of any kind, by id: "I am doing this". The same lock as `next`.
+ *
+ * A task is taken once, wherever the agent is, and only from the repo it is for unless `any`. A
+ * handoff or a bug is taken once per repo: the place is the agent's repo, so a transfer handed to a
+ * team can be repeated in each teammate's checkout and never twice in one. A refusal because
+ * somebody has it names who, so the agent can say so instead of silently doubling the work.
+ *
+ * An agent holds one thing at a time, as with `next`: taking what it already holds renews it, and
+ * taking something else while it holds one is refused with the id it has to finish or pass first.
+ */
+export async function take(
+  db: D1Database,
+  id: string,
+  who: Agent,
+  { at }: { at: string },
+): Promise<{ task: TaskRow & { kind: string }; claim: ClaimRow; resumed: boolean } | Refusal> {
+  const g = await db
+    .prepare(
+      `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created, g.kind,
+              ${BLOCKED} AS blocked
+         FROM guide g WHERE g.id = ?2 AND ${VISIBLE}`,
+    )
+    .bind(who.account, id)
+    .first<TaskRow & { kind: string; blocked: number }>();
+  if (!g) return { status: 404, error: "no such guide that you can see" };
+
+  const held = await db
+    .prepare(
+      "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' LIMIT 1",
+    )
+    .bind(who.agent, who.account)
+    .first<{ guide_id: string }>();
+  if (held?.guide_id === id) {
+    const claim = await renew(db, id, who, { at, note: null });
+    if (claim) return { task: g, claim, resumed: true };
+  }
+  if (held)
+    return {
+      status: 409,
+      error: `this agent already holds ${held.guide_id}: hand it in or pass it before taking another`,
+    };
+
+  if (g.status !== "published")
+    return { status: 409, error: `${id} is not open to take: it is ${g.status === "draft" ? "a draft" : "done"}` };
+  const task = g.kind === "task";
+  if (task && g.blocked)
+    return { status: 409, error: `${id} waits for tasks nobody has approved yet` };
+  const repo = repoKey(who.repo);
+  if (task && !who.any && g.target !== repo)
+    return {
+      status: 400,
+      error: `${id} is for ${g.target || "no repo"}, and this agent is in ${repo || "no repo"}`,
+    };
+
+  const place = task ? "" : repo;
+  const res = await db
+    .prepare(
+      `INSERT INTO claim (guide_id, place, account_id, agent_id, host, repo, worktree, state,
+                          claimed_at, lease_until, updated)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?)
+       ON CONFLICT(guide_id, place) DO NOTHING`,
+    )
+    .bind(
+      id,
+      place,
+      who.account,
+      who.agent,
+      String(who.host || "").slice(0, 120),
+      repo,
+      String(who.worktree || "").slice(0, 400),
+      at,
+      leaseFrom(at),
+      at,
+    )
+    .run();
+  if (res.meta.changes === 1) {
+    const claim = await claimFor(db, id, who);
+    if (claim) return { task: g, claim, resumed: false };
+  }
+  const holder = await db
+    .prepare("SELECT * FROM claim WHERE guide_id = ? AND place = ?")
+    .bind(id, place)
+    .first<ClaimRow>();
+  const where = [holder?.host, holder?.worktree].filter(Boolean).join(":");
+  return {
+    status: 409,
+    holder: holder || undefined,
+    error: `${id} is already taken${place ? ` in ${place}` : ""}${where ? ` by the agent at ${where}` : ""}`,
+  };
+}
+
+/** Where a held guide is: live, or stalled because its agent went quiet. */
+export type HeldState = "claimed" | "stalled";
+
+/**
+ * Everything somebody is working on right now that this account can see, of every kind: who has
+ * it, where, what they last said. Handed-in work is not here — it is waiting on a person, not being
+ * worked on. Most recently heard from first.
+ */
+export async function working(
+  db: D1Database,
+  account: string,
+  at: string,
+): Promise<
+  {
+    guide: { id: string; title: string; kind: string; target: string; share_key: string; account_id: string };
+    claim: ClaimRow;
+    state: HeldState;
+    by: { handle: string; name: string; you: boolean };
+  }[]
+> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.*, g.title AS g_title, g.kind AS g_kind, g.target AS g_target,
+              g.share_key AS g_share_key, g.account_id AS g_account,
+              COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
+         FROM claim c
+         JOIN guide g ON g.id = c.guide_id
+         LEFT JOIN account a ON a.id = c.account_id
+        WHERE c.state = 'claimed' AND ${VISIBLE}
+        ORDER BY c.lease_until DESC LIMIT 200`,
+    )
+    .bind(account)
+    .all<
+      ClaimRow & {
+        g_title: string;
+        g_kind: string;
+        g_target: string;
+        g_share_key: string;
+        g_account: string;
+        by_handle: string;
+        by_name: string;
+      }
+    >();
+  return results.map(({ g_title, g_kind, g_target, g_share_key, g_account, by_handle, by_name, ...claim }) => ({
+    guide: {
+      id: claim.guide_id,
+      title: g_title,
+      kind: g_kind,
+      target: g_target,
+      share_key: g_share_key,
+      account_id: g_account,
+    },
+    claim,
+    state: claim.lease_until > at ? "claimed" : "stalled",
+    by: { handle: by_handle, name: by_name, you: claim.account_id === account },
+  }));
 }
 
 /**
@@ -210,7 +375,7 @@ export async function renew(
       who.account,
     )
     .run();
-  return res.meta.changes === 1 ? claimOf(db, id) : null;
+  return res.meta.changes === 1 ? claimFor(db, id, who) : null;
 }
 
 /**
@@ -259,7 +424,7 @@ export async function finish(
       status: 409,
       error: "this agent does not hold that task — it was released, or never taken here",
     };
-  const claim = await claimOf(db, id);
+  const claim = await claimFor(db, id, who);
   return claim ? { claim } : { status: 409, error: "the claim went away while finishing" };
 }
 
