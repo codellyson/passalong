@@ -156,6 +156,9 @@ export function statusLine({ g, state }: LaneRow): { text: string; tone: Tone } 
         tone: "",
       };
   }
+  // Given to someone else: say who has it, rather than asking you anything.
+  if (!g.mine && !state && g.to && !g.for_me)
+    return { text: `given to ${named(g.to_name, g.to)}`, tone: "" };
   // A team's guide a teammate handled: say who, rather than asking you anything.
   if (!g.mine && !state) {
     if (g.verdict && g.verdict.by)

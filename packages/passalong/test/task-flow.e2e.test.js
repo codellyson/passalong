@@ -830,3 +830,43 @@ test("a team's guide one teammate said worked stops asking the others, so nobody
   await assert.rejects(p.take(id, { cwd: dir }), /already said it worked/);
   as(owner);
 });
+
+test("taken, then given to someone else: it stops being yours", { skip }, async () => {
+  const env = await setup();
+  const { p } = env;
+  const api = await import("../src/api.js");
+  const owner = process.env.PASSALONG_TOKEN;
+  const as = (token) => {
+    process.env.PASSALONG_TOKEN = token;
+  };
+  const team = await api.createTeam(`regive ${Date.now()}`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  const joinTeam = async (handle) => {
+    as(owner);
+    const { code } = await api.invite(team.slug);
+    const who = await secondAccount();
+    as(who.token);
+    await api.join(code);
+    await api.updateMe({ handle });
+    return who;
+  };
+  const stamp = Date.now().toString(36);
+  const me = await joinTeam(`me${stamp}`);
+  await joinTeam(`bami${stamp}`);
+
+  as(owner);
+  const md =
+    "---\ntitle: Ship-to address\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const id = (await p.share(md, { to: `${team.slug}/@me${stamp}` })).guide.meta.id;
+
+  // I take it, then give it to Bami.
+  as(me.token);
+  await api.ack(id, true, "");
+  await p.assign(id, `@bami${stamp}`);
+
+  // My "on it" went with it: the guide no longer says I am taking it.
+  const mine = (await api.list("", "all")).guides.find((g) => g.id === id);
+  assert.equal(mine.my_ack, null, "my answer was taken back with the work");
+  assert.ok(!mine.for_me);
+  as(owner);
+});

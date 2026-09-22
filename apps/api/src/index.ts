@@ -3799,6 +3799,25 @@ app.post("/v1/guides/:id/assign", async (c) => {
     at,
     why: `reassigned to ${label}`,
   });
+  // Their "on it" goes with the work: anyone the new assignment leaves out said they were taking
+  // something that is no longer theirs, and left in place it kept the guide in their Needs you as
+  // "you're taking it". The author's own answer, if any, is not theirs to lose.
+  if (accounts) {
+    const keep = new Set([...accounts, row.account_id]);
+    const { results: acks } = await c.env.DB.prepare(
+      "SELECT account_id FROM ack WHERE guide_id = ? AND taken = 1",
+    )
+      .bind(row.id)
+      .all<{ account_id: string }>();
+    const gone = acks.map((a) => a.account_id).filter((a) => !keep.has(a));
+    if (gone.length)
+      await c.env.DB.batch(
+        gone.map((a) =>
+          c.env.DB.prepare("DELETE FROM ack WHERE guide_id = ? AND account_id = ?").bind(row.id, a),
+        ),
+      );
+  }
+
   // Read again: taking a task back writes a line into it.
   const current = await c.env.DB.prepare("SELECT markdown FROM guide WHERE id = ?")
     .bind(row.id)

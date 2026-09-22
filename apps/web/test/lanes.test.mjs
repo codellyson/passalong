@@ -123,3 +123,16 @@ test("a team's guide a teammate handled says who, instead of asking you", () => 
   const t = { id: "a2", mine: false, team: "acme", taken_by: ["bo"], taken_by_names: ["Bo"] };
   assert.equal(statusLine({ g: t, state: null }).text, "Bo is taking it");
 });
+
+test("a guide given to someone else says who has it now", () => {
+  const g = {
+    id: "a3",
+    mine: false,
+    team: "khaime",
+    to: "bami",
+    to_name: "Bami",
+    for_me: false,
+    my_ack: { taken: true, note: "", at: "t" },
+  };
+  assert.equal(statusLine({ g, state: null }).text, "given to Bami");
+});
