@@ -81,7 +81,8 @@ passalong setup     # Claude Code: skill, MCP server and hooks</code></pre>
           <p>
             Assistants that add outside tools add them as MCP servers reached over a URL. Paste
             this as the server URL. You get every tool that does not need a working directory: take
-            work, report progress, hand it in or pass it, see who is on what, search and read guides,
+            work, report progress, hand it in or pass it, see your work as a live board where the app
+            can draw one, search and read guides,
             your inbox, board and log, publish a guide, and file a set of bugs with their
             screenshots.
           </p>

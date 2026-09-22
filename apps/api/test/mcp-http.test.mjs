@@ -93,6 +93,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "take",
     "task_progress",
     "verify_guide",
+    "work",
   ]);
   for (const tool of body.result.tools) {
     assert.ok(tool.description && tool.description.length > 20, `${tool.name} needs a description`);
@@ -377,7 +378,7 @@ test("every tool says what it does to the world, so a client does not assume the
       .sort();
   assert.deepEqual(
     by((t) => t.annotations.readOnlyHint),
-    ["board", "get_report", "inbox", "log", "search_guides"],
+    ["board", "get_report", "inbox", "log", "search_guides", "work"],
   );
   assert.deepEqual(
     by((t) => t.annotations.destructiveHint),
@@ -1035,4 +1036,117 @@ test("a refusal to stop says to stop", async () => {
   );
   assert.equal(body.result.isError, true);
   assert.match(body.result.content[0].text, /Stop\./);
+});
+
+// ---- the work board as an MCP App (docs/V2.md §11) --------------------------------------------------
+
+test("work is drawn as an app where the host can, and names the page it is drawn with", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
+  );
+  const work = body.result.tools.find((t) => t.name === "work");
+  assert.equal(work._meta.ui.resourceUri, "ui://passalong/work");
+  // Nothing the app can press is hidden from the model: the review gate is not in the app.
+  for (const t of body.result.tools) {
+    const v = t._meta?.ui?.visibility;
+    assert.ok(!v || v.includes("model"), `${t.name} is callable by the model`);
+    assert.doesNotMatch(t.name, /approve|reject|send_back|close/, "no gate tool over MCP");
+  }
+});
+
+test("the app page is served as an MCP App, speaks the host protocol, and loads nothing from outside", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "resources/read",
+        params: { uri: "ui://passalong/work" },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  const [page] = body.result.contents;
+  assert.equal(page.mimeType, "text/html;profile=mcp-app");
+  assert.match(page.text, /ui\/initialize/);
+  assert.match(page.text, /ui\/notifications\/tool-result/);
+  assert.match(page.text, /ui\/open-link/);
+  assert.doesNotMatch(page.text, /<script[^>]+src=|<link[^>]+href="http/, "self-contained");
+});
+
+test("work gathers what needs you, who is on what and what is open into one board", async () => {
+  const task = (id, state, mine = true, extra = {}) => ({
+    id,
+    title: `task ${id}`,
+    state,
+    mine,
+    url: `https://passalong.dev/g/${id}/k`,
+    claim: null,
+    ...extra,
+  });
+  const { call } = recorder({
+    "GET /v1/tasks": {
+      status: 200,
+      text: JSON.stringify({
+        tasks: [
+          task("t1", "review"),
+          task("t2", "ready"),
+          task("t3", "ready"),
+          task("t4", "draft"),
+          task("t5", "done"),
+        ],
+      }),
+    },
+    "GET /v1/working": {
+      status: 200,
+      text: JSON.stringify({
+        working: [
+          {
+            id: "h1",
+            title: "Stream the PDF",
+            kind: "transfer",
+            state: "claimed",
+            by: { name: "Ada", handle: "ada", you: false },
+            note: "halfway",
+            url: "u",
+          },
+        ],
+      }),
+    },
+    "GET /v1/handed_in": {
+      status: 200,
+      text: JSON.stringify({
+        handed_in: [
+          {
+            id: "h2",
+            title: "CSV export",
+            place: "o/r",
+            by: { name: "Bami", handle: "bami" },
+            note: "works",
+            url: "u2",
+          },
+        ],
+      }),
+    },
+    "GET /v1/inbox": {
+      status: 200,
+      text: JSON.stringify({ guides: [{ id: "g1", title: "Fix the header", url: "u3" }] }),
+    },
+  });
+  const body = await read(await handleMcp(callTool("work", {}), call, VOCAB));
+  const board = body.result.structuredContent;
+  assert.deepEqual(board.counts, { needs: 3, working: 1, open: 3, done: 1 });
+  assert.deepEqual(
+    board.needs.map((n) => n.id),
+    ["t1", "h2", "g1"],
+  );
+  assert.equal(board.hub, "https://passalong.dev/hub");
+  assert.match(
+    body.result.content[0].text,
+    /3 need you/,
+    "a text answer for hosts that draw no apps",
+  );
 });

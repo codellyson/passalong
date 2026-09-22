@@ -197,7 +197,10 @@ be handed to whoever fixes it. Send them in one call rather than one call each. 
 The same server is also hosted, for assistants that add remote MCP servers rather than running
 one: `https://passalong.dev/v1/mcp`, Streamable HTTP, authenticated with a bearer token. It carries
 most of these tools — everything except the ones that touch a working directory. `take` there
-returns the markdown without writing it anywhere. `attach_screenshot` is
+returns the markdown without writing it anywhere. It also has `work`: everything that needs the
+user, who is on what, and what is open, in one read. Hosts that support MCP Apps (Claude, ChatGPT)
+draw it as a board in the conversation (`ui://passalong/work`); it is read-only, and its buttons
+open the hub, where approving and sending back happen. `attach_screenshot` is
 on both, shaped for where it runs: a path locally, a client-passed file over HTTP. Over HTTP,
 `publish_guide` and `file_bugs` also take the files themselves in a top-level `attachments` array,
 so a client that passes files needs one call: `publish_guide` puts each image under Problem (or at
