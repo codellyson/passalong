@@ -643,6 +643,39 @@ export async function followUps(meta = {}, deps = {}) {
   ].join("\n\n");
 }
 
+/**
+ * The guide a follow-up came out of, formatted to go in front of it — or "" when there is none.
+ *
+ * Follow-ups travelled one way: opening a guide handed over what was written under it, and opening
+ * one of those handed over nothing. An agent given a follow-up on its own reads a document that
+ * assumes a piece of work it has never seen, and either goes looking for it or treats the note as
+ * the whole job. Where the parent has got to is part of the context, not a separate question.
+ *
+ * The same shape the hosted server's parentOf() returns. Injectable for testing, and never worth
+ * failing the call over: the guide itself is what was asked for.
+ */
+export async function parentGuide(
+  meta = {},
+  { parent = api.parent, loggedIn = api.loggedIn } = {},
+) {
+  if (!meta.id || !meta.parent || !loggedIn()) return "";
+  try {
+    const { guide } = await parent(meta.id, { markdown: true });
+    if (!guide?.id) return "";
+    const who = guide.by?.name || (guide.by?.handle ? `@${guide.by.handle}` : "");
+    const state = guide.state === "held" && who ? `held by ${who}` : guide.state || "open";
+    return (
+      `THIS IS A FOLLOW-UP TO ${guide.id}: ${guide.title || "untitled"} — ${state}. It is more ` +
+      "context for that guide, not a piece of work on its own. Read the guide it follows first; " +
+      "it is below, and where the two disagree this follow-up is newer. If what it asks for " +
+      `depends on ${guide.id} being done and it is not, say so rather than starting.\n\n` +
+      `--- the guide it follows: ${guide.id} ---\n${String(guide.markdown ?? "").trimEnd()}\n\n`
+    );
+  } catch {
+    return "";
+  }
+}
+
 /** Local guides merged with synced ones (by id), newest first, optionally filtered. */
 export async function list(query = "", { remote = true, scope = "" } = {}) {
   const local = scope && scope !== "all" && scope !== "mine" ? [] : store.search(query);

@@ -38,9 +38,10 @@ test("a cut inside a multi-byte character drops it rather than emitting half", (
 });
 
 const index = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+// Each slice stops where the next route starts, so neither test can pass on the other's source.
 const route = index.slice(
   index.indexOf('app.get("/v1/guides/:id/children"'),
-  index.indexOf('app.patch("/v1/guides/:id/status"'),
+  index.indexOf('app.get("/v1/guides/:id/parent"'),
 );
 
 test("the children route opts in to markdown, oldest first and capped", () => {
@@ -53,6 +54,28 @@ test("the children route opts in to markdown, oldest first and capped", () => {
 
 test("fetching follow-ups is not opening them: no pull is recorded for the children", () => {
   assert.doesNotMatch(route, /recordPull|recordReceipt|INSERT INTO pull|pulls = pulls/);
+});
+
+const upward = index.slice(
+  index.indexOf('app.get("/v1/guides/:id/parent"'),
+  index.indexOf('app.patch("/v1/guides/:id/status"'),
+);
+
+test("the guide a follow-up came out of travels with it, clipped the same way", () => {
+  assert.ok(upward.length > 0, "found the route");
+  assert.match(upward, /clipFollowUp\(parent\.row\.id, parent\.row\.markdown\)/);
+  assert.match(upward, /c\.req\.query\("markdown"\)/);
+  // Where the parent has got to is what decides whether the follow-up can be acted on.
+  for (const state of ["done", "draft", "handed in", "held", "open"])
+    assert.ok(upward.includes(`"${state}"`), `says when a parent is ${state}`);
+});
+
+test("reading the parent is not opening it, and it is filtered on its own", () => {
+  assert.doesNotMatch(upward, /recordPull|recordReceipt|INSERT INTO pull|pulls = pulls/);
+  // Readable on the follow-up is not readable on the parent: a follow-up shared with your team
+  // must not hand you a guide from a team you are not in.
+  assert.match(upward, /readableGuide\(c, found\.row\.parent_id\)/);
+  assert.match(upward, /if \(!parent\) return c\.json\(none\)/);
 });
 
 test("readability still holds: readable parent, each child yours or your team's, no drafts", () => {

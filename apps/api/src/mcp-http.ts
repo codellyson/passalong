@@ -341,6 +341,46 @@ async function followUps(
 }
 
 /**
+ * The guide a follow-up came out of, formatted to go in front of it — or "" when there is none.
+ *
+ * Said before the document, not after, because it changes what the document is: a follow-up read
+ * on its own looks like a small piece of work, and is actually a note on a bigger one. Where the
+ * parent has got to is part of that — a follow-up to work nobody has started is not work to start.
+ *
+ * Context is never worth failing the tool over; the guide itself is what was asked for.
+ */
+async function parentOf(call: Call, id: string): Promise<{ text: string; id: string }> {
+  const none = { text: "", id: "" };
+  try {
+    const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}/parent?markdown=1`);
+    if (res.status >= 400) return none;
+    const { guide } = JSON.parse(res.text) as {
+      guide?: {
+        id?: string;
+        title?: string;
+        state?: string;
+        by?: { name?: string; handle?: string } | null;
+        markdown?: unknown;
+      } | null;
+    };
+    if (!guide?.id) return none;
+    const who = guide.by?.name || (guide.by?.handle ? `@${guide.by.handle}` : "");
+    const state = guide.state === "held" && who ? `held by ${who}` : guide.state || "open";
+    return {
+      id: String(guide.id),
+      text:
+        `THIS IS A FOLLOW-UP TO ${guide.id}: ${guide.title || "untitled"} — ${state}. It is more ` +
+        "context for that guide, not a piece of work on its own. Read the guide it follows first; " +
+        "it is below, and where the two disagree this follow-up is newer. If what it asks for " +
+        `depends on ${guide.id} being done and it is not, say so rather than starting.\n\n` +
+        `--- the guide it follows: ${guide.id} ---\n${String(guide.markdown ?? "").trimEnd()}`,
+    };
+  } catch {
+    return none;
+  }
+}
+
+/**
  * The product's own vocabulary, handed in rather than imported.
  *
  * `guide.ts` is the single source for the areas and severities, and importing it here would make
@@ -599,7 +639,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
         "id. It is listed under the original, and anyone who opens the original, person or agent, " +
-        "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.\n" +
+        "gets it too. take and get_guide return a guide's follow-ups after it; read them before " +
+        "acting. They also return the guide it follows, in front of it: a follow-up is a note on " +
+        "a bigger piece of work, not the work. If it needs that guide done and it is not, say so " +
+        "rather than starting.\n" +
         "If you were taught next_task, task_progress, finish_task, ack_guide or verify_guide, " +
         "those are gone: take, progress, hand_in and pass do all of it, for every kind of guide.",
     },
@@ -889,9 +932,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           "If this guide needs more — a missing detail, a step that needed explaining, what " +
           "changed since, what you found doing it — publish that with publish_guide " +
           `parent=${id}, and whoever opens this guide gets it too. -->`;
-      const context = await followUps(call, id);
+      const [context, from] = await Promise.all([followUps(call, id), parentOf(call, id)]);
       return {
         content: [
+          ...(from.text ? [{ type: "text" as const, text: from.text }] : []),
           { type: "text" as const, text: lead + res.text },
           ...(context.text ? [{ type: "text" as const, text: context.text }] : []),
           { type: "text" as const, text: note },
@@ -901,6 +945,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           id,
           kind: bug ? "bug" : /^kind:\s*task\s*$/m.test(res.text) ? "task" : "transfer",
           markdown: res.text,
+          parent: from.id,
           follow_ups: context.guides,
         },
       };
@@ -1069,12 +1114,22 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         ...text(nextNote(parsed) || "Nothing is waiting for you. Tell the user, and stop."),
         structuredContent: parsed as Record<string, unknown>,
       };
+    // Taking a guide is opening it, so it arrives with what it belongs to: the guide it follows,
+    // and the follow-ups written under it. An agent handed a follow-up on its own reads a document
+    // that assumes work it has never seen.
+    const [from, context] = await Promise.all([parentOf(call, g.id), followUps(call, g.id)]);
     return {
-      ...text(
-        `${leadFor(g.kind || "")}${g.markdown ?? ""}\n\n<!-- passalong: ${g.id} is yours` +
-          `${g.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->\n` +
-          nextNote(parsed, g.id),
-      ),
+      content: [
+        ...(from.text ? [{ type: "text" as const, text: from.text }] : []),
+        {
+          type: "text" as const,
+          text:
+            `${leadFor(g.kind || "")}${g.markdown ?? ""}\n\n<!-- passalong: ${g.id} is yours` +
+            `${g.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->\n` +
+            nextNote(parsed, g.id),
+        },
+        ...(context.text ? [{ type: "text" as const, text: context.text }] : []),
+      ],
       structuredContent: parsed as Record<string, unknown>,
     };
   }

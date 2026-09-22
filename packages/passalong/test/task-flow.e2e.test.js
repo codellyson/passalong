@@ -310,6 +310,37 @@ const PNG = Buffer.from(
   "base64",
 );
 
+test("a follow-up is never handed over alone: the guide it came out of comes with it", {
+  skip,
+}, async () => {
+  const { p } = await setup();
+  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+  const doc = (title) =>
+    `---\ntitle: ${title}\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. open/close per day\n`;
+  const parent = (await p.share(doc("Store Hours UI"), { cwd: dir })).guide.meta.id;
+  const child = (await p.share(doc("Confirmation email"), { cwd: dir, follows: parent })).guide.meta
+    .id;
+
+  const lead = await p.parentGuide({ id: child, parent });
+  assert.match(lead, new RegExp(`^THIS IS A FOLLOW-UP TO ${parent}: Store Hours UI — open\\.`));
+  assert.match(lead, /open\/close per day/, "the parent's own document comes with it");
+
+  // Where the parent has got to, because that is what says whether this can be acted on.
+  const agent = { agent: "e2e-parent-aaaa", repo: "e2e/parent" };
+  await fetch(`${API}/v1/take`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ ...agent, id: parent }),
+  });
+  assert.match(await p.parentGuide({ id: child, parent }), /— held/);
+
+  // A guide that follows nothing hands over nothing.
+  assert.equal(await p.parentGuide({ id: parent }), "");
+});
+
 test("a screenshot handed in as evidence belongs to the guide, so the nightly sweep leaves it", {
   skip,
 }, async () => {

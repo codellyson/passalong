@@ -58,7 +58,9 @@ machine, another agent session, or a teammate without your branch.
    **If what you are capturing is more context for an existing guide** — a missing detail, a step
    that needed explaining, what changed since, what you found doing it — add `--follows <that id>`.
    That publishes it as a follow-up: its own guide, listed under the original, and handed to
-   whoever opens the original, person or agent. A session that started from a passalong guide
+   whoever opens the original, person or agent. It travels the other way too — whoever opens the
+   follow-up gets the guide it came out of, and where that guide has got to — so write it as a
+   note on that work rather than as a standalone brief. A session that started from a passalong guide
    (`passalong start` or `pull` on an id, or an agent opened one) usually has context worth adding
    this way. Whether the guide worked is still its own answer: `passalong works <id>` or
    `passalong broken <id> <why>`.

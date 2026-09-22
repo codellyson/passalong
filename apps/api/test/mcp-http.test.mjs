@@ -456,6 +456,8 @@ test("get_guide hands back the document and its follow-ups as data, without the 
     id: "abc12345",
     kind: "bug",
     markdown,
+    // It follows nothing, so there is nothing in front of it.
+    parent: "",
     follow_ups: [{ id: "f1", title: "More", markdown: "# more" }],
   });
 });
@@ -868,7 +870,9 @@ test("agents are told when a follow-up is a guide, at connect and with the guide
   );
   assert.match(init.result.instructions, /FOLLOW-UP IS MORE CONTEXT FOR A GUIDE/);
   assert.match(init.result.instructions, /publish_guide `parent`/);
-  assert.match(init.result.instructions, /get_guide returns a guide's follow-ups after it/);
+  assert.match(init.result.instructions, /take and get_guide return a guide's follow-ups after it/);
+  // And the other direction: a follow-up arrives with the guide it came out of.
+  assert.match(init.result.instructions, /the guide it follows, in front of it/);
   // Not the old rule: context is worth adding whether or not the guide worked as written.
   assert.doesNotMatch(init.result.instructions, /worked exactly as written|departed from/);
 
@@ -940,6 +944,72 @@ test("get_guide hands over a guide's follow-ups after it, oldest first, with the
   assert.match(content[2].text, /^<!-- passalong:/);
   // Asked for with content, which is the form that records no pull on the children.
   assert.ok(seen.some((s) => s.path === "/v1/guides/k3mq2xa7/children?markdown=1"));
+});
+
+const CHILD =
+  "---\nid: jn3juujr\ntitle: Confirmation email\nparent: hveahejv\n---\n\n## Steps\n1. x\n";
+const PARENT_ANSWER = JSON.stringify({
+  guide: {
+    id: "hveahejv",
+    title: "Store Hours UI",
+    state: "held",
+    by: { name: "Ada Lovelace", handle: "ada" },
+    markdown: "---\nid: hveahejv\n---\n\n## Goal\nOpen/close per day.\n",
+  },
+});
+
+test("a follow-up is handed over with the guide it came out of, in front of it", async () => {
+  const { call, seen } = recorder({
+    "GET /v1/guides/jn3juujr": { status: 200, text: CHILD },
+    "GET /v1/guides/jn3juujr/children": { status: 200, text: JSON.stringify({ guides: [] }) },
+    "GET /v1/guides/jn3juujr/parent": { status: 200, text: PARENT_ANSWER },
+  });
+  const content = await getGuide(call, "jn3juujr");
+  assert.match(
+    content[0].text,
+    /^THIS IS A FOLLOW-UP TO hveahejv: Store Hours UI — held by Ada Lovelace\./,
+  );
+  assert.match(content[0].text, /Open\/close per day\./, "the parent's own document comes with it");
+  assert.match(content[0].text, /depends on hveahejv being done and it is not, say so/);
+  // The document itself is still handed over whole, after the context.
+  assert.equal(content[1].text, CHILD);
+  // Asked for with content, and reading it records no pull on the parent.
+  assert.ok(seen.some((s) => s.path === "/v1/guides/jn3juujr/parent?markdown=1"));
+});
+
+test("taking a follow-up carries the same context, so no agent starts on half of it", async () => {
+  const answer = {
+    guide: { id: "jn3juujr", kind: "transfer", markdown: CHILD },
+    next: [{ tool: "hand_in", when: "done", why: "its author hears" }],
+  };
+  const { call } = recorder({
+    "POST /v1/take": { status: 200, text: JSON.stringify(answer) },
+    "GET /v1/guides/jn3juujr/children": { status: 200, text: JSON.stringify({ guides: [] }) },
+    "GET /v1/guides/jn3juujr/parent": { status: 200, text: PARENT_ANSWER },
+  });
+  const body = await read(
+    await handleMcp(callTool("take", { agent: "chat-7f3k2m9q", id: "jn3juujr" }), call, VOCAB),
+  );
+  const content = body.result.content;
+  assert.match(content[0].text, /^THIS IS A FOLLOW-UP TO hveahejv/);
+  assert.match(content[1].text, /jn3juujr is yours/);
+});
+
+test("a guide that follows nothing is handed over exactly as it always was", async () => {
+  for (const parent of [
+    { status: 200, text: JSON.stringify({ guide: null }) },
+    { status: 500, text: "boom" },
+    { status: 200, text: "not json" },
+  ]) {
+    const { call } = recorder({
+      "GET /v1/guides/k3mq2xa7": { status: 200, text: DOC },
+      "GET /v1/guides/k3mq2xa7/children": { status: 200, text: JSON.stringify({ guides: [] }) },
+      "GET /v1/guides/k3mq2xa7/parent": parent,
+    });
+    const content = await getGuide(call, "k3mq2xa7");
+    assert.equal(content.length, 2);
+    assert.equal(content[0].text, DOC);
+  }
 });
 
 test("no follow-ups, or a failure fetching them, returns the guide as it always was", async () => {

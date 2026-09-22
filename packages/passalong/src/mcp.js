@@ -194,7 +194,9 @@ export async function serve() {
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
         "id. It is listed under the original, and anyone who opens the original, person or agent, " +
         "gets it too. get_guide and take return a guide's follow-ups after it; read them " +
-        "before acting.",
+        "before acting. They also return the guide it follows, in front of it: a follow-up is a " +
+        "note on a bigger piece of work, not the work. If it needs that guide done and it is " +
+        "not, say so rather than starting.",
     },
   );
 
@@ -226,12 +228,13 @@ export async function serve() {
       const meta = parse(r.guide.markdown).meta;
       const siblings = await related(meta);
       const context = await passalong.followUps(meta);
+      const from = await passalong.parentGuide(meta);
       const held =
         `<!-- passalong: ${r.guide.id} is yours` +
         `${r.guide.resumed ? " (you already held it — carry on from where it was left)" : ""}; ` +
         `written to ${r.path}. -->`;
       return text(
-        `${leadFor(meta)}${r.guide.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
+        `${from}${leadFor(meta)}${r.guide.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
           `\n\n${held}\n${nextNote(r, r.guide.id)}\n${passalong.followUpNote(meta)}`,
       );
     } catch (err) {
@@ -598,13 +601,16 @@ export async function serve() {
         // Follow-ups are more context for this guide, so they come with it — after the document,
         // never inside it, so the guide an agent writes back out is still only the guide.
         const context = await passalong.followUps(meta);
+        // The guide this one came out of, in front of the document: a follow-up read on its own
+        // looks like a small piece of work and is a note on a bigger one.
+        const follows = await passalong.parentGuide(meta);
         // After the document, with the other trailing comments, not in front of it. An
         // instruction that arrives with the payload is what gets read — but anything before the
         // opening `---` stops the frontmatter being frontmatter, and this fires on every guide
         // anyone was handed rather than only on bugs. The bug lead stays where it is: it is a
         // warning against executing the document, so being read first is its whole job.
         return text(
-          `${lead}${markdown}${siblings}${context ? `\n\n${context}` : ""}` +
+          `${follows}${lead}${markdown}${siblings}${context ? `\n\n${context}` : ""}` +
             `\n\n<!-- passalong: ${from}; written to ${path} -->` +
             `\n${passalong.handoffNudge(meta)}` +
             `\n${passalong.followUpNote(meta)}`,

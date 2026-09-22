@@ -101,6 +101,12 @@ export const get = (id) => call(`/v1/guides/${id}`, { raw: true });
  */
 export const children = (id, { markdown = false } = {}) =>
   call(`/v1/guides/${encodeURIComponent(id)}/children${q({ markdown: markdown ? "1" : "" })}`);
+/**
+ * The guide this one came out of, with where it has got to. `markdown` adds its content. Like the
+ * follow-ups, reading it is not opening it: no pull is recorded on the parent.
+ */
+export const parent = (id, { markdown = false } = {}) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/parent${q({ markdown: markdown ? "1" : "" })}`);
 export const setStatus = (id, status) =>
   call(`/v1/guides/${id}/status`, { method: "PATCH", body: { status } });
 export const remove = (id) => call(`/v1/guides/${id}`, { method: "DELETE" });

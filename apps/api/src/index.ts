@@ -3050,6 +3050,60 @@ app.get("/v1/guides/:id/children", async (c) => {
   });
 });
 
+/**
+ * The guide this one came out of, with its content and where it has got to.
+ *
+ * Follow-ups travelled one way. Opening a guide handed over the guides written under it, and
+ * opening one of those handed over nothing: an agent given a follow-up got a document that assumes
+ * a piece of work it has never read, and had to go and find the original itself — or, worse, act
+ * as though the follow-up were the whole job. A follow-up is more context for a guide, so the
+ * guide travels with it.
+ *
+ * `state` is what decides whether this follow-up can be acted on at all, so it is answered here
+ * rather than left to another call: a follow-up to work nobody has done yet is not work to start.
+ * `draft`, `open`, `held` (by whom), `handed in` or `done`.
+ *
+ * Readable on the follow-up is not enough: the parent is filtered again on its own, so a follow-up
+ * shared with your team does not hand you a guide from a team you are not in. Like the children
+ * route, this records no pull — reading context for a guide is not opening that guide.
+ */
+app.get("/v1/guides/:id/parent", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const none = { guide: null };
+  if (!found.row.parent_id) return c.json(none);
+  const parent = await readableGuide(c, found.row.parent_id);
+  if (!parent) return c.json(none);
+
+  const claim = await c.env.DB.prepare(
+    `SELECT c.state, COALESCE(a.name, '') AS name, COALESCE(a.handle, '') AS handle
+       FROM claim c LEFT JOIN account a ON a.id = c.account_id
+      WHERE c.guide_id = ? ORDER BY c.updated DESC LIMIT 1`,
+  )
+    .bind(parent.row.id)
+    .first<{ state: string; name: string; handle: string }>();
+  const state =
+    parent.row.status === "consumed"
+      ? "done"
+      : parent.row.status === "draft"
+        ? "draft"
+        : claim?.state === "review"
+          ? "handed in"
+          : claim?.state === "claimed"
+            ? "held"
+            : "open";
+  const [summary] = await summaries(c, [parent.row]);
+  const withMarkdown = ["1", "true"].includes(c.req.query("markdown") || "");
+  return c.json({
+    guide: {
+      ...summary,
+      state,
+      by: claim ? { name: claim.name, handle: claim.handle } : null,
+      ...(withMarkdown ? { markdown: clipFollowUp(parent.row.id, parent.row.markdown) } : {}),
+    },
+  });
+});
+
 app.patch("/v1/guides/:id/status", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
