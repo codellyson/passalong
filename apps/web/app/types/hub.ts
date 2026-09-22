@@ -154,6 +154,8 @@ export interface TeamDetail extends Team {
   /** How many channels are connected. Never their URLs — those are credentials for rooms. */
   channels?: number;
   members: {
+    /** The account id, which is the address of a teammate who has not chosen an @name. */
+    id?: string;
     handle: string | null;
     name: string | null;
     role: string;
@@ -179,6 +181,8 @@ export interface Task {
   team?: string;
   /** Who it is for: "@handle", "#group", or empty for anyone in the team. */
   to?: string;
+  /** Assigned to you, or to a group you are in, so you may pass it on. */
+  for_me?: boolean;
   url: string;
   claim: {
     agent: string;

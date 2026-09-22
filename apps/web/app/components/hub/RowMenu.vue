@@ -36,8 +36,11 @@ const canJudge = computed(
     !(props.g.verdict && me.value && props.g.verdict.by === me.value),
 );
 
-/** Yours and in a team: you may give it to someone else there. The menu turns into the picker. */
-const canAssign = computed(() => props.g.mine && Boolean(props.g.team) && !archived.value);
+/* The menu turns into the picker. */
+/** Yours, or handed to you: either way you may give it to someone else in its team. */
+const canAssign = computed(
+  () => (props.g.mine || Boolean(props.g.for_me)) && Boolean(props.g.team) && !archived.value,
+);
 const assigning = ref(false);
 const assignedTo = computed(() =>
   props.g.to ? `@${props.g.to}` : props.g.to_group ? `#${props.g.to_group}` : "",

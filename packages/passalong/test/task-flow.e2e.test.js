@@ -23,7 +23,7 @@ let ready;
 function setup() {
   ready ??= (async () => {
     assert.match(API, /^http:\/\/localhost[:/]/, "only ever against a local server");
-    const { token, account } = await (await fetch(`${API}/v1/accounts`, { method: "POST" })).json();
+    const { token, account } = await newAccount();
     await sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
     process.env.PASSALONG_API = API;
     process.env.PASSALONG_TOKEN = token;
@@ -179,40 +179,71 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
 });
 
 /** Another account on the same local server, allowed to sync. Returns its token. */
+/**
+ * A fresh account. Sign-up is rate-limited per address (ACCOUNT_LIMIT: 5 a minute), and this suite
+ * makes more than five, so a 429 waits and tries again rather than handing the tests an undefined
+ * token — which the server then reports as "That token isn't recognized", far from the cause.
+ */
+async function newAccount() {
+  for (let i = 0; i < 12; i++) {
+    const res = await fetch(`${API}/v1/accounts`, { method: "POST" });
+    if (res.status === 429) {
+      await new Promise((r) => setTimeout(r, 10_000));
+      continue;
+    }
+    if (!res.ok) throw new Error(`could not make an account: ${res.status} ${await res.text()}`);
+    return res.json();
+  }
+  throw new Error("could not make an account: still rate-limited after two minutes");
+}
+
 async function secondAccount() {
-  const { token, account } = await (await fetch(`${API}/v1/accounts`, { method: "POST" })).json();
+  const { token, account } = await newAccount();
   await sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
   return { token, account };
 }
 
 /**
- * A statement against the local D1, through wrangler. Resolved when wrangler prints success, and
- * the process is then stopped: `wrangler d1 execute --local` can finish its write and not exit, and
- * waiting for the exit hung the whole suite. Anything else — a failure, or no answer in 90s — throws.
+ * A statement against the local D1, through wrangler. Resolved when wrangler prints success and its
+ * whole process group is gone: `wrangler d1 execute --local` can finish its write and not exit, and
+ * waiting for it to exit on its own hung the suite. Killing `npx` alone left wrangler running as its
+ * child, and a wrangler that outlived the test could write the database back later — dropping rows
+ * the server had written meanwhile, like a token minted a moment before ("That token isn't
+ * recognized"). So it runs in its own group, and the group is killed outright once the write is
+ * reported: it is committed by then, and nothing after it is wanted. Anything else — a failure, or
+ * no answer in 90s — throws.
  */
 function sql(command) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       "npx",
       ["wrangler", "d1", "execute", "passalong", "--local", "--command", command],
-      { cwd: WEB, stdio: ["ignore", "pipe", "pipe"] },
+      { cwd: WEB, stdio: ["ignore", "pipe", "pipe"], detached: true },
     );
     let out = "";
-    const done = (err) => {
+    let settled = false;
+    let failure = null;
+    const stop = (err) => {
+      if (settled) return;
+      settled = true;
+      failure = err || null;
       clearTimeout(timer);
-      child.kill();
-      err ? reject(err) : resolve();
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {}
     };
-    const timer = setTimeout(() => done(new Error(`no answer from wrangler: ${command}`)), 90_000);
+    const timer = setTimeout(() => stop(new Error(`no answer from wrangler: ${command}`)), 90_000);
     child.stdout.on("data", (b) => {
       out += b;
-      if (/"success":\s*true/.test(out)) done();
+      if (/"success":\s*true/.test(out)) stop();
     });
     child.stderr.on("data", (b) => {
       out += b;
     });
-    child.on("exit", (code) => {
-      if (code) done(new Error(`wrangler exited ${code}: ${out.slice(-400)}`));
+    // Only once the group is gone does the test carry on.
+    child.on("close", (code) => {
+      if (!settled) stop(code ? new Error(`wrangler exited ${code}: ${out.slice(-400)}`) : null);
+      failure ? reject(failure) : resolve();
     });
   });
 }
@@ -678,11 +709,10 @@ test("reassigning a task: only the assignee's agents get it, and whoever is left
   if (skipped.guide) await p.pass(skipped.guide.id, "not this one", { cwd: mine });
   await assert.rejects(p.take(id, { cwd: mine }), /assigned to someone else/);
 
-  // The assignee's agent gets it. Only the author can move it again.
+  // The assignee's agent gets it.
   as(mate.token);
   const theirs = worktree();
   assert.equal((await p.take(id, { cwd: theirs })).guide.id, id);
-  await assert.rejects(p.assign(id, "team"), (e) => e.status === 403);
   await p.activity();
 
   // To the whole team: nobody is left out, so the mate keeps it.
@@ -698,5 +728,59 @@ test("reassigning a task: only the assignee's agents get it, and whoever is left
   as(mate.token);
   const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
   assert.match(heard, /gave "Assigned work" to someone else/);
+  as(owner);
+});
+
+test("whoever it is assigned to can pass it on, even to a teammate with no @name, and the author hears", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p, serialize, account } = env;
+  const api = await import("../src/api.js");
+  const owner = process.env.PASSALONG_TOKEN;
+  const as = (token) => {
+    process.env.PASSALONG_TOKEN = token;
+  };
+
+  const team = await api.createTeam(`delegate ${Date.now()}`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  const { code } = await api.invite(team.slug);
+  const ada = await secondAccount();
+  const handle = `ada${Date.now().toString(36)}`;
+  as(ada.token);
+  await api.join(code);
+  await api.updateMe({ handle });
+  // A teammate who never chose an @name: addressed by their account id.
+  as(owner);
+  const { code: code2 } = await api.invite(team.slug);
+  const quiet = await secondAccount();
+  as(quiet.token);
+  await api.join(code2);
+
+  as(owner);
+  const task = serialize({
+    meta: { title: "Delegated work", kind: "task", target_context: `e2e/${account}` },
+    body: "## Goal\nx\n\n## Acceptance\n- a",
+  });
+  const id = (await p.share(task, { to: team.slug })).guide.meta.id;
+  await p.ready(id);
+  await p.assign(id, `@${handle}`);
+  await p.activity();
+
+  // Ada, the assignee, passes it on to the teammate with no @name.
+  as(ada.token);
+  const passed = await p.assign(id, `@${quiet.account}`);
+  assert.equal(passed.to, `@${quiet.account}`);
+
+  // The author hears who it went to; a stranger to it still cannot move it.
+  as(owner);
+  const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
+  assert.match(heard, /gave "Delegated work" to someone else/);
+  as(ada.token);
+  await assert.rejects(
+    p.assign(id, `@${handle}`),
+    (e) => e.status === 403,
+    "no longer hers to move",
+  );
   as(owner);
 });

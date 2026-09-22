@@ -25,7 +25,7 @@
 //   passalong hub                 open your synced guides in the browser
 //   passalong take <id>           you are doing it — said before the work, so the sender stops guessing
 //   passalong pass <id> <why>     it is not yours — hands it back to its author with your reason
-//   passalong assign <id> <to>    give it to @handle, a #group, or "team" — yours to reassign
+//   passalong assign <id> <to>    give it to @handle, a #group, or "team" — yours, or assigned to you
 //   passalong works <id>          you tried it and it holds up
 //   passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
 //   passalong done <id>           archive it: off your board and out of the free tier's count

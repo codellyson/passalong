@@ -2592,7 +2592,7 @@ app.put("/v1/guides/:id", async (c) => {
       const handle = raw.replace(/^@/, "").toLowerCase();
       toAccount = await c.env.DB.prepare(
         `SELECT a.id, a.handle, a.name, a.email FROM account a JOIN membership m ON m.account_id = a.id
-         WHERE a.handle = ? AND m.team_id = ?`,
+         WHERE (a.handle = ?1 OR (a.handle = '' AND a.id = ?1)) AND m.team_id = ?2`,
       )
         .bind(handle, team.id)
         .first<AccountRow>();
@@ -3367,6 +3367,8 @@ app.get("/v1/tasks", async (c) => {
         url: shareUrl(base, r.task),
         // Where it sits and who it is for, so its author can give it to someone else.
         team: r.task.team_slug,
+        // Assigned to you, or to a group you are in: yours to pass on, as well as its author's.
+        for_me: Boolean(r.task.for_me),
         to: r.task.to_handle
           ? `@${r.task.to_handle}`
           : r.task.to_group_slug
@@ -3712,8 +3714,24 @@ app.post("/v1/guides/:id/pass", async (c) => {
 app.post("/v1/guides/:id/assign", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
-  if (!found.owner) return err(c, 403, "Only its author can give it to someone else.");
   const row = found.row;
+  const me = c.get("account");
+  // Its author, or whoever it is assigned to — the person, or anyone in the group — may pass it on.
+  // Assigned to the whole team, it is nobody's in particular, and only its author moves it.
+  const assignee =
+    row.to_account_id === me ||
+    (row.to_group_id !== "" &&
+      Boolean(
+        await c.env.DB.prepare("SELECT 1 FROM group_member WHERE group_id = ? AND account_id = ?")
+          .bind(row.to_group_id, me)
+          .first(),
+      ));
+  if (!found.owner && !assignee)
+    return err(
+      c,
+      403,
+      "Only its author, or whoever it is assigned to, can give it to someone else.",
+    );
   if (!row.team_id)
     return err(
       c,
@@ -3743,20 +3761,20 @@ app.post("/v1/guides/:id/assign", async (c) => {
     accounts = results.map((r) => r.account_id);
   } else if (raw) {
     const handle = raw.replace(/^@/, "").toLowerCase();
+    // By @name, or by account id for a teammate who has not chosen one.
     person = await c.env.DB.prepare(
       `SELECT a.id, a.handle FROM account a JOIN membership m ON m.account_id = a.id
-        WHERE a.handle = ? AND m.team_id = ?`,
+        WHERE (a.handle = ?1 OR (a.handle = '' AND a.id = ?1)) AND m.team_id = ?2`,
     )
       .bind(handle, team.id)
       .first<{ id: string; handle: string }>();
     if (!person) return err(c, 400, `@${handle} isn't in ${team.name}.`);
     accounts = [person.id];
   }
-  const label = person
-    ? `@${person.handle}`
-    : group
-      ? `#${group.slug}`
-      : `everyone in ${team.name}`;
+  // A teammate who never chose an @name is addressed by their account id, which is what the
+  // frontmatter then says: every path that reads `to:` resolves either.
+  const address = person ? `@${person.handle || person.id}` : "";
+  const label = person ? address : group ? `#${group.slug}` : `everyone in ${team.name}`;
   const at = now();
 
   const dropped = await claims.dropOutside(c.env.DB, row.id, {
@@ -3770,7 +3788,7 @@ app.post("/v1/guides/:id/assign", async (c) => {
     .first<{ markdown: string }>();
   const md = current?.markdown ?? row.markdown;
   const markdown = person
-    ? setField(md, "to", `@${person.handle}`)
+    ? setField(md, "to", address)
     : group
       ? setField(md, "to", `#${group.slug}`)
       : dropField(md, "to");
@@ -3780,7 +3798,6 @@ app.post("/v1/guides/:id/assign", async (c) => {
     .bind(markdown, person?.id || "", group?.id || "", at, row.id)
     .run();
 
-  const me = c.get("account");
   for (const to of dropped)
     await notify(c.env, {
       to,
@@ -3792,10 +3809,21 @@ app.post("/v1/guides/:id/assign", async (c) => {
     });
   for (const to of accounts ?? [])
     await notify(c.env, { to, kind: "handoff", guide_id: row.id, actor_id: me, team_id: team.id });
+  // Passed on by its assignee: the author hears where their work went. notify() drops an event
+  // addressed to whoever caused it, so an author reassigning their own hears nothing.
+  if (!dropped.includes(row.account_id))
+    await notify(c.env, {
+      to: row.account_id,
+      kind: "reassigned",
+      guide_id: row.id,
+      actor_id: me,
+      team_id: team.id,
+      note: label,
+    });
   count(c, "guide_reassigned", { to: person ? "person" : group ? "group" : "team" });
   return c.json({
     id: row.id,
-    to: person ? `@${person.handle}` : group ? `#${group.slug}` : "",
+    to: person ? address : group ? `#${group.slug}` : "",
     taken_back: dropped.length,
   });
 });

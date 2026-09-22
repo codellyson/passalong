@@ -249,10 +249,10 @@ export async function serve() {
     {
       title: "Give it to someone else",
       description:
-        "Reassign a guide or task the user wrote to someone else in its team, when the user asks: " +
+        "Reassign a guide or task the user wrote, or one assigned to them, to someone else in its team, when the user asks: " +
         '`to` is @handle for one person, #group for the people who do a thing, or "team" for ' +
         "everyone. Whoever held it and is left out has it taken back and is told; a task then only " +
-        "goes to the new assignee's agents. Only the author can do this.",
+        "goes to the new assignee's agents. Its author, or whoever it is assigned to, can do this.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         to: z.string().describe('"@handle", "#group", or "team"'),

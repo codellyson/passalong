@@ -477,6 +477,7 @@ export async function list(
   {
     task: Omit<TaskRow, "markdown"> & {
       share_key: string;
+      for_me: number;
       team_slug: string;
       to_handle: string;
       to_group_slug: string;
@@ -494,6 +495,8 @@ export async function list(
       .prepare(
         `SELECT g.id, g.account_id, g.title, g.status, g.target, g.created, g.share_key,
                 ${BLOCKED} AS blocked, COALESCE(t.slug, '') AS team_slug,
+                (g.to_account_id = ?1 OR (g.to_group_id <> '' AND g.to_group_id IN
+                  (SELECT group_id FROM group_member WHERE account_id = ?1))) AS for_me,
                 COALESCE(ta.handle, '') AS to_handle, COALESCE(tg.slug, '') AS to_group_slug
            FROM guide g
            LEFT JOIN team t ON t.id = g.team_id
@@ -506,6 +509,7 @@ export async function list(
         Omit<TaskRow, "markdown"> & {
           share_key: string;
           blocked: number;
+          for_me: number;
           team_slug: string;
           to_handle: string;
           to_group_slug: string;

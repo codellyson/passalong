@@ -1162,3 +1162,80 @@ test("work gathers what needs you, who is on what and what is open into one boar
     "a text answer for hosts that draw no apps",
   );
 });
+
+test("the board says what you may give to someone else, and to whom, so the app can offer it", async () => {
+  const { call } = recorder({
+    "GET /v1/tasks": {
+      status: 200,
+      text: JSON.stringify({
+        tasks: [
+          {
+            id: "t1",
+            title: "mine",
+            state: "ready",
+            mine: true,
+            team: "acme",
+            to: "",
+            url: "u",
+            claim: null,
+          },
+          {
+            id: "t2",
+            title: "for me",
+            state: "ready",
+            mine: false,
+            for_me: true,
+            team: "acme",
+            to: "@me",
+            url: "u",
+            claim: null,
+          },
+          {
+            id: "t3",
+            title: "someone else's",
+            state: "ready",
+            mine: false,
+            team: "acme",
+            url: "u",
+            claim: null,
+          },
+          {
+            id: "t4",
+            title: "no team",
+            state: "ready",
+            mine: true,
+            team: "",
+            url: "u",
+            claim: null,
+          },
+        ],
+      }),
+    },
+    "GET /v1/teams/acme": {
+      status: 200,
+      text: JSON.stringify({
+        name: "Acme",
+        members: [
+          { id: "a1", handle: "ada", name: "Ada" },
+          { id: "b2", handle: "", name: "" },
+        ],
+      }),
+    },
+    "GET /v1/teams/acme/groups": {
+      status: 200,
+      text: JSON.stringify({ groups: [{ slug: "web", name: "Web" }] }),
+    },
+  });
+  const board = (await read(await handleMcp(callTool("work", {}), call, VOCAB))).result
+    .structuredContent;
+  const byId = Object.fromEntries(board.ready.map((t) => [t.id, t]));
+  assert.equal(byId.t1.team, "acme");
+  assert.equal(byId.t2.team, "acme", "assigned to you: yours to pass on");
+  assert.equal(byId.t3.team, undefined, "not yours, not offered");
+  assert.equal(byId.t4.team, undefined, "no team, nobody to give it to");
+  assert.deepEqual(
+    board.teams.acme.map((c) => c.to),
+    ["", "@ada", "@b2", "#web"],
+    "everyone, each teammate (by id without an @name), each group",
+  );
+});

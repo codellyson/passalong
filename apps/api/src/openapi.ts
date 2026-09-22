@@ -539,7 +539,7 @@ export function openapi(origin: string) {
           operationId: "assign",
           summary: "Give a guide or task you wrote to someone else in its team.",
           description:
-            "`to` is `@handle` for one person, `#group` for the people who do a thing, or empty for the whole team. Only the author may. Whoever held it and is left out has it taken back and is told; a task then only goes to the new assignee's agents.",
+            "`to` is `@handle` for one person (or `@<account id>` for a teammate with no @name), `#group` for the people who do a thing, or empty for the whole team. Its author may, and so may whoever it is assigned to — the person, or anyone in the group; the author is told. Whoever held it and is left out has it taken back and is told; a task then only goes to the new assignee's agents.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -563,7 +563,7 @@ export function openapi(origin: string) {
               },
             }),
             400: { description: "Not in a team, or nobody by that @handle or #group in it." },
-            403: { description: "Not your guide." },
+            403: { description: "Neither its author nor whoever it is assigned to." },
           },
         },
       },

@@ -1,8 +1,9 @@
 <!--
-  Who something you wrote is for, and the choice to give it to someone else in its team.
+  Who something is for, and the choice to give it to someone else in its team — open to its author,
+  and to whoever it is assigned to.
 
-  The choices are the team as a whole, each teammate with an @name, and each group. A teammate with
-  no @name cannot be picked: an address is an @name, and they have not chosen one yet. Choosing
+  The choices are the team as a whole, each teammate, and each group. A teammate with no @name is
+  picked by their account id, which the server accepts as an address. Choosing
   calls POST /v1/guides/:id/assign; whoever held it and is left out has it taken back and is told,
   which the note under the list says before anyone presses anything.
 -->
@@ -35,11 +36,11 @@ const choices = computed(() => {
   const d = detail.data.value;
   const seen = new Set<string>();
   const people = (d?.members ?? [])
-    .filter((m) => m.handle)
+    .filter((m) => m.handle || m.id)
     .map((m) => ({
-      to: `@${m.handle}`,
-      label: m.display || personName(m.name, m.handle),
-      hint: `@${m.handle}`,
+      to: `@${m.handle || m.id}`,
+      label: m.display || personName(m.name, m.handle, m.id),
+      hint: m.handle ? `@${m.handle}` : "no @name",
     }));
   const teams = (groups.data.value ?? [])
     .filter((g) => !seen.has(g.slug) && seen.add(g.slug))
