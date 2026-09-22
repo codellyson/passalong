@@ -179,7 +179,7 @@ const SPECIMEN = {
     label: "What came back",
     title: "Backfill order totals: done",
     facts: [
-      { label: "Taken by", value: "Ada's agent" },
+      { label: "Taken by", value: "Ada’s agent" },
       { label: "Change", value: "commit 3f9a2c1" },
     ],
     sections: [
@@ -215,7 +215,7 @@ const PROOF = null as { figure: string; says: string } | null;
     <header class="hero">
       <!-- The h1 names what the product is, because that is what a search engine reads first and
            the claim below never says it. The claim keeps the display type as a <p class="headline">:
-           same look, no longer the page's heading. -->
+           same look, no longer the page’s heading. -->
       <h1 class="eyebrow">Handing work between AI coding agents</h1>
       <p class="headline">
         Agents that never<br>
@@ -303,14 +303,14 @@ const PROOF = null as { figure: string; says: string } | null;
         <p>
           <em>“Add a Passalong task: dark mode in settings.”</em> <em>“Plan this into tasks.”</em>
           <em>“Pass this along.”</em> Your agent writes the brief from the code and the
-          conversation, and nothing runs until you've read it.
+          conversation, and nothing runs until you’ve read it.
         </p>
       </article>
       <article>
         <p class="n">02</p>
         <h2>An agent claims it</h2>
         <p>
-          One of yours, in any repo, or a teammate's. Only one agent can hold a job, and a task waits
+          One of yours, in any repo, or a teammate’s. Only one agent can hold a job, and a task waits
           for the ones it depends on. Run <code>passalong work</code> and your agents work through
           the queue on their own.
         </p>
@@ -319,14 +319,14 @@ const PROOF = null as { figure: string; says: string } | null;
         <p class="n">03</p>
         <h2>You see it moving</h2>
         <p>
-          A one-line update at each milestone, next to who has it and where. Agents don't wander
+          A one-line update at each milestone, next to who has it and where. Agents don’t wander
           off: each step tells them the next one, and an agent that goes quiet is flagged, not
           forgotten.
         </p>
       </article>
       <article>
         <p class="n">04</p>
-        <h2>You decide it's done</h2>
+        <h2>You decide it’s done</h2>
         <p>
           It hands back what it did and how it checked each line of done. Approve it, or send it
           back with a reason the next agent reads first.
@@ -340,9 +340,9 @@ const PROOF = null as { figure: string; says: string } | null;
         <span class="turn">Everyone sees who has what.</span>
       </h2>
       <p>
-        What needs you, who's working on what, what's open and what's done, for every agent,
+        What needs you, who’s working on what, what’s open and what’s done, for every agent,
         machine and teammate, on one page. If a second agent reaches for a job someone already has,
-        it's told who and stops, instead of doing the work twice.
+        it’s told who and stops, instead of doing the work twice.
       </p>
     </section>
 
@@ -410,7 +410,7 @@ const PROOF = null as { figure: string; says: string } | null;
           </p>
           <p>
             <b>One subscription covers the whole team.</b> Hand work to a person, to the group that
-            does that kind of work, or to anyone's agents, and see who's on what.
+            does that kind of work, or to anyone’s agents, and see who’s on what.
           </p>
         </article>
 

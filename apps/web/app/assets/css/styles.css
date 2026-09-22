@@ -1476,6 +1476,7 @@ form.join label {
   font: var(--t-sm) / 1.65 var(--font-sans);
   color: var(--muted);
   text-align: center;
+  text-wrap: pretty;
 }
 /* A command broken across two lines stops being a command you could type. */
 .under code {
@@ -1492,15 +1493,13 @@ form.join label {
   max-width: 22rem;
 }
 /* Four steps wrap as three and a stray one under auto-fit, which reads as a step left over. So a
-   row of four is two by two, four across once there is room for all of them, and one column on a
-   phone. */
+   row of four is two by two, and one column on a phone. Never four across: in this container that
+   is a 28-character measure, and each step became a six-line column of 14px text. */
 .steps:has(> article:nth-child(4)) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-@media (min-width: 72rem) {
-  .steps:has(> article:nth-child(4)) {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+.steps:has(> article:nth-child(4)) article {
+  max-width: 28rem;
 }
 @media (max-width: 36rem) {
   .steps:has(> article:nth-child(4)) {
@@ -1646,6 +1645,7 @@ form.join label {
   margin: var(--s-5) 0 0;
   font: var(--t-sm) / 1.6 var(--font-sans);
   color: var(--muted);
+  text-wrap: pretty;
 }
 .reassure code {
   white-space: nowrap;
@@ -1802,7 +1802,9 @@ form.join label {
   }
 }
 .eyebrow {
-  font: 600 var(--t-xs) / 1 var(--font-sans);
+  /* 1.4, not 1: the landing's h1 is an eyebrow, and on a phone it wraps to two lines, which at a
+     line-height of 1 set the capitals on top of each other. One line looks the same either way. */
+  font: 600 var(--t-xs) / 1.4 var(--font-sans);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
