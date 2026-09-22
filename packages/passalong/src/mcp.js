@@ -245,6 +245,29 @@ export async function serve() {
   }
 
   server.registerTool(
+    "assign",
+    {
+      title: "Give it to someone else",
+      description:
+        "Reassign a guide or task the user wrote, or one assigned to them, to someone else in its team, when the user asks: " +
+        '`to` is @handle for one person, #group for the people who do a thing, or "team" for ' +
+        "everyone. Whoever held it and is left out has it taken back and is told; a task then only " +
+        "goes to the new assignee's agents. Its author, or whoever it is assigned to, can do this.",
+      inputSchema: {
+        id: z.string().describe("passalong id"),
+        to: z.string().describe('"@handle", "#group", or "team"'),
+      },
+    },
+    async ({ id, to }) => {
+      try {
+        return json(await passalong.assign(id, to));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "search_guides",
     {
       title: "Search guides",

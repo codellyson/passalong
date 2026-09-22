@@ -63,6 +63,7 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob took "Add Paystack webhook verification" back from your agent',
     '@bob accepted your work on "Add Paystack webhook verification", and closed it',
     '@bob sent "Add Paystack webhook verification" back',
+    '@bob gave "Add Paystack webhook verification" to someone else',
   ]);
 });
 

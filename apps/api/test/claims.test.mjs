@@ -12,6 +12,7 @@ import {
   approve,
   blockOn,
   closeHandedIn,
+  dropOutside,
   finish,
   handedIn,
   handIn,
@@ -646,4 +647,54 @@ test("the author can send one repo's hand-in back with a reason, and it is open 
   assert.equal(back.claimant, "other");
   assert.deepEqual(await handedIn(db, "me"), []);
   assert.equal((await take(db, "h1", ada, { at: T0 })).resumed, false, "open to take again");
+});
+
+// ---- assignment: a task for one person, or one group, is theirs to take ------------------------
+
+const OTHER = { account: "other", agent: "agent-other", repo: "o/r" };
+
+test("a task assigned to a person goes only to their agents", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  teamed(db);
+  db.raw.exec("UPDATE guide SET to_account_id = 'other' WHERE id = 't1'");
+  assert.equal(await next(db, A, { at: T0 }), null, "not for me");
+  const refused = await take(db, "t1", A, { at: T0 });
+  assert.equal(refused.status, 409);
+  assert.match(refused.error, /assigned/);
+  assert.equal((await next(db, OTHER, { at: T0 })).task.id, "t1");
+});
+
+test("a task assigned to a group goes to its members", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  teamed(db);
+  db.raw.exec(`INSERT INTO team_group (id, team_id, slug, name, created) VALUES ('g1', 'tm', 'web', 'Web', '${T0}');
+               INSERT INTO group_member (group_id, account_id) VALUES ('g1', 'other');
+               UPDATE guide SET to_group_id = 'g1' WHERE id = 't1';`);
+  assert.equal(await next(db, A, { at: T0 }), null);
+  assert.equal((await next(db, OTHER, { at: T0 })).task.id, "t1");
+});
+
+test("reassigning takes the work back from whoever the new assignment leaves out", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  teamed(db);
+  await take(db, "t1", { ...A, host: "mac", worktree: "/w/shop" }, { at: T0 });
+  // To `other` alone: my agent's claim goes, with a line saying so for whoever is next.
+  const dropped = await dropOutside(db, "t1", {
+    accounts: ["other"],
+    at: T0,
+    why: "reassigned to @ada",
+  });
+  assert.deepEqual(dropped, ["me"]);
+  assert.equal(await stateIn(db, "t1"), "ready");
+  const md = db.raw.prepare("SELECT markdown FROM guide WHERE id = 't1'").get().markdown;
+  assert.match(md, /reassigned to @ada; it was with mac:\/w\/shop/);
+  // To the whole team (null): nobody is left out, nothing is dropped.
+  await take(db, "t1", OTHER, { at: T0 });
+  assert.deepEqual(await dropOutside(db, "t1", { accounts: null, at: T0, why: "x" }), []);
 });

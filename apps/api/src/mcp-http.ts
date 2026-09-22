@@ -511,6 +511,9 @@ const workOut = z
     ready: z.array(workItem).optional(),
   })
   .passthrough();
+const assignOut = z
+  .object({ id: z.string(), to: z.string().optional(), taken_back: z.number().optional() })
+  .passthrough();
 const passOut = z.object({ id: z.string(), passed: z.boolean().optional() }).passthrough();
 const finishOut = z
   .object({ id: z.string(), state: z.string().optional(), report: z.string().optional() })
@@ -618,6 +621,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         title: string;
         state: string;
         mine: boolean;
+        for_me?: boolean;
+        team?: string;
+        to?: string;
         url: string;
         claim: { note?: string } | null;
       };
@@ -638,12 +644,15 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         url: string;
         by: { name: string; handle: string };
       };
-      const [{ tasks }, { working }, { handed_in }, { guides }] = await Promise.all([
-        get<{ tasks: T[] }>("/v1/tasks", { tasks: [] }),
-        get<{ working: W[] }>("/v1/working", { working: [] }),
-        get<{ handed_in: H[] }>("/v1/handed_in", { handed_in: [] }),
-        get<{ guides: { id: string; title: string; url: string }[] }>("/v1/inbox", { guides: [] }),
-      ]);
+      const [{ tasks = [] }, { working = [] }, { handed_in = [] }, { guides = [] }] =
+        await Promise.all([
+          get<{ tasks: T[] }>("/v1/tasks", { tasks: [] }),
+          get<{ working: W[] }>("/v1/working", { working: [] }),
+          get<{ handed_in: H[] }>("/v1/handed_in", { handed_in: [] }),
+          get<{ guides: { id: string; title: string; url: string }[] }>("/v1/inbox", {
+            guides: [],
+          }),
+        ]);
       const hub = `${origin}/hub`;
       const who = (b: { name?: string; handle?: string }) =>
         b.name || (b.handle ? `@${b.handle}` : "A teammate");
@@ -685,6 +694,44 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         })),
       ];
       const ready = tasks.filter((t) => t.state === "ready");
+      // What you may give to someone else — yours, or assigned to you, and in a team — carries its
+      // team, and each such team its choices, so the app can offer "Give to…" without asking again.
+      const mayAssign = (t: T) => ((t.mine || t.for_me) && t.team ? t.team : undefined);
+      const slugs = [
+        ...new Set(
+          ready
+            .slice(0, 5)
+            .map(mayAssign)
+            .filter((x): x is string => !!x),
+        ),
+      ];
+      const teams: Record<string, { to: string; label: string; hint: string }[]> = {};
+      await Promise.all(
+        slugs.map(async (slug) => {
+          const [d, g] = await Promise.all([
+            get<{ name?: string; members?: { id: string; handle: string; name: string }[] }>(
+              `/v1/teams/${encodeURIComponent(slug)}`,
+              {},
+            ),
+            get<{ groups?: { slug: string; name: string }[] }>(
+              `/v1/teams/${encodeURIComponent(slug)}/groups`,
+              {},
+            ),
+          ]);
+          const seen = new Set<string>();
+          teams[slug] = [
+            { to: "", label: `Everyone in ${d.name || slug}`, hint: "the team" },
+            ...(d.members ?? []).map((m) => ({
+              to: `@${m.handle || m.id}`,
+              label: m.name || (m.handle ? `@${m.handle}` : `@${m.id}`),
+              hint: m.handle ? `@${m.handle}` : "no @name",
+            })),
+            ...(g.groups ?? [])
+              .filter((x) => !seen.has(x.slug) && seen.add(x.slug))
+              .map((x) => ({ to: `#${x.slug}`, label: x.name || x.slug, hint: `#${x.slug}` })),
+          ];
+        }),
+      );
       const open = tasks.filter((t) => ["ready", "blocked", "draft"].includes(t.state)).length;
       const board = {
         hub,
@@ -704,7 +751,14 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           stalled: w.state === "stalled",
           url: w.url,
         })),
-        ready: ready.slice(0, 5).map((t) => ({ id: t.id, title: t.title, url: t.url })),
+        ready: ready.slice(0, 5).map((t) => ({
+          id: t.id,
+          title: t.title,
+          url: t.url,
+          team: mayAssign(t),
+          to: t.to || "",
+        })),
+        teams,
       };
       const lines = [
         `${needs.length} need you · ${working.length} being worked on · ${open} open`,
@@ -716,6 +770,26 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       ];
       return { ...text(lines.join("\n")), structuredContent: board };
     },
+  );
+
+  server.registerTool(
+    "assign",
+    {
+      title: "Give it to someone else",
+      annotations: ADDS,
+      outputSchema: assignOut,
+      description:
+        "Reassign a guide or task the user wrote, or one assigned to them, to someone else in its team, when the user asks: " +
+        "`to` is @handle for one person, #group for the people who do a thing, or empty for the " +
+        "whole team. Whoever held it and is left out has it taken back and is told; a task then " +
+        "only goes to the new assignee's agents. Its author, or whoever it is assigned to, can do this.",
+      inputSchema: {
+        id: z.string(),
+        to: z.string().describe('"@handle", "#group", or "" for the whole team'),
+      },
+    },
+    async ({ id, to }) =>
+      relay(call, "POST", `/v1/guides/${encodeURIComponent(id)}/assign`, { to }),
   );
 
   server.registerTool(
@@ -1529,6 +1603,11 @@ const WORK_APP_HTML = `<!doctype html>
   .actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
   .link { flex: none; padding: 4px 8px; }
   .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+  .choices { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; padding: 6px; border-radius: 10px; background: var(--bg); box-shadow: 0 0 0 1px var(--line); }
+  .choice { display: flex; justify-content: space-between; gap: 8px; text-align: left; box-shadow: none; background: transparent; }
+  .choice:hover { background: var(--raised); }
+  .choice.on { font-weight: 600; }
+  .note { margin: 4px 6px 2px; color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -1561,10 +1640,24 @@ const WORK_APP_HTML = `<!doctype html>
     if (url) request("ui/open-link", { url });
   }
 
-  function row(dot, title, sub, id, url, label) {
+  function row(dot, title, sub, id, url, label, assign) {
     return '<li><span class="dot ' + dot + '"></span><div class="grow"><div class="title">' + esc(title) +
-      '</div><div class="sub">' + sub + (id ? ' <span class="id">' + esc(id) + '</span>' : "") + '</div></div>' +
+      '</div><div class="sub">' + sub + (id ? ' <span class="id">' + esc(id) + '</span>' : "") + '</div>' +
+      (assign ? picker(assign) : "") + '</div>' +
+      (assign ? '<button class="link" data-give="' + esc(id) + '">Give to…</button>' : "") +
       (url ? '<button class="link" data-url="' + esc(url) + '">' + esc(label || "Open") + '</button>' : "") + '</li>';
+  }
+
+  // "Give to…" opens the choices under the row. Reassigning is not the review gate, so the app may
+  // call the assign tool itself; the server still refuses anyone but the author or the assignee.
+  let giving = null;
+  function picker(a) {
+    if (giving !== a.id) return "";
+    const choices = (board.teams && board.teams[a.team]) || [];
+    return '<div class="choices">' + choices.map((c) =>
+      '<button class="choice' + (c.to === a.to ? " on" : "") + '" data-assign="' + esc(a.id) + '" data-to="' + esc(c.to) + '">' +
+      esc(c.label) + ' <span class="id">' + esc(c.hint) + '</span></button>').join("") +
+      '<p class="note">Whoever has it now and is left out gets it taken back, and is told.</p></div>';
   }
 
   function render(b) {
@@ -1582,7 +1675,9 @@ const WORK_APP_HTML = `<!doctype html>
         esc(w.who) + (w.stalled ? " · went quiet" : "") + (w.note ? " · “" + esc(w.note) + "”" : ""), w.id, w.url, "Open")).join("") + '</ul>';
     }
     if (b.ready && b.ready.length) {
-      html += '<h2>Ready for an agent</h2><ul>' + b.ready.map((t) => row("idle", t.title, "waiting for the next agent in its repo", t.id, t.url, "Open")).join("") + '</ul>';
+      html += '<h2>Ready for an agent</h2><ul>' + b.ready.map((t) => row("idle", t.title,
+        t.to ? "for " + esc(t.to) : "waiting for the next agent in its repo", t.id, t.url, "Open",
+        t.team ? { id: t.id, team: t.team, to: t.to || "" } : null)).join("") + '</ul>';
     }
     html += '<div class="actions"><button class="primary" data-url="' + esc(b.hub) + '">Open the hub</button><button id="refresh">Refresh</button></div>';
     app.innerHTML = html;
@@ -1592,6 +1687,19 @@ const WORK_APP_HTML = `<!doctype html>
   app.addEventListener("click", (e) => {
     const t = e.target.closest("button");
     if (!t) return;
+    if (t.dataset.give) {
+      giving = giving === t.dataset.give ? null : t.dataset.give;
+      render(board);
+      return;
+    }
+    if (t.dataset.assign) {
+      t.disabled = true;
+      request("tools/call", { name: "assign", arguments: { id: t.dataset.assign, to: t.dataset.to } }).then(() => {
+        giving = null;
+        return request("tools/call", { name: "work", arguments: {} });
+      }).then((r) => render(r && r.structuredContent));
+      return;
+    }
     if (t.id === "refresh") {
       t.disabled = true;
       request("tools/call", { name: "work", arguments: {} }).then((r) => {

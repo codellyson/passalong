@@ -36,9 +36,20 @@ const canJudge = computed(
     !(props.g.verdict && me.value && props.g.verdict.by === me.value),
 );
 
+/* The menu turns into the picker. */
+/** Yours, or handed to you: either way you may give it to someone else in its team. */
+const canAssign = computed(
+  () => (props.g.mine || Boolean(props.g.for_me)) && Boolean(props.g.team) && !archived.value,
+);
+const assigning = ref(false);
+const assignedTo = computed(() =>
+  props.g.to ? `@${props.g.to}` : props.g.to_group ? `#${props.g.to_group}` : "",
+);
+
 function shut() {
   open.value = false;
   confirming.value = false;
+  assigning.value = false;
 }
 
 /** A menu that stays open behind you is worse than no menu. */
@@ -67,7 +78,10 @@ function run(work: () => void) {
       <AppIcon name="more" />
     </button>
 
-    <div v-if="open" class="menu">
+    <div v-if="open && assigning" class="menu w-72">
+      <HubAssignPicker :id="g.id" :team="g.team || ''" :to="assignedTo" @done="shut" />
+    </div>
+    <div v-else-if="open" class="menu">
       <a class="menu-item" :href="g.url" target="_blank" rel="noopener" @click="shut">Open the guide</a>
       <button class="menu-item" @click="copy(g.url, $event.currentTarget)">Copy link</button>
       <button class="menu-item" type="button" @click="copy(followUpAsk(g.id), $event.currentTarget)">
@@ -82,6 +96,13 @@ function run(work: () => void) {
         See follow-ups ({{ g.children }})
       </NuxtLink>
       <p class="menu-note">A follow-up adds more context to this guide. Anyone who opens it gets that too.</p>
+
+      <template v-if="canAssign">
+        <div class="menu-rule" />
+        <button class="menu-item" type="button" @click.stop="assigning = true">
+          Give it to someone else
+        </button>
+      </template>
 
       <template v-if="canTake || canJudge">
         <div class="menu-rule" />

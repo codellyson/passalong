@@ -534,6 +534,39 @@ export function openapi(origin: string) {
           },
         },
       },
+      "/v1/guides/{id}/assign": {
+        post: {
+          operationId: "assign",
+          summary: "Give a guide or task you wrote to someone else in its team.",
+          description:
+            "`to` is `@handle` for one person (or `@<account id>` for a teammate with no @name), `#group` for the people who do a thing, or empty for the whole team. Its author may, and so may whoever it is assigned to — the person, or anyone in the group; the author is told. Whoever held it and is left out has it taken back and is told; a task then only goes to the new assignee's agents.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["to"],
+                  properties: { to: { type: "string" } },
+                },
+              },
+            },
+          },
+          responses: {
+            200: json200("Reassigned.", {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                to: { type: "string" },
+                taken_back: { type: "integer", description: "How many holds were taken back." },
+              },
+            }),
+            400: { description: "Not in a team, or nobody by that @handle or #group in it." },
+            403: { description: "Neither its author nor whoever it is assigned to." },
+          },
+        },
+      },
       "/v1/working": {
         get: {
           operationId: "working",

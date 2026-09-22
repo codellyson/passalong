@@ -90,6 +90,7 @@ import {
 import {
   AREAS,
   clipFollowUp,
+  dropField,
   FOLLOW_UPS_MAX,
   type Meta,
   parseMeta,
@@ -2591,7 +2592,7 @@ app.put("/v1/guides/:id", async (c) => {
       const handle = raw.replace(/^@/, "").toLowerCase();
       toAccount = await c.env.DB.prepare(
         `SELECT a.id, a.handle, a.name, a.email FROM account a JOIN membership m ON m.account_id = a.id
-         WHERE a.handle = ? AND m.team_id = ?`,
+         WHERE (a.handle = ?1 OR (a.handle = '' AND a.id = ?1)) AND m.team_id = ?2`,
       )
         .bind(handle, team.id)
         .first<AccountRow>();
@@ -3364,6 +3365,15 @@ app.get("/v1/tasks", async (c) => {
         ...taskView(r.task, r.claim, r.state),
         mine: r.task.account_id === me,
         url: shareUrl(base, r.task),
+        // Where it sits and who it is for, so its author can give it to someone else.
+        team: r.task.team_slug,
+        // Assigned to you, or to a group you are in: yours to pass on, as well as its author's.
+        for_me: Boolean(r.task.for_me),
+        to: r.task.to_handle
+          ? `@${r.task.to_handle}`
+          : r.task.to_group_slug
+            ? `#${r.task.to_group_slug}`
+            : "",
       };
       if (!v.claim || !r.by) return v;
       const report_url = r.report_key
@@ -3688,6 +3698,134 @@ app.post("/v1/guides/:id/pass", async (c) => {
     await recordAck(c, found.row, false, why.trim().slice(0, NOTE_MAX));
   }
   return c.json({ id: found.row.id, passed: true, ...claims.steps(found.row.kind, "passed") });
+});
+
+// ---- reassigning: who a guide is for, changed after it was sent ---------------------------------
+
+/**
+ * Give a guide or task to someone else in its team: `to` is `@handle` for one person, `#group` for
+ * the people who do a thing, or empty for the whole team. Only its author decides.
+ *
+ * The frontmatter's `to:` is rewritten, so the document says who it is for wherever it travels.
+ * Anyone holding it whom the new assignment leaves out has it taken back (claims.dropOutside) and
+ * is told; on a task the queue then only hands it to the new assignee's agents. The new person, or
+ * the group's members, are told it is theirs.
+ */
+app.post("/v1/guides/:id/assign", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const row = found.row;
+  const me = c.get("account");
+  // Its author, or whoever it is assigned to — the person, or anyone in the group — may pass it on.
+  // Assigned to the whole team, it is nobody's in particular, and only its author moves it.
+  const assignee =
+    row.to_account_id === me ||
+    (row.to_group_id !== "" &&
+      Boolean(
+        await c.env.DB.prepare("SELECT 1 FROM group_member WHERE group_id = ? AND account_id = ?")
+          .bind(row.to_group_id, me)
+          .first(),
+      ));
+  if (!found.owner && !assignee)
+    return err(
+      c,
+      403,
+      "Only its author, or whoever it is assigned to, can give it to someone else.",
+    );
+  if (!row.team_id)
+    return err(
+      c,
+      400,
+      "It isn't in a team, so there is nobody to give it to. Send it to a team first.",
+    );
+  const team = await c.env.DB.prepare("SELECT id, slug, name FROM team WHERE id = ?")
+    .bind(row.team_id)
+    .first<{ id: string; slug: string; name: string }>();
+  if (!team) return err(c, 404, GUIDE_GONE);
+  const body = (await c.req.json().catch(() => ({}))) as { to?: unknown };
+  const raw = typeof body.to === "string" ? body.to.trim().replace(/^[^/@#]+\//, "") : "";
+
+  let person: { id: string; handle: string } | null = null;
+  let group: { id: string; slug: string } | null = null;
+  let accounts: string[] | null = null;
+  if (raw.startsWith("#")) {
+    group = await c.env.DB.prepare("SELECT id, slug FROM team_group WHERE slug = ? AND team_id = ?")
+      .bind(tag(raw.slice(1)), team.id)
+      .first<{ id: string; slug: string }>();
+    if (!group) return err(c, 400, `${team.name} has no group called ${raw}.`);
+    const { results } = await c.env.DB.prepare(
+      "SELECT account_id FROM group_member WHERE group_id = ?",
+    )
+      .bind(group.id)
+      .all<{ account_id: string }>();
+    accounts = results.map((r) => r.account_id);
+  } else if (raw) {
+    const handle = raw.replace(/^@/, "").toLowerCase();
+    // By @name, or by account id for a teammate who has not chosen one.
+    person = await c.env.DB.prepare(
+      `SELECT a.id, a.handle FROM account a JOIN membership m ON m.account_id = a.id
+        WHERE (a.handle = ?1 OR (a.handle = '' AND a.id = ?1)) AND m.team_id = ?2`,
+    )
+      .bind(handle, team.id)
+      .first<{ id: string; handle: string }>();
+    if (!person) return err(c, 400, `@${handle} isn't in ${team.name}.`);
+    accounts = [person.id];
+  }
+  // A teammate who never chose an @name is addressed by their account id, which is what the
+  // frontmatter then says: every path that reads `to:` resolves either.
+  const address = person ? `@${person.handle || person.id}` : "";
+  const label = person ? address : group ? `#${group.slug}` : `everyone in ${team.name}`;
+  const at = now();
+
+  const dropped = await claims.dropOutside(c.env.DB, row.id, {
+    accounts,
+    at,
+    why: `reassigned to ${label}`,
+  });
+  // Read again: taking a task back writes a line into it.
+  const current = await c.env.DB.prepare("SELECT markdown FROM guide WHERE id = ?")
+    .bind(row.id)
+    .first<{ markdown: string }>();
+  const md = current?.markdown ?? row.markdown;
+  const markdown = person
+    ? setField(md, "to", address)
+    : group
+      ? setField(md, "to", `#${group.slug}`)
+      : dropField(md, "to");
+  await c.env.DB.prepare(
+    "UPDATE guide SET markdown = ?, to_account_id = ?, to_group_id = ?, updated = ? WHERE id = ?",
+  )
+    .bind(markdown, person?.id || "", group?.id || "", at, row.id)
+    .run();
+
+  for (const to of dropped)
+    await notify(c.env, {
+      to,
+      kind: "reassigned",
+      guide_id: row.id,
+      actor_id: me,
+      team_id: team.id,
+      note: label,
+    });
+  for (const to of accounts ?? [])
+    await notify(c.env, { to, kind: "handoff", guide_id: row.id, actor_id: me, team_id: team.id });
+  // Passed on by its assignee: the author hears where their work went. notify() drops an event
+  // addressed to whoever caused it, so an author reassigning their own hears nothing.
+  if (!dropped.includes(row.account_id))
+    await notify(c.env, {
+      to: row.account_id,
+      kind: "reassigned",
+      guide_id: row.id,
+      actor_id: me,
+      team_id: team.id,
+      note: label,
+    });
+  count(c, "guide_reassigned", { to: person ? "person" : group ? "group" : "team" });
+  return c.json({
+    id: row.id,
+    to: person ? address : group ? `#${group.slug}` : "",
+    taken_back: dropped.length,
+  });
 });
 
 // ---- the author's close on a handed-in handoff or bug -------------------------------------------

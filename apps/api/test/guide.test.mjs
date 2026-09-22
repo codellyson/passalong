@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   body,
+  dropField,
   parseMeta,
   SETTABLE,
   STATUSES,
@@ -376,6 +377,7 @@ test("the API description covers what an agent does with a task, and not the rev
     ["/v1/guides/{id}/hand_in", "post"],
     ["/v1/guides/{id}/pass", "post"],
     ["/v1/working", "get"],
+    ["/v1/guides/{id}/assign", "post"],
   ])
     assert.ok(doc.paths[path]?.[method], `${method.toUpperCase()} ${path} is described`);
   // Every verb's answer says what to call next; a client generated from the spec should see it.
@@ -397,4 +399,11 @@ test("the API description says null the way OpenAPI 3.1 does", async () => {
   // `nullable` is OpenAPI 3.0. A 3.1 validator ignores it, so a field that can be null reads as one
   // that never is, and a client generated from it chokes on the null.
   assert.doesNotMatch(JSON.stringify(doc), /"nullable"/);
+});
+
+test("a field can be taken out of the frontmatter, and nothing else moves", () => {
+  const md = '---\nid: aa\nteam: khaime\nto: "@ada"\ntitle: t\n---\n\nbody\n';
+  assert.equal(dropField(md, "to"), "---\nid: aa\nteam: khaime\ntitle: t\n---\n\nbody\n");
+  assert.equal(dropField(md, "missing"), md, "absent is a no-op");
+  assert.equal(parseMeta(dropField(md, "to")).to, undefined);
 });
