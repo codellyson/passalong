@@ -241,6 +241,17 @@ export function agent(cwd = process.cwd()) {
   return { agent: id, host: hostname(), repo: c.repo, worktree: root };
 }
 
+/** This worktree's agent if it has one, without creating it. `agent` is "" when there is none. */
+function knownAgent(cwd = process.cwd()) {
+  const c = context(cwd);
+  const root = c.root || cwd;
+  let id = "";
+  try {
+    id = String(JSON.parse(readFileSync(join(root, ".passalong", "agent.json"), "utf8")).id || "");
+  } catch {}
+  return { agent: /^[a-z0-9]{8,64}$/.test(id) ? id : "", repo: c.repo };
+}
+
 function needsSync(what) {
   if (!api.loggedIn())
     throw new PassalongError(
@@ -353,6 +364,28 @@ export async function pass(id, why, { cwd = process.cwd() } = {}) {
   if (!String(why || "").trim())
     throw new PassalongError("say why you are passing it, so whoever is next knows");
   return api.pass(id, { agent: agent(cwd).agent, why });
+}
+
+/**
+ * What this worktree's agent holds right now, and what is waiting for it: what the session-start
+ * and stop hooks read (src/hooks.js). `held` is null when it holds nothing. Counts are best effort
+ * — a hook must never fail a session over a count.
+ */
+export async function now({ cwd = process.cwd() } = {}) {
+  needsSync("seeing what you hold");
+  // Read, never minted: the hooks run in every repo a session opens, and a worktree that has never
+  // taken anything has no agent — and should not be given a .passalong/ folder for asking.
+  const who = knownAgent(cwd);
+  const { working } = await api.working();
+  const held = (who.agent && working.find((w) => w.agent === who.agent && w.by?.you)) || null;
+  const waiting = { ready: 0, inbox: 0 };
+  if (!held) {
+    const [t, i] = await Promise.allSettled([api.tasks(), api.inbox()]);
+    if (t.status === "fulfilled")
+      waiting.ready = t.value.tasks.filter((x) => x.state === "ready" && x.target === who.repo).length;
+    if (i.status === "fulfilled") waiting.inbox = i.value.guides.length;
+  }
+  return { held, waiting, agent: who.agent };
 }
 
 /**

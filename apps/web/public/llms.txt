@@ -83,7 +83,7 @@ are addresses, not secrets. The key in a share link is the secret.
 
 ```sh
 npm i -g passalong
-passalong setup                 # Claude Code capture skill + MCP server
+passalong setup                 # Claude Code capture skill, MCP server and hooks
 passalong login                 # optional: sync across machines
 ```
 
@@ -109,6 +109,9 @@ passalong login                 # optional: sync across machines
   review gate. A person's commands: an agent never approves or rejects work, its own or another's
 - `passalong work [--once] [--agent CMD]` — from a worktree, run an agent (`claude -p` by default)
   on each ready task for its repo, one after another, until the queue is empty
+- `passalong now` — what this worktree's agent holds, and what is waiting. `--hook session|stop`
+  is what the Claude Code hooks from `setup` call: told at session start, stopped once before
+  ending with work nobody has handed in
 - `passalong mcp` — run the MCP server over stdio
 - `passalong version` — print the installed version (also `-v`, `--version`)
 

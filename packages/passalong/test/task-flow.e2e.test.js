@@ -9,7 +9,7 @@
 // works against a local server whose database is apps/web's — never point this at a real one.
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -459,4 +459,43 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
   assert.equal((await p.take(h, { cwd: dir })).guide.kind, "transfer");
   await assert.rejects(p.pass(h, "", { cwd: dir }), /why/);
   assert.deepEqual((await p.pass(h, "not mine", { cwd: dir })).next.map((s) => s.tool), ["take"]);
+});
+
+test("now says what this worktree holds, for the session-start and stop hooks", { skip }, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { dir } = await readyTask(env, "Held across a restart");
+  const took = await p.take(undefined, { cwd: dir });
+  const now = await p.now({ cwd: dir });
+  assert.equal(now.held.id, took.guide.id);
+  assert.equal(now.held.kind, "task");
+  await p.pass(took.guide.id, "testing now", { cwd: dir });
+  assert.equal((await p.now({ cwd: dir })).held, null);
+});
+
+test("the hook commands: a session is told what it holds, and stopped once before ending", { skip }, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { dir } = await readyTask(env, "Hooked");
+  const took = await p.take(undefined, { cwd: dir });
+  const bin = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "passalong");
+  const run = (hook, input = "") =>
+    execFileSync(process.execPath, [bin, "now", "--hook", hook], { cwd: dir, input, env: process.env }).toString();
+
+  const started = JSON.parse(run("session"));
+  assert.equal(started.hookSpecificOutput.hookEventName, "SessionStart");
+  assert.match(started.hookSpecificOutput.additionalContext, new RegExp(`You hold ${took.guide.id}`));
+
+  const stop = JSON.parse(run("stop", JSON.stringify({ stop_hook_active: false })));
+  assert.equal(stop.decision, "block");
+  assert.equal(run("stop", JSON.stringify({ stop_hook_active: true })), "", "never twice");
+
+  await p.pass(took.guide.id, "testing the hooks", { cwd: dir });
+  assert.equal(run("stop", "{}"), "", "nothing held: free to stop");
+
+  // A repo that never took anything is not given a .passalong/ folder for being asked.
+  const bare = mkdtempSync(join(tmpdir(), "passalong-bare-"));
+  execFileSync("git", ["init", "-q", bare]);
+  execFileSync(process.execPath, [bin, "now", "--hook", "session"], { cwd: bare, env: process.env });
+  assert.equal(existsSync(join(bare, ".passalong")), false);
 });

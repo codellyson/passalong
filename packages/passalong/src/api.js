@@ -121,6 +121,7 @@ export const rejectTask = (id, why) =>
 export const releaseTask = (id) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });
 /** The four verbs every guide answers to. See docs/V2.md §11. */
+export const working = () => call("/v1/working");
 export const take = (body) => call("/v1/take", { method: "POST", body });
 export const progress = (id, body) =>
   call(`/v1/guides/${encodeURIComponent(id)}/progress`, { method: "PUT", body });
