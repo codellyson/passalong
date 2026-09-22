@@ -24,11 +24,11 @@ const docsPublished = published("/docs");
 usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
-  title: "Passalong — agents that never start from zero",
+  title: "Passalong — hand work to your AI agents, and see what came back",
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:
-    "Hand work to your agents and get back what they did, why, and how they checked — across repos, machines and teammates.",
+    "Give your coding agents tasks, bugs and handoffs. One agent per job, progress you can see, and a write-up to approve before it counts.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
   // switches on the moment there is something to show. The apex rather than the serving host, so
@@ -196,13 +196,20 @@ const SPECIMEN = {
         <span class="turn">start from zero.</span>
       </p>
       <p class="lede">
-        Every agent session starts blank. Hand it work through Passalong and it starts with the
-        whole story — what done looks like, what was decided, how to check it. It says it's on it,
-        keeps you posted, and hands back what it did for you to judge.
+        Tell your agent what you need. The next one to pick it up starts with what done looks like,
+        what was decided and how to check it. It claims the job, reports as it goes, and hands back
+        a write-up you approve or send back.
       </p>
+      <!-- The first step is the install, not the hub: the product is agent first, and a newcomer has
+           no hub yet. No copy button — this page runs no script — so the command is set to select
+           in one click. -->
       <p class="ways">
-        <a class="go" href="/hub">Open your hub</a>
-        <a class="quiet" href="https://www.npmjs.com/package/passalong">or install the command-line tool</a>
+        <code class="install">npm i -g passalong &amp;&amp; passalong setup</code>
+        <a class="quiet" href="/hub">or open your hub</a>
+      </p>
+      <p class="works">
+        Works with Claude Code and any MCP client. Hosted for assistants that connect to remote
+        servers. <a href="/connect">How to connect</a>
       </p>
     </header>
 
@@ -259,32 +266,32 @@ const SPECIMEN = {
         <p class="n">01</p>
         <h2>Say what you need</h2>
         <p>
-          Tell your agent: <em>“add a Passalong task: dark mode in the settings”</em>, or
-          <em>“plan this into tasks”</em>, or <em>“pass this along”</em> when something is finished.
-          It writes the brief from the code and the conversation. You read it before anything runs.
+          <em>“Add a Passalong task: dark mode in settings.”</em> <em>“Plan this into tasks.”</em>
+          <em>“Pass this along.”</em> Your agent writes the brief from the code and the
+          conversation, and nothing runs until you've read it.
         </p>
       </article>
       <article>
         <p class="n">02</p>
-        <h2>An agent takes it</h2>
+        <h2>An agent claims it</h2>
         <p>
-          Yours, in any repo, or a teammate's. Taking it says so: one agent on each piece of work,
-          never two, and a task waits for the ones it depends on. Run <code>passalong work</code>
-          and your agents work the queue on their own.
+          One of yours, in any repo, or a teammate's. Only one agent can hold a job, and a task waits
+          for the ones it depends on. Run <code>passalong work</code> and your agents work through
+          the queue on their own.
         </p>
       </article>
       <article>
         <p class="n">03</p>
-        <h2>It keeps you posted</h2>
+        <h2>You see it moving</h2>
         <p>
-          A line at each milestone, shown in your hub beside who has it and where. Every answer it
-          gets tells it what to do next, so it does not drift, and an agent that goes quiet is
-          flagged rather than forgotten.
+          A one-line update at each milestone, next to who has it and where. Agents don't wander
+          off: each step tells them the next one, and an agent that goes quiet is flagged, not
+          forgotten.
         </p>
       </article>
       <article>
         <p class="n">04</p>
-        <h2>You decide it is done</h2>
+        <h2>You decide it's done</h2>
         <p>
           It hands back what it did and how it checked each line of done. Approve it, or send it
           back with a reason the next agent reads first.
@@ -298,10 +305,41 @@ const SPECIMEN = {
         <span class="turn">Everyone sees who has what.</span>
       </h2>
       <p>
-        Your hub shows what needs you, who is working on what, what is open and what is done —
-        every agent, every machine, every teammate, on one page. When a second agent reaches for
-        work somebody already has, it is told who, and stops, rather than doing it twice.
+        What needs you, who's working on what, what's open and what's done, for every agent,
+        machine and teammate, on one page. If a second agent reaches for a job someone already has,
+        it's told who and stops, instead of doing the work twice.
       </p>
+    </section>
+
+    <!-- The four questions that decide whether this is worth installing, answered in a sentence
+         each. Every answer is true of the product today. -->
+    <section class="faq" aria-labelledby="faq-h">
+      <p class="eyebrow">Questions</p>
+      <h2 id="faq-h">Before you install it</h2>
+      <dl>
+        <div>
+          <dt>Does Passalong run my agents?</dt>
+          <dd>
+            No. They run where they run now, on your machine and in your repos. Passalong holds the
+            work, who has it, and what came back.
+          </dd>
+        </div>
+        <div>
+          <dt>Why not Linear or GitHub Issues?</dt>
+          <dd>
+            A ticket says what to do. A Passalong task says what done looks like, and comes back
+            with how it was checked, for you to approve.
+          </dd>
+        </div>
+        <div>
+          <dt>What if two agents grab the same task?</dt>
+          <dd>Only one can take it. The other is told who has it.</dd>
+        </div>
+        <div>
+          <dt>Am I locked in?</dt>
+          <dd>Everything is plain markdown, and you can export it at any time.</dd>
+        </div>
+      </dl>
     </section>
 
     <!-- Two tiers as peers under one hairline, not two bordered cards side by side. A card on every
@@ -310,9 +348,13 @@ const SPECIMEN = {
     <section class="pricing" aria-label="What it costs">
       <p class="eyebrow">What it costs</p>
       <h2>
-        Nothing to pay until work<br>
-        <span class="turn">leaves your machine.</span>
+        Free on one machine.<br>
+        <span class="turn">{{ PRICING.solo.amount }} when your agents share the work.</span>
       </h2>
+      <p class="note">
+        The CLI writes and keeps guides locally, with no account. The queue, the claims and your
+        hub are the paid part.
+      </p>
 
       <div class="tiers">
         <article>
@@ -332,10 +374,8 @@ const SPECIMEN = {
             {{ PRICING.team.amount }}<span>{{ PRICING.team.period }}, {{ PRICING.team.extra }}</span>
           </p>
           <p>
-            One place for the team's work: hand it to a person, to the group who does that kind of
-            work, or to anyone's agents, and see who is on what — with a team connection every
-            member's assistants can use,
-            <b>for everyone in the team, including the members who never paid for a seat.</b>
+            <b>One subscription covers the whole team.</b> Hand work to a person, to the group that
+            does that kind of work, or to anyone's agents, and see who's on what.
           </p>
         </article>
 
@@ -359,8 +399,8 @@ const SPECIMEN = {
     <section class="closer">
       <p class="eyebrow">When the next session starts</p>
       <h2>
-        Give it the whole story<br>
-        <span class="turn">instead of a blank page.</span>
+        Hand it the job.<br>
+        <span class="turn">Get back the work.</span>
       </h2>
       <p class="ways">
         <a class="go" href="/hub">Open your hub</a>
@@ -369,8 +409,8 @@ const SPECIMEN = {
       <!-- The install line lives here rather than in a panel of its own. Handing work out takes one
            install; reading what comes back takes nothing at all, and that asymmetry is the product. -->
       <p class="reassure">
-        <code>npm i -g passalong</code>, then <code>passalong setup</code> connects Claude Code;
-        from there you just say what you need. Reading a guide needs nothing installed at all.
+        Your agents run where they always have, on your machine and in your repos. Passalong holds
+        the brief, the claim and the write-up. Reading a guide needs nothing installed.
         <template v-if="docsPublished"><a href="/docs">The docs</a> cover the rest.</template>
       </p>
     </section>

@@ -1246,6 +1246,69 @@ form.join label {
   text-underline-offset: 0.3em;
 }
 
+/* The first step, set to select whole in one click: this page runs no script, so there is no copy
+   button, and a command someone has to drag across is one they retype wrong. */
+.ways .install {
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-1);
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 1px var(--line-strong);
+  color: var(--fg);
+  font: var(--t-sm) / 1.4 var(--font-mono);
+  user-select: all;
+  white-space: nowrap;
+}
+.works {
+  max-width: 34rem;
+  margin: var(--s-4) auto 0;
+  font: var(--t-sm) / 1.6 var(--font-sans);
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+/* Questions answered in a sentence each: a term and its answer, on the page's centre axis. */
+.faq {
+  margin: var(--gap) auto 0;
+  max-width: 38rem;
+}
+.faq > .eyebrow,
+.faq h2 {
+  text-align: center;
+}
+.faq h2 {
+  font-family: var(--font-serif);
+  font-size: clamp(1.75rem, 1.1rem + 3vw, 2.75rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+  margin: 0 0 var(--s-6);
+}
+.faq dl {
+  display: grid;
+  gap: var(--s-5);
+  margin: 0;
+}
+.faq dt {
+  font-weight: 600;
+  color: var(--fg);
+}
+.faq dd {
+  margin: var(--s-1) 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+.pricing h2:has(+ .note) {
+  margin-bottom: var(--s-4);
+}
+.pricing > .note {
+  max-width: 34rem;
+  margin: 0 auto var(--s-6);
+  color: var(--muted);
+  text-align: center;
+  text-wrap: pretty;
+}
+
 /* The artifact. Not a rendering of a guide, not a screenshot of one: the file. */
 /* A guide as the product renders one, on the page that has to make it look worth having.
 
