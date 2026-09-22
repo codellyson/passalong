@@ -8,7 +8,7 @@ the problem, the decisions and why, the steps, how to verify, and what went wron
 
 ```sh
 npm i -g passalong
-passalong setup      # installs the Claude Code capture skill + registers the MCP server
+passalong setup      # installs the Claude Code capture skill, the MCP server and two hooks
 passalong login      # optional: sync guides across machines and get share links
 ```
 
@@ -54,9 +54,33 @@ passalong team create <name>  start a team (you become its owner)
 passalong team invite [email] make an invite link (mailed when an email is given)
 passalong team join <link>    accept an invite
 passalong team use <slug>     switch the current team
-passalong setup               install the Claude Code capture skill + register the MCP server
+passalong setup               install the Claude Code capture skill, MCP server and hooks
+passalong now                 what this worktree holds and what is waiting
 passalong mcp                 run the MCP server over stdio
 ```
+
+## Working the task queue unattended
+
+`passalong work` runs `claude -p` on each ready task for the repo you are in, one after another.
+The agent runs headless, so it can only use the tools you allow up front. A task that needs a
+command you did not allow ends up blocked: the agent says so on the board with a
+`BLOCKED:` progress note and stops. To allow tools, point `--agent` (or `PASSALONG_AGENT`) at a
+small script:
+
+```sh
+#!/bin/sh
+# The prompt must come first: --allowedTools takes any number of values and would swallow it.
+exec claude -p "$@" --permission-mode acceptEdits \
+  --allowedTools "mcp__passalong__*,Bash(npm test:*),Bash(node:*),Bash(git add:*),Bash(git commit:*),Bash(chmod:*)"
+```
+
+```sh
+passalong work --agent ./agent.sh
+```
+
+Each agent commits its change as `<task id>: …` and hands the hash in with `hand_in`, so you
+review one task's change at a time. Then `passalong approve <id>`, or
+`passalong reject <id> <why>`: the next agent reads the reason before it starts again.
 
 ## The guide
 
@@ -120,13 +144,13 @@ you see which ones keep travelling — there is nothing to mark them as, and not
 
 ## MCP
 
-`passalong setup` registers the server with Claude Code. For other clients:
+`passalong setup` registers the server with Claude Code, and adds two hooks to `~/.claude/settings.json`: at session start the agent is told what its worktree holds (`passalong now --hook session`), and a session that still holds work is stopped once and told to hand it in, pass it, or leave a progress note (`passalong now --hook stop`). Both say nothing when offline or signed out. For other clients:
 
 ```sh
 claude mcp add passalong -- passalong mcp     # or the equivalent stdio config
 ```
 
-Tools: `publish_guide` (with `to`), `file_bugs`, `start_guide`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `ack_guide`, `verify_guide`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`.
+Tools: `take`, `progress`, `hand_in` and `pass` for working any guide, each answering with what to call next; `publish_guide` (with `to`), `file_bugs`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`, `attach_screenshot`, `inbox`, `board`, `activity`, `log`, `plan_tasks`. The older `start_guide`, `ack_guide`, `verify_guide`, `next_task`, `task_progress` and `finish_task` still work, as those four.
 
 The same server is hosted at `https://passalong.dev/v1/mcp` for assistants that add remote MCP servers. A screenshot reaches it differently by assistant — ChatGPT passes the file, Claude sends it from its code sandbox to a one-time upload link (`create_upload`, with `passalong.dev` allowed in its network settings), and a local server reads a path. [passalong.dev/connect](https://passalong.dev/connect#screenshots) has the steps.
 

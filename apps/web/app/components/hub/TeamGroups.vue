@@ -179,10 +179,10 @@ async function drop(g: Group) {
         </label>
         <input id="group-slug" v-model="slug" class="w-full" placeholder="frontend" required>
       </div>
-      <button class="btn primary sm" type="submit" :disabled="busy || !slug.trim()">
+      <button class="btn primary" type="submit" :disabled="busy || !slug.trim()">
         {{ busy ? "Adding…" : "Add group" }}
       </button>
-      <button class="btn sm" type="button" @click="adding = false; slug = ''">Cancel</button>
+      <button class="btn" type="button" @click="adding = false; slug = ''">Cancel</button>
       <p class="m-0 basis-full font-ui text-sm text-muted">
         A guide sent to the group reaches everyone in it, and the first person to take it takes it
         off everyone else's list. Agents can send to it by name too.

@@ -38,6 +38,14 @@ const where = computed(() => {
   return [c.host, tree].filter(Boolean).join(":");
 });
 
+/** Whose agent has it: yours, or a teammate's. */
+const by = computed(() => {
+  const b = props.t.claim?.by;
+  if (!b || b.you) return "Your agent";
+  const name = personName(b.name, b.handle);
+  return name ? `${name}'s agent` : "A teammate's agent";
+});
+
 /**
  * When the agent was last heard from. The lease runs 30 minutes from its last call (LEASE_MS in
  * apps/api/src/claims.ts), so that is the lease less 30 minutes — the lease itself is when it
@@ -90,8 +98,13 @@ function send() {
         <a :href="t.claim.report_url || undefined" target="_blank" rel="noopener">{{
           t.claim.report_title || t.claim.report
         }}</a>
-        <template v-if="t.claim.pr">
+        <!-- `pr` is whatever the agent had: a PR link when there is one, and more often the hash
+             of the commit it made, which has nowhere to link to from here. -->
+        <template v-if="t.claim.pr && /^https?:\/\//.test(t.claim.pr)">
           · <a :href="t.claim.pr" target="_blank" rel="noopener">the change</a>
+        </template>
+        <template v-else-if="t.claim.pr">
+          · commit <code class="font-code">{{ t.claim.pr.slice(0, 7) }}</code>
         </template>
       </p>
 
@@ -99,7 +112,7 @@ function send() {
         <code class="shrink-0 font-code">{{ t.id }}</code>
         <span v-if="t.target" class="font-code"><AppShorten :value="t.target" :max="28" /></span>
         <span v-else>no repo</span>
-        <span v-if="where" class="font-code">{{ where }}</span>
+        <span v-if="where">{{ by }} · <span class="font-code">{{ where }}</span></span>
       </div>
 
       <div
@@ -139,6 +152,7 @@ function send() {
       <button
         v-else-if="t.state === 'claimed' || t.state === 'stalled'"
         class="btn outline warn sm"
+       
         @click="onRelease(t)"
       >take back</button>
       <button v-else-if="t.state === 'draft'" class="btn sm" @click="onTaskReady(t)">make ready</button>

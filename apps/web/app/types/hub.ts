@@ -188,7 +188,43 @@ export interface Task {
     pr: string;
     claimed_at: string;
     lease_until: string;
+    /** Whose agent has it. A teammate's agent can take your task. */
+    by?: { handle: string; name: string; you: boolean };
   } | null;
+}
+
+/** One guide someone is working on right now, of any kind. See GET /v1/working. */
+export interface Working {
+  id: string;
+  title: string;
+  kind: string;
+  target: string;
+  url: string;
+  state: "claimed" | "stalled";
+  by: { handle: string; name: string; you: boolean };
+  agent: string;
+  host: string;
+  repo: string;
+  worktree: string;
+  note: string;
+  claimed_at: string;
+  lease_until: string;
+}
+
+/** A handoff or bug you wrote that somebody handed in, waiting on you. See GET /v1/handed_in. */
+export interface HandedIn {
+  id: string;
+  title: string;
+  kind: string;
+  url: string;
+  /** The repo it was handed in from; '' for a person in the browser. What send-back names. */
+  place: string;
+  by: { handle: string; name: string };
+  agent: string;
+  host: string;
+  worktree: string;
+  note: string;
+  at: string;
 }
 
 export interface HubData {
@@ -202,4 +238,6 @@ export interface HubData {
   tokens: ApiToken[];
   team: TeamDetail | null;
   tasks: Task[];
+  working: Working[];
+  handedIn: HandedIn[];
 }

@@ -113,7 +113,7 @@ function deny() {
   <HubShell heading="Connect an app">
     <template #sub>Something wants to use Passalong for you.</template>
 
-    <section v-if="trouble && !info" class="rounded-3 border border-line bg-raised p-6">
+    <section v-if="trouble && !info" class="rounded-3 bg-raised shadow-edge p-6">
       <h2 class="m-0 text-h2">This link didn't work</h2>
       <p class="mt-2 mb-0 font-ui text-sm text-muted">{{ trouble }}</p>
       <p class="mt-4 mb-0 font-ui text-sm">
@@ -121,7 +121,7 @@ function deny() {
       </p>
     </section>
 
-    <section v-else-if="info" class="rounded-3 border border-line bg-raised p-6">
+    <section v-else-if="info" class="rounded-3 bg-raised shadow-edge p-6">
       <h2 class="m-0 text-h2">Let {{ app }} use your Passalong?</h2>
       <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ info.host }}</p>
 
@@ -149,7 +149,7 @@ function deny() {
          from appearing under the reader's pointer a moment after they started reading. -->
     <section
       v-else-if="lookingUp"
-      class="flex flex-col gap-4 rounded-3 border border-line bg-raised p-6"
+      class="flex flex-col gap-4 rounded-3 bg-raised shadow-edge p-6"
       role="status"
       aria-label="Checking the app"
     >

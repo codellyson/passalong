@@ -8,8 +8,8 @@
 // so it is put on the solo plan in the *local* D1 with `wrangler d1 execute --local`. That only
 // works against a local server whose database is apps/web's — never point this at a real one.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -24,19 +24,7 @@ function setup() {
   ready ??= (async () => {
     assert.match(API, /^http:\/\/localhost[:/]/, "only ever against a local server");
     const { token, account } = await (await fetch(`${API}/v1/accounts`, { method: "POST" })).json();
-    execFileSync(
-      "npx",
-      [
-        "wrangler",
-        "d1",
-        "execute",
-        "passalong",
-        "--local",
-        "--command",
-        `UPDATE account SET plan = 'solo' WHERE id = '${account}'`,
-      ],
-      { cwd: WEB, stdio: "ignore" },
-    );
+    await sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
     process.env.PASSALONG_API = API;
     process.env.PASSALONG_TOKEN = token;
     process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-e2e-"));
@@ -193,14 +181,39 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
 /** Another account on the same local server, allowed to sync. Returns its token. */
 async function secondAccount() {
   const { token, account } = await (await fetch(`${API}/v1/accounts`, { method: "POST" })).json();
-  sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
+  await sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
   return { token, account };
 }
 
+/**
+ * A statement against the local D1, through wrangler. Resolved when wrangler prints success, and
+ * the process is then stopped: `wrangler d1 execute --local` can finish its write and not exit, and
+ * waiting for the exit hung the whole suite. Anything else — a failure, or no answer in 90s — throws.
+ */
 function sql(command) {
-  execFileSync("npx", ["wrangler", "d1", "execute", "passalong", "--local", "--command", command], {
-    cwd: WEB,
-    stdio: "ignore",
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "npx",
+      ["wrangler", "d1", "execute", "passalong", "--local", "--command", command],
+      { cwd: WEB, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    let out = "";
+    const done = (err) => {
+      clearTimeout(timer);
+      child.kill();
+      err ? reject(err) : resolve();
+    };
+    const timer = setTimeout(() => done(new Error(`no answer from wrangler: ${command}`)), 90_000);
+    child.stdout.on("data", (b) => {
+      out += b;
+      if (/"success":\s*true/.test(out)) done();
+    });
+    child.stderr.on("data", (b) => {
+      out += b;
+    });
+    child.on("exit", (code) => {
+      if (code) done(new Error(`wrangler exited ${code}: ${out.slice(-400)}`));
+    });
   });
 }
 
@@ -216,7 +229,7 @@ test("in a team, each side hears what the other did to a task — and only the a
   };
 
   const team = await api.createTeam(`tasks ${Date.now()}`);
-  sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
   const { code } = await api.invite(team.slug);
   const mate = await secondAccount();
   as(mate.token);
@@ -364,4 +377,234 @@ test("work stops when an agent exits without finishing, instead of looping on it
     "claimed",
     "still this worktree's",
   );
+});
+
+test("a task is answered with the task tools, and the guide ones say so", { skip }, async () => {
+  const env = await setup();
+  const { p } = env;
+  const api = await import("../src/api.js");
+  const { id } = await readyTask(env, "Answered the wrong way");
+  // A verdict or an ack on a task would be an answer nobody reads: its author reviews it from the
+  // queue. Both are refused, and the refusal names the tools that do the job.
+  const task = /take[^.]*hand_in|hand_in[^.]*take/;
+  await assert.rejects(p.verdict(id, true, ""), (e) => e.status === 400 && task.test(e.message));
+  await assert.rejects(api.ack(id, true, ""), (e) => e.status === 400 && task.test(e.message));
+});
+
+test("one set of verbs for every kind: take, progress, hand_in, pass, each saying what is next", {
+  skip,
+}, async () => {
+  const { p } = await setup();
+  const call = async (method, path, body) => {
+    const res = await fetch(`${API}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, ...(await res.json()) };
+  };
+  const h = (
+    await p.share(
+      "---\ntitle: Stream the PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    )
+  ).guide.meta.id;
+  const a = { agent: "e2e-agent-aaaa", repo: "e2e/one", host: "mac", worktree: "/w/a" };
+  const b = { agent: "e2e-agent-bbbb", repo: "e2e/one" };
+  const c = { agent: "e2e-agent-cccc", repo: "e2e/two" };
+
+  const took = await call("POST", "/v1/take", { ...a, id: h });
+  assert.equal(took.guide.kind, "transfer");
+  assert.match(took.guide.markdown, /Stream the PDF/);
+  assert.deepEqual(
+    took.next.map((s) => s.tool),
+    ["progress", "hand_in", "pass"],
+  );
+
+  const clash = await call("POST", "/v1/take", { ...b, id: h });
+  assert.equal(clash.status, 409);
+  assert.equal(clash.holder.worktree, "/w/a", "the refusal says who has it");
+  assert.equal((await call("POST", "/v1/take", { ...c, id: h })).guide.repo, "e2e/two");
+
+  const said = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "halfway" });
+  assert.equal(said.note, "halfway");
+  assert.ok(said.next.length);
+
+  // Your own guide: nobody to hand it in to, and the claim is still yours to pass.
+  assert.equal((await call("POST", `/v1/guides/${h}/hand_in`, { ...a, ok: true })).status, 403);
+  const passed = await call("POST", `/v1/guides/${h}/pass`, { ...a, why: "wrong repo after all" });
+  assert.deepEqual(
+    passed.next.map((s) => s.tool),
+    ["take"],
+  );
+  const gone = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "still going" });
+  assert.equal(gone.status, 409);
+  assert.match(gone.say, /stop/i, "an agent that lost its claim is told to stop");
+  assert.equal((await call("POST", "/v1/take", { ...b, id: h })).guide.agent, b.agent);
+});
+
+test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handoff alike", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { dir } = await readyTask(env, "Verbs on a task");
+
+  // No id: the next thing waiting in this repo — oldest first, so maybe a task an earlier test
+  // left ready. The document lands where a pull would put it.
+  const took = await p.take(undefined, { cwd: dir });
+  const id = took.guide.id;
+  assert.equal(took.guide.kind, "task");
+  assert.match(readFileSync(took.path, "utf8"), new RegExp(took.guide.title));
+  assert.deepEqual(
+    took.next.map((s) => s.tool),
+    ["progress", "hand_in", "pass"],
+  );
+
+  assert.equal((await p.progress(id, "halfway", { cwd: dir })).note, "halfway");
+  const md = "---\ntitle: Verbs, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const handed = await p.handIn(id, { markdown: md, cwd: dir });
+  assert.equal(handed.state, "review");
+  assert.deepEqual(
+    handed.next.map((s) => s.tool),
+    ["take"],
+  );
+
+  // A handoff by id: taken, then passed with the reason, and free for the next agent.
+  const h = (
+    await p.share(
+      "---\ntitle: A handoff\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      { cwd: dir },
+    )
+  ).guide.meta.id;
+  assert.equal((await p.take(h, { cwd: dir })).guide.kind, "transfer");
+  await assert.rejects(p.pass(h, "", { cwd: dir }), /why/);
+  assert.deepEqual(
+    (await p.pass(h, "not mine", { cwd: dir })).next.map((s) => s.tool),
+    ["take"],
+  );
+});
+
+test("now says what this worktree holds, for the session-start and stop hooks", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { dir } = await readyTask(env, "Held across a restart");
+  const took = await p.take(undefined, { cwd: dir });
+  const now = await p.now({ cwd: dir });
+  assert.equal(now.held.id, took.guide.id);
+  assert.equal(now.held.kind, "task");
+  await p.pass(took.guide.id, "testing now", { cwd: dir });
+  assert.equal((await p.now({ cwd: dir })).held, null);
+});
+
+test("the hook commands: a session is told what it holds, and stopped once before ending", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { dir } = await readyTask(env, "Hooked");
+  const took = await p.take(undefined, { cwd: dir });
+  const bin = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "passalong");
+  const run = (hook, input = "") =>
+    execFileSync(process.execPath, [bin, "now", "--hook", hook], {
+      cwd: dir,
+      input,
+      env: process.env,
+    }).toString();
+
+  const started = JSON.parse(run("session"));
+  assert.equal(started.hookSpecificOutput.hookEventName, "SessionStart");
+  assert.match(
+    started.hookSpecificOutput.additionalContext,
+    new RegExp(`You hold ${took.guide.id}`),
+  );
+
+  const stop = JSON.parse(run("stop", JSON.stringify({ stop_hook_active: false })));
+  assert.equal(stop.decision, "block");
+  assert.equal(run("stop", JSON.stringify({ stop_hook_active: true })), "", "never twice");
+
+  await p.pass(took.guide.id, "testing the hooks", { cwd: dir });
+  assert.equal(run("stop", "{}"), "", "nothing held: free to stop");
+
+  // A repo that never took anything is not given a .passalong/ folder for being asked.
+  const bare = mkdtempSync(join(tmpdir(), "passalong-bare-"));
+  execFileSync("git", ["init", "-q", bare]);
+  execFileSync(process.execPath, [bin, "now", "--hook", "session"], {
+    cwd: bare,
+    env: process.env,
+  });
+  assert.equal(existsSync(join(bare, ".passalong")), false);
+});
+
+test("a handoff in the browser: taking it holds it, saying it worked hands it in, and its author closes it", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const api = await import("../src/api.js");
+  const owner = process.env.PASSALONG_TOKEN;
+  const as = (token) => {
+    process.env.PASSALONG_TOKEN = token;
+  };
+  const call = async (method, path, body) => {
+    const res = await fetch(`${API}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return { status: res.status, ...(await res.json()) };
+  };
+
+  const team = await api.createTeam(`handoffs ${Date.now()}`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  const { code } = await api.invite(team.slug);
+  const mate = await secondAccount();
+  as(mate.token);
+  await api.join(code);
+
+  as(owner);
+  const md =
+    "---\ntitle: Stream the invoice PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const id = (await p.share(md, { to: team.slug })).guide.meta.id;
+
+  // The teammate takes it the way the browser does, and shows in Working now as a person.
+  as(mate.token);
+  await api.ack(id, true, "");
+  as(owner);
+  const held = (await call("GET", "/v1/working")).working.find((w) => w.id === id);
+  assert.match(held.agent, /^person-/);
+  assert.equal(held.state, "claimed");
+
+  // "It worked" from the browser hands it in: out of working, into the author's list.
+  as(mate.token);
+  await api.verdict(id, true, "streams fine now");
+  as(owner);
+  assert.equal(
+    (await call("GET", "/v1/working")).working.find((w) => w.id === id),
+    undefined,
+  );
+  const [waiting] = (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id);
+  assert.equal(waiting.note, "streams fine now");
+
+  // Only the author closes it; closing archives it and tells the teammate.
+  as(mate.token);
+  assert.equal((await call("POST", `/v1/guides/${id}/close`)).status, 404);
+  await p.activity();
+  as(owner);
+  assert.equal((await call("POST", `/v1/guides/${id}/close`)).state, "done");
+  assert.deepEqual(
+    (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id),
+    [],
+  );
+  as(mate.token);
+  const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
+  assert.match(heard, /accepted your work on "Stream the invoice PDF"/);
+  as(owner);
 });

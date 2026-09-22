@@ -1,47 +1,56 @@
 <!--
-  The hub: one page, three questions. What needs you, what you sent and where it got to, and what
-  is finished — folded, because it is most of what exists and none of what needs doing.
+  The hub: one page for all work, whatever kind it is. See docs/V2.md §11.
 
-  The title says whose guides these are — "Guides in [Khaime ▾]" — with the team picker in it, and
-  the line under it is the three sections' own counts, each a link to its section. Those numbers
-  used to be computed separately in the page header and disagreed with the sections on the same
-  screen.
+  Tasks and handoffs used to be two pages, with two ideas of who has what. They are one thing — a
+  guide handed from one context to another — so they are one page, in the order a person needs it:
 
-  /hub/guides redirects here with its query, so `?q=` and `?follows=` links still work. `?done=1`
-  opens Done, which is where the free-plan banner sends you to make room.
+    Needs you     work handed in for you to review (HubTaskReview), agents stuck on you, and guides
+                  handed to you that you have not answered
+    Working now   who is on what, across every kind (HubWorkingNow, GET /v1/working)
+    Open          what nobody is on yet: ready, blocked and draft tasks, a teammate's task waiting
+                  for its author, and handoffs you sent that are still out
+    Done          folded, because it is most of what exists and none of what needs doing
+
+  The title says whose work this is — "Work in [Khaime ▾]" — with the team picker in it. The four
+  are tabs, each with its count, so an empty one is a zero on a label rather than a section.
+
+  /hub/guides and /hub/tasks redirect here with their query, so `?q=` and `?follows=` links still
+  work. `?tab=` opens a tab; `?done=1` opens Done, which is where the free-plan banner sends you.
 -->
 <script setup lang="ts">
-import type { Guide } from "~/types/hub";
+import type { Guide, Task } from "~/types/hub";
+import { ASKS } from "~/utils/asks";
 import { boardStates, stateOf } from "~/utils/guide-state";
 
 usePage({
-  title: "Guides · Passalong",
-  description: "Guides sent to you, guides you sent, and what's done.",
+  title: "Work · Passalong",
+  description: "What needs you, who is working on what, what is open, and what is done.",
   noindex: true,
 });
 
 const { data, scope, loading, failed, updating, scopeChanging } = useHub();
 
-/** Either half of what the sections are built from gave up loading. The shell's banner says so. */
+/** Either half of what the guide sections are built from gave up loading. The shell says so. */
 const unavailable = computed(() => failed.value.guides || failed.value.board);
-/** Either half of what the sections are built from is still on its way. */
+/** Either half is still on its way. */
 const waiting = computed(() => !unavailable.value && (loading.value.guides || loading.value.board));
 
-// An account with nothing in it is not looking at a list. It gets the two things that lead
-// somewhere instead, and a heading that says so — but only once the list has actually arrived
-// empty, or every first load would flash the onboarding screen at people with guides.
+// An account with nothing in it is not looking at a list. It gets the steps that lead somewhere,
+// but only once both lists have arrived empty, or every first load would flash onboarding.
 const first = computed(
   () =>
     Boolean(data.value.me) &&
     !waiting.value &&
     !unavailable.value &&
-    data.value.guides.length === 0,
+    !loading.value.tasks &&
+    data.value.guides.length === 0 &&
+    data.value.tasks.length === 0,
 );
 
 const route = useRoute();
 const text = (v: unknown) => (typeof v === "string" ? v : "");
-/** Seeded from the URL, so a link elsewhere can open a search; watched, because a link on this
-    same page changes the query without remounting it. */
+/** Seeded from the URL so a link elsewhere can open a search; watched, because a link on this page
+    changes the query without remounting it. */
 const q = ref(text(route.query.q));
 watch(
   () => route.query.q,
@@ -49,14 +58,25 @@ watch(
     q.value = text(v);
   },
 );
-/** `?follows=<id>`: guides naming it as their parent. A follow-up does not contain its parent's
-    title, so this cannot be a search term. */
+/** `?follows=<id>`: guides naming it as their parent. */
 const follows = computed(() => text(route.query.follows));
-/** The guide being followed, by title, when it is one this list holds. */
 const followed = computed(() =>
   follows.value ? data.value.guides.find((g) => g.id === follows.value) || null : null,
 );
 const searching = computed(() => Boolean(q.value.trim() || follows.value));
+function clearSearch() {
+  q.value = "";
+  if (route.query.q || route.query.follows)
+    navigateTo({ query: { ...route.query, q: undefined, follows: undefined } }, { replace: true });
+}
+const terms = computed(() => q.value.trim().toLowerCase().split(/\s+/).filter(Boolean));
+const hit = (fields: unknown[]) => {
+  if (!terms.value.length) return true;
+  const hay = fields.join("\n").toLowerCase();
+  return terms.value.every((t) => hay.includes(t));
+};
+
+// ---- guides: handoffs and bugs, as the lanes always sorted them ----------------------------------
 
 const fromBoard = computed(() => boardStates(data.value.board));
 const me = computed(() => data.value.me?.handle || null);
@@ -64,21 +84,24 @@ const hasTeams = computed(() => Boolean(data.value.me?.teams.length));
 
 /**
  * The list is scoped and the board is not. Across all teams, a guide sent to you from outside your
- * teams is on the board and not in the list — it is the one thing on this page that must not go
- * missing, so it is added back.
+ * teams is on the board and not in the list — the one thing here that must not go missing.
+ * Tasks are left out: they have their own sections below, from the task queue.
  */
 const guides = computed<Guide[]>(() => {
   const list = data.value.guides;
-  if (scope.value !== "all") return list;
-  const have = new Set(list.map((g) => g.id));
-  return [...list, ...(data.value.board?.waiting ?? []).filter((g) => !have.has(g.id))];
+  const all =
+    scope.value !== "all"
+      ? list
+      : [
+          ...list,
+          ...(data.value.board?.waiting ?? []).filter((g) => !list.some((x) => x.id === g.id)),
+        ];
+  return all.filter((g) => g.kind !== "task");
 });
 
 const matches = (g: Guide) => {
   if (follows.value && g.parent !== follows.value) return false;
-  const terms = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (!terms.length) return true;
-  const hay = [
+  return hit([
     g.title,
     g.source_context,
     g.from,
@@ -90,10 +113,7 @@ const matches = (g: Guide) => {
     g.report_title,
     ...(g.tags || []),
     ...(g.stack_assumptions || []),
-  ]
-    .join("\n")
-    .toLowerCase();
-  return terms.every((t) => hay.includes(t));
+  ]);
 };
 
 const lanes = computed(() =>
@@ -101,137 +121,290 @@ const lanes = computed(() =>
     guides.value.filter(matches).map((g) => ({ g, state: stateOf(g, fromBoard.value, me.value) })),
   ),
 );
-
 const sentCount = computed(() =>
   lanes.value.sent.reduce((n, e) => n + ("row" in e ? 1 : e.group.rows.length), 0),
 );
 
-const showDone = ref(route.query.done === "1");
-watch(
-  () => route.query.done,
-  (v) => {
-    if (v === "1") showDone.value = true;
+// ---- tasks -----------------------------------------------------------------------------------
+
+const taskHit = (t: Task) =>
+  !follows.value && hit([t.title, t.id, t.target, t.claim?.note, t.claim?.report_title]);
+const tasks = computed(() => data.value.tasks.filter(taskHit));
+
+/** Yours, and waiting on you: mirrors the groups in HubTaskReview. */
+const taskNeedsYou = (t: Task) =>
+  t.mine &&
+  (t.state === "review" ||
+    t.state === "stalled" ||
+    (t.state === "claimed" && /^BLOCKED:/i.test(t.claim?.note || "")));
+const reviewCount = computed(() => tasks.value.filter(taskNeedsYou).length);
+
+/** Tasks nobody is on and nobody needs to review: claimed ones are in Working now. */
+const OPEN: { state: Task["state"]; title: string; note: string }[] = [
+  {
+    state: "review",
+    title: "Waiting for its author",
+    note: "A teammate's task, handed in and waiting on them.",
   },
+  {
+    state: "ready",
+    title: "Ready",
+    note: "The next agent in the right repo takes these, oldest first.",
+  },
+  {
+    state: "blocked",
+    title: "Blocked",
+    note: "Waiting until the tasks they depend on are approved.",
+  },
+  { state: "draft", title: "Draft", note: "Not in the queue until you make them ready." },
+];
+const openTasks = computed(() => {
+  const out = new Map<Task["state"], Task[]>();
+  for (const t of tasks.value)
+    if (!taskNeedsYou(t) && OPEN.some((c) => c.state === t.state))
+      out.set(t.state, [...(out.get(t.state) || []), t]);
+  return out;
+});
+const openTaskCount = computed(() =>
+  [...openTasks.value.values()].reduce((n, l) => n + l.length, 0),
 );
-/** A search looks everywhere, so it opens the shelf rather than hiding matches behind it. */
-const doneOpen = computed(() => showDone.value || searching.value);
+const doneTasks = computed(() => tasks.value.filter((t) => t.state === "done"));
+
+// ---- the counts line -------------------------------------------------------------------------
+
+/** Handoffs you wrote that somebody handed in, narrowed by the search like everything else. */
+const handedIn = computed(() =>
+  data.value.handedIn.filter(
+    (h) => !follows.value && hit([h.title, h.id, h.note, h.place, h.by.name, h.by.handle]),
+  ),
+);
+const needsCount = computed(
+  () => reviewCount.value + handedIn.value.length + lanes.value.needs.length,
+);
+const workingCount = computed(() => data.value.working.length);
+const openCount = computed(() => openTaskCount.value + sentCount.value);
+const doneCount = computed(() => doneTasks.value.length + lanes.value.done.length);
+
+/**
+ * One section at a time, as tabs, each carrying its count. Four stacked sections spent the page on
+ * whichever were empty; a tab with nothing in it is a zero on a label instead.
+ *
+ * The tab is in the URL (`?tab=`), so a link can open one and Back goes where you were. `?done=1`,
+ * which the free-plan banner sends, still opens Done. With no tab asked for, it opens the first
+ * that has something in it, in the order of what needs a person most.
+ */
+const TABS = ["needs", "working", "open", "done"] as const;
+type Tab = (typeof TABS)[number];
+const asked = computed<Tab | null>(() => {
+  const t = text(route.query.tab);
+  if ((TABS as readonly string[]).includes(t)) return t as Tab;
+  return route.query.done === "1" ? "done" : null;
+});
+const fallback = computed<Tab>(() =>
+  needsCount.value ? "needs" : workingCount.value ? "working" : openCount.value ? "open" : "needs",
+);
+const tab = computed<Tab>(() => asked.value ?? fallback.value);
+const tabs = computed(() => [
+  {
+    id: "needs" as const,
+    label: "Needs you",
+    count: needsCount.value,
+    tone: needsCount.value ? "accent" : "",
+  },
+  { id: "working" as const, label: "Working now", count: workingCount.value, tone: "" },
+  { id: "open" as const, label: "Open", count: openCount.value, tone: "" },
+  { id: "done" as const, label: "Done", count: doneCount.value, tone: "" },
+]);
+function pick(id: Tab) {
+  navigateTo({ query: { ...route.query, tab: id, done: undefined } }, { replace: true });
+}
+// On a phone the four tabs are wider than the screen and the row scrolls: keep the chosen one in
+// view, horizontally only, so opening ?tab=done does not leave Done off the edge.
+const tablist = ref<HTMLElement | null>(null);
+function showTab() {
+  const row = tablist.value;
+  const el = document.getElementById(`tab-${tab.value}`);
+  if (!row || !el) return;
+  const left = el.offsetLeft - row.offsetLeft;
+  if (left < row.scrollLeft || left + el.offsetWidth > row.scrollLeft + row.clientWidth)
+    row.scrollLeft = left - 8;
+}
+onMounted(() => nextTick(showTab));
+watch([tab, tablist, waiting], () => nextTick(showTab));
+
+function arrowTabs(e: KeyboardEvent) {
+  const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+  if (!step) return;
+  const next = TABS[(TABS.indexOf(tab.value) + step + TABS.length) % TABS.length]!;
+  pick(next);
+  nextTick(() => document.getElementById(`tab-${next}`)?.focus());
+}
+
+const sub = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted";
+const list = "m-0 list-none overflow-hidden rounded-3 bg-raised p-0 shadow-edge";
 </script>
 
 <template>
   <HubShell :heading="first ? 'Get started' : ''">
-    <!-- A token-only account cannot sign in from any other browser. That is true whether or not
-         the list is empty, so it sits above whichever of the two this page is showing. -->
+    <!-- A token-only account cannot sign in from any other browser, whichever of the two this page
+         is showing. -->
     <HubClaim />
 
     <HubFirstRun v-if="first" />
 
-    <div v-else class="flex flex-col gap-8">
+    <div v-else class="flex flex-col gap-6">
       <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div class="flex min-w-0 flex-col gap-1">
-          <h1 class="m-0 flex flex-wrap items-center gap-2 text-h2">
-            Guides<template v-if="hasTeams"> in <HubScopes /></template>
-          </h1>
-          <p v-if="waiting" class="m-0 h-5 font-ui text-sm text-muted" aria-hidden="true">
-            <span class="inline-block h-2.5 w-56 rounded-pill bg-line align-middle" />
-          </p>
-          <p v-else class="m-0 font-ui text-sm text-muted">
-            <!-- Said once, quietly, and only for a refresh of what is already on screen. -->
-            <span v-if="updating || scopeChanging" role="status" class="mr-2 text-muted">Updating…</span>
-            <a href="#needs">{{ lanes.needs.length }} need you</a>
-            ·
-            <a href="#sent">{{ sentCount }} you sent {{ sentCount === 1 ? "is" : "are" }} still out</a>
-            ·
-            <a href="#done" @click="showDone = true">{{ lanes.done.length }} done</a>
-          </p>
-        </div>
+        <h1 class="m-0 flex flex-wrap items-center gap-2 text-h2">
+          Work<template v-if="hasTeams"> in <HubScopes /></template>
+          <span v-if="updating || scopeChanging" role="status" class="font-ui text-sm font-normal text-muted">Updating…</span>
+        </h1>
         <div class="toolbar m-0 min-w-[14rem] grow basis-56 sm:max-w-xs">
-          <input v-model="q" type="search" placeholder="Search guides" aria-label="Search guides" />
+          <input v-model="q" type="search" placeholder="Search work" aria-label="Search work" />
         </div>
       </div>
 
       <!-- Named, not "one guide": the filter is only useful if you can see which guide it is. -->
-      <p v-if="follows" class="-mt-4 mb-0 font-ui text-sm text-muted">
+      <p v-if="follows" class="m-0 font-ui text-sm text-muted">
         Follow-ups to
         <b class="font-medium text-fg">{{ followed?.title || "this guide" }}</b>: more context
         added to it.
-        <NuxtLink :to="{ path: '/hub/write', query: { follows } }">Add one</NuxtLink>
+        <button class="linkish" type="button" @click="copy(followUpAsk(follows), $event.currentTarget)"><span data-label>Copy a follow-up ask</span></button>
         ·
-        <NuxtLink to="/hub">Show all guides</NuxtLink>
+        <NuxtLink to="/hub">Show all work</NuxtLink>
       </p>
 
       <!-- A list that failed to load draws nothing rather than its empty state: the shell's banner
            already says what happened and offers Try again. -->
       <template v-if="!unavailable">
-      <section
-        id="needs"
-        aria-labelledby="lane-needs"
-        class="flex scroll-mt-4 flex-col gap-3 transition-opacity"
-        :class="scopeChanging ? 'opacity-60' : ''"
-        :aria-busy="waiting || scopeChanging"
-      >
-        <h2 id="lane-needs" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
-          Needs you
-          <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ lanes.needs.length }}</span>
-        </h2>
-        <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
-        <ul v-else-if="lanes.needs.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
-          <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />
-        </ul>
-        <p v-else class="m-0 font-ui text-sm text-muted">
-          {{ searching ? "Nothing waiting on you matches." : "Nothing is waiting on you." }}
-        </p>
-      </section>
-
-      <section
-        id="sent"
-        aria-labelledby="lane-sent"
-        class="flex scroll-mt-4 flex-col gap-3 transition-opacity"
-        :class="scopeChanging ? 'opacity-60' : ''"
-        :aria-busy="waiting || scopeChanging"
-      >
-        <h2 id="lane-sent" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
-          You sent
-          <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ sentCount }}</span>
-        </h2>
-        <HubSkeleton v-if="waiting" :rows="2" label="Loading what you sent" />
-        <ul v-else-if="lanes.sent.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
-          <template v-for="e in lanes.sent" :key="'row' in e ? e.row.g.id : `report-${e.group.report}`">
-            <HubInboxRow v-if="'row' in e" :row="e.row" />
-            <HubReportRow v-else :group="e.group" :open="searching" />
-          </template>
-        </ul>
-        <p v-else class="m-0 font-ui text-sm text-muted">
-          {{ searching ? "Nothing you sent matches." : "Nothing you sent is still out." }}
-          <NuxtLink v-if="!searching" to="/hub/write">Write a guide</NuxtLink>
-        </p>
-      </section>
-
-      <section id="done" aria-labelledby="lane-done" class="flex scroll-mt-4 flex-col gap-3">
-        <button
-          type="button"
-          class="flex w-full cursor-pointer items-center justify-between rounded-3 border border-line bg-raised px-4 py-3 text-left hover:border-line-strong"
-          :aria-expanded="doneOpen"
-          @click="showDone = !showDone"
+        <div
+          ref="tablist"
+          class="-mb-2 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line [scrollbar-width:none]"
+          role="tablist"
+          aria-label="Work"
+          @keydown="arrowTabs"
         >
-          <span id="lane-done" class="flex items-baseline gap-2 text-h3 font-bold text-fg">
-            Done
-            <span v-if="!waiting" class="font-ui text-sm font-normal text-muted tabular-nums">{{ lanes.done.length }}</span>
-          </span>
-          <AppIcon
-            name="reveal"
-            class="text-muted transition-transform"
-            :class="doneOpen ? 'rotate-180' : ''"
-          />
-        </button>
-        <template v-if="doneOpen">
-          <ul v-if="lanes.done.length" class="m-0 list-none rounded-3 border border-line bg-raised p-0">
-            <HubInboxRow v-for="r in lanes.done" :key="r.g.id" :row="r" />
-          </ul>
-          <p v-else class="m-0 font-ui text-sm text-muted">
-            {{ searching ? "Nothing finished matches." : "Nothing finished yet." }}
-          </p>
-        </template>
-      </section>
+          <button
+            v-for="t in tabs"
+            :id="`tab-${t.id}`"
+            :key="t.id"
+            type="button"
+            role="tab"
+            :aria-selected="tab === t.id"
+            :aria-controls="`panel-${t.id}`"
+            :tabindex="tab === t.id ? 0 : -1"
+            class="-mb-px flex cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-2.5 font-ui text-sm whitespace-nowrap"
+            :class="tab === t.id ? 'border-accent font-semibold text-fg' : 'border-transparent text-muted hover:text-fg'"
+            @click="pick(t.id)"
+          >
+            {{ t.label }}
+            <span
+              v-if="!waiting"
+              class="min-w-5 rounded-pill px-1.5 py-0.5 text-center text-xs tabular-nums"
+              :class="t.tone === 'accent' ? 'bg-accent text-accent-fg font-semibold' : 'bg-surface text-muted'"
+            >{{ t.count }}</span>
+          </button>
+        </div>
+
+        <section
+          :id="`panel-${tab}`"
+          role="tabpanel"
+          :aria-labelledby="`tab-${tab}`"
+          class="flex flex-col gap-6 transition-opacity"
+          :class="scopeChanging ? 'opacity-60' : ''"
+          :aria-busy="waiting || scopeChanging"
+        >
+          <!-- ---- Needs you ---- -->
+          <template v-if="tab === 'needs'">
+            <HubTaskReview :tasks="tasks" />
+            <div v-if="handedIn.length">
+              <h3 :class="sub">Handed in · {{ handedIn.length }}</h3>
+              <p class="mt-1 mb-3 font-ui text-sm text-muted">
+                Handoffs you sent, done where they went. Close them, or send one back with why.
+              </p>
+              <ul :class="list">
+                <HubHandedInRow v-for="h in handedIn" :key="`${h.id}-${h.place}`" :h="h" />
+              </ul>
+            </div>
+            <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
+            <div v-else-if="lanes.needs.length">
+              <h3 :class="sub">Sent to you · {{ lanes.needs.length }}</h3>
+              <p class="mt-1 mb-3 font-ui text-sm text-muted">Handed to you, and waiting on your answer.</p>
+              <ul :class="list">
+                <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />
+              </ul>
+            </div>
+            <!-- All clear is one quiet line, not an empty section. -->
+            <div
+              v-if="!waiting && !needsCount"
+              class="flex items-center gap-3 rounded-3 bg-surface px-4 py-3 font-ui text-sm"
+            >
+              <span class="grid size-6 shrink-0 place-items-center rounded-pill bg-ok-soft text-ok" aria-hidden="true">
+                <AppIcon name="check" />
+              </span>
+              <p class="m-0 text-pretty">
+                <template v-if="searching">
+                  <b class="font-semibold text-fg">Nothing waiting on you matches.</b>{{ " " }}<button class="linkish" type="button" @click="clearSearch">Clear search</button>
+                </template>
+                <template v-else>
+                  <b class="font-semibold text-fg">Nothing needs you.</b>{{ " " }}<span class="text-muted">Work an agent hands in, or a teammate sends you, lands here.</span>
+                </template>
+              </p>
+            </div>
+          </template>
+
+          <!-- ---- Working now ---- -->
+          <template v-else-if="tab === 'working'">
+            <HubWorkingNow v-if="data.working.length" :rows="data.working" bare />
+            <p v-else class="m-0 font-ui text-sm text-muted">
+              Nobody is working on anything right now. When an agent or a teammate takes something,
+              it shows here with who has it and what they last said.
+            </p>
+          </template>
+
+          <!-- ---- Open ---- -->
+          <template v-else-if="tab === 'open'">
+            <template v-for="col in OPEN" :key="col.state">
+              <div v-if="openTasks.get(col.state)?.length">
+                <h3 :class="sub">{{ col.title }} · {{ openTasks.get(col.state)?.length }}</h3>
+                <p class="mt-1 mb-3 font-ui text-sm text-muted">{{ col.note }}</p>
+                <ul :class="list">
+                  <HubTaskRow v-for="t in openTasks.get(col.state)" :key="t.id" :t="t" />
+                </ul>
+              </div>
+            </template>
+            <div v-if="waiting || lanes.sent.length">
+              <h3 :class="sub">Handoffs you sent · {{ sentCount }}</h3>
+              <p class="mt-1 mb-3 font-ui text-sm text-muted">Still out: nobody has said it worked yet.</p>
+              <HubSkeleton v-if="waiting" :rows="2" label="Loading what you sent" />
+              <ul v-else :class="list">
+                <template v-for="e in lanes.sent" :key="'row' in e ? e.row.g.id : `report-${e.group.report}`">
+                  <HubInboxRow v-if="'row' in e" :row="e.row" />
+                  <HubReportRow v-else :group="e.group" :open="searching" />
+                </template>
+              </ul>
+            </div>
+            <p v-if="!waiting && !openCount" class="m-0 font-ui text-sm text-muted">
+              {{ searching ? "Nothing open matches." : "Nothing is open." }}
+              <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
+              <button v-else class="linkish" type="button" @click="copy(ASKS.task, $event.currentTarget)">
+                <span data-label>Copy a task ask for your agent</span>
+              </button>
+            </p>
+          </template>
+
+          <!-- ---- Done ---- -->
+          <template v-else>
+            <ul v-if="doneTasks.length" :class="list">
+              <HubTaskRow v-for="t in doneTasks" :key="t.id" :t="t" />
+            </ul>
+            <ul v-if="lanes.done.length" :class="list">
+              <HubInboxRow v-for="r in lanes.done" :key="r.g.id" :row="r" />
+            </ul>
+            <p v-if="!doneCount" class="m-0 font-ui text-sm text-muted">
+              {{ searching ? "Nothing finished matches." : "Nothing finished yet." }}
+            </p>
+          </template>
+        </section>
       </template>
 
       <HubActivity />

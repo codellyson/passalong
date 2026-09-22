@@ -19,7 +19,7 @@ usePage({
   title: "The Passalong guide format — markdown an agent can act on",
   // TODO(copy): under ~155 characters.
   description:
-    "Frontmatter fields and section headings for transfer guides and bug reports, and what a receiving agent does with each.",
+    "Frontmatter fields and section headings for transfer guides, bug reports and tasks, and what a receiving agent does with each.",
   url: `${APEX}${self.path}`,
   image: `${APEX}/og.png`,
   noindex: self.draft,
@@ -29,7 +29,7 @@ usePage({
 const FIELDS = [
   { name: "id", note: "8 characters from a no-lookalike alphabet. An address, not a secret." },
   { name: "title", note: "TODO(copy)" },
-  { name: "kind", note: "transfer (or absent) or bug. Read it before acting." },
+  { name: "kind", note: "transfer (or absent), bug or task. Read it before acting." },
   { name: "created", note: "TODO(copy)" },
   { name: "author", note: "TODO(copy)" },
   { name: "source_context", note: "TODO(copy): the project the work was done in." },
@@ -44,6 +44,14 @@ const FIELDS = [
   {
     name: "report, area, severity",
     note: "Bugs only. severity runs s1 (blocker) to s4 (cosmetic).",
+  },
+  {
+    name: "target_context",
+    note: "Tasks only. The repo the work is for, as owner/repo. Empty is a task for no repo.",
+  },
+  {
+    name: "blocked_by",
+    note: "Tasks only. A list of task ids it waits for; it is not handed out until each is approved.",
   },
 ];
 
@@ -65,6 +73,35 @@ const BUG = [
   { h: "Reproduce", note: "How to see the bug. Running it produces the bug; it is not a remedy." },
   { h: "Verification", note: "The behaviour that should have happened." },
   { h: "Gotchas", note: "TODO(copy)" },
+];
+
+/** Task sections, in order. A brief written before the work, so there are no Steps. */
+const TASK = [
+  { h: "Goal", note: "What is true when this is done. Required." },
+  { h: "Context", note: "What the agent needs to know first: where the code is, what exists." },
+  { h: "Constraints", note: "What must not change, and what to use or avoid." },
+  {
+    h: "Acceptance",
+    note: "Checks a person can run. What the work is approved against. Required.",
+  },
+  { h: "Out of scope", note: "What looks related and is not part of this task." },
+];
+
+/** The four calls every guide is worked with, whatever its kind, in the order they are used. */
+const TASK_TOOLS = [
+  {
+    name: "take",
+    note: "Say you are doing it, and get it: by id, or the next one waiting. Nobody else can take it there while you hold it.",
+  },
+  {
+    name: "progress",
+    note: "A one-line note at each milestone. Thirty minutes without one marks it stalled.",
+  },
+  {
+    name: "hand_in",
+    note: "Done here. A task hands in a write-up for its author to review; a handoff or a bug, whether it worked.",
+  },
+  { name: "pass", note: "Not yours, or stuck: give it back with the reason for whoever is next." },
 ];
 
 /** A minimal transfer guide. TODO(copy): replace with a real, short example. */
@@ -149,6 +186,34 @@ tags: [TODO]
             <template v-for="s in BUG" :key="s.h">
               <dt>## {{ s.h }}</dt>
               <dd>{{ s.note }}</dd>
+            </template>
+          </dl>
+        </div>
+      </section>
+
+      <section>
+        <p class="eyebrow">kind: task</p>
+        <h2>Work for an agent</h2>
+        <div class="say">
+          <p>
+            A task is written before any work exists. It has no Steps: the agent that takes it works
+            out how to reach Goal within Constraints, and a person approves the result against
+            Acceptance. What the agent did comes back as a transfer guide.
+          </p>
+          <dl class="kinds">
+            <template v-for="s in TASK" :key="s.h">
+              <dt>## {{ s.h }}</dt>
+              <dd>{{ s.note }}</dd>
+            </template>
+          </dl>
+          <p>
+            Every kind is worked with the same four calls, and each answer ends with what to call
+            next. Write tasks with <code>plan_tasks</code>.
+          </p>
+          <dl class="kinds">
+            <template v-for="t in TASK_TOOLS" :key="t.name">
+              <dt>{{ t.name }}</dt>
+              <dd>{{ t.note }}</dd>
             </template>
           </dl>
         </div>

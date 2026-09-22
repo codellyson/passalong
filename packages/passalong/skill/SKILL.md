@@ -57,7 +57,7 @@ each. Absent means `transfer`, which is what every guide written before bug repo
 
 | kind | what it is | what the receiver does |
 | --- | --- | --- |
-| `transfer` (default) | finished work to repeat somewhere else | follows the **Steps** |
+| `transfer` (or no `kind:` line) | finished work to repeat somewhere else | follows the **Steps** |
 | `bug` | a defect to fix where it is | fixes it — **Reproduce** shows the problem, it is not a procedure to apply |
 
 To file bugs you found but are not fixing, call `file_bugs` with all of them in one call — it

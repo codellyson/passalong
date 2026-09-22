@@ -90,7 +90,7 @@ const home = () => router.push("/hub");
 
         <HubAck v-if="asks === 'ack'" :g="g" :why="intent === 'pass'" @done="home" />
         <HubVerdict v-else-if="asks === 'verdict'" :g="g" :why="intent === 'failed'" @done="home" />
-        <div v-else class="rounded-3 border border-line bg-raised p-4">
+        <div v-else class="rounded-3 bg-raised shadow-edge p-4">
           <p class="m-0 font-ui text-sm text-fg">
             <template v-if="g.mine">
               This is your guide. Answers from {{ g.to ? toName(g) : "your team" }} show up on your
@@ -104,7 +104,7 @@ const home = () => router.push("/hub");
         <NuxtLink to="/hub" class="font-ui text-sm">Go to your guides</NuxtLink>
       </template>
 
-      <div v-else-if="looked && !everything.isFetching.value" class="rounded-3 border border-line bg-raised p-5">
+      <div v-else-if="looked && !everything.isFetching.value" class="rounded-3 bg-raised shadow-edge p-5">
         <h1 class="mt-0 mb-2 text-h2">This guide isn't available to you</h1>
         <p class="m-0 font-ui text-sm text-muted">
           It may have been deleted, or sent to a team you're not in. If someone sent it to you, ask
@@ -116,7 +116,7 @@ const home = () => router.push("/hub");
       <div v-else class="flex flex-col gap-4" role="status" aria-label="Finding the guide">
         <span class="block h-3 w-40 rounded-pill bg-line" aria-hidden="true" />
         <span class="block h-7 w-4/5 rounded-pill bg-line-strong" aria-hidden="true" />
-        <span class="block h-28 rounded-2 border border-line bg-raised" aria-hidden="true" />
+        <span class="block h-28 rounded-2 bg-raised shadow-edge" aria-hidden="true" />
         <span class="sr-only">Finding the guide…</span>
       </div>
     </div>

@@ -36,13 +36,15 @@ function leadFor(meta) {
     return (
       "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
       "— those steps produce the defect. Fix what Problem describes, then check " +
-      "Verification and answer with verify_guide.\n\n"
+      "Verification and answer with hand_in.\n\n"
     );
   if (meta.kind === "task")
     return (
       "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
       "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
-      "under Acceptance holds; answer with verify_guide.\n\n"
+      "under Acceptance holds. Opening it here does not make it yours: to work on it, call take " +
+      "with its id in the repo it is for, so no other agent can. Then progress, and hand_in " +
+      "with a write-up.\n\n"
     );
   return "";
 }
@@ -79,6 +81,27 @@ async function related(meta) {
 const json = (data) => text(JSON.stringify(data, null, 2));
 const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError: true });
 
+/**
+ * The server's `next` and `say`, as the last thing an agent reads. See steps() in
+ * apps/api/src/claims.ts: the answer to the call it just made is the one place it is sure to look.
+ */
+export function nextNote({ next = [], say = "" } = {}, id = "") {
+  const lines = next.map(
+    (s) => `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})`,
+  );
+  if (say) lines.unshift(`  ${say}`);
+  return lines.length ? `<!-- passalong: next:\n${lines.join("\n")}\n-->` : "";
+}
+
+/** A refusal that carries the server's own next move, when it sent one. */
+const failWith = (err) => {
+  const said = nextNote(err.body || {});
+  return {
+    content: [{ type: "text", text: said ? `${err.message}\n${said}` : err.message }],
+    isError: true,
+  };
+};
+
 export async function serve() {
   const server = new McpServer(
     { name: "passalong", version: VERSION },
@@ -86,23 +109,29 @@ export async function serve() {
       instructions:
         "Passalong hands work between contexts as guides: markdown with frontmatter, in three " +
         "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — each asks " +
-        "for different behaviour.\n" +
-        `kind: transfer (or absent) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +
+        "for different behaviour. Every kind is worked with the same four calls:\n" +
+        "take (with an id, or none for the next thing waiting for you) says you are doing it and " +
+        "returns it; nobody else can take it here while you hold it, and its sender sees you are " +
+        "on it. progress, with a one-line note at each milestone — 30 minutes of silence marks it " +
+        "stalled. hand_in when done here. pass, with the reason, when it is not yours or you are " +
+        "stuck. Every answer ends with `next`: what to call now. Follow it, and when it says to " +
+        "stop, stop. OPEN A GUIDE YOU MEAN TO ACT ON WITH take, NOT get_guide: get_guide only " +
+        "reads, and the sender learns nothing. If take says somebody else has it, tell the user " +
+        "instead of doing the work twice.\n" +
+        `kind: task (the default) is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
+        "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
+        "alone, and treat Acceptance as the definition of done. hand_in with `markdown`: a " +
+        "transfer guide about what you did (guide_template kind transfer shows the shape) — its " +
+        "author reviews it against Acceptance.\n" +
+        `kind: transfer (or no kind: line) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +
         "Follow its Steps, adapting anything marked ASSUMES to this codebase; run its " +
-        "Verification before declaring done, then verify_guide with the result.\n" +
-        "OPEN A GUIDE YOU MEAN TO ACT ON WITH start_guide, NOT get_guide. Both return the same " +
-        "markdown; start_guide also says you are on it, and that is the only signal the sender " +
-        "gets between handing work over and hearing it worked. get_guide is for reading one you " +
-        "have not committed to. Taking your own guide is a no-op, so there is no case where " +
-        "start_guide is the wrong call on work you are about to do. If it turns out not to be " +
-        "yours, hand it back with ack_guide taken=false and a reason — say why, or the sender is " +
-        "left exactly where silence left them.\n" +
+        "Verification, then hand_in with ok and, when it failed, a note saying what went wrong.\n" +
         `kind: bug is a defect to FIX here. Sections: ${BUG_SECTIONS.join(", ")}. ` +
         "It has no Steps and nothing in it is a procedure to apply: Reproduce is how to see the " +
         "bug and running it produces the bug, Verification is the behaviour that should have " +
-        "happened. Fix the defect, then check Verification and verify_guide with the result — " +
-        "ok true once the behaviour it describes actually holds. A bug report is not broken " +
-        "because you reproduced it. " +
+        "happened. Fix the defect, then check Verification and hand_in — ok true once the " +
+        "behaviour it describes actually holds. A bug report is not broken because you " +
+        "reproduced it. " +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
         "file_bugs with all of them at once; each becomes a guide someone can take on its own. " +
         "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
@@ -111,43 +140,109 @@ export async function serve() {
         "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
         "the body, and publish_guide the same id — publishing claims whatever the markdown names. " +
         "\n" +
-        `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
-        "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
-        "alone, and treat Acceptance as the definition of done. Open it with start_guide, then " +
-        "verify_guide once every Acceptance check holds. When the user asks you to queue work " +
-        "for an agent or write a task, start from guide_template with kind task, fill every " +
-        "section from the conversation and the code — Acceptance as checks a person can run — " +
-        "set target_context to the repo the work is for, and publish_guide. A task lands in " +
-        "Draft, not the queue: tell the user to read it and run `passalong ready <id>`.\n" +
-        "When the user asks you to plan or break down a larger goal, call plan_tasks with the " +
-        "steps in order — each a task with Goal and Acceptance, and `after` naming the earlier " +
-        "steps it needs. They land in Draft; tell the user to read them and run " +
-        "`passalong ready --all`.\n" +
-        "When the user asks you to take work from the queue, call next_task: it claims the oldest " +
-        "ready task for this repo, and no other agent can have it while you do. Call " +
-        "task_progress with a one-line status at each milestone — silence for 30 minutes stalls " +
-        "the task. When Acceptance holds, call finish_task with `markdown`: a transfer guide about " +
-        "what you did (guide_template shows the shape), which it publishes and attaches; the task " +
-        "goes to a person for review, who reads it against Acceptance. If " +
-        "task_progress or finish_task says you no longer hold the task, stop working on it.\n" +
-        "When the user asks to pass along, hand off, or " +
-        "share what was just done, distill the session into a guide (guide_template shows the " +
-        "shape) and call publish_guide, with `to` as team, team/@handle for one teammate, or " +
-        "team/#group for the people who do a thing. " +
-        "At the start of work, inbox shows guides teammates have handed to this user — open one " +
-        "with start_guide — and activity " +
-        "shows whether the guides they handed off have landed. When the user asks what they have " +
-        "been working on, or wants a standup or a summary of a period, call log — but say that it " +
-        "holds what they passed along and not everything they did. Gotchas are " +
-        "the highest-value section: record what failed and why.\n" +
+        "When the user asks you to write a task, or to queue work for an agent, call plan_tasks — " +
+        "one step for one task — with every section filled from the conversation and the code, " +
+        "Acceptance as checks a person can run; it fills in the repo you are in. When the user " +
+        "asks you to plan or break down a larger goal, call plan_tasks with the steps in order, " +
+        "`after` naming the earlier steps each needs. Tasks land in Draft, not the queue: tell the " +
+        "user to read them and run `passalong ready <id>` or `passalong ready --all`.\n" +
+        "When the user asks to pass along, hand off, or share what was just done, distill the " +
+        "session into a guide (guide_template kind transfer shows the shape) and call " +
+        "publish_guide, with `to` as team, team/@handle for one teammate, or team/#group for the " +
+        "people who do a thing. " +
+        "At the start of work, inbox shows guides teammates have handed to this user — take one " +
+        "to start it — and activity shows whether the guides they handed off have landed. When " +
+        "the user asks what they have been working on, or wants a standup or a summary of a " +
+        "period, call log — but say that it holds what they passed along and not everything they " +
+        "did. Gotchas are the highest-value section: record what failed and why.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
         "id. It is listed under the original, and anyone who opens the original, person or agent, " +
-        "gets it too. get_guide and start_guide return a guide's follow-ups after it; read them " +
+        "gets it too. get_guide and take return a guide's follow-ups after it; read them " +
         "before acting.",
     },
   );
+
+  // ---- the four verbs (docs/V2.md §11) --------------------------------------------------------
+  // One implementation each. The older tool names above call these too, so an agent following an
+  // old prompt gets exactly what one following a new prompt gets.
+
+  /** An answer as JSON, with the server's next move after it. */
+  const answer = (r, id) => {
+    const { next, say, ...rest } = r || {};
+    const note = nextNote({ next, say }, id);
+    return text(`${JSON.stringify(rest, null, 2)}${note ? `\n${note}` : ""}`);
+  };
+
+  async function doTake({ id, cwd, any }) {
+    const dir = cwd || process.cwd();
+    try {
+      // Without sync there is no claim to make; a guide by id can still be read and worked from.
+      if (!api.loggedIn() && id) {
+        const r = await passalong.pull(id, { cwd: dir });
+        return text(
+          `${leadFor(parse(r.markdown).meta)}${r.markdown}\n\n<!-- passalong: not logged in, so ` +
+            "nobody was told you took it; written to " +
+            `${r.path} -->`,
+        );
+      }
+      const r = await passalong.take(id, { cwd: dir, any: Boolean(any) });
+      if (!r.guide) return text(nextNote(r) || "Nothing is waiting for this agent here.");
+      const meta = parse(r.guide.markdown).meta;
+      const siblings = await related(meta);
+      const context = await passalong.followUps(meta);
+      const held =
+        `<!-- passalong: ${r.guide.id} is yours` +
+        `${r.guide.resumed ? " (you already held it — carry on from where it was left)" : ""}; ` +
+        `written to ${r.path}. -->`;
+      return text(
+        `${leadFor(meta)}${r.guide.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
+          `\n\n${held}\n${nextNote(r, r.guide.id)}\n${passalong.followUpNote(meta)}`,
+      );
+    } catch (err) {
+      const h = err.body?.holder;
+      if (h)
+        return fail({
+          message:
+            `${err.message}. Somebody else is on it here${h.note ? ` (last said: "${h.note}")` : ""}. ` +
+            "Tell the user before doing this work too; get_guide reads it without taking it.",
+        });
+      return failWith(err);
+    }
+  }
+
+  async function doProgress({ id, note, cwd }) {
+    try {
+      return answer(await passalong.progress(id, note || "", { cwd: cwd || process.cwd() }), id);
+    } catch (err) {
+      return failWith(err);
+    }
+  }
+
+  async function doHandIn({ id, ok, note, markdown, report, pr, cwd }) {
+    try {
+      const r = await passalong.handIn(id, {
+        ok,
+        note: note || "",
+        markdown,
+        report,
+        pr: pr || "",
+        cwd: cwd || process.cwd(),
+      });
+      return answer(r, id);
+    } catch (err) {
+      return failWith(err);
+    }
+  }
+
+  async function doPass({ id, why, cwd }) {
+    try {
+      return answer(await passalong.pass(id, why, { cwd: cwd || process.cwd() }), id);
+    } catch (err) {
+      return failWith(err);
+    }
+  }
 
   server.registerTool(
     "search_guides",
@@ -242,57 +337,40 @@ export async function serve() {
   server.registerTool(
     "ack_guide",
     {
-      title: "Say whether you are taking it",
+      title: "Take it or pass it (same as take / pass)",
       description:
-        "The first word back on a guide handed to you, before any work: take it, or pass it " +
-        "back. Passing must say why — an unanswered handoff is indistinguishable from one nobody " +
-        "has noticed, and the sender finds out in a week instead of a minute. Answer this when " +
-        "you pick up an inbox; verify_guide comes later, once you have actually run it.",
+        "Kept for older prompts: taken=true is take with this id, taken=false is pass with `note` " +
+        "as the reason.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         taken: z.boolean().describe("true if you are doing it; false hands it back"),
-        note: z
+        note: z.string().default("").describe("why it is not yours (required when taken is false)"),
+        cwd: z
           .string()
-          .default("")
-          .describe("why it is not yours (required when taken is false); one line, max 280 chars"),
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
-    async ({ id, taken, note }) => {
-      try {
-        return json(await passalong.ack(id, taken, note || ""));
-      } catch (err) {
-        return fail(err);
-      }
-    },
+    async ({ id, taken, note, cwd }) =>
+      taken ? doTake({ id, cwd }) : doPass({ id, why: note || "", cwd }),
   );
 
   server.registerTool(
     "verify_guide",
     {
-      title: "Report whether a guide works",
-      description:
-        "After following a guide's Verification section, report the result. This is the only way " +
-        "the author learns their handoff did not land — `set_guide_status consumed` says it was " +
-        "implemented, this says it actually works. A failing verdict must say what went wrong. " +
-        "If the guide needs more context than a one-line note holds — a missing detail, a step " +
-        "that needed explaining, what you found doing it — publish that as a follow-up: its own " +
-        "guide, with publish_guide `parent` set to this id. Whoever opens this guide then gets it too.",
+      title: "Report whether it works (same as hand_in)",
+      description: "Kept for older prompts: exactly hand_in with `ok` and `note`.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         ok: z.boolean().describe("true if the Verification steps passed"),
-        note: z
+        note: z.string().default("").describe("what went wrong (required when ok is false)"),
+        cwd: z
           .string()
-          .default("")
-          .describe("what went wrong (required when ok is false); one line, max 280 chars"),
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
-    async ({ id, ok, note }) => {
-      try {
-        return json(await passalong.verdict(id, ok, note || ""));
-      } catch (err) {
-        return fail(err);
-      }
-    },
+    async (args) => doHandIn(args),
   );
 
   server.registerTool(
@@ -322,47 +400,19 @@ export async function serve() {
   server.registerTool(
     "start_guide",
     {
-      title: "Start work on a guide",
+      title: "Start work on a guide (same as take with an id)",
       description:
-        "Take a guide handed to you AND fetch it, in one call — use this the moment you are going " +
-        "to do the work. Same markdown as get_guide, plus the handoff is answered: until somebody " +
-        "says they are on it, a guide nobody has noticed and a guide somebody is deep in look " +
-        "identical to the sender, who finds out in a week instead of a minute. Taking your own " +
-        "guide is a no-op, not an error, so this is always safe to call. If the work turns out " +
-        "not to be yours after reading, hand it back with ack_guide taken=false and a reason.",
+        "Kept for older prompts: exactly take with this id — say you are doing it and get it in " +
+        "one call. Use it the moment you are going to do the work.",
       inputSchema: {
         ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
         cwd: z
           .string()
           .optional()
-          .describe("directory to write .passalong/<id>.md into; default is the server's cwd"),
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
-    async ({ ref, cwd }) => {
-      try {
-        const r = await passalong.start(ref, { cwd: cwd || process.cwd() });
-        const meta = parse(r.markdown).meta;
-        const lead = leadFor(meta);
-        // What actually happened to the ack, said plainly. An agent that reports "took it" when
-        // nothing was sent is the failure this tool exists to prevent, one step further along.
-        const took = r.took
-          ? "handoff taken; the sender has been told"
-          : r.own
-            ? "your own guide — nothing to take, and nobody to tell"
-            : r.ack_error
-              ? `NOT taken (${r.ack_error}) — retry with ack_guide before reporting that you have it`
-              : "not logged in, so no handoff was taken";
-        const siblings = await related(meta);
-        const context = await passalong.followUps(meta);
-        return text(
-          `${lead}${r.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
-            `\n\n<!-- passalong: ${r.from}; written to ${r.path}; ${took} -->` +
-            `\n${passalong.followUpNote(meta)}`,
-        );
-      } catch (err) {
-        return fail(err);
-      }
-    },
+    async ({ ref, cwd }) => doTake({ id: ref, cwd }),
   );
 
   server.registerTool(
@@ -370,8 +420,10 @@ export async function serve() {
     {
       title: "Plan a goal as tasks",
       description:
-        "Break one larger goal into tasks an agent can each finish and a person can each check, " +
-        "written as drafts in order. Give each step a Goal and an Acceptance a person can run. " +
+        "Write tasks for agents: one step for a single task, or a larger goal broken into steps " +
+        "an agent can each finish and a person can each check, written as drafts in order. The " +
+        "tool for any task, rather than publish_guide. Give each step a Goal and an Acceptance " +
+        "a person can run. " +
         "`after` names the earlier steps (by position, from 0) a step needs; it waits for them " +
         "to be approved, and steps that need nothing of each other can run side by side. Keep a " +
         "step to one sitting of work in one repo. Nothing runs until the user makes them ready.",
@@ -413,11 +465,10 @@ export async function serve() {
   server.registerTool(
     "next_task",
     {
-      title: "Take the next task",
+      title: "Take the next task (same as take with no id)",
       description:
-        "Claim the oldest ready task for the repo this worktree is in, and return it. While you " +
-        "hold it no other agent can take it. If this worktree already holds one, that one comes " +
-        "back instead — one task at a time. Returns nothing to do when the queue is empty.",
+        "Kept for older prompts: exactly take with no id. Takes the next guide waiting for this " +
+        "worktree's agent, or gives back the one it already holds.",
       inputSchema: {
         cwd: z
           .string()
@@ -426,84 +477,147 @@ export async function serve() {
         any: z
           .boolean()
           .optional()
-          .describe("take a task for any repo, or for none — only when the user asks for that"),
+          .describe("any repo, or none — only when the user asks for that"),
       },
     },
-    async ({ cwd, any }) => {
-      try {
-        const t = await passalong.nextTask({ cwd: cwd || process.cwd(), any: Boolean(any) });
-        if (!t)
-          return text(
-            "No task ready for this repo. Nothing to do — tell the user the queue is empty.",
-          );
-        const how =
-          `\n\n<!-- passalong: task ${t.id} is yours${t.resumed ? " (you already held it — carry on from where it was left)" : ""}; ` +
-          `written to ${t.path}. Call task_progress with a one-line status at each milestone; ` +
-          "30 minutes without one stalls it. When every Acceptance check holds: finish_task with id " +
-          `${t.id} and \`markdown\`, a transfer guide about what you did. -->`;
-        return text(`${leadFor({ kind: "task" })}${t.markdown}${how}`);
-      } catch (err) {
-        return fail(err);
-      }
-    },
+    async ({ cwd, any }) => doTake({ cwd, any }),
   );
 
   server.registerTool(
     "task_progress",
     {
-      title: "Report progress on a task",
-      description:
-        "Say you are still working on the task you hold, with a one-line status the board shows. " +
-        "Renews the claim; 30 minutes without this stalls the task. If it answers that you do " +
-        "not hold the task, a person released it: stop working on it.",
+      title: "Report progress (same as progress)",
+      description: "Kept for older prompts: exactly progress.",
       inputSchema: {
-        id: z.string().describe("the task's id"),
-        note: z.string().optional().describe('one line, e.g. "migrating schema, 2 of 5 steps"'),
-        cwd: z.string().optional().describe("the worktree you are working in"),
+        id: z.string().describe("the id of what you hold"),
+        note: z.string().optional().describe("one line"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
-    async ({ id, note, cwd }) => {
-      try {
-        return json(await passalong.taskProgress(id, note || "", { cwd: cwd || process.cwd() }));
-      } catch (err) {
-        return fail(err);
-      }
-    },
+    async (args) => doProgress(args),
   );
 
   server.registerTool(
     "finish_task",
     {
-      title: "Finish a task",
-      description:
-        "Hand a finished task to a person for review. Only once every Acceptance check holds. " +
-        "`markdown` is a transfer guide about the work — this publishes it and attaches it, so " +
-        "there is nothing to publish first. The reviewer reads it against Acceptance: say what " +
-        "you did, what you decided and why, and how you checked each Acceptance line.",
+      title: "Finish a task (same as hand_in)",
+      description: "Kept for older prompts: exactly hand_in, for a task.",
       inputSchema: {
         id: z.string().describe("the task's id"),
+        markdown: z.string().optional().describe("the transfer guide about this work"),
+        report: z.string().optional().describe("instead of markdown: id of one already published"),
+        pr: z.string().optional().describe("PR or branch link, when there is one"),
+        note: z.string().optional().describe("one line for the hub"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
+      },
+    },
+    async (args) => doHandIn(args),
+  );
+
+  server.registerTool(
+    "take",
+    {
+      title: "Take work",
+      description:
+        "Say you are doing it, and get it. With `id`, that guide — any kind: a task, a bug, a " +
+        "handoff. With no id, the next thing waiting for this worktree's agent. While you hold it " +
+        "no other agent can take it here, and its sender sees you are on it. One thing at a time: " +
+        "if you already hold something, finish or pass that first. If somebody else has it, the " +
+        "answer says who — tell the user rather than doing the work twice. Every answer ends with " +
+        "what to call next.",
+      inputSchema: {
+        id: z
+          .string()
+          .optional()
+          .describe("passalong id or share link; leave out for the next one"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
+        any: z
+          .boolean()
+          .optional()
+          .describe("a task for another repo, or none — only when the user asks"),
+      },
+    },
+    async (args) => doTake(args),
+  );
+
+  server.registerTool(
+    "progress",
+    {
+      title: "Report progress",
+      description:
+        "Say you are still on what you hold, with a one-line note the hub shows. 30 minutes " +
+        "without one marks it stalled. If the answer says you no longer hold it, stop.",
+      inputSchema: {
+        id: z.string().describe("the id of what you hold"),
+        note: z.string().optional().describe('one line, e.g. "migrating schema, 2 of 5 steps"'),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
+      },
+    },
+    async (args) => doProgress(args),
+  );
+
+  server.registerTool(
+    "hand_in",
+    {
+      title: "Hand it in",
+      description:
+        "Done here. A task: `markdown`, a transfer guide about what you did, decided and how you " +
+        "checked each Acceptance line — this publishes it and attaches it; its author reviews it. " +
+        "A handoff or a bug: `ok`, whether its Verification held here, and `note` saying what went " +
+        "wrong when it did not. More context than a note holds goes in a follow-up: publish_guide " +
+        "with `parent` set to this id.",
+      inputSchema: {
+        id: z.string().describe("passalong id"),
+        ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
+        note: z.string().optional().describe("one line; required when ok is false"),
         markdown: z
           .string()
           .optional()
-          .describe("the transfer guide about this work; start from guide_template"),
+          .describe("task: the write-up; start from guide_template kind transfer"),
         report: z
           .string()
           .optional()
-          .describe("instead of markdown: id of a transfer guide already published about it"),
-        pr: z.string().optional().describe("PR or branch link, when there is one"),
-        note: z.string().optional().describe("one line for the board"),
-        cwd: z.string().optional().describe("the worktree you are working in"),
+          .describe("task, instead of markdown: id of a write-up already published"),
+        pr: z.string().optional().describe("task: PR or branch link, when there is one"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
       },
     },
-    async ({ id, markdown, report, pr, note, cwd }) => {
-      try {
-        return json(
-          await passalong.finishTask(id, { markdown, report, pr, note, cwd: cwd || process.cwd() }),
-        );
-      } catch (err) {
-        return fail(err);
-      }
+    async (args) => doHandIn(args),
+  );
+
+  server.registerTool(
+    "pass",
+    {
+      title: "Pass it",
+      description:
+        "Not yours to do, or you are stuck: give it back with the reason. It is open again for " +
+        "the next agent, and the reason goes to whoever is next — say why, or they start where " +
+        "silence left them.",
+      inputSchema: {
+        id: z.string().describe("passalong id"),
+        why: z.string().describe("one line: why it is not yours, or where you got stuck"),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
+      },
     },
+    async (args) => doPass(args),
   );
 
   server.registerTool(
@@ -514,8 +628,8 @@ export async function serve() {
         "READ a transfer guide by passalong id or share link and return its full markdown. Also " +
         "writes it to .passalong/<id>.md in the working directory so it survives the session. " +
         "Pulling a teammate's guide tells them the transfer landed. Use this to look at a guide " +
-        "you have not committed to. If you are about to DO the work, call start_guide instead: " +
-        "it does this and takes the handoff in one call, which is the only way the sender learns " +
+        "you have not committed to. If you are about to DO the work, call take instead: " +
+        "it does this and takes it in one call, which is the only way the sender learns " +
         "somebody picked it up.",
       inputSchema: {
         ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
@@ -733,20 +847,20 @@ export async function serve() {
     {
       title: "Guide template",
       description:
-        "The empty guide skeleton with guidance comments for each section. `kind: bug` gives the " +
-        "bug report skeleton instead, which has a Reproduce section and no Steps. `kind: task` " +
-        "gives a task brief: Goal, Context, Constraints, Acceptance, Out of scope.",
+        "The empty guide skeleton with guidance comments for each section. By default a task " +
+        "brief: Goal, Context, Constraints, Acceptance, Out of scope. `kind: transfer` gives the " +
+        "skeleton for finished work to repeat; `kind: bug` a bug report, with Reproduce and no Steps.",
       inputSchema: {
         kind: z
           .enum(["transfer", "bug", "task"])
           .optional()
           .describe(
-            "transfer (default) for finished work to repeat; bug for a defect to fix; task for " +
-              "work nobody has done yet",
+            "task (default) for work nobody has done yet; transfer for finished work to repeat; " +
+              "bug for a defect to fix",
           ),
       },
     },
-    async ({ kind }) => text(template(kind === "bug" || kind === "task" ? { kind } : {})),
+    async ({ kind }) => text(template(kind ? { kind } : {})),
   );
 
   server.registerTool(
@@ -756,7 +870,7 @@ export async function serve() {
       description:
         "Archive a guide (`consumed`) or put it back on the board (`published`). Archiving is the " +
         "author's shelf: off the board, out of the free tier's count, reversible — it is not a " +
-        "judgement that the work landed, which is what verify_guide reports. `promoted` was " +
+        "judgement that the work landed, which is what hand_in reports. `promoted` was " +
         "retired and the server refuses it.",
       inputSchema: { id: z.string(), status: z.enum(["published", "consumed"]) },
     },

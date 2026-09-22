@@ -27,6 +27,14 @@ const PATHS = {
   open: "M7.75 3.75H3.75v8.5h8.5v-4M10 3.75h2.25V6M12.25 3.75l-4.25 4.25",
   /** Opens something below it, and turns over when it is open. */
   reveal: "M4.5 6.5L8 10l3.5-3.5",
+  /** Undoes a mark, the way check makes one. */
+  x: "M5 5l6 6M11 5l-6 6",
+  /** Appearance: follow the system. A screen on its stand. */
+  system: "M2.75 3.25h10.5v7H2.75zM6 13.25h4M8 10.25v3",
+  /** Appearance: light. */
+  sun: "M8 5.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M8 1.75v1.25M8 13v1.25M1.75 8H3M13 8h1.25M3.6 3.6l.9.9M11.5 11.5l.9.9M3.6 12.4l.9-.9M11.5 4.5l.9-.9",
+  /** Appearance: dark. */
+  moon: "M13 9.75A5.25 5.25 0 1 1 6.25 3a4.25 4.25 0 0 0 6.75 6.75z",
 } as const;
 
 /** Dots are drawn as zero-length strokes with a round cap, so their weight *is* the stroke width —

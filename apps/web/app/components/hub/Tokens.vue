@@ -68,18 +68,19 @@ const head =
         <b class="font-ui text-sm text-fg">Your new token</b>
         <span class="font-ui text-sm text-accent">Copy it now. You won't be able to see it again.</span>
       </div>
+      <!-- The well and its buttons share one height, the control height, so the row is one line. -->
       <div class="flex flex-wrap items-center gap-2">
         <code
-          class="min-w-0 flex-1 overflow-x-auto rounded-1 border border-line-strong bg-raised px-3 py-2 font-code text-sm whitespace-nowrap text-fg"
+          class="flex h-[var(--control-h)] min-w-0 flex-1 items-center overflow-x-auto rounded-1 border border-line-strong bg-raised px-3 font-code text-sm whitespace-nowrap text-fg"
         >{{ fresh.token }}</code>
         <button
-          class="btn primary sm"
+          class="btn primary"
           @click="copy(fresh.token, $event.currentTarget)"
         >
           <AppIcon name="copy" /><span data-label>Copy token</span>
         </button>
         <button
-          class="btn sm"
+          class="btn"
           @click="fresh = null"
         >
           Done
@@ -136,10 +137,10 @@ const head =
           required
         />
       </div>
-      <button class="btn primary sm" type="submit" :disabled="busy || !name.trim()">
+      <button class="btn primary" type="submit" :disabled="busy || !name.trim()">
         {{ busy ? "Creating…" : "Create token" }}
       </button>
-      <button class="btn sm" type="button" @click="naming = false">Cancel</button>
+      <button class="btn" type="button" @click="naming = false">Cancel</button>
     </form>
 
     <div class="mt-3 flex flex-wrap items-center justify-between gap-3">

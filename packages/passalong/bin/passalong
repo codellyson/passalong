@@ -37,7 +37,8 @@
 //   passalong team invite [email] make an invite link (mailed when an email is given)
 //   passalong team join <link|code>  accept an invite
 //   passalong team use <slug>     switch the current team
-//   passalong setup               install the Claude Code capture skill + register the MCP server
+//   passalong setup               install the Claude Code capture skill, MCP server and hooks
+//   passalong now                 what this worktree holds and what is waiting (the hooks call --hook)
 //   passalong mcp                 run the MCP server over stdio
 //   passalong version             print the installed version (also -v, --version)
 import { execFileSync, spawnSync } from "node:child_process";
@@ -592,9 +593,65 @@ const commands = {
           `could not register MCP server automatically (${msg.trim()}).\n  run: claude mcp add passalong -- passalong mcp`,
         );
     }
+    // The two hooks that keep an agent on what it holds: told at session start, and stopped once
+    // before ending with work nobody has handed in. Merged into the user's settings, not written
+    // over them, and a no-op when they are already there.
+    const settingsPath = join(homedir(), ".claude", "settings.json");
+    try {
+      const { withHooks } = await import("../src/hooks.js");
+      const before = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, "utf8")) : {};
+      const after = withHooks(before);
+      if (JSON.stringify(after) === JSON.stringify(before)) console.error("Claude Code hooks already installed");
+      else {
+        mkdirSync(dirname(settingsPath), { recursive: true });
+        writeFileSync(settingsPath, `${JSON.stringify(after, null, 2)}\n`);
+        console.error(`installed Claude Code hooks (session start, stop) → ${settingsPath}`);
+      }
+    } catch (err) {
+      console.error(`could not install Claude Code hooks (${err.message}); ${settingsPath} left as it was`);
+    }
     if (!api.loggedIn())
       console.error("sync is off; run `passalong login` when you want guides to follow you across machines");
     console.error('done. In Claude Code, say "pass this along" at the end of a task, or run /passalong-capture.');
+  },
+
+  /**
+   * What this worktree holds and what is waiting. `--hook session|stop` is the form the Claude
+   * Code hooks from `setup` call (src/hooks.js): it prints only what the hook protocol reads, and
+   * nothing at all when anything goes wrong — a hook must never get in the way of a session.
+   */
+  async now(f) {
+    const { nowText, stopVerdict } = await import("../src/hooks.js");
+    if (!f.hook) {
+      const r = await passalong.now();
+      console.log(nowText(r) || "Nothing held here, and nothing waiting.");
+      return;
+    }
+    try {
+      let input = {};
+      if (f.hook === "stop" && !process.stdin.isTTY) {
+        let raw = "";
+        for await (const chunk of process.stdin) raw += chunk;
+        input = JSON.parse(raw || "{}");
+      }
+      if (!api.loggedIn()) return;
+      const r = await Promise.race([
+        passalong.now(),
+        new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 5000)),
+      ]);
+      if (f.hook === "session") {
+        const text = nowText(r);
+        if (text)
+          console.log(
+            JSON.stringify({
+              hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: text },
+            }),
+          );
+      } else if (f.hook === "stop") {
+        const v = stopVerdict({ held: r.held, input });
+        if (v) console.log(JSON.stringify(v));
+      }
+    } catch {}
   },
 
   async mcp() {

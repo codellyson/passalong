@@ -17,11 +17,14 @@ public one, for agents *using* Passalong rather than changing it.
     **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
-  - `src/mcp.js` — MCP tools: `search_guides`, `inbox`, `board`, `activity`, `log`, `start_guide`,
-    `get_guide`, `publish_guide`, `guide_template`, `set_guide_status`, `ack_guide`,
-    `verify_guide`, `file_bugs`, `attach_screenshot`. `start_guide` is the one an agent should
-    reach for on work it means to do: it pulls and takes the handoff together. `get_guide` only
-    reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a
+  - `src/mcp.js` — MCP tools. `take`, `progress`, `hand_in` and `pass` work every kind of guide
+    (docs/V2.md §11); each answer ends with the server's `next` (`steps()` in
+    apps/api/src/claims.ts). `start_guide`, `ack_guide`, `verify_guide`, `next_task`,
+    `task_progress` and `finish_task` are kept as those four under their old names — one
+    implementation each, never a second copy. Also `search_guides`, `inbox`, `board`, `activity`,
+    `log`, `get_guide`, `publish_guide`, `guide_template`, `set_guide_status`, `file_bugs`,
+    `attach_screenshot`, `plan_tasks`. `take` is the one an agent should reach for on work it means
+    to do. `get_guide` only reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a
     client-passed file over HTTP (`openai/fileParams`). Over HTTP, `publish_guide` and `file_bugs`
     also take a top-level `attachments` file array. `openai/fileParams` only accepts top-level
     fields, so a `file_bugs` issue names its files by position rather than holding them. Only
@@ -106,7 +109,8 @@ public one, for agents *using* Passalong rather than changing it.
   dispatches back through the app's own routes with the caller's bearer token, so a rule lives in
   the route and nowhere else. Stateless on purpose: nothing subscribes, so nothing needs a session.
 - **A guide has a kind, and each asks something different of whoever receives one.** `transfer`
-  (or absent — every guide written before migration 0007 is one) is finished work to repeat:
+  (or absent — every guide written before migration 0007 is one, and every installed client still
+  writes one that way; the API stores it spelled out since migration 0023) is finished work to repeat:
   follow its `Steps`. `bug` is a defect to fix where it is. A bug's repro goes under `## Reproduce`
   and **never** `## Steps`, because `Steps` is the heading the MCP server tells every agent to
   follow — a repro under it means an agent reproduces the defect, checks the Verification, finds it
@@ -137,6 +141,16 @@ public one, for agents *using* Passalong rather than changing it.
   `mt-8` between sections. Half-steps are off the scale — `-1.5`, `-2.5` and `-3.5` were all in use
   and one relationship had four different values, which is what made the interface look unfinished
   before anyone could say why. `-0.5` is the one exception: 2px inside a chip is a sub-unit.
+- **A raised surface's edge is a shadow; a border is structure.** Cards, list containers, panels,
+  menus and the sign-in card take `shadow-edge` (`--edge-shadow` in styles.css: a 1px ring plus a
+  little depth in light, the ring alone in dark), never `border border-line`. Borders stay where
+  they separate or state something: dividers, table rules, inputs and code wells, a selected or
+  focused control, a coloured callout. A row inside a list sits flush, so it rounds its ends to the
+  list's own radius; nested surfaces with a small inset nest their radii (outer = inner + padding —
+  the `.menu` is 16px because its items are 8px inside 8px). Every `.btn` presses to
+  `scale(0.96)`; `.static` opts out. A button in the same row as an input or a code well is a
+  full-height `.btn`, not `.btn sm`: the field is `--control-h`, and a small button beside it
+  sits off its line.
 - **Long values are shortened by unit, never by pixel.** `shorten()` (`app/utils/shorten.ts`) drops
   whole words, then whole path segments, so what is left is a repo name or a host and not
   `techchak-backend (https://g…`. Do not reach for `truncate` on a value a person has to read, and

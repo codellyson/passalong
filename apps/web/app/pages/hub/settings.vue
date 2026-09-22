@@ -154,7 +154,7 @@ onBeforeUnmount(() => observer?.disconnect());
 const claiming = ref(false);
 const band = "flex flex-col border-t border-line pt-8 first:border-t-0 first:pt-0";
 const bandLabel = "m-0 mb-2 font-ui text-xs font-semibold tracking-widest text-muted uppercase";
-const sec = "flex scroll-mt-6 flex-col gap-4 py-5";
+const sec = "flex scroll-mt-20 flex-col gap-4 py-5";
 const secHead = "flex flex-wrap items-baseline gap-x-3 gap-y-1";
 const title = "m-0 font-ui text-lg font-semibold text-fg";
 // Its own line under the title. A max-width here let the flex row fit it beside the title instead,
@@ -170,7 +170,7 @@ const noteTone: Record<string, string> = {
 <template>
   <HubShell>
     <div class="grid gap-8 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-12">
-      <nav class="flex flex-col gap-4 md:sticky md:top-6 md:self-start" aria-label="Settings sections">
+      <nav class="flex flex-col gap-4 md:sticky md:top-20 md:self-start" aria-label="Settings sections">
         <h1 class="m-0">Settings</h1>
         <div class="flex gap-2 overflow-x-auto pb-1 md:flex-col md:gap-4 md:overflow-visible md:pb-0">
           <div v-for="g in nav" :key="g.group" class="contents md:flex md:flex-col md:gap-0.5">
@@ -191,7 +191,7 @@ const noteTone: Record<string, string> = {
       </nav>
 
       <div class="flex min-w-0 flex-col">
-        <section v-if="items.length" class="mb-8 rounded-2 border border-line bg-raised" aria-labelledby="needs-h">
+        <section v-if="items.length" class="mb-8 rounded-2 bg-raised shadow-edge" aria-labelledby="needs-h">
           <!-- A div, not <header>: the global header rule's padding and margin outrank utilities. -->
           <div class="flex items-baseline gap-2 border-b border-line px-4 py-3">
             <h2 id="needs-h" class="m-0 font-ui text-base font-semibold text-fg">Needs you</h2>

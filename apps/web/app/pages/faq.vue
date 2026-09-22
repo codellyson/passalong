@@ -68,9 +68,9 @@ const QUESTIONS = [
       "/connect#screenshots: ChatGPT web passes the file; Claude uploads from its sandbox via create_upload once passalong.dev is allowed; local servers take a path.",
   },
   {
-    q: "What is the difference between a transfer and a bug?",
+    q: "What is the difference between a task, a transfer and a bug?",
     a: "",
-    notes: "/connect statement section; llms.txt 'Two kinds of guide'.",
+    notes: "/connect statement section; llms.txt 'Three kinds of guide'. Same four calls for all.",
   },
   {
     q: "What happens to my guides if I stop paying or delete my account?",

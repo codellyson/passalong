@@ -8,7 +8,9 @@
  * pointing one of them at Passalong meant hand-writing schemas.
  *
  * WHAT IS AND IS NOT IN HERE. This describes the surface the MCP server exposes — read guides,
- * file bugs, answer with a verdict — and deliberately not account administration. Signup, login,
+ * file bugs, answer with a verdict, and take, report on and finish tasks — and deliberately not
+ * account administration, or the task review gate (approve, reject, release), which is a person's to
+ * do and has no MCP tool for the same reason. Signup, login,
  * password reset and token management are real routes and stay undescribed: an action schema is a
  * list of things you are inviting a model to call, and "reset this account's password" does not
  * belong on it. Anyone automating those has the source.
@@ -69,8 +71,7 @@ const GUIDE = {
     severity: { type: "string", enum: ["s1", "s2", "s3", "s4"] },
     failing: { type: "boolean", description: "Someone tried it and said it does not work." },
     verdict: {
-      type: "object",
-      nullable: true,
+      type: ["object", "null"],
       properties: {
         ok: { type: "boolean" },
         by: { type: "string" },
@@ -129,6 +130,92 @@ const REPORT = {
   },
 } as const;
 
+/** One task on the queue, as GET /v1/tasks and POST /v1/tasks/next answer it. */
+const TASK = {
+  type: "object",
+  description:
+    "A task: work nobody has done yet, queued for an agent. `state` is where it is; `claim` is who has it.",
+  properties: {
+    id: { type: "string", example: "3cxbzebv" },
+    title: { type: "string" },
+    target: { type: "string", description: "owner/repo the task is for; empty for no repo." },
+    state: {
+      type: "string",
+      enum: ["draft", "ready", "blocked", "claimed", "stalled", "review", "done"],
+      description:
+        "stalled: claimed, and nothing heard for 30 minutes. Still locked to the agent that took it.",
+    },
+    mine: { type: "boolean", description: "You wrote it, so its review is yours." },
+    url: { type: "string", description: "Share link." },
+    claim: {
+      type: ["object", "null"],
+      properties: {
+        agent: { type: "string" },
+        note: { type: "string", description: "The latest progress line." },
+        report: { type: "string", description: "Id of the transfer guide it was finished with." },
+        pr: { type: "string", description: "A PR link or a commit hash." },
+        lease_until: { type: "string", format: "date-time" },
+      },
+    },
+  },
+};
+
+/** Who is asking for work: the same `agent` name on every call is what makes it the same agent. */
+const AGENT = {
+  type: "string",
+  pattern: "^[a-z0-9-]{8,64}$",
+  description:
+    "A name for you, the same on every task call. A local agent's is in its worktree's .passalong/agent.json.",
+};
+/** What every verb's answer ends with: the calls that make sense from here. See steps() in claims.ts. */
+const NEXT = {
+  type: "object",
+  description:
+    "What to do now. `next` is the calls that make sense from this state, with when and why. `say` is set when the right move is no call at all — you no longer hold it, or nothing is waiting: stop, and tell the user.",
+  properties: {
+    next: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          tool: { type: "string", enum: ["take", "progress", "hand_in", "pass"] },
+          when: { type: "string" },
+          why: { type: "string" },
+        },
+      },
+    },
+    say: { type: "string" },
+  },
+};
+
+/** A verb's answer: its own fields, and what to call next. */
+const withNext = (props: Record<string, unknown>) => ({
+  allOf: [{ type: "object", properties: props }, { $ref: "#/components/schemas/Next" }],
+});
+
+const json200 = (description: string, schema: unknown) => ({
+  description,
+  content: { "application/json": { schema } },
+});
+
+const agentBody = (props: Record<string, unknown> = {}, required: string[] = []) => ({
+  required: true,
+  content: {
+    "application/json": {
+      schema: {
+        type: "object",
+        required: ["agent", ...required],
+        properties: { agent: AGENT, ...props },
+      },
+    },
+  },
+});
+
+const NOT_HELD = {
+  description:
+    "You do not hold that task: a person took it back, or it was never yours. Stop working on it.",
+};
+
 const guideList = {
   200: {
     description: "Guides.",
@@ -150,10 +237,14 @@ export function openapi(origin: string) {
       title: "Passalong",
       version: "1.0.0",
       description:
-        "Hand work between contexts as guides: markdown with frontmatter, in two kinds. A " +
+        "Hand work between contexts as guides: markdown with frontmatter, in three kinds. A " +
         "transfer guide is finished work to repeat — follow its Steps. A bug is a defect to fix — " +
         "Reproduce shows you the problem and is not a procedure to apply, and Verification is the " +
-        "behaviour that should have happened. Read `kind` before acting on any guide.",
+        "behaviour that should have happened. A task (the default) is work nobody has done yet. " +
+        "Every kind is worked with four calls: POST /v1/take, PUT /v1/guides/{id}/progress, " +
+        "POST /v1/guides/{id}/hand_in and POST /v1/guides/{id}/pass. Each answer ends with " +
+        "`next`, what to call now, and `say` when the move is to stop. Read `kind` before acting " +
+        "on any guide.",
     },
     servers: [{ url: origin }],
     security: [{ bearerAuth: [] }],
@@ -165,7 +256,7 @@ export function openapi(origin: string) {
           description: "An API token, minted in the hub under Settings.",
         },
       },
-      schemas: { Guide: GUIDE, Report: REPORT },
+      schemas: { Guide: GUIDE, Report: REPORT, Task: TASK, Next: NEXT },
     },
     paths: {
       "/v1/me": {
@@ -299,7 +390,10 @@ export function openapi(origin: string) {
           },
           responses: {
             200: { description: "Recorded." },
-            400: { description: "Passing needs a reason." },
+            400: {
+              description:
+                "Passing needs a reason. Or it is a task, which is not taken this way: use POST /v1/take.",
+            },
             403: { description: "It is your own guide." },
           },
         },
@@ -329,7 +423,306 @@ export function openapi(origin: string) {
           },
           responses: {
             200: { description: "Recorded." },
-            400: { description: "A failure needs a reason." },
+            400: {
+              description:
+                "A failure needs a reason. Or it is a task, which is not answered this way: hand it in with POST /v1/guides/{id}/hand_in.",
+            },
+          },
+        },
+      },
+      // The task queue, the agent's half of it. Approve, reject and release are the review gate — a
+      // person's calls — and stay undescribed for the reason account routes do: a description is a
+      // list of things a model is invited to call, and approving work is not one of them.
+      // The four verbs every guide is worked with, and who is on what. See docs/V2.md §11.
+      "/v1/take": {
+        post: {
+          operationId: "take",
+          summary: "Say you are doing it, and get it: a guide by id, or the next one waiting.",
+          description:
+            "Any kind. While you hold it nobody else can take it there: a task has one taker, " +
+            "anything else one per repo. You hold one thing at a time — taking what you hold " +
+            "resumes it. When somebody else has it the 409 names them in `holder`: tell the user " +
+            "rather than doing the work twice. With no id, the next ready task for `repo`, or " +
+            "`guide: null` and `say` when nothing is waiting.",
+          requestBody: agentBody({
+            id: { type: "string", description: "The guide to take. Leave out for the next one." },
+            repo: { type: "string", description: "owner/repo you are in; omit for no repo." },
+            host: { type: "string" },
+            worktree: { type: "string" },
+            any: { type: "boolean", description: "A task for another repo. Only when asked to." },
+          }),
+          responses: {
+            200: json200(
+              "What you now hold, with its markdown — or null — and what to call next.",
+              withNext({
+                guide: {
+                  oneOf: [
+                    {
+                      type: "object",
+                      properties: {
+                        id: { type: "string" },
+                        title: { type: "string" },
+                        kind: { type: "string" },
+                        markdown: { type: "string" },
+                        resumed: { type: "boolean" },
+                        lease_until: { type: "string", format: "date-time" },
+                      },
+                    },
+                    { type: "null" },
+                  ],
+                },
+              }),
+            ),
+            400: { description: "No `agent`, or a task taken from outside the repo it is for." },
+            404: { description: "No such guide that you can see." },
+            409: {
+              description:
+                "Somebody has it here (`holder` says who), you already hold something else, or it is a draft, blocked or done.",
+            },
+          },
+        },
+      },
+      "/v1/guides/{id}/progress": {
+        put: {
+          operationId: "progress",
+          summary: "Still on it: renews your hold, and `note` is the line the hub shows.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: agentBody({ note: { type: "string", maxLength: 280 } }),
+          responses: {
+            200: json200(
+              "Renewed.",
+              withNext({ id: { type: "string" }, note: { type: "string" } }),
+            ),
+            409: NOT_HELD,
+          },
+        },
+      },
+      "/v1/guides/{id}/hand_in": {
+        post: {
+          operationId: "handIn",
+          summary: "Done here.",
+          description:
+            "A task: `report`, the id of a transfer guide you published about the work; its author reviews it against Acceptance. A handoff or a bug: `ok`, whether its Verification held, and `note` when it did not.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: agentBody({
+            report: { type: "string", description: "Task: the write-up's id." },
+            pr: { type: "string", description: "Task: PR or branch link, or a commit hash." },
+            ok: { type: "boolean", description: "Handoff or bug: did its Verification hold." },
+            note: { type: "string", maxLength: 280 },
+          }),
+          responses: {
+            200: json200("Handed in.", withNext({ id: { type: "string" } })),
+            400: { description: "A task without `report`, or a failure without a note." },
+            403: { description: "Your own guide: there is nobody to hand it in to." },
+            409: NOT_HELD,
+          },
+        },
+      },
+      "/v1/guides/{id}/pass": {
+        post: {
+          operationId: "pass",
+          summary: "Not yours, or stuck: give it back with the reason.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: agentBody({ why: { type: "string", maxLength: 1000 } }, ["why"]),
+          responses: {
+            200: json200(
+              "Open again; the reason goes to whoever is next.",
+              withNext({ id: { type: "string" } }),
+            ),
+            400: { description: "No reason given." },
+            409: NOT_HELD,
+          },
+        },
+      },
+      "/v1/working": {
+        get: {
+          operationId: "working",
+          summary: "Who is working on what: every guide somebody holds right now that you can see.",
+          responses: {
+            200: json200("Most recently heard from first. One row per taker.", {
+              type: "object",
+              properties: {
+                working: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      id: { type: "string" },
+                      title: { type: "string" },
+                      kind: { type: "string" },
+                      state: { type: "string", enum: ["claimed", "stalled"] },
+                      by: {
+                        type: "object",
+                        properties: {
+                          handle: { type: "string" },
+                          name: { type: "string" },
+                          you: { type: "boolean" },
+                        },
+                      },
+                      repo: { type: "string" },
+                      host: { type: "string" },
+                      note: { type: "string" },
+                      lease_until: { type: "string", format: "date-time" },
+                    },
+                  },
+                },
+              },
+            }),
+          },
+        },
+      },
+      "/v1/tasks": {
+        get: {
+          operationId: "listTasks",
+          summary: "Every task you can see, with where it is and who has it.",
+          responses: {
+            200: {
+              description: "Oldest first.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      tasks: { type: "array", items: { $ref: "#/components/schemas/Task" } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/v1/tasks/next": {
+        post: {
+          operationId: "takeNextTask",
+          summary:
+            "Take the oldest ready task for a repo. No other agent can have it while you do.",
+          description:
+            "If you already hold a task, that one comes back instead (`resumed: true`) — one at a " +
+            "time. A task waits until every task in its `blocked_by` is approved. Answers " +
+            "`{ task: null }` when nothing is ready.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["agent"],
+                  properties: {
+                    agent: AGENT,
+                    repo: {
+                      type: "string",
+                      description: "owner/repo you are in; omit for tasks for no repo.",
+                    },
+                    host: { type: "string" },
+                    worktree: { type: "string" },
+                    any: {
+                      type: "boolean",
+                      description: "Take a task for any repo. Only when asked to.",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: "The task you now hold, with its markdown, or null.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      task: {
+                        oneOf: [
+                          {
+                            allOf: [
+                              { $ref: "#/components/schemas/Task" },
+                              {
+                                type: "object",
+                                properties: {
+                                  markdown: { type: "string" },
+                                  resumed: { type: "boolean" },
+                                },
+                              },
+                            ],
+                          },
+                          { type: "null" },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            400: { description: "`agent` is missing or not 8–64 of a-z, 0-9 and -." },
+          },
+        },
+      },
+      "/v1/tasks/{id}/progress": {
+        put: {
+          operationId: "reportTaskProgress",
+          summary:
+            "Say you are still on it, with a one-line status. 30 minutes without one stalls it.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["agent"],
+                  properties: {
+                    agent: AGENT,
+                    note: {
+                      type: "string",
+                      maxLength: 280,
+                      description: 'e.g. "migrating schema, 2 of 5"',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: { description: "The lease runs 30 minutes from now." },
+            409: NOT_HELD,
+          },
+        },
+      },
+      "/v1/tasks/{id}/finish": {
+        post: {
+          operationId: "finishTask",
+          summary: "Hand a finished task in for review, with a transfer guide about the work.",
+          description:
+            "Only once every Acceptance line holds. Publish the transfer guide first (PUT " +
+            "/v1/guides/{id}) and pass its id as `report`: the reviewer reads it against " +
+            "Acceptance. `pr` is a PR link or the hash of the commit you made.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["agent", "report"],
+                  properties: {
+                    agent: AGENT,
+                    report: {
+                      type: "string",
+                      description: "Id of the transfer guide about this work.",
+                    },
+                    pr: { type: "string" },
+                    note: { type: "string", maxLength: 280 },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: { description: "In review. A person approves it or sends it back." },
+            400: { description: "`report` is missing, not yours, or is itself a task." },
+            409: NOT_HELD,
           },
         },
       },

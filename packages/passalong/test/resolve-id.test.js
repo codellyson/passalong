@@ -29,10 +29,10 @@ test("anything that is neither an id, a link, nor a file is refused before the w
 // the instruction an agent actually reads, arriving with the payload rather than in a description
 // it saw once a session.
 test("the handoff nudge fires only on a guide somebody was handed", () => {
-  assert.match(handoffNudge({ to: "hybee1", team: "khaime" }), /start_guide instead of get_guide/);
+  assert.match(handoffNudge({ to: "hybee1", team: "khaime" }), /call take instead of get_guide/);
   // A team share was handed to everyone in it, which is still somebody.
-  assert.match(handoffNudge({ team: "khaime" }), /start_guide instead of get_guide/);
-  assert.match(handoffNudge({ to: "hybee1", team: "khaime" }), /ack_guide taken=false/);
+  assert.match(handoffNudge({ team: "khaime" }), /call take instead of get_guide/);
+  assert.match(handoffNudge({ to: "hybee1", team: "khaime" }), /pass with a reason/);
   // Nothing was handed over, so there is no handoff to answer for and the nudge is noise that
   // teaches an agent to skip reading them.
   assert.equal(handoffNudge({ title: "Mine alone" }), "");

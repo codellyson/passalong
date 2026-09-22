@@ -20,20 +20,40 @@ const show = computed(
   () => Boolean(me.value) && (props.bare || !me.value?.handle || editing.value),
 );
 
+/**
+ * What is in the fields, kept here rather than in the DOM. The inputs used to be bound with
+ * `:value`, which Vue writes back on every re-render — and the hub refetches the account whenever
+ * the window regains focus, so clicking into the field and typing could lose the typing to a
+ * refetch landing a moment later. The drafts follow the account only until you start typing, and
+ * Cancel puts them back.
+ */
+const draft = reactive({ handle: "", name: "", email: "" });
+function fromAccount() {
+  draft.handle = me.value?.handle || "";
+  draft.name = me.value?.name || "";
+  draft.email = me.value?.email || "";
+}
+watch(
+  me,
+  () => {
+    if (!dirty.value) fromAccount();
+  },
+  { immediate: true },
+);
+function cancel() {
+  fromAccount();
+  dirty.value = false;
+  error.value = null;
+}
+
 /** The one error anyone actually hits belongs against the field that caused it. */
 const onHandle = computed(() => Boolean(error.value && /handle|@|taken/i.test(error.value)));
 
 const label = "block font-ui text-sm font-medium text-fg mb-2";
 const box = "block w-full max-w-sm";
 
-async function submit(e: Event) {
-  // Read first, then set state: a re-render would reset these inputs to the stored values.
-  const f = e.target as HTMLFormElement;
-  const body = {
-    handle: field(f, "handle"),
-    name: field(f, "name"),
-    email: field(f, "email"),
-  };
+async function submit() {
+  const body = { handle: draft.handle, name: draft.name, email: draft.email };
   error.value = null;
   try {
     const next = await api<Partial<Me>>("/v1/me", json("PATCH", body));
@@ -65,22 +85,17 @@ async function submit(e: Event) {
       class="flex flex-col gap-4"
       @submit.prevent="submit"
       @input="dirty = true"
-      @reset="dirty = false; error = null"
     >
       <div :class="box">
         <label :class="label" for="handle">How teammates mention you</label>
         <!-- The @ is not part of the value, and typing it again is the obvious mistake to make, so
              it sits in the field as furniture rather than in the placeholder. -->
-        <div
-          class="flex items-center gap-1 rounded-1 border bg-raised pl-3 focus-within:border-accent"
-          :class="onHandle ? 'border-danger' : 'border-line-strong'"
-        >
-          <span class="text-sm text-muted">@</span>
+        <div class="affix" :class="{ invalid: onHandle }">
+          <span class="affix-mark" aria-hidden="true">@</span>
           <input
             id="handle"
             name="handle"
-            :value="me?.handle || ''"
-            class="w-full border-0 bg-transparent px-0 py-2 pr-3 focus:outline-none"
+            v-model="draft.handle"
             required
             spellcheck="false"
             pattern="[a-zA-Z0-9][a-zA-Z0-9-]{1,30}"
@@ -95,20 +110,19 @@ async function submit(e: Event) {
 
       <div :class="box">
         <label :class="label" for="name">Name</label>
-        <input id="name" name="name" class="w-full" :value="me?.name || ''" />
+        <input id="name" v-model="draft.name" name="name" class="w-full" />
       </div>
 
       <div :class="box">
         <label :class="label" for="email">Email</label>
-        <input id="email" name="email" type="email" class="w-full" :value="me?.email || ''" />
+        <input id="email" v-model="draft.email" name="email" type="email" class="w-full" />
       </div>
 
       <!-- Nothing at rest: "Saved." before anyone has saved anything reads as a claim. -->
       <div v-if="!bare || dirty" class="flex flex-wrap gap-2">
         <button class="primary" type="submit">{{ bare ? "Save changes" : "Save" }}</button>
-        <!-- On settings there is nothing to close, so cancel means "put back what was there" —
-             which a native reset does exactly, the inputs being uncontrolled. -->
-        <button v-if="bare" class="btn" type="reset">Cancel</button>
+        <!-- On settings there is nothing to close, so cancel means "put back what was there". -->
+        <button v-if="bare" class="btn" type="button" @click="cancel">Cancel</button>
         <button v-else-if="me?.handle" class="btn" type="button" @click="editing = false">
           Cancel
         </button>

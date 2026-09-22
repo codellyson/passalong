@@ -250,17 +250,32 @@ test("nothing a stranger does to your guide happens in silence", async () => {
   // the author can reach has to tell the author. `reopened` is here because it did not, and a
   // guide moved off somebody's board on another person's say-so without a word.
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
-  for (const [route, kind] of [
-    ["/v1/guides/:id/verdict", /kind: body\.ok \? "verified" : "failed"/],
-    ["/v1/guides/:id/ack", /kind,/],
-    ["/v1/guides/:id/status", /kind: "reopened"/],
-    ["/v1/guides/:id/status", /kind: "consumed"/],
+  const block = (needle, len = 4000) => {
+    const at = src.indexOf(needle);
+    assert.ok(at > 0, `${needle} should still exist`);
+    return src.slice(at, at + len);
+  };
+  // The verdict and the first word back live in one function each, shared by every route that
+  // records them, so each function is held to the rule and each route to calling it.
+  for (const [fn, kind] of [
+    ["async function recordVerdict", /kind: ok \? "verified" : "failed"/],
+    ["async function recordAck", /kind,/],
   ]) {
-    const at = src.indexOf(`"${route}"`);
-    assert.ok(at > 0, `${route} should still exist`);
-    const body = src.slice(at, at + 4000);
-    assert.match(body, /await notify\(c\.env/, `${route} must tell the author something happened`);
-    assert.match(body, kind, `${route} must tell them what`);
+    const body = block(fn);
+    assert.match(body, /await notify\(c\.env/, `${fn} must tell the author something happened`);
+    assert.match(body, kind, `${fn} must tell them what`);
+  }
+  for (const [route, calls] of [
+    ["/v1/guides/:id/verdict", /recordVerdict\(/],
+    ["/v1/guides/:id/ack", /recordAck\(/],
+    ["/v1/guides/:id/hand_in", /recordVerdict\(/],
+    ["/v1/guides/:id/pass", /recordAck\(/],
+  ])
+    assert.match(block(`"${route}"`, 3000), calls, `${route} must tell the author`);
+  for (const kind of [/kind: "reopened"/, /kind: "consumed"/]) {
+    const body = block('"/v1/guides/:id/status"');
+    assert.match(body, /await notify\(c\.env/);
+    assert.match(body, kind);
   }
 });
 
@@ -346,4 +361,40 @@ test("an image a reader cannot load is caught, and an ordinary one is not", () =
   assert.deepEqual(unreachableImages("![a](./diagram.png)"), []);
   // A link that is not an image is not this check's business.
   assert.deepEqual(unreachableImages("[see](attachment://file_1)"), []);
+});
+
+test("the API description covers what an agent does with a task, and not the review gate", async () => {
+  const { openapi } = await import("../src/openapi.ts");
+  const doc = openapi("https://passalong.dev");
+  for (const [path, method] of [
+    ["/v1/tasks", "get"],
+    ["/v1/tasks/next", "post"],
+    ["/v1/tasks/{id}/progress", "put"],
+    ["/v1/tasks/{id}/finish", "post"],
+    ["/v1/take", "post"],
+    ["/v1/guides/{id}/progress", "put"],
+    ["/v1/guides/{id}/hand_in", "post"],
+    ["/v1/guides/{id}/pass", "post"],
+    ["/v1/working", "get"],
+  ])
+    assert.ok(doc.paths[path]?.[method], `${method.toUpperCase()} ${path} is described`);
+  // Every verb's answer says what to call next; a client generated from the spec should see it.
+  assert.ok(doc.components.schemas.Next, "the next-step shape is described");
+  // Approve, reject and release are a person's calls. Describing them would invite a model to make
+  // them, which is the one thing the review gate exists to stop, so they stay out, like the
+  // account routes do.
+  for (const gate of ["approve", "reject", "release"])
+    assert.equal(doc.paths[`/v1/tasks/{id}/${gate}`], undefined, `${gate} is not described`);
+  // A task is answered with the task routes: ack and verdict say they refuse one.
+  for (const path of ["/v1/guides/{id}/ack", "/v1/guides/{id}/verdict"])
+    assert.match(doc.paths[path].put.responses[400].description, /task/i, path);
+});
+
+test("the API description says null the way OpenAPI 3.1 does", async () => {
+  const { openapi } = await import("../src/openapi.ts");
+  const doc = openapi("https://passalong.dev");
+  assert.equal(doc.openapi.startsWith("3.1"), true);
+  // `nullable` is OpenAPI 3.0. A 3.1 validator ignores it, so a field that can be null reads as one
+  // that never is, and a client generated from it chokes on the null.
+  assert.doesNotMatch(JSON.stringify(doc), /"nullable"/);
 });

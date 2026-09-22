@@ -161,10 +161,10 @@ async function test(id: string) {
           required
         >
       </div>
-      <button class="btn primary sm" type="submit" :disabled="busy || !url.trim()">
+      <button class="btn primary" type="submit" :disabled="busy || !url.trim()">
         {{ busy ? "Adding…" : "Add channel" }}
       </button>
-      <button class="btn sm" type="button" @click="adding = false; name = ''; url = ''">
+      <button class="btn" type="button" @click="adding = false; name = ''; url = ''">
         Cancel
       </button>
       <p class="basis-full m-0 font-ui text-sm text-muted">

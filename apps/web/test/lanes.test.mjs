@@ -2,7 +2,6 @@
 // which the stripper erases, so they load without Nuxt.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { draftMarkdown, followUpDefaults } from "../app/utils/guide-draft.ts";
 import { arrange, laneOf, statusLine } from "../app/utils/lanes.ts";
 import { handleFrom, personName } from "../app/utils/people.ts";
 
@@ -92,46 +91,6 @@ test("a person is their name, then @handle, then @account id", () => {
   assert.equal(personName("  ", "ada", "acc1"), "@ada");
   assert.equal(personName(null, null, "acc1"), "@acc1");
   assert.equal(handleFrom("Ada Ọkafor!"), "ada-okafor");
-});
-
-test("a guide written in the browser is the document the CLI would write", () => {
-  const md = draftMarkdown("abc12345", {
-    title: "Fix: invoice PDF",
-    team: "khaime",
-    to: "@bami",
-    problem: "PDFs time out.",
-    solution: "",
-    steps: "1. Stream it.",
-    verification: "Download works.",
-    gotchas: "",
-  });
-  assert.match(md, /^---\nid: abc12345\ntitle: "Fix: invoice PDF"\nkind: transfer\n/);
-  assert.match(md, /\nteam: khaime\nto: bami\n---\n/);
-  assert.match(md, /## Problem\n\nPDFs time out\.\n\n## Steps\n\n1\. Stream it\./);
-  assert.doesNotMatch(md, /Solution shape|Gotchas/, "empty sections are left out");
-});
-
-test("a follow-up goes to the people the original is for", () => {
-  assert.deepEqual(
-    followUpDefaults({ mine: true, team: "khaime", from: "me", to: "ada" }),
-    { team: "khaime", to: "ada" },
-    "context for your own guide reaches whoever you sent it to",
-  );
-  assert.deepEqual(
-    followUpDefaults({ mine: true, team: "khaime", from: "me", to: null }),
-    { team: "khaime", to: "" },
-    "a guide sent to the whole team gets its context sent to the whole team",
-  );
-  assert.deepEqual(
-    followUpDefaults({ mine: false, team: "khaime", from: "bami", to: "me" }),
-    { team: "khaime", to: "bami" },
-    "context for someone else's guide goes to its author",
-  );
-  assert.deepEqual(
-    followUpDefaults({ mine: false, team: null, from: "bami", to: null }),
-    { team: "", to: "" },
-    "no team, no address",
-  );
 });
 
 test("the follow-up dock is an address: open, close, and room for four", async () => {

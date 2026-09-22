@@ -44,12 +44,19 @@ watch(
   },
 );
 
+// Whether to poll depends on the clients the poll returns, so the two cannot be declared in one
+// order: the query read `watching` while setting itself up, before `clients` existed, and threw.
+// A plain ref breaks the loop — the query is made first, and `watching` is fed in afterwards.
+const polling = ref(false);
+const { data: loaded, isPending: loadingClients, error: loadFailed } = useConnectors(polling);
+const clients = computed(() => loaded.value ?? []);
 const progress = computed(() => handshake(clients.value, since.value));
 const watching = computed(
   () => connect.value.open && app.value.kind === "oauth" && progress.value.reached < 3,
 );
-const { data: loaded, isPending: loadingClients, error: loadFailed } = useConnectors(watching);
-const clients = computed(() => loaded.value ?? []);
+watchEffect(() => {
+  polling.value = watching.value;
+});
 const reload = () => queryClient.invalidateQueries({ queryKey: settingsKeys.connectors });
 
 const STAGES = ["You approved", "Signed in", "First tool call"];
@@ -153,7 +160,7 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
   <div class="flex flex-col gap-4">
     <div
       v-if="connect.open"
-      class="grid overflow-hidden rounded-2 border border-line bg-raised md:grid-cols-[13rem_1fr]"
+      class="grid overflow-hidden rounded-2 bg-raised shadow-edge md:grid-cols-[13rem_1fr]"
     >
       <div
         ref="picker"

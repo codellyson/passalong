@@ -141,7 +141,7 @@ const initials = (label: string) =>
       v-for="t in details"
       :id="`team-${t.slug}`"
       :key="t.slug"
-      class="scroll-mt-6 rounded-2 border border-line bg-raised"
+      class="scroll-mt-20 rounded-2 bg-raised shadow-edge"
     >
       <!-- A div, not <header>: the global header rule adds its own padding and margin, and it
            outranks utility classes — it put a gap above the tabs. -->
@@ -217,8 +217,8 @@ const initials = (label: string) =>
         <label class="mb-2 block font-ui text-sm font-medium text-fg" for="team-name">Name your team</label>
         <input id="team-name" ref="field" v-model="name" class="w-full" placeholder="Name it after the people, e.g. Checkout squad" required>
       </div>
-      <button class="btn primary sm" type="submit" :disabled="!name.trim()">Create team</button>
-      <button class="btn sm" type="button" @click="naming = false">Cancel</button>
+      <button class="btn primary" type="submit" :disabled="!name.trim()">Create team</button>
+      <button class="btn" type="button" @click="naming = false">Cancel</button>
     </form>
     <button v-else id="new-team" class="btn sm self-start" @click="ask"><AppIcon name="plus" />New team</button>
   </div>

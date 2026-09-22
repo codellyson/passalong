@@ -54,7 +54,7 @@ const TONE = {
 
 <template>
   <li
-    class="group/report m-0 bg-raised shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[calc(var(--r-3)-1px)] first:shadow-none last:rounded-b-[calc(var(--r-3)-1px)]"
+    class="group/report m-0 bg-raised shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
   >
     <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
       <button
@@ -66,7 +66,7 @@ const TONE = {
         <span class="flex items-center gap-2 text-base font-semibold leading-snug text-fg">
           <AppIcon
             name="reveal"
-            class="shrink-0 text-muted transition-transform"
+            class="shrink-0 text-muted transition-[rotate] duration-150 ease-out"
             :class="shown ? '' : '-rotate-90'"
           />
           {{ group.title || "Bug report" }}
@@ -89,7 +89,7 @@ const TONE = {
 
     <ul
       v-if="shown"
-      class="m-0 list-none border-t border-line bg-surface p-0 py-1 group-last/report:rounded-b-[calc(var(--r-3)-1px)]"
+      class="m-0 list-none border-t border-line bg-surface p-0 py-1 group-last/report:rounded-b-[var(--r-3)]"
     >
       <li
         v-for="r in rows"

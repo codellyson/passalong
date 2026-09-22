@@ -3,11 +3,12 @@
 
   Two steps, in the order they depend on each other. Teammates can only send work to you once they
   have something to call you, so step one asks for your name and suggests the @name from it. Step
-  two is sending something — and it used to be a single `passalong share` command, which told a
-  tester or a designer that the product was not for them. It now offers the browser first.
+  two is giving an agent its first task. Passalong is agent first, so that is a sentence to say to
+  your agent, not a form: the agent that has the context writes the guide.
 -->
 <script setup lang="ts">
 import type { Me } from "~/types/hub";
+import { ASKS } from "~/utils/asks";
 
 const { data, api, json, setMe } = useHub();
 
@@ -73,7 +74,7 @@ const step =
             Nothing can be sent to you until teammates have something to call you.
           </p>
 
-          <form class="mt-3 flex max-w-md flex-col gap-3 rounded-2 border border-line bg-raised p-4" @submit.prevent="claim">
+          <form class="mt-3 flex max-w-md flex-col gap-3 rounded-2 bg-raised shadow-edge p-4" @submit.prevent="claim">
             <div>
               <label class="mb-2 block font-ui text-sm font-medium text-fg" for="first-name">Your name</label>
               <input id="first-name" v-model="name" class="w-full" required placeholder="Ada Okafor" autocomplete="name" />
@@ -87,12 +88,11 @@ const step =
               <label class="mb-2 block font-ui text-sm font-medium text-fg" for="first-handle">
                 How teammates mention you
               </label>
-              <div class="flex items-center gap-1 rounded-1 border border-line-strong bg-raised pl-3 focus-within:border-accent">
-                <span class="text-sm text-muted">@</span>
+              <div class="affix">
+                <span class="affix-mark" aria-hidden="true">@</span>
                 <input
                   id="first-handle"
                   v-model="handle"
-                  class="w-full border-0 bg-transparent px-0 py-2 pr-3 focus:outline-none"
                   required
                   spellcheck="false"
                   pattern="[a-z0-9][a-z0-9-]{1,30}"
@@ -120,34 +120,19 @@ const step =
         >2</span>
 
         <h2 class="m-0 font-ui text-base font-semibold" :class="claimed ? 'text-fg' : 'text-muted'">
-          Send your first guide
+          Give an agent its first task
         </h2>
         <p class="mt-1 mb-0 font-ui text-sm text-muted">
-          A guide is finished work written down so someone else can repeat it.
+          Your agent writes it, in the repo it is for. Say this in Claude Code, or any agent with the
+          Passalong tools. It waits here as a draft until you have read it.
         </p>
 
-        <div class="mt-3 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr))]">
-          <div class="flex flex-col gap-2 rounded-2 border border-line bg-raised p-4">
-            <b class="font-ui text-sm text-fg">Write it here</b>
-            <p class="m-0 font-ui text-sm text-muted">
-              Describe the problem, what you did, and how someone checks it worked.
-            </p>
-            <NuxtLink to="/hub/write" class="btn primary sm mt-auto self-start">Write a guide</NuxtLink>
-          </div>
-          <div class="flex flex-col gap-2 rounded-2 border border-line bg-raised p-4">
-            <b class="font-ui text-sm text-fg">From Claude Code or a terminal</b>
-            <p class="m-0 font-ui text-sm text-muted">
-              At the end of a session, say <b class="font-medium text-fg">“pass this along”</b> in
-              Claude Code, or run the command below.
-            </p>
-            <button
-              class="btn sm mt-auto self-start"
-              type="button"
-              @click="copy('passalong share', $event.currentTarget)"
-            >
-              <AppIcon name="copy" /><span data-label>Copy <code>passalong share</code></span>
-            </button>
-          </div>
+        <div class="mt-3 flex flex-col gap-2">
+          <HubAsk :text="ASKS.task" />
+          <p class="m-0 font-ui text-xs text-muted">
+            Finished something someone else should repeat? Say <b class="font-medium text-fg">“{{ ASKS.handoff }}”</b>
+            at the end of the session. No agent to hand? <code>passalong setup</code> connects Claude Code.
+          </p>
         </div>
       </li>
     </ol>
