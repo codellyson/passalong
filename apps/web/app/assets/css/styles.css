@@ -1345,6 +1345,22 @@ form.join label {
 .steps article {
   max-width: 22rem;
 }
+/* Four steps wrap as three and a stray one under auto-fit, which reads as a step left over. So a
+   row of four is two by two, four across once there is room for all of them, and one column on a
+   phone. */
+.steps:has(> article:nth-child(4)) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 72rem) {
+  .steps:has(> article:nth-child(4)) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 36rem) {
+  .steps:has(> article:nth-child(4)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 /* A numeral, not a filled circle. The count is the only thing the number has to say, and three
    accent discs down a page spend the accent on ordinal information. */
 .steps .n {

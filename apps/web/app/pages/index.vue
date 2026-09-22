@@ -28,7 +28,7 @@ usePage({
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:
-    "Queue work for your agents and get back what they did and why — across repos, machines and teammates.",
+    "Hand work to your agents and get back what they did, why, and how they checked — across repos, machines and teammates.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
   // switches on the moment there is something to show. The apex rather than the serving host, so
@@ -95,7 +95,7 @@ const STRUCTURED = {
       name: "Passalong",
       url: `${APEX}/`,
       description:
-        "Hand finished work from one repo, machine, agent session or teammate to the next, as a transfer guide an AI agent can act on. A CLI, an MCP server and a sync service.",
+        "Hand work to AI coding agents — a task, a bug, or finished work to repeat — and get back what they did and how they checked it, with one agent on each piece of work and everyone able to see who has what. A CLI, an MCP server and a sync service.",
       applicationCategory: "DeveloperApplication",
       operatingSystem: "macOS, Linux, Windows",
       publisher: { "@id": `${APEX}/#organization` },
@@ -190,15 +190,15 @@ const SPECIMEN = {
       <!-- The h1 names what the product is, because that is what a search engine reads first and
            the claim below never says it. The claim keeps the display type as a <p class="headline">:
            same look, no longer the page's heading. -->
-      <h1 class="eyebrow">Transfer guides and a task queue for AI coding agents</h1>
+      <h1 class="eyebrow">Handing work between AI coding agents</h1>
       <p class="headline">
         Agents that never<br>
         <span class="turn">start from zero.</span>
       </p>
       <p class="lede">
-        Every agent session starts blank. Passalong hands the next one the whole story — what was
-        decided, why, and how to check it — in another repo, on another machine, for a teammate, or
-        from a queue of tasks you review as they come back.
+        Every agent session starts blank. Hand it work through Passalong and it starts with the
+        whole story — what done looks like, what was decided, how to check it. It says it's on it,
+        keeps you posted, and hands back what it did for you to judge.
       </p>
       <p class="ways">
         <a class="go" href="/hub">Open your hub</a>
@@ -241,95 +241,67 @@ const SPECIMEN = {
       </article>
     </section>
     <p class="under">
-      That is what lands in the next session, and what a teammate opens in a browser. Underneath it
-      is plain markdown: in your repo, in your hub, and yours to export whenever you want out.
+      That is what an agent hands back, and what the next session starts from. The work you hand
+      out has the same shape: what done looks like, what to leave alone. Underneath it is plain
+      markdown — in your repo, in your hub, and yours to export whenever you want out.
     </p>
 
-    <!-- Told as what a person does, not as the flags that do it. The addressing syntax and the
-         pull command are real and documented on /connect; on the front page they made the product
-         read as a CLI you have to learn before anything happens. -->
-    <section class="steps" aria-label="How sending a guide works">
-      <article>
-        <p class="n">01</p>
-        <h2>Finish the work</h2>
-        <p>
-          In Claude Code, say <em>“pass this along”</em>. Or write it in your hub. Either way the
-          work becomes a guide: what was wrong, what you did, and how to check it.
-        </p>
-      </article>
-      <article>
-        <p class="n">02</p>
-        <h2>Send it</h2>
-        <p>
-          Send it to a teammate, or to the group of people who do that kind of work. They get an
-          email with a link.
-        </p>
-      </article>
-      <article>
-        <p class="n">03</p>
-        <h2>They pick it up</h2>
-        <p>
-          They open the link, say they're taking it, and later tell you whether it worked. An agent
-          can pick it up from the same link. Nothing to install on the receiving end.
-        </p>
-      </article>
-    </section>
-
-    <section class="statement">
-      <h2>
-        A session ends.<br>
-        <span class="turn">A guide gets picked up.</span>
-      </h2>
-      <p>
-        Whoever takes it says they're taking it, and says whether it worked once they've tried it,
-        so the person who sent it never has to ask, and never finds out a week later that nobody
-        did.
-      </p>
-    </section>
-
     <!--
-      The queue: the same document pointed the other way. A guide is work done, handed on; a task
-      is work to do, handed out — and what comes back from it is a guide. Said as three steps in the
-      same layout as the three above, because it is the same loop with one more person in it: you,
-      at the end, deciding whether it is done.
+      One loop, whatever the work is. Tasks and handoffs used to be told as two products with two
+      sets of steps; they are one thing — work handed from one context to another — so the page
+      tells it once (docs/V2.md §11). Told as what a person does, not as the flags that do it, and
+      every sentence is something the product does today.
 
-      Every sentence here is something the product does today. No "coming soon" — a landing page
-      that promises is one that has to be rewritten the week it is found out.
+      Agent first: nothing here is typed into a form. You say it to your agent, and it writes it.
     -->
-    <section class="statement">
-      <p class="eyebrow">The task queue</p>
-      <h2>
-        Queue the work.<br>
-        <span class="turn">Read what comes back.</span>
-      </h2>
-    </section>
-    <!-- Closer to its heading than the page's section gap: the three steps are that heading's, not
-         a section of their own. -->
-    <section class="steps mt-10" aria-label="How the task queue works">
+    <section class="steps" aria-label="How handing work to an agent works">
       <article>
         <p class="n">01</p>
-        <h2>Write the task</h2>
+        <h2>Say what you need</h2>
         <p>
-          <code>passalong task "add dark mode"</code>, or ask an agent to plan a larger goal. Each
-          task says what done looks like, and waits in Draft until you have read it.
+          Tell your agent: <em>“add a Passalong task: dark mode in the settings”</em>, or
+          <em>“plan this into tasks”</em>, or <em>“pass this along”</em> when something is finished.
+          It writes the brief from the code and the conversation. You read it before anything runs.
         </p>
       </article>
       <article>
         <p class="n">02</p>
-        <h2>Agents take it</h2>
+        <h2>An agent takes it</h2>
         <p>
-          Run <code>passalong work</code> in the repo, or tell any agent to take the next task. One
-          agent per task — never two on the same one — and a task waits for the ones it depends on.
+          Yours, in any repo, or a teammate's. Taking it says so: one agent on each piece of work,
+          never two, and a task waits for the ones it depends on. Run <code>passalong work</code>
+          and your agents work the queue on their own.
         </p>
       </article>
       <article>
         <p class="n">03</p>
+        <h2>It keeps you posted</h2>
+        <p>
+          A line at each milestone, shown in your hub beside who has it and where. Every answer it
+          gets tells it what to do next, so it does not drift, and an agent that goes quiet is
+          flagged rather than forgotten.
+        </p>
+      </article>
+      <article>
+        <p class="n">04</p>
         <h2>You decide it is done</h2>
         <p>
-          Each task comes back with a write-up of what was done and how it was checked. Approve it,
-          or send it back with a reason the next agent reads first.
+          It hands back what it did and how it checked each line of done. Approve it, or send it
+          back with a reason the next agent reads first.
         </p>
       </article>
+    </section>
+
+    <section class="statement">
+      <h2>
+        One agent per job.<br>
+        <span class="turn">Everyone sees who has what.</span>
+      </h2>
+      <p>
+        Your hub shows what needs you, who is working on what, what is open and what is done —
+        every agent, every machine, every teammate, on one page. When a second agent reaches for
+        work somebody already has, it is told who, and stops, rather than doing it twice.
+      </p>
     </section>
 
     <!-- Two tiers as peers under one hairline, not two bordered cards side by side. A card on every
@@ -338,7 +310,7 @@ const SPECIMEN = {
     <section class="pricing" aria-label="What it costs">
       <p class="eyebrow">What it costs</p>
       <h2>
-        Nothing to pay until a guide<br>
+        Nothing to pay until work<br>
         <span class="turn">leaves your machine.</span>
       </h2>
 
@@ -349,8 +321,8 @@ const SPECIMEN = {
             {{ PRICING.solo.amount }}<span>{{ PRICING.solo.period }}</span>
           </p>
           <p>
-            Every guide you write, on every machine you use, with no limit, the task queue for your
-            agents, and a private connection any assistant you use can search.
+            Every piece of work, on every machine you use, with no limit: hand it to any of your
+            agents, see who has what, and connect any assistant you use.
           </p>
         </article>
 
@@ -360,9 +332,9 @@ const SPECIMEN = {
             {{ PRICING.team.amount }}<span>{{ PRICING.team.period }}, {{ PRICING.team.extra }}</span>
           </p>
           <p>
-            A shared space, guides sent to a person or to the group who does that kind of work, one
-            task queue for everyone's agents, and a team connection every member's assistants can
-            search,
+            One place for the team's work: hand it to a person, to the group who does that kind of
+            work, or to anyone's agents, and see who is on what — with a team connection every
+            member's assistants can use,
             <b>for everyone in the team, including the members who never paid for a seat.</b>
           </p>
         </article>
@@ -394,11 +366,11 @@ const SPECIMEN = {
         <a class="go" href="/hub">Open your hub</a>
         <a class="quiet" href="/connect">or connect your tools</a>
       </p>
-      <!-- The install line lives here rather than in a panel of its own. Writing guides takes one
-           command; reading one takes nothing at all, and that asymmetry is the product. -->
+      <!-- The install line lives here rather than in a panel of its own. Handing work out takes one
+           install; reading what comes back takes nothing at all, and that asymmetry is the product. -->
       <p class="reassure">
-        Write them in your hub, in Claude Code, or with <code>npm i -g passalong</code>. Reading one
-        needs nothing installed at all.
+        <code>npm i -g passalong</code>, then <code>passalong setup</code> connects Claude Code;
+        from there you just say what you need. Reading a guide needs nothing installed at all.
         <template v-if="docsPublished"><a href="/docs">The docs</a> cover the rest.</template>
       </p>
     </section>
