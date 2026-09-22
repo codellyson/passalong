@@ -45,8 +45,38 @@ jobs:
     outputs:
       deploy-ready: ${{ steps.cf.outputs.ready }}
 
+  # The task queue end to end: the CLI's own operations against a real local server, with the real
+  # migrations on a local D1 (packages/passalong/test/task-flow.e2e.test.js). Separate from `check`
+  # because it needs a running Worker, and gating the deploy because it is the only test that
+  # crosses the network boundary the product is made of.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Local D1 with every migration
+        run: pnpm -C apps/web exec wrangler d1 migrations apply passalong --local
+      - name: Start the local server
+        run: |
+          pnpm -C apps/web exec nuxt dev --port 3001 > "$RUNNER_TEMP/dev.log" 2>&1 &
+          for i in $(seq 1 90); do
+            curl -sf http://localhost:3001/v1/openapi.json > /dev/null && exit 0
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/dev.log"; exit 1
+      - name: End to end
+        run: pnpm -C packages/passalong test:e2e
+      - name: Server log
+        if: failure()
+        run: cat "$RUNNER_TEMP/dev.log"
+
   deploy:
-    needs: check
+    needs: [check, e2e]
     if: >-
       github.event_name == 'push' && github.ref == 'refs/heads/master'
       && needs.check.outputs.deploy-ready == 'true'
