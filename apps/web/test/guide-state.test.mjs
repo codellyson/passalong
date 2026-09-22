@@ -89,3 +89,21 @@ test("a team's guide a teammate already handled is not waiting on you", () => {
   // Nobody has touched it: you opened it, so how it went is still yours to say.
   assert.equal(stateOf(guide({ team: "acme" }), new Map(), "me").key, "unjudged");
 });
+
+// Taken, then given to someone else: it is theirs now. Your "on it" from before the reassignment
+// does not make it wait on you, and it says who has it instead.
+test("a guide given to someone else is not waiting on you, whatever you said before", () => {
+  const given = guide({
+    team: "khaime",
+    to: "bami",
+    to_name: "Bami",
+    for_me: false,
+    my_ack: { taken: true, note: "", at: "t" },
+  });
+  assert.equal(stateOf(given, new Map(), "me"), null);
+  // Still yours when it was given to you.
+  assert.equal(
+    stateOf(guide({ team: "khaime", to: "me", for_me: true }), new Map(), "me").key,
+    "unjudged",
+  );
+});
