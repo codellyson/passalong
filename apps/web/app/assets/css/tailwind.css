@@ -46,6 +46,7 @@
   --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-image-edge: var(--image-edge);
 
   --text-xs: var(--t-xs);
   --text-sm: var(--t-sm);

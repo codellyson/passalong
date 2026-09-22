@@ -157,6 +157,9 @@
   --warn: light-dark(#8a5a08, #dfae5f);
   --warn-soft: light-dark(#f6e8cd, #2e2619);
   --code: light-dark(#f4f2ec, #1e1c18);
+  /* The hairline around an image. Pure black on light, pure white on dark, at a tenth: a tinted
+     neutral picks up the surface behind it and reads as dirt on the picture's edge. */
+  --image-edge: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
   /* A shadow is a list rather than a colour, so the pair goes in each colour slot. The dark
      theme's second layer is transparent because dark needs one layer where light needs two. */
   --shadow-1:

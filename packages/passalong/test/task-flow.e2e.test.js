@@ -253,6 +253,101 @@ function sql(command) {
   });
 }
 
+/**
+ * The same, for a question rather than a write: the rows come back.
+ *
+ * `--json` prints the whole answer as one array, so the read is done the moment that array parses
+ * — at which point the process group goes, for the reason sql() explains. A statement that never
+ * prints a parsable answer in 90s throws.
+ */
+function rows(command) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "npx",
+      ["wrangler", "d1", "execute", "passalong", "--local", "--json", "--command", command],
+      { cwd: WEB, stdio: ["ignore", "pipe", "pipe"], detached: true },
+    );
+    let out = "";
+    let settled = false;
+    let answer = null;
+    let failure = null;
+    const stop = (err) => {
+      if (settled) return;
+      settled = true;
+      failure = err || null;
+      clearTimeout(timer);
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {}
+    };
+    const timer = setTimeout(() => stop(new Error(`no answer from wrangler: ${command}`)), 90_000);
+    child.stdout.on("data", (b) => {
+      out += b;
+      const from = out.indexOf("[");
+      if (from < 0) return;
+      try {
+        answer = JSON.parse(out.slice(from))[0]?.results ?? [];
+        stop();
+      } catch {
+        // Still arriving.
+      }
+    });
+    child.stderr.on("data", (b) => {
+      out += b;
+    });
+    child.on("close", (code) => {
+      if (!settled) stop(code ? new Error(`wrangler exited ${code}: ${out.slice(-400)}`) : null);
+      if (failure) reject(failure);
+      else if (!answer) reject(new Error(`no rows parsed from wrangler: ${out.slice(-400)}`));
+      else resolve(answer);
+    });
+  });
+}
+
+/** A 1x1 PNG, as bytes the shots route will accept. */
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+test("a screenshot handed in as evidence belongs to the guide, so the nightly sweep leaves it", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { id, dir } = await readyTask(env, "Evidence with a picture");
+
+  const { shot } = await (
+    await fetch(`${API}/v1/shots`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "content-type": "image/png",
+      },
+      body: PNG,
+    })
+  ).json();
+  assert.ok(shot.id, "the screenshot uploaded");
+  // Unclaimed on upload: it belongs to nothing until a document points at it.
+  assert.deepEqual(await rows(`SELECT guide_id FROM shot WHERE id = '${shot.id}'`), [
+    { guide_id: "" },
+  ]);
+
+  await p.take(id, { cwd: dir });
+  await p.handIn(id, {
+    markdown: "---\ntitle: Picture, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    evidence: `$ npm test\n> 3 pass, 0 fail\n\n![the refusal](${shot.url})`,
+    cwd: dir,
+  });
+
+  // Claimed by the task it answers. Evidence is not markdown and lives on the claim, so nothing
+  // used to claim it — and sweepOrphans() deleted it a day later, leaving a broken image where the
+  // one part of a hand-in a reviewer cannot reconstruct used to be.
+  assert.deepEqual(await rows(`SELECT guide_id FROM shot WHERE id = '${shot.id}'`), [
+    { guide_id: id },
+  ]);
+});
+
 test("in a team, each side hears what the other did to a task — and only the author moves it", {
   skip,
 }, async () => {

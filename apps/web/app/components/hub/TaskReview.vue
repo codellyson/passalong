@@ -282,9 +282,7 @@ const press =
             <h3 class="m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted">
               What it ran
             </h3>
-            <pre
-              class="mt-2 mb-0 max-h-72 overflow-auto rounded-1 bg-surface p-3 font-code text-xs leading-relaxed whitespace-pre-wrap break-words text-fg"
-            >{{ selected.claim.evidence }}</pre>
+            <HubEvidence :text="selected.claim.evidence" />
           </section>
 
           <details

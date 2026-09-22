@@ -63,9 +63,7 @@ function send() {
            several and the decision is usually made on the title and the note. -->
       <details v-if="h.evidence" class="mt-2">
         <summary class="cursor-pointer font-ui text-xs text-muted">What they ran</summary>
-        <pre
-          class="mt-2 mb-0 max-h-64 overflow-auto rounded-1 bg-surface p-3 font-code text-xs leading-relaxed whitespace-pre-wrap break-words text-fg"
-        >{{ h.evidence }}</pre>
+        <HubEvidence :text="h.evidence" />
       </details>
       <p v-if="where" class="mt-3 mb-0 font-code text-xs text-muted">{{ where }}</p>
 

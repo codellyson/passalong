@@ -151,7 +151,7 @@ import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
 import { acceptsNewWork, type Ceiling, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
-import { SHOT_TYPES, shotKey } from "./shots.js";
+import { evidenceOn, holdShots, SHOT_TYPES, shotKey } from "./shots.js";
 import {
   isUploadToken,
   publicUpload,
@@ -1602,29 +1602,43 @@ app.post("/v1/invites/:code/accept", async (c) => {
 const SHOT_MAX = 5 * 1024 * 1024;
 
 /**
- * Point a document's screenshots at it, and let go of any it no longer carries.
- *
- * Run on every write, because the document is what decides. `account_id` in the WHERE is the load
- * bearing part: without it, naming someone else's shot id in your own markdown would claim their
- * image, and deleting your guide would then delete it.
+ * Everything a guide points a screenshot from: its own markdown, and the evidence of every hand-in
+ * on it. Both are documents somebody wrote, and either is reason enough to keep the file.
  */
+async function carriedShots(c: Ctx, guide: string, markdown: string) {
+  const said = await evidenceOn(c.env.DB, guide);
+  return [...new Set([...shotIds(markdown), ...said.flatMap(shotIds)])];
+}
+
+/** The screenshots a document points at, claimed for it, and any it dropped let go. */
 async function claimShots(c: Ctx, account: string, guide: string, markdown: string) {
-  const ids = shotIds(markdown);
-  const holes = ids.map(() => "?").join(",");
-  const statements = ids.length
-    ? [
-        c.env.DB.prepare(
-          `UPDATE shot SET guide_id = ? WHERE account_id = ? AND id IN (${holes})`,
-        ).bind(guide, account, ...ids),
-        // An edit that drops an image releases it. It becomes an orphan rather than being
-        // deleted here: the same upload can be referenced by a second guide, and a write is the
-        // wrong moment to decide nobody wants a file.
-        c.env.DB.prepare(
-          `UPDATE shot SET guide_id = '' WHERE guide_id = ? AND id NOT IN (${holes})`,
-        ).bind(guide, ...ids),
-      ]
-    : [c.env.DB.prepare("UPDATE shot SET guide_id = '' WHERE guide_id = ?").bind(guide)];
-  await c.env.DB.batch(statements);
+  await holdShots(c.env.DB, {
+    account,
+    guide,
+    mine: shotIds(markdown),
+    carried: await carriedShots(c, guide, markdown),
+  });
+}
+
+/**
+ * The screenshots a hand-in's evidence points at, claimed for the guide it answers.
+ *
+ * Evidence is not markdown and lives on the claim, so nothing here was claiming it: a screenshot
+ * referenced only from evidence stayed unowned, and the nightly sweep deleted it a day later —
+ * leaving the one part of a hand-in a reviewer cannot reconstruct as a broken image.
+ */
+async function claimEvidenceShots(c: Ctx, account: string, guide: string, evidence: string) {
+  const ids = shotIds(evidence);
+  if (!ids.length) return;
+  const row = await c.env.DB.prepare("SELECT markdown FROM guide WHERE id = ?")
+    .bind(guide)
+    .first<{ markdown: string }>();
+  await holdShots(c.env.DB, {
+    account,
+    guide,
+    mine: ids,
+    carried: await carriedShots(c, guide, row?.markdown || ""),
+  });
 }
 
 /**
@@ -3474,6 +3488,12 @@ app.post("/v1/tasks/:id/finish", async (c) => {
     note: typeof who.note === "string" ? who.note : "",
   });
   if ("error" in done) return err(c, done.status, done.error);
+  await claimEvidenceShots(
+    c,
+    who.account,
+    done.claim.guide_id,
+    typeof who.evidence === "string" ? who.evidence : "",
+  );
   count(c, "task_finished", {});
   await taskEvent(c, done.claim.guide_id, "task_finished", "");
   return c.json({
@@ -3670,6 +3690,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
     });
     if ("error" in done)
       return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
+    await claimEvidenceShots(c, who.account, found.row.id, evidence);
     count(c, "task_finished", {});
     await taskEvent(c, found.row.id, "task_finished", "");
     return c.json({
@@ -3694,6 +3715,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   if (bad) return err(c, 400, bad);
   await recordVerdict(c, found.row, who.ok, note);
   await claims.handIn(c.env.DB, found.row.id, who, { at, note, evidence });
+  await claimEvidenceShots(c, who.account, found.row.id, evidence);
   return c.json({
     id: found.row.id,
     ok: who.ok,

@@ -28,6 +28,75 @@ export const SHOT_TYPES: Record<string, string> = {
 export const shotKey = (id: string, type: string) => `${id}.${SHOT_TYPES[type] || "png"}`;
 
 /**
+ * Point a guide at the screenshots it carries, and let go of any it no longer does.
+ *
+ * `mine` is what the writer of this call put there — the ids in the document it just published, or
+ * in the evidence it just handed in — and only the account that uploaded a shot can claim it.
+ * Without `account_id` in that WHERE, naming someone else's id in your own markdown would take
+ * their image, and deleting your guide would then delete it.
+ *
+ * `carried` is everything the guide points at from anywhere, which is what decides the release.
+ * The two differ because a guide carries shots from more than one source and more than one person:
+ * its own markdown, written by its author, and the evidence of each hand-in on it, written by
+ * whoever did the work. Releasing on `mine` alone would mean an author's next edit dropped the
+ * screenshot a teammate handed in — and a day later the sweep would delete it.
+ *
+ * A released shot becomes an orphan rather than being deleted here: the same upload can be
+ * referenced by a second guide, and a write is the wrong moment to decide nobody wants a file.
+ */
+export async function holdShots(
+  db: D1Database,
+  { account, guide, mine, carried }: Hold,
+): Promise<void> {
+  const keep = [...new Set([...mine, ...carried])];
+  const holes = keep.map(() => "?").join(",");
+  const statements = [];
+  if (mine.length)
+    statements.push(
+      db
+        .prepare(
+          `UPDATE shot SET guide_id = ? WHERE account_id = ? AND id IN (${mine
+            .map(() => "?")
+            .join(",")})`,
+        )
+        .bind(guide, account, ...mine),
+    );
+  statements.push(
+    keep.length
+      ? db
+          .prepare(`UPDATE shot SET guide_id = '' WHERE guide_id = ? AND id NOT IN (${holes})`)
+          .bind(guide, ...keep)
+      : db.prepare("UPDATE shot SET guide_id = '' WHERE guide_id = ?").bind(guide),
+  );
+  await db.batch(statements);
+}
+
+/** What holdShots() needs: who is claiming, for what guide, what they wrote, what it all carries. */
+interface Hold {
+  account: string;
+  guide: string;
+  /** Shot ids in what this caller just wrote. Only these are claimed, and only for `account`. */
+  mine: string[];
+  /** Shot ids the guide points at from anywhere. Anything outside this is released. */
+  carried: string[];
+}
+
+/**
+ * The evidence of every hand-in on a guide, as it was written.
+ *
+ * Parsing it for shot ids is the caller's job: the parser lives in guide.ts with the markdown it
+ * was written for, and this file deliberately imports no sibling so it can be tested against a
+ * real SQLite the way claims.ts is.
+ */
+export async function evidenceOn(db: D1Database, guide: string): Promise<string[]> {
+  const { results } = await db
+    .prepare("SELECT evidence FROM claim WHERE guide_id = ? AND evidence <> ''")
+    .bind(guide)
+    .all<{ evidence: string }>();
+  return results.map((r) => r.evidence);
+}
+
+/**
  * Delete uploads no guide ever claimed.
  *
  * The age is the whole safety of it. A shot is claimed when the guide naming it is written, which
