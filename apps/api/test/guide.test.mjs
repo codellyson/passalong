@@ -250,17 +250,32 @@ test("nothing a stranger does to your guide happens in silence", async () => {
   // the author can reach has to tell the author. `reopened` is here because it did not, and a
   // guide moved off somebody's board on another person's say-so without a word.
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
-  for (const [route, kind] of [
-    ["/v1/guides/:id/verdict", /kind: body\.ok \? "verified" : "failed"/],
-    ["/v1/guides/:id/ack", /kind,/],
-    ["/v1/guides/:id/status", /kind: "reopened"/],
-    ["/v1/guides/:id/status", /kind: "consumed"/],
+  const block = (needle, len = 4000) => {
+    const at = src.indexOf(needle);
+    assert.ok(at > 0, `${needle} should still exist`);
+    return src.slice(at, at + len);
+  };
+  // The verdict and the first word back live in one function each, shared by every route that
+  // records them, so each function is held to the rule and each route to calling it.
+  for (const [fn, kind] of [
+    ["async function recordVerdict", /kind: ok \? "verified" : "failed"/],
+    ["async function recordAck", /kind,/],
   ]) {
-    const at = src.indexOf(`"${route}"`);
-    assert.ok(at > 0, `${route} should still exist`);
-    const body = src.slice(at, at + 4000);
-    assert.match(body, /await notify\(c\.env/, `${route} must tell the author something happened`);
-    assert.match(body, kind, `${route} must tell them what`);
+    const body = block(fn);
+    assert.match(body, /await notify\(c\.env/, `${fn} must tell the author something happened`);
+    assert.match(body, kind, `${fn} must tell them what`);
+  }
+  for (const [route, calls] of [
+    ["/v1/guides/:id/verdict", /recordVerdict\(/],
+    ["/v1/guides/:id/ack", /recordAck\(/],
+    ["/v1/guides/:id/hand_in", /recordVerdict\(/],
+    ["/v1/guides/:id/pass", /recordAck\(/],
+  ])
+    assert.match(block(`"${route}"`, 3000), calls, `${route} must tell the author`);
+  for (const kind of [/kind: "reopened"/, /kind: "consumed"/]) {
+    const body = block('"/v1/guides/:id/status"');
+    assert.match(body, /await notify\(c\.env/);
+    assert.match(body, kind);
   }
 });
 

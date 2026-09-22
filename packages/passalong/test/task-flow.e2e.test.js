@@ -390,3 +390,46 @@ test("a task is answered with the task tools, and the guide ones say so", { skip
   await assert.rejects(p.verdict(id, true, ""), (e) => e.status === 400 && task.test(e.message));
   await assert.rejects(api.ack(id, true, ""), (e) => e.status === 400 && task.test(e.message));
 });
+
+test("one set of verbs for every kind: take, progress, hand_in, pass, each saying what is next", { skip }, async () => {
+  const { p } = await setup();
+  const call = async (method, path, body) => {
+    const res = await fetch(`${API}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, ...(await res.json()) };
+  };
+  const h = (await p.share("---\ntitle: Stream the PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n"))
+    .guide.meta.id;
+  const a = { agent: "e2e-agent-aaaa", repo: "e2e/one", host: "mac", worktree: "/w/a" };
+  const b = { agent: "e2e-agent-bbbb", repo: "e2e/one" };
+  const c = { agent: "e2e-agent-cccc", repo: "e2e/two" };
+
+  const took = await call("POST", "/v1/take", { ...a, id: h });
+  assert.equal(took.guide.kind, "transfer");
+  assert.match(took.guide.markdown, /Stream the PDF/);
+  assert.deepEqual(took.next.map((s) => s.tool), ["progress", "hand_in", "pass"]);
+
+  const clash = await call("POST", "/v1/take", { ...b, id: h });
+  assert.equal(clash.status, 409);
+  assert.equal(clash.holder.worktree, "/w/a", "the refusal says who has it");
+  assert.equal((await call("POST", "/v1/take", { ...c, id: h })).guide.repo, "e2e/two");
+
+  const said = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "halfway" });
+  assert.equal(said.note, "halfway");
+  assert.ok(said.next.length);
+
+  // Your own guide: nobody to hand it in to, and the claim is still yours to pass.
+  assert.equal((await call("POST", `/v1/guides/${h}/hand_in`, { ...a, ok: true })).status, 403);
+  const passed = await call("POST", `/v1/guides/${h}/pass`, { ...a, why: "wrong repo after all" });
+  assert.deepEqual(passed.next.map((s) => s.tool), ["take"]);
+  const gone = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "still going" });
+  assert.equal(gone.status, 409);
+  assert.match(gone.say, /stop/i, "an agent that lost its claim is told to stop");
+  assert.equal((await call("POST", "/v1/take", { ...b, id: h })).guide.agent, b.agent);
+});

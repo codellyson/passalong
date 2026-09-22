@@ -20,6 +20,9 @@ import {
   renew,
   repoKey,
   stateOf,
+  handIn,
+  pass,
+  steps,
   take,
   working,
 } from "../src/claims.ts";
@@ -510,4 +513,49 @@ test("working names every guide someone holds, of every kind, with who holds it"
   ]);
   assert.equal(rows[0].by.handle, "me-h");
   assert.equal(rows[0].by.you, true);
+});
+
+test("an agent passes what it holds: it is free again, and a task says why for the next agent", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await take(db, "t1", { ...A, host: "mac", worktree: "/w/shop" }, { at: T0 });
+  assert.equal((await pass(db, "t1", A, { at: T0, why: "" })).status, 400, "a reason is required");
+  const passed = await pass(db, "t1", A, { at: T0, why: "needs a design decision first" });
+  assert.equal(passed.kind, "task");
+  assert.equal(await stateIn(db, "t1"), "ready");
+  const md = db.raw.prepare("SELECT markdown FROM guide WHERE id = 't1'").get().markdown;
+  assert.match(md, /## Review notes\n- 2026-09-21 passed from mac:\/w\/shop: needs a design decision first/);
+  assert.equal((await pass(db, "t1", A, { at: T0, why: "again" })).status, 409, "nothing left to pass");
+  assert.equal((await take(db, "t1", B, { at: T0 })).claim.agent_id, "agent-b");
+});
+
+test("handing in a handoff moves its claim out of working and into waiting on its author", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  await take(db, "h1", A, { at: T0 });
+  const done = await handIn(db, "h1", A, { at: T0, note: "applied, tests pass" });
+  assert.equal(done.claim.state, "review");
+  assert.equal(done.claim.note, "applied, tests pass");
+  assert.deepEqual(await working(db, "me", T0), []);
+  assert.equal((await handIn(db, "h1", B, { at: T0, note: "" })).status, 409, "only the taker hands in");
+  // Free again for a new piece of work.
+  guide("h2", { kind: "transfer", target: "" });
+  assert.equal((await take(db, "h2", A, { at: T0 })).claim.guide_id, "h2");
+});
+
+test("every answer says what to do next, and an answer to stop says to stop", () => {
+  const tools = (s) => s.next.map((x) => x.tool);
+  assert.deepEqual(tools(steps("task", "taken")), ["progress", "hand_in", "pass"]);
+  assert.deepEqual(tools(steps("transfer", "taken")), ["progress", "hand_in", "pass"]);
+  assert.match(steps("task", "taken").next.find((x) => x.tool === "hand_in").when, /Acceptance/);
+  assert.match(steps("transfer", "taken").next.find((x) => x.tool === "hand_in").when, /Verification/);
+  assert.match(steps("bug", "taken").next.find((x) => x.tool === "hand_in").when, /Verification/);
+  assert.deepEqual(tools(steps("task", "handed_in")), ["take"]);
+  assert.deepEqual(tools(steps("task", "passed")), ["take"]);
+  assert.deepEqual(tools(steps("", "nothing")), []);
+  assert.match(steps("", "nothing").say, /nothing/i);
+  assert.deepEqual(tools(steps("", "not_held")), []);
+  assert.match(steps("", "not_held").say, /stop/i);
 });

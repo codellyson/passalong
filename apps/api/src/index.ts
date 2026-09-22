@@ -3099,6 +3099,99 @@ const TASK_TOOLS =
   "This is a task, not a handoff. Take it with next_task, report with task_progress, and hand it " +
   "in with finish_task; its author reviews it from the task queue.";
 
+/**
+ * "It worked" or "it didn't", from someone who tried it: stored, receipted, and told to the author
+ * and the room. Shared by the verdict route and hand_in, so either way the author hears the same.
+ */
+async function recordVerdict(c: Ctx & { env: Env }, row: GuideRow, ok: boolean, note: string) {
+  const account = c.get("account");
+  await c.env.DB.prepare(
+    `INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note, at = excluded.at`,
+  )
+    .bind(row.id, account, ok ? 1 : 0, note, now())
+    .run();
+  await recordReceipt(c, row, "verdict");
+
+  const people = await accounts(c, [account, row.account_id]);
+  await notify(c.env, {
+    to: row.account_id,
+    kind: ok ? "verified" : "failed",
+    guide_id: row.id,
+    actor_id: account,
+    team_id: row.team_id,
+    note,
+    mail: () =>
+      sendVerdict(c.env, {
+        to: people.get(row.account_id)?.email || "",
+        byName: nameOf(people, account),
+        title: row.title,
+        url: shareUrl(origin(c), row),
+        ok: ok === true,
+        note,
+      }),
+  });
+  // Once for the room, after once-per-person above. A failed verdict is the thing this product
+  // exists to surface, and a channel is where a team sees it today rather than eventually.
+  await announce(c.env, {
+    kind: ok ? "verified" : "failed",
+    team_id: row.team_id,
+    text: line({
+      kind: ok ? "verified" : "failed",
+      actor_name: nameOf(people, account),
+      title: row.title,
+      times: 1,
+    }),
+    title: row.title,
+    // Set apart rather than run into the sentence: a failure's reason is the only part anyone
+    // reads twice, and in a card it gets its own paragraph.
+    note,
+    url: shareUrl(origin(c), row),
+  });
+  count(c, "verdict_given", { ok: ok });
+}
+
+/**
+ * The first word back — "on it", or "not me, and why" — stored and told to the author and the room.
+ * Shared by the ack route, take and pass, so the sender's signal is the same whichever was called.
+ */
+async function recordAck(c: Ctx & { env: Env }, row: GuideRow, taken: boolean, note: string) {
+  const account = c.get("account");
+  await c.env.DB.prepare(
+    `INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(guide_id, account_id) DO UPDATE SET taken = excluded.taken, note = excluded.note, at = excluded.at`,
+  )
+    .bind(row.id, account, taken ? 1 : 0, note, now())
+    .run();
+
+  const people = await accounts(c, [account, row.account_id]);
+  const kind = taken ? "taken" : "declined";
+  await notify(c.env, {
+    to: row.account_id,
+    kind,
+    guide_id: row.id,
+    actor_id: account,
+    team_id: row.team_id,
+    note,
+  });
+  // And once for the room. A guide nobody has taken is the thing a channel is for: it is work
+  // that has stopped moving, and whoever picks it up is probably reading there.
+  await announce(c.env, {
+    kind,
+    team_id: row.team_id,
+    text: line({
+      kind,
+      actor_name: nameOf(people, account),
+      title: row.title,
+      times: 1,
+    }),
+    title: row.title,
+    note,
+    url: shareUrl(origin(c), row),
+  });
+  count(c, "guide_acked", { taken });
+}
+
 app.put("/v1/guides/:id/verdict", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
@@ -3113,50 +3206,7 @@ app.put("/v1/guides/:id/verdict", async (c) => {
   if (!body.ok && !note)
     return err(c, 400, "Say what went wrong, so the author knows what to fix.");
 
-  await c.env.DB.prepare(
-    `INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note, at = excluded.at`,
-  )
-    .bind(found.row.id, account, body.ok ? 1 : 0, note, now())
-    .run();
-  await recordReceipt(c, found.row, "verdict");
-
-  const people = await accounts(c, [account, found.row.account_id]);
-  await notify(c.env, {
-    to: found.row.account_id,
-    kind: body.ok ? "verified" : "failed",
-    guide_id: found.row.id,
-    actor_id: account,
-    team_id: found.row.team_id,
-    note,
-    mail: () =>
-      sendVerdict(c.env, {
-        to: people.get(found.row.account_id)?.email || "",
-        byName: nameOf(people, account),
-        title: found.row.title,
-        url: shareUrl(origin(c), found.row),
-        ok: body.ok === true,
-        note,
-      }),
-  });
-  // Once for the room, after once-per-person above. A failed verdict is the thing this product
-  // exists to surface, and a channel is where a team sees it today rather than eventually.
-  await announce(c.env, {
-    kind: body.ok ? "verified" : "failed",
-    team_id: found.row.team_id,
-    text: line({
-      kind: body.ok ? "verified" : "failed",
-      actor_name: nameOf(people, account),
-      title: found.row.title,
-      times: 1,
-    }),
-    title: found.row.title,
-    // Set apart rather than run into the sentence: a failure's reason is the only part anyone
-    // reads twice, and in a card it gets its own paragraph.
-    note,
-    url: shareUrl(origin(c), found.row),
-  });
-  count(c, "verdict_given", { ok: body.ok });
+  await recordVerdict(c, found.row, body.ok, note);
   return c.json({ id: found.row.id, ok: body.ok, note });
 });
 
@@ -3190,39 +3240,7 @@ app.put("/v1/guides/:id/ack", async (c) => {
   if (!body.taken && !note)
     return err(c, 400, "Say why you're passing it on, so the sender knows what to do next.");
 
-  await c.env.DB.prepare(
-    `INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(guide_id, account_id) DO UPDATE SET taken = excluded.taken, note = excluded.note, at = excluded.at`,
-  )
-    .bind(found.row.id, account, body.taken ? 1 : 0, note, now())
-    .run();
-
-  const people = await accounts(c, [account, found.row.account_id]);
-  const kind = body.taken ? "taken" : "declined";
-  await notify(c.env, {
-    to: found.row.account_id,
-    kind,
-    guide_id: found.row.id,
-    actor_id: account,
-    team_id: found.row.team_id,
-    note,
-  });
-  // And once for the room. A guide nobody has taken is the thing a channel is for: it is work
-  // that has stopped moving, and whoever picks it up is probably reading there.
-  await announce(c.env, {
-    kind,
-    team_id: found.row.team_id,
-    text: line({
-      kind,
-      actor_name: nameOf(people, account),
-      title: found.row.title,
-      times: 1,
-    }),
-    title: found.row.title,
-    note,
-    url: shareUrl(origin(c), found.row),
-  });
-  count(c, "guide_acked", { taken: body.taken });
+  await recordAck(c, found.row, body.taken, note);
   return c.json({ id: found.row.id, taken: body.taken, note });
 });
 
@@ -3362,7 +3380,7 @@ app.post("/v1/tasks/next", async (c) => {
   if (!who.agent) return err(c, 400, NO_AGENT);
   const at = now();
   const got = await claims.next(c.env.DB, who, { at, any: who.any === true });
-  if (!got) return c.json({ task: null });
+  if (!got) return c.json({ task: null, ...claims.steps("", "nothing") });
   count(c, "task_claimed", { resumed: got.resumed });
   if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
   return c.json({
@@ -3371,6 +3389,7 @@ app.post("/v1/tasks/next", async (c) => {
       resumed: got.resumed,
       markdown: got.task.markdown,
     },
+    ...claims.steps("task", "taken"),
   });
 });
 
@@ -3380,8 +3399,13 @@ app.put("/v1/tasks/:id/progress", async (c) => {
   const note = typeof who.note === "string" ? who.note : null;
   const claim = await claims.renew(c.env.DB, c.req.param("id"), who, { at: now(), note });
   // The answer an agent needs to stop: somebody released it, or it was never this agent's.
-  if (!claim) return err(c, 409, "this agent does not hold that task — stop work on it");
-  return c.json({ id: claim.guide_id, lease_until: claim.lease_until, note: claim.note });
+  if (!claim) return stopWith(c, "this agent does not hold that task — stop work on it");
+  return c.json({
+    id: claim.guide_id,
+    lease_until: claim.lease_until,
+    note: claim.note,
+    ...claims.steps("task", "progress"),
+  });
 });
 
 app.post("/v1/tasks/:id/finish", async (c) => {
@@ -3398,7 +3422,12 @@ app.post("/v1/tasks/:id/finish", async (c) => {
   if ("error" in done) return err(c, done.status, done.error);
   count(c, "task_finished", {});
   await taskEvent(c, done.claim.guide_id, "task_finished", "");
-  return c.json({ id: done.claim.guide_id, state: "review", report: done.claim.report_id });
+  return c.json({
+    id: done.claim.guide_id,
+    state: "review",
+    report: done.claim.report_id,
+    ...claims.steps("task", "handed_in"),
+  });
 });
 
 // The gate. A person's calls, not an agent's: there is no MCP tool for any of these, because an
@@ -3436,6 +3465,180 @@ app.post("/v1/tasks/:id/release", async (c) => {
   count(c, "task_released", {});
   await taskEvent(c, c.req.param("id"), "task_released", r.claimant);
   return c.json({ id: c.req.param("id"), state: r.state });
+});
+
+// ---- one set of verbs for every guide (docs/V2.md §11) -----------------------------------------
+
+// take, progress, hand_in, pass: the same four calls whatever kind the guide is. The rules are in
+// claims.ts; these read the request, tell the other side, and attach `next` — the calls that make
+// sense from here — to every answer, because the answer to its last call is what an agent reads.
+
+/** A refusal that also says what to do: stop, usually. */
+const stopWith = (c: Ctx & { json: (b: unknown, s: 409) => Response }, message: string) =>
+  c.json({ message, ...claims.steps("", "not_held") }, 409);
+
+/** A guide as the verbs answer it: enough to act on, the document itself when it was just taken. */
+function heldView(
+  base: string,
+  g: { id: string; title: string; kind: string; target: string; share_key?: string; markdown?: string },
+  claim: claims.ClaimRow,
+) {
+  return {
+    id: g.id,
+    title: g.title,
+    kind: g.kind,
+    target: g.target,
+    url: g.share_key ? shareUrl(base, { id: g.id, share_key: g.share_key }) : "",
+    agent: claim.agent_id,
+    repo: claim.repo,
+    state: claim.state,
+    note: claim.note,
+    lease_until: claim.lease_until,
+    ...(g.markdown !== undefined ? { markdown: g.markdown } : {}),
+  };
+}
+
+/**
+ * Take one guide by `id`, or with no id the next one waiting for this agent. Any kind. Taking a
+ * handoff also says "on it" to its sender, exactly as ack taken=true did, so their board moves.
+ */
+app.post("/v1/take", async (c) => {
+  const who = agentOf(c, await c.req.json().catch(() => ({})));
+  if (!who.agent) return err(c, 400, NO_AGENT);
+  const at = now();
+  const id = typeof who.id === "string" ? who.id.trim() : "";
+  const base = origin(c);
+
+  if (!id) {
+    const got = await claims.next(c.env.DB, who, { at, any: who.any === true });
+    if (!got) return c.json({ guide: null, ...claims.steps("", "nothing") });
+    count(c, "task_claimed", { resumed: got.resumed });
+    if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
+    const row = await c.env.DB.prepare("SELECT kind, share_key FROM guide WHERE id = ?")
+      .bind(got.task.id)
+      .first<{ kind: string; share_key: string }>();
+    const kind = row?.kind || "task";
+    return c.json({
+      guide: { ...heldView(base, { ...got.task, kind, share_key: row?.share_key }, got.claim), resumed: got.resumed },
+      ...claims.steps(kind, "taken"),
+    });
+  }
+
+  const got = await claims.take(c.env.DB, id, who, { at });
+  if ("error" in got)
+    return c.json(
+      {
+        message: got.error,
+        holder: got.holder
+          ? { agent: got.holder.agent_id, host: got.holder.host, repo: got.holder.repo, worktree: got.holder.worktree, note: got.holder.note }
+          : undefined,
+      },
+      got.status,
+    );
+  if (!got.resumed) {
+    if (got.task.kind === "task") {
+      count(c, "task_claimed", { resumed: false });
+      await taskEvent(c, id, "task_claimed", got.task.account_id);
+    } else if (got.task.account_id !== c.get("account")) {
+      const found = await readableGuide(c, id);
+      if (found) await recordAck(c, found.row, true, "");
+    }
+  }
+  const share = await c.env.DB.prepare("SELECT share_key FROM guide WHERE id = ?")
+    .bind(id)
+    .first<{ share_key: string }>();
+  return c.json({
+    guide: { ...heldView(base, { ...got.task, share_key: share?.share_key }, got.claim), resumed: got.resumed },
+    ...claims.steps(got.task.kind, "taken"),
+  });
+});
+
+app.put("/v1/guides/:id/progress", async (c) => {
+  const who = agentOf(c, await c.req.json().catch(() => ({})));
+  if (!who.agent) return err(c, 400, NO_AGENT);
+  const note = typeof who.note === "string" ? who.note : null;
+  const claim = await claims.renew(c.env.DB, c.req.param("id"), who, { at: now(), note });
+  if (!claim) return stopWith(c, "this agent does not hold that — stop working on it");
+  const kind = await c.env.DB.prepare("SELECT kind FROM guide WHERE id = ?")
+    .bind(claim.guide_id)
+    .first<{ kind: string }>();
+  return c.json({
+    id: claim.guide_id,
+    lease_until: claim.lease_until,
+    note: claim.note,
+    ...claims.steps(kind?.kind || "", "progress"),
+  });
+});
+
+/**
+ * Done here. A task needs `report`, the id of the write-up its author reviews against Acceptance.
+ * Anything else needs `ok` — did its Verification hold — and a note when it did not, which is the
+ * verdict its sender has always heard; the claim, if this agent took it, moves out of working.
+ */
+app.post("/v1/guides/:id/hand_in", async (c) => {
+  const who = agentOf(c, await c.req.json().catch(() => ({})));
+  if (!who.agent) return err(c, 400, NO_AGENT);
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const at = now();
+  const note = typeof who.note === "string" ? who.note.trim().slice(0, NOTE_MAX) : "";
+
+  if (found.row.kind === "task") {
+    const report = typeof who.report === "string" ? who.report.trim() : "";
+    if (!report) return err(c, 400, "send `report`: the id of the transfer guide about this work");
+    const done = await claims.finish(c.env.DB, found.row.id, who, {
+      at,
+      report,
+      pr: typeof who.pr === "string" ? who.pr : "",
+      note,
+    });
+    if ("error" in done)
+      return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
+    count(c, "task_finished", {});
+    await taskEvent(c, found.row.id, "task_finished", "");
+    return c.json({
+      id: found.row.id,
+      state: "review",
+      report: done.claim.report_id,
+      ...claims.steps("task", "handed_in"),
+    });
+  }
+
+  if (typeof who.ok !== "boolean")
+    return err(c, 400, 'Say whether its Verification held: send "ok": true, or "ok": false with a note.');
+  if (!who.ok && !note) return err(c, 400, "Say what went wrong, so the author knows what to fix.");
+  if (found.owner) return err(c, 403, "This is your own guide: there is nobody to hand it in to.");
+  await recordVerdict(c, found.row, who.ok, note);
+  await claims.handIn(c.env.DB, found.row.id, who, { at, note });
+  return c.json({
+    id: found.row.id,
+    ok: who.ok,
+    note,
+    ...claims.steps(found.row.kind, "handed_in"),
+  });
+});
+
+/**
+ * Not this agent's to do, with the reason. What it held is open again; on a handoff the sender is
+ * told "not me, and why", the way ack taken=false always told them.
+ */
+app.post("/v1/guides/:id/pass", async (c) => {
+  const who = agentOf(c, await c.req.json().catch(() => ({})));
+  if (!who.agent) return err(c, 400, NO_AGENT);
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const why = typeof who.why === "string" ? who.why : "";
+  const r = await claims.pass(c.env.DB, found.row.id, who, { at: now(), why });
+  // Passing a handoff nobody took is still a real answer to its sender: not me, and why.
+  if ("error" in r && !(r.status === 409 && found.row.kind !== "task" && !found.owner))
+    return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
+  if (found.row.kind === "task") {
+    count(c, "task_passed", {});
+    await taskEvent(c, found.row.id, "task_released", found.row.account_id, why);
+  } else if (!found.owner) {
+    await recordAck(c, found.row, false, why.trim().slice(0, NOTE_MAX));
+  }
+  return c.json({ id: found.row.id, passed: true, ...claims.steps(found.row.kind, "passed") });
 });
 
 app.delete("/v1/guides/:id", async (c) => {

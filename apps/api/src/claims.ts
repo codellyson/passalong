@@ -642,3 +642,127 @@ export async function blockOn(
   ]);
   return kept;
 }
+
+/**
+ * The agent gives back what it holds: "not me", with the reason. Its claim goes, so the work is
+ * open again in that place and the agent is free to take something else.
+ *
+ * On a task the reason goes into the task under `## Review notes`, with where the agent was, like
+ * a release does: the next agent is handed the document, and that is the only place it will look.
+ * On anything else the author hears it through the route's own notification.
+ */
+export async function pass(
+  db: D1Database,
+  id: string,
+  who: Agent,
+  { at, why }: { at: string; why: string },
+): Promise<{ kind: string; author: string } | { error: string; status: 400 | 409 }> {
+  const reason = String(why ?? "")
+    .trim()
+    .slice(0, 1000);
+  if (!reason)
+    return { status: 400, error: "say why you are passing it, so whoever is next knows" };
+  const c = await claimFor(db, id, who);
+  const g = await db
+    .prepare("SELECT kind, account_id, markdown FROM guide WHERE id = ?")
+    .bind(id)
+    .first<{ kind: string; account_id: string; markdown: string }>();
+  if (!c || c.state !== "claimed" || !g)
+    return { status: 409, error: "this agent does not hold that — there is nothing to pass" };
+  const drop = db
+    .prepare("DELETE FROM claim WHERE guide_id = ? AND place = ? AND agent_id = ?")
+    .bind(id, c.place, who.agent);
+  if (g.kind === "task") {
+    const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
+    const markdown = withNote(g.markdown, `${at.slice(0, 10)} passed from ${where}: ${reason}`);
+    await db.batch([
+      drop,
+      db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
+    ]);
+  } else await drop.run();
+  return { kind: g.kind, author: g.account_id };
+}
+
+/**
+ * The agent hands in a handoff or a bug it took: done here, waiting on its author. The claim stays,
+ * as `review`, so it leaves `working()` and the author can see who did it and where. A task hands
+ * in through `finish`, which needs the write-up the gate reads.
+ */
+export async function handIn(
+  db: D1Database,
+  id: string,
+  who: Agent,
+  { at, note }: { at: string; note: string },
+): Promise<{ claim: ClaimRow } | { error: string; status: 409 }> {
+  const res = await db
+    .prepare(
+      `UPDATE claim SET state = 'review', note = COALESCE(NULLIF(?, ''), note), updated = ?
+        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
+    )
+    .bind(String(note ?? "").trim().slice(0, NOTE_MAX), at, id, who.agent, who.account)
+    .run();
+  const claim = res.meta.changes === 1 ? await claimFor(db, id, who) : null;
+  return claim
+    ? { claim }
+    : { status: 409, error: "this agent does not hold that — take it first, or it was taken back" };
+}
+
+/** One call worth making next, and when. */
+export interface Step {
+  tool: "take" | "progress" | "hand_in" | "pass";
+  when: string;
+  why: string;
+}
+
+/** What just happened, from the agent's side. */
+export type StepEvent = "taken" | "progress" | "handed_in" | "passed" | "nothing" | "not_held";
+
+/**
+ * What an agent should do next, attached to every answer it gets. See docs/V2.md §11.
+ *
+ * Instructions an agent read at the start of a long session are the first thing it forgets; the
+ * answer to the call it just made is the last thing it read. So the next move rides on that answer,
+ * worked out here because only the server knows the state. `say` is set when the right move is to
+ * make no call at all: stop, or tell the person.
+ */
+export function steps(kind: string, event: StepEvent): { next: Step[]; say?: string } {
+  const done =
+    kind === "task"
+      ? "every line of Acceptance holds"
+      : "you ran its Verification here, and it holds or it does not";
+  const working: Step[] = [
+    {
+      tool: "progress",
+      when: "at each milestone, with a one-line note",
+      why: "30 minutes without word marks it stalled",
+    },
+    {
+      tool: "hand_in",
+      when: done,
+      why:
+        kind === "task"
+          ? "its author reviews your write-up against Acceptance"
+          : "its author hears whether it worked",
+    },
+    {
+      tool: "pass",
+      when: "it is not yours to do, or you are stuck",
+      why: "with the reason, so whoever is next knows",
+    },
+  ];
+  const again: Step[] = [
+    { tool: "take", when: "now, with no id", why: "the next thing waiting for this agent" },
+  ];
+  switch (event) {
+    case "taken":
+    case "progress":
+      return { next: working };
+    case "handed_in":
+    case "passed":
+      return { next: again };
+    case "nothing":
+      return { next: [], say: "Nothing is waiting for this agent here. Tell the person, and stop." };
+    case "not_held":
+      return { next: [], say: "You no longer hold this. Stop working on it, and tell the person." };
+  }
+}
