@@ -156,6 +156,19 @@ export function statusLine({ g, state }: LaneRow): { text: string; tone: Tone } 
         tone: "",
       };
   }
+  // A team's guide a teammate handled: say who, rather than asking you anything.
+  if (!g.mine && !state) {
+    if (g.verdict && g.verdict.by)
+      return {
+        text: `${named(g.verdict.by_name, g.verdict.by)} said it ${g.verdict.ok ? "worked" : "didn't work"}`,
+        tone: g.verdict.ok ? "ok" : "danger",
+      };
+    const who = g.taken_by_names?.length
+      ? g.taken_by_names
+      : (g.taken_by ?? []).map((h) => `@${h}`);
+    if (who.length)
+      return { text: `${list(who)} ${who.length === 1 ? "is" : "are"} taking it`, tone: "" };
+  }
   if (g.status === "consumed") return { text: "archived", tone: "" };
   if (!g.mine && g.my_ack && !g.my_ack.taken) {
     return { text: `you passed${g.my_ack.note ? `: ${g.my_ack.note}` : ""}`, tone: "" };

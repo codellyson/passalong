@@ -241,11 +241,11 @@ export async function take(
   const g = await db
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created, g.kind,
-              ${BLOCKED} AS blocked, ${FOR_ME} AS for_me
+              g.to_account_id, ${BLOCKED} AS blocked, ${FOR_ME} AS for_me
          FROM guide g WHERE g.id = ?2 AND ${VISIBLE}`,
     )
     .bind(who.account, id)
-    .first<TaskRow & { kind: string; blocked: number; for_me: number }>();
+    .first<TaskRow & { kind: string; to_account_id: string; blocked: number; for_me: number }>();
   if (!g) return { status: 404, error: "no such guide that you can see" };
 
   const held = await db
@@ -282,6 +282,27 @@ export async function take(
       status: 400,
       error: `${id} is for ${g.target || "no repo"}, and this agent is in ${repo || "no repo"}`,
     };
+
+  // A handoff sent to a team or a group asks one of them. When a teammate has already said it
+  // worked, taking it again is doing the same work twice — the regression waiting to happen — so
+  // it is refused with who did it. Asked of you by name, it is yours to repeat regardless.
+  if (!task && g.to_account_id !== who.account) {
+    const done = await db
+      .prepare(
+        `SELECT COALESCE(NULLIF(a.name, ''), '@' || NULLIF(a.handle, ''), 'a teammate') AS who, v.at
+           FROM verdict v JOIN account a ON a.id = v.account_id
+          WHERE v.guide_id = ? AND v.ok = 1 AND v.account_id <> ? ORDER BY v.at DESC LIMIT 1`,
+      )
+      .bind(id, who.account)
+      .first<{ who: string; at: string }>();
+    if (done)
+      return {
+        status: 409,
+        error:
+          `${done.who} already said it worked (${done.at.slice(0, 10)}), so it is not waiting on ` +
+          "anyone. Tell the user before doing it again; get_guide reads it without taking it.",
+      };
+  }
 
   const place = task ? "" : repo;
   const res = await db
