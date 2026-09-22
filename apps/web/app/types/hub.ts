@@ -24,6 +24,8 @@ export interface Me {
   /** This account's own subscription: "free", "solo" or "lapsed". Not the same fact as `sync` — a
       member of a paid team syncs without a ceiling and is still on `free` themselves. */
   plan: string;
+  /** Set only on a plan that was given rather than bought: when it stops. See apps/api/src/gifts.ts. */
+  plan_until?: string;
   teams: Team[];
   /** Name, else @handle, else @account id — worked out by the API. */
   display?: string;

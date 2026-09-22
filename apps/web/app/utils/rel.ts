@@ -12,3 +12,19 @@ export function rel(iso: string | null | undefined): string {
 export function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
+
+/**
+ * A day, written out: "31 December 2026".
+ *
+ * Read in UTC on purpose. The dates this renders are days somebody typed — the end of a gifted plan
+ * (apps/api/src/gifts.ts) — stored as the last instant of that day, so formatting them in the
+ * reader's own zone moved "31 December" to "1 January" for anyone east of Greenwich. A day is the
+ * same day wherever it is read.
+ */
+export function day(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleDateString(undefined, { dateStyle: "long", timeZone: "UTC" });
+}

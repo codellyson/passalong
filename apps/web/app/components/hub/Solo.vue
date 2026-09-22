@@ -28,6 +28,11 @@ const available = computed(() =>
 const testing = computed(() => available.value.some((p) => modes.value?.[p] === "test"));
 
 const plan = computed(() => data.value.me?.plan ?? "free");
+/**
+ * When a given plan stops (apps/api/src/gifts.ts). Said plainly rather than left to be discovered
+ * on the day it ends: somebody who thinks they bought this would find out by being refused.
+ */
+const until = computed(() => day(data.value.me?.plan_until));
 /** Why the ceiling is what it is, which is not always this plan. */
 const sync = computed(() => data.value.me?.sync ?? "free");
 const onATeamSeat = computed(() => sync.value === "unlimited" && plan.value !== "solo");
@@ -71,7 +76,10 @@ async function subscribe(provider: string) {
 
     <p v-if="plan === 'solo'" class="m-0 font-ui text-sm text-muted">
       You can keep as many guides as you like, on every device you use, and connect your own
-      assistants to them.
+      assistants to them.<template v-if="until">
+        {{ " " }}This one was given to you and runs until {{ until }}, after which it lapses —
+        nothing is taken away, and new guides past the free limit wait until you subscribe.
+      </template>
     </p>
     <p v-else-if="plan === 'lapsed'" class="m-0 font-ui text-sm text-muted">
       Your Solo plan has lapsed. Nothing has been taken away: every guide is still here and still
@@ -121,7 +129,9 @@ async function subscribe(provider: string) {
     <p v-if="!available.length" class="m-0 font-ui text-sm text-muted">
       Paid plans aren't available yet. Check back later.
     </p>
-    <div v-else-if="plan !== 'solo'" class="flex flex-wrap gap-2">
+    <!-- A gift is still a plan you do not own: the button stays, so it can be bought before the
+         gift runs out rather than after it has. -->
+    <div v-else-if="plan !== 'solo' || until" class="flex flex-wrap gap-2">
       <button
         v-for="p in available"
         :key="p"

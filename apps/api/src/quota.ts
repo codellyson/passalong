@@ -100,6 +100,30 @@ export const ACCOUNT_PLANS = ["free", "solo", "lapsed"] as const;
 export type AccountPlan = (typeof ACCOUNT_PLANS)[number];
 
 /**
+ * A plan as it stands right now, given that it may have been a gift with an end date.
+ *
+ * A comped plan is the same plan by the same name — what else would it be — so the only thing that
+ * marks it is `plan_until` beside it (migrations/0026_gifts.sql). Past that moment the plan reads
+ * `lapsed`, which is already the word for "it was paid and is not now" and already falls back to
+ * whatever the account would have had without a plan at all.
+ *
+ * Derived on every read rather than written by something on a clock, for the same reason a task's
+ * state is: a value only a nightly job updates is wrong for up to a day, and on the day the job
+ * does not run it is wrong until somebody notices.
+ *
+ * An empty `until` is what a bought subscription has — the provider owns when that stops, and says
+ * so with a webhook — so it means no end, not an end that has passed. Mirrored in SQL by
+ * `PAYING_TEAM` in index.ts, for the queries that count paid teams.
+ */
+export function planNow(plan: string, until: unknown, at: string): string {
+  const ends = String(until ?? "");
+  // Only a plan somebody has can run out. `free` and `lapsed` are the after-states, and running one
+  // of those through here would invent a plan change out of a stale date.
+  if (plan !== "solo" && plan !== "team") return plan;
+  return ends && ends <= at ? "lapsed" : plan;
+}
+
+/**
  * Whether new work may be addressed to a team.
  *
  * `lapsed` is read-only, and read-only is narrower than it sounds: what stops is work flowing *in*

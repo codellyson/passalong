@@ -1,6 +1,7 @@
 // Runs on Node 22.18+ with built-in type stripping (`node --test`).
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { day } from "../app/utils/rel.ts";
 import { shorten } from "../app/utils/shorten.ts";
 
 test("leaves a value that fits alone, minus the parts nobody reads", () => {
@@ -49,4 +50,16 @@ test("returns an unbreakable value whole rather than saying nothing", () => {
 test("nothing is a value too", () => {
   assert.deepEqual(shorten(null), { text: "", full: "", clipped: false });
   assert.deepEqual(shorten(undefined), { text: "", full: "", clipped: false });
+});
+
+// ---- a day is the same day wherever it is read -------------------------------------------------
+
+test("a gifted plan's last day is written out, and does not move with the reader's clock", () => {
+  // Stored as the last instant of the day it was given until; formatted in the reader's own zone,
+  // "31 December" became "1 January" for everyone east of Greenwich.
+  assert.match(day("2026-12-31T23:59:59.999Z"), /31 December 2026|December 31, 2026/);
+  assert.match(day("2027-09-23"), /23 September 2027|September 23, 2027/);
+  assert.equal(day(""), "");
+  assert.equal(day(null), "");
+  assert.equal(day("not a date"), "");
 });

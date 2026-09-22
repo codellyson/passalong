@@ -87,6 +87,7 @@ import {
   sendReset,
   sendVerdict,
 } from "./email.js";
+import { gift, gifts, isAdmin, revokeGift } from "./gifts.js";
 import {
   AREAS,
   clipFollowUp,
@@ -150,7 +151,15 @@ import {
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
-import { acceptsNewWork, type Ceiling, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
+import {
+  acceptsNewWork,
+  type Ceiling,
+  COUNTED,
+  ceilingFor,
+  isFull,
+  planNow,
+  seatsFull,
+} from "./quota.js";
 import { evidenceOn, holdShots, SHOT_TYPES, shotKey } from "./shots.js";
 import {
   isUploadToken,
@@ -183,6 +192,14 @@ type Env = MailEnv &
     PAYSTACK_SECRET?: string;
     PAYSTACK_PLAN?: string;
     FREE_SYNC_LIMIT: string;
+    /**
+     * Who may give a plan away: account ids, comma-separated. Empty — the default — means nobody,
+     * so a deployment that has not been told who the operator is has no admin routes at all rather
+     * than a guessable one. A secret and not a column on purpose: an admin flag in the database is
+     * reachable by every bug that can write a row, and this list is changed where the deployment
+     * is, by whoever already has that access.
+     */
+    ADMIN_ACCOUNTS?: string;
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
   };
@@ -325,6 +342,19 @@ const shareUrl = (base: string, row: Pick<GuideRow, "id" | "share_key">) =>
 
 const db = (c: { env: Env }) => c.env.DB;
 
+/**
+ * A team as it stands now: a plan that was given (migrations/0026_gifts.sql) stops on its date.
+ *
+ * Applied in the two helpers every caller already goes through, rather than at each of them. A
+ * plan is read on nearly every request — the ceiling, the seat check, what may be addressed to the
+ * team — and an expiry that had to be remembered at each of those is one that will be forgotten at
+ * one of them, which is the reading where a gift never ends.
+ */
+const asItStands = <T extends { plan: string; plan_until?: string }>(row: T, at: string): T => ({
+  ...row,
+  plan: planNow(row.plan, row.plan_until, at),
+});
+
 async function myTeams(c: Ctx): Promise<(TeamRow & { role: string })[]> {
   const { results } = await db(c)
     .prepare(
@@ -333,17 +363,19 @@ async function myTeams(c: Ctx): Promise<(TeamRow & { role: string })[]> {
     )
     .bind(c.get("account"))
     .all<TeamRow & { role: string }>();
-  return results;
+  const at = now();
+  return results.map((t) => asItStands(t, at));
 }
 
 async function teamBySlug(c: Ctx, slug: string): Promise<(TeamRow & { role: string }) | null> {
-  return db(c)
+  const row = await db(c)
     .prepare(
       `SELECT t.*, m.role FROM team t JOIN membership m ON m.team_id = t.id
        WHERE t.slug = ? AND m.account_id = ?`,
     )
     .bind(slug, c.get("account"))
     .first<TeamRow & { role: string }>();
+  return row ? asItStands(row, now()) : null;
 }
 
 /**
@@ -1054,15 +1086,77 @@ app.delete("/v1/tokens/:id", async (c) => {
   return c.json({ id: c.req.param("id"), revoked: true });
 });
 
+// ---- giving a plan away (migrations/0026_gifts.sql) --------------------------------------------
+//
+// The operator's own routes, and the only ones in the product that are not about guides. They are
+// here rather than in a separate admin service because there is one deployment and one database,
+// and a second Worker to run three statements would be a system to maintain for the rest of time.
+//
+// `ADMIN_ACCOUNTS` is the whole of the gate. Unset — which is what every deployment that has not
+// been told otherwise has — means these routes answer 404 to everyone, so nothing about them is
+// discoverable on a deployment that does not use them.
+
+/** 404, not 403: an operator route nobody is the operator of does not exist as far as callers go. */
+function operator(c: Ctx & { env: Env }): string | null {
+  const account = c.get("account");
+  return isAdmin(c.env.ADMIN_ACCOUNTS, account) ? account : null;
+}
+
+/** Give Solo to a person or Team to a team, until a date. */
+app.post("/v1/admin/gifts", async (c) => {
+  const by = operator(c);
+  if (!by) return err(c, 404, "Not found.");
+  const body = (await c.req.json().catch(() => ({}))) as {
+    to?: string;
+    until?: string;
+    why?: string;
+    seats?: number;
+  };
+  const given = await gift(c.env.DB, {
+    to: String(body.to ?? ""),
+    until: String(body.until ?? ""),
+    why: String(body.why ?? ""),
+    seats: Number(body.seats ?? 0),
+    by,
+    at: now(),
+  });
+  if ("error" in given) return err(c, given.status, given.error);
+  count(c, "plan_gifted", { kind: given.subject.kind });
+  return c.json({
+    id: given.id,
+    to: given.subject.name,
+    kind: given.subject.kind,
+    plan: given.subject.kind === "account" ? "solo" : "team",
+    until: given.until,
+  });
+});
+
+/** What has been given, newest first, and whether each one is still doing anything. */
+app.get("/v1/admin/gifts", async (c) => {
+  if (!operator(c)) return err(c, 404, "Not found.");
+  return c.json({ gifts: await gifts(c.env.DB, { at: now() }) });
+});
+
+/** Take one back. The plan goes to `lapsed`; a subscription bought since is left alone. */
+app.delete("/v1/admin/gifts/:id", async (c) => {
+  if (!operator(c)) return err(c, 404, "Not found.");
+  const r = await revokeGift(c.env.DB, c.req.param("id"), { at: now() });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "plan_gift_revoked", {});
+  return c.json({ id: c.req.param("id"), revoked: true });
+});
+
 // ---- identity ---------------------------------------------------------------------------
 
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, password_hash, plan FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, password_hash, plan, plan_until FROM account WHERE id = ?",
   )
     .bind(account)
-    .first<AccountRow & { password_hash: string; plan: string }>();
+    .first<AccountRow & { password_hash: string; plan: string; plan_until: string }>();
+  // A gift that has run out is `lapsed` here too, so the hub says what the ceiling already does.
+  const ownPlan = planNow(me?.plan || "free", me?.plan_until, now());
   const room = await quota(c, account);
   // The plan rides along with the team it belongs to. Without it the hub would have to fetch every
   // team to find out why a limit vanished, and the banner that explains the ceiling is drawn before
@@ -1089,7 +1183,9 @@ app.get("/v1/me", async (c) => {
     sync: room.plan,
     // This account's own subscription, which is a different fact from what it may sync: a member of
     // a paid team syncs without a ceiling and is still on `free` themselves.
-    plan: me?.plan || "free",
+    plan: ownPlan,
+    // When it stops, and only for a plan that was given: a bought one ends when the provider says.
+    plan_until: me?.plan_until || "",
     unread: await unreadCount(c.env, account),
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.
@@ -1106,6 +1202,7 @@ app.get("/v1/me", async (c) => {
  */
 async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceiling> {
   const marks = COUNTED.map(() => "?").join(", ");
+  const at = now();
   // `paid` is the whole of the plan's effect on an individual: being in one team that is currently
   // paying removes this account's ceiling. Asked here rather than stored on the account, so the
   // answer cannot be stale — see ceilingFor().
@@ -1114,11 +1211,20 @@ async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceilin
             (SELECT sync_limit FROM account WHERE id = ?) AS own,
             (SELECT grandfathered FROM account WHERE id = ?) AS old,
             (SELECT plan FROM account WHERE id = ?) AS own_plan,
+            (SELECT plan_until FROM account WHERE id = ?) AS own_until,
             (SELECT COUNT(*) FROM membership m JOIN team t ON t.id = m.team_id
-              WHERE m.account_id = ? AND t.plan = 'team') AS paid`,
+              WHERE m.account_id = ? AND t.plan = 'team'
+                AND (t.plan_until = '' OR t.plan_until > ?)) AS paid`,
   )
-    .bind(account, ...COUNTED, account, account, account, account)
-    .first<{ used: number; own: number; old: number; paid: number; own_plan: string }>();
+    .bind(account, ...COUNTED, account, account, account, account, account, at)
+    .first<{
+      used: number;
+      own: number;
+      old: number;
+      paid: number;
+      own_plan: string;
+      own_until: string;
+    }>();
   return {
     used: row?.used ?? 0,
     ...ceilingFor(
@@ -1127,7 +1233,9 @@ async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceilin
       c.env.FREE_SYNC_LIMIT,
       row?.old,
       c.env.FREE_SIGNUP,
-      row?.own_plan,
+      // The mirror of planNow(), because this one is a COUNT and cannot be done in TS: a team whose
+      // gift has run out is not a team that is paying.
+      planNow(row?.own_plan ?? "free", row?.own_until, at),
     ),
   };
 }
@@ -1539,12 +1647,14 @@ app.post("/v1/invites/:code/accept", async (c) => {
     // is a count that drifts the first time a member leaves, and the drift is invisible until it
     // has been wrong for a month. An existing member re-opening their invite link is never
     // refused: they already occupy the seat this is protecting.
-    const room = await c.env.DB.prepare(
-      "SELECT t.plan, t.seats, (SELECT COUNT(*) FROM membership WHERE team_id = t.id) AS members" +
+    const found = await c.env.DB.prepare(
+      "SELECT t.plan, t.plan_until, t.seats," +
+        " (SELECT COUNT(*) FROM membership WHERE team_id = t.id) AS members" +
         " FROM team t WHERE t.id = ?",
     )
       .bind(inv.team_id)
-      .first<{ plan: string; seats: number; members: number }>();
+      .first<{ plan: string; plan_until: string; seats: number; members: number }>();
+    const room = found ? asItStands(found, now()) : null;
     if (room && !acceptsNewWork(room.plan))
       return err(
         c,
@@ -2297,8 +2407,10 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
     "";
   if (soloId && !change.team_id) {
     const plan = change.plan === "team" ? "solo" : change.plan;
+    // `plan_until` is cleared: a subscription is not a gift, and a date left over from one would
+    // expire a plan somebody is now being charged for. See migrations/0026_gifts.sql.
     const done = await c.env.DB.prepare(
-      "UPDATE account SET plan = ?, plan_since = ?, subscription_id = ? WHERE id = ?",
+      "UPDATE account SET plan = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
     )
       .bind(plan, now(), change.subscription_id, soloId)
       .run();
@@ -2327,8 +2439,10 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
   // The subscription id is written here and only here, which is what binds a team to the thing
   // paying for it. Never cleared on a lapse: a lapsed team that renews is the same subscription,
   // and forgetting it would orphan every event that follows.
+  // `plan_until` cleared for the same reason as above: what the team is on is now the provider's
+  // to end, not a date an operator typed.
   await c.env.DB.prepare(
-    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, subscription_id = ? WHERE id = ?",
+    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
   )
     .bind(change.plan, change.seats ?? team.seats, now(), change.subscription_id, team.id)
     .run();
@@ -2351,10 +2465,13 @@ app.post("/v1/subscribe", async (c) => {
   if (!provider || !isProvider(provider))
     return err(c, 400, "Choose Stripe or Paystack to pay with.");
 
-  const me = await c.env.DB.prepare("SELECT email, plan FROM account WHERE id = ?")
+  const me = await c.env.DB.prepare("SELECT email, plan, subscription_id FROM account WHERE id = ?")
     .bind(account)
-    .first<{ email: string; plan: string }>();
-  if (me?.plan === "solo") return err(c, 400, "You're already on the Solo plan.");
+    .first<{ email: string; plan: string; subscription_id: string }>();
+  // Asked of the subscription, not of the plan: somebody on a gifted Solo (0026_gifts.sql) has the
+  // plan and pays nothing, and telling them they already have it would leave them no way to buy
+  // the thing before their gift runs out.
+  if (me?.subscription_id) return err(c, 400, "You're already on the Solo plan.");
   if (!me?.email)
     return err(
       c,

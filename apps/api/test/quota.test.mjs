@@ -9,6 +9,7 @@ import {
   isFull,
   limitFor,
   PLANS,
+  planNow,
   SYNC_PLANS,
   seatsFull,
 } from "../src/quota.ts";
@@ -118,4 +119,36 @@ test("a lapsed Solo plan falls back rather than down to nothing", () => {
 
 test("an account plan is one field with three values", () => {
   assert.deepEqual([...ACCOUNT_PLANS], ["free", "solo", "lapsed"]);
+});
+
+// ---- a plan that was given rather than bought (migrations/0026_gifts.sql) -----------------------
+
+const AT = "2026-09-23T10:00:00.000Z";
+
+test("a gift lasts until its date, and is lapsed the moment it passes", () => {
+  assert.equal(planNow("solo", "2026-12-31T00:00:00.000Z", AT), "solo");
+  assert.equal(planNow("solo", "2026-09-23T10:00:00.001Z", AT), "solo", "one millisecond left");
+  assert.equal(planNow("solo", AT, AT), "lapsed", "the end is the end");
+  assert.equal(planNow("team", "2026-09-01T00:00:00.000Z", AT), "lapsed");
+});
+
+test("no date means nobody set one, which is what a bought subscription has", () => {
+  // The provider owns when a paid plan stops, and says so with a webhook. Expiry must never cut
+  // short something somebody is paying for, so an empty date is not an expired one.
+  assert.equal(planNow("solo", "", AT), "solo");
+  assert.equal(planNow("team", undefined, AT), "team");
+  assert.equal(planNow("solo", null, AT), "solo");
+});
+
+test("a plan that is already over stays exactly as it is", () => {
+  // `free` and `lapsed` are the after-states; running one through this must not invent a plan.
+  assert.equal(planNow("free", "2026-01-01T00:00:00.000Z", AT), "free");
+  assert.equal(planNow("lapsed", "2026-01-01T00:00:00.000Z", AT), "lapsed");
+  assert.equal(planNow("", "2026-01-01T00:00:00.000Z", AT), "");
+});
+
+test("a ceiling reads the plan as it is now, so an expired gift stops lifting it", () => {
+  const ceiling = (plan, until) => ceilingFor(0, 0, "25", 0, "0", planNow(plan, until, AT));
+  assert.equal(ceiling("solo", "2026-12-31T00:00:00.000Z").plan, "unlimited");
+  assert.equal(ceiling("solo", "2026-09-01T00:00:00.000Z").plan, "none", "the gift ran out");
 });
