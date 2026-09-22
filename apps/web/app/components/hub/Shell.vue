@@ -124,7 +124,6 @@ const tabs = [
 const active = (to: string) =>
   to === "/hub"
     ? route.path === "/hub" ||
-      route.path === "/hub/write" ||
       route.path.startsWith("/hub/answer") ||
       route.path.startsWith("/hub/report")
     : route.path === to;

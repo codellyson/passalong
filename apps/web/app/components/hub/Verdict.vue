@@ -78,9 +78,9 @@ function send() {
       <!-- Someone who has just done the work knows what the guide was missing, so this is where
            adding that context is offered — not in a menu they have to know to open. -->
       <p class="mt-3 mb-0 font-ui text-xs text-muted">
-        Was something missing from the guide?
-        <NuxtLink :to="{ path: '/hub/write', query: { follows: g.id } }">Add a follow-up</NuxtLink>
-        with the extra context, so the next person has it.
+        Was something missing from the guide? Ask your agent to add a follow-up with the extra
+        context, so the next person has it:
+        <button class="linkish" type="button" @click="copy(followUpAsk(g.id), $event.currentTarget)"><span data-label>copy what to say</span></button>
       </p>
     </template>
 
@@ -112,9 +112,9 @@ function send() {
         </span>
       </div>
       <p class="mt-3 mb-0 font-ui text-xs text-muted">
-        Know what the guide needs?
-        <NuxtLink :to="{ path: '/hub/write', query: { follows: g.id } }">Add a follow-up</NuxtLink>
-        — this note is one line; a follow-up is context everyone who opens the guide gets.
+        Know what the guide needs? This note is one line; a follow-up is context everyone who opens
+        the guide gets, and your agent writes it:
+        <button class="linkish" type="button" @click="copy(followUpAsk(g.id), $event.currentTarget)"><span data-label>copy what to say</span></button>
       </p>
     </template>
   </div>

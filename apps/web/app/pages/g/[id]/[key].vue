@@ -108,7 +108,8 @@ const views = computed(() => [
  */
 const answer = (what: string) => `/hub/answer/${encodeURIComponent(id.value)}?do=${what}`;
 const author = computed(() => str(meta.value?.author) || "the sender");
-const followUp = computed(() => `/hub/write?follows=${encodeURIComponent(id.value)}`);
+/** Said to an agent, not typed into a form: this page runs no script, so it is shown to select. */
+const followUp = computed(() => followUpAsk(id.value));
 /** More context added to this guide, oldest first, and the guide this one adds context to. */
 const followUps = computed(() => guide.value?.followUps ?? []);
 const parent = computed(() => guide.value?.parent ?? null);
@@ -380,11 +381,10 @@ usePage({
               <a class="ml-1 font-ui text-sm" :href="answer('report')">Already on it? Say how it went</a>
             </p>
           </template>
-          <!-- A plain link, like the rest of this box: the write page is in the hub, which signs
-               the reader in first if it needs to. -->
           <p class="mt-3 mb-0 font-ui text-sm text-muted">
-            Something missing from this guide? <a :href="followUp">Add a follow-up</a> with the extra
-            context, and everyone who opens it gets that too.
+            Something missing from this guide? Ask your agent to add a follow-up with the extra
+            context, and everyone who opens it gets that too:
+            <code class="font-code text-xs text-fg select-all">{{ followUp }}</code>
           </p>
 
           <details class="mt-4">

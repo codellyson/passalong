@@ -12,6 +12,7 @@
 -->
 <script setup lang="ts">
 import type { Guide } from "~/types/hub";
+import { ASKS } from "~/utils/asks";
 import { boardStates, stateOf } from "~/utils/guide-state";
 
 usePage({
@@ -162,7 +163,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
         Follow-ups to
         <b class="font-medium text-fg">{{ followed?.title || "this guide" }}</b>: more context
         added to it.
-        <NuxtLink :to="{ path: '/hub/write', query: { follows } }">Add one</NuxtLink>
+        <button class="linkish" type="button" @click="copy(followUpAsk(follows), $event.currentTarget)"><span data-label>Copy a follow-up ask</span></button>
         ·
         <NuxtLink to="/hub">Show all guides</NuxtLink>
       </p>
@@ -212,7 +213,7 @@ const doneOpen = computed(() => showDone.value || searching.value);
         <p v-else class="m-0 font-ui text-sm text-muted">
           {{ searching ? "Nothing you sent matches." : "Nothing you sent is still out." }}
           <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
-          <NuxtLink v-if="!searching" to="/hub/write">Write a guide</NuxtLink>
+          <button v-if="!searching" class="linkish" type="button" @click="copy(ASKS.handoff, $event.currentTarget)"><span data-label>Copy “{{ ASKS.handoff }}” for your agent</span></button>
         </p>
       </section>
 

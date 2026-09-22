@@ -1002,9 +1002,9 @@ details.more summary:hover {
   gap: var(--s-2);
   margin-top: var(--s-5);
 }
-/* A command, set as one unbroken line with its copy button: the well and the button share the
+/* A command or an ask, set as one unbroken line with its copy button: the well and the button share the
    control height, like every field and button that sit in a row. */
-.empty .command {
+.command {
   display: flex;
   align-items: center;
   max-width: 100%;

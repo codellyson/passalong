@@ -14,6 +14,7 @@
 -->
 <script setup lang="ts">
 import type { LogEntry } from "~/types/hub";
+import { ASKS } from "~/utils/asks";
 
 usePage({
   title: "Your log · Passalong",
@@ -95,7 +96,7 @@ const months = computed(() => {
       <h2>Nothing in your log yet</h2>
       <p>It fills up as you send guides, open them, and answer them, newest first.</p>
       <div class="actions">
-        <NuxtLink class="btn primary" to="/hub/write">Write your first guide</NuxtLink>
+        <HubAsk :text="ASKS.task" />
       </div>
     </div>
 

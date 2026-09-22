@@ -70,9 +70,9 @@ function run(work: () => void) {
     <div v-if="open" class="menu">
       <a class="menu-item" :href="g.url" target="_blank" rel="noopener" @click="shut">Open the guide</a>
       <button class="menu-item" @click="copy(g.url, $event.currentTarget)">Copy link</button>
-      <NuxtLink class="menu-item" :to="{ path: '/hub/write', query: { follows: g.id } }" @click="shut">
-        Add a follow-up
-      </NuxtLink>
+      <button class="menu-item" type="button" @click="copy(followUpAsk(g.id), $event.currentTarget)">
+        <span data-label>Copy a follow-up ask for your agent</span>
+      </button>
       <NuxtLink
         v-if="g.children"
         class="menu-item"
