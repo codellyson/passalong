@@ -15,7 +15,10 @@ session's history. Write for execution, not for permanence.
 `take` with no id over MCP) to see what this worktree holds and what was handed to you.
 
 - **The session answers something you hold** — hand it in (`passalong hand_in <id> …`) instead.
-  Publishing a second guide about it leaves two records of one piece of work.
+  Publishing a second guide about it leaves two records of one piece of work. Every hand-in carries
+  `evidence`: what you ran and what came back — the command and the lines that decided it, a test
+  summary, a link to the change, or a screenshot url. Copy each one out of the session as you go;
+  at the end you would be writing from memory, which is what evidence exists to replace.
 - **The work never left this repo** — committed and pushed on a branch the team can already see,
   with a pull request to review — then it has crossed no boundary, and a transfer guide is one more
   thing for somebody to read. What is worth publishing from a session like that is what is *still

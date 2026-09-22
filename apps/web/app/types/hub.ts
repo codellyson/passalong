@@ -190,6 +190,8 @@ export interface Task {
     repo: string;
     worktree: string;
     note: string;
+    /** What it ran and what came back, sent with the hand-in. Empty until it hands in. */
+    evidence?: string;
     report: string;
     report_title?: string;
     report_url?: string;
@@ -232,6 +234,8 @@ export interface HandedIn {
   host: string;
   worktree: string;
   note: string;
+  /** What it ran and what came back, sent with the hand-in. See migrations/0025_claim_evidence.sql. */
+  evidence: string;
   at: string;
 }
 

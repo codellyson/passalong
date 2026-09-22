@@ -3230,10 +3230,9 @@ app.put("/v1/guides/:id/verdict", async (c) => {
     c.env.DB,
     found.row.id,
     { account, agent: personAgent(account) },
-    {
-      at: now(),
-      note,
-    },
+    // A person in the hub, not an agent with a terminal: their word is the evidence, and asking
+    // them to paste one would be the form this product does not have.
+    { at: now(), note, evidence: note, person: true },
   );
   return c.json({ id: found.row.id, ok: body.ok, note });
 });
@@ -3362,6 +3361,7 @@ function taskView(
           repo: claim.repo,
           worktree: claim.worktree,
           note: claim.note,
+          evidence: claim.evidence,
           report: claim.report_id,
           pr: claim.pr,
           claimed_at: claim.claimed_at,
@@ -3469,6 +3469,7 @@ app.post("/v1/tasks/:id/finish", async (c) => {
   const done = await claims.finish(c.env.DB, c.req.param("id"), who, {
     at: now(),
     report,
+    evidence: typeof who.evidence === "string" ? who.evidence : "",
     pr: typeof who.pr === "string" ? who.pr : "",
     note: typeof who.note === "string" ? who.note : "",
   });
@@ -3655,12 +3656,15 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   const at = now();
   const note = typeof who.note === "string" ? who.note.trim().slice(0, NOTE_MAX) : "";
 
+  const evidence = typeof who.evidence === "string" ? who.evidence : "";
+
   if (found.row.kind === "task") {
     const report = typeof who.report === "string" ? who.report.trim() : "";
     if (!report) return err(c, 400, "send `report`: the id of the transfer guide about this work");
     const done = await claims.finish(c.env.DB, found.row.id, who, {
       at,
       report,
+      evidence,
       pr: typeof who.pr === "string" ? who.pr : "",
       note,
     });
@@ -3684,8 +3688,12 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
     );
   if (!who.ok && !note) return err(c, 400, "Say what went wrong, so the author knows what to fix.");
   if (found.owner) return err(c, 403, "This is your own guide: there is nobody to hand it in to.");
+  // Evidence before the verdict is recorded: a refused hand-in must leave nothing behind, or the
+  // author is told "it worked" by a call that did not go through.
+  const bad = claims.evidenceProblem(evidence);
+  if (bad) return err(c, 400, bad);
   await recordVerdict(c, found.row, who.ok, note);
-  await claims.handIn(c.env.DB, found.row.id, who, { at, note });
+  await claims.handIn(c.env.DB, found.row.id, who, { at, note, evidence });
   return c.json({
     id: found.row.id,
     ok: who.ok,
@@ -3882,6 +3890,7 @@ app.get("/v1/handed_in", async (c) => {
       host: r.claim.host,
       worktree: r.claim.worktree,
       note: r.claim.note,
+      evidence: r.claim.evidence,
       at: r.claim.updated,
     })),
   });

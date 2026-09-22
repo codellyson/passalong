@@ -24,6 +24,30 @@ export const PERSON_LEASE_MS = 7 * 24 * 60 * 60 * 1000;
 /** The longest progress line kept. It is a status, not a log. */
 export const NOTE_MAX = 280;
 
+/** The longest evidence kept. A note is a line; this is a paste of output, so it gets room. */
+export const EVIDENCE_MAX = 4000;
+
+/**
+ * What a hand-in has to bring, in the words an agent is refused with. See docs/V2.md §11.
+ *
+ * "Done" is the agent's word for its own work, and a write-up is the agent's word written longer.
+ * Neither tells the person at the gate what actually ran. Evidence is the other side of that: the
+ * command and what came back, a test summary, a link to the change, a screenshot url.
+ *
+ * The rule is deliberately one rule — something was sent, and it is longer than a verdict — rather
+ * than a parser that decides what real output looks like. Anything cleverer refuses honest evidence
+ * in a shape nobody thought of, and the refusal itself is what teaches: it says what counts.
+ */
+export function evidenceProblem(text: string): string | null {
+  const said = String(text ?? "").trim();
+  if (said.length >= 16) return null;
+  return (
+    "send `evidence`: what you ran and what came back — the command and the lines that decided " +
+    "it, a test summary, a link to the change, or a screenshot url. " +
+    `"${said || "nothing"}" is a claim, not evidence.`
+  );
+}
+
 /**
  * Where a task is, as a column name. Derived from the guide and its claim on every read, never
  * stored: `stalled` in particular is only "claimed, and the lease is in the past", and storing it
@@ -42,6 +66,8 @@ export interface ClaimRow {
   worktree: string;
   state: string;
   note: string;
+  /** What the agent ran and what came back, sent with the hand-in. Empty until it hands in. */
+  evidence: string;
   report_id: string;
   pr: string;
   claimed_at: string;
@@ -445,13 +471,25 @@ export async function renew(
  * `report` is the transfer guide the agent wrote about the work, and it is required — a person
  * approving a task reads that against Acceptance, and "done" with nothing to read is the thing
  * the gate exists to catch. It has to be a guide this account wrote, and not a task.
+ *
+ * `evidence` is required for the same reason one step further on: the write-up is still the agent
+ * describing its own work, and the reviewer has no way to tell a run that happened from one that
+ * was summarised. See evidenceProblem().
  */
 export async function finish(
   db: D1Database,
   id: string,
   who: Agent,
-  { at, report, pr = "", note = "" }: { at: string; report: string; pr?: string; note?: string },
+  {
+    at,
+    report,
+    evidence,
+    pr = "",
+    note = "",
+  }: { at: string; report: string; evidence: string; pr?: string; note?: string },
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
+  const bad = evidenceProblem(evidence);
+  if (bad) return { status: 400, error: bad };
   const guide = await db
     .prepare("SELECT kind FROM guide WHERE id = ? AND account_id = ?")
     .bind(report, who.account)
@@ -467,12 +505,14 @@ export async function finish(
     return { status: 400, error: "report is a task, not a transfer guide" };
   const res = await db
     .prepare(
-      `UPDATE claim SET state = 'review', report_id = ?, pr = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
+      `UPDATE claim SET state = 'review', report_id = ?, pr = ?, evidence = ?,
+              note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
     )
     .bind(
       report,
       pr.trim().slice(0, 400),
+      evidence.trim().slice(0, EVIDENCE_MAX),
       note.trim().slice(0, NOTE_MAX),
       at,
       id,
@@ -770,19 +810,34 @@ export async function pass(
  * The agent hands in a handoff or a bug it took: done here, waiting on its author. The claim stays,
  * as `review`, so it leaves `working()` and the author can see who did it and where. A task hands
  * in through `finish`, which needs the write-up the gate reads.
+ *
+ * `evidence` is required here as it is there: "it worked" from the agent that did the work is the
+ * one thing the author cannot check. The exception is a person handing in from the browser, who is
+ * not pasting a terminal into a page — that path passes `person: true` and is taken at their word,
+ * for the same reason the hub has no forms.
  */
 export async function handIn(
   db: D1Database,
   id: string,
   who: Agent,
-  { at, note }: { at: string; note: string },
-): Promise<{ claim: ClaimRow } | { error: string; status: 409 }> {
+  {
+    at,
+    note,
+    evidence,
+    person = false,
+  }: { at: string; note: string; evidence: string; person?: boolean },
+): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
+  const bad = person ? null : evidenceProblem(evidence);
+  if (bad) return { status: 400, error: bad };
   const res = await db
     .prepare(
-      `UPDATE claim SET state = 'review', note = COALESCE(NULLIF(?, ''), note), updated = ?
+      `UPDATE claim SET state = 'review', evidence = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
     )
     .bind(
+      String(evidence ?? "")
+        .trim()
+        .slice(0, EVIDENCE_MAX),
       String(note ?? "")
         .trim()
         .slice(0, NOTE_MAX),
@@ -798,11 +853,13 @@ export async function handIn(
     : { status: 409, error: "this agent does not hold that — take it first, or it was taken back" };
 }
 
-/** One call worth making next, and when. */
+/** One call worth making next, when to make it, and what it has to carry. */
 export interface Step {
   tool: "take" | "progress" | "hand_in" | "pass";
   when: string;
   why: string;
+  /** What the call needs, named on every answer so it is in front of the agent when it calls. */
+  with?: string;
 }
 
 /** What just happened, from the agent's side. */
@@ -834,6 +891,13 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
         kind === "task"
           ? "its author reviews your write-up against Acceptance"
           : "its author hears whether it worked",
+      // Said on every answer, not only once at take: by the time an agent finishes a long piece
+      // of work, the rules it read at the start are the first thing gone. Keep evidence collected
+      // as you go, or you are reconstructing it from memory at the end, which is the failure this
+      // is here to stop.
+      with:
+        "evidence: what you ran and what came back — the command and the lines that decided it, " +
+        "a test summary, a link to the change, or a screenshot url. Keep it as you go.",
     },
     {
       tool: "pass",

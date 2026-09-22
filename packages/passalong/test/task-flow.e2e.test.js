@@ -51,6 +51,9 @@ async function readyTask({ account, p, serialize }, title) {
 
 const skip = !API && "PASSALONG_E2E_API not set";
 
+/** What every hand-in carries: the run, not the agent's word for it. */
+const PROOF = "npm test -w apps/api → 285 pass, 0 fail";
+
 test("finishing with the write-up publishes it as the task's report", { skip }, async () => {
   const env = await setup();
   const { p, parse } = env;
@@ -59,6 +62,7 @@ test("finishing with the write-up publishes it as the task's report", { skip }, 
   const md = "---\ntitle: Dark mode, done\n---\n\n## Problem\np\n\n## Steps\n1. tokens\n";
   const done = await p.finishTask(id, {
     markdown: md,
+    evidence: PROOF,
     pr: "https://github.com/e2e/x/pull/1",
     cwd: dir,
   });
@@ -105,7 +109,7 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
 
   // Taken, finished, turned down: back in the queue with the reason on it.
   assert.equal((await p.nextTask({ cwd: a })).id, id);
-  await p.finishTask(id, { report: await report(a), cwd: a });
+  await p.finishTask(id, { report: await report(a), evidence: PROOF, cwd: a });
   assert.equal(await state(), "review");
   await p.rejectTask(id, "toggle does nothing on Safari");
   assert.equal(await state(), "ready");
@@ -122,7 +126,7 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
   // The first worktree picks it up with a pointer to what was left, finishes, and it is approved.
   const third = await p.nextTask({ cwd: a });
   assert.match(third.markdown, /safari fix in progress/);
-  await p.finishTask(id, { report: await report(a), cwd: a });
+  await p.finishTask(id, { report: await report(a), evidence: PROOF, cwd: a });
   await p.approveTask(id);
   assert.equal(await state(), "done");
   assert.equal(parse((await p.pull(id, { write: false })).markdown).meta.status, "consumed");
@@ -151,6 +155,7 @@ test("blocked_by in a task's frontmatter holds it until its blocker is approved"
   assert.equal((await p.nextTask({ cwd: first.dir })).id, first.id);
   await p.finishTask(first.id, {
     markdown: "---\ntitle: schema\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    evidence: PROOF,
     cwd: first.dir,
   });
   assert.equal(await state(second), "blocked", "finished is not approved");
@@ -288,6 +293,7 @@ test("in a team, each side hears what the other did to a task — and only the a
   assert.equal((await p.nextTask({ cwd: dir })).id, id);
   await p.finishTask(id, {
     markdown: "---\ntitle: team done\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    evidence: PROOF,
     cwd: dir,
   });
 
@@ -496,7 +502,16 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
 
   assert.equal((await p.progress(id, "halfway", { cwd: dir })).note, "halfway");
   const md = "---\ntitle: Verbs, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const handed = await p.handIn(id, { markdown: md, cwd: dir });
+  await assert.rejects(
+    p.handIn(id, { markdown: md, cwd: dir }),
+    /what you ran and what came back/,
+    "a hand-in with no evidence is refused",
+  );
+  const handed = await p.handIn(id, {
+    markdown: md,
+    evidence: "npm test -w apps/api → 285 pass, 0 fail",
+    cwd: dir,
+  });
   assert.equal(handed.state, "review");
   assert.deepEqual(
     handed.next.map((s) => s.tool),

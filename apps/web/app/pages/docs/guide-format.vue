@@ -99,7 +99,7 @@ const TASK_TOOLS = [
   },
   {
     name: "hand_in",
-    note: "Done here. A task hands in a write-up for its author to review; a handoff or a bug, whether it worked.",
+    note: "Done here, with evidence: what you ran and what came back. A task hands in a write-up too, for its author to review; a handoff or a bug, whether it worked.",
   },
   { name: "pass", note: "Not yours, or stuck: give it back with the reason for whoever is next." },
 ];

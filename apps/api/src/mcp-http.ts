@@ -64,12 +64,19 @@ async function relay(call: Call, method: string, path: string, body?: unknown) {
 }
 
 /** The part of a verb's answer that says what to do next. See steps() in claims.ts. */
-type Answer = { next?: { tool: string; when: string; why: string }[]; say?: string };
+type Answer = {
+  next?: { tool: string; when: string; why: string; with?: string }[];
+  say?: string;
+};
 
 /** `next` and `say`, as the last thing an agent reads. Mirrors nextNote() in the local server. */
 function nextNote({ next = [], say = "" }: Answer, id = "") {
   const lines = next.map(
-    (s) => `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})`,
+    (s) =>
+      `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})` +
+      // What the call has to carry, under the call it belongs to: an agent that reads this at the
+      // end of a long session should not have to remember hand_in takes evidence.
+      (s.with ? `\n      with ${s.with}` : ""),
   );
   if (say) lines.unshift(`  ${say}`);
   return lines.length ? `<!-- passalong: next:\n${lines.join("\n")}\n-->` : "";
@@ -100,20 +107,35 @@ async function answer(call: Call, method: string, path: string, id: string, body
   return { ...text(`${res.text}${note ? `\n${note}` : ""}`), structuredContent: parsed };
 }
 
+/**
+ * Said in front of every guide an agent opens, whatever its kind: the hand-in needs evidence, and
+ * evidence is collected while the work happens, not reconstructed from memory once it is done.
+ * Mirrors KEEP_EVIDENCE in packages/passalong/src/mcp.js.
+ */
+const KEEP_EVIDENCE =
+  "KEEP YOUR EVIDENCE AS YOU GO. hand_in needs it: the commands you ran and what came back, the " +
+  "test summary, the link to the change. Copy each one when it happens — at the end you will be " +
+  "writing from memory, which is the thing evidence is here to replace.\n\n";
+
 /** What to say in front of a guide, by kind. Mirrors leadFor() in packages/passalong/src/mcp.js. */
 function leadFor(kind: string) {
   if (kind === "bug")
     return (
       "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions — " +
       "those steps produce the defect. Fix what Problem describes, then check Verification and " +
-      "answer with hand_in.\n\n"
+      "answer with hand_in.\n\n" +
+      KEEP_EVIDENCE
     );
   if (kind === "task")
     return (
       "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
       "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
-      "under Acceptance holds.\n\n"
+      "under Acceptance holds.\n\n" +
+      KEEP_EVIDENCE
     );
+  // A transfer guide is handed over untouched: it is a document to follow, and anything in front
+  // of it is one more thing that is not the document. The reminder still reaches the agent on the
+  // answer's `next` line, which is where every other instruction from the server rides.
   return "";
 }
 
@@ -537,6 +559,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "are stuck. Every answer ends with `next`: what to call now. Follow it, and when it says " +
         "to stop, stop. If take says somebody else has it, tell the user instead of doing the " +
         "work twice.\n" +
+        "EVERY HAND-IN CARRIES EVIDENCE: what you ran and what came back — the command and the " +
+        "lines that decided it, a test summary, a link to the change, or a screenshot url. " +
+        "Collect it as you work rather than writing it from memory at the end. hand_in without " +
+        "it is refused, because the write-up and the verdict are both your word for your own " +
+        "work and evidence is the part the person reviewing it can check.\n" +
         "kind: task (the default) is work nobody has done yet. It has no Steps: work out how to " +
         "reach Goal within Constraints, leave Out of scope alone, and treat Acceptance as the " +
         "definition of done. When Acceptance holds, publish_guide a transfer guide about what you " +
@@ -1009,6 +1036,17 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     .regex(/^[a-z0-9-]{8,64}$/, "8 to 64 of a-z, 0-9 and -")
     .describe("a name for you, the same on every task call, e.g. chat-7f3k2m9q");
 
+  /**
+   * What the hand-in has to carry. Described here once, in the words the server refuses with, so
+   * the schema an agent reads before calling and the error it gets for a bad call agree.
+   */
+  const EVIDENCE = z
+    .string()
+    .describe(
+      "what you ran and what came back: the command and the lines that decided it, a test " +
+        'summary, a link to the change, or a screenshot url. "it works" is a claim, not evidence',
+    );
+
   // ---- the four verbs (docs/V2.md §11) --------------------------------------------------------
   // take, progress, hand_in and pass work every kind of guide. They replaced next_task,
   // task_progress, finish_task, start_guide, ack_guide and verify_guide, which are gone: ten tools
@@ -1050,6 +1088,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
   const doHandIn = (args: {
     id: string;
     agent: string;
+    evidence: string;
     ok?: boolean;
     note?: string;
     report?: string;
@@ -1058,6 +1097,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     answer(call, "POST", `/v1/guides/${encodeURIComponent(args.id)}/hand_in`, args.id, {
       agent: args.agent,
       note: args.note ?? "",
+      evidence: args.evidence ?? "",
       ...(args.report ? { report: args.report, pr: args.pr ?? "" } : {}),
       ...(typeof args.ok === "boolean" ? { ok: args.ok } : {}),
     });
@@ -1116,12 +1156,15 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       annotations: ADDS,
       outputSchema: finishOut,
       description:
-        "Done here. A task: `report`, the id of a transfer guide you published about the work " +
-        "(publish_guide it first) — its author reviews it against Acceptance. A handoff or a bug: " +
-        "`ok`, whether its Verification held, and `note` saying what went wrong when it did not.",
+        "Done here, with proof. `evidence` is required on every hand-in: what you ran and what " +
+        "came back. A task also takes `report`, the id of a transfer guide you published about " +
+        "the work (publish_guide it first) — its author reviews it against Acceptance. A handoff " +
+        "or a bug takes `ok`, whether its Verification held, and `note` saying what went wrong " +
+        "when it did not.",
       inputSchema: {
         id: z.string(),
         agent: AGENT,
+        evidence: EVIDENCE,
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),
         report: z.string().optional().describe("task: id of the transfer guide about this work"),

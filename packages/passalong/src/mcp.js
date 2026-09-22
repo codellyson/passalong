@@ -24,6 +24,16 @@ const VERSION = JSON.parse(
 const text = (s) => ({ content: [{ type: "text", text: s }] });
 
 /**
+ * Said in front of every guide an agent opens, whatever its kind: the hand-in needs evidence, and
+ * evidence is collected while the work happens, not reconstructed from memory once it is done.
+ * Mirrors KEEP_EVIDENCE in apps/api/src/mcp-http.ts.
+ */
+const KEEP_EVIDENCE =
+  "KEEP YOUR EVIDENCE AS YOU GO. hand_in needs it: the commands you ran and what came back, the " +
+  "test summary, the link to the change. Copy each one when it happens — at the end you will be " +
+  "writing from memory, which is the thing evidence is here to replace.\n\n";
+
+/**
  * What to say in front of a guide whose kind changes what the reader should do with it.
  *
  * The heading text is what an agent keys on, and a bug's or a task's headings are close enough to
@@ -36,7 +46,8 @@ function leadFor(meta) {
     return (
       "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
       "— those steps produce the defect. Fix what Problem describes, then check " +
-      "Verification and answer with hand_in.\n\n"
+      "Verification and answer with hand_in.\n\n" +
+      KEEP_EVIDENCE
     );
   if (meta.kind === "task")
     return (
@@ -44,8 +55,12 @@ function leadFor(meta) {
       "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
       "under Acceptance holds. Opening it here does not make it yours: to work on it, call take " +
       "with its id in the repo it is for, so no other agent can. Then progress, and hand_in " +
-      "with a write-up.\n\n"
+      "with a write-up.\n\n" +
+      KEEP_EVIDENCE
     );
+  // A transfer guide is handed over untouched: it is a document to follow, and anything in front
+  // of it is one more thing that is not the document. The reminder still reaches the agent on the
+  // answer's `next` line, which is where every other instruction from the server rides.
   return "";
 }
 
@@ -87,7 +102,11 @@ const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError
  */
 export function nextNote({ next = [], say = "" } = {}, id = "") {
   const lines = next.map(
-    (s) => `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})`,
+    (s) =>
+      `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})` +
+      // What the call has to carry, under the call it belongs to: an agent that reads this at the
+      // end of a long session should not have to remember hand_in takes evidence.
+      (s.with ? `\n      with ${s.with}` : ""),
   );
   if (say) lines.unshift(`  ${say}`);
   return lines.length ? `<!-- passalong: next:\n${lines.join("\n")}\n-->` : "";
@@ -118,6 +137,11 @@ export async function serve() {
         "stop, stop. OPEN A GUIDE YOU MEAN TO ACT ON WITH take, NOT get_guide: get_guide only " +
         "reads, and the sender learns nothing. If take says somebody else has it, tell the user " +
         "instead of doing the work twice.\n" +
+        "EVERY HAND-IN CARRIES EVIDENCE: what you ran and what came back — the command and the " +
+        "lines that decided it, a test summary, a link to the change, or a screenshot url. " +
+        "Collect it as you work rather than writing it from memory at the end. hand_in without " +
+        "it is refused, because the write-up and the verdict are both your word for your own " +
+        "work and evidence is the part the person reviewing it can check.\n" +
         `kind: task (the default) is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
         "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
         "alone, and treat Acceptance as the definition of done. hand_in with `markdown`: a " +
@@ -230,11 +254,12 @@ export async function serve() {
     }
   }
 
-  async function doHandIn({ id, ok, note, markdown, report, pr, cwd }) {
+  async function doHandIn({ id, ok, note, evidence, markdown, report, pr, cwd }) {
     try {
       const r = await passalong.handIn(id, {
         ok,
         note: note || "",
+        evidence: evidence || "",
         markdown,
         report,
         pr: pr || "",
@@ -491,13 +516,20 @@ export async function serve() {
     {
       title: "Hand it in",
       description:
-        "Done here. A task: `markdown`, a transfer guide about what you did, decided and how you " +
-        "checked each Acceptance line — this publishes it and attaches it; its author reviews it. " +
-        "A handoff or a bug: `ok`, whether its Verification held here, and `note` saying what went " +
-        "wrong when it did not. More context than a note holds goes in a follow-up: publish_guide " +
-        "with `parent` set to this id.",
+        "Done here, with proof. `evidence` is required on every hand-in: what you ran and what " +
+        "came back. A task also takes `markdown`, a transfer guide about what you did, decided " +
+        "and how you checked each Acceptance line — this publishes it and attaches it; its author " +
+        "reviews it. A handoff or a bug takes `ok`, whether its Verification held here, and " +
+        "`note` saying what went wrong when it did not. More context than a note holds goes in a " +
+        "follow-up: publish_guide with `parent` set to this id.",
       inputSchema: {
         id: z.string().describe("passalong id"),
+        evidence: z
+          .string()
+          .describe(
+            "what you ran and what came back: the command and the lines that decided it, a test " +
+              'summary, a link to the change, or a screenshot url. "it works" is a claim, not evidence',
+          ),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),
         markdown: z
