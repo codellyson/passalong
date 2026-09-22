@@ -110,6 +110,11 @@ const leaseFrom = (at: string, ms = LEASE_MS) => new Date(Date.parse(at) + ms).t
 const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
   (SELECT team_id FROM membership WHERE account_id = ?1)))`;
 
+// Addressed to this account, or to nobody in particular: a task assigned to one person or to one
+// group is theirs to take, and the queue does not hand it to anyone else's agent.
+const FOR_ME = `(g.to_account_id = '' OR g.to_account_id = ?1) AND (g.to_group_id = '' OR
+  g.to_group_id IN (SELECT group_id FROM group_member WHERE account_id = ?1))`;
+
 // Waiting on a task a person has not approved yet. See migrations/0022_blocks.sql.
 const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN guide x ON x.id = b.blocker_id
   WHERE b.guide_id = g.id AND x.status <> 'consumed')`;
@@ -153,7 +158,7 @@ export async function next(
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created
          FROM guide g
-        WHERE g.kind = 'task' AND g.status = 'published' AND ${VISIBLE} ${where}
+        WHERE g.kind = 'task' AND g.status = 'published' AND ${VISIBLE} AND ${FOR_ME} ${where}
           AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id) AND NOT ${BLOCKED}
         ORDER BY g.created, g.id LIMIT 20`,
     )
@@ -236,11 +241,11 @@ export async function take(
   const g = await db
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created, g.kind,
-              ${BLOCKED} AS blocked
+              ${BLOCKED} AS blocked, ${FOR_ME} AS for_me
          FROM guide g WHERE g.id = ?2 AND ${VISIBLE}`,
     )
     .bind(who.account, id)
-    .first<TaskRow & { kind: string; blocked: number }>();
+    .first<TaskRow & { kind: string; blocked: number; for_me: number }>();
   if (!g) return { status: 404, error: "no such guide that you can see" };
 
   const held = await db
@@ -267,6 +272,8 @@ export async function take(
       error: `${id} is not open to take: it is ${g.status === "draft" ? "a draft" : "done"}`,
     };
   const task = g.kind === "task";
+  if (task && !g.for_me)
+    return { status: 409, error: `${id} is assigned to someone else — its author can reassign it` };
   if (task && g.blocked)
     return { status: 409, error: `${id} waits for tasks nobody has approved yet` };
   const repo = repoKey(who.repo);
@@ -468,7 +475,12 @@ export async function list(
   at: string,
 ): Promise<
   {
-    task: Omit<TaskRow, "markdown"> & { share_key: string };
+    task: Omit<TaskRow, "markdown"> & {
+      share_key: string;
+      team_slug: string;
+      to_handle: string;
+      to_group_slug: string;
+    };
     claim: ClaimRow | null;
     state: TaskState;
     report_title: string;
@@ -481,11 +493,24 @@ export async function list(
     db
       .prepare(
         `SELECT g.id, g.account_id, g.title, g.status, g.target, g.created, g.share_key,
-                ${BLOCKED} AS blocked
-           FROM guide g WHERE g.kind = 'task' AND ${VISIBLE} ORDER BY g.created, g.id LIMIT 200`,
+                ${BLOCKED} AS blocked, COALESCE(t.slug, '') AS team_slug,
+                COALESCE(ta.handle, '') AS to_handle, COALESCE(tg.slug, '') AS to_group_slug
+           FROM guide g
+           LEFT JOIN team t ON t.id = g.team_id
+           LEFT JOIN account ta ON ta.id = g.to_account_id AND g.to_account_id <> ''
+           LEFT JOIN team_group tg ON tg.id = g.to_group_id AND g.to_group_id <> ''
+          WHERE g.kind = 'task' AND ${VISIBLE} ORDER BY g.created, g.id LIMIT 200`,
       )
       .bind(account)
-      .all<Omit<TaskRow, "markdown"> & { share_key: string; blocked: number }>(),
+      .all<
+        Omit<TaskRow, "markdown"> & {
+          share_key: string;
+          blocked: number;
+          team_slug: string;
+          to_handle: string;
+          to_group_slug: string;
+        }
+      >(),
     db
       .prepare(
         // The write-up's title rides along, so a reviewer scanning the board sees what came back
@@ -910,4 +935,42 @@ export async function sendBackHandedIn(
   if (!c) return { status: 409, error: "nothing handed in there to send back" };
   await db.prepare("DELETE FROM claim WHERE guide_id = ? AND place = ?").bind(id, place).run();
   return { claimant: c.account_id };
+}
+
+/**
+ * After a reassignment: take the work back from everyone the new assignment leaves out. `accounts`
+ * is who may hold it now — a person, or a group's members — and null means the whole team, which
+ * leaves nobody out. Only live claims go; something already handed in waits on its author either
+ * way. On a task the reason goes under `## Review notes` with where it was, so the next agent can
+ * pick up what was started. Returns the accounts whose hold was dropped, to tell them.
+ */
+export async function dropOutside(
+  db: D1Database,
+  id: string,
+  { accounts, at, why }: { accounts: string[] | null; at: string; why: string },
+): Promise<string[]> {
+  if (accounts === null) return [];
+  const { results } = await db
+    .prepare("SELECT * FROM claim WHERE guide_id = ? AND state = 'claimed'")
+    .bind(id)
+    .all<ClaimRow>();
+  const out = results.filter((c) => !accounts.includes(c.account_id));
+  if (!out.length) return [];
+  const g = await db
+    .prepare("SELECT kind, markdown FROM guide WHERE id = ?")
+    .bind(id)
+    .first<{ kind: string; markdown: string }>();
+  const drops = out.map((c) =>
+    db.prepare("DELETE FROM claim WHERE guide_id = ? AND place = ?").bind(id, c.place),
+  );
+  if (g?.kind === "task") {
+    const c = out[0]!;
+    const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
+    const markdown = withNote(g.markdown, `${at.slice(0, 10)} ${why}; it was with ${where}`);
+    drops.push(
+      db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
+    );
+  }
+  await db.batch(drops);
+  return [...new Set(out.map((c) => c.account_id))];
 }

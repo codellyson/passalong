@@ -25,6 +25,7 @@
 //
 //   closed         the author accepted what you handed in, and the guide is done
 //   sent_back      the author turned it down in your repo, with why
+//   reassigned     the author gave work you were on to someone else, and took it back from you
 //
 // Rows first, delivery second. `line()` renders the one sentence every surface shows (CLI, MCP,
 // hub), so the wording is decided once here rather than three times.
@@ -49,6 +50,7 @@ export const KINDS = [
   "task_released",
   "closed",
   "sent_back",
+  "reassigned",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -609,6 +611,8 @@ export function line(r: LineFacts): string {
       return `${who} accepted your work on ${title}, and closed it`;
     case "sent_back":
       return `${who} sent ${title} back${note}`;
+    case "reassigned":
+      return `${who} gave ${title} to someone else${note}`;
     default:
       return `${who} did something with ${title}`;
   }

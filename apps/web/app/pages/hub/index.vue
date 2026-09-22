@@ -241,7 +241,10 @@ function arrowTabs(e: KeyboardEvent) {
 }
 
 const sub = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted";
-const list = "m-0 list-none overflow-hidden rounded-3 bg-raised p-0 shadow-edge";
+// No overflow-hidden: it clipped the menus rows open (More, give to…). The first and last rows take
+// the list's corners instead, so their backgrounds do not square them off.
+const list =
+  "m-0 list-none rounded-3 bg-raised p-0 shadow-edge [&>li:first-child]:rounded-t-3 [&>li:last-child]:rounded-b-3";
 </script>
 
 <template>

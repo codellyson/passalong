@@ -56,6 +56,7 @@ passalong team join <link>    accept an invite
 passalong team use <slug>     switch the current team
 passalong setup               install the Claude Code capture skill, MCP server and hooks
 passalong now                 what this worktree holds and what is waiting
+passalong assign <id> <to>    give something you wrote to @handle, a #group, or "team"
 passalong mcp                 run the MCP server over stdio
 ```
 

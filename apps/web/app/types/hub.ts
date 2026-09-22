@@ -175,6 +175,10 @@ export interface Task {
   created: string;
   /** You wrote it, so ready, approve, reject and release are yours. */
   mine: boolean;
+  /** The team it is in, by slug; empty when it is in none. */
+  team?: string;
+  /** Who it is for: "@handle", "#group", or empty for anyone in the team. */
+  to?: string;
   url: string;
   claim: {
     agent: string;

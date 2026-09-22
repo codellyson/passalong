@@ -470,6 +470,20 @@ function build(queryClient: QueryClient) {
       [hubKeys.handedIn, hubKeys.working],
     );
 
+  /**
+   * Give something you wrote to someone else in its team: "@handle", "#group", or "" for everyone.
+   * No optimistic move — who holds it afterwards is the server's to work out — so every list that
+   * can show it is refreshed once it answers.
+   */
+  const onAssign = (id: string, to: string) =>
+    change(() => api(`/v1/guides/${id}/assign`, json("POST", { to })), () => {}, [
+      hubKeys.tasks,
+      hubKeys.allGuides,
+      hubKeys.board,
+      hubKeys.working,
+      hubKeys.handedIn,
+    ]);
+
   const onApprove = (t: Task) => moveTask(t, "done", `/v1/tasks/${t.id}/approve`, json("POST"));
   const onReject = (t: Task, why: string) => {
     const said = why.trim();
@@ -545,6 +559,7 @@ function build(queryClient: QueryClient) {
     onVerdict,
     onTaskReady,
     onApprove,
+    onAssign,
     onCloseHandedIn,
     onSendBackHandedIn,
     onReject,

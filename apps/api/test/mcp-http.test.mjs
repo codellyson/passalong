@@ -75,6 +75,7 @@ test("every tool it lists is one an agent could act on", async () => {
   const names = body.result.tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "ack_guide",
+    "assign",
     "attach_screenshot",
     "board",
     "create_upload",
@@ -1036,6 +1037,17 @@ test("a refusal to stop says to stop", async () => {
   );
   assert.equal(body.result.isError, true);
   assert.match(body.result.content[0].text, /Stop\./);
+});
+
+test("assign maps onto the route, with who it is for", async () => {
+  const { call, seen } = recorder({
+    "POST /v1/guides/t1/assign": { status: 200, text: '{"id":"t1","to":"@ada","taken_back":0}' },
+  });
+  const body = await read(
+    await handleMcp(callTool("assign", { id: "t1", to: "@ada" }), call, VOCAB),
+  );
+  assert.deepEqual(seen[0].body, { to: "@ada" });
+  assert.equal(body.result.structuredContent.to, "@ada");
 });
 
 // ---- the work board as an MCP App (docs/V2.md §11) --------------------------------------------------

@@ -123,6 +123,8 @@ export const releaseTask = (id) =>
 /** The four verbs every guide answers to. See docs/V2.md §11. */
 export const working = () => call("/v1/working");
 export const handedIn = () => call("/v1/handed_in");
+export const assign = (id, to) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/assign`, { method: "POST", body: { to } });
 export const take = (body) => call("/v1/take", { method: "POST", body });
 export const progress = (id, body) =>
   call(`/v1/guides/${encodeURIComponent(id)}/progress`, { method: "PUT", body });

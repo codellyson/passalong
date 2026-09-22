@@ -511,6 +511,9 @@ const workOut = z
     ready: z.array(workItem).optional(),
   })
   .passthrough();
+const assignOut = z
+  .object({ id: z.string(), to: z.string().optional(), taken_back: z.number().optional() })
+  .passthrough();
 const passOut = z.object({ id: z.string(), passed: z.boolean().optional() }).passthrough();
 const finishOut = z
   .object({ id: z.string(), state: z.string().optional(), report: z.string().optional() })
@@ -716,6 +719,26 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       ];
       return { ...text(lines.join("\n")), structuredContent: board };
     },
+  );
+
+  server.registerTool(
+    "assign",
+    {
+      title: "Give it to someone else",
+      annotations: ADDS,
+      outputSchema: assignOut,
+      description:
+        "Reassign a guide or task the user wrote to someone else in its team, when the user asks: " +
+        "`to` is @handle for one person, #group for the people who do a thing, or empty for the " +
+        "whole team. Whoever held it and is left out has it taken back and is told; a task then " +
+        "only goes to the new assignee's agents. Only the author can do this.",
+      inputSchema: {
+        id: z.string(),
+        to: z.string().describe('"@handle", "#group", or "" for the whole team'),
+      },
+    },
+    async ({ id, to }) =>
+      relay(call, "POST", `/v1/guides/${encodeURIComponent(id)}/assign`, { to }),
   );
 
   server.registerTool(

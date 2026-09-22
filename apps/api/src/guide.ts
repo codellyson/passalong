@@ -275,6 +275,14 @@ export function setField(markdown: string, key: string, value: string): string {
   return `---\n${front}\n---\n${parts.body}`;
 }
 
+/** Remove one scalar frontmatter field. Absent, the document comes back untouched. */
+export function dropField(markdown: string, key: string): string {
+  const parts = split(markdown);
+  const re = new RegExp(`^${key}:.*\\n?`, "m");
+  if (!parts || !re.test(parts.front)) return markdown;
+  return `---\n${parts.front.replace(re, "").replace(/\n$/, "")}\n---\n${parts.body}`;
+}
+
 /**
  * Set one list frontmatter field, as a flow sequence.
  *

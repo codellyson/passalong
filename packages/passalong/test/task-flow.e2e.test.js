@@ -628,3 +628,75 @@ test("the status line shows what this worktree holds, from a cache it refreshes 
   assert.doesNotMatch(line, /\n/);
   await p.pass(took.guide.id, "testing the status line", { cwd: dir });
 });
+
+test("reassigning a task: only the assignee's agents get it, and whoever is left out is told", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p, serialize, account } = env;
+  const api = await import("../src/api.js");
+  const owner = process.env.PASSALONG_TOKEN;
+  const as = (token) => {
+    process.env.PASSALONG_TOKEN = token;
+  };
+  const worktree = () => {
+    const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+    execFileSync("git", ["init", "-q", dir]);
+    execFileSync("git", [
+      "-C",
+      dir,
+      "remote",
+      "add",
+      "origin",
+      `git@github.com:e2e/${account}.git`,
+    ]);
+    return dir;
+  };
+
+  const team = await api.createTeam(`assign ${Date.now()}`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  const { code } = await api.invite(team.slug);
+  const mate = await secondAccount();
+  const handle = `mate${Date.now().toString(36)}`;
+  as(mate.token);
+  await api.join(code);
+  await api.updateMe({ handle });
+
+  as(owner);
+  const task = serialize({
+    meta: { title: "Assigned work", kind: "task", target_context: `e2e/${account}` },
+    body: "## Goal\nx\n\n## Acceptance\n- a",
+  });
+  const id = (await p.share(task, { to: team.slug })).guide.meta.id;
+  await p.ready(id);
+  assert.equal((await p.assign(id, `@${handle}`)).to, `@${handle}`);
+
+  // Not the owner's agent any more: the queue skips it, and taking it by id says why.
+  const mine = worktree();
+  const skipped = await p.take(undefined, { cwd: mine });
+  assert.notEqual(skipped.guide?.id, id);
+  if (skipped.guide) await p.pass(skipped.guide.id, "not this one", { cwd: mine });
+  await assert.rejects(p.take(id, { cwd: mine }), /assigned to someone else/);
+
+  // The assignee's agent gets it. Only the author can move it again.
+  as(mate.token);
+  const theirs = worktree();
+  assert.equal((await p.take(id, { cwd: theirs })).guide.id, id);
+  await assert.rejects(p.assign(id, "team"), (e) => e.status === 403);
+  await p.activity();
+
+  // To the whole team: nobody is left out, so the mate keeps it.
+  as(owner);
+  assert.equal((await p.assign(id, "team")).taken_back, 0);
+  // To the owner instead: the mate's agent loses it, and the mate is told.
+  const me = `own${Date.now().toString(36)}`;
+  await api.updateMe({ handle: me });
+  const back = await p.assign(id, `@${me}`);
+  assert.equal(back.to, `@${me}`);
+  assert.equal(back.taken_back, 1);
+  await assert.rejects(p.assign(id, "@nobody-here"), (e) => e.status === 400);
+  as(mate.token);
+  const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
+  assert.match(heard, /gave "Assigned work" to someone else/);
+  as(owner);
+});

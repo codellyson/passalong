@@ -109,6 +109,9 @@ passalong login                 # optional: sync across machines
   review gate. A person's commands: an agent never approves or rejects work, its own or another's
 - `passalong work [--once] [--agent CMD]` — from a worktree, run an agent (`claude -p` by default)
   on each ready task for its repo, one after another, until the queue is empty
+- `passalong assign <id> <@handle|#group|team>` — give a guide or task you wrote to someone else in its
+  team; whoever held it and is left out has it taken back, and an assigned task only goes to the
+  assignee's agents
 - `passalong now` — what this worktree's agent holds, and what is waiting. `--hook session|stop`
   is what the Claude Code hooks from `setup` call: told at session start, stopped once before
   ending with work nobody has handed in. `--statusline` is the Claude Code status line `setup`
@@ -119,6 +122,7 @@ passalong login                 # optional: sync across machines
 ## MCP tools
 
 `passalong setup` registers a stdio MCP server exposing: `take`, `progress`, `hand_in`, `pass`,
+`assign` (give a guide or task you wrote to @handle, #group or the whole team),
 `publish_guide`, `file_bugs`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`,
 `attach_screenshot`, `inbox`, `board`, `activity`, `log`, `plan_tasks`, and, kept for older prompts,
 `start_guide`, `ack_guide`, `verify_guide`, `next_task`, `task_progress`, `finish_task`.

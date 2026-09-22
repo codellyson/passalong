@@ -56,6 +56,16 @@ const heard = computed(() => {
   return until ? new Date(Date.parse(until) - 30 * 60 * 1000).toISOString() : "";
 });
 
+/** Yours, in a team and not finished: you may give it to someone else there. */
+const canAssign = computed(() => props.t.mine && Boolean(props.t.team) && props.t.state !== "done");
+const assigning = ref(false);
+const pickerRoot = ref<HTMLElement | null>(null);
+function onDocument(e: MouseEvent) {
+  if (assigning.value && !pickerRoot.value?.contains(e.target as Node)) assigning.value = false;
+}
+onMounted(() => document.addEventListener("click", onDocument));
+onBeforeUnmount(() => document.removeEventListener("click", onDocument));
+
 const rejecting = ref(false);
 const why = ref("");
 const field = ref<HTMLTextAreaElement | null>(null);
@@ -110,6 +120,7 @@ function send() {
 
       <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
         <code class="shrink-0 font-code">{{ t.id }}</code>
+        <span v-if="t.to" class="font-medium text-fg">for {{ t.to }}</span>
         <span v-if="t.target" class="font-code"><AppShorten :value="t.target" :max="28" /></span>
         <span v-else>no repo</span>
         <span v-if="where">{{ by }} · <span class="font-code">{{ where }}</span></span>
@@ -145,6 +156,14 @@ function send() {
     </div>
 
     <div v-if="t.mine && !rejecting" class="flex shrink-0 items-center gap-2">
+      <div v-if="canAssign" ref="pickerRoot" class="relative" @keydown.esc="assigning = false">
+        <button class="btn sm" type="button" :aria-expanded="assigning" @click="assigning = !assigning">
+          give to…
+        </button>
+        <div v-if="assigning" class="menu w-72">
+          <HubAssignPicker :id="t.id" :team="t.team || ''" :to="t.to" @done="assigning = false" />
+        </div>
+      </div>
       <template v-if="t.state === 'review'">
         <button class="btn primary sm" @click="onApprove(t)">approve</button>
         <button class="btn outline danger sm" @click="askWhy">send back</button>

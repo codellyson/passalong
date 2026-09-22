@@ -358,6 +358,21 @@ export async function handIn(
   });
 }
 
+/**
+ * Give a guide or task you wrote to someone else in its team: `@handle` for one person, `#group`
+ * for the people who do a thing, or "team" (or empty) for everyone. Whoever held it and is left out
+ * has it taken back and is told; a task then only goes to the new assignee's agents. The local copy
+ * is dropped so the next read shows the new `to:`.
+ */
+export async function assign(ref, to) {
+  needsSync("reassigning");
+  const id = await resolveId(ref);
+  const target = !to || to === "team" || to === "everyone" ? "" : String(to).trim();
+  const r = await api.assign(id, target);
+  store.remove(id);
+  return r;
+}
+
 /** Not this agent's to do: what it held is open again, and `why` goes to whoever is next. */
 export async function pass(id, why, { cwd = process.cwd() } = {}) {
   needsSync("passing work");
