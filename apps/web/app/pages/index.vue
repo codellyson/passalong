@@ -230,7 +230,7 @@ const PROOF = null as { figure: string; says: string } | null;
            no hub yet. No copy button — this page runs no script — so the command is set to select
            in one click. -->
       <p class="ways">
-        <code class="install">npm i -g passalong &amp;&amp; passalong setup</code>
+        <code class="install"><span>npm i -g passalong &amp;&amp;</span> <span>passalong setup</span></code>
         <a class="quiet" href="/hub">or open your hub</a>
       </p>
       <p class="works">
