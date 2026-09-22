@@ -1387,6 +1387,89 @@ form.join label {
   text-wrap: pretty;
 }
 
+/* Out and back, side by side: what was asked for against what came back. One column on a narrow
+   screen, where the task still comes first. The rule between them is structure, so it is a border. */
+.specimen.pair {
+  display: grid;
+  gap: var(--s-7) var(--s-6);
+  grid-template-columns: minmax(0, 1fr);
+}
+.specimen.pair article {
+  max-width: none;
+  margin: 0;
+}
+@media (min-width: 52rem) {
+  .specimen.pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(5, auto);
+    row-gap: 0;
+  }
+  /* Each side's label, title, facts, checks and prose share rows with the other side's, so the
+     two checklists start level however many lines either title takes. */
+  .specimen.pair article {
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+    align-content: start;
+  }
+  .specimen.pair article + article {
+    padding-left: var(--s-6);
+    border-left: 1px solid var(--line);
+  }
+}
+.specimen .side {
+  margin: 0 0 var(--s-3);
+  font: 500 var(--t-xs) / 1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.specimen .checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.specimen .checks li {
+  position: relative;
+  padding-left: 1.5em;
+}
+.specimen .checks li + li {
+  margin-top: var(--s-2);
+}
+/* An open box for a line of done, a tick for a line checked: the two columns differ in exactly the
+   mark, which is what a reviewer compares. */
+.specimen .checks li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.35em;
+  width: 0.8em;
+  height: 0.8em;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 3px;
+}
+.specimen .checks.met li::before {
+  content: "\2713";
+  border: 0;
+  top: 0;
+  width: auto;
+  height: auto;
+  color: var(--ok);
+  font-weight: 700;
+}
+.proof {
+  max-width: 40rem;
+  margin: var(--s-4) auto 0;
+  font: var(--t-sm) / 1.6 var(--font-sans);
+  color: var(--muted);
+  text-align: center;
+}
+.proof b {
+  color: var(--fg);
+}
+
 .under {
   max-width: 40rem;
   margin: 0 auto;

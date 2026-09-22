@@ -46,9 +46,10 @@ usePage({
  * not a concession — it is how the tool works. What is paid for is the crossing, which is the
  * product.
  *
- * NOTE: `apps/api/src/quota.ts` still grants an unpaid account 25 synced guides. Until that changes
- * the server is more generous than this page — the safe direction to be wrong in, but they have to
- * meet, and doing it locks out existing accounts unless they are grandfathered.
+ * The server agrees: `FREE_SIGNUP` is "0" in apps/web/wrangler.jsonc, so a new account may sync
+ * nothing until it has a plan (`ceilingFor()` in apps/api/src/quota.ts answers "none"). Only
+ * accounts from before the cutover keep the 25 synced guides they had (migrations/0016_grandfather.sql),
+ * and the page does not advertise that, because nobody new can get it.
  */
 const PRICING = {
   solo: { amount: "$5", period: "per month" },
@@ -139,47 +140,72 @@ const STRUCTURED = {
 useHead({ script: [{ type: "application/ld+json", innerHTML: JSON.stringify(STRUCTURED) }] });
 
 /**
- * The specimen guide, as fields rather than as a text file.
+ * The specimen: one piece of work, going out and coming back, side by side.
  *
- * The page used to print the markdown source: twenty-five lines of monospace, which is the
- * aesthetic of a config file and quietly argues that what this product makes is a text file.
- * Anybody can make a text file. What it makes is the document at `/g/:id/:key` — typeset,
- * sectioned, with its facts in a labelled row — and that is a real surface of this product rather
- * than a drawing of one, so it is what the front page shows.
+ * It used to be a single finished handoff, which told the old story — Passalong as a way to write
+ * up what you did. The product now leads with handing work to an agent, so the page shows both
+ * halves of that: the task as it was handed out (what done looks like, what to leave alone) and
+ * what the agent handed back against it (what it decided, how it checked each line of done). The
+ * checks on the right are the lines on the left, one for one, which is the whole point of a review.
+ *
+ * Built from the devices the guide page uses — the fact row, the sectioning — so it is a real
+ * surface of this product rather than a drawing of one. Nothing claims to be a screenshot.
  */
 const SPECIMEN = {
-  title: "Backfill order totals without locking the table",
-  // No id and no repo@branch: the guide page stopped leading with either, and the specimen of it
-  // should not teach a visitor that guides are named by strings like those.
-  facts: [
-    { label: "From", value: "Ada Okafor" },
-    { label: "Project", value: "orders-api" },
-    { label: "Assumes", value: "Postgres 16 \u00b7 Node 22" },
-  ],
-  tags: ["migrations", "backfill"],
-  sections: [
-    {
-      h: "Problem",
-      p: "Totals were computed per request. The obvious backfill takes an ACCESS EXCLUSIVE lock and stalls checkout for about forty seconds.",
-    },
-    {
-      h: "Decisions and rationale",
-      p: "Chunked rather than one statement: the lock is the cost here, not the work. Nullable first and NOT NULL last, so nothing blocks on a rewrite.",
-    },
-    {
-      h: "Steps",
-      p: "Add the column nullable with no default, backfill in chunks of 5,000 by primary key, then set NOT NULL once the tail is clean.",
-    },
-    {
-      h: "Verification",
-      p: "pnpm verify:totals reconciles every row and exits 0, with no lock wait over 50ms in pg_stat_activity.",
-    },
-    {
-      h: "Gotchas",
-      p: "Chunks under 1,000 finish slower, not faster: the planner stops using the index and each pass reads the table.",
-    },
-  ],
+  out: {
+    label: "The task you handed out",
+    title: "Backfill order totals without locking the table",
+    facts: [
+      { label: "For", value: "orders-api" },
+      { label: "Waits for", value: "Add total column" },
+    ],
+    sections: [
+      {
+        h: "Goal",
+        p: "Every order has a stored total, so checkout stops computing it per request.",
+      },
+      {
+        h: "Constraints",
+        p: "No lock that stalls checkout. Postgres 16, in production, during trading hours.",
+      },
+    ],
+    acceptance: [
+      "Every row reconciles: pnpm verify:totals exits 0",
+      "No lock wait over 50ms in pg_stat_activity",
+      "total is NOT NULL once the backfill ends",
+    ],
+  },
+  back: {
+    label: "What came back",
+    title: "Backfill order totals: done",
+    facts: [
+      { label: "Taken by", value: "Ada's agent" },
+      { label: "Change", value: "commit 3f9a2c1" },
+    ],
+    sections: [
+      {
+        h: "Decisions",
+        p: "Chunked by primary key rather than one statement: the lock is the cost here, not the work. Nullable first and NOT NULL last, so nothing waits on a rewrite.",
+      },
+      {
+        h: "Gotchas",
+        p: "Chunks under 1,000 ran slower, not faster: the planner stopped using the index and each pass read the table.",
+      },
+    ],
+    checked: [
+      "pnpm verify:totals exits 0 across 4.1M rows",
+      "Longest lock wait 12ms, sampled every second",
+      "NOT NULL set after the tail was clean",
+    ],
+  },
 };
+
+/**
+ * A number from real use, for the proof line under the specimen — and nothing until there is one.
+ * The page states no figure it cannot stand behind: set this from the dogfooding metric in
+ * docs/V2.md §7 (the share of tasks approved the first time they come back) once it exists.
+ */
+const PROOF = null as { figure: string; says: string } | null;
 </script>
 
 <template>
@@ -226,32 +252,41 @@ const SPECIMEN = {
       the fact row, the tags, the sectioning. Nothing is invented and nothing claims to be a
       screenshot.
     -->
-    <section class="specimen" aria-label="A transfer guide, as it arrives in the next session">
-      <article>
-        <h2>{{ SPECIMEN.title }}</h2>
+    <section class="specimen pair" aria-label="A task as it was handed out, and what the agent handed back">
+      <article v-for="side in [SPECIMEN.out, SPECIMEN.back]" :key="side.label">
+        <p class="side">{{ side.label }}</p>
+        <h2>{{ side.title }}</h2>
 
         <dl class="facts">
-          <div v-for="f in SPECIMEN.facts" :key="f.label">
+          <div v-for="f in side.facts" :key="f.label">
             <dt>{{ f.label }}</dt>
             <dd>{{ f.value }}</dd>
           </div>
         </dl>
 
-        <p class="tags">
-          <span v-for="t in SPECIMEN.tags" :key="t" class="tag">#{{ t }}</span>
-        </p>
+        <!-- The lines of done first, on both sides, so each check sits level with the line it
+             answers: that comparison is the review. -->
+        <div class="sec">
+          <h3>{{ "acceptance" in side ? "Done when" : "How it checked each line" }}</h3>
+          <ul class="checks" :class="{ met: !('acceptance' in side) }">
+            <li v-for="line in 'acceptance' in side ? side.acceptance : side.checked" :key="line">{{ line }}</li>
+          </ul>
+        </div>
 
-        <div v-for="sec in SPECIMEN.sections" :key="sec.h" class="sec">
-          <h3>{{ sec.h }}</h3>
-          <p>{{ sec.p }}</p>
+        <div>
+          <div v-for="sec in side.sections" :key="sec.h" class="sec">
+            <h3>{{ sec.h }}</h3>
+            <p>{{ sec.p }}</p>
+          </div>
         </div>
       </article>
     </section>
     <p class="under">
-      That is what an agent hands back, and what the next session starts from. The work you hand
-      out has the same shape: what done looks like, what to leave alone. Underneath it is plain
-      markdown — in your repo, in your hub, and yours to export whenever you want out.
+      What you asked for, beside what it says it checked, one line for one line — so a write-up that
+      skips a line shows. Underneath both is plain markdown: in your repo, in your hub, and yours to
+      export whenever you want out.
     </p>
+    <p v-if="PROOF" class="proof"><b>{{ PROOF.figure }}</b> {{ PROOF.says }}</p>
 
     <!--
       One loop, whatever the work is. Tasks and handoffs used to be told as two products with two
