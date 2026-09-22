@@ -25,7 +25,7 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
   <div ref="root" class="relative" @keydown.esc="open = false">
     <button
       type="button"
-      class="btn sm max-w-[12rem]"
+      class="btn sm max-w-[7.5rem] sm:max-w-[12rem]"
       :aria-expanded="open"
       aria-haspopup="menu"
       @click="open = !open"

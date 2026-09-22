@@ -12,7 +12,8 @@
 <script setup lang="ts">
 import type { Working } from "~/types/hub";
 
-const props = defineProps<{ rows: Working[] }>();
+/** `bare` drops the heading, for a page that already names the section (the hub's tab). */
+const props = defineProps<{ rows: Working[]; bare?: boolean }>();
 
 const who = (w: Working) => (w.by.you ? "You" : personName(w.by.name, w.by.handle) || "A teammate");
 
@@ -47,11 +48,11 @@ const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "
 <template>
   <section v-if="props.rows.length" aria-labelledby="working-h" class="scroll-mt-4">
     <!-- The same heading as the hub's other sections: this is one of them. -->
-    <h2 id="working-h" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
+    <h2 v-if="!props.bare" id="working-h" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
       Working now
       <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ props.rows.length }}</span>
     </h2>
-    <p class="mt-1 mb-3 font-ui text-sm text-muted">Each agent holds one thing until it hands it in; people can hold several.</p>
+    <p class="mt-1 mb-3 font-ui text-sm text-muted" :class="props.bare ? 'mt-0' : ''">Each agent holds one thing until it hands it in; people can hold several.</p>
     <ul class="m-0 list-none overflow-hidden rounded-[var(--r-3)] bg-raised p-0 shadow-edge">
       <li
         v-for="w in props.rows"

@@ -155,35 +155,48 @@ const active = (to: string) =>
     />
 
     <section v-else class="hub">
-      <header class="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
-        <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <AppBrand to="/hub" />
-          <nav class="flex flex-wrap gap-1" aria-label="Hub">
+      <!-- The app's navbar: pinned to the top, full width, on its own raised background, so it reads
+           as the frame around the page rather than one more row of tabs inside it — which is what
+           the page's own tabs (Needs you, Working now…) now are. A div, not <header>: the global
+           header rule adds its own border, padding and margin, and it outranks utility classes.
+           The full-bleed background is a shadow spread past the column and clipped to the bar's
+           height, so the bar can stay inside <main> and keep its measure. -->
+      <div
+        class="sticky top-0 z-30 -mt-12 mb-8 border-b border-line bg-raised/85 py-2.5 shadow-[0_0_0_100vmax_color-mix(in_oklab,var(--surface-raised)_85%,transparent)] backdrop-blur-md [clip-path:inset(0_-100vmax)]"
+      >
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-6">
+          <AppBrand to="/hub" compact />
+          <!-- On a phone the links take their own row under the brand and the controls, so the bar
+               is two tidy rows rather than whatever wrapping made of one. -->
+          <nav
+            class="order-last -mx-1 flex w-full gap-1 overflow-x-auto [scrollbar-width:none] sm:order-none sm:mx-0 sm:w-auto"
+            aria-label="Hub"
+          >
             <NuxtLink
               v-for="t in tabs"
               :key="t.to"
               :to="t.to"
-              class="rounded-1 px-3 py-1.5 font-ui text-sm no-underline transition-colors"
+              class="rounded-pill px-3 py-1.5 font-ui text-sm whitespace-nowrap no-underline transition-colors"
               :class="
                 active(t.to)
-                  ? 'bg-surface font-semibold text-fg'
-                  : 'font-medium text-muted hover:text-fg'
+                  ? 'bg-fg font-semibold text-bg'
+                  : 'font-medium text-muted hover:bg-surface hover:text-fg'
               "
               :aria-current="active(t.to) ? 'page' : undefined"
             >
               {{ t.label }}
             </NuxtLink>
           </nav>
+          <div class="ml-auto flex items-center gap-2">
+            <!-- Reachable signed in or out: the sign-in screen is as likely as any to be too bright. -->
+            <AppThemeToggle />
+            <template v-if="signedIn">
+              <HubNewMenu />
+              <HubAccountMenu />
+            </template>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <!-- Reachable signed in or out: the sign-in screen is as likely as any to be too bright. -->
-          <AppThemeToggle />
-          <template v-if="signedIn">
-            <HubNewMenu />
-            <HubAccountMenu />
-          </template>
-        </div>
-      </header>
+      </div>
 
       <template v-if="heading">
         <h1 class="mt-0">{{ heading }}</h1>

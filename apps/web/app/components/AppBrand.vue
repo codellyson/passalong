@@ -6,9 +6,11 @@
      your own board — sending someone who is signed in out to the marketing page is the one thing
      it should not do. -->
 <script setup lang="ts">
-withDefaults(defineProps<{ to?: string }>(), { to: "/" });
+withDefaults(defineProps<{ to?: string; compact?: boolean }>(), { to: "/", compact: false });
 </script>
 
 <template>
-  <a class="brand" :href="to"><img src="/favicon.svg" alt="" />Passalong</a>
+  <!-- `compact`: on a narrow phone the name goes to screen readers only and the mark stays, so the
+       hub's navbar keeps the brand and its controls on one row. -->
+  <a class="brand" :href="to"><img src="/favicon.svg" alt="" /><span :class="compact ? 'max-[26rem]:sr-only' : ''">Passalong</span></a>
 </template>

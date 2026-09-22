@@ -11,11 +11,11 @@
                   for its author, and handoffs you sent that are still out
     Done          folded, because it is most of what exists and none of what needs doing
 
-  The title says whose work this is — "Work in [Khaime ▾]" — with the team picker in it, and the line
-  under it is the sections' own counts, each a link to its section.
+  The title says whose work this is — "Work in [Khaime ▾]" — with the team picker in it. The four
+  are tabs, each with its count, so an empty one is a zero on a label rather than a section.
 
   /hub/guides and /hub/tasks redirect here with their query, so `?q=` and `?follows=` links still
-  work. `?done=1` opens Done, which is where the free-plan banner sends you to make room.
+  work. `?tab=` opens a tab; `?done=1` opens Done, which is where the free-plan banner sends you.
 -->
 <script setup lang="ts">
 import type { Guide, Task } from "~/types/hub";
@@ -181,24 +181,65 @@ const handedIn = computed(() =>
 const needsCount = computed(
   () => reviewCount.value + handedIn.value.length + lanes.value.needs.length,
 );
-/** Nothing needs you, and nothing is being searched for: the section folds to one line. */
-const clear = computed(() => !waiting.value && !needsCount.value && !searching.value);
 const workingCount = computed(() => data.value.working.length);
 const openCount = computed(() => openTaskCount.value + sentCount.value);
 const doneCount = computed(() => doneTasks.value.length + lanes.value.done.length);
 
-const showDone = ref(route.query.done === "1");
-watch(
-  () => route.query.done,
-  (v) => {
-    if (v === "1") showDone.value = true;
-  },
+/**
+ * One section at a time, as tabs, each carrying its count. Four stacked sections spent the page on
+ * whichever were empty; a tab with nothing in it is a zero on a label instead.
+ *
+ * The tab is in the URL (`?tab=`), so a link can open one and Back goes where you were. `?done=1`,
+ * which the free-plan banner sends, still opens Done. With no tab asked for, it opens the first
+ * that has something in it, in the order of what needs a person most.
+ */
+const TABS = ["needs", "working", "open", "done"] as const;
+type Tab = (typeof TABS)[number];
+const asked = computed<Tab | null>(() => {
+  const t = text(route.query.tab);
+  if ((TABS as readonly string[]).includes(t)) return t as Tab;
+  return route.query.done === "1" ? "done" : null;
+});
+const fallback = computed<Tab>(() =>
+  needsCount.value ? "needs" : workingCount.value ? "working" : openCount.value ? "open" : "needs",
 );
-/** A search looks everywhere, so it opens the shelf rather than hiding matches behind it. */
-const doneOpen = computed(() => showDone.value || searching.value);
+const tab = computed<Tab>(() => asked.value ?? fallback.value);
+const tabs = computed(() => [
+  {
+    id: "needs" as const,
+    label: "Needs you",
+    count: needsCount.value,
+    tone: needsCount.value ? "accent" : "",
+  },
+  { id: "working" as const, label: "Working now", count: workingCount.value, tone: "" },
+  { id: "open" as const, label: "Open", count: openCount.value, tone: "" },
+  { id: "done" as const, label: "Done", count: doneCount.value, tone: "" },
+]);
+function pick(id: Tab) {
+  navigateTo({ query: { ...route.query, tab: id, done: undefined } }, { replace: true });
+}
+// On a phone the four tabs are wider than the screen and the row scrolls: keep the chosen one in
+// view, horizontally only, so opening ?tab=done does not leave Done off the edge.
+const tablist = ref<HTMLElement | null>(null);
+function showTab() {
+  const row = tablist.value;
+  const el = document.getElementById(`tab-${tab.value}`);
+  if (!row || !el) return;
+  const left = el.offsetLeft - row.offsetLeft;
+  if (left < row.scrollLeft || left + el.offsetWidth > row.scrollLeft + row.clientWidth)
+    row.scrollLeft = left - 8;
+}
+onMounted(() => nextTick(showTab));
+watch([tab, tablist, waiting], () => nextTick(showTab));
 
-const heading = "m-0 flex items-baseline gap-2 text-h3 font-bold text-fg";
-const count = "font-ui text-sm font-normal text-muted tabular-nums";
+function arrowTabs(e: KeyboardEvent) {
+  const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+  if (!step) return;
+  const next = TABS[(TABS.indexOf(tab.value) + step + TABS.length) % TABS.length]!;
+  pick(next);
+  nextTick(() => document.getElementById(`tab-${next}`)?.focus());
+}
+
 const sub = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted";
 const list = "m-0 list-none overflow-hidden rounded-3 bg-raised p-0 shadow-edge";
 </script>
@@ -211,35 +252,19 @@ const list = "m-0 list-none overflow-hidden rounded-3 bg-raised p-0 shadow-edge"
 
     <HubFirstRun v-if="first" />
 
-    <div v-else class="flex flex-col gap-10">
+    <div v-else class="flex flex-col gap-6">
       <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div class="flex min-w-0 flex-col gap-1">
-          <h1 class="m-0 flex flex-wrap items-center gap-2 text-h2">
-            Work<template v-if="hasTeams"> in <HubScopes /></template>
-          </h1>
-          <p v-if="waiting" class="m-0 h-5 font-ui text-sm text-muted" aria-hidden="true">
-            <span class="inline-block h-2.5 w-56 rounded-pill bg-line align-middle" />
-          </p>
-          <p v-else class="m-0 font-ui text-sm text-muted">
-            <span v-if="updating || scopeChanging" role="status" class="mr-2 text-muted">Updating…</span>
-            <!-- A count is a link only when there is something to jump to. -->
-            <a v-if="needsCount" href="#needs">{{ needsCount }} need{{ needsCount === 1 ? "s" : "" }} you</a>
-            <span v-else>Nothing needs you</span>
-            ·
-            <component :is="workingCount ? 'a' : 'span'" :href="workingCount ? '#working-h' : undefined">{{ workingCount }} being worked on</component>
-            ·
-            <component :is="openCount ? 'a' : 'span'" :href="openCount ? '#open' : undefined">{{ openCount }} open</component>
-            ·
-            <component :is="doneCount ? 'a' : 'span'" :href="doneCount ? '#done' : undefined" @click="showDone = true">{{ doneCount }} done</component>
-          </p>
-        </div>
+        <h1 class="m-0 flex flex-wrap items-center gap-2 text-h2">
+          Work<template v-if="hasTeams"> in <HubScopes /></template>
+          <span v-if="updating || scopeChanging" role="status" class="font-ui text-sm font-normal text-muted">Updating…</span>
+        </h1>
         <div class="toolbar m-0 min-w-[14rem] grow basis-56 sm:max-w-xs">
           <input v-model="q" type="search" placeholder="Search work" aria-label="Search work" />
         </div>
       </div>
 
       <!-- Named, not "one guide": the filter is only useful if you can see which guide it is. -->
-      <p v-if="follows" class="-mt-6 mb-0 font-ui text-sm text-muted">
+      <p v-if="follows" class="m-0 font-ui text-sm text-muted">
         Follow-ups to
         <b class="font-medium text-fg">{{ followed?.title || "this guide" }}</b>: more context
         added to it.
@@ -251,109 +276,124 @@ const list = "m-0 list-none overflow-hidden rounded-3 bg-raised p-0 shadow-edge"
       <!-- A list that failed to load draws nothing rather than its empty state: the shell's banner
            already says what happened and offers Try again. -->
       <template v-if="!unavailable">
-        <!-- All clear is one quiet line, not a section. A heading, a zero and a sentence saying there
-             is nothing here spent the top of the page — the place people look first — on nothing. -->
-        <section
-          v-if="clear"
-          id="needs"
-          aria-label="Needs you"
-          class="-mb-4 flex items-center gap-3 rounded-3 bg-surface px-4 py-3 font-ui text-sm"
+        <div
+          ref="tablist"
+          class="-mb-2 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line [scrollbar-width:none]"
+          role="tablist"
+          aria-label="Work"
+          @keydown="arrowTabs"
         >
-          <span class="grid size-6 shrink-0 place-items-center rounded-pill bg-ok-soft text-ok" aria-hidden="true">
-            <AppIcon name="check" />
-          </span>
-          <p class="m-0 text-pretty">
-            <b class="font-semibold text-fg">Nothing needs you.</b>{{ " " }}<span class="text-muted">Work an agent hands in, or a teammate sends you, lands here.</span>
-          </p>
-        </section>
+          <button
+            v-for="t in tabs"
+            :id="`tab-${t.id}`"
+            :key="t.id"
+            type="button"
+            role="tab"
+            :aria-selected="tab === t.id"
+            :aria-controls="`panel-${t.id}`"
+            :tabindex="tab === t.id ? 0 : -1"
+            class="-mb-px flex cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-2.5 font-ui text-sm whitespace-nowrap"
+            :class="tab === t.id ? 'border-accent font-semibold text-fg' : 'border-transparent text-muted hover:text-fg'"
+            @click="pick(t.id)"
+          >
+            {{ t.label }}
+            <span
+              v-if="!waiting"
+              class="min-w-5 rounded-pill px-1.5 py-0.5 text-center text-xs tabular-nums"
+              :class="t.tone === 'accent' ? 'bg-accent text-accent-fg font-semibold' : 'bg-surface text-muted'"
+            >{{ t.count }}</span>
+          </button>
+        </div>
+
         <section
-          v-else
-          id="needs"
-          aria-labelledby="lane-needs"
-          class="flex scroll-mt-4 flex-col gap-3 transition-opacity"
+          :id="`panel-${tab}`"
+          role="tabpanel"
+          :aria-labelledby="`tab-${tab}`"
+          class="flex flex-col gap-6 transition-opacity"
           :class="scopeChanging ? 'opacity-60' : ''"
           :aria-busy="waiting || scopeChanging"
         >
-          <h2 id="lane-needs" :class="heading">
-            Needs you <span :class="count">{{ needsCount }}</span>
-          </h2>
-          <HubTaskReview :tasks="tasks" />
-          <div v-if="handedIn.length">
-            <h3 :class="sub">Handed in · {{ handedIn.length }}</h3>
-            <p class="mt-1 mb-3 font-ui text-sm text-muted">
-              Handoffs you sent, done where they went. Close them, or send one back with why.
-            </p>
-            <ul :class="list">
-              <HubHandedInRow v-for="h in handedIn" :key="`${h.id}-${h.place}`" :h="h" />
-            </ul>
-          </div>
-          <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
-          <ul v-else-if="lanes.needs.length" :class="list">
-            <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />
-          </ul>
-          <p v-if="!waiting && !needsCount" class="m-0 font-ui text-sm text-muted">
-            Nothing waiting on you matches.
-            <button class="linkish" type="button" @click="clearSearch">Clear search</button>
-          </p>
-        </section>
-
-        <HubWorkingNow :rows="data.working" />
-
-        <section id="open" aria-labelledby="lane-open" class="flex scroll-mt-4 flex-col gap-6">
-          <h2 id="lane-open" :class="heading">
-            Open <span :class="count">{{ openCount }}</span>
-          </h2>
-
-          <template v-for="col in OPEN" :key="col.state">
-            <div v-if="openTasks.get(col.state)?.length">
-              <h3 :class="sub">{{ col.title }} · {{ openTasks.get(col.state)?.length }}</h3>
-              <p class="mt-1 mb-3 font-ui text-sm text-muted">{{ col.note }}</p>
+          <!-- ---- Needs you ---- -->
+          <template v-if="tab === 'needs'">
+            <HubTaskReview :tasks="tasks" />
+            <div v-if="handedIn.length">
+              <h3 :class="sub">Handed in · {{ handedIn.length }}</h3>
+              <p class="mt-1 mb-3 font-ui text-sm text-muted">
+                Handoffs you sent, done where they went. Close them, or send one back with why.
+              </p>
               <ul :class="list">
-                <HubTaskRow v-for="t in openTasks.get(col.state)" :key="t.id" :t="t" />
+                <HubHandedInRow v-for="h in handedIn" :key="`${h.id}-${h.place}`" :h="h" />
               </ul>
+            </div>
+            <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
+            <div v-else-if="lanes.needs.length">
+              <h3 :class="sub">Sent to you · {{ lanes.needs.length }}</h3>
+              <p class="mt-1 mb-3 font-ui text-sm text-muted">Handed to you, and waiting on your answer.</p>
+              <ul :class="list">
+                <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />
+              </ul>
+            </div>
+            <!-- All clear is one quiet line, not an empty section. -->
+            <div
+              v-if="!waiting && !needsCount"
+              class="flex items-center gap-3 rounded-3 bg-surface px-4 py-3 font-ui text-sm"
+            >
+              <span class="grid size-6 shrink-0 place-items-center rounded-pill bg-ok-soft text-ok" aria-hidden="true">
+                <AppIcon name="check" />
+              </span>
+              <p class="m-0 text-pretty">
+                <template v-if="searching">
+                  <b class="font-semibold text-fg">Nothing waiting on you matches.</b>{{ " " }}<button class="linkish" type="button" @click="clearSearch">Clear search</button>
+                </template>
+                <template v-else>
+                  <b class="font-semibold text-fg">Nothing needs you.</b>{{ " " }}<span class="text-muted">Work an agent hands in, or a teammate sends you, lands here.</span>
+                </template>
+              </p>
             </div>
           </template>
 
-          <div v-if="waiting || lanes.sent.length">
-            <h3 :class="sub">Handoffs you sent · {{ sentCount }}</h3>
-            <p class="mt-1 mb-3 font-ui text-sm text-muted">Still out: nobody has said it worked yet.</p>
-            <HubSkeleton v-if="waiting" :rows="2" label="Loading what you sent" />
-            <ul v-else :class="list">
-              <template v-for="e in lanes.sent" :key="'row' in e ? e.row.g.id : `report-${e.group.report}`">
-                <HubInboxRow v-if="'row' in e" :row="e.row" />
-                <HubReportRow v-else :group="e.group" :open="searching" />
-              </template>
-            </ul>
-          </div>
+          <!-- ---- Working now ---- -->
+          <template v-else-if="tab === 'working'">
+            <HubWorkingNow v-if="data.working.length" :rows="data.working" bare />
+            <p v-else class="m-0 font-ui text-sm text-muted">
+              Nobody is working on anything right now. When an agent or a teammate takes something,
+              it shows here with who has it and what they last said.
+            </p>
+          </template>
 
-          <p v-if="!waiting && !openCount" class="m-0 font-ui text-sm text-muted">
-            {{ searching ? "Nothing open matches." : "Nothing is open." }}
-            <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
-            <button v-else class="linkish" type="button" @click="copy(ASKS.task, $event.currentTarget)">
-              <span data-label>Copy a task ask for your agent</span>
-            </button>
-          </p>
-        </section>
+          <!-- ---- Open ---- -->
+          <template v-else-if="tab === 'open'">
+            <template v-for="col in OPEN" :key="col.state">
+              <div v-if="openTasks.get(col.state)?.length">
+                <h3 :class="sub">{{ col.title }} · {{ openTasks.get(col.state)?.length }}</h3>
+                <p class="mt-1 mb-3 font-ui text-sm text-muted">{{ col.note }}</p>
+                <ul :class="list">
+                  <HubTaskRow v-for="t in openTasks.get(col.state)" :key="t.id" :t="t" />
+                </ul>
+              </div>
+            </template>
+            <div v-if="waiting || lanes.sent.length">
+              <h3 :class="sub">Handoffs you sent · {{ sentCount }}</h3>
+              <p class="mt-1 mb-3 font-ui text-sm text-muted">Still out: nobody has said it worked yet.</p>
+              <HubSkeleton v-if="waiting" :rows="2" label="Loading what you sent" />
+              <ul v-else :class="list">
+                <template v-for="e in lanes.sent" :key="'row' in e ? e.row.g.id : `report-${e.group.report}`">
+                  <HubInboxRow v-if="'row' in e" :row="e.row" />
+                  <HubReportRow v-else :group="e.group" :open="searching" />
+                </template>
+              </ul>
+            </div>
+            <p v-if="!waiting && !openCount" class="m-0 font-ui text-sm text-muted">
+              {{ searching ? "Nothing open matches." : "Nothing is open." }}
+              <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
+              <button v-else class="linkish" type="button" @click="copy(ASKS.task, $event.currentTarget)">
+                <span data-label>Copy a task ask for your agent</span>
+              </button>
+            </p>
+          </template>
 
-        <section id="done" aria-labelledby="lane-done" class="flex scroll-mt-4 flex-col gap-3">
-          <h2 class="m-0">
-            <button
-              type="button"
-              class="flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left"
-              :aria-expanded="doneOpen"
-              @click="showDone = !showDone"
-            >
-              <span id="lane-done" :class="heading">
-                Done <span v-if="!waiting" :class="count">{{ doneCount }}</span>
-              </span>
-              <AppIcon
-                name="reveal"
-                class="text-muted transition-[rotate] duration-150 ease-out"
-                :class="doneOpen ? 'rotate-180' : ''"
-              />
-            </button>
-          </h2>
-          <template v-if="doneOpen">
+          <!-- ---- Done ---- -->
+          <template v-else>
             <ul v-if="doneTasks.length" :class="list">
               <HubTaskRow v-for="t in doneTasks" :key="t.id" :t="t" />
             </ul>
