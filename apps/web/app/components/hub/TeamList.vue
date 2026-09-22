@@ -122,15 +122,6 @@ function guides(t: TeamDetail) {
   scope.value = t.slug;
   router.push("/hub");
 }
-
-const initials = (label: string) =>
-  label
-    .replace(/^@/, "")
-    .split(/\s+/)
-    .map((w) => w[0] ?? "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
 </script>
 
 <template>
@@ -191,8 +182,8 @@ const initials = (label: string) =>
             :key="m.handle || m.joined"
             class="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0"
           >
-            <span class="grid size-7 shrink-0 place-items-center rounded-pill border border-line bg-surface font-ui text-xs font-semibold text-muted" aria-hidden="true">
-              {{ initials(m.display || personName(m.name, m.handle)) }}
+            <span class="avatar" :style="{ '--h': avatarHue(m.display || personName(m.name, m.handle)) }" aria-hidden="true">
+              {{ initialsOf(m.display || personName(m.name, m.handle)) }}
             </span>
             <span class="min-w-0 grow font-ui text-sm text-fg">
               {{ m.display || personName(m.name, m.handle) }}

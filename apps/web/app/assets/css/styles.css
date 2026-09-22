@@ -617,6 +617,33 @@ button.primary[disabled],
   background: var(--line);
 }
 
+/* A person, as two letters in their own colour.
+
+   Grey initials on a grey disc was the flattest thing in a row and told you nothing at a glance;
+   colour makes the same person recognisable down a list before the name is read. The hue comes from
+   their name (avatarHue in utils/people.ts) and is passed in as `--h`; lightness and chroma live
+   here, so every hue stays legible in both themes rather than one of them going muddy. The ring is
+   the same colour at low opacity: a border would be a second grey line. */
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: var(--r-pill);
+  font: 600 var(--t-xs) / 1 var(--font-sans);
+  letter-spacing: 0.02em;
+  color: light-dark(oklch(0.42 0.1 var(--h)), oklch(0.87 0.07 var(--h)));
+  background: light-dark(oklch(0.93 0.05 var(--h)), oklch(0.32 0.055 var(--h)));
+  box-shadow: inset 0 0 0 1px
+    light-dark(oklch(0.42 0.1 var(--h) / 0.16), oklch(0.87 0.07 var(--h) / 0.22));
+}
+/* You, in a list of other people: the accent, so your own row reads as yours. */
+.avatar.you {
+  color: light-dark(oklch(0.42 0.1 40), oklch(0.87 0.07 40));
+  background: light-dark(oklch(0.93 0.05 40), oklch(0.32 0.055 40));
+}
+
 /* Filter toggles. Pill-shaped so they never read as actions. */
 .chips {
   display: flex;
