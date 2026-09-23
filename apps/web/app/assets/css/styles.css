@@ -205,18 +205,6 @@
   box-sizing: border-box;
 }
 
-/* Full-bleed decoration — the navbar's background spans the viewport while its content stays in
-   the reading column — is drawn with `100vw`, and `100vw` counts the vertical scrollbar. That is
-   about eight pixels wider than the page, and the browser answered with a horizontal scrollbar
-   along the bottom of every screen.
-   On the scrolling element, because that is what was offering the scroll; clipping the body left
-   it scrollable. `clip` and not `hidden`: hidden would make this a scroll container and break
-   `position: sticky` inside it, and bleeding past the viewport edge is what full-bleed means —
-   there is nothing out there to scroll to. */
-html {
-  overflow-x: clip;
-}
-
 body {
   margin: 0;
   background: var(--bg);
