@@ -360,9 +360,26 @@ It also pinned one thing as-is rather than fixing it: the frontmatter is read li
 survives. Normalising the body would rewrite the bytes of every guide written on Windows, which is
 the silent rewrite the corpus exists to make visible rather than commit.
 
-**3. Add a monotonic counter to the claim row.** The compare-and-set guard already fences the
-dangerous write; a counter closes the ABA case and matches KCL's `leaseCounter`. Cheap, and it is
-the precondition for ever letting a lapsed lease release on its own.
+**3. Add a monotonic counter to the claim row.** *Implemented, in
+`apps/api/migrations/0029_claim_fence.sql`.* Every fresh claim gets the next number for that guide
+and place, `take` tells the agent what it is, and `progress`, `hand_in` and `pass` send it back; a
+write carrying a number that is not the current one is refused with "it was released and taken
+again since". That is Chubby's lock generation number and KCL's `leaseCounter`.
+
+The counter lives in its own table rather than on the claim, because the claim row is deleted on
+release, on pass and on approve, and a counter that went back to zero with it would not be a
+counter. Gaps are fine — a take that loses the race burns a number — as long as none is handed out
+twice.
+
+The agent never sees the number and is never asked for it: a model echoing an integer back three
+calls later is not a lock. The CLI keeps it in `.passalong/held.json` beside `agent.json` and sends
+it automatically. That is also why the HTTP surface stays unfenced for now — a stateless client has
+nowhere to keep it.
+
+Sending it is optional and it is checked when present, so an agent on a CLI older than the
+migration still works rather than being cut off mid-task on the day it shipped. Requiring it is the
+follow-up, once published clients carry it — and that is the precondition for ever letting a lapsed
+lease release on its own.
 
 **4. Annotate the stdio MCP tools.** `readOnlyHint` on the reads, `outputSchema` on the four verbs,
 to match `mcp-http.ts`. Advisory per the spec, but the asymmetry is a bug either way.

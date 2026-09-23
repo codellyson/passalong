@@ -342,6 +342,118 @@ test("a hand-in records what the command returned, and the flattened block says 
   assert.match(flatten(checks), /the badge reads 3\nopened the hub by hand/);
 });
 
+test("a stale agent cannot hand in over the card it used to hold", async () => {
+  // ABA. `agent_id` is minted per worktree and deliberately stable, so it cannot tell the claim
+  // before a release from the claim after one: the same agent takes a task, a person releases it,
+  // the same agent takes it again, and a hand-in still in flight from the first claim satisfies
+  // the old guard on the second. The generation number is what tells them apart.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+
+  const first = await next(db, A, { at: T0 });
+  const was = first.claim.fence;
+  assert.ok(was >= 1, "a fresh claim carries a generation");
+
+  await release(db, "t1", { account: "me", at: T0 });
+  const again = await next(db, A, { at: T0 });
+  assert.equal(again.claim.guide_id, "t1", "the same agent takes it again");
+  assert.ok(again.claim.fence > was, `${again.claim.fence} should be past ${was}`);
+
+  // The hand-in the first claim would have sent. Same agent, same account, same task.
+  const stale = await finish(db, "t1", A, {
+    at: T0,
+    report: "report",
+    evidence: PROOF,
+    fence: was,
+  });
+  assert.equal(stale.status, 409);
+  assert.match(stale.error, /released and taken again/);
+  assert.equal(await stateIn(db, "t1"), "claimed", "the live claim is untouched");
+
+  // The number it holds now works.
+  const good = await finish(db, "t1", A, {
+    at: T0,
+    report: "report",
+    evidence: PROOF,
+    fence: again.claim.fence,
+  });
+  assert.equal("error" in good, false, good.error);
+  assert.equal(await stateIn(db, "t1"), "review");
+});
+
+test("the counter outlives the claim, and only ever counts up", async () => {
+  // It lives in its own table for this reason: the claim row is deleted on release, on pass and on
+  // approve, and a number that went back to zero with it would not be a fence at all.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const seen = [];
+  for (let i = 0; i < 3; i++) {
+    const got = await next(db, A, { at: T0 });
+    seen.push(got.claim.fence);
+    await release(db, "t1", { account: "me", at: T0 });
+  }
+  assert.deepEqual(
+    seen,
+    [...seen].sort((x, y) => x - y),
+    "the generations come back in order",
+  );
+  assert.equal(new Set(seen).size, seen.length, "no generation is handed out twice");
+});
+
+test("resuming a claim keeps its generation, and progress renews with it", async () => {
+  // A restarted session in the same worktree takes its card back. That is the same claim, so its
+  // number must not move — the worktree still holds what it was given.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const first = await next(db, A, { at: T0 });
+  const resumed = await next(db, A, { at: T0 });
+  assert.equal(resumed.resumed, true);
+  assert.equal(resumed.claim.fence, first.claim.fence);
+
+  assert.ok(await renew(db, "t1", A, { at: T0, note: "still here", fence: first.claim.fence }));
+  assert.equal(
+    await renew(db, "t1", A, { at: T0, note: "stale", fence: first.claim.fence + 1 }),
+    null,
+    "a number that is not the current one renews nothing",
+  );
+});
+
+test("a client too old to send a generation still works", async () => {
+  // An agent on a CLI from before the migration has no number to send. Refusing it would break
+  // every session mid-task on the day this shipped, so it is checked when present and not before.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  await next(db, A, { at: T0 });
+  assert.ok(await renew(db, "t1", A, { at: T0, note: "no number" }));
+  const done = await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF });
+  assert.equal("error" in done, false, done.error);
+});
+
+test("a stale agent cannot pass back work somebody else is doing", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  // A handoff is not released by its author the way a task is — it is passed back. Same shape:
+  // the claim goes away and the same agent can take it again, which is where ABA lives.
+  const first = await take(db, "h1", B, { at: T0 });
+  await pass(db, "h1", B, { at: T0, why: "wrong repo", fence: first.claim.fence });
+  const second = await take(db, "h1", B, { at: T0 });
+  assert.equal(second.resumed, false, "the claim went away, so this is a new one");
+  assert.ok(second.claim.fence > first.claim.fence);
+
+  const stale = await pass(db, "h1", B, { at: T0, why: "not mine", fence: first.claim.fence });
+  assert.equal(stale.status, 409);
+  assert.match(stale.error, /released and taken again/);
+  const live = await db.prepare("SELECT agent_id FROM claim WHERE guide_id = ?").bind("h1").first();
+  assert.equal(live?.agent_id, "agent-b", "the live claim is still there");
+});
+
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {
   const db = d1();
   const guide = seed(db);

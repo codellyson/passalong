@@ -57,7 +57,11 @@ public one, for agents *using* Passalong rather than changing it.
   - `src/og.ts` reads its fonts through the `ASSETS` binding, which is **apps/web's** assets now.
   - `src/claims.ts` — the task queue (`docs/V2.md`): claim, lease, gate, `blocked_by`. Imports no
     sibling so `test/claims.test.mjs` can run it against real SQLite with every migration. The lock
-    is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked.
+    is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked. Each
+    claim also carries a generation from `claim_fence` (migration 0029): `take` hands it out, the
+    CLI keeps it in `.passalong/held.json`, and `progress`, `hand_in` and `pass` send it back, so
+    the same agent's write from a claim that was since released and re-taken is refused. It is
+    optional on the way in and checked when present — an older CLI has none to send.
   - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running
     local server (`npm run test:e2e`, skipped by `npm test`). It puts its accounts on a plan in the
     *local* D1 with `wrangler d1 execute --local`, so it refuses any API that is not localhost.

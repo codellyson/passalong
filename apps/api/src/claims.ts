@@ -132,6 +132,8 @@ export interface ClaimRow {
   evidence: string;
   /** The same evidence against the lines it answers, as JSON. Empty when it was sent as one block. */
   checks: string;
+  /** The claim's generation. 0 on a claim taken before 0029_claim_fence.sql existed. */
+  fence: number;
   report_id: string;
   pr: string;
   claimed_at: string;
@@ -196,6 +198,45 @@ export function stateOf(
 
 const leaseFrom = (at: string, ms = LEASE_MS) => new Date(Date.parse(at) + ms).toISOString();
 
+/**
+ * The next generation number for this guide in this place. See migrations/0029_claim_fence.sql.
+ *
+ * Counts up and never goes back, because the counter outlives every claim on that card — the claim
+ * row is deleted on release, on pass and on approve, and a number that reset with it would let the
+ * same agent's stale write match a later claim. A take that then loses the race burns a number,
+ * which costs nothing: what matters is that no number is ever handed out twice.
+ */
+async function nextFence(db: D1Database, id: string, place: string): Promise<number> {
+  await db
+    .prepare(
+      `INSERT INTO claim_fence (guide_id, place, held) VALUES (?, ?, 1)
+       ON CONFLICT(guide_id, place) DO UPDATE SET held = held + 1`,
+    )
+    .bind(id, place)
+    .run();
+  const row = await db
+    .prepare("SELECT held FROM claim_fence WHERE guide_id = ? AND place = ?")
+    .bind(id, place)
+    .first<{ held: number }>();
+  return row?.held ?? 1;
+}
+
+/**
+ * What a write has to satisfy to count as coming from the agent that holds the claim.
+ *
+ * `fence` is optional on the way in and checked when it is there: an agent on a CLI older than
+ * migration 0029 has no number to send, and refusing it would break every session mid-task on the
+ * day this shipped. `0` is what those claims carry, and a claim taken since carries a real number,
+ * so a stale write from a re-taken card is refused while an old client still works. Requiring it
+ * is the follow-up, once published clients carry it.
+ */
+const heldBy = (fence?: number) => (typeof fence === "number" ? " AND fence = ?" : "");
+
+/** What the agent is told when its number is not the current one: it is holding a stale card. */
+const STALE =
+  "this agent no longer holds that: it was released and taken again since. Take it again — " +
+  "what you did is still in the worktree, and nothing here was overwritten.";
+
 // A task the account may see: its own, or one shared to a team it is in.
 const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
   (SELECT team_id FROM membership WHERE account_id = ?1)))`;
@@ -257,11 +298,13 @@ export async function next(
 
   for (const task of results) {
     const lease = leaseFrom(at);
+    // A task's place is '', so the counter is per task. Burned when the insert below loses.
+    const fence = await nextFence(db, task.id, "");
     const res = await db
       .prepare(
         `INSERT INTO claim (guide_id, account_id, agent_id, host, repo, worktree, state,
-                            claimed_at, lease_until, updated)
-         VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?)
+                            claimed_at, lease_until, updated, fence)
+         VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?, ?)
          ON CONFLICT(guide_id, place) DO NOTHING`,
       )
       .bind(
@@ -274,6 +317,7 @@ export async function next(
         at,
         lease,
         at,
+        fence,
       )
       .run();
     if (res.meta.changes === 1) {
@@ -395,11 +439,12 @@ export async function take(
   }
 
   const place = task ? "" : repo;
+  const fence = await nextFence(db, id, place);
   const res = await db
     .prepare(
       `INSERT INTO claim (guide_id, place, account_id, agent_id, host, repo, worktree, state,
-                          claimed_at, lease_until, updated)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?)
+                          claimed_at, lease_until, updated, fence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?, ?)
        ON CONFLICT(guide_id, place) DO NOTHING`,
     )
     .bind(
@@ -413,6 +458,7 @@ export async function take(
       at,
       leaseFrom(at, leaseMs),
       at,
+      fence,
     )
     .run();
   if (res.meta.changes === 1) {
@@ -510,12 +556,12 @@ export async function renew(
   db: D1Database,
   id: string,
   who: Agent,
-  { at, note }: { at: string; note: string | null },
+  { at, note, fence }: { at: string; note: string | null; fence?: number },
 ): Promise<ClaimRow | null> {
   const res = await db
     .prepare(
       `UPDATE claim SET lease_until = ?, updated = ?, note = COALESCE(?, note)
-        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
+        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
       leaseFrom(at),
@@ -524,6 +570,7 @@ export async function renew(
       id,
       who.agent,
       who.account,
+      ...(typeof fence === "number" ? [fence] : []),
     )
     .run();
   return res.meta.changes === 1 ? claimFor(db, id, who) : null;
@@ -551,6 +598,7 @@ export async function finish(
     checks = [],
     pr = "",
     note = "",
+    fence,
   }: {
     at: string;
     report: string;
@@ -559,6 +607,8 @@ export async function finish(
     checks?: Check[];
     pr?: string;
     note?: string;
+    /** The claim's generation, from take. Checked when it is there. See 0029_claim_fence.sql. */
+    fence?: number;
   },
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
   // Checks are evidence, so a hand-in that brings them has brought it: `evidence` is filled from
@@ -583,7 +633,7 @@ export async function finish(
     .prepare(
       `UPDATE claim SET state = 'review', report_id = ?, pr = ?, evidence = ?, checks = ?,
               note = COALESCE(NULLIF(?, ''), note), updated = ?
-        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
+        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
       report,
@@ -607,13 +657,21 @@ export async function finish(
       id,
       who.agent,
       who.account,
+      ...(typeof fence === "number" ? [fence] : []),
     )
     .run();
-  if (res.meta.changes !== 1)
+  if (res.meta.changes !== 1) {
+    // Two ways to miss, and they read differently to whoever is holding the worktree: the card was
+    // taken away, or it was taken away and given back and this write belongs to the claim before.
+    const now = await claimFor(db, id, who);
     return {
       status: 409,
-      error: "this agent does not hold that task — it was released, or never taken here",
+      error:
+        typeof fence === "number" && now && now.fence !== fence
+          ? STALE
+          : "this agent does not hold that task — it was released, or never taken here",
     };
+  }
   const claim = await claimFor(db, id, who);
   return claim ? { claim } : { status: 409, error: "the claim went away while finishing" };
 }
@@ -867,7 +925,7 @@ export async function pass(
   db: D1Database,
   id: string,
   who: Agent,
-  { at, why }: { at: string; why: string },
+  { at, why, fence }: { at: string; why: string; fence?: number },
 ): Promise<{ kind: string; author: string } | { error: string; status: 400 | 409 }> {
   const reason = String(why ?? "")
     .trim()
@@ -875,6 +933,8 @@ export async function pass(
   if (!reason)
     return { status: 400, error: "say why you are passing it, so whoever is next knows" };
   const c = await claimFor(db, id, who);
+  // Passing gives the card back, so a stale one would hand back work somebody else is doing.
+  if (c && typeof fence === "number" && c.fence !== fence) return { status: 409, error: STALE };
   const g = await db
     .prepare("SELECT kind, account_id, markdown FROM guide WHERE id = ?")
     .bind(id)
@@ -914,14 +974,15 @@ export async function handIn(
     note,
     evidence,
     person = false,
-  }: { at: string; note: string; evidence: string; person?: boolean },
+    fence,
+  }: { at: string; note: string; evidence: string; person?: boolean; fence?: number },
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
   const bad = person ? null : evidenceProblem(evidence);
   if (bad) return { status: 400, error: bad };
   const res = await db
     .prepare(
       `UPDATE claim SET state = 'review', evidence = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
-        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
+        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
       String(evidence ?? "")
@@ -934,12 +995,19 @@ export async function handIn(
       id,
       who.agent,
       who.account,
+      ...(typeof fence === "number" ? [fence] : []),
     )
     .run();
   const claim = res.meta.changes === 1 ? await claimFor(db, id, who) : null;
-  return claim
-    ? { claim }
-    : { status: 409, error: "this agent does not hold that — take it first, or it was taken back" };
+  if (claim) return { claim };
+  const now = await claimFor(db, id, who);
+  return {
+    status: 409,
+    error:
+      typeof fence === "number" && now && now.fence !== fence
+        ? STALE
+        : "this agent does not hold that — take it first, or it was taken back",
+  };
 }
 
 /** One call worth making next, when to make it, and what it has to carry. */

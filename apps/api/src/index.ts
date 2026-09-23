@@ -3905,6 +3905,10 @@ function heldView(
     state: claim.state,
     note: claim.note,
     lease_until: claim.lease_until,
+    // The claim's generation. The CLI keeps it and sends it back with progress, hand_in and pass;
+    // a write carrying the wrong one is a write from a claim that has since been released and
+    // re-taken. See migrations/0029_claim_fence.sql.
+    fence: claim.fence,
     ...(g.markdown !== undefined ? { markdown: g.markdown } : {}),
   };
 }
@@ -3980,7 +3984,11 @@ app.put("/v1/guides/:id/progress", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
   const note = typeof who.note === "string" ? who.note : null;
-  const claim = await claims.renew(c.env.DB, c.req.param("id"), who, { at: now(), note });
+  const claim = await claims.renew(c.env.DB, c.req.param("id"), who, {
+    at: now(),
+    note,
+    fence: fenceIn(who.fence),
+  });
   if (!claim) return stopWith(c, "this agent does not hold that — stop working on it");
   const kind = await c.env.DB.prepare("SELECT kind FROM guide WHERE id = ?")
     .bind(claim.guide_id)
@@ -4008,6 +4016,10 @@ app.put("/v1/guides/:id/progress", async (c) => {
  * `exit` beside it is an agent saying what it would have run, which is the claim this exists to
  * replace.
  */
+/** The generation an agent says it is holding, when its client is new enough to have one. */
+const fenceIn = (raw: unknown): number | undefined =>
+  typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : undefined;
+
 function checksIn(raw: unknown): claims.Check[] {
   if (!Array.isArray(raw)) return [];
   return (raw as unknown[])
@@ -4049,6 +4061,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
       report,
       evidence,
       checks,
+      fence: fenceIn(who.fence),
       pr: typeof who.pr === "string" ? who.pr : "",
       note,
     });
@@ -4078,7 +4091,12 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   const bad = claims.evidenceProblem(evidence);
   if (bad) return err(c, 400, bad);
   await recordVerdict(c, found.row, who.ok, note);
-  await claims.handIn(c.env.DB, found.row.id, who, { at, note, evidence });
+  await claims.handIn(c.env.DB, found.row.id, who, {
+    at,
+    note,
+    evidence,
+    fence: fenceIn(who.fence),
+  });
   await claimEvidenceShots(c, who.account, found.row.id, evidence);
   return c.json({
     id: found.row.id,
@@ -4098,7 +4116,11 @@ app.post("/v1/guides/:id/pass", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
   const why = typeof who.why === "string" ? who.why : "";
-  const r = await claims.pass(c.env.DB, found.row.id, who, { at: now(), why });
+  const r = await claims.pass(c.env.DB, found.row.id, who, {
+    at: now(),
+    why,
+    fence: fenceIn(who.fence),
+  });
   // Passing a handoff nobody took is still a real answer to its sender: not me, and why.
   if ("error" in r && !(r.status === 409 && found.row.kind !== "task" && !found.owner))
     return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
