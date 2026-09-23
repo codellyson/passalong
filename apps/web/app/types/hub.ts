@@ -198,6 +198,8 @@ export interface Task {
     note: string;
     /** What it ran and what came back, sent with the hand-in. Empty until it hands in. */
     evidence?: string;
+    /** The same evidence against the Acceptance line each piece answers, when the agent sorted it. */
+    checks?: { check: string; ran: string }[];
     report: string;
     report_title?: string;
     report_url?: string;

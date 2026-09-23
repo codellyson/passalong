@@ -19,7 +19,7 @@
 -->
 <script setup lang="ts">
 import type { Task } from "~/types/hub";
-import { checkLines, codeParts, type Sections } from "~/utils/task-docs";
+import { checkLines, codeParts, matchChecks, type Sections } from "~/utils/task-docs";
 
 const props = defineProps<{ tasks: Task[] }>();
 const { onApprove, onReject, onRelease } = useHub();
@@ -72,6 +72,17 @@ onMounted(() => {
 });
 const asked = computed(() => checkLines(docs.value?.task?.Acceptance));
 const claimed = computed(() => checkLines(docs.value?.report?.Verification));
+/**
+ * Each line the task asked for, with the evidence the agent filed against it.
+ *
+ * The old screen put what was asked in one column, what the write-up claimed in another, and the
+ * whole run in a block underneath — so a reviewer read "the sixth is refused with 429" and then
+ * went looking for `429` in a wall of output, once per line. The agent knows which output answers
+ * which line; since 0028 it can say so, and this is where that pays.
+ */
+const paired = computed(() => matchChecks(asked.value, selected.value?.claim?.checks ?? []));
+/** Only when the agent sorted it: an older hand-in still has one block, and gets the old screen. */
+const perLine = computed(() => (selected.value?.claim?.checks?.length ?? 0) > 0);
 // Documents that belong to the item you just left count as not loaded, rather than showing its lines.
 const loading = computed(
   () =>
@@ -211,7 +222,65 @@ const press =
       <template v-if="selected.state === 'review'">
         <p v-if="loading" class="m-0 font-ui text-sm text-muted">Loading the task and its write-up…</p>
         <template v-else>
-          <div class="grid gap-6 md:grid-cols-2">
+          <!-- Line against line: what was asked, and what ran for it. One row per Acceptance
+               line, the evidence under the line it answers, so the reviewer's eye never has to
+               carry `429` from one column to a block of output at the bottom of the page. -->
+          <ol v-if="perLine" class="m-0 list-none p-0">
+            <li
+              v-for="(row, i) in paired.rows"
+              :key="row.asked"
+              class="border-b border-line py-3 first:pt-0 last:border-b-0"
+            >
+              <div class="flex items-start gap-2">
+                <AppIcon
+                  :name="row.ran ? 'check' : 'x'"
+                  class="mt-0.5 shrink-0"
+                  :class="row.ran ? 'text-ok' : 'text-muted'"
+                />
+                <span class="grow font-ui text-sm" :class="flagged.has(i) ? 'text-danger' : 'text-fg'">
+                  <template v-for="(p, k) in codeParts(row.asked)" :key="k"
+                    ><code v-if="p.code" class="font-code text-xs">{{ p.text }}</code
+                    ><template v-else>{{ p.text }}</template></template
+                  >
+                </span>
+                <!-- Quiet until used: a full button on every line outweighed the lines. -->
+                <button
+                  class="inline-flex shrink-0 items-center gap-1 rounded-1 border-0 px-1.5 py-0.5 font-ui text-xs"
+                  :class="[
+                    press,
+                    flagged.has(i)
+                      ? 'bg-danger-soft text-danger'
+                      : 'bg-transparent text-muted hover:bg-surface hover:text-fg',
+                  ]"
+                  :aria-pressed="flagged.has(i)"
+                  :aria-label="flagged.has(i) ? 'Marked not met. Undo' : 'Mark this line not met'"
+                  @click="flag(i)"
+                >
+                  <template v-if="flagged.has(i)">not met<AppIcon name="x" :size="12" /></template>
+                  <template v-else>not met?</template>
+                </button>
+              </div>
+              <!-- The gap is the point of the screen: a line with nothing under it says so. -->
+              <HubEvidence v-if="row.ran" :text="row.ran" />
+              <p v-else class="mt-2 mb-0 font-ui text-xs text-warn">
+                Nothing was handed in for this line.
+              </p>
+            </li>
+          </ol>
+
+          <section v-if="perLine && paired.extra.length" class="mt-5">
+            <h3 class="m-0 font-ui text-xs font-semibold tracking-widest text-muted uppercase">
+              Also ran · {{ paired.extra.length }}
+            </h3>
+            <!-- Evidence that answers no line it was asked for. Kept, and kept apart: it is often
+                 the thing worth reading, and it is never a reason a check was met. -->
+            <div v-for="e in paired.extra" :key="e.check" class="mt-3">
+              <p class="m-0 font-ui text-sm text-fg">{{ e.check }}</p>
+              <HubEvidence :text="e.ran" />
+            </div>
+          </section>
+
+          <div v-else-if="!perLine" class="grid gap-6 md:grid-cols-2">
             <section>
               <h3 class="m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted">
                 You asked for · {{ asked.length }}
@@ -282,10 +351,9 @@ const press =
             </section>
           </div>
 
-          <!-- Both columns above are the agent's word: what the task asked, and what the write-up
-               says it checked. This is the run itself, so it sits under them rather than beside
-               one of them, and it is shown as it was sent — output is read, not paraphrased. -->
-          <section v-if="selected.claim?.evidence" class="mt-6">
+          <!-- The older shape, for a hand-in that sent one block of evidence rather than sorting
+               it: both columns above are the agent's word, and this is the run itself. -->
+          <section v-if="!perLine && selected.claim?.evidence" class="mt-6">
             <h3 class="m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted">
               What it ran
             </h3>

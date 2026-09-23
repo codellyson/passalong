@@ -1143,7 +1143,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
   const doHandIn = (args: {
     id: string;
     agent: string;
-    evidence: string;
+    evidence?: string;
+    checks?: { check: string; ran: string }[];
     ok?: boolean;
     note?: string;
     report?: string;
@@ -1153,6 +1154,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       agent: args.agent,
       note: args.note ?? "",
       evidence: args.evidence ?? "",
+      ...(args.checks?.length ? { checks: args.checks } : {}),
       ...(args.report ? { report: args.report, pr: args.pr ?? "" } : {}),
       ...(typeof args.ok === "boolean" ? { ok: args.ok } : {}),
     });
@@ -1211,15 +1213,29 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       annotations: ADDS,
       outputSchema: finishOut,
       description:
-        "Done here, with proof. `evidence` is required on every hand-in: what you ran and what " +
-        "came back. A task also takes `report`, the id of a transfer guide you published about " +
-        "the work (publish_guide it first) — its author reviews it against Acceptance. A handoff " +
-        "or a bug takes `ok`, whether its Verification held, and `note` saying what went wrong " +
-        "when it did not.",
+        "Done here, with proof. Every hand-in carries what you ran and what came back. On a TASK " +
+        "send `checks`: one entry per Acceptance line, each with that line and the evidence for " +
+        "it — that is what its author reads, line against line, instead of hunting through a wall " +
+        "of output for the part that answers each one. `evidence` is the same thing as one block, " +
+        "for a handoff or a bug, which have no Acceptance lines; send it when you are not sending " +
+        "`checks`. A task also takes `report`, the id of a transfer guide you published about the " +
+        "work (publish_guide it first). A handoff or a bug takes `ok`, whether its Verification " +
+        "held, and `note` saying what went wrong when it did not.",
       inputSchema: {
         id: z.string(),
         agent: AGENT,
-        evidence: EVIDENCE,
+        evidence: EVIDENCE.optional(),
+        checks: z
+          .array(
+            z.object({
+              check: z
+                .string()
+                .describe("the Acceptance line this answers, in the task's own words"),
+              ran: EVIDENCE,
+            }),
+          )
+          .optional()
+          .describe("task: one entry per Acceptance line, in the order you worked them"),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),
         report: z.string().optional().describe("task: id of the transfer guide about this work"),

@@ -3667,6 +3667,22 @@ const NO_AGENT =
   "worktree's .passalong/agent.json";
 
 /** One task as the API answers it: where it is, and who has it. */
+/** A claim's `checks` column as a list. Anything unreadable is nothing, never half a list. */
+function readChecks(raw: string): { check: string; ran: string }[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (c): c is { check: string; ran: string } =>
+        typeof (c as { check?: unknown })?.check === "string" &&
+        typeof (c as { ran?: unknown })?.ran === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
 function taskView(
   task: { id: string; title: string; target: string; status: string; created: string },
   claim: claims.ClaimRow | null,
@@ -3686,6 +3702,9 @@ function taskView(
           worktree: claim.worktree,
           note: claim.note,
           evidence: claim.evidence,
+          // Parsed here, once: the hub reads a list, and a screen that has to JSON.parse a column
+          // is a screen that has to decide what to do when it does not parse.
+          checks: readChecks(claim.checks),
           report: claim.report_id,
           pr: claim.pr,
           claimed_at: claim.claimed_at,
@@ -3794,6 +3813,7 @@ app.post("/v1/tasks/:id/finish", async (c) => {
     at: now(),
     report,
     evidence: typeof who.evidence === "string" ? who.evidence : "",
+    checks: Array.isArray(who.checks) ? (who.checks as claims.Check[]) : [],
     pr: typeof who.pr === "string" ? who.pr : "",
     note: typeof who.note === "string" ? who.note : "",
   });
@@ -3987,6 +4007,17 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   const note = typeof who.note === "string" ? who.note.trim().slice(0, NOTE_MAX) : "";
 
   const evidence = typeof who.evidence === "string" ? who.evidence : "";
+  // Evidence against the line it answers, when the agent sorted it that way. Anything that is not
+  // a pair of strings is dropped rather than refused: the block of text is still required, so a
+  // malformed extra cannot leave a hand-in with nothing to read.
+  const checks = Array.isArray(who.checks)
+    ? (who.checks as unknown[])
+        .filter((c): c is { check: string; ran: string } => {
+          const o = c as { check?: unknown; ran?: unknown };
+          return typeof o?.check === "string" && typeof o?.ran === "string";
+        })
+        .slice(0, 50)
+    : [];
 
   if (found.row.kind === "task") {
     const report = typeof who.report === "string" ? who.report.trim() : "";
@@ -3995,6 +4026,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
       at,
       report,
       evidence,
+      checks,
       pr: typeof who.pr === "string" ? who.pr : "",
       note,
     });

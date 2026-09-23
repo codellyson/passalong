@@ -1,0 +1,18 @@
+-- Evidence against the line it proves, rather than in one block underneath.
+--
+-- `evidence` (0025) is what the agent ran, as one piece of text. It answered "is this work real"
+-- and left "does it meet what I asked for" to the reviewer: they read an Acceptance line — "the
+-- sixth is refused with 429" — and then went hunting for `429` in a wall of output, line by line,
+-- for every line they asked for. That is the whole job of the review screen, done by hand.
+--
+-- So a hand-in may also say which evidence belongs to which check: a JSON array of
+-- `[{ "check": "...", "ran": "..." }]`, in the order the agent worked them. JSON in a column and
+-- not a table because nothing queries inside it — it is read whole, with the claim, by the one
+-- screen that shows it, and a table would buy joins nobody makes at the cost of rows to keep in
+-- step with a claim that already comes and goes as a unit.
+--
+-- `evidence` stays, and stays required: a handoff and a bug have no Acceptance lines to answer, so
+-- for them the block of text is the only shape there is. When a task hands in checks, `evidence`
+-- holds them flattened, so every surface that already reads it — the CLI, the handed-in row, the
+-- hub's older markup — keeps working without knowing about this column.
+ALTER TABLE claim ADD COLUMN checks TEXT NOT NULL DEFAULT '';
