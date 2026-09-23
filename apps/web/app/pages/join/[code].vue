@@ -6,8 +6,13 @@
   work to is suggested from it and can be changed; it used to be a required field in a strict
   format, explained with a CLI flag, and it was where people got stuck.
 
-  No password: the account lives in this browser until they add one in Settings. The terminal tool
-  is one link away for people who want it, not a four-command block competing with the button.
+  Email and password are asked for here, because an account is a thing you sign in to. They used to
+  be deferred — name only, and a band on the hub asking for a password afterwards — which made the
+  first thing a new teammate read a chore about account recovery, before they had anything worth
+  recovering. Someone arriving with an account that already has a password is not asked again.
+
+  The terminal tool is one link away for people who want it, not a four-command block competing
+  with the button.
 -->
 <script setup lang="ts">
 const route = useRoute();
@@ -49,6 +54,8 @@ interface Me {
   handle: string;
   name: string;
   email: string;
+  /** Already signed in with a password: they are joining a team, not making an account. */
+  has_password?: boolean;
 }
 
 async function call<T>(
@@ -74,6 +81,9 @@ const me = ref<Me | null>(null);
 const name = ref("");
 const handle = ref("");
 const email = ref("");
+const password = ref("");
+/** Someone who already has a password is joining a team, not making an account. */
+const needsPassword = computed(() => !me.value?.has_password);
 /** Once someone edits the @name themselves, typing their name stops overwriting it. */
 const handleTouched = ref(false);
 const editingHandle = ref(false);
@@ -125,9 +135,17 @@ async function submit() {
     const patch: Record<string, string> = {};
     if (handle.value && handle.value !== who.handle) patch.handle = handle.value;
     if (name.value.trim() && name.value.trim() !== who.name) patch.name = name.value.trim();
-    if (email.value.trim()) patch.email = email.value.trim();
     if (Object.keys(patch).length) {
       me.value = await call<Me>("/v1/me", { method: "PATCH", body: patch });
+    }
+    // The email is set here rather than in the PATCH above, so that one refusal covers both it and
+    // the password: an address another account already uses is the same problem either way, and
+    // hearing about it twice in two different sentences is worse than hearing it once.
+    if (needsPassword.value) {
+      await call("/v1/auth/password", {
+        method: "POST",
+        body: { email: email.value.trim(), password: password.value },
+      });
     }
     await call(`/v1/invites/${encodeURIComponent(code.value)}/accept`, { method: "POST" });
     location.assign("/hub");
@@ -181,19 +199,37 @@ async function submit() {
           <span class="muted">2 to 31 lowercase letters, numbers or dashes.</span>
         </label>
 
-        <label>
-          Email <span class="muted">optional</span>
-          <input v-model="email" name="email" type="email" placeholder="ada@example.com" autocomplete="email" />
-          <span class="muted">Only used to tell you when something is sent to you.</span>
+        <label v-if="needsPassword">
+          Email
+          <input
+            v-model="email"
+            name="email"
+            type="email"
+            required
+            placeholder="ada@example.com"
+            autocomplete="email"
+          />
+          <span class="muted">You sign in with this, and it is where we tell you about work sent to you.</span>
+        </label>
+
+        <label v-if="needsPassword">
+          Password
+          <input
+            v-model="password"
+            name="password"
+            type="password"
+            required
+            placeholder="choose a password"
+            autocomplete="new-password"
+          />
         </label>
 
         <button class="btn primary" type="submit" :disabled="busy">
           {{ busy ? "Joining…" : `Join ${team}` }}
         </button>
         <p v-if="error" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-3 font-ui text-sm text-danger">{{ error }}</p>
-        <p class="muted">
-          This browser keeps you signed in. Add a password later in Settings to sign in anywhere
-          else.
+        <p v-if="needsPassword" class="muted">
+          That is the whole account. You can sign in from anywhere with it.
         </p>
       </form>
 

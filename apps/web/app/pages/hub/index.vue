@@ -249,10 +249,11 @@ const list =
 
 <template>
   <HubShell :heading="first ? 'Get started' : ''">
-    <!-- A token-only account cannot sign in from any other browser, whichever of the two this page
-         is showing. -->
-    <HubClaim />
-
+    <!-- No password band here. An account gets an email and a password when it is made — the
+         invite page asks for both — so the only accounts without one now are the ones made before
+         that, and `passalong login`'s, which is a token and signs in with a token. Settings has
+         the form for them, under Sign-in. Asking on the board made the first thing a new teammate
+         read a chore about account recovery, before they had anything worth recovering. -->
     <HubFirstRun v-if="first" />
 
     <div v-else class="flex flex-col gap-6">
