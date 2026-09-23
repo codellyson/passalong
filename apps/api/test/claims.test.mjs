@@ -13,8 +13,6 @@ import {
   blockOn,
   checksProblem,
   closeGuide,
-  STALE_SENT_MS,
-  staleSent,
   dropOutside,
   evidenceProblem,
   finish,
@@ -30,7 +28,9 @@ import {
   release,
   renew,
   repoKey,
+  STALE_SENT_MS,
   sendBackHandedIn,
+  staleSent,
   stalled,
   stateOf,
   steps,
@@ -682,7 +682,9 @@ test("a sent guide nothing happened to is closed by the clock; one in play is no
   const old = new Date(Date.parse(T0) - STALE_SENT_MS - 60_000).toISOString();
   const sent = (id, over = {}) => {
     guide(id, { kind: "transfer", target: "", created: old, ...over });
-    db.raw.prepare("UPDATE guide SET updated = ?, to_account_id = ? WHERE id = ?").run(old, "other", id);
+    db.raw
+      .prepare("UPDATE guide SET updated = ?, to_account_id = ? WHERE id = ?")
+      .run(old, "other", id);
   };
 
   sent("untouched");
