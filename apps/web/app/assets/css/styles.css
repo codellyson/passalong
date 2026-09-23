@@ -2064,6 +2064,34 @@ article.prose details.rest > summary {
   color: var(--muted);
 }
 
+/* Somebody ran this guide and it did not hold. Above the Steps, and in the danger colour, because
+   it is the one thing a reader has to know before following them — the page showed no verdict at
+   all before this, so a guide already found broken read as authoritative and the only way to warn
+   anyone was to publish a second guide titled "Correction: …". */
+.notworking {
+  margin: 0 0 var(--s-6);
+  padding: var(--s-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-3);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.notworking time {
+  font-variant-numeric: tabular-nums;
+}
+
+.notworking-ran {
+  margin: var(--s-2) 0 0;
+  padding: var(--s-3);
+  border-radius: var(--r-2);
+  background: var(--bg);
+  color: var(--fg);
+  font: var(--t-xs) / 1.6 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* The seam in the verify view: the point where the guide stops being re-ordered and goes back to
    the author's own sequence. Set apart from the prose because it is the page talking, not the
    guide. */

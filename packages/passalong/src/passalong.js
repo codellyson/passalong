@@ -815,11 +815,21 @@ export async function activity({ all = false, limit = 50 } = {}) {
  * `done` says "I implemented it", a verdict says "I tried it and it holds up" — or does not.
  * A failing verdict needs a note; "it doesn't work" without a reason helps nobody.
  */
+/**
+ * Say whether a guide held, and why at the length that takes.
+ *
+ * The reason used to be one field, capped at 280 characters by the row it was written for — so an
+ * agent that had run the Verification and found it did not hold published a guide called
+ * "Correction: …" instead, because measurements, commands and commit ids do not fit in a tweet.
+ * The first line is the summary a row shows; the whole thing is what the guide shows.
+ */
 export async function verdict(id, ok, note = "") {
   if (!api.loggedIn()) throw new PassalongError("verdicts need sync — run `passalong login` first");
-  if (!ok && !note.trim())
-    throw new PassalongError("say what went wrong: passalong failed <id> <what happened>");
-  return api.verdict(await resolveId(id), ok, note.trim());
+  const said = note.trim();
+  if (!ok && !said)
+    throw new PassalongError("say what went wrong: passalong broken <id> <what happened>");
+  const line = said.split("\n")[0].slice(0, 280);
+  return api.verdict(await resolveId(id), ok, line, said.length > line.length ? said : "");
 }
 
 /**

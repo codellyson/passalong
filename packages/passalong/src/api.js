@@ -176,8 +176,11 @@ export const setStatus = (id, status) =>
   call(`/v1/guides/${id}/status`, { method: "PATCH", body: { status } });
 export const remove = (id) => call(`/v1/guides/${id}`, { method: "DELETE" });
 /** Does it actually work? `note` is required when it does not. */
-export const verdict = (id, ok, note = "") =>
-  call(`/v1/guides/${id}/verdict`, { method: "PUT", body: { ok, note } });
+export const verdict = (id, ok, note = "", detail = "") =>
+  call(`/v1/guides/${id}/verdict`, {
+    method: "PUT",
+    body: { ok, note, ...(detail ? { detail } : {}) },
+  });
 
 export const tasks = () => call("/v1/tasks");
 export const nextTask = (body) => call("/v1/tasks/next", { method: "POST", body });

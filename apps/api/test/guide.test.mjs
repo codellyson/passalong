@@ -251,6 +251,36 @@ test("an empty list is written as one, not left as the old value", () => {
   assert.deepEqual(parseMeta(out).tags, []);
 });
 
+test("a correction is a verdict with room, shown on the guide", async () => {
+  // The page never rendered a verdict, so a guide somebody had already found broken still read as
+  // authoritative to the next reader — and `note` is capped at 280 characters, the width of the
+  // row it was written for. Between them, the only way to warn anyone was to publish a second
+  // guide titled "Correction: …" and hope they followed the link.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("async function recordVerdict");
+  const fn = src.slice(at, at + 1400);
+  assert.match(fn, /detail = "", checks = ""/, "a verdict carries why, at the length that takes");
+  assert.match(fn, /INSERT INTO verdict[\s\S]*detail, checks/, "and stores both");
+
+  // A failing hand-in already collected the evidence; it lands on the verdict now, not only the
+  // claim, which is what makes the guide able to show it.
+  const handIn = src.slice(src.indexOf('app.post("/v1/guides/:id/hand_in"'));
+  const route = handIn.slice(0, handIn.indexOf("\napp."));
+  assert.match(route, /recordVerdict\([\s\S]*detail: evidence/, "the hand-in feeds the verdict");
+
+  // And the page asks for them. Without this the rest is a column nobody reads.
+  const page = await readFile(
+    new URL("../../web/server/api/guide/[id]/[key].get.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(page, /FROM verdict\s*\n\s*WHERE guide_id = \? AND ok = 0/, "only the failures");
+  assert.doesNotMatch(
+    page,
+    /SELECT[^;]*account_id[^;]*FROM verdict/,
+    "and nobody is named: the key in the URL is the whole authorisation, so this page is public",
+  );
+});
+
 test("nothing a stranger does to your guide happens in silence", async () => {
   // Checked against the source because the Hono app is not importable from a test — see the note
   // in hosts.ts. What is pinned is the rule, not the wording: every mutation a person who is not
