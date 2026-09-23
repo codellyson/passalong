@@ -18,6 +18,14 @@ public one, for agents *using* Passalong rather than changing it.
     publish route writes it back into the document. Nothing downstream may re-decide — six places
     used to, and one of them guessed `task`. `validate()` refuses a guide with no kind, which can
     now only be one built field by field in code.
+
+    **That is the rule for every field whose absence means something**, not a fact about `kind`:
+    the default is applied at the boundary, the answer is written into the record, and nothing
+    downstream applies it again. `packages/passalong/test/one-place.test.js` enforces it by reading
+    the source, and `Meta.kind` in `apps/api/src/guide.ts` is non-optional so the type says it too.
+    A fallback that is really a caller's invariant rather than a default — the task queue only ever
+    hands out tasks — is written as the constant it is, where it is relied on. Add a field to that
+    test's `GUARDED` list the day absence starts speaking for it.
     **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both,
     and `fixtures/guides/` is what now checks you did.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.

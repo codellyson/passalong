@@ -37,11 +37,15 @@ export interface Meta {
   source_context?: string;
   url?: string;
   /**
-   * What this guide is for: "bug", "task" or "transfer" (the default, and what an absent value
-   * means).
-   * The receiving agent behaves differently for each — see KINDS in packages/passalong/src/guide.js.
+   * What this guide is for: "bug", "task" or "transfer". The receiving agent behaves differently
+   * for each — see KINDS in packages/passalong/src/guide.js.
+   *
+   * Not optional. `parseMeta` seeds it on every path, including the early return for a document
+   * with no frontmatter, so a Meta that came from a document always says what it is. The type is
+   * where that guarantee is kept: leaving it optional invited every caller to answer `undefined`
+   * for itself, which is the whole of what went wrong.
    */
-  kind?: string;
+  kind: string;
   /**
    * The guide this one came out of — see migrations/0015_lineage.sql. A chain, not a set: the
    * parent is an ordinary guide somebody pulled, and this is what they learned doing it.

@@ -675,8 +675,10 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       children: childCounts.get(r.id) || 0,
       area: r.area || "",
       severity: r.severity || "",
-      // Empty means transfer, which is what every guide written before bug reports existed is.
-      kind: r.kind || "transfer",
+      // No fallback. Every row has a kind — migration 0023 backfilled the ones written before the
+      // column, and every write since goes through parseMeta, which seeds it. A `|| "transfer"`
+      // here would be this file restating a rule guide.js owns, and a second place to change.
+      kind: r.kind,
       verdict: latest
         ? {
             ok: Boolean(latest.ok),
@@ -3081,7 +3083,7 @@ app.put("/v1/guides/:id", async (c) => {
   // that decision into the document rather than leaving the next reader to make it again. A guide
   // written before kinds existed gains one the first time it is shared, which is the only moment
   // anything here is allowed to change somebody's markdown.
-  markdown = setField(markdown, "kind", meta.kind ?? "transfer");
+  markdown = setField(markdown, "kind", meta.kind);
   // `parseMeta` already normalised what it read, so this writes the one style back into the
   // document the author will pull again. It is a no-op when they already agree, which is every
   // publish after the first.
@@ -3987,10 +3989,15 @@ app.post("/v1/take", async (c) => {
     if (!got) return c.json({ guide: null, ...claims.steps("", "nothing") });
     count(c, "task_claimed", { resumed: got.resumed });
     if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
+    // The queue hands out tasks and nothing else — next()'s SQL says `g.kind = 'task'` — so the
+    // fallback below is that invariant, not a guess about an empty kind.
     const row = await c.env.DB.prepare("SELECT kind, share_key FROM guide WHERE id = ?")
       .bind(got.task.id)
       .first<{ kind: string; share_key: string }>();
-    const kind = row?.kind || "task";
+    // Not a default: next() selects `g.kind = 'task'` and returns nothing else, so this is the
+    // queue's invariant written down where it is relied on. Reading it off the row and falling
+    // back would be a second opinion about what an absent kind means.
+    const kind = "task";
     return c.json({
       guide: {
         ...heldView(base, { ...got.task, kind, share_key: row?.share_key }, got.claim),
