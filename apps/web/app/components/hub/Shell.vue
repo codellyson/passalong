@@ -195,7 +195,9 @@ const active = (to: string) =>
     </div>
   </div>
 
-  <main :class="measure">
+  <!-- Less room above than the 48px every other page gets: those open on a heading with nothing
+       over it, and this one opens under a navbar that is already a band of its own. -->
+  <main class="pt-6" :class="measure">
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->
