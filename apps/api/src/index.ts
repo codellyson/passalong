@@ -4181,14 +4181,16 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   if (!who.ok && !note) return err(c, 400, "Say what went wrong, so the author knows what to fix.");
   if (found.owner) return err(c, 403, "This is your own guide: there is nobody to hand it in to.");
   // Evidence before the verdict is recorded: a refused hand-in must leave nothing behind, or the
-  // author is told "it worked" by a call that did not go through.
-  const bad = claims.evidenceProblem(evidence);
+  // author is told "it worked" by a call that did not go through. Checks are evidence sorted
+  // against the Verification line each one answers, and bringing them is bringing it.
+  const bad = checks.length ? claims.checksProblem(checks) : claims.evidenceProblem(evidence);
   if (bad) return err(c, 400, bad);
   await recordVerdict(c, found.row, who.ok, note);
   await claims.handIn(c.env.DB, found.row.id, who, {
     at,
     note,
     evidence,
+    checks,
     fence: fenceIn(who.fence),
   });
   await claimEvidenceShots(c, who.account, found.row.id, evidence);
@@ -4393,6 +4395,10 @@ app.get("/v1/handed_in", async (c) => {
       worktree: r.claim.worktree,
       note: r.claim.note,
       evidence: r.claim.evidence,
+      // The same evidence sorted against the Verification line each part answers, when the agent
+      // sent it that way. The flat block stays, because a hand-in from before this, or from a
+      // person in the browser, has only that.
+      checks: r.claim.checks,
       at: r.claim.updated,
     })),
   });

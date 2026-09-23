@@ -235,6 +235,8 @@ export interface Working {
 
 /** A handoff or bug you wrote that somebody handed in, waiting on you. See GET /v1/handed_in. */
 export interface HandedIn {
+  /** The evidence sorted against the `## Verification` line each part answers, as JSON. */
+  checks?: string;
   id: string;
   title: string;
   kind: string;

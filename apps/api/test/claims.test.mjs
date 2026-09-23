@@ -601,6 +601,74 @@ test("releasing a task still writes where the work was left", async () => {
   assert.doesNotMatch(hmd, /Review notes/, "a handoff's document is left alone");
 });
 
+test("a handoff answers its Verification line by line, the way a task answers Acceptance", async () => {
+  // A task has had this since migration 0028. A handoff — the product's main artifact — answered
+  // with a boolean and a paragraph, so the expectation was a list and the response was prose. An
+  // agent that had read a guide and done the work had no shape to fill and no way to tell when it
+  // was finished, and improvised: a second published guide titled "Hand-in evidence: …", or `pass`
+  // with a note. Same field, same column, same rule.
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  const ada = { account: "me", agent: "agent-ada", repo: "o/r" };
+  await take(db, "h1", ada, { at: T0 });
+
+  const checks = [
+    { check: "the sixth request is refused with 429", ran: "$ curl -si … → HTTP/1.1 429" },
+    {
+      check: "the retry header names a wait",
+      ran: "$ curl -sI … | grep -i retry-after\nRetry-After: 60",
+      cmd: "curl -sI localhost:3001/v1/accounts",
+      exit: 0,
+      ok: true,
+    },
+  ];
+  const done = await handIn(db, "h1", ada, { at: T0, note: "both hold", evidence: "", checks });
+  assert.equal("error" in done, false, done.error);
+
+  const kept = JSON.parse(done.claim.checks);
+  assert.equal(kept.length, 2);
+  assert.equal(kept[0].check, "the sixth request is refused with 429");
+  assert.equal(kept[1].cmd, "curl -sI localhost:3001/v1/accounts", "a run check keeps its command");
+  assert.equal(kept[1].exit, 0);
+
+  // Every surface older than `checks` reads the flattened block, so it has to be filled from them.
+  assert.match(done.claim.evidence, /429/);
+  assert.match(done.claim.evidence, /Retry-After/);
+});
+
+test("a handoff's checks are held to the same rule as a task's", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  const ada = { account: "me", agent: "agent-ada", repo: "o/r" };
+  await take(db, "h1", ada, { at: T0 });
+
+  // "it works" under a Verification line is the same claim it always was, filed more neatly.
+  const weak = await handIn(db, "h1", ada, {
+    at: T0,
+    note: "done",
+    evidence: "",
+    checks: [{ check: "the badge reads 3", ran: "it works" }],
+  });
+  assert.equal(weak.status, 400);
+  assert.match(weak.error, /what you ran and what came back/);
+  // The claim's own column, not stateIn(): that reads a task's board position from the guide's
+  // status, and a handoff has no such column.
+  const still = await db.prepare("SELECT state FROM claim WHERE guide_id = ?").bind("h1").first();
+  assert.equal(still.state, "claimed", "a refused hand-in leaves it held");
+
+  // And a check whose command did not hold is not a check that passed.
+  const failed = await handIn(db, "h1", ada, {
+    at: T0,
+    note: "done",
+    evidence: "",
+    checks: [{ check: "tests pass", ran: "$ npm test\n1 failing", cmd: "npm test", exit: 1, ok: false }],
+  });
+  assert.equal(failed.status, 400);
+  assert.match(failed.error, /did not hold/);
+});
+
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {
   const db = d1();
   const guide = seed(db);
