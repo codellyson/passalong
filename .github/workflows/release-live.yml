@@ -1,0 +1,94 @@
+# Is the newest release actually on npm?
+#
+# release.yml stages a version and stops there, because npm's trusted-publishing registration for
+# this package is stage-only: CI may stage, a person approves with 2FA. That is the right shape —
+# it is what lets the release run unattended — and it has one failure mode, which this exists for.
+#
+# The staging run goes green. A green run reads as shipped. So v0.4.0 and v0.7.0 were tagged,
+# staged, and never approved: two versions that exist in git, do not exist on npm, and nothing ever
+# said so. The only notice was a step summary on a run that passed, and nobody opens the summary of
+# a run that passed.
+#
+# So the question is asked on a clock instead, and asked of the registry, which is the only thing
+# that knows. It fails, and keeps failing, until `npm install passalong` would get the version the
+# newest tag names. GitHub emails the repo owner when a scheduled workflow fails on the default
+# branch, which is the loud part.
+#
+# Only the newest tag. Older gaps are history a person has to decide about — publishing a
+# superseded version, or living with it — and a check that stays red about a decision already made
+# teaches people to ignore it, which is how this happened in the first place.
+name: release-live
+
+on:
+  schedule:
+    # Daily, at a minute nothing else here uses.
+    - cron: "47 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      # Tags, and enough history to date them.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: The newest tag should be installable
+        env:
+          # How long after tagging a staged version may go unapproved before this complains.
+          # Long enough to be asleep when the release ran; short enough that it is still the same
+          # piece of work when the mail arrives.
+          GRACE_HOURS: "6"
+        run: |
+          set -euo pipefail
+
+          tag="$(git tag --list 'v*' --sort=-creatordate | head -n1)"
+          if [ -z "$tag" ]; then
+            echo "no v* tags yet — nothing to check" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          version="${tag#v}"
+
+          if npm view "passalong@$version" version >/dev/null 2>&1; then
+            echo "### passalong@$version is live" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Not on npm. Whether that is a problem depends on how long it has been true: a release
+          # cut twenty minutes ago is waiting for somebody to wake up, not stuck.
+          tagged="$(git log -1 --format=%ct "$tag")"
+          hours=$(( ( $(date +%s) - tagged ) / 3600 ))
+          if [ "$hours" -lt "$GRACE_HOURS" ]; then
+            echo "::notice title=Waiting for approval::passalong@$version was tagged ${hours}h ago and is staged, not live."
+            {
+              echo "### passalong@$version is staged, not live"
+              echo
+              echo "Tagged ${hours}h ago. Still within the ${GRACE_HOURS}h grace period, so this is not failing yet."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::error title=Release never published::passalong@$version was tagged ${hours}h ago and is still not on npm."
+          {
+            echo "### passalong@$version was never published"
+            echo
+            echo "Tagged **${hours}h ago** by \`$tag\`, staged by release.yml, and still not on npm —"
+            echo "so \`npm i -g passalong\` gives people an older build, and nothing else would have said so."
+            echo
+            echo "Approve it — 2FA either way:"
+            echo
+            echo '```sh'
+            echo 'npm stage list passalong'
+            echo 'npm stage approve <stage-id>'
+            echo '```'
+            echo
+            echo "Or npmjs.com → passalong → Staged Packages → Approve."
+            echo
+            echo "If that version is superseded and should never ship, delete the tag so the newest"
+            echo "one is the one you mean: \`git push origin :refs/tags/$tag\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
