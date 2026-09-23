@@ -663,7 +663,9 @@ test("a handoff's checks are held to the same rule as a task's", async () => {
     at: T0,
     note: "done",
     evidence: "",
-    checks: [{ check: "tests pass", ran: "$ npm test\n1 failing", cmd: "npm test", exit: 1, ok: false }],
+    checks: [
+      { check: "tests pass", ran: "$ npm test\n1 failing", cmd: "npm test", exit: 1, ok: false },
+    ],
   });
   assert.equal(failed.status, 400);
   assert.match(failed.error, /did not hold/);
