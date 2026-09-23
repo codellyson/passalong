@@ -1,5 +1,12 @@
 <!--
-  Who is working on what: every guide someone holds right now, of every kind, one line per taker.
+  Who has what: every guide someone has taken and not yet handed in, of every kind, one line per
+  taker.
+
+  It was called "Working now", which was wrong about the rows that matter most. A stalled card —
+  nobody heard from its agent in thirty minutes — is precisely not working now, and it is on this
+  list on purpose, because it is the one you act on. `take` is the product's verb and "took it 3h
+  ago" is what the rows already say, so `Taken` is what the panel is. It also pairs with Open,
+  which is its complement: nobody has it, somebody does.
 
   A task has one taker; a handoff can be repeated once in each repo, so it can show twice, once per
   repo (claims.working, GET /v1/working). An agent holds one thing at a time, so a line is an agent
@@ -64,10 +71,10 @@ const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "
 </script>
 
 <template>
-  <section v-if="props.rows.length" aria-labelledby="working-h" class="scroll-mt-4">
+  <section v-if="props.rows.length" aria-labelledby="taken-h" class="scroll-mt-4">
     <!-- The same heading as the hub's other sections: this is one of them. -->
-    <h2 v-if="!props.bare" id="working-h" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
-      Working now
+    <h2 v-if="!props.bare" id="taken-h" class="m-0 flex items-baseline gap-2 text-h3 font-bold text-fg">
+      Taken
       <span class="font-ui text-sm font-normal text-muted tabular-nums">{{ props.rows.length }}</span>
     </h2>
     <p class="mt-1 mb-3 font-ui text-sm text-muted" :class="props.bare ? 'mt-0' : ''">Each agent holds one thing until it hands it in; people can hold several.</p>

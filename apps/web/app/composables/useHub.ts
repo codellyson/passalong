@@ -459,7 +459,7 @@ function build(queryClient: QueryClient) {
    *
    * `onRelease` is the same call reached from a task's own row. This one exists because a handoff
    * has no such row: the guide lists know who acknowledged one, which is not who holds the claim,
-   * so Working now is the only place the author can act on the truth.
+   * so Taken is the only place the author can act on the truth.
    */
   const onTakeBack = (w: Working) =>
     change(
