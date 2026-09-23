@@ -156,8 +156,10 @@ test("a task is a brief with Acceptance and no Steps", () => {
   assert.ok(validate(open).some((e) => /## Acceptance/.test(e)));
 });
 
-test("a guide with no kind is still a transfer guide", () => {
-  assert.equal(parse(SAMPLE).meta.kind, undefined);
+test("a guide with no kind is read as a transfer guide, and then says so", () => {
+  // It used to come back undefined and be decided again by every reader — six of them, and one
+  // decided `task`. Now the read decides once and the document carries the answer.
+  assert.equal(parse(SAMPLE).meta.kind, "transfer");
   assert.deepEqual(validate(parse(SAMPLE)), []);
   // ...and a transfer guide still requires the Steps a bug refuses.
   assert.ok(
@@ -267,7 +269,9 @@ test("a parent survives the round trip and sits with the provenance fields", () 
 
 test("a parent is optional, and a malformed one is caught before publish", () => {
   const guide = {
-    meta: { id: "k3mq2xa7", title: "One", tags: [] },
+    // Built by hand rather than parsed, so it says its kind: nothing reaches validate() without
+    // one unless code left it out, and that is what the rule is for.
+    meta: { id: "k3mq2xa7", title: "One", kind: "transfer", tags: [] },
     body: "## Problem\nx\n\n## Steps\ny",
   };
   assert.deepEqual(validate(guide), [], "no parent at all is the ordinary case");

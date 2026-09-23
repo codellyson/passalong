@@ -64,22 +64,22 @@ const NORMALISED = [
   {
     why: "a key the format does not know keeps its place after the ones it does",
     from: "---\nurl: https://a.test\nid: aaaaaaaa\ntitle: T\n---\n\n## Problem\np\n",
-    to: '---\nid: aaaaaaaa\ntitle: T\nstack_assumptions: []\ntags: []\nurl: "https://a.test"\n---\n\n## Problem\np\n',
+    to: '---\nid: aaaaaaaa\ntitle: T\nkind: transfer\nstack_assumptions: []\ntags: []\nurl: "https://a.test"\n---\n\n## Problem\np\n',
   },
   {
     why: "a timestamp is quoted, because a bare one has colons in it",
     from: "---\nid: aaaaaaaa\ntitle: T\ncreated: 2026-01-02T03:04:05.000Z\n---\n\n## Problem\np\n",
-    to: '---\nid: aaaaaaaa\ntitle: T\ncreated: "2026-01-02T03:04:05.000Z"\nstack_assumptions: []\ntags: []\n---\n\n## Problem\np\n',
+    to: '---\nid: aaaaaaaa\ntitle: T\nkind: transfer\ncreated: "2026-01-02T03:04:05.000Z"\nstack_assumptions: []\ntags: []\n---\n\n## Problem\np\n',
   },
   {
     why: "tags are one style: lowercase, hyphenated, deduped once two spellings become one",
     from: '---\nid: aaaaaaaa\ntitle: T\ntags: [Rate_Limit, rate limit, "", rate-limit]\n---\n\n## Problem\np\n',
-    to: "---\nid: aaaaaaaa\ntitle: T\nstack_assumptions: []\ntags: [rate-limit]\n---\n\n## Problem\np\n",
+    to: "---\nid: aaaaaaaa\ntitle: T\nkind: transfer\nstack_assumptions: []\ntags: [rate-limit]\n---\n\n## Problem\np\n",
   },
   {
     why: "a list written as a block sequence comes back inline",
     from: "---\nid: aaaaaaaa\ntitle: T\nstack_assumptions:\n- hono\n- d1\n---\n\n## Problem\np\n",
-    to: "---\nid: aaaaaaaa\ntitle: T\nstack_assumptions: [hono, d1]\ntags: []\n---\n\n## Problem\np\n",
+    to: "---\nid: aaaaaaaa\ntitle: T\nkind: transfer\nstack_assumptions: [hono, d1]\ntags: []\n---\n\n## Problem\np\n",
   },
   {
     // Pinned as it is, not as it might be nicer. The frontmatter is read line by line on `\r?\n`
@@ -88,12 +88,12 @@ const NORMALISED = [
     // Windows, which is the silent rewrite this corpus exists to make visible rather than commit.
     why: "CRLF leaves the frontmatter and stays in the body",
     from: "---\r\nid: aaaaaaaa\r\ntitle: T\r\n---\r\n\r\n## Problem\r\np\r\n",
-    to: "---\nid: aaaaaaaa\ntitle: T\nstack_assumptions: []\ntags: []\n---\n\n## Problem\r\np\n",
+    to: "---\nid: aaaaaaaa\ntitle: T\nkind: transfer\nstack_assumptions: []\ntags: []\n---\n\n## Problem\r\np\n",
   },
   {
     why: "a document with no frontmatter is a body, and gets the fields every guide has",
     from: "## Problem\np\n",
-    to: "---\nstack_assumptions: []\ntags: []\n---\n\n## Problem\np\n",
+    to: "---\nkind: transfer\nstack_assumptions: []\ntags: []\n---\n\n## Problem\np\n",
   },
 ];
 

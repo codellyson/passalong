@@ -3077,6 +3077,11 @@ app.put("/v1/guides/:id", async (c) => {
   const url = shareUrl(base, { id, share_key });
   markdown = setField(markdown, "url", url);
   if (!meta.id) markdown = setField(markdown, "id", id);
+  // And what it is. `parseMeta` has already decided — absent reads as transfer — so this writes
+  // that decision into the document rather than leaving the next reader to make it again. A guide
+  // written before kinds existed gains one the first time it is shared, which is the only moment
+  // anything here is allowed to change somebody's markdown.
+  markdown = setField(markdown, "kind", meta.kind ?? "transfer");
   // `parseMeta` already normalised what it read, so this writes the one style back into the
   // document the author will pull again. It is a no-op when they already agree, which is every
   // publish after the first.

@@ -138,7 +138,11 @@ test("the demo sign-in cannot exist anywhere it was not deliberately turned on",
   // escaping a .dev.vars into somewhere real is still not enough on its own.
   assert.match(body, /c\.env\.DEMO_LOGIN !== "1"/, "the flag must be checked, and exactly");
   assert.match(body, /hostname/, "the host must be checked too");
-  assert.match(body, /return c\.notFound\(\)/, "a door that is not open should not announce itself");
+  assert.match(
+    body,
+    /return c\.notFound\(\)/,
+    "a door that is not open should not announce itself",
+  );
 
   // Both in one condition: two separate ifs would let a later edit drop one and still read as
   // guarded.

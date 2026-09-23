@@ -14,6 +14,10 @@ public one, for agents *using* Passalong rather than changing it.
 - `packages/passalong` — the `passalong` CLI and the MCP server. Plain ESM JavaScript, no build step,
   no runtime deps beyond `@modelcontextprotocol/sdk` + `zod`. Published to npm as `passalong`.
   - `src/guide.js` — the guide format: frontmatter parse/serialize, validation, ids, template.
+    `kind` is decided once, on read: absent means `transfer`, `parseFrontmatter` seeds it, and the
+    publish route writes it back into the document. Nothing downstream may re-decide — six places
+    used to, and one of them guessed `task`. `validate()` refuses a guide with no kind, which can
+    now only be one built field by field in code.
     **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both,
     and `fixtures/guides/` is what now checks you did.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.

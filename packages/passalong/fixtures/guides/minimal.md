@@ -1,6 +1,7 @@
 ---
 id: m1n1m4l0
 title: The smallest thing that is still a guide
+kind: transfer
 stack_assumptions: []
 tags: []
 ---
