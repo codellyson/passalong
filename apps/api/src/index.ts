@@ -3517,13 +3517,37 @@ const TASK_TOOLS =
  * "It worked" or "it didn't", from someone who tried it: stored, receipted, and told to the author
  * and the room. Shared by the verdict route and hand_in, so either way the author hears the same.
  */
-async function recordVerdict(c: Ctx & { env: Env }, row: GuideRow, ok: boolean, note: string) {
+/**
+ * Somebody's standing answer to "does this guide hold?", and the report behind it.
+ *
+ * `note` is the line a row shows and stays short. `detail` and `checks` are why, at the length
+ * that takes — see migrations/0030_verdict_detail.sql. A failing hand-in already collects both;
+ * before this they landed on the claim, where only the author could see them, and the guide itself
+ * said nothing, so the only way to warn the next reader was to publish a second guide.
+ */
+async function recordVerdict(
+  c: Ctx & { env: Env },
+  row: GuideRow,
+  ok: boolean,
+  note: string,
+  { detail = "", checks = "" }: { detail?: string; checks?: string } = {},
+) {
   const account = c.get("account");
   await c.env.DB.prepare(
-    `INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note, at = excluded.at`,
+    `INSERT INTO verdict (guide_id, account_id, ok, note, detail, checks, at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note,
+       detail = excluded.detail, checks = excluded.checks, at = excluded.at`,
   )
-    .bind(row.id, account, ok ? 1 : 0, note, now())
+    .bind(
+      row.id,
+      account,
+      ok ? 1 : 0,
+      note,
+      String(detail ?? "").slice(0, claims.EVIDENCE_MAX),
+      String(checks ?? "").slice(0, claims.EVIDENCE_MAX * 2),
+      now(),
+    )
     .run();
   await recordReceipt(c, row, "verdict");
 
@@ -3611,7 +3635,11 @@ app.put("/v1/guides/:id/verdict", async (c) => {
   if (!found) return err(c, 404, GUIDE_GONE);
   if (found.row.kind === "task") return err(c, 400, TASK_TOOLS);
   const account = c.get("account");
-  const body = (await c.req.json().catch(() => ({}))) as { ok?: boolean; note?: string };
+  const body = (await c.req.json().catch(() => ({}))) as {
+    ok?: boolean;
+    note?: string;
+    detail?: string;
+  };
   if (typeof body.ok !== "boolean")
     return err(c, 400, 'Say whether it worked: send {"ok": true} or {"ok": false}.');
   const note = (body.note || "").trim().slice(0, NOTE_MAX);
@@ -3620,7 +3648,11 @@ app.put("/v1/guides/:id/verdict", async (c) => {
   if (!body.ok && !note)
     return err(c, 400, "Say what went wrong, so the author knows what to fix.");
 
-  await recordVerdict(c, found.row, body.ok, note);
+  // What the row shows is one line; what the guide shows can be the whole report. A correction
+  // that did not fit in 280 characters is exactly why people published them as guides instead.
+  await recordVerdict(c, found.row, body.ok, note, {
+    detail: typeof body.detail === "string" ? body.detail.trim() : "",
+  });
   // Said in the browser by the person holding it: that is handing it in, so the hold moves to
   // waiting on the author, who closes it or sends it back. No hold, nothing to move.
   await claims.handIn(
@@ -4185,7 +4217,12 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   // against the Verification line each one answers, and bringing them is bringing it.
   const bad = checks.length ? claims.checksProblem(checks) : claims.evidenceProblem(evidence);
   if (bad) return err(c, 400, bad);
-  await recordVerdict(c, found.row, who.ok, note);
+  // The evidence the agent just sent, on the verdict as well as the claim. This is the correction
+  // channel: a hand-in that says it did not hold now carries what was run, and the guide shows it.
+  await recordVerdict(c, found.row, who.ok, note, {
+    detail: evidence,
+    checks: checks.length ? JSON.stringify(checks) : "",
+  });
   await claims.handIn(c.env.DB, found.row.id, who, {
     at,
     note,

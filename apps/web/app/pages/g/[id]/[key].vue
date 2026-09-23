@@ -112,6 +112,8 @@ const author = computed(() => str(meta.value?.author) || "the sender");
 const followUp = computed(() => followUpAsk(id.value));
 /** More context added to this guide, oldest first, and the guide this one adds context to. */
 const followUps = computed(() => guide.value?.followUps ?? []);
+/** Standing verdicts saying it does not hold, with what was run. See the server route. */
+const failing = computed(() => guide.value?.failing ?? []);
 const parent = computed(() => guide.value?.parent ?? null);
 
 // ---- the dock ----------------------------------------------------------------------------------
@@ -336,6 +338,30 @@ usePage({
           </div>
           <a :href="dockHref(base, openOrder)" class="font-ui text-sm whitespace-nowrap">Read it in order</a>
         </div>
+
+        <!-- Above the Steps, because it is what somebody about to follow them needs first.
+             The page showed no verdict at all before this, so a guide already found broken read as
+             authoritative to the next reader, and the only way to warn them was to publish a
+             second guide titled "Correction: …". Nobody is named: the key in the URL is the whole
+             authorisation, so this page is as public as the link. -->
+        <aside v-if="failing.length" class="notworking">
+          <p class="m-0 font-ui text-sm font-semibold">
+            {{ failing.length === 1 ? "Somebody tried this and it did not hold" : `${failing.length} people tried this and it did not hold` }}
+          </p>
+          <div v-for="(f, i) in failing" :key="i" class="mt-3">
+            <p class="m-0 font-ui text-sm">
+              <time :datetime="f.at">{{ f.at.slice(0, 10) }}</time
+              ><template v-if="f.note"> — {{ f.note }}</template>
+            </p>
+            <ul v-if="f.checks.length" class="m-0 mt-2 list-none p-0">
+              <li v-for="(c, j) in f.checks" :key="j" class="mt-2">
+                <p class="m-0 font-ui text-sm font-medium">{{ c.check }}</p>
+                <pre class="notworking-ran">{{ c.ran }}</pre>
+              </li>
+            </ul>
+            <pre v-else-if="f.detail" class="notworking-ran">{{ f.detail }}</pre>
+          </div>
+        </aside>
 
         <!-- eslint-disable-next-line vue/no-v-html -- see server/utils/guide-html.ts: the CSP is what
              makes this safe, and it is checked by scripts/probe.sh against a deployed response. -->

@@ -137,9 +137,46 @@ export default defineEventHandler(async (event) => {
   const env = (event.context.cloudflare as { env?: Record<string, string> } | undefined)?.env;
   if (env) event.waitUntil(track(env, "guide_viewed", { view }));
 
+  /**
+   * Standing verdicts that say this does not hold, and the report behind each.
+   *
+   * The page never showed a verdict at all, so a guide somebody had already found broken still
+   * read as authoritative to the next person who opened it — and the only way to warn them was to
+   * publish a second guide titled "Correction: …" and hope they followed the link.
+   *
+   * Nobody is named. The key in this URL is the whole authorisation, so the page is as public as
+   * the link: an author put their own name in their own frontmatter, and a verifier did not put
+   * theirs anywhere. What the next reader needs is that it did not hold and what was run — the
+   * hub, which knows who is asking, names them.
+   */
+  const failing = (
+    (
+      await db(event)
+        .prepare(
+          `SELECT note, detail, checks, at FROM verdict
+            WHERE guide_id = ? AND ok = 0 ORDER BY at DESC LIMIT 5`,
+        )
+        .bind(row.id)
+        .all<{ note: string; detail: string; checks: string; at: string }>()
+    ).results ?? []
+  ).map((v) => ({
+    at: v.at,
+    note: v.note,
+    detail: v.detail,
+    checks: (() => {
+      try {
+        const rows = JSON.parse(v.checks || "[]");
+        return Array.isArray(rows) ? rows.filter((r) => r?.check) : [];
+      } catch {
+        return [];
+      }
+    })(),
+  }));
+
   const body = bodyOf(row.markdown);
   const { html, outline, rest, cut } = renderBody(body, view);
   return {
+    failing,
     id: row.id,
     meta: parseMeta(row.markdown),
     html,
