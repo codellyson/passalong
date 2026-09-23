@@ -11,10 +11,12 @@ import { fileURLToPath } from "node:url";
 import {
   approve,
   blockOn,
+  checksProblem,
   closeHandedIn,
   dropOutside,
   evidenceProblem,
   finish,
+  flatten,
   handedIn,
   handIn,
   LEASE_MS,
@@ -270,6 +272,74 @@ test("a check with nothing behind it is not evidence either", async () => {
   );
   assert.match((await fin([{ check: "it works", ran: "yes" }])).error, /what you ran/i);
   assert.equal(await stateIn(db, "t1"), "claimed", "a refused hand-in leaves it held");
+});
+
+test("a check a runner executed answers for itself, however short its output", async () => {
+  // The length rule exists to catch a sentence standing in for output. `test -f` prints nothing at
+  // all and is the strongest evidence on offer, so a run that happened is exempt from it.
+  assert.equal(checksProblem([{ check: "it builds", ran: "$ test -f dist/app.js" }]) || "", "");
+  assert.match(
+    checksProblem([{ check: "it builds", ran: "ok" }]) || "",
+    /what you ran and what came back/,
+    "prose still has to look like evidence",
+  );
+  assert.equal(
+    checksProblem([
+      {
+        check: "it builds",
+        ran: "$ test -f dist/app.js\n(no output; exited 0)",
+        cmd: "test -f dist/app.js",
+        exit: 0,
+        ok: true,
+      },
+    ]),
+    null,
+  );
+
+  // A command that never ran carries exit: null, and is still a check that does not hold.
+  assert.match(
+    checksProblem([
+      { check: "tests pass", ran: "timed out", cmd: "npm test", exit: null, ok: false },
+    ]) || "",
+    /did not hold/,
+  );
+  assert.match(
+    checksProblem([
+      { check: "tests pass", ran: "$ npm test\n1 failing", cmd: "npm test", exit: 1, ok: false },
+    ]) || "",
+    /a check that failed is not a check that passed/,
+  );
+});
+
+test("a hand-in records what the command returned, and the flattened block says so", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  await next(db, A, { at: T0 });
+  const checks = [
+    {
+      check: "the suite is green",
+      ran: "$ npm test\n42 passing",
+      cmd: "npm test",
+      exit: 0,
+      ok: true,
+    },
+    { check: "the badge reads 3", ran: "opened the hub by hand, it reads 3" },
+  ];
+  const done = await finish(db, "t1", A, { at: T0, report: "report", evidence: "", checks });
+  assert.equal("error" in done, false, done.error);
+
+  const kept = JSON.parse(done.claim.checks);
+  assert.equal(kept[0].cmd, "npm test");
+  assert.equal(kept[0].exit, 0);
+  assert.equal(kept[0].ok, true);
+  // The one nobody ran keeps its shape: no command, so nothing to say about a run.
+  assert.equal("cmd" in kept[1], false);
+
+  // Every surface older than `checks` reads the flattened block, so the exit code has to be in it.
+  assert.match(done.claim.evidence, /\[npm test → exited 0\]/);
+  assert.match(flatten(checks), /the badge reads 3\nopened the hub by hand/);
 });
 
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {

@@ -8,6 +8,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as api from "./api.js";
+import { refusal, runChecks } from "./checks.js";
 import { AREAS, BUG_SECTIONS, parse, SECTIONS, TASK_SECTIONS, template } from "./guide.js";
 import * as passalong from "./passalong.js";
 
@@ -259,15 +260,28 @@ export async function serve() {
 
   async function doHandIn({ id, ok, note, evidence, checks, markdown, report, pr, cwd }) {
     try {
+      // A check that names a command is run here, before anything is recorded, and its exit code
+      // decides it rather than the agent's account of it. A failure is refused with the command's
+      // own output: the claim is still held, nothing is written, and the agent has what it needs
+      // to fix. Checks with no `cmd` pass straight through to the prose rule.
+      const at = cwd || process.cwd();
+      const done = runChecks(checks || [], { cwd: at });
+      if (done.failed)
+        return {
+          content: [
+            { type: "text", text: refusal(done.failed, { ran: done.ran, total: checks.length }) },
+          ],
+          isError: true,
+        };
       const r = await passalong.handIn(id, {
         ok,
         note: note || "",
         evidence: evidence || "",
-        checks: checks || [],
+        checks: done.checks,
         markdown,
         report,
         pr: pr || "",
-        cwd: cwd || process.cwd(),
+        cwd: at,
       });
       return answer(r, id);
     } catch (err) {
@@ -523,7 +537,10 @@ export async function serve() {
         "Done here, with proof. Every hand-in carries what you ran and what came back. On a TASK " +
         "send `checks`: one entry per Acceptance line, each with that line and the evidence for " +
         "it — that is what its author reads, line against line, instead of hunting through a wall " +
-        "of output for the part that answers each one. `evidence` is the same thing as one block, " +
+        "of output for the part that answers each one. Give a check `cmd` when a command proves " +
+        "it: the command is run here before the hand-in lands, a non-zero exit refuses it, and " +
+        "what it printed is recorded instead of your account of it. Use `ran` for a check no " +
+        "command can settle. `evidence` is the same thing as one block, " +
         "for a handoff or a bug, which have no Acceptance lines. A task also takes `markdown`, a " +
         "transfer guide about what you did and decided — this publishes it and attaches it. A " +
         "handoff or a bug takes `ok`, whether its Verification held here, and `note` saying what " +
@@ -542,7 +559,19 @@ export async function serve() {
           .array(
             z.object({
               check: z.string().describe("the Acceptance line this answers, in the task's words"),
-              ran: z.string().describe("what you ran for it, and what came back"),
+              ran: z
+                .string()
+                .optional()
+                .describe("what you ran for it, and what came back; not needed when `cmd` is set"),
+              cmd: z
+                .string()
+                .optional()
+                .describe(
+                  "the shell command that proves this line, run here before the hand-in lands — " +
+                    "its exit code decides the check and its output is recorded as the evidence. " +
+                    "Non-zero refuses the hand-in. Leave it out for a check nobody can run, like " +
+                    '"the badge reads 3", and write `ran` instead',
+                ),
             }),
           )
           .optional()

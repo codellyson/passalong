@@ -294,6 +294,9 @@ export async function taskProgress(id, note, { cwd = process.cwd() } = {}) {
  * write-up and then being refused leaves a guide nobody asked for behind every refused hand-in.
  * The rule and the wording are the server's — see evidenceProblem() in apps/api/src/claims.ts.
  */
+/** A check a runner executed: the command it ran, and what the process returned. See checks.js. */
+const verified = (c) => Boolean(c?.cmd) && (typeof c?.exit === "number" || c?.exit === null);
+
 function requireEvidence(evidence) {
   const said = String(evidence || "").trim();
   if (said.length >= 16) return;
@@ -375,8 +378,10 @@ export async function handIn(
   } = {},
 ) {
   needsSync("handing work in");
-  // Checks are evidence, sorted against the lines they answer: bringing them is bringing it.
-  if (checks.length) checks.forEach((c) => requireEvidence(c?.ran));
+  // Checks are evidence, sorted against the lines they answer: bringing them is bringing it. A
+  // check whose command was actually run is exempt from the length rule — its exit code is the
+  // evidence, and `test -f dist/app.js` exiting 0 says more than any sentence about it would.
+  if (checks.length) checks.forEach((c) => (verified(c) ? null : requireEvidence(c?.ran)));
   else requireEvidence(evidence);
   if (!report && markdown) {
     const g = parse(markdown);
@@ -387,7 +392,16 @@ export async function handIn(
     agent: agent(cwd).agent,
     note,
     evidence,
-    ...(checks.length ? { checks } : {}),
+    ...(checks.length
+      ? {
+          checks: checks.map((c) => ({
+            check: c.check,
+            ran: c.ran,
+            // Only present on a check that was run. The server keeps them apart the same way.
+            ...(verified(c) ? { cmd: c.cmd, exit: c.exit, ok: c.ok } : {}),
+          })),
+        }
+      : {}),
     ...(report ? { report, pr } : {}),
     ...(typeof ok === "boolean" ? { ok } : {}),
   });

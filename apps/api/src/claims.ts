@@ -55,11 +55,27 @@ export function evidenceProblem(text: string): string | null {
  */
 export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "review" | "done";
 
-/** One Acceptance line, and what the agent ran for it. See migrations/0028_evidence_checks.sql. */
+/**
+ * One Acceptance line, and what the agent ran for it. See migrations/0028_evidence_checks.sql.
+ *
+ * `cmd`, `exit` and `ok` are present when a runner executed the check rather than the agent
+ * describing it — packages/passalong/src/checks.js, which runs locally where there is a shell.
+ * `exit` is what the process returned and `ok` is whether the check holds; they are two fields for
+ * the reason SARIF keeps `exitCode` beside `executionSuccessful`, "because not all programs exit
+ * with an exit code of 0 on success and non-0 on failure". `exit` is null when the command never
+ * ran at all, which is not the same as a check that failed.
+ */
 export interface Check {
   check: string;
   ran: string;
+  cmd?: string;
+  exit?: number | null;
+  ok?: boolean;
 }
+
+/** A check a runner executed, as opposed to one the agent wrote about. */
+const verified = (c: Check): boolean =>
+  Boolean(c?.cmd) && (typeof c?.exit === "number" || c?.exit === null);
 
 /**
  * Evidence sorted against the lines it answers, or the reason it is not evidence yet.
@@ -71,6 +87,17 @@ export function checksProblem(checks: Check[]): string | null {
   for (const c of checks) {
     if (!String(c?.check ?? "").trim())
       return "each entry needs `check`: which check it is evidence for, in the task's own words";
+    // A check a runner executed answers for itself. The length rule is there to catch a sentence
+    // standing in for output, and `test -f dist/app.js` exiting 0 is not that — it is the
+    // strongest evidence on offer, and refusing it for being short would push agents back to prose.
+    if (verified(c)) {
+      if (c.ok === false)
+        return (
+          `"${String(c.check).trim().slice(0, 60)}" was handed in with a command that did not ` +
+          "hold: a check that failed is not a check that passed"
+        );
+      continue;
+    }
     const bad = evidenceProblem(c?.ran ?? "");
     if (bad) return `for "${String(c.check).trim().slice(0, 60)}", ${bad}`;
   }
@@ -79,7 +106,16 @@ export function checksProblem(checks: Check[]): string | null {
 
 /** The checks as one block of text, which is what every surface that predates them reads. */
 export const flatten = (checks: Check[]): string =>
-  checks.map((c) => `${c.check.trim()}\n${c.ran.trim()}`).join("\n\n");
+  checks
+    .map((c) => {
+      // The command and what it returned belong in the flattened block too: every surface that
+      // predates `checks` reads only this, and "exited 0" is the part that makes it evidence.
+      const how = verified(c)
+        ? `\n[${c.cmd} → exited ${c.exit === null ? "nothing" : c.exit}]`
+        : "";
+      return `${c.check.trim()}${how}\n${String(c.ran ?? "").trim()}`;
+    })
+    .join("\n\n");
 
 export interface ClaimRow {
   guide_id: string;
@@ -557,7 +593,12 @@ export async function finish(
         ? JSON.stringify(
             checks.map((c) => ({
               check: c.check.trim().slice(0, NOTE_MAX),
-              ran: c.ran.trim().slice(0, EVIDENCE_MAX),
+              ran: String(c.ran ?? "")
+                .trim()
+                .slice(0, EVIDENCE_MAX),
+              ...(verified(c)
+                ? { cmd: String(c.cmd).slice(0, NOTE_MAX), exit: c.exit, ok: c.ok === true }
+                : {}),
             })),
           ).slice(0, EVIDENCE_MAX * 2)
         : "",

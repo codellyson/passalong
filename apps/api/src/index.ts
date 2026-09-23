@@ -3998,6 +3998,38 @@ app.put("/v1/guides/:id/progress", async (c) => {
  * Anything else needs `ok` — did its Verification hold — and a note when it did not, which is the
  * verdict its sender has always heard; the claim, if this agent took it, moves out of working.
  */
+/**
+ * Evidence against the line it answers, when the agent sorted it that way. Anything that is not a
+ * pair of strings is dropped rather than refused: the block of text is still required, so a
+ * malformed extra cannot leave a hand-in with nothing to read.
+ *
+ * A check a local runner executed also carries the command, what the process returned, and whether
+ * it holds (packages/passalong/src/checks.js). Those three are taken only as a set: a `cmd` with no
+ * `exit` beside it is an agent saying what it would have run, which is the claim this exists to
+ * replace.
+ */
+function checksIn(raw: unknown): claims.Check[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[])
+    .filter((c): c is claims.Check => {
+      const o = c as { check?: unknown; ran?: unknown };
+      return typeof o?.check === "string" && typeof o?.ran === "string";
+    })
+    .map((c) => {
+      const o = c as { cmd?: unknown; exit?: unknown; ok?: unknown };
+      const ran = typeof o.cmd === "string" && (typeof o.exit === "number" || o.exit === null);
+      if (!ran) return { check: c.check, ran: c.ran };
+      return {
+        check: c.check,
+        ran: c.ran,
+        cmd: o.cmd as string,
+        exit: o.exit as number | null,
+        ok: o.ok === true,
+      };
+    })
+    .slice(0, 50);
+}
+
 app.post("/v1/guides/:id/hand_in", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
@@ -4007,17 +4039,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   const note = typeof who.note === "string" ? who.note.trim().slice(0, NOTE_MAX) : "";
 
   const evidence = typeof who.evidence === "string" ? who.evidence : "";
-  // Evidence against the line it answers, when the agent sorted it that way. Anything that is not
-  // a pair of strings is dropped rather than refused: the block of text is still required, so a
-  // malformed extra cannot leave a hand-in with nothing to read.
-  const checks = Array.isArray(who.checks)
-    ? (who.checks as unknown[])
-        .filter((c): c is { check: string; ran: string } => {
-          const o = c as { check?: unknown; ran?: unknown };
-          return typeof o?.check === "string" && typeof o?.ran === "string";
-        })
-        .slice(0, 50)
-    : [];
+  const checks = checksIn(who.checks);
 
   if (found.row.kind === "task") {
     const report = typeof who.report === "string" ? who.report.trim() : "";

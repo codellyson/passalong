@@ -32,6 +32,11 @@ public one, for agents *using* Passalong rather than changing it.
     ChatGPT fills file inputs, so the HTTP server also has `create_upload`: a one-time link
     (`POST /v1/uploads`, spent by `PUT /v1/uploads/:token` without a credential) that an agent's
     sandbox sends the file to with curl. See `apps/api/src/uploads.ts`.
+  - `src/checks.js` — runs an Acceptance check's command at hand-in and records the exit code, so
+    a task's verdict is the process's and not the agent's. Local only: `mcp-http.ts` is a Worker
+    with no shell, so a hand-in over HTTP keeps the prose gate. It never reads a command out of a
+    guide — a guide comes from somebody else's account, and running what it says would make every
+    pull remote code execution.
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to

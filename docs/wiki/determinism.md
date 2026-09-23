@@ -306,12 +306,19 @@ that an error occurred and self-correct".
 
 Four changes, in the order they earn their keep.
 
-**1. Run the check instead of reading about it.** `checksProblem()` validates that a string is long
-enough. Give `Check` an optional `cmd`, and when it is present have the tool execute it and record
-the exit code itself, so the agent never reports its own verdict. Record two fields, not one:
-the exit code, and whether the criterion holds. Port SWE-bench's three defences — refuse a result
-whose output claims success while the command exited non-zero, refuse an empty or unparseable run
-rather than reading it as no failures, and do not let a skipped check count as a met one.
+**1. Run the check instead of reading about it.** *Implemented, in
+`packages/passalong/src/checks.js`.* A check may now carry `cmd`. When it does, `hand_in` runs it
+before anything is recorded, and the exit code decides the check rather than the agent's account of
+it. What the process printed is what gets stored, replacing whatever the agent wrote in `ran`. A
+non-zero exit refuses the hand-in with the command's own output, records nothing, and leaves the
+claim held. `exit` and `ok` are stored as two fields even though `ok` is `exit === 0` today, so a
+later rule does not have to rewrite what was already recorded. A command that never ran — a timeout,
+a missing binary — keeps `exit: null`, so "it did not run" stays distinguishable from "it ran and
+found nothing wrong".
+
+Not done, and deliberately: parsing test output. SWE-bench needs 57 per-framework log parsers to
+tell a skipped test from a passing one, and a half-parser that guesses would refuse honest runs and
+pass misread ones. The exit code is the whole verdict here, which is how a CI step decides too.
 
 This has to run where a shell exists. `packages/passalong/src/mcp.js` runs on the agent's machine
 over stdio and can execute the command; `apps/api/src/mcp-http.ts` is a Worker and cannot. So the
