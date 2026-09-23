@@ -17,14 +17,21 @@ export interface PublicPage {
   draft: boolean;
   /** The footer's link text. Absent means the footer does not link it. */
   footer?: string;
+  /**
+   * When this page's copy last changed, as YYYY-MM-DD, for the sitemap's `lastmod`.
+   *
+   * Written by hand and worth only as much as it is kept true: a date that claims every page
+   * changed on every deploy is one a crawler learns to ignore. Change the copy, change the date.
+   */
+  updated: string;
 }
 
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "/", draft: false },
-  { path: "/connect", draft: false },
-  { path: "/docs", draft: true, footer: "Docs" },
-  { path: "/docs/guide-format", draft: true, footer: "Guide format" },
-  { path: "/faq", draft: true, footer: "FAQ" },
+  { path: "/", draft: false, updated: "2026-09-21" },
+  { path: "/connect", draft: false, updated: "2026-09-21" },
+  { path: "/docs", draft: false, footer: "Docs", updated: "2026-09-23" },
+  { path: "/docs/guide-format", draft: false, footer: "Guide format", updated: "2026-09-23" },
+  { path: "/faq", draft: false, footer: "FAQ", updated: "2026-09-23" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */

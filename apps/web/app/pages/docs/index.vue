@@ -1,10 +1,10 @@
 <!--
-  SKELETON — the docs front page. `draft: true` in shared/pages.ts keeps it noindex, out of the
-  sitemap and out of the footer until the copy is written.
+  The docs front page: the searchable home of what otherwise lives in README.md, public/llms.txt
+  and docs/wiki.
 
-  What it is for: the searchable home of what today only lives in README.md, public/llms.txt and
-  docs/wiki. Each rail is one topic with a line of what it covers and where it goes next. Rails that
-  point at pages not written yet say so rather than linking nowhere.
+  Each rail is one topic, a line of what it covers, and where it goes next. A rail whose
+  destination is not written yet says where that material is today rather than linking nowhere —
+  a docs page that promises pages it does not have is worse than a short one.
 
   Script-free like the landing and /connect: its route rule is `noScripts` with the strict CSP.
 -->
@@ -15,11 +15,9 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/docs");
 
 usePage({
-  // TODO(copy): under ~60 characters, and name what someone would search for.
-  title: "Passalong docs — transfer guides for AI coding agents",
-  // TODO(copy): under ~155 characters.
+  title: "Passalong docs — hand work to AI coding agents",
   description:
-    "How to write, send and pick up Passalong guides from the CLI, an MCP server or the API.",
+    "Install it, connect your assistant, and write guides an agent in another repo or session can act on: the format, the four calls, and the API.",
   url: `${APEX}${self.path}`,
   image: `${APEX}/og.png`,
   noindex: self.draft,
@@ -33,48 +31,63 @@ const TOPICS = [
   {
     eyebrow: "Start",
     h: "Install and connect",
-    // TODO(copy): npm i -g passalong, passalong setup, passalong login — and that reading needs nothing.
-    p: "TODO: the three commands, what each one does, and that reading a guide needs no install.",
+    p:
+      "`npm i -g passalong` installs it, `passalong setup` registers the MCP server, the capture " +
+      "skill and the Claude Code hooks, and `passalong login` syncs across machines. Reading a " +
+      "guide somebody sent you needs none of this: a share link opens in a browser, and an agent " +
+      "appends .md to it.",
     href: "/connect",
     link: "Connect your tools",
   },
   {
     eyebrow: "The document",
     h: "The guide format",
-    p: "TODO: one line on frontmatter plus sections, and why the headings are stable.",
+    p:
+      "Markdown with frontmatter, and headings that do not move: Problem, Steps, Verification, " +
+      "Gotchas. They are stable because the receiving agent keys on them — a bug uses Reproduce " +
+      "where a transfer uses Steps, and that difference is load-bearing.",
     href: "/docs/guide-format",
     link: "Read the format",
   },
   {
     eyebrow: "Sending",
     h: "Share a guide",
-    // TODO(copy): passalong share, --to team/handle and #group, "pass this along" in Claude Code, the hub's writer.
-    p: "TODO: share from Claude Code, the CLI or the hub; addressing a person or a group.",
-    href: null,
-    link: "",
+    p:
+      'In Claude Code, say "pass this along" and the capture skill writes the guide from the ' +
+      "session. From a terminal, `passalong share <file>`. Either way `--to team/@handle` asks " +
+      "one person, `--to team/#group` asks the people who do a thing, and `--to team` asks " +
+      "nobody in particular.",
+    href: "/connect",
+    link: "Connect an assistant",
   },
   {
     eyebrow: "Receiving",
     h: "Pick one up and answer",
-    // TODO(copy): start/take/pass, works/broken, done — and that the sender hears each one.
-    p: "TODO: taking or passing, then saying whether it worked.",
+    p:
+      "Four calls, whatever the guide is: take it — which is what tells the sender somebody is on " +
+      "it, and stops a second agent doing the same work — report progress, hand it in with the " +
+      "evidence, or pass it back with the reason. The sender hears each one.",
     href: null,
     link: "",
   },
   {
     eyebrow: "More context",
     h: "Follow-ups and bug reports",
-    // TODO(copy): --follows / parent, file_bugs, kind: bug vs transfer, and attaching screenshots
-    // (per assistant, already written at /connect#screenshots).
-    p: "TODO: adding context to a guide, and filing a set of bugs as one report.",
-    href: null,
-    link: "",
+    p:
+      "A follow-up is more context for a guide, written as its own guide: `passalong share " +
+      "--follows <id>`. Whoever opens the original gets it too. Defects you found but are not " +
+      "fixing go in one call as a report, each becoming a guide somebody can take on its own — " +
+      "with the screenshot attached, not described.",
+    href: "/connect#screenshots",
+    link: "Attaching screenshots",
   },
   {
     eyebrow: "Reference",
     h: "CLI, MCP tools and API",
-    // TODO(copy): decide whether these become /docs/cli and /docs/mcp, or stay in llms.txt.
-    p: "TODO: every command, every MCP tool, and the OpenAPI document.",
+    p:
+      "Every command and every MCP tool is listed in llms.txt, which is written for an agent and " +
+      "reads perfectly well as a person's reference. The HTTP API has an OpenAPI document, for a " +
+      "client that adds no MCP server at all.",
     href: "/v1/openapi.json",
     link: "The API document",
   },
@@ -87,14 +100,15 @@ const TOPICS = [
 
     <header class="hero">
       <p class="eyebrow">Docs</p>
-      <!-- TODO(copy): the h1 should say what the reader will be able to do. -->
       <h1>
-        Everything a guide needs
-        <span class="turn">to get from one context to the next.</span>
+        Write it once,
+        <span class="turn">and have the next agent act on it.</span>
       </h1>
       <p class="lede">
-        TODO: two sentences. What Passalong is, and the three ways to use it — Claude Code, the
-        command line, or any assistant that adds MCP servers.
+        Passalong hands work between AI coding agents: a task nobody has done, a bug to fix, or
+        finished work worth repeating, written so an agent in another repo or a later session can
+        act on it. Use it from Claude Code, from the command line, or from any assistant that adds
+        MCP servers.
       </p>
     </header>
 
@@ -103,7 +117,14 @@ const TOPICS = [
         <p class="eyebrow">{{ t.eyebrow }}</p>
         <h2>{{ t.h }}</h2>
         <div class="say">
-          <p>{{ t.p }}</p>
+          <!-- Backticks in the copy render as code, the way they do everywhere else in the
+               product, rather than as backticks. -->
+          <p>
+            <template v-for="(part, k) in codeParts(t.p)" :key="k"
+              ><code v-if="part.code">{{ part.text }}</code
+              ><template v-else>{{ part.text }}</template></template
+            >
+          </p>
           <p v-if="t.href"><a :href="t.href">{{ t.link }}</a></p>
         </div>
       </section>

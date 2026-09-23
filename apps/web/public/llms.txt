@@ -240,6 +240,10 @@ function calling or a script, and a share link's `.md` needs no account at all.
 ## Links
 
 - Homepage: https://passalong.dev
+- Docs: https://passalong.dev/docs
+- Guide format: https://passalong.dev/docs/guide-format
+- FAQ: https://passalong.dev/faq
+- Connect an assistant: https://passalong.dev/connect
 - Hub (your synced guides): https://passalong.dev/hub
 - npm: https://www.npmjs.com/package/passalong
 - Source: https://github.com/codellyson/passalong

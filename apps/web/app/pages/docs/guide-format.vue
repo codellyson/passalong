@@ -1,10 +1,8 @@
 <!--
-  SKELETON — the guide format, for people. `draft: true` in shared/pages.ts keeps it noindex, out
-  of the sitemap and out of the footer until the copy is written.
+  The guide format, for people. public/llms.txt is the same material written for an agent.
 
-  The facts here are already true and come from public/llms.txt, which is the authority. The format
-  itself is defined in apps/api/src/guide.ts; if a field or heading changes there, this page and
-  llms.txt both change with it. What is still TODO is the prose around the facts.
+  The format itself is defined in apps/api/src/guide.ts; if a field or a heading changes there,
+  this page and llms.txt change with it.
 
   Script-free: route rule `/docs/**` is `noScripts` with the strict CSP.
 -->
@@ -15,9 +13,7 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/docs/guide-format");
 
 usePage({
-  // TODO(copy): under ~60 characters.
-  title: "The Passalong guide format — markdown an agent can act on",
-  // TODO(copy): under ~155 characters.
+  title: "Passalong guide format — markdown agents act on",
   description:
     "Frontmatter fields and section headings for transfer guides, bug reports and tasks, and what a receiving agent does with each.",
   url: `${APEX}${self.path}`,
@@ -28,13 +24,13 @@ usePage({
 /** Frontmatter, in order. From llms.txt "Guide format". */
 const FIELDS = [
   { name: "id", note: "8 characters from a no-lookalike alphabet. An address, not a secret." },
-  { name: "title", note: "TODO(copy)" },
+  { name: "title", note: "What the work accomplishes, as a verb phrase. It is the line in an inbox." },
   { name: "kind", note: "transfer (or absent), bug or task. Read it before acting." },
-  { name: "created", note: "TODO(copy)" },
-  { name: "author", note: "TODO(copy)" },
-  { name: "source_context", note: "TODO(copy): the project the work was done in." },
+  { name: "created", note: "When it was written. Stamped for you; the reader uses it to judge the stack." },
+  { name: "author", note: "Who wrote it, from git. Who to ask when the guide turns out to be wrong." },
+  { name: "source_context", note: "The project and branch the work was done in, as repo@branch." },
   { name: "status", note: "draft or published; consumed is the author's shelf." },
-  { name: "team", note: "TODO(copy)" },
+  { name: "team", note: "The team it is shared with, by slug. Without one it is yours alone." },
   { name: "to", note: "@handle asks one person; #group asks the people who do a thing." },
   {
     name: "stack_assumptions",
@@ -72,7 +68,7 @@ const BUG = [
   { h: "Problem", note: "What is wrong." },
   { h: "Reproduce", note: "How to see the bug. Running it produces the bug; it is not a remedy." },
   { h: "Verification", note: "The behaviour that should have happened." },
-  { h: "Gotchas", note: "TODO(copy)" },
+  { h: "Gotchas", note: "What made it hard to see, and what a fix must not break." },
 ];
 
 /** Task sections, in order. A brief written before the work, so there are no Steps. */
@@ -104,29 +100,56 @@ const TASK_TOOLS = [
   { name: "pass", note: "Not yours, or stuck: give it back with the reason for whoever is next." },
 ];
 
-/** A minimal transfer guide. TODO(copy): replace with a real, short example. */
+/**
+ * A short transfer guide, written out. Short on purpose: the shape is the lesson, and a long
+ * example teaches that guides are long.
+ */
 const EXAMPLE = `---
-title: TODO
+title: Verify Paystack webhooks before trusting them
 kind: transfer
-author: TODO
-source_context: TODO
+author: Ada Lovelace
+source_context: acme/shop@main
 stack_assumptions:
-  - TODO
-tags: [TODO]
+  - Cloudflare Workers, Hono 4
+  - Paystack, live keys in wrangler secrets
+tags: [webhooks, payments, security]
 ---
 
 ## Problem
 
+Any POST to /webhooks/paystack was treated as real, so a forged body could mark an order
+paid. It showed up as one order paid twice, from two different IPs.
+
 ## Solution shape
+
+Verify the signature before reading the body, with the raw bytes rather than the parsed
+JSON — re-serialising changes the bytes and the HMAC never matches.
 
 ## Decisions and rationale
 
+- **Verify in the route, not in middleware**, because only this route has the secret.
+- **Chose HMAC over an IP allowlist**: Paystack's egress addresses change without notice.
+
 ## Steps
+
+1. Read the raw body: \`const raw = await c.req.text()\`.
+2. HMAC-SHA512 it with PAYSTACK_SECRET and compare, in constant time, to the
+   \`x-paystack-signature\` header.
+3. Refuse with 401 before parsing. Only then \`JSON.parse(raw)\`.
 
 ## Verification
 
+\`\`\`sh
+curl -X POST localhost:8787/webhooks/paystack -d '{"event":"charge.success"}'   # 401
+npm test -w apps/api -- webhook                                                # 6 pass
+\`\`\`
+
 ## Gotchas
-`;
+
+Comparing with \`===\` leaks where two signatures diverge, one character at a time. Use a
+constant-time compare. And Paystack sends a test event on save: it is signed with the same
+secret, so a 401 there means the secret is wrong, not that the check works.
+\`;
 </script>
 
 <template>
@@ -140,8 +163,9 @@ tags: [TODO]
         <span class="turn">shaped so the next agent can act on it.</span>
       </h1>
       <p class="lede">
-        TODO: why the format is fixed — the headings are what a receiving agent keys on — and that it
-        is plain markdown you can export and keep.
+        The headings are fixed because they are what a receiving agent keys on: it is told to follow
+        Steps, to run Verification before saying it worked, and never to execute Reproduce. Under
+        that, it is plain markdown — yours to grep, commit, export and keep.
       </p>
     </header>
 
@@ -150,11 +174,19 @@ tags: [TODO]
         <p class="eyebrow">Frontmatter</p>
         <h2>The fields, in order</h2>
         <div class="say">
-          <p>TODO: one sentence on what frontmatter is for here.</p>
+          <p>
+            Frontmatter is what the product reads: who a guide is for, what it is, and what the
+            author's machine was. Everything under it is for the reader.
+          </p>
           <dl class="kinds">
             <template v-for="f in FIELDS" :key="f.name">
               <dt>{{ f.name }}</dt>
-              <dd>{{ f.note }}</dd>
+              <dd>
+                <template v-for="(part, k) in codeParts(f.note)" :key="k"
+                  ><code v-if="part.code">{{ part.text }}</code
+                  ><template v-else>{{ part.text }}</template></template
+                >
+              </dd>
             </template>
           </dl>
         </div>
@@ -164,11 +196,20 @@ tags: [TODO]
         <p class="eyebrow">kind: transfer</p>
         <h2>Finished work to repeat</h2>
         <div class="say">
-          <p>TODO: what the receiver does — follow Steps, adapt assumptions, run Verification, answer.</p>
+          <p>
+            The receiver follows Steps, adapting anything the author marked as an assumption to the
+            codebase in front of it, runs Verification before saying it worked, and answers — which
+            is the half that makes the next guide better.
+          </p>
           <dl class="kinds">
             <template v-for="s in TRANSFER" :key="s.h">
               <dt>## {{ s.h }}</dt>
-              <dd>{{ s.note }}</dd>
+              <dd>
+                <template v-for="(part, k) in codeParts(s.note)" :key="k"
+                  ><code v-if="part.code">{{ part.text }}</code
+                  ><template v-else>{{ part.text }}</template></template
+                >
+              </dd>
             </template>
           </dl>
         </div>
@@ -179,13 +220,20 @@ tags: [TODO]
         <h2>A defect to fix</h2>
         <div class="say">
           <p>
-            TODO: why a bug has Reproduce rather than Steps — Steps is the heading an agent is told
-            to execute.
+            Reproduce, not Steps, and the difference is load-bearing: Steps is the heading an agent
+            is told to execute, and steps that produce a defect are the one list that must never be
+            run as a remedy. An agent that confuses them reproduces the bug, checks Verification,
+            finds it false because the bug is real, and reports the guide as broken.
           </p>
           <dl class="kinds">
             <template v-for="s in BUG" :key="s.h">
               <dt>## {{ s.h }}</dt>
-              <dd>{{ s.note }}</dd>
+              <dd>
+                <template v-for="(part, k) in codeParts(s.note)" :key="k"
+                  ><code v-if="part.code">{{ part.text }}</code
+                  ><template v-else>{{ part.text }}</template></template
+                >
+              </dd>
             </template>
           </dl>
         </div>
@@ -203,7 +251,12 @@ tags: [TODO]
           <dl class="kinds">
             <template v-for="s in TASK" :key="s.h">
               <dt>## {{ s.h }}</dt>
-              <dd>{{ s.note }}</dd>
+              <dd>
+                <template v-for="(part, k) in codeParts(s.note)" :key="k"
+                  ><code v-if="part.code">{{ part.text }}</code
+                  ><template v-else>{{ part.text }}</template></template
+                >
+              </dd>
             </template>
           </dl>
           <p>
@@ -224,8 +277,10 @@ tags: [TODO]
         <h2>Follow-ups</h2>
         <div class="say">
           <p>
-            TODO: a follow-up is a whole guide with <code>parent</code> set, listed under the
-            original; where they disagree, the follow-up is newer.
+            A follow-up is a whole guide — its own id, its own link, its own verdicts — with
+            <code>parent</code> set to the guide it adds to. It is listed under the original, and
+            whoever opens the original gets it too, person or agent. Where the two disagree, the
+            follow-up is the newer fact.
           </p>
         </div>
       </section>
@@ -242,9 +297,22 @@ tags: [TODO]
         <p class="eyebrow">Writing a good one</p>
         <h2>What makes a guide worth picking up</h2>
         <div class="say">
-          <!-- TODO(copy): from llms.txt "Writing a good guide" — one problem per guide, Verification
-               first, Gotchas over Steps, state the environment. -->
-          <p>TODO</p>
+          <ul>
+            <li>
+              <b>One problem per guide.</b> A session that solved three things is three guides.
+            </li>
+            <li>
+              <b>Write Verification first.</b> If you cannot say how to check it, the guide is not
+              ready to send.
+            </li>
+            <li>
+              <b>Gotchas is worth more than Steps.</b> Steps can be re-derived. The dead end that
+              cost an hour cannot.
+            </li>
+            <li>
+              <b>Say what your environment was</b> rather than assuming the reader shares it.
+            </li>
+          </ul>
         </div>
       </section>
     </div>

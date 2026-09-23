@@ -24,7 +24,8 @@ const docsPublished = published("/docs");
 usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
-  title: "Passalong — hand work to your AI agents, and see what came back",
+  // Under ~60 characters: longer than that and a search result cuts it mid-phrase.
+  title: "Passalong — hand work to your AI coding agents",
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:

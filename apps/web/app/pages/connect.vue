@@ -31,11 +31,68 @@ import { published } from "#shared/pages";
 const formatPublished = published("/docs/guide-format");
 
 usePage({
-  title: "Set up Passalong in Claude Code, Cursor, ChatGPT or any MCP app",
+  title: "Set up Passalong in Claude Code, Cursor or any MCP app",
   description:
     "Use Passalong from Claude Code, Cursor, Gemini or any HTTP client — what each one can do, and how to set it up.",
   url: `${APEX}/connect`,
   image: `${APEX}/og.png`,
+});
+
+/**
+ * The page as a HowTo, for a search engine.
+ *
+ * Only the three routes in, in the order the page argues for them, and only what the page itself
+ * says — a step whose text promises more than the section under it is the kind of markup that gets
+ * a site's rich results turned off. Built from one array so the two cannot drift.
+ *
+ * A data block, not script: browsers never execute `application/ld+json`, so this page's CSP, which
+ * allows no script at all, is untouched (server/plugins/csp.ts knows not to count it as one).
+ */
+const WAYS = [
+  {
+    name: "Run it locally",
+    text:
+      "Install the CLI with npm i -g passalong and run passalong setup. It registers the MCP " +
+      "server over stdio, the capture skill and the Claude Code hooks. This is the best of the " +
+      "three: it knows which repo you are in, and it works offline.",
+  },
+  {
+    name: "Point it at a URL",
+    text:
+      "For an assistant that adds remote MCP servers rather than running one, the hosted server " +
+      "is at https://passalong.dev/v1/mcp over Streamable HTTP. Authorise it with OAuth, or with " +
+      "a token minted in your hub under Settings.",
+  },
+  {
+    name: "Call the API",
+    text:
+      "Anything that speaks HTTP can use the API directly. GET https://passalong.dev/v1/openapi.json " +
+      "describes it, which is what a Gemini function-calling setup or a shell script needs. A " +
+      "share link's .md needs no account at all.",
+  },
+];
+
+useHead({
+  script: [
+    {
+      type: "application/ld+json",
+      innerHTML: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        name: "Connect Passalong to your AI coding assistant",
+        description:
+          "Three ways to reach Passalong: a local MCP server, the hosted MCP server by URL, or the HTTP API.",
+        url: `${APEX}/connect`,
+        step: WAYS.map((w, i) => ({
+          "@type": "HowToStep",
+          position: i + 1,
+          name: w.name,
+          text: w.text,
+          url: `${APEX}/connect`,
+        })),
+      }),
+    },
+  ],
 });
 </script>
 

@@ -10,7 +10,7 @@ export default defineEventHandler((event) => {
   setResponseHeader(event, "content-type", "application/xml; charset=utf-8");
   setResponseHeader(event, "cache-control", "public, max-age=3600");
   const urls = PUBLIC_PAGES.filter((p) => !p.draft)
-    .map((p) => `  <url><loc>${APEX}${p.path}</loc></url>`)
+    .map((p) => `  <url><loc>${APEX}${p.path}</loc><lastmod>${p.updated}</lastmod></url>`)
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
