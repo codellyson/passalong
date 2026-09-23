@@ -36,8 +36,6 @@ export interface ConnectApp {
   /** Which mark AppMark.vue draws. Each vendor's own logo; a plug and braces for the two that have none. */
   mark: "chatgpt" | "claude" | "claude-code" | "cursor" | "mcp" | "script";
   name: string;
-  how: string;
-  method: string;
   lede: string;
   /** "oauth" apps sign themselves in and can be followed live; the others use a token. */
   kind: "oauth" | "local" | "token";
@@ -57,8 +55,6 @@ export const APPS: ConnectApp[] = [
     group: "Assistants",
     mark: "chatgpt",
     name: "ChatGPT",
-    how: "Address and a client ID",
-    method: "OAuth · client ID",
     lede: "ChatGPT asks for a client ID, so you make one here and paste it back. It needs no secret.",
     kind: "oauth",
     requirements: [
@@ -108,8 +104,6 @@ export const APPS: ConnectApp[] = [
     group: "Assistants",
     mark: "claude",
     name: "Claude",
-    how: "Paste an address",
-    method: "Signs itself in",
     lede: "Claude signs itself in. Paste one address, approve it, and allow one domain so screenshots work.",
     kind: "oauth",
     requirements: [
@@ -140,8 +134,6 @@ export const APPS: ConnectApp[] = [
     group: "On your machine",
     mark: "claude-code",
     name: "Claude Code",
-    how: "Three commands",
-    method: "Local server",
     lede: "Runs Passalong on your machine, so it knows which repo you're in and works offline.",
     kind: "local",
     requirements: [
@@ -164,8 +156,6 @@ export const APPS: ConnectApp[] = [
     group: "On your machine",
     mark: "cursor",
     name: "Cursor",
-    how: "Install, then one file",
-    method: "Local server",
     lede: "The same local server, added to Cursor's MCP settings.",
     kind: "local",
     requirements: [
@@ -189,8 +179,6 @@ export const APPS: ConnectApp[] = [
     group: "Anything else",
     mark: "mcp",
     name: "Another MCP app",
-    how: "Address, or a client ID",
-    method: "Signs itself in",
     lede: "Most apps take the address and sign themselves in. If yours asks for a client ID instead, make one below.",
     kind: "oauth",
     requirements: [
@@ -213,8 +201,6 @@ export const APPS: ConnectApp[] = [
     group: "Anything else",
     mark: "script",
     name: "Script or API",
-    how: "A token",
-    method: "Token",
     lede: "For your own code. Make a token under API tokens, then call the API with it.",
     kind: "token",
     requirements: [

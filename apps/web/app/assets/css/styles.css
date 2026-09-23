@@ -143,14 +143,17 @@
      panels). Borders alone used to carry every boundary; now fill does most of it. */
   color-scheme: light dark;
   /* Plain, not papered: the page itself carries no tint, so the only coloured things on it are
-     the ones meant to be read as coloured — a raised card, a recessed code block, a state. */
-  --bg: light-dark(#ffffff, #121110);
-  --surface: light-dark(#f4f2ec, #1e1c18);
-  --surface-raised: light-dark(#ffffff, #1c1a16);
-  --fg: light-dark(#1c1b19, #ece9e1);
-  --muted: light-dark(#6b6862, #9c988f);
-  --line: light-dark(#e4e0d8, #2e2b25);
-  --line-strong: light-dark(#cfcabf, #423e36);
+     the ones meant to be read as coloured — a raised card, a recessed code block, a state.
+     The neutrals are neutral, with no hue at all. They used to carry a warm cast borrowed from
+     the rust accent, which on a dark ground read as brown paper behind every panel and left the
+     accent nothing to stand against. Rust is still the brand; it is now the only warm thing. */
+  --bg: light-dark(#ffffff, #111111);
+  --surface: light-dark(#f4f4f4, #1b1b1b);
+  --surface-raised: light-dark(#ffffff, #191919);
+  --fg: light-dark(#1a1a1a, #eaeaea);
+  --muted: light-dark(#6a6a6a, #9a9a9a);
+  --line: light-dark(#e4e4e4, #2c2c2c);
+  --line-strong: light-dark(#cbcbcb, #414141);
   --accent: light-dark(#b5451b, #f08a5b);
   --accent-hover: light-dark(#97390f, #f7a077);
   --accent-fg: light-dark(#fffaf7, #1a1410);
@@ -164,18 +167,18 @@
   --ok-soft: light-dark(#e2ecdd, #1e2a20);
   --warn: light-dark(#8a5a08, #dfae5f);
   --warn-soft: light-dark(#f6e8cd, #2e2619);
-  --code: light-dark(#f4f2ec, #1e1c18);
+  --code: light-dark(#f4f4f4, #1b1b1b);
   /* The hairline around an image. Pure black on light, pure white on dark, at a tenth: a tinted
      neutral picks up the surface behind it and reads as dirt on the picture's edge. */
   --image-edge: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
   /* A shadow is a list rather than a colour, so the pair goes in each colour slot. The dark
      theme's second layer is transparent because dark needs one layer where light needs two. */
   --shadow-1:
-    0 1px 2px light-dark(rgb(28 27 25 / 0.04), rgb(0 0 0 / 0.3)),
-    0 1px 3px light-dark(rgb(28 27 25 / 0.06), transparent);
+    0 1px 2px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.3)),
+    0 1px 3px light-dark(rgb(0 0 0 / 0.06), transparent);
   --shadow-2:
-    0 2px 4px light-dark(rgb(28 27 25 / 0.04), rgb(0 0 0 / 0.25)),
-    0 8px 24px light-dark(rgb(28 27 25 / 0.07), rgb(0 0 0 / 0.35));
+    0 2px 4px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.25)),
+    0 8px 24px light-dark(rgb(0 0 0 / 0.07), rgb(0 0 0 / 0.35));
   /* The edge of a raised surface, drawn as a shadow rather than a border: a 1px ring and a little
      depth. It is transparent, so it reads the same on any background a card lands on, where a
      fixed border colour was only ever right on one. Dark mode is the ring alone, because layered
@@ -596,6 +599,29 @@ button.primary[disabled],
     0 0 0 1px var(--edge-ring),
     var(--shadow-2);
 }
+/* The same surface as a menu, under a field rather than behind a button: it belongs to the input
+   above it, so it takes that input's width and its leading edge, and it is capped at a height that
+   leaves the rest of the form visible behind it. */
+.menu.under-field {
+  right: auto;
+  left: 0;
+  /* At least the field's width, and wider than a narrow field when there is a name and an email
+     to read: it is drawn over the page for as long as somebody is choosing, so it costs the
+     layout nothing to be legible. */
+  width: max(100%, min(22rem, 80vw));
+  max-height: 16rem;
+  overflow-y: auto;
+  list-style: none;
+  margin-top: var(--s-1);
+}
+/* Above its field, for a field near the bottom of the page: a list that opens into the fold shows
+   one suggestion, and choosing from it means scrolling the field out from under the cursor. */
+.menu.under-field.above {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: var(--s-1);
+}
 .menu-item {
   display: flex;
   width: 100%;
@@ -712,6 +738,19 @@ textarea {
   height: auto;
   min-height: calc(var(--control-h) * 2);
   padding: var(--s-3) var(--s-4);
+}
+
+/* A checkbox is not a text field. The rule above hands every input a control height and a text
+   field's padding, which left a checkbox drawn small inside a 2.25rem box — it read as sitting a
+   line below the label it belongs to. These draw themselves; they need a size and nothing else. */
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: var(--accent);
 }
 
 input::placeholder {

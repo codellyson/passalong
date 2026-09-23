@@ -20,6 +20,8 @@ usePage({
 
 const { data, loading } = useHub();
 const isSuper = computed(() => data.value.me?.role === "super");
+/** Named by the deployment, rather than given the role by another admin. See apps/api/src/gifts.ts. */
+const canMakeSupers = computed(() => data.value.me?.can_make_supers === true);
 /** `loading` is per endpoint; this page waits on exactly one of them. */
 const pending = computed(() => loading.value.me);
 
@@ -40,6 +42,19 @@ watchEffect(() => {
         <p class="mt-2 mb-0 font-ui text-sm text-muted">
           Plans given away, and who runs Passalong. Nobody else can see this page. A plan given here
           costs the person nothing and ends on its date.
+        </p>
+        <!-- Why you can see this, and therefore what you can do on it. The two routes to being an
+             admin permit different things, and an operator who cannot tell which one they have
+             reads a missing button as a bug. -->
+        <p v-if="isSuper" class="mt-3 mb-0 font-ui text-sm text-muted">
+          You are here as
+          <code class="font-code text-xs text-fg">{{ data.me?.account }}</code
+          >{{ data.me?.handle ? ` · @${data.me.handle}` : "" }}.
+          {{
+            canMakeSupers
+              ? "This deployment names your account in ADMIN_ACCOUNTS, so you can add and remove admins as well as give plans."
+              : "Another admin gave this account the role, so you can give plans. Adding or removing an admin is only for an account the deployment names in ADMIN_ACCOUNTS."
+          }}
         </p>
       </header>
 

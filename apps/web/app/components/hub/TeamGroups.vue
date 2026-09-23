@@ -159,7 +159,6 @@ async function drop(g: Group) {
           >
             <input
               type="checkbox"
-              class="w-auto"
               :checked="picked.has(h)"
               @change="toggle(h)"
             >{{ nameOf(h) }}
