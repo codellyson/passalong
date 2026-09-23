@@ -181,6 +181,7 @@ const NEXT = {
           tool: { type: "string", enum: ["take", "progress", "hand_in", "pass"] },
           when: { type: "string" },
           why: { type: "string" },
+          with: { type: "string", description: "What that call has to carry." },
         },
       },
     },
@@ -502,14 +503,23 @@ export function openapi(origin: string) {
           operationId: "handIn",
           summary: "Done here.",
           description:
-            "A task: `report`, the id of a transfer guide you published about the work; its author reviews it against Acceptance. A handoff or a bug: `ok`, whether its Verification held, and `note` when it did not.",
+            "Done here, with proof. `evidence` is required whatever the kind: what you ran and what came back. A task also takes `report`, the id of a transfer guide you published about the work; its author reviews it against Acceptance. A handoff or a bug takes `ok`, whether its Verification held, and `note` when it did not.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-          requestBody: agentBody({
-            report: { type: "string", description: "Task: the write-up's id." },
-            pr: { type: "string", description: "Task: PR or branch link, or a commit hash." },
-            ok: { type: "boolean", description: "Handoff or bug: did its Verification hold." },
-            note: { type: "string", maxLength: 280 },
-          }),
+          requestBody: agentBody(
+            {
+              report: { type: "string", description: "Task: the write-up's id." },
+              pr: { type: "string", description: "Task: PR or branch link, or a commit hash." },
+              ok: { type: "boolean", description: "Handoff or bug: did its Verification hold." },
+              note: { type: "string", maxLength: 280 },
+              evidence: {
+                type: "string",
+                maxLength: 4000,
+                description:
+                  "What you ran and what came back: the command and the lines that decided it, a test summary, a link to the change, or a screenshot url. A verdict on your own work is not evidence.",
+              },
+            },
+            ["evidence"],
+          ),
           responses: {
             200: json200("Handed in.", withNext({ id: { type: "string" } })),
             400: { description: "A task without `report`, or a failure without a note." },

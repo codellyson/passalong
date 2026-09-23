@@ -32,7 +32,8 @@ export function nowText({ held, waiting = {} }) {
       lines.push("It is marked stalled: nobody has heard from its agent in 30 minutes.");
     lines.push(
       `To carry on, call take ${held.id} (it resumes what you hold), then progress at each ` +
-        "milestone. When it is done, hand_in; if it is not yours or you are stuck, pass with the reason.",
+        "milestone. When it is done, hand_in with evidence — what you ran and what came back — " +
+        "so keep it as you go; if it is not yours or you are stuck, pass with the reason.",
     );
     return lines.join("\n");
   }
@@ -57,9 +58,9 @@ export function stopVerdict({ held, input = {} }) {
     decision: "block",
     reason:
       `You still hold ${held.id}: ${held.title || held.id}. Before ending, do one of: ` +
-      `hand_in ${held.id} if it is done; pass ${held.id} with the reason if it is not yours or ` +
-      `you are stuck; or, if the user is stopping mid-way, progress ${held.id} with a note ` +
-      "saying what is left — then end.",
+      `hand_in ${held.id} with your evidence if it is done; pass ${held.id} with the reason if ` +
+      `it is not yours or you are stuck; or, if the user is stopping mid-way, progress ${held.id} ` +
+      "with a note saying what is left — then end.",
   };
 }
 

@@ -59,6 +59,12 @@ function send() {
         class="mt-2 block text-base leading-snug font-semibold text-fg no-underline hover:text-accent"
       >{{ h.title || h.id }}</a>
       <p v-if="h.note" class="mt-2 mb-0 text-sm text-muted">“{{ h.note }}”</p>
+      <!-- The note is what they say; this is what ran. Folded, because the row is a queue of
+           several and the decision is usually made on the title and the note. -->
+      <details v-if="h.evidence" class="mt-2">
+        <summary class="cursor-pointer font-ui text-xs text-muted">What they ran</summary>
+        <HubEvidence :text="h.evidence" />
+      </details>
       <p v-if="where" class="mt-3 mb-0 font-code text-xs text-muted">{{ where }}</p>
 
       <div

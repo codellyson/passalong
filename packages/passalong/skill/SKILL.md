@@ -9,6 +9,27 @@ You are turning this session into a **transfer guide**: executable context for a
 different place. The reader is an AI agent (with a developer watching) that has none of this
 session's history. Write for execution, not for permanence.
 
+## Before you write anything
+
+**Check what is already open, and whether a guide is wanted at all.** Run `passalong now` (or
+`take` with no id over MCP) to see what this worktree holds and what was handed to you.
+
+- **The session answers something you hold** — hand it in (`passalong hand_in <id> …`) instead.
+  Publishing a second guide about it leaves two records of one piece of work. Every hand-in carries
+  `evidence`: what you ran and what came back — the command and the lines that decided it, a test
+  summary, a link to the change, or a screenshot url. Copy each one out of the session as you go;
+  at the end you would be writing from memory, which is what evidence exists to replace.
+- **The work never left this repo** — committed and pushed on a branch the team can already see,
+  with a pull request to review — then it has crossed no boundary, and a transfer guide is one more
+  thing for somebody to read. What is worth publishing from a session like that is what is *still
+  open*: file it as a bug (`kind: bug`) or a task, not as a write-up of the fix.
+- **The ask is vague** — "update the passalong", "add this to passalong", "log this" — it may mean
+  hand in what you hold, add a follow-up to a guide, or publish something new. Ask which, in one
+  line. Publishing the wrong thing costs somebody a review, and the author a guide to delete.
+
+A transfer guide earns its place when the work has to cross a boundary: another repo, another
+machine, another agent session, or a teammate without your branch.
+
 ## Procedure
 
 1. **Pick the one thing to transfer.** If the user named it (`/passalong-capture <what>` or
@@ -37,7 +58,9 @@ session's history. Write for execution, not for permanence.
    **If what you are capturing is more context for an existing guide** — a missing detail, a step
    that needed explaining, what changed since, what you found doing it — add `--follows <that id>`.
    That publishes it as a follow-up: its own guide, listed under the original, and handed to
-   whoever opens the original, person or agent. A session that started from a passalong guide
+   whoever opens the original, person or agent. It travels the other way too — whoever opens the
+   follow-up gets the guide it came out of, and where that guide has got to — so write it as a
+   note on that work rather than as a standalone brief. A session that started from a passalong guide
    (`passalong start` or `pull` on an id, or an agent opened one) usually has context worth adding
    this way. Whether the guide worked is still its own answer: `passalong works <id>` or
    `passalong broken <id> <why>`.

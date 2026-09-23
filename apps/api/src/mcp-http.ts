@@ -64,12 +64,19 @@ async function relay(call: Call, method: string, path: string, body?: unknown) {
 }
 
 /** The part of a verb's answer that says what to do next. See steps() in claims.ts. */
-type Answer = { next?: { tool: string; when: string; why: string }[]; say?: string };
+type Answer = {
+  next?: { tool: string; when: string; why: string; with?: string }[];
+  say?: string;
+};
 
 /** `next` and `say`, as the last thing an agent reads. Mirrors nextNote() in the local server. */
 function nextNote({ next = [], say = "" }: Answer, id = "") {
   const lines = next.map(
-    (s) => `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})`,
+    (s) =>
+      `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})` +
+      // What the call has to carry, under the call it belongs to: an agent that reads this at the
+      // end of a long session should not have to remember hand_in takes evidence.
+      (s.with ? `\n      with ${s.with}` : ""),
   );
   if (say) lines.unshift(`  ${say}`);
   return lines.length ? `<!-- passalong: next:\n${lines.join("\n")}\n-->` : "";
@@ -100,20 +107,35 @@ async function answer(call: Call, method: string, path: string, id: string, body
   return { ...text(`${res.text}${note ? `\n${note}` : ""}`), structuredContent: parsed };
 }
 
+/**
+ * Said in front of every guide an agent opens, whatever its kind: the hand-in needs evidence, and
+ * evidence is collected while the work happens, not reconstructed from memory once it is done.
+ * Mirrors KEEP_EVIDENCE in packages/passalong/src/mcp.js.
+ */
+const KEEP_EVIDENCE =
+  "KEEP YOUR EVIDENCE AS YOU GO. hand_in needs it: the commands you ran and what came back, the " +
+  "test summary, the link to the change. Copy each one when it happens — at the end you will be " +
+  "writing from memory, which is the thing evidence is here to replace.\n\n";
+
 /** What to say in front of a guide, by kind. Mirrors leadFor() in packages/passalong/src/mcp.js. */
 function leadFor(kind: string) {
   if (kind === "bug")
     return (
       "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions — " +
       "those steps produce the defect. Fix what Problem describes, then check Verification and " +
-      "answer with hand_in.\n\n"
+      "answer with hand_in.\n\n" +
+      KEEP_EVIDENCE
     );
   if (kind === "task")
     return (
       "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
       "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
-      "under Acceptance holds.\n\n"
+      "under Acceptance holds.\n\n" +
+      KEEP_EVIDENCE
     );
+  // A transfer guide is handed over untouched: it is a document to follow, and anything in front
+  // of it is one more thing that is not the document. The reminder still reaches the agent on the
+  // answer's `next` line, which is where every other instruction from the server rides.
   return "";
 }
 
@@ -312,6 +334,46 @@ async function followUps(
         ...withContent.map((g) => `--- follow-up ${g.id}: ${g.title} ---\n${g.markdown}`),
       ].join("\n\n"),
       guides: withContent,
+    };
+  } catch {
+    return none;
+  }
+}
+
+/**
+ * The guide a follow-up came out of, formatted to go in front of it — or "" when there is none.
+ *
+ * Said before the document, not after, because it changes what the document is: a follow-up read
+ * on its own looks like a small piece of work, and is actually a note on a bigger one. Where the
+ * parent has got to is part of that — a follow-up to work nobody has started is not work to start.
+ *
+ * Context is never worth failing the tool over; the guide itself is what was asked for.
+ */
+async function parentOf(call: Call, id: string): Promise<{ text: string; id: string }> {
+  const none = { text: "", id: "" };
+  try {
+    const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}/parent?markdown=1`);
+    if (res.status >= 400) return none;
+    const { guide } = JSON.parse(res.text) as {
+      guide?: {
+        id?: string;
+        title?: string;
+        state?: string;
+        by?: { name?: string; handle?: string } | null;
+        markdown?: unknown;
+      } | null;
+    };
+    if (!guide?.id) return none;
+    const who = guide.by?.name || (guide.by?.handle ? `@${guide.by.handle}` : "");
+    const state = guide.state === "held" && who ? `held by ${who}` : guide.state || "open";
+    return {
+      id: String(guide.id),
+      text:
+        `THIS IS A FOLLOW-UP TO ${guide.id}: ${guide.title || "untitled"} — ${state}. It is more ` +
+        "context for that guide, not a piece of work on its own. Read the guide it follows first; " +
+        "it is below, and where the two disagree this follow-up is newer. If what it asks for " +
+        `depends on ${guide.id} being done and it is not, say so rather than starting.\n\n` +
+        `--- the guide it follows: ${guide.id} ---\n${String(guide.markdown ?? "").trimEnd()}`,
     };
   } catch {
     return none;
@@ -537,6 +599,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "are stuck. Every answer ends with `next`: what to call now. Follow it, and when it says " +
         "to stop, stop. If take says somebody else has it, tell the user instead of doing the " +
         "work twice.\n" +
+        "EVERY HAND-IN CARRIES EVIDENCE: what you ran and what came back — the command and the " +
+        "lines that decided it, a test summary, a link to the change, or a screenshot url. " +
+        "Collect it as you work rather than writing it from memory at the end. hand_in without " +
+        "it is refused, because the write-up and the verdict are both your word for your own " +
+        "work and evidence is the part the person reviewing it can check.\n" +
         "kind: task (the default) is work nobody has done yet. It has no Steps: work out how to " +
         "reach Goal within Constraints, leave Out of scope alone, and treat Acceptance as the " +
         "definition of done. When Acceptance holds, publish_guide a transfer guide about what you " +
@@ -548,6 +615,16 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "apply: Reproduce is how to see the bug and running it produces the bug, Verification is " +
         "the behaviour that should have happened. Fix the defect, then check Verification and " +
         "hand_in with the result. A bug report is not broken because you reproduced it.\n" +
+        "BEFORE PUBLISHING ANYTHING, CHECK WHAT IS ALREADY OPEN: call work, or take with no id, " +
+        "and see what you hold. If this session's work answers something you hold, hand_in that — " +
+        "never publish a second guide about it. A transfer guide is for work that has to cross a " +
+        "boundary: another repo, another machine, a teammate without your branch. Work you " +
+        "committed and pushed where the team can already see it has crossed no boundary, and a " +
+        "guide about it is one more thing for somebody to read and review; what is worth " +
+        "publishing from a session like that is what is still open, as a bug or a task. " +
+        '"Update the passalong", "add this to passalong" and the like are ambiguous — hand in ' +
+        "what you hold, add a follow-up, or publish something new? Ask which, in one line, rather " +
+        "than publishing and leaving the user to undo it.\n" +
         "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
         "file_bugs with all of them at once; each becomes a guide someone can take on its own.\n" +
         "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
@@ -562,9 +639,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
         "id. It is listed under the original, and anyone who opens the original, person or agent, " +
-        "gets it too. get_guide returns a guide's follow-ups after it; read them before acting.\n" +
-        "Older prompts may name next_task, task_progress, finish_task, ack_guide or " +
-        "verify_guide: they still work, as take, progress, hand_in and the handoff answers.",
+        "gets it too. take and get_guide return a guide's follow-ups after it; read them before " +
+        "acting. They also return the guide it follows, in front of it: a follow-up is a note on " +
+        "a bigger piece of work, not the work. If it needs that guide done and it is not, say so " +
+        "rather than starting.\n" +
+        "If you were taught next_task, task_progress, finish_task, ack_guide or verify_guide, " +
+        "those are gone: take, progress, hand_in and pass do all of it, for every kind of guide.",
     },
   );
 
@@ -852,9 +932,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           "If this guide needs more — a missing detail, a step that needed explaining, what " +
           "changed since, what you found doing it — publish that with publish_guide " +
           `parent=${id}, and whoever opens this guide gets it too. -->`;
-      const context = await followUps(call, id);
+      const [context, from] = await Promise.all([followUps(call, id), parentOf(call, id)]);
       return {
         content: [
+          ...(from.text ? [{ type: "text" as const, text: from.text }] : []),
           { type: "text" as const, text: lead + res.text },
           ...(context.text ? [{ type: "text" as const, text: context.text }] : []),
           { type: "text" as const, text: note },
@@ -864,6 +945,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           id,
           kind: bug ? "bug" : /^kind:\s*task\s*$/m.test(res.text) ? "task" : "transfer",
           markdown: res.text,
+          parent: from.id,
           follow_ups: context.guides,
         },
       };
@@ -934,7 +1016,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       // because `attachments` are fetched from wherever the client says they are.
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       description:
-        "Publish a guide from its full markdown — a transfer guide, a single bug with " +
+        "Publish a guide from its full markdown. Check what is already open first (work): if this " +
+        "session answers something you hold, hand_in that instead, and if the work never left a " +
+        "branch the team can see, publish what is still open as a bug or a task rather than a " +
+        "write-up of the fix. A transfer guide, a single bug with " +
         "`kind: bug`, or a task with `kind: task`. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
         "is minted and returned. To change a guide, pass the id it came back with; inventing a " +
         "fresh id to retry or to correct one publishes a second copy, and every copy counts " +
@@ -988,33 +1073,6 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     },
   );
 
-  server.registerTool(
-    "ack_guide",
-    {
-      title: "Say whether you are taking it",
-      annotations: ADDS,
-      description:
-        "The first word back on a guide handed to you, before any work: take it, or pass it " +
-        "back. Passing must say why — an unanswered handoff is indistinguishable from one nobody " +
-        "has noticed, and the sender finds out in a week instead of a minute. Answer this when " +
-        "you pick up an inbox, then verify_guide once you have actually run it.",
-      inputSchema: {
-        id: z.string(),
-        taken: z.boolean().describe("true if you are doing it; false hands it back"),
-        note: z
-          .string()
-          .optional()
-          .describe("required when taken is false: why it is not yours; one line, 280 chars"),
-      },
-      outputSchema: ackOut,
-    },
-    async ({ id, taken, note }) =>
-      relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/ack`, {
-        taken,
-        note: note ?? "",
-      }),
-  );
-
   // The task queue. A local agent's id comes from its worktree (packages/passalong/src/passalong.js
   // `agent()`); an assistant over HTTP has no worktree and no session, so it names itself and the
   // name is the claim's owner. Reusing it on every call is what makes it the same agent.
@@ -1023,9 +1081,21 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     .regex(/^[a-z0-9-]{8,64}$/, "8 to 64 of a-z, 0-9 and -")
     .describe("a name for you, the same on every task call, e.g. chat-7f3k2m9q");
 
+  /**
+   * What the hand-in has to carry. Described here once, in the words the server refuses with, so
+   * the schema an agent reads before calling and the error it gets for a bad call agree.
+   */
+  const EVIDENCE = z
+    .string()
+    .describe(
+      "what you ran and what came back: the command and the lines that decided it, a test " +
+        'summary, a link to the change, or a screenshot url. "it works" is a claim, not evidence',
+    );
+
   // ---- the four verbs (docs/V2.md §11) --------------------------------------------------------
-  // take, progress, hand_in and pass work every kind of guide. next_task, task_progress and
-  // finish_task are kept for older prompts and call the same code.
+  // take, progress, hand_in and pass work every kind of guide. They replaced next_task,
+  // task_progress, finish_task, start_guide, ack_guide and verify_guide, which are gone: ten tools
+  // for four jobs, each pair described almost the same way, is a list a model misreads.
 
   async function doTake(args: { agent: string; id?: string; repo?: string; any?: boolean }) {
     const res = await call("POST", "/v1/take", {
@@ -1044,12 +1114,22 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         ...text(nextNote(parsed) || "Nothing is waiting for you. Tell the user, and stop."),
         structuredContent: parsed as Record<string, unknown>,
       };
+    // Taking a guide is opening it, so it arrives with what it belongs to: the guide it follows,
+    // and the follow-ups written under it. An agent handed a follow-up on its own reads a document
+    // that assumes work it has never seen.
+    const [from, context] = await Promise.all([parentOf(call, g.id), followUps(call, g.id)]);
     return {
-      ...text(
-        `${leadFor(g.kind || "")}${g.markdown ?? ""}\n\n<!-- passalong: ${g.id} is yours` +
-          `${g.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->\n` +
-          nextNote(parsed, g.id),
-      ),
+      content: [
+        ...(from.text ? [{ type: "text" as const, text: from.text }] : []),
+        {
+          type: "text" as const,
+          text:
+            `${leadFor(g.kind || "")}${g.markdown ?? ""}\n\n<!-- passalong: ${g.id} is yours` +
+            `${g.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->\n` +
+            nextNote(parsed, g.id),
+        },
+        ...(context.text ? [{ type: "text" as const, text: context.text }] : []),
+      ],
       structuredContent: parsed as Record<string, unknown>,
     };
   }
@@ -1063,6 +1143,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
   const doHandIn = (args: {
     id: string;
     agent: string;
+    evidence: string;
     ok?: boolean;
     note?: string;
     report?: string;
@@ -1071,6 +1152,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     answer(call, "POST", `/v1/guides/${encodeURIComponent(args.id)}/hand_in`, args.id, {
       agent: args.agent,
       note: args.note ?? "",
+      evidence: args.evidence ?? "",
       ...(args.report ? { report: args.report, pr: args.pr ?? "" } : {}),
       ...(typeof args.ok === "boolean" ? { ok: args.ok } : {}),
     });
@@ -1102,18 +1184,6 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     async (args) => doTake(args),
   );
 
-  server.registerTool(
-    "next_task",
-    {
-      title: "Take the next task (same as take with no id)",
-      annotations: ADDS,
-      outputSchema: takeOut,
-      description: "Kept for older prompts: exactly take with no id.",
-      inputSchema: { agent: AGENT, repo: takeIn.repo, any: takeIn.any },
-    },
-    async (args) => doTake(args),
-  );
-
   const progressIn = {
     id: z.string(),
     agent: AGENT,
@@ -1135,52 +1205,25 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
   );
 
   server.registerTool(
-    "task_progress",
-    {
-      title: "Report progress (same as progress)",
-      annotations: ADDS,
-      outputSchema: progressOut,
-      description: "Kept for older prompts: exactly progress.",
-      inputSchema: progressIn,
-    },
-    async (args) => doProgress(args),
-  );
-
-  server.registerTool(
     "hand_in",
     {
       title: "Hand it in",
       annotations: ADDS,
       outputSchema: finishOut,
       description:
-        "Done here. A task: `report`, the id of a transfer guide you published about the work " +
-        "(publish_guide it first) — its author reviews it against Acceptance. A handoff or a bug: " +
-        "`ok`, whether its Verification held, and `note` saying what went wrong when it did not.",
+        "Done here, with proof. `evidence` is required on every hand-in: what you ran and what " +
+        "came back. A task also takes `report`, the id of a transfer guide you published about " +
+        "the work (publish_guide it first) — its author reviews it against Acceptance. A handoff " +
+        "or a bug takes `ok`, whether its Verification held, and `note` saying what went wrong " +
+        "when it did not.",
       inputSchema: {
         id: z.string(),
         agent: AGENT,
+        evidence: EVIDENCE,
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),
         report: z.string().optional().describe("task: id of the transfer guide about this work"),
         pr: z.string().optional().describe("task: PR or branch link"),
-      },
-    },
-    async (args) => doHandIn(args),
-  );
-
-  server.registerTool(
-    "finish_task",
-    {
-      title: "Finish a task (same as hand_in)",
-      annotations: ADDS,
-      outputSchema: finishOut,
-      description: "Kept for older prompts: exactly hand_in, for a task.",
-      inputSchema: {
-        id: z.string(),
-        agent: AGENT,
-        report: z.string().describe("id of the transfer guide about this work"),
-        pr: z.string().optional(),
-        note: z.string().optional(),
       },
     },
     async (args) => doHandIn(args),
@@ -1203,31 +1246,6 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     },
     async ({ id, agent, why }) =>
       answer(call, "POST", `/v1/guides/${encodeURIComponent(id)}/pass`, id, { agent, why }),
-  );
-
-  server.registerTool(
-    "verify_guide",
-    {
-      title: "Say whether it worked",
-      annotations: ADDS,
-      description:
-        "Answer for a guide you took. The single most valuable thing to report back, and the " +
-        "only way the sender learns their handoff did not land. A failure must say why. If the " +
-        "guide needs more context than a one-line note holds — a missing detail, a step that " +
-        "needed explaining, what you found doing it — publish that as a follow-up: its own guide, " +
-        "with publish_guide `parent` set to this id. Whoever opens this guide then gets it too.",
-      inputSchema: {
-        id: z.string(),
-        ok: z.boolean().describe("true if it holds up"),
-        note: z.string().optional().describe("required when ok is false; one line, 280 chars"),
-      },
-      outputSchema: verdictResultOut,
-    },
-    async ({ id, ok, note }) =>
-      relay(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/verdict`, {
-        ok,
-        note: note ?? "",
-      }),
   );
 
   server.registerTool(

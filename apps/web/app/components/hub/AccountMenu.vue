@@ -11,12 +11,7 @@ const { data, signOut } = useHub();
 
 const label = computed(() => meName(data.value.me) || "Account");
 /** Two letters for the avatar a phone shows instead of the whole name. */
-const initials = computed(() => {
-  const words = label.value.replace(/^@/, "").split(/\s+/).filter(Boolean);
-  // One word — a handle, or an account id — gives one letter from each word, which is one letter.
-  const two = words.length > 1 ? words.map((w) => w[0]).join("") : (words[0] ?? "");
-  return two.slice(0, 2).toUpperCase();
-});
+const initials = computed(() => initialsOf(label.value));
 
 const open = ref(false);
 const root = ref<HTMLElement | null>(null);

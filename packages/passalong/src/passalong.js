@@ -288,6 +288,23 @@ export async function taskProgress(id, note, { cwd = process.cwd() } = {}) {
 }
 
 /**
+ * What a hand-in has to carry, checked before anything is published.
+ *
+ * The server refuses the call without it anyway; the reason to check first is that publishing the
+ * write-up and then being refused leaves a guide nobody asked for behind every refused hand-in.
+ * The rule and the wording are the server's — see evidenceProblem() in apps/api/src/claims.ts.
+ */
+function requireEvidence(evidence) {
+  const said = String(evidence || "").trim();
+  if (said.length >= 16) return;
+  throw new PassalongError(
+    "send `evidence`: what you ran and what came back — the command and the lines that decided " +
+      "it, a test summary, a link to the change, or a screenshot url. " +
+      `"${said || "nothing"}" is a claim, not evidence.`,
+  );
+}
+
+/**
  * The work is done: the task moves to review with a transfer guide about it attached.
  *
  * Pass `markdown` and this writes that guide too, with `parent:` naming the task, so the write-up
@@ -296,9 +313,10 @@ export async function taskProgress(id, note, { cwd = process.cwd() } = {}) {
  */
 export async function finishTask(
   id,
-  { report, markdown, pr = "", note = "", cwd = process.cwd() } = {},
+  { report, markdown, evidence = "", pr = "", note = "", cwd = process.cwd() } = {},
 ) {
   needsSync("finishing a task");
+  requireEvidence(evidence);
   if (!report && markdown) {
     const g = parse(markdown);
     report = (await share(serialize({ meta: { ...g.meta, parent: id }, body: g.body }), { cwd }))
@@ -308,7 +326,7 @@ export async function finishTask(
     throw new PassalongError(
       "finishing needs the write-up: `markdown` for a transfer guide about the work, or `report` with the id of one",
     );
-  return api.finishTask(id, { agent: agent(cwd).agent, report, pr, note });
+  return api.finishTask(id, { agent: agent(cwd).agent, report, evidence, pr, note });
 }
 
 /**
@@ -339,12 +357,16 @@ export async function progress(id, note, { cwd = process.cwd() } = {}) {
  * Done here. A task hands in a write-up — `markdown`, published with `parent:` naming the task, or
  * `report`, the id of one already published — for its author to review against Acceptance. Any
  * other guide hands in whether its Verification held: `ok`, and a `note` when it did not.
+ *
+ * Every hand-in carries `evidence`: what was run and what came back. The write-up and the `ok` are
+ * both the agent's word for its own work; evidence is the part the reviewer can check.
  */
 export async function handIn(
   id,
-  { ok, note = "", markdown, report, pr = "", cwd = process.cwd() } = {},
+  { ok, note = "", evidence = "", markdown, report, pr = "", cwd = process.cwd() } = {},
 ) {
   needsSync("handing work in");
+  requireEvidence(evidence);
   if (!report && markdown) {
     const g = parse(markdown);
     report = (await share(serialize({ meta: { ...g.meta, parent: id }, body: g.body }), { cwd }))
@@ -353,6 +375,7 @@ export async function handIn(
   return api.handIn(id, {
     agent: agent(cwd).agent,
     note,
+    evidence,
     ...(report ? { report, pr } : {}),
     ...(typeof ok === "boolean" ? { ok } : {}),
   });
@@ -620,6 +643,39 @@ export async function followUps(meta = {}, deps = {}) {
   ].join("\n\n");
 }
 
+/**
+ * The guide a follow-up came out of, formatted to go in front of it — or "" when there is none.
+ *
+ * Follow-ups travelled one way: opening a guide handed over what was written under it, and opening
+ * one of those handed over nothing. An agent given a follow-up on its own reads a document that
+ * assumes a piece of work it has never seen, and either goes looking for it or treats the note as
+ * the whole job. Where the parent has got to is part of the context, not a separate question.
+ *
+ * The same shape the hosted server's parentOf() returns. Injectable for testing, and never worth
+ * failing the call over: the guide itself is what was asked for.
+ */
+export async function parentGuide(
+  meta = {},
+  { parent = api.parent, loggedIn = api.loggedIn } = {},
+) {
+  if (!meta.id || !meta.parent || !loggedIn()) return "";
+  try {
+    const { guide } = await parent(meta.id, { markdown: true });
+    if (!guide?.id) return "";
+    const who = guide.by?.name || (guide.by?.handle ? `@${guide.by.handle}` : "");
+    const state = guide.state === "held" && who ? `held by ${who}` : guide.state || "open";
+    return (
+      `THIS IS A FOLLOW-UP TO ${guide.id}: ${guide.title || "untitled"} — ${state}. It is more ` +
+      "context for that guide, not a piece of work on its own. Read the guide it follows first; " +
+      "it is below, and where the two disagree this follow-up is newer. If what it asks for " +
+      `depends on ${guide.id} being done and it is not, say so rather than starting.\n\n` +
+      `--- the guide it follows: ${guide.id} ---\n${String(guide.markdown ?? "").trimEnd()}\n\n`
+    );
+  } catch {
+    return "";
+  }
+}
+
 /** Local guides merged with synced ones (by id), newest first, optionally filtered. */
 export async function list(query = "", { remote = true, scope = "" } = {}) {
   const local = scope && scope !== "all" && scope !== "mine" ? [] : store.search(query);
@@ -800,9 +856,12 @@ export function workPrompt(t) {
     "When every Acceptance check holds, commit what you changed as one commit whose message",
     `starts with "${t.id}: " — several tasks share this worktree, and a reviewer reads each one's`,
     "change on its own. Then call hand_in with id",
-    `${t.id}, \`pr\` set to that commit's hash, and \`markdown\`: a transfer guide saying what you`,
-    "did, what you decided and why, and how you checked each Acceptance line. If either call",
-    "says you no longer hold the task, stop.",
+    `${t.id}, \`pr\` set to that commit's hash, \`markdown\`: a transfer guide saying what you`,
+    "did, what you decided and why, and how you checked each Acceptance line, and `evidence`:",
+    "what you ran and what came back — the commands and the lines that decided it, the test",
+    "summary, the commit. Keep that as you go; at the end you would be writing it from memory,",
+    "and it is the one part of the hand-in a reviewer can check. If either call says you no",
+    "longer hold the task, stop.",
     "",
     "Nobody reads what you print: this session runs unattended. If something only a person can",
     "do stands between you and an Acceptance line — a permission, a secret, a decision — call",

@@ -32,15 +32,6 @@ const heard = (w: Working) => new Date(Date.parse(w.lease_until) - 30 * 60 * 100
 
 const blocked = (w: Working) => /^BLOCKED:/i.test(w.note);
 
-const initials = (label: string) =>
-  label
-    .replace(/^@/, "")
-    .split(/\s+/)
-    .map((x) => x[0] ?? "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
 /** The kind, only when it is not the default: most of what is held is a task. */
 const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "bug" : "handoff");
 </script>
@@ -60,9 +51,11 @@ const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "
         class="grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-x-3 px-4 py-3 shadow-[inset_0_1px_0_var(--line)] first:shadow-none sm:grid-cols-[1.75rem_minmax(0,14rem)_minmax(0,1fr)_auto]"
       >
         <span
-          class="grid size-7 place-items-center rounded-pill bg-surface font-ui text-xs font-semibold text-muted"
+          class="avatar"
+          :class="w.by.you ? 'you' : ''"
+          :style="{ '--h': avatarHue(who(w)) }"
           aria-hidden="true"
-        >{{ w.by.you ? "Y" : initials(who(w)) }}</span>
+        >{{ initialsOf(who(w)) }}</span>
 
         <div class="min-w-0 font-ui text-sm">
           <span class="block truncate font-medium text-fg">{{ who(w) }}</span>

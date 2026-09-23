@@ -9,6 +9,7 @@ if (!process.env.FAKE_AGENT_GIVES_UP) {
   await p.taskProgress(id, "working", { cwd: process.cwd() });
   await p.finishTask(id, {
     markdown: `---\ntitle: did ${id}\n---\n\n## Problem\np\n\n## Steps\n1. x\n`,
+    evidence: `node --test → 3 pass, 0 fail (${id})`,
     cwd: process.cwd(),
   });
 }

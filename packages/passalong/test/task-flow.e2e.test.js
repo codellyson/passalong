@@ -51,6 +51,9 @@ async function readyTask({ account, p, serialize }, title) {
 
 const skip = !API && "PASSALONG_E2E_API not set";
 
+/** What every hand-in carries: the run, not the agent's word for it. */
+const PROOF = "npm test -w apps/api → 285 pass, 0 fail";
+
 test("finishing with the write-up publishes it as the task's report", { skip }, async () => {
   const env = await setup();
   const { p, parse } = env;
@@ -59,6 +62,7 @@ test("finishing with the write-up publishes it as the task's report", { skip }, 
   const md = "---\ntitle: Dark mode, done\n---\n\n## Problem\np\n\n## Steps\n1. tokens\n";
   const done = await p.finishTask(id, {
     markdown: md,
+    evidence: PROOF,
     pr: "https://github.com/e2e/x/pull/1",
     cwd: dir,
   });
@@ -105,7 +109,7 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
 
   // Taken, finished, turned down: back in the queue with the reason on it.
   assert.equal((await p.nextTask({ cwd: a })).id, id);
-  await p.finishTask(id, { report: await report(a), cwd: a });
+  await p.finishTask(id, { report: await report(a), evidence: PROOF, cwd: a });
   assert.equal(await state(), "review");
   await p.rejectTask(id, "toggle does nothing on Safari");
   assert.equal(await state(), "ready");
@@ -122,7 +126,7 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
   // The first worktree picks it up with a pointer to what was left, finishes, and it is approved.
   const third = await p.nextTask({ cwd: a });
   assert.match(third.markdown, /safari fix in progress/);
-  await p.finishTask(id, { report: await report(a), cwd: a });
+  await p.finishTask(id, { report: await report(a), evidence: PROOF, cwd: a });
   await p.approveTask(id);
   assert.equal(await state(), "done");
   assert.equal(parse((await p.pull(id, { write: false })).markdown).meta.status, "consumed");
@@ -151,6 +155,7 @@ test("blocked_by in a task's frontmatter holds it until its blocker is approved"
   assert.equal((await p.nextTask({ cwd: first.dir })).id, first.id);
   await p.finishTask(first.id, {
     markdown: "---\ntitle: schema\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    evidence: PROOF,
     cwd: first.dir,
   });
   assert.equal(await state(second), "blocked", "finished is not approved");
@@ -248,6 +253,132 @@ function sql(command) {
   });
 }
 
+/**
+ * The same, for a question rather than a write: the rows come back.
+ *
+ * `--json` prints the whole answer as one array, so the read is done the moment that array parses
+ * — at which point the process group goes, for the reason sql() explains. A statement that never
+ * prints a parsable answer in 90s throws.
+ */
+function rows(command) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "npx",
+      ["wrangler", "d1", "execute", "passalong", "--local", "--json", "--command", command],
+      { cwd: WEB, stdio: ["ignore", "pipe", "pipe"], detached: true },
+    );
+    let out = "";
+    let settled = false;
+    let answer = null;
+    let failure = null;
+    const stop = (err) => {
+      if (settled) return;
+      settled = true;
+      failure = err || null;
+      clearTimeout(timer);
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {}
+    };
+    const timer = setTimeout(() => stop(new Error(`no answer from wrangler: ${command}`)), 90_000);
+    child.stdout.on("data", (b) => {
+      out += b;
+      const from = out.indexOf("[");
+      if (from < 0) return;
+      try {
+        answer = JSON.parse(out.slice(from))[0]?.results ?? [];
+        stop();
+      } catch {
+        // Still arriving.
+      }
+    });
+    child.stderr.on("data", (b) => {
+      out += b;
+    });
+    child.on("close", (code) => {
+      if (!settled) stop(code ? new Error(`wrangler exited ${code}: ${out.slice(-400)}`) : null);
+      if (failure) reject(failure);
+      else if (!answer) reject(new Error(`no rows parsed from wrangler: ${out.slice(-400)}`));
+      else resolve(answer);
+    });
+  });
+}
+
+/** A 1x1 PNG, as bytes the shots route will accept. */
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+test("a follow-up is never handed over alone: the guide it came out of comes with it", {
+  skip,
+}, async () => {
+  const { p } = await setup();
+  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
+  const doc = (title) =>
+    `---\ntitle: ${title}\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. open/close per day\n`;
+  const parent = (await p.share(doc("Store Hours UI"), { cwd: dir })).guide.meta.id;
+  const child = (await p.share(doc("Confirmation email"), { cwd: dir, follows: parent })).guide.meta
+    .id;
+
+  const lead = await p.parentGuide({ id: child, parent });
+  assert.match(lead, new RegExp(`^THIS IS A FOLLOW-UP TO ${parent}: Store Hours UI — open\\.`));
+  assert.match(lead, /open\/close per day/, "the parent's own document comes with it");
+
+  // Where the parent has got to, because that is what says whether this can be acted on.
+  const agent = { agent: "e2e-parent-aaaa", repo: "e2e/parent" };
+  await fetch(`${API}/v1/take`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ ...agent, id: parent }),
+  });
+  assert.match(await p.parentGuide({ id: child, parent }), /— held/);
+
+  // A guide that follows nothing hands over nothing.
+  assert.equal(await p.parentGuide({ id: parent }), "");
+});
+
+test("a screenshot handed in as evidence belongs to the guide, so the nightly sweep leaves it", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { id, dir } = await readyTask(env, "Evidence with a picture");
+
+  const { shot } = await (
+    await fetch(`${API}/v1/shots`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "content-type": "image/png",
+      },
+      body: PNG,
+    })
+  ).json();
+  assert.ok(shot.id, "the screenshot uploaded");
+  // Unclaimed on upload: it belongs to nothing until a document points at it.
+  assert.deepEqual(await rows(`SELECT guide_id FROM shot WHERE id = '${shot.id}'`), [
+    { guide_id: "" },
+  ]);
+
+  await p.take(id, { cwd: dir });
+  await p.handIn(id, {
+    markdown: "---\ntitle: Picture, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    evidence: `$ npm test\n> 3 pass, 0 fail\n\n![the refusal](${shot.url})`,
+    cwd: dir,
+  });
+
+  // Claimed by the task it answers. Evidence is not markdown and lives on the claim, so nothing
+  // used to claim it — and sweepOrphans() deleted it a day later, leaving a broken image where the
+  // one part of a hand-in a reviewer cannot reconstruct used to be.
+  assert.deepEqual(await rows(`SELECT guide_id FROM shot WHERE id = '${shot.id}'`), [
+    { guide_id: id },
+  ]);
+});
+
 test("in a team, each side hears what the other did to a task — and only the author moves it", {
   skip,
 }, async () => {
@@ -288,6 +419,7 @@ test("in a team, each side hears what the other did to a task — and only the a
   assert.equal((await p.nextTask({ cwd: dir })).id, id);
   await p.finishTask(id, {
     markdown: "---\ntitle: team done\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    evidence: PROOF,
     cwd: dir,
   });
 
@@ -496,7 +628,16 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
 
   assert.equal((await p.progress(id, "halfway", { cwd: dir })).note, "halfway");
   const md = "---\ntitle: Verbs, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const handed = await p.handIn(id, { markdown: md, cwd: dir });
+  await assert.rejects(
+    p.handIn(id, { markdown: md, cwd: dir }),
+    /what you ran and what came back/,
+    "a hand-in with no evidence is refused",
+  );
+  const handed = await p.handIn(id, {
+    markdown: md,
+    evidence: "npm test -w apps/api → 285 pass, 0 fail",
+    cwd: dir,
+  });
   assert.equal(handed.state, "review");
   assert.deepEqual(
     handed.next.map((s) => s.tool),

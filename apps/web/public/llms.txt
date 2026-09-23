@@ -124,8 +124,7 @@ passalong login                 # optional: sync across machines
 `passalong setup` registers a stdio MCP server exposing: `take`, `progress`, `hand_in`, `pass`,
 `assign` (give a guide or task you wrote to @handle, #group or the whole team),
 `publish_guide`, `file_bugs`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`,
-`attach_screenshot`, `inbox`, `board`, `activity`, `log`, `plan_tasks`, and, kept for older prompts,
-`start_guide`, `ack_guide`, `verify_guide`, `next_task`, `task_progress`, `finish_task`.
+`attach_screenshot`, `inbox`, `board`, `activity`, `log`, `plan_tasks`.
 
 Every guide, whatever its kind, is worked with four calls:
 
@@ -143,9 +142,14 @@ Every guide, whatever its kind, is worked with four calls:
 
 Every answer ends with `next`: the calls that make sense from here, with when and why. When the
 move is to make no call — you no longer hold it, or nothing is waiting — it says so in `say`:
-stop, and tell the user. The older names are the same calls: `start_guide` and `next_task` are
-`take`, `task_progress` is `progress`, `finish_task` and `verify_guide` are `hand_in`, and
-`ack_guide` is `take` or `pass`.
+stop, and tell the user. `start_guide`, `ack_guide`, `verify_guide`, `next_task`, `task_progress`
+and `finish_task` were the old names for parts of this, and are gone.
+
+Before publishing, check what is already open: `take` with no id, or `work` over the hosted server,
+shows what you hold. Work this session answers that you already hold is `hand_in`, not a second
+guide. Work that never left a branch the team can see has crossed no boundary, so publish what is
+still *open* from it — a bug or a task — rather than a write-up of the fix. "Update the passalong"
+and the like are ambiguous: ask whether it means hand in, follow up, or publish.
 
 Open a guide you mean to act on with `take`, not `get_guide`. `get_guide` is the same fetch without
 saying you are on it — for reading a guide you have not committed to. You have to be able to read

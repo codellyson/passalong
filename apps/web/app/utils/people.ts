@@ -47,3 +47,34 @@ export function handleFrom(name: string): string {
     .slice(0, 31)
     .replace(/-+$/g, "");
 }
+
+/**
+ * Two letters for an avatar: the initials of a name, or the first two letters of a single word.
+ * `?` when there is nothing to take them from — an account with no name and no @name yet.
+ */
+export function initialsOf(label: string): string {
+  const words = String(label ?? "")
+    .replace(/^@/, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return "?";
+  const two = words.length > 1 ? words.map((w) => w[0]).join("") : words[0]!;
+  return two.slice(0, 2).toUpperCase();
+}
+
+/**
+ * A person's colour, as a hue, derived from their name so it is the same in every list and on
+ * every machine — no palette to store, and no two sessions disagreeing about who is teal.
+ *
+ * The hash is FNV-1a, and the hue is its remainder: small, stable, and spread evenly enough that a
+ * handful of teammates do not land on one colour. Lightness and chroma are the stylesheet's, so
+ * both themes stay legible whatever hue comes out.
+ */
+export function avatarHue(seed: string): number {
+  let h = 2166136261;
+  for (const ch of String(seed ?? "")) {
+    h ^= ch.codePointAt(0) ?? 0;
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h) % 360;
+}

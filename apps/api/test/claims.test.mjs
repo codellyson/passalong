@@ -13,6 +13,7 @@ import {
   blockOn,
   closeHandedIn,
   dropOutside,
+  evidenceProblem,
   finish,
   handedIn,
   handIn,
@@ -86,6 +87,8 @@ function seed(db) {
       .run(id, account, `task ${id}`, status, created, created, kind, target);
 }
 
+/** What a hand-in has to bring: the run, not the agent's word for it. */
+const PROOF = "npm test -w apps/api → 41 pass, 0 fail";
 const A = { account: "me", agent: "agent-a", repo: "o/r" };
 const B = { account: "me", agent: "agent-b", repo: "o/r" };
 
@@ -207,23 +210,51 @@ test("finishing needs a transfer guide, and moves the task to review", async () 
   guide("report", { kind: "", target: "" });
   guide("theirs", { kind: "", target: "", account: "other" });
   await next(db, A, { at: T0 });
-  assert.equal((await finish(db, "t1", A, { at: T0, report: "missing" })).status, 400);
-  assert.equal((await finish(db, "t1", A, { at: T0, report: "theirs" })).status, 400);
+  const fin = (o) => finish(db, "t1", A, { at: T0, evidence: PROOF, report: "report", ...o });
+  assert.equal((await fin({ report: "missing" })).status, 400);
+  assert.equal((await fin({ report: "theirs" })).status, 400);
+  assert.equal((await fin({ report: "t1" })).status, 400, "a task is not a report");
   assert.equal(
-    (await finish(db, "t1", A, { at: T0, report: "t1" })).status,
-    400,
-    "a task is not a report",
+    (await finish(db, "t1", B, { at: T0, evidence: PROOF, report: "report" })).status,
+    409,
   );
-  assert.equal((await finish(db, "t1", B, { at: T0, report: "report" })).status, 409);
   await renew(db, "t1", A, { at: T0, note: "all green" });
-  const done = await finish(db, "t1", A, { at: T0, report: "report", pr: "https://x/pull/1" });
+  const done = await fin({ pr: "https://x/pull/1" });
   assert.equal(done.claim.state, "review");
   assert.equal(done.claim.note, "all green", "finishing without a note keeps the last line");
+  assert.equal(done.claim.evidence, PROOF, "what it ran is kept with the claim");
   const [row] = (await list(db, "me", T0)).filter((r) => r.task.id === "t1");
   assert.equal(row.state, "review");
   assert.equal(row.claim.report_id, "report");
   // Finished is not held: the agent is free for the next one, and this task is not handed out again.
   assert.equal(await next(db, A, { at: T0 }), null);
+});
+
+test("nothing is handed in without evidence, and a claim is not evidence", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  await next(db, A, { at: T0 });
+  for (const bad of ["", "   ", "done", "it works", "all good"])
+    assert.match(
+      evidenceProblem(bad) || "",
+      /what you ran and what came back/,
+      `"${bad}" is a claim, not evidence`,
+    );
+  assert.equal(evidenceProblem(PROOF), null);
+  assert.equal(evidenceProblem("https://github.com/o/r/pull/12"), null, "a link to the change");
+
+  const missing = await finish(db, "t1", A, { at: T0, report: "report", evidence: "done" });
+  assert.equal(missing.status, 400);
+  assert.match(missing.error, /what you ran and what came back/);
+  assert.equal(await stateIn(db, "t1"), "claimed", "a refused hand-in leaves it held");
+
+  guide("h1", { kind: "transfer", target: "" });
+  await take(db, "h1", B, { at: T0 });
+  assert.equal((await handIn(db, "h1", B, { at: T0, note: "worked", evidence: "" })).status, 400);
+  const done = await handIn(db, "h1", B, { at: T0, note: "worked", evidence: PROOF });
+  assert.equal(done.claim.evidence, PROOF);
 });
 
 test("a repo is one name however it was written", () => {
@@ -246,7 +277,7 @@ async function inReview() {
   guide("t1");
   guide("report", { kind: "", target: "" });
   await next(db, A, { at: T0 });
-  await finish(db, "t1", A, { at: T0, report: "report" });
+  await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF });
   return db;
 }
 
@@ -346,15 +377,21 @@ test("an agent whose task was released or rejected is told to stop", async () =>
   await next(db, A, { at: T0 });
   await release(db, "t1", { account: "me", at: T0 });
   assert.equal(await renew(db, "t1", A, { at: T0, note: "still going" }), null);
-  assert.equal((await finish(db, "t1", A, { at: T0, report: "report" })).status, 409);
+  assert.equal(
+    (await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF })).status,
+    409,
+  );
 
   // Rejected, then taken by someone else: the first agent cannot finish over the second.
   await next(db, A, { at: T0 });
-  await finish(db, "t1", A, { at: T0, report: "report" });
+  await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF });
   await reject(db, "t1", { account: "me", at: T0, why: "wrong" });
   await next(db, B, { at: T0 });
   assert.equal(await renew(db, "t1", A, { at: T0, note: null }), null);
-  assert.equal((await finish(db, "t1", A, { at: T0, report: "report" })).status, 409);
+  assert.equal(
+    (await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF })).status,
+    409,
+  );
 });
 
 test("a task in review lists the title of the write-up it came back with", async () => {
@@ -379,7 +416,7 @@ test("a task waits for the tasks it is blocked by, until a person approves them"
   assert.equal(await next(db, B, { at: T0 }), null);
 
   // Finished is not enough: an agent saying it is done does not unblock anything.
-  await finish(db, "schema", A, { at: T0, report: "report" });
+  await finish(db, "schema", A, { at: T0, report: "report", evidence: PROOF });
   assert.equal(await next(db, B, { at: T0 }), null);
   assert.equal(await stateIn(db, "api"), "blocked");
 
@@ -549,12 +586,12 @@ test("handing in a handoff moves its claim out of working and into waiting on it
   const guide = seed(db);
   guide("h1", { kind: "transfer", target: "" });
   await take(db, "h1", A, { at: T0 });
-  const done = await handIn(db, "h1", A, { at: T0, note: "applied, tests pass" });
+  const done = await handIn(db, "h1", A, { at: T0, note: "applied, tests pass", evidence: PROOF });
   assert.equal(done.claim.state, "review");
   assert.equal(done.claim.note, "applied, tests pass");
   assert.deepEqual(await working(db, "me", T0), []);
   assert.equal(
-    (await handIn(db, "h1", B, { at: T0, note: "" })).status,
+    (await handIn(db, "h1", B, { at: T0, note: "", evidence: PROOF })).status,
     409,
     "only the taker hands in",
   );
@@ -573,6 +610,14 @@ test("every answer says what to do next, and an answer to stop says to stop", ()
     /Verification/,
   );
   assert.match(steps("bug", "taken").next.find((x) => x.tool === "hand_in").when, /Verification/);
+  // What to bring rides on every answer, because a rule read at take is forgotten by hand-in.
+  for (const kind of ["task", "transfer", "bug"])
+    for (const event of ["taken", "progress"])
+      assert.match(
+        steps(kind, event).next.find((x) => x.tool === "hand_in").with || "",
+        /evidence/,
+        `${kind} after ${event}`,
+      );
   assert.deepEqual(tools(steps("task", "handed_in")), ["take"]);
   assert.deepEqual(tools(steps("task", "passed")), ["take"]);
   assert.deepEqual(tools(steps("", "nothing")), []);
@@ -619,7 +664,7 @@ test("the author sees what was handed in on a handoff, and can close it", async 
   teamed(db);
   const ada = { account: "other", agent: "agent-ada1", repo: "o/r" };
   await take(db, "h1", ada, { at: T0 });
-  await handIn(db, "h1", ada, { at: T0, note: "worked in o/r" });
+  await handIn(db, "h1", ada, { at: T0, note: "worked in o/r", evidence: PROOF });
   const [row] = await handedIn(db, "me");
   assert.equal(row.guide.id, "h1");
   assert.equal(row.claim.note, "worked in o/r");
@@ -640,7 +685,7 @@ test("the author can send one repo's hand-in back with a reason, and it is open 
   teamed(db);
   const ada = { account: "other", agent: "agent-ada1", repo: "o/r" };
   await take(db, "h1", ada, { at: T0 });
-  await handIn(db, "h1", ada, { at: T0, note: "done" });
+  await handIn(db, "h1", ada, { at: T0, note: "done", evidence: PROOF });
   const at = { account: "me", at: T0, place: "o/r" };
   assert.equal((await sendBackHandedIn(db, "h1", { ...at, why: "" })).status, 400);
   const back = await sendBackHandedIn(db, "h1", { ...at, why: "the migration never ran" });

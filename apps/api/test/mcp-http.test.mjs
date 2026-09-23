@@ -74,26 +74,21 @@ test("every tool it lists is one an agent could act on", async () => {
   const body = await read(res);
   const names = body.result.tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
-    "ack_guide",
     "assign",
     "attach_screenshot",
     "board",
     "create_upload",
     "file_bugs",
-    "finish_task",
     "get_guide",
     "get_report",
     "hand_in",
     "inbox",
     "log",
-    "next_task",
     "pass",
     "progress",
     "publish_guide",
     "search_guides",
     "take",
-    "task_progress",
-    "verify_guide",
     "work",
   ]);
   for (const tool of body.result.tools) {
@@ -336,28 +331,19 @@ test("a failure part-way through says which issues already landed", async () => 
   assert.match(body.result.content[0].text, /filed 1 of 2 issues/);
 });
 
-test("acking maps onto the route, and passing carries its reason", async () => {
+test("passing carries its reason to the route", async () => {
   const { call, seen } = recorder({
-    "PUT /v1/guides/k3mq2xa7/ack": { status: 200, text: '{"id":"k3mq2xa7","taken":false}' },
+    "POST /v1/guides/k3mq2xa7/pass": { status: 200, text: '{"id":"k3mq2xa7","passed":true}' },
   });
   const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 9,
-      method: "tools/call",
-      params: {
-        name: "ack_guide",
-        arguments: { id: "k3mq2xa7", taken: false, note: "no context on payments" },
-      },
-    }),
+    callTool("pass", { id: "k3mq2xa7", agent: "chat-7f3k2m9q", why: "no context on payments" }),
     call,
     VOCAB,
   );
   assert.equal(res.status, 200);
-  const sent = seen[0];
-  assert.equal(sent.method, "PUT");
-  assert.equal(sent.path, "/v1/guides/k3mq2xa7/ack");
-  assert.deepEqual(sent.body, { taken: false, note: "no context on payments" });
+  assert.equal(seen[0].method, "POST");
+  assert.equal(seen[0].path, "/v1/guides/k3mq2xa7/pass");
+  assert.deepEqual(seen[0].body, { agent: "chat-7f3k2m9q", why: "no context on payments" });
 });
 
 test("every tool says what it does to the world, so a client does not assume the worst", async () => {
@@ -470,6 +456,8 @@ test("get_guide hands back the document and its follow-ups as data, without the 
     id: "abc12345",
     kind: "bug",
     markdown,
+    // It follows nothing, so there is nothing in front of it.
+    parent: "",
     follow_ups: [{ id: "f1", title: "More", markdown: "# more" }],
   });
 });
@@ -882,7 +870,9 @@ test("agents are told when a follow-up is a guide, at connect and with the guide
   );
   assert.match(init.result.instructions, /FOLLOW-UP IS MORE CONTEXT FOR A GUIDE/);
   assert.match(init.result.instructions, /publish_guide `parent`/);
-  assert.match(init.result.instructions, /get_guide returns a guide's follow-ups after it/);
+  assert.match(init.result.instructions, /take and get_guide return a guide's follow-ups after it/);
+  // And the other direction: a follow-up arrives with the guide it came out of.
+  assert.match(init.result.instructions, /the guide it follows, in front of it/);
   // Not the old rule: context is worth adding whether or not the guide worked as written.
   assert.doesNotMatch(init.result.instructions, /worked exactly as written|departed from/);
 
@@ -956,6 +946,72 @@ test("get_guide hands over a guide's follow-ups after it, oldest first, with the
   assert.ok(seen.some((s) => s.path === "/v1/guides/k3mq2xa7/children?markdown=1"));
 });
 
+const CHILD =
+  "---\nid: jn3juujr\ntitle: Confirmation email\nparent: hveahejv\n---\n\n## Steps\n1. x\n";
+const PARENT_ANSWER = JSON.stringify({
+  guide: {
+    id: "hveahejv",
+    title: "Store Hours UI",
+    state: "held",
+    by: { name: "Ada Lovelace", handle: "ada" },
+    markdown: "---\nid: hveahejv\n---\n\n## Goal\nOpen/close per day.\n",
+  },
+});
+
+test("a follow-up is handed over with the guide it came out of, in front of it", async () => {
+  const { call, seen } = recorder({
+    "GET /v1/guides/jn3juujr": { status: 200, text: CHILD },
+    "GET /v1/guides/jn3juujr/children": { status: 200, text: JSON.stringify({ guides: [] }) },
+    "GET /v1/guides/jn3juujr/parent": { status: 200, text: PARENT_ANSWER },
+  });
+  const content = await getGuide(call, "jn3juujr");
+  assert.match(
+    content[0].text,
+    /^THIS IS A FOLLOW-UP TO hveahejv: Store Hours UI — held by Ada Lovelace\./,
+  );
+  assert.match(content[0].text, /Open\/close per day\./, "the parent's own document comes with it");
+  assert.match(content[0].text, /depends on hveahejv being done and it is not, say so/);
+  // The document itself is still handed over whole, after the context.
+  assert.equal(content[1].text, CHILD);
+  // Asked for with content, and reading it records no pull on the parent.
+  assert.ok(seen.some((s) => s.path === "/v1/guides/jn3juujr/parent?markdown=1"));
+});
+
+test("taking a follow-up carries the same context, so no agent starts on half of it", async () => {
+  const answer = {
+    guide: { id: "jn3juujr", kind: "transfer", markdown: CHILD },
+    next: [{ tool: "hand_in", when: "done", why: "its author hears" }],
+  };
+  const { call } = recorder({
+    "POST /v1/take": { status: 200, text: JSON.stringify(answer) },
+    "GET /v1/guides/jn3juujr/children": { status: 200, text: JSON.stringify({ guides: [] }) },
+    "GET /v1/guides/jn3juujr/parent": { status: 200, text: PARENT_ANSWER },
+  });
+  const body = await read(
+    await handleMcp(callTool("take", { agent: "chat-7f3k2m9q", id: "jn3juujr" }), call, VOCAB),
+  );
+  const content = body.result.content;
+  assert.match(content[0].text, /^THIS IS A FOLLOW-UP TO hveahejv/);
+  assert.match(content[1].text, /jn3juujr is yours/);
+});
+
+test("a guide that follows nothing is handed over exactly as it always was", async () => {
+  for (const parent of [
+    { status: 200, text: JSON.stringify({ guide: null }) },
+    { status: 500, text: "boom" },
+    { status: 200, text: "not json" },
+  ]) {
+    const { call } = recorder({
+      "GET /v1/guides/k3mq2xa7": { status: 200, text: DOC },
+      "GET /v1/guides/k3mq2xa7/children": { status: 200, text: JSON.stringify({ guides: [] }) },
+      "GET /v1/guides/k3mq2xa7/parent": parent,
+    });
+    const content = await getGuide(call, "k3mq2xa7");
+    assert.equal(content.length, 2);
+    assert.equal(content[0].text, DOC);
+  }
+});
+
 test("no follow-ups, or a failure fetching them, returns the guide as it always was", async () => {
   for (const children of [
     { status: 200, text: JSON.stringify({ guides: [] }) },
@@ -993,32 +1049,39 @@ test("take works any guide by id, and ends with what to call next", async () => 
   assert.match(said, /next:\n\s+hand_in k3mq2xa7 — when you ran its Verification here/);
 });
 
-test("the old task tools are the new verbs under their old names", async () => {
-  const { call, seen } = recorder({
-    "POST /v1/take": {
-      status: 200,
-      text: JSON.stringify({ guide: null, next: [], say: "Nothing here. Stop." }),
-    },
-  });
-  const body = await read(
-    await handleMcp(callTool("next_task", { agent: "chat-7f3k2m9q" }), call, VOCAB),
+test("the old tool names are gone, and the instructions say what replaced them", async () => {
+  // Ten tools for four jobs, each pair described almost the same way, is a list a model misreads.
+  const { call } = recorder();
+  const list = await read(
+    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
   );
-  assert.equal(seen[0].path, "/v1/take");
-  assert.match(body.result.content[0].text, /Nothing here\. Stop\./);
-  const { call: c2, seen: s2 } = recorder();
-  await handleMcp(
-    callTool("task_progress", { id: "t1", agent: "chat-7f3k2m9q", note: "half" }),
-    c2,
-    VOCAB,
+  const names = list.result.tools.map((t) => t.name);
+  for (const gone of [
+    "next_task",
+    "task_progress",
+    "finish_task",
+    "ack_guide",
+    "verify_guide",
+    "start_guide",
+  ])
+    assert.ok(!names.includes(gone), `${gone} should be gone`);
+  const hello = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: PROTOCOL,
+          capabilities: {},
+          clientInfo: { name: "t", version: "1" },
+        },
+      }),
+      call,
+      VOCAB,
+    ),
   );
-  assert.equal(s2[0].path, "/v1/guides/t1/progress");
-  const { call: c3, seen: s3 } = recorder();
-  await handleMcp(
-    callTool("finish_task", { id: "t1", agent: "chat-7f3k2m9q", report: "r1" }),
-    c3,
-    VOCAB,
-  );
-  assert.equal(s3[0].path, "/v1/guides/t1/hand_in");
+  assert.match(hello.result.instructions, /those are gone: take, progress, hand_in and pass/);
 });
 
 test("a refusal to stop says to stop", async () => {
@@ -1238,4 +1301,32 @@ test("the board says what you may give to someone else, and to whom, so the app 
     ["", "@ada", "@b2", "#web"],
     "everyone, each teammate (by id without an @name), each group",
   );
+});
+
+test("a vague ask to 'update passalong' is answered by checking what you hold, not by publishing", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: PROTOCOL,
+          capabilities: {},
+          clientInfo: { name: "t", version: "1" },
+        },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  const said = body.result.instructions;
+  // Work already committed on a branch the team can see has not crossed a boundary, and a guide
+  // for it is one more thing to review. Hand in what you hold, or ask; do not publish by default.
+  assert.match(said, /hand_in/);
+  assert.match(said, /ask which/i);
+  assert.match(said, /has not crossed|crossed no boundary|never left/i);
+  const publish = body.result.instructions;
+  assert.match(publish, /before publishing/i);
 });

@@ -70,7 +70,7 @@ export interface LogEnv {
  * resolve an id without a fetch, so they write no pull row at all.
  *
  * The clause stays, because the fix removed a cause and not the property. A person who pulls a
- * guide on Monday and again on Thursday still has two rows, `start_guide` writes one every time an
+ * guide on Monday and again on Thursday still has two rows, `take` writes one every time an
  * agent opens a guide it means to work on, and rows from before the fix are still in the table. The
  * act this list renders is taking delivery of a guide, which happens once; every extra row is the
  * transfer's bookkeeping and belongs to the board, not here. `MIN(p.at)` dates the act from the

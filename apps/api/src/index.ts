@@ -151,7 +151,7 @@ import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
 import { acceptsNewWork, type Ceiling, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
-import { SHOT_TYPES, shotKey } from "./shots.js";
+import { evidenceOn, holdShots, SHOT_TYPES, shotKey } from "./shots.js";
 import {
   isUploadToken,
   publicUpload,
@@ -1602,29 +1602,43 @@ app.post("/v1/invites/:code/accept", async (c) => {
 const SHOT_MAX = 5 * 1024 * 1024;
 
 /**
- * Point a document's screenshots at it, and let go of any it no longer carries.
- *
- * Run on every write, because the document is what decides. `account_id` in the WHERE is the load
- * bearing part: without it, naming someone else's shot id in your own markdown would claim their
- * image, and deleting your guide would then delete it.
+ * Everything a guide points a screenshot from: its own markdown, and the evidence of every hand-in
+ * on it. Both are documents somebody wrote, and either is reason enough to keep the file.
  */
+async function carriedShots(c: Ctx, guide: string, markdown: string) {
+  const said = await evidenceOn(c.env.DB, guide);
+  return [...new Set([...shotIds(markdown), ...said.flatMap(shotIds)])];
+}
+
+/** The screenshots a document points at, claimed for it, and any it dropped let go. */
 async function claimShots(c: Ctx, account: string, guide: string, markdown: string) {
-  const ids = shotIds(markdown);
-  const holes = ids.map(() => "?").join(",");
-  const statements = ids.length
-    ? [
-        c.env.DB.prepare(
-          `UPDATE shot SET guide_id = ? WHERE account_id = ? AND id IN (${holes})`,
-        ).bind(guide, account, ...ids),
-        // An edit that drops an image releases it. It becomes an orphan rather than being
-        // deleted here: the same upload can be referenced by a second guide, and a write is the
-        // wrong moment to decide nobody wants a file.
-        c.env.DB.prepare(
-          `UPDATE shot SET guide_id = '' WHERE guide_id = ? AND id NOT IN (${holes})`,
-        ).bind(guide, ...ids),
-      ]
-    : [c.env.DB.prepare("UPDATE shot SET guide_id = '' WHERE guide_id = ?").bind(guide)];
-  await c.env.DB.batch(statements);
+  await holdShots(c.env.DB, {
+    account,
+    guide,
+    mine: shotIds(markdown),
+    carried: await carriedShots(c, guide, markdown),
+  });
+}
+
+/**
+ * The screenshots a hand-in's evidence points at, claimed for the guide it answers.
+ *
+ * Evidence is not markdown and lives on the claim, so nothing here was claiming it: a screenshot
+ * referenced only from evidence stayed unowned, and the nightly sweep deleted it a day later —
+ * leaving the one part of a hand-in a reviewer cannot reconstruct as a broken image.
+ */
+async function claimEvidenceShots(c: Ctx, account: string, guide: string, evidence: string) {
+  const ids = shotIds(evidence);
+  if (!ids.length) return;
+  const row = await c.env.DB.prepare("SELECT markdown FROM guide WHERE id = ?")
+    .bind(guide)
+    .first<{ markdown: string }>();
+  await holdShots(c.env.DB, {
+    account,
+    guide,
+    mine: ids,
+    carried: await carriedShots(c, guide, row?.markdown || ""),
+  });
 }
 
 /**
@@ -3006,7 +3020,7 @@ app.get("/v1/guides/:id", async (c) => {
  * not in does not appear under a guide you can see. Drafts are not children yet.
  *
  * `?markdown=1` is the reader's form: a follow-up is more context for the guide, so whoever opens
- * the original — an agent through get_guide or start_guide, a person through `passalong pull` —
+ * the original — an agent through get_guide or take, a person through `passalong pull` —
  * gets the follow-ups' content with it. That form is oldest first, because context reads in the
  * order it was added and a later follow-up may build on or correct an earlier one; at most
  * `FOLLOW_UPS_MAX` of them, each clipped by `clipFollowUp`. Without it the listing is newest first,
@@ -3033,6 +3047,60 @@ app.get("/v1/guides/:id/children", async (c) => {
   const markdown = new Map(results.map((r) => [r.id, clipFollowUp(r.id, r.markdown)]));
   return c.json({
     guides: guides.map((g) => ({ ...g, markdown: markdown.get(g.id) || "" })),
+  });
+});
+
+/**
+ * The guide this one came out of, with its content and where it has got to.
+ *
+ * Follow-ups travelled one way. Opening a guide handed over the guides written under it, and
+ * opening one of those handed over nothing: an agent given a follow-up got a document that assumes
+ * a piece of work it has never read, and had to go and find the original itself — or, worse, act
+ * as though the follow-up were the whole job. A follow-up is more context for a guide, so the
+ * guide travels with it.
+ *
+ * `state` is what decides whether this follow-up can be acted on at all, so it is answered here
+ * rather than left to another call: a follow-up to work nobody has done yet is not work to start.
+ * `draft`, `open`, `held` (by whom), `handed in` or `done`.
+ *
+ * Readable on the follow-up is not enough: the parent is filtered again on its own, so a follow-up
+ * shared with your team does not hand you a guide from a team you are not in. Like the children
+ * route, this records no pull — reading context for a guide is not opening that guide.
+ */
+app.get("/v1/guides/:id/parent", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const none = { guide: null };
+  if (!found.row.parent_id) return c.json(none);
+  const parent = await readableGuide(c, found.row.parent_id);
+  if (!parent) return c.json(none);
+
+  const claim = await c.env.DB.prepare(
+    `SELECT c.state, COALESCE(a.name, '') AS name, COALESCE(a.handle, '') AS handle
+       FROM claim c LEFT JOIN account a ON a.id = c.account_id
+      WHERE c.guide_id = ? ORDER BY c.updated DESC LIMIT 1`,
+  )
+    .bind(parent.row.id)
+    .first<{ state: string; name: string; handle: string }>();
+  const state =
+    parent.row.status === "consumed"
+      ? "done"
+      : parent.row.status === "draft"
+        ? "draft"
+        : claim?.state === "review"
+          ? "handed in"
+          : claim?.state === "claimed"
+            ? "held"
+            : "open";
+  const [summary] = await summaries(c, [parent.row]);
+  const withMarkdown = ["1", "true"].includes(c.req.query("markdown") || "");
+  return c.json({
+    guide: {
+      ...summary,
+      state,
+      by: claim ? { name: claim.name, handle: claim.handle } : null,
+      ...(withMarkdown ? { markdown: clipFollowUp(parent.row.id, parent.row.markdown) } : {}),
+    },
   });
 });
 
@@ -3230,10 +3298,9 @@ app.put("/v1/guides/:id/verdict", async (c) => {
     c.env.DB,
     found.row.id,
     { account, agent: personAgent(account) },
-    {
-      at: now(),
-      note,
-    },
+    // A person in the hub, not an agent with a terminal: their word is the evidence, and asking
+    // them to paste one would be the form this product does not have.
+    { at: now(), note, evidence: note, person: true },
   );
   return c.json({ id: found.row.id, ok: body.ok, note });
 });
@@ -3362,6 +3429,7 @@ function taskView(
           repo: claim.repo,
           worktree: claim.worktree,
           note: claim.note,
+          evidence: claim.evidence,
           report: claim.report_id,
           pr: claim.pr,
           claimed_at: claim.claimed_at,
@@ -3469,10 +3537,17 @@ app.post("/v1/tasks/:id/finish", async (c) => {
   const done = await claims.finish(c.env.DB, c.req.param("id"), who, {
     at: now(),
     report,
+    evidence: typeof who.evidence === "string" ? who.evidence : "",
     pr: typeof who.pr === "string" ? who.pr : "",
     note: typeof who.note === "string" ? who.note : "",
   });
   if ("error" in done) return err(c, done.status, done.error);
+  await claimEvidenceShots(
+    c,
+    who.account,
+    done.claim.guide_id,
+    typeof who.evidence === "string" ? who.evidence : "",
+  );
   count(c, "task_finished", {});
   await taskEvent(c, done.claim.guide_id, "task_finished", "");
   return c.json({
@@ -3655,17 +3730,21 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   const at = now();
   const note = typeof who.note === "string" ? who.note.trim().slice(0, NOTE_MAX) : "";
 
+  const evidence = typeof who.evidence === "string" ? who.evidence : "";
+
   if (found.row.kind === "task") {
     const report = typeof who.report === "string" ? who.report.trim() : "";
     if (!report) return err(c, 400, "send `report`: the id of the transfer guide about this work");
     const done = await claims.finish(c.env.DB, found.row.id, who, {
       at,
       report,
+      evidence,
       pr: typeof who.pr === "string" ? who.pr : "",
       note,
     });
     if ("error" in done)
       return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
+    await claimEvidenceShots(c, who.account, found.row.id, evidence);
     count(c, "task_finished", {});
     await taskEvent(c, found.row.id, "task_finished", "");
     return c.json({
@@ -3684,8 +3763,13 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
     );
   if (!who.ok && !note) return err(c, 400, "Say what went wrong, so the author knows what to fix.");
   if (found.owner) return err(c, 403, "This is your own guide: there is nobody to hand it in to.");
+  // Evidence before the verdict is recorded: a refused hand-in must leave nothing behind, or the
+  // author is told "it worked" by a call that did not go through.
+  const bad = claims.evidenceProblem(evidence);
+  if (bad) return err(c, 400, bad);
   await recordVerdict(c, found.row, who.ok, note);
-  await claims.handIn(c.env.DB, found.row.id, who, { at, note });
+  await claims.handIn(c.env.DB, found.row.id, who, { at, note, evidence });
+  await claimEvidenceShots(c, who.account, found.row.id, evidence);
   return c.json({
     id: found.row.id,
     ok: who.ok,
@@ -3882,6 +3966,7 @@ app.get("/v1/handed_in", async (c) => {
       host: r.claim.host,
       worktree: r.claim.worktree,
       note: r.claim.note,
+      evidence: r.claim.evidence,
       at: r.claim.updated,
     })),
   });

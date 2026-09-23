@@ -275,6 +275,16 @@ const press =
             </section>
           </div>
 
+          <!-- Both columns above are the agent's word: what the task asked, and what the write-up
+               says it checked. This is the run itself, so it sits under them rather than beside
+               one of them, and it is shown as it was sent — output is read, not paraphrased. -->
+          <section v-if="selected.claim?.evidence" class="mt-6">
+            <h3 class="m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted">
+              What it ran
+            </h3>
+            <HubEvidence :text="selected.claim.evidence" />
+          </section>
+
           <details
             v-if="docs?.report?.['Decisions and rationale'] || docs?.report?.Gotchas"
             class="mt-6"
