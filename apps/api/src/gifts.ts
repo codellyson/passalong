@@ -16,8 +16,8 @@
  * every request reads a plan, and almost none of them give one away.
  */
 
-/** Who may give a plan away, from the deployment's `ADMIN_ACCOUNTS`. Unset means nobody. */
-export function isAdmin(list: unknown, account: string): boolean {
+/** The deployment's break-glass list, as ids. Unset — the default — is nobody. */
+function listed(list: unknown, account: string): boolean {
   if (!account) return false;
   return String(list ?? "")
     .split(",")
@@ -25,6 +25,95 @@ export function isAdmin(list: unknown, account: string): boolean {
     .filter(Boolean)
     .includes(account);
 }
+
+/**
+ * Whether this account runs the product.
+ *
+ * Two ways to be one, and the order says which is the everyday answer: `role = 'super'` on the
+ * account (migrations/0027_super.sql), or the id in the deployment's `ADMIN_ACCOUNTS`. The secret
+ * is kept for the two jobs a column cannot do — making the first super on a fresh deployment, and
+ * getting back in when nobody is left who can — and is checked beside the column, never instead of
+ * it, so revoking a role is not undone by a stale entry in a secret nobody remembers editing.
+ */
+export async function isAdmin(db: D1Database, list: unknown, account: string): Promise<boolean> {
+  if (!account) return false;
+  if (listed(list, account)) return true;
+  const row = await db
+    .prepare("SELECT role FROM account WHERE id = ?")
+    .bind(account)
+    .first<{ role: string }>();
+  return row?.role === "super";
+}
+
+/** Give an account the role. Writing it twice is not an error: the second one is the same fact. */
+export async function makeSuper(
+  db: D1Database,
+  { account, by, at }: { account: string; by: string; at: string },
+): Promise<void> {
+  await db
+    .prepare("UPDATE account SET role = 'super', role_since = ?, role_by = ? WHERE id = ?")
+    .bind(at, by, account)
+    .run();
+}
+
+/**
+ * Take the role back. The account is untouched — its guides, its plan and its sign-in are its own,
+ * and losing the power to comp somebody is not losing what you wrote.
+ *
+ * The last super cannot be removed, by themselves or by anybody. A product with no operator and no
+ * way to make one is recoverable only by editing a secret and redeploying, which is exactly the
+ * everyday answer this role exists to replace.
+ */
+export async function unSuper(
+  db: D1Database,
+  { account, by, at }: { account: string; by: string; at: string },
+): Promise<Record<string, never> | Refusal> {
+  const row = await db
+    .prepare("SELECT role FROM account WHERE id = ?")
+    .bind(account)
+    .first<{ role: string }>();
+  if (!row) return { status: 404, error: `no account ${account}` };
+  if (row.role !== "super") return { status: 409, error: `${account} is not a super` };
+  const others = await db
+    .prepare("SELECT COUNT(*) AS n FROM account WHERE role = 'super' AND id <> ?")
+    .bind(account)
+    .first<{ n: number }>();
+  if (!Number(others?.n))
+    return {
+      status: 409,
+      error:
+        "that is the last super — make another one first, or nobody can make one without the " +
+        "deployment's ADMIN_ACCOUNTS",
+    };
+  await db
+    .prepare("UPDATE account SET role = '', role_since = ?, role_by = ? WHERE id = ?")
+    .bind(at, by, account)
+    .run();
+  return {};
+}
+
+/** Who runs the product, for the one listing there is. */
+export async function superAccounts(
+  db: D1Database,
+): Promise<{ id: string; name: string; email: string; since: string; by: string }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, COALESCE(NULLIF(name, ''), '@' || NULLIF(handle, ''), id) AS name,
+              email, role_since, role_by
+         FROM account WHERE role = 'super' ORDER BY role_since`,
+    )
+    .all<{ id: string; name: string; email: string; role_since: string; role_by: string }>();
+  return results.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email || "",
+    since: r.role_since,
+    by: r.role_by,
+  }));
+}
+
+/** A refusal, in the words the operator reads. */
+type Refusal = { error: string; status: 400 | 404 | 409 };
 
 /** Who a gift is for: one person, or one team. */
 export interface Subject {
@@ -56,9 +145,6 @@ export async function findSubject(db: D1Database, ref: string): Promise<Subject 
   if (!row) return null;
   return { kind: "account", id: row.id, name: row.name || `@${row.handle || row.id}` };
 }
-
-/** A refusal, in the words the operator reads. */
-type Refusal = { error: string; status: 400 | 404 | 409 };
 
 const ISO = /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z)?$/;
 

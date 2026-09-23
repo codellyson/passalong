@@ -9,7 +9,16 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { findSubject, gift, gifts, isAdmin, revokeGift } from "../src/gifts.ts";
+import {
+  findSubject,
+  gift,
+  gifts,
+  isAdmin,
+  makeSuper,
+  revokeGift,
+  superAccounts,
+  unSuper,
+} from "../src/gifts.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 const NOW = "2026-09-23T10:00:00.000Z";
@@ -64,14 +73,16 @@ const account = (db, id) => ({
   ...db.raw.prepare("SELECT plan, plan_until, plan_since FROM account WHERE id = ?").get(id),
 });
 
-test("only the accounts the deployment names may give a plan away", () => {
-  assert.equal(isAdmin("boss,other", "boss"), true);
-  assert.equal(isAdmin(" boss , other ", "other"), true, "spaces around a list are not an id");
-  assert.equal(isAdmin("boss", "ada"), false);
-  // Unset means nobody, so a deployment that was never told who the operator is has no admin at all.
-  assert.equal(isAdmin("", "boss"), false);
-  assert.equal(isAdmin(undefined, "boss"), false);
-  assert.equal(isAdmin("boss", ""), false, "an empty account never matches an empty entry");
+test("the deployment's list is read as ids, and unset means nobody", async () => {
+  const db = d1();
+  seed(db);
+  assert.equal(await isAdmin(db, "boss,other", "boss"), true);
+  assert.equal(await isAdmin(db, " boss , other ", "other"), true, "spaces are not part of an id");
+  assert.equal(await isAdmin(db, "boss", "ada"), false);
+  // Unset means nobody, so a deployment never told who runs it has no operator at all.
+  assert.equal(await isAdmin(db, "", "boss"), false);
+  assert.equal(await isAdmin(db, undefined, "boss"), false);
+  assert.equal(await isAdmin(db, "boss", ""), false, "an empty account matches no empty entry");
 });
 
 test("a handle names a person and team/slug names a team", async () => {
@@ -193,6 +204,66 @@ test("a gift that ran out on its own reads as over, with nothing having to run",
   assert.equal((await gifts(db, { at: "2026-09-24T00:00:00.000Z" }))[0].live, false);
 });
 
+// ---- who is allowed to do any of this ----------------------------------------------------------
+
+test("a super is one by the role on the account, and the deployment's list still works", async () => {
+  const db = d1();
+  seed(db);
+  // Nobody, to begin with: a fresh deployment has no operator until one is made.
+  assert.equal(await isAdmin(db, "", "ada"), false);
+  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
+  assert.equal(await isAdmin(db, "", "ada"), true);
+  // The secret is break-glass and bootstrap, checked beside the column and never instead of it:
+  // it is how the first super is made, and how the last one gets back in.
+  assert.equal(await isAdmin(db, "boss", "boss"), true);
+  assert.equal(await isAdmin(db, "", "boss"), false);
+});
+
+test("a role says when it was given and by whom, and taking it back leaves the account alone", async () => {
+  const db = d1();
+  seed(db);
+  // Two, because the last one cannot be removed — see the test below.
+  await makeSuper(db, { account: "boss", by: "boss", at: NOW });
+  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
+  const row = () => ({
+    ...db.raw.prepare("SELECT role, role_since, role_by FROM account WHERE id = 'ada'").get(),
+  });
+  assert.deepEqual(row(), { role: "super", role_since: NOW, role_by: "boss" });
+
+  const later = "2026-09-24T10:00:00.000Z";
+  assert.equal((await unSuper(db, { account: "ada", by: "boss", at: later })).error, undefined);
+  assert.deepEqual(row(), { role: "", role_since: later, role_by: "boss" });
+  assert.equal(await isAdmin(db, "", "ada"), false);
+  // The account itself is untouched: losing the role is not losing the guides.
+  assert.equal(db.raw.prepare("SELECT id FROM account WHERE id = 'ada'").get().id, "ada");
+  assert.match(
+    (await unSuper(db, { account: "ada", by: "boss", at: later })).error,
+    /not a super/i,
+  );
+});
+
+test("the last super cannot take the role from themselves", async () => {
+  // Otherwise the product has no operator and no way to make one without editing a secret and
+  // redeploying — which is the thing the role exists to stop being the everyday answer.
+  const db = d1();
+  seed(db);
+  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
+  const r = await unSuper(db, { account: "ada", by: "ada", at: NOW });
+  assert.match(r.error, /last super/i);
+  assert.equal(await isAdmin(db, "", "ada"), true);
+});
+
+test("who the supers are, for the one listing there is", async () => {
+  const db = d1();
+  seed(db);
+  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
+  const list = await superAccounts(db);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].id, "ada");
+  assert.equal(list[0].name, "Ada Lovelace");
+  assert.equal(list[0].by, "boss");
+});
+
 // ---- the routes, read rather than imported (the app is not importable under type stripping) ----
 
 const index = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
@@ -201,18 +272,22 @@ const routes = index.slice(
   index.indexOf("// ---- identity"),
 );
 
-test("the operator's routes are shut, and say nothing, on a deployment with no operator", () => {
+test("every operator route is gated, and says nothing when the caller is not one", () => {
   assert.ok(routes.length > 0, "found the routes");
   // 404 rather than 403: a route nobody is the operator of should not confirm it exists.
-  assert.match(routes, /isAdmin\(c\.env\.ADMIN_ACCOUNTS, account\)/);
-  assert.equal([...routes.matchAll(/err\(c, 404, "Not found\."\)/g)].length, 3, "all three gated");
-  for (const verb of ["app.post", "app.get", "app.delete"])
-    assert.ok(routes.includes(`${verb}("/v1/admin/gifts`), `${verb} is gated`);
+  assert.match(routes, /isAdmin\(c\.env\.DB, c\.env\.ADMIN_ACCOUNTS, account\)/);
+  const gated = [...routes.matchAll(/err\(c, 404, "Not found\."\)/g)].length;
+  const paths = [...routes.matchAll(/app\.(post|get|put|delete)\("\/v1\/admin\//g)].length;
+  assert.equal(paths, 7, "three for gifts, four for the accounts that run the product");
+  assert.equal(gated, paths, "each one checks first");
 });
 
 test("a subscription arriving clears the date a gift left behind", () => {
   // Otherwise a webhook would put somebody on a paid plan that expires on a day an operator typed
   // months earlier, and the charge would go on.
-  const webhook = index.slice(index.indexOf("const soloId ="), index.indexOf("count(c, \"plan_changed\", { provider, plan: change.plan, subject: \"team\" })"));
+  const webhook = index.slice(
+    index.indexOf("const soloId ="),
+    index.indexOf('count(c, "plan_changed", { provider, plan: change.plan, subject: "team" })'),
+  );
   assert.equal([...webhook.matchAll(/plan_until = ''/g)].length, 2, "the account's and the team's");
 });

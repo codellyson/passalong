@@ -26,6 +26,9 @@
 //   passalong take <id>           you are doing it — said before the work, so the sender stops guessing
 //   passalong pass <id> <why>     it is not yours — hands it back to its author with your reason
 //   passalong assign <id> <to>    give it to @handle, a #group, or "team" — yours, or assigned to you
+//   passalong admin create <email>   make an account that runs the product (operator only)
+//   passalong admin list          who runs it
+//   passalong admin grant|revoke <@handle>   give or take the role on an existing account
 //   passalong gift <who> --until <date> [--why "..."] [--seats N]
 //                                 give Solo to @handle, or Team to team/slug, until a date (operator only)
 //   passalong gifts               what has been given away, and what is still running
@@ -489,6 +492,42 @@ const commands = {
     const r = await passalong.assign(id, to).catch((e) => die(e.message));
     const back = r.taken_back ? ` — taken back from ${r.taken_back} who had it, and they were told` : "";
     console.error(`${r.id} is now for ${r.to || "everyone in the team"}${back}`);
+  },
+
+  // ---- who runs the product ---------------------------------------------------------------
+  // `passalong admin <create|list|grant|revoke>`. A super signs in like anybody else: the role is
+  // a column, so there is no admin password and no admin token — only an account that has it.
+
+  async admin(f) {
+    const what = f._[0] || "list";
+    if (what === "create") {
+      const email = f._[1] || die("usage: passalong admin create <email>");
+      const r = await api.makeAdmin(email).catch((e) => die(e.message));
+      // Shown once, and only here. The link is a day long because it is handed to somebody
+      // rather than clicked on the spot.
+      console.log(`account   ${r.account}`);
+      console.log(`token     ${r.token}`);
+      console.log(`password  ${r.password_url}`);
+      console.error(
+        `\n${r.email} is a super. The token is for \`passalong login\`, the link sets their ` +
+          `password for the hub, and it expires ${r.expires.slice(0, 10)}. Neither is shown again.`,
+      );
+      return;
+    }
+    if (what === "grant" || what === "revoke") {
+      const who = f._[1] || die(`usage: passalong admin ${what} <@handle | account id>`);
+      const call = what === "grant" ? api.grantAdmin : api.revokeAdmin;
+      const r = await call(who).catch((e) => die(e.message));
+      console.error(
+        what === "grant" ? `${r.name} is now a super` : `${r.name} is no longer a super`,
+      );
+      return;
+    }
+    if (what !== "list") die("usage: passalong admin <create <email> | list | grant | revoke>");
+    const { supers = [] } = await api.listAdmins().catch((e) => die(e.message));
+    if (!supers.length) return console.error("nobody is a super yet");
+    for (const s of supers)
+      console.log(`${s.id}  ${s.name}${s.email ? `  ${s.email}` : ""}  since ${s.since.slice(0, 10)}`);
   },
 
   // ---- giving a plan away -----------------------------------------------------------------

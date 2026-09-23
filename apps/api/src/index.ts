@@ -87,7 +87,16 @@ import {
   sendReset,
   sendVerdict,
 } from "./email.js";
-import { gift, gifts, isAdmin, revokeGift } from "./gifts.js";
+import {
+  findSubject,
+  gift,
+  gifts,
+  isAdmin,
+  makeSuper,
+  revokeGift,
+  superAccounts,
+  unSuper,
+} from "./gifts.js";
 import {
   AREAS,
   clipFollowUp,
@@ -1097,14 +1106,105 @@ app.delete("/v1/tokens/:id", async (c) => {
 // discoverable on a deployment that does not use them.
 
 /** 404, not 403: an operator route nobody is the operator of does not exist as far as callers go. */
-function operator(c: Ctx & { env: Env }): string | null {
+async function operator(c: Ctx & { env: Env }): Promise<string | null> {
   const account = c.get("account");
-  return isAdmin(c.env.ADMIN_ACCOUNTS, account) ? account : null;
+  return (await isAdmin(c.env.DB, c.env.ADMIN_ACCOUNTS, account)) ? account : null;
 }
+
+/**
+ * Make an account that exists to run the product, and hand back the two ways into it.
+ *
+ * A separate account on purpose: admin work is then never done by the account that also publishes
+ * guides, so a compromised working session cannot comp anybody, and the log of who did what says
+ * which hat was on. It signs in like any other account — that is the whole point of the role being
+ * a column — so nothing new is issued and nothing new can leak: a token for the CLI, and a link to
+ * set a password for the hub, each shown exactly once.
+ *
+ * The link is the existing password-reset link, because "set your first password" and "set a new
+ * one" are the same act against the same table, and a second one-time-code path is a second place
+ * for an expiry bug to live.
+ */
+app.post("/v1/admin/accounts", async (c) => {
+  const by = await operator(c);
+  if (!by) return err(c, 404, "Not found.");
+  const { email } = (await c.req.json().catch(() => ({}))) as { email?: string };
+  const address = (email || "").trim().toLowerCase();
+  if (!EMAIL_RE.test(address)) return err(c, 400, NOT_AN_EMAIL);
+  const taken = await c.env.DB.prepare("SELECT id FROM account WHERE email = ?")
+    .bind(address)
+    .first();
+  if (taken)
+    return err(
+      c,
+      409,
+      "There's already an account with that email. Make the existing one a super instead.",
+    );
+
+  const id = rid(10);
+  const token = `pa_${rand(32)}`;
+  const code = rand(40);
+  const at = now();
+  await c.env.DB.batch([
+    // token_hash is the retired identity column, as in POST /v1/accounts. See migration 0005.
+    c.env.DB.prepare(
+      `INSERT INTO account (id, created, token_hash, email, role, role_since, role_by)
+       VALUES (?, ?, ?, ?, 'super', ?, ?)`,
+    ).bind(id, at, `retired:${rid(24)}`, address, at, by),
+    c.env.DB.prepare(
+      "INSERT INTO token (id, account_id, name, hash, created) VALUES (?, ?, ?, ?, ?)",
+    ).bind(rid(10), id, "admin cli", await sha256(token), at),
+    c.env.DB.prepare(
+      "INSERT INTO reset (hash, account_id, created, expires) VALUES (?, ?, ?, ?)",
+    ).bind(await sha256(code), id, at, new Date(Date.now() + 24 * 3600e3).toISOString()),
+  ]);
+  // Mailed as well when the deployment can send, so the person it is for gets it without the
+  // operator copying a link out of a terminal into a chat window.
+  await sendReset(c.env, { to: address, url: `${origin(c)}/reset#${code}` }).catch(() => {});
+  count(c, "account_created", { kind: "super" });
+  return c.json(
+    {
+      account: id,
+      email: address,
+      role: "super",
+      token,
+      // A day, not an hour: this one is handed over rather than clicked on the spot.
+      password_url: `${origin(c)}/reset#${code}`,
+      expires: new Date(Date.now() + 24 * 3600e3).toISOString(),
+    },
+    201,
+  );
+});
+
+/** Who runs the product. */
+app.get("/v1/admin/accounts", async (c) => {
+  if (!(await operator(c))) return err(c, 404, "Not found.");
+  return c.json({ supers: await superAccounts(c.env.DB) });
+});
+
+/** Make an account that already exists a super. */
+app.put("/v1/admin/accounts/:id", async (c) => {
+  const by = await operator(c);
+  if (!by) return err(c, 404, "Not found.");
+  const who = await findSubject(c.env.DB, c.req.param("id"));
+  if (!who || who.kind !== "account") return err(c, 404, `no account "${c.req.param("id")}"`);
+  await makeSuper(c.env.DB, { account: who.id, by, at: now() });
+  return c.json({ account: who.id, name: who.name, role: "super" });
+});
+
+/** Take the role back. The account keeps everything else it has. */
+app.delete("/v1/admin/accounts/:id", async (c) => {
+  const by = await operator(c);
+  if (!by) return err(c, 404, "Not found.");
+  const who = await findSubject(c.env.DB, c.req.param("id"));
+  if (!who || who.kind !== "account") return err(c, 404, `no account "${c.req.param("id")}"`);
+  const r = await unSuper(c.env.DB, { account: who.id, by, at: now() });
+  if ("error" in r) return err(c, r.status, r.error);
+  return c.json({ account: who.id, name: who.name, role: "" });
+});
 
 /** Give Solo to a person or Team to a team, until a date. */
 app.post("/v1/admin/gifts", async (c) => {
-  const by = operator(c);
+  const by = await operator(c);
   if (!by) return err(c, 404, "Not found.");
   const body = (await c.req.json().catch(() => ({}))) as {
     to?: string;
@@ -1133,13 +1233,13 @@ app.post("/v1/admin/gifts", async (c) => {
 
 /** What has been given, newest first, and whether each one is still doing anything. */
 app.get("/v1/admin/gifts", async (c) => {
-  if (!operator(c)) return err(c, 404, "Not found.");
+  if (!(await operator(c))) return err(c, 404, "Not found.");
   return c.json({ gifts: await gifts(c.env.DB, { at: now() }) });
 });
 
 /** Take one back. The plan goes to `lapsed`; a subscription bought since is left alone. */
 app.delete("/v1/admin/gifts/:id", async (c) => {
-  if (!operator(c)) return err(c, 404, "Not found.");
+  if (!(await operator(c))) return err(c, 404, "Not found.");
   const r = await revokeGift(c.env.DB, c.req.param("id"), { at: now() });
   if ("error" in r) return err(c, r.status, r.error);
   count(c, "plan_gift_revoked", {});
