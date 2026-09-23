@@ -136,7 +136,9 @@
      `--surface` is the recessed fill (code, inputs), `--surface-raised` the lifted one (cards,
      panels). Borders alone used to carry every boundary; now fill does most of it. */
   color-scheme: light dark;
-  --bg: light-dark(#fbfaf7, #14130f);
+  /* Plain, not papered: the page itself carries no tint, so the only coloured things on it are
+     the ones meant to be read as coloured — a raised card, a recessed code block, a state. */
+  --bg: light-dark(#ffffff, #121110);
   --surface: light-dark(#f4f2ec, #1e1c18);
   --surface-raised: light-dark(#ffffff, #1c1a16);
   --fg: light-dark(#1c1b19, #ece9e1);
@@ -201,6 +203,18 @@
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+/* Full-bleed decoration — the navbar's background spans the viewport while its content stays in
+   the reading column — is drawn with `100vw`, and `100vw` counts the vertical scrollbar. That is
+   about eight pixels wider than the page, and the browser answered with a horizontal scrollbar
+   along the bottom of every screen.
+   On the scrolling element, because that is what was offering the scroll; clipping the body left
+   it scrollable. `clip` and not `hidden`: hidden would make this a scroll container and break
+   `position: sticky` inside it, and bleeding past the viewport edge is what full-bleed means —
+   there is nothing out there to scroll to. */
+html {
+  overflow-x: clip;
 }
 
 body {
