@@ -605,12 +605,21 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     2,
     async (slice, marks) =>
       (
-        await c.env.DB.prepare(`SELECT id, title FROM guide WHERE id IN (${marks}) AND ${readable}`)
+        await c.env.DB.prepare(
+          `SELECT id, title, share_key FROM guide WHERE id IN (${marks}) AND ${readable}`,
+        )
           .bind(...slice, me, me)
-          .all<{ id: string; title: string }>()
+          .all<{ id: string; title: string; share_key: string }>()
       ).results,
   );
-  for (const row of parentRows) parentTitles.set(row.id, row.title);
+  // The address as well as the title. "follows Migrating the worker" was a link into a hub search
+  // for the parent's id, which finds it only when it happens to be in the list already loaded —
+  // so from an inbox row, where the parent usually is not, it found nothing at all.
+  const parentUrls = new Map<string, string>();
+  for (const row of parentRows) {
+    parentTitles.set(row.id, row.title);
+    parentUrls.set(row.id, shareUrl(base, row));
+  }
   const childCounts = new Map<string, number>();
   const childRows = await inSlices(
     rows.map((r) => r.id),
@@ -662,6 +671,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       report_title: reportTitles.get(r.report_id) || "",
       parent: r.parent_id || "",
       parent_title: parentTitles.get(r.parent_id) || "",
+      parent_url: parentUrls.get(r.parent_id) || "",
       children: childCounts.get(r.id) || 0,
       area: r.area || "",
       severity: r.severity || "",
