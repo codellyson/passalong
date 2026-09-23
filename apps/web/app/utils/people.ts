@@ -78,3 +78,52 @@ export function avatarHue(seed: string): number {
   }
   return Math.abs(h) % 360;
 }
+
+/**
+ * Who somebody might mean, as they type: the /admin picker's rows.
+ *
+ * The routes take `@handle`, `team/slug` or an account id, all three exact, so `value` is what the
+ * field must end up holding. The two lines beside it are what makes one row tellable from the next:
+ * a name on top, and underneath the address and the email that were matched on. Two lines and not
+ * two columns, because a name and an email side by side in a field's width are two truncated halves.
+ */
+export interface PickerPerson {
+  id: string;
+  handle?: string;
+  name?: string;
+  email?: string;
+}
+export interface PickerTeam {
+  slug: string;
+  name?: string;
+}
+export interface PickerChoice {
+  value: string;
+  title: string;
+  hint: string;
+}
+
+export function personChoices(
+  people: PickerPerson[] = [],
+  teams: PickerTeam[] = [],
+): PickerChoice[] {
+  return [
+    ...people.map((p) => {
+      const address = p.handle ? `@${p.handle}` : p.id;
+      return {
+        value: address,
+        // An account with no name is known by the address it is about to be given, so that goes on
+        // the first line rather than leaving it blank and showing the address twice.
+        title: p.name?.trim() || address,
+        hint: [p.name?.trim() ? address : "", p.email].filter(Boolean).join(" · "),
+      };
+    }),
+    // A team is named twice on purpose: two teams can share a name, and the slug underneath is the
+    // only thing that says which one the plan is about to go to.
+    ...teams.map((t) => ({
+      value: `team/${t.slug}`,
+      title: t.name || t.slug,
+      hint: `team/${t.slug} · the whole team`,
+    })),
+  ];
+}

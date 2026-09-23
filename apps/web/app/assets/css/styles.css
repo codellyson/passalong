@@ -596,6 +596,29 @@ button.primary[disabled],
     0 0 0 1px var(--edge-ring),
     var(--shadow-2);
 }
+/* The same surface as a menu, under a field rather than behind a button: it belongs to the input
+   above it, so it takes that input's width and its leading edge, and it is capped at a height that
+   leaves the rest of the form visible behind it. */
+.menu.under-field {
+  right: auto;
+  left: 0;
+  /* At least the field's width, and wider than a narrow field when there is a name and an email
+     to read: it is drawn over the page for as long as somebody is choosing, so it costs the
+     layout nothing to be legible. */
+  width: max(100%, min(22rem, 80vw));
+  max-height: 16rem;
+  overflow-y: auto;
+  list-style: none;
+  margin-top: var(--s-1);
+}
+/* Above its field, for a field near the bottom of the page: a list that opens into the fold shows
+   one suggestion, and choosing from it means scrolling the field out from under the cursor. */
+.menu.under-field.above {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: var(--s-1);
+}
 .menu-item {
   display: flex;
   width: 100%;

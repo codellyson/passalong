@@ -204,6 +204,10 @@ const menu = readFileSync(
   "utf8",
 );
 const admin = readFileSync(new URL("../app/components/hub/Admin.vue", import.meta.url), "utf8");
+const picker = readFileSync(
+  new URL("../app/components/hub/PersonPicker.vue", import.meta.url),
+  "utf8",
+);
 
 test("running the product is its own page, and no part of a customer's settings", () => {
   // Settings is what somebody keeps about themselves. Comping another account is the business
@@ -265,15 +269,42 @@ test("Settings says whether you run Passalong, and by which of the two routes", 
 });
 
 test("the fields that ask for a person do not ask you to remember a handle", () => {
-  // The routes take `@handle`, `team/slug` or an id, all exact. A native datalist gives the list,
-  // the filtering and the keyboard for free, and what is typed stays the plain string the field
-  // has to send anyway.
-  assert.match(admin, /<datalist id="admin-people">/);
-  assert.equal([...admin.matchAll(/list="admin-people"/g)].length, 2, "both fields");
-  assert.match(admin, /\/v1\/admin\/people\?q=/);
+  // The routes take `@handle`, `team/slug` or an id, all exact, and both fields that take one
+  // suggest as you type.
+  assert.equal([...admin.matchAll(/<HubPersonPicker/g)].length, 2, "both fields");
+  assert.match(picker, /\/v1\/admin\/people\?q=/);
   // Typed, not pasted: one request per keystroke is one request per keystroke.
-  assert.match(admin, /setTimeout\(async \(\) => \{/);
-  assert.match(admin, /said\.length < 2/);
+  assert.match(picker, /setTimeout\(async \(\) => \{/);
+  assert.match(picker, /said\.length < 2/);
+});
+
+test("the list of suggestions is drawn in the page, not by the browser", () => {
+  // A native <datalist> was the first shape, for the list, the filtering and the keyboard the
+  // browser gives away. The browser also draws that popup outside the page and positions it
+  // against the window: in an embedded view it landed hundreds of pixels from its field, over
+  // whatever else was on screen, and no CSS can reach it.
+  // No field hands its list to the browser: `list=` is the attribute that does that.
+  assert.doesNotMatch(picker, /\blist="/);
+  assert.doesNotMatch(admin, /\blist="/);
+  assert.match(picker, /'menu under-field'/);
+  assert.match(picker, /role="listbox"/);
+  // And it opens on whichever side of the field has room: the promote field sits near the bottom
+  // of the page, where a list below it opens into the fold.
+  assert.match(picker, /up \? 'above' : ''/);
+  assert.match(picker, /getBoundingClientRect\(\)/);
+  // Drawn here means written here: everything the browser was doing for the keyboard and for a
+  // screen reader is now this component's to do.
+  assert.match(picker, /role="combobox"/);
+  assert.match(picker, /:aria-expanded="open"/);
+  assert.match(picker, /aria-activedescendant/);
+  assert.match(picker, /e\.key === "ArrowDown"/);
+  assert.match(picker, /e\.key === "Escape"/);
+  // Enter is a choice only while one is highlighted; otherwise it is the Enter that submits the
+  // form, which is what somebody who typed an id in full is pressing it for.
+  assert.match(picker, /e\.key === "Enter" && open\.value && active\.value >= 0/);
+  // mousedown, not click: the field blurs first otherwise and the list is gone by the time the
+  // click lands.
+  assert.match(picker, /@mousedown\.prevent="pick\(s\)"/);
 });
 
 test("a super sees who else there is; only the deployment's own account can change it", () => {
