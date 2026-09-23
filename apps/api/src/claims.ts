@@ -1303,10 +1303,16 @@ async function authoredGuide(
 }
 
 /**
- * The author accepts what was handed in: the guide is done, the way an approved task is — archived
- * as `consumed` — and every claim on it goes, handed in or not. Returns who had it, to tell them.
+ * The author closes their own guide: it is done, the way an approved task is — archived as
+ * `consumed` — and every claim on it goes, handed in or not. Returns who had it, to tell them.
+ *
+ * It was called closeHandedIn, and read as though a hand-in were the precondition. It never was —
+ * the gate is only that you wrote it — and the name was the reason the hub offered this on a
+ * hand-in row and nowhere else. So a guide whose receiver never engaged had no way off the board
+ * at all: leaving `Open` needs somebody else to open it and say it worked, and when they never do,
+ * the author is the one person who knows the work is finished and the one with no verb for it.
  */
-export async function closeHandedIn(
+export async function closeGuide(
   db: D1Database,
   id: string,
   { account, at }: { account: string; at: string },
@@ -1324,6 +1330,61 @@ export async function closeHandedIn(
       .bind(withStatus(g.markdown, "consumed"), at, id),
   ]);
   return { claimants: results.map((r) => r.account_id) };
+}
+
+/**
+ * Guides sent to somebody that nothing has happened to, for something on a clock to close.
+ *
+ * "Nothing" is meant strictly: nobody pulled it, nobody said they were taking it, nobody holds it,
+ * nobody gave a verdict. A guide with any of those is a conversation in progress, however slow,
+ * and closing it would be taking it off somebody's list while they are still on it.
+ *
+ * `consumed` is the right end for this and not a lie about the work: it is the author's shelf,
+ * reversible, and explicitly not a judgement that the work landed. What it says is that this
+ * stopped being live, which after a fortnight of silence it did.
+ */
+/**
+ * How long a sent guide may sit with nothing happening to it before the clock shelves it.
+ *
+ * A fortnight, because the thing being measured is a person not getting to something, and people
+ * are away for a week. Short enough that a board is not carrying a month of guides nobody opened;
+ * long enough that "I was on leave" does not lose you your work — and it is reversible anyway.
+ */
+export const STALE_SENT_MS = 14 * 24 * 60 * 60 * 1000;
+
+export async function staleSent(
+  db: D1Database,
+  before: string,
+): Promise<{ id: string; account_id: string; title: string; team_id: string; to: string }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT g.id, g.account_id, g.title, g.team_id, g.to_account_id AS to_id, g.to_group_id
+         FROM guide g
+        WHERE g.kind <> 'task' AND g.status = 'published' AND g.updated <= ?
+          AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
+          AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
+          AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id)
+        ORDER BY g.updated ASC
+        LIMIT 100`,
+    )
+    .bind(before)
+    .all<{
+      id: string;
+      account_id: string;
+      title: string;
+      team_id: string;
+      to_id: string;
+      to_group_id: string;
+    }>();
+  return results.map((r) => ({
+    id: r.id,
+    account_id: r.account_id,
+    title: r.title,
+    team_id: r.team_id,
+    to: r.to_id,
+  }));
 }
 
 /**

@@ -473,6 +473,21 @@ function build(queryClient: QueryClient) {
       [hubKeys.working, hubKeys.tasks, hubKeys.allGuides, hubKeys.board],
     );
 
+  /**
+   * The author closes a guide of theirs, from its own row.
+   *
+   * Same endpoint as onCloseHandedIn — one implementation, and the hand-in row keeps its own
+   * wording because there the answer really is "I accept this". Here it is "this is finished",
+   * which is a thing only the author can know when nobody ever opened it.
+   */
+  const onCloseGuide = (g: Guide) =>
+    change(() => api(`/v1/guides/${g.id}/close`, json("POST")), () => {}, [
+      hubKeys.allGuides,
+      hubKeys.board,
+      hubKeys.working,
+      hubKeys.handedIn,
+    ]);
+
   const onCloseHandedIn = (h: HandedIn) =>
     change(
       () => api(`/v1/guides/${h.id}/close`, json("POST")),
@@ -584,6 +599,7 @@ function build(queryClient: QueryClient) {
     onReject,
     onRelease,
     onTakeBack,
+    onCloseGuide,
     readAll,
     createTeam,
     signOut,
