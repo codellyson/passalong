@@ -551,14 +551,18 @@ button.primary[disabled],
 }
 /* Outlined: the same weight as tonal, for a tone that should not carry a fill until you reach
    for it. */
+/* The ring is quieter than the label it holds. At full strength the border carried as much colour
+   as the text and more length, so an outlined button shouted louder than the filled one beside it —
+   and "send back" is the second choice on that row, not the first. The label stays at full tone,
+   which is what says which button this is; the ring only has to draw the shape. */
 .btn.outline {
   background: transparent;
-  border-color: var(--tone);
+  border-color: color-mix(in oklab, var(--tone) 40%, transparent);
   color: var(--tone);
 }
 .btn.outline:hover {
   background: var(--tone-soft);
-  border-color: var(--tone);
+  border-color: color-mix(in oklab, var(--tone) 65%, transparent);
   color: var(--tone);
 }
 /* Destructive: a normal button until you are on it. It used to be muted at rest, which read as
