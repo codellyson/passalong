@@ -18,7 +18,10 @@ public one, for agents *using* Passalong rather than changing it.
     and `fixtures/guides/` is what now checks you did.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
-  - `src/mcp.js` — MCP tools. `take`, `progress`, `hand_in` and `pass` work every kind of guide
+  - `src/mcp.js` — MCP tools. `buildServer()` builds the surface and `serve()` connects it over
+    stdio, so `test/mcp-surface.test.js` can read what every tool tells a client. Each one carries
+    `annotations` saying what it does to the world, and `progress`, `hand_in` and `pass` carry an
+    `outputSchema` — pass the zod object, never its `.shape`, which advertises a closed object. `take`, `progress`, `hand_in` and `pass` work every kind of guide
     (docs/V2.md §11); each answer ends with the server's `next` (`steps()` in
     apps/api/src/claims.ts). `start_guide`, `ack_guide`, `verify_guide`, `next_task`,
     `task_progress` and `finish_task` are gone: ten tools for four jobs, each pair described

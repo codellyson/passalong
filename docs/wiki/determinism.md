@@ -381,8 +381,26 @@ migration still works rather than being cut off mid-task on the day it shipped. 
 follow-up, once published clients carry it — and that is the precondition for ever letting a lapsed
 lease release on its own.
 
-**4. Annotate the stdio MCP tools.** `readOnlyHint` on the reads, `outputSchema` on the four verbs,
-to match `mcp-http.ts`. Advisory per the spec, but the asymmetry is a bug either way.
+**4. Annotate the stdio MCP tools.** *Implemented.* All seventeen now say what they do to the
+world, matching the `READS`/`ADDS` block in `mcp-http.ts`. Six only read; `publish_guide` is the
+one that admits it may replace a document; `attach_screenshot` is the one that reaches outside
+Passalong. `activity` is marked as a write although it mostly reads, because it clears the unread
+feed when asked to and an annotation cannot say "sometimes".
+
+`outputSchema` is declared on `progress`, `hand_in` and `pass` only — the calls that answer with a
+record this server shapes. The spec puts the MUST on the server ("Servers MUST provide structured
+results that conform to this schema") and only a SHOULD on the client, so declaring a shape is a
+promise; `take` answers with the guide's markdown to read, not a record, so it stays quiet.
+
+`serve()` was split into `buildServer()` and `serve()`, the shape `mcp-http.ts` already had, so
+`test/mcp-surface.test.js` can list the tools over an in-memory transport pair and read what each
+one tells a client. Four mutations were checked against it: removing an annotation fails four
+tests, and downgrading `publish_guide`, `attach_screenshot` or a declared schema fails one each.
+
+That test caught a real mistake before it shipped. Handing `registerTool` a zod `.shape` rather
+than the object rebuilds it closed, so all three schemas were advertised as
+`additionalProperties: false` — the server promising its answer carries nothing else, which the
+next field added to a route would have broken. The suite now pins openness.
 
 Not doing: content-addressed ids, for the three reasons above. Not doing: anything that tries to
 make guide text reproducible.
