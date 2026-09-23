@@ -208,8 +208,10 @@ const head =
         </tbody>
       </table>
 
-      <!-- Giving one is a decision made with that list in view, so the fields sit under it. -->
-      <form class="mt-1 flex flex-wrap items-end gap-3 rounded-2 bg-surface p-3" @submit.prevent="give">
+      <!-- Giving one is a decision made with that list in view, so the fields sit under it. The
+           fields carry their own borders; a filled panel around them was a second boundary saying
+           the same thing, and it made the form read as a separate card from the list it belongs to. -->
+      <form class="mt-2 flex flex-wrap items-end gap-3" @submit.prevent="give">
         <div class="grow basis-56">
           <label :class="label" for="gift-to">Who</label>
           <input id="gift-to" v-model="to" :class="field" placeholder="@ada, or team/acme" required />
