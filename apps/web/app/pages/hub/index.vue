@@ -6,7 +6,7 @@
 
     Needs you     work handed in for you to review (HubTaskReview), agents stuck on you, and guides
                   handed to you that you have not answered
-    Working now   who is on what, across every kind (HubWorkingNow, GET /v1/working)
+    Taken         who has what, across every kind (HubTaken, GET /v1/working)
     Open          what nobody is on yet: ready, blocked and draft tasks, a teammate's task waiting
                   for its author, and handoffs you sent that are still out
     Done          folded, because it is most of what exists and none of what needs doing
@@ -139,7 +139,7 @@ const taskNeedsYou = (t: Task) =>
     (t.state === "claimed" && /^BLOCKED:/i.test(t.claim?.note || "")));
 const reviewCount = computed(() => tasks.value.filter(taskNeedsYou).length);
 
-/** Tasks nobody is on and nobody needs to review: claimed ones are in Working now. */
+/** Tasks nobody is on and nobody needs to review: claimed ones are under Taken. */
 const OPEN: { state: Task["state"]; title: string; note: string }[] = [
   {
     state: "review",
@@ -211,7 +211,9 @@ const tabs = computed(() => [
     count: needsCount.value,
     tone: needsCount.value ? "accent" : "",
   },
-  { id: "working" as const, label: "Working now", count: workingCount.value, tone: "" },
+  // The id stays `working`: it is the `?tab=` in a link somebody may have sent. Only the label
+  // changed, because the label was wrong — a stalled card is on this list and is not working.
+  { id: "working" as const, label: "Taken", count: workingCount.value, tone: "" },
   { id: "open" as const, label: "Open", count: openCount.value, tone: "" },
   { id: "done" as const, label: "Done", count: doneCount.value, tone: "" },
 ]);
@@ -359,12 +361,12 @@ const list =
             </div>
           </template>
 
-          <!-- ---- Working now ---- -->
+          <!-- ---- Taken ---- -->
           <template v-else-if="tab === 'working'">
-            <HubWorkingNow v-if="data.working.length" :rows="data.working" bare />
+            <HubTaken v-if="data.working.length" :rows="data.working" bare />
             <p v-else class="m-0 font-ui text-sm text-muted">
-              Nobody is working on anything right now. When an agent or a teammate takes something,
-              it shows here with who has it and what they last said.
+              Nobody has taken anything yet. When an agent or a teammate takes something, it shows
+              here with who has it and what they last said.
             </p>
           </template>
 

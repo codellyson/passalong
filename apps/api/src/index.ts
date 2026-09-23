@@ -3832,6 +3832,10 @@ app.get("/v1/working", async (c) => {
       target: r.guide.target,
       url: shareUrl(base, r.guide),
       state: r.state,
+      // Whether the person reading this wrote it. Only an author takes work back, and this is the
+      // one view that knows who is holding what — the guide rows know who acknowledged a handoff,
+      // which is not the same as who holds the claim.
+      mine: r.guide.account_id === c.get("account"),
       by: r.by,
       agent: r.claim.agent_id,
       host: r.claim.host,
@@ -3933,15 +3937,27 @@ app.post("/v1/tasks/:id/reject", async (c) => {
   return c.json({ id: c.req.param("id"), state: r.state });
 });
 
-app.post("/v1/tasks/:id/release", async (c) => {
-  const r = await claims.release(c.env.DB, c.req.param("id"), {
-    account: c.get("account"),
-    at: now(),
-  });
+/**
+ * The author takes their work back from whoever is holding it, whatever kind it is.
+ *
+ * It was tasks only, which left an asymmetry nobody chose: a task you could reclaim, a handoff you
+ * could not — the author's only ways out were `close` (marks it done, which it is not) or assigning
+ * it to a third party, which takes it back as a side effect of giving it away.
+ *
+ * Every live claim goes, because a handoff has one per repo and "take it back" means from whoever
+ * has it. A returning agent is refused by the fence rather than writing over whoever holds it next,
+ * which is what migration 0029 is for.
+ */
+// Two paths, one registration. `/v1/tasks/...` is the old spelling — `release` was a task verb
+// when the path was written and is every kind's now — and an installed CLI still calls it, where a
+// 404 for a command that used to work is worse than a path whose first segment is history.
+app.on("POST", ["/v1/guides/:id/release", "/v1/tasks/:id/release"], async (c) => {
+  const id = c.req.param("id");
+  const r = await claims.release(c.env.DB, id, { account: c.get("account"), at: now() });
   if ("error" in r) return err(c, r.status, r.error);
   count(c, "task_released", {});
-  await taskEvent(c, c.req.param("id"), "task_released", r.claimant);
-  return c.json({ id: c.req.param("id"), state: r.state });
+  for (const who of r.claimants) await taskEvent(c, id, "task_released", who);
+  return c.json({ id, state: r.state, from: r.places });
 });
 
 // ---- one set of verbs for every guide (docs/V2.md §11) -----------------------------------------

@@ -454,6 +454,25 @@ function build(queryClient: QueryClient) {
         ? { handed_in: old.handed_in.filter((x) => !(x.id === h.id && x.place === h.place)) }
         : old,
     );
+  /**
+   * Take work back from whoever holds it, from the one view that knows who does.
+   *
+   * `onRelease` is the same call reached from a task's own row. This one exists because a handoff
+   * has no such row: the guide lists know who acknowledged one, which is not who holds the claim,
+   * so Taken is the only place the author can act on the truth.
+   */
+  const onTakeBack = (w: Working) =>
+    change(
+      () => api(`/v1/guides/${w.id}/release`, json("POST")),
+      () =>
+        queryClient.setQueryData<{ working: Working[] }>(hubKeys.working, (old) =>
+          // Every row for that guide, not just this one: a handoff held in three repos is taken
+          // back from all three by one call, and leaving the others on screen would be a lie.
+          old ? { working: old.working.filter((x) => x.id !== w.id) } : old,
+        ),
+      [hubKeys.working, hubKeys.tasks, hubKeys.allGuides, hubKeys.board],
+    );
+
   const onCloseHandedIn = (h: HandedIn) =>
     change(
       () => api(`/v1/guides/${h.id}/close`, json("POST")),
@@ -490,7 +509,7 @@ function build(queryClient: QueryClient) {
     if (!said) return;
     return moveTask(t, "ready", `/v1/tasks/${t.id}/reject`, json("POST", { why: said }));
   };
-  const onRelease = (t: Task) => moveTask(t, "ready", `/v1/tasks/${t.id}/release`, json("POST"));
+  const onRelease = (t: Task) => moveTask(t, "ready", `/v1/guides/${t.id}/release`, json("POST"));
 
   const readAll = () =>
     change(
@@ -564,6 +583,7 @@ function build(queryClient: QueryClient) {
     onSendBackHandedIn,
     onReject,
     onRelease,
+    onTakeBack,
     readAll,
     createTeam,
     signOut,

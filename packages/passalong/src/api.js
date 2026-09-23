@@ -189,8 +189,9 @@ export const approveTask = (id) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/approve`, { method: "POST", body: {} });
 export const rejectTask = (id, why) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/reject`, { method: "POST", body: { why } });
-export const releaseTask = (id) =>
-  call(`/v1/tasks/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });
+/** Take work back from whoever holds it, of any kind. `/v1/tasks/…/release` is the old path. */
+export const release = (id) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });
 /** The four verbs every guide answers to. See docs/V2.md §11. */
 export const working = () => call("/v1/working");
 export const handedIn = () => call("/v1/handed_in");

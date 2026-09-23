@@ -12,7 +12,7 @@
 //   passalong work [--once] [--agent CMD]  run an agent on each ready task here, one after another
 //   passalong approve <id>        the work in review is done
 //   passalong reject <id> <why>   not done: back to Ready, and the next agent reads why
-//   passalong release <id>        take a task back from the agent holding it, stalled or not
+//   passalong release <id>        take work back from whoever holds it, of any kind
 //   passalong attach <image>      upload evidence and print the markdown that points at it
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong start <id|link>     pull it and take it — one command for "I am doing this"
@@ -332,8 +332,12 @@ const commands = {
 
   async release(f) {
     const id = f._[0] || die("usage: passalong release <id>");
-    await passalong.releaseTask(id).catch((e) => die(e.message));
-    console.error(`${id} is back in Ready — it says where the last agent left it`);
+    const r = await passalong.release(id).catch((e) => die(e.message));
+    const from = Number(r?.from) || 1;
+    console.error(
+      `${id} is back in Ready${from > 1 ? `, taken back from ${from} places` : ""}` +
+        " — whoever had it has been told",
+    );
   },
 
   async ready(f) {

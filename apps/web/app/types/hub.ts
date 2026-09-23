@@ -221,6 +221,8 @@ export interface Working {
   target: string;
   url: string;
   state: "claimed" | "stalled";
+  /** You wrote it, so you can take it back. */
+  mine: boolean;
   by: { handle: string; name: string; you: boolean };
   agent: string;
   host: string;

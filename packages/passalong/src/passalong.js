@@ -539,9 +539,16 @@ export async function rejectTask(id, why) {
   return r;
 }
 
-export async function releaseTask(id) {
-  needsSync("releasing a task");
-  const r = await api.releaseTask(id);
+/**
+ * Take it back from whoever is holding it — a task, a handoff or a bug, and from all of them at
+ * once when several people hold the same handoff in different repos.
+ *
+ * It was tasks only, which left an asymmetry nobody chose: the author of a handoff could mark it
+ * done or give it to somebody else, and had no way to simply have it back.
+ */
+export async function release(id) {
+  needsSync("taking work back");
+  const r = await api.release(id);
   store.remove(id);
   return r;
 }

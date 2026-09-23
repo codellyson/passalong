@@ -828,8 +828,8 @@ export async function list(
 }
 
 /**
- * A task this account wrote, with its claim, or a refusal. The gate is the author's: approving,
- * rejecting and releasing all decide what happens to work somebody asked for, and only they asked.
+ * A task this account wrote, with its claim, or a refusal. The gate is the author's: approving and
+ * rejecting both decide what happens to work somebody asked for, and only they asked.
  */
 async function authored(
   db: D1Database,
@@ -846,6 +846,19 @@ async function authored(
       error: "no such task of yours — only its author decides what happens to it",
     };
   return { markdown: g.markdown, claim: await claimOf(db, id) };
+}
+
+/** The same gate, of any kind: releasing is something an author does to work of theirs. */
+async function authoredAnyKind(
+  db: D1Database,
+  id: string,
+  account: string,
+): Promise<{ markdown: string; kind: string } | { error: string; status: 404 }> {
+  const g = await db
+    .prepare("SELECT markdown, kind FROM guide WHERE id = ? AND account_id = ?")
+    .bind(id, account)
+    .first<{ markdown: string; kind: string }>();
+  return g || { status: 404, error: "no such guide of yours — only its author takes it back" };
 }
 
 /** Set `status:` in a document's frontmatter, so the markdown agrees with the column. */
@@ -932,23 +945,58 @@ export async function release(
   db: D1Database,
   id: string,
   { account, at }: { account: string; at: string },
-): Promise<{ state: "ready"; claimant: string } | { error: string; status: 404 | 409 }> {
-  const t = await authored(db, id, account);
-  if ("error" in t) return t;
-  const c = t.claim;
-  if (c?.state !== "claimed")
+): Promise<
+  { state: "ready"; claimants: string[]; places: number } | { error: string; status: 404 | 409 }
+> {
+  const g = await authoredAnyKind(db, id, account);
+  if ("error" in g) return g;
+
+  // Every live claim, because a handoff has one per repo: three people in three checkouts can each
+  // hold the same guide legitimately, and "take it back" means from whoever has it, not from
+  // whichever of them the query happened to return first. A task has one place, so this is the
+  // same single row it always was.
+  const { results: held } = await db
+    .prepare("SELECT * FROM claim WHERE guide_id = ? AND state = 'claimed'")
+    .bind(id)
+    .all<ClaimRow>();
+  if (!held.length) {
+    const waiting = await db
+      .prepare("SELECT 1 FROM claim WHERE guide_id = ? AND state = 'review' LIMIT 1")
+      .bind(id)
+      .first();
     return {
       status: 409,
-      error: c ? "this task is in review — approve or reject it instead" : "nobody holds this task",
+      error: waiting
+        ? "this is handed in and waiting on you — approve it, or send it back with a reason"
+        : "nobody holds this",
     };
-  const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
-  const said = c.note ? `; last progress: "${c.note}"` : "";
-  const markdown = withNote(t.markdown, `${at.slice(0, 10)} released from ${where}${said}`);
-  await db.batch([
-    db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
-    db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
-  ]);
-  return { state: "ready", claimant: c.account_id };
+  }
+
+  const writes = [
+    db.prepare("DELETE FROM claim WHERE guide_id = ? AND state = 'claimed'").bind(id),
+  ];
+  // Where the work was left, written into the document so the next person picks it up rather than
+  // starting over. `## Review notes` is a task's section; a handoff has no place for it, and
+  // inventing one inside somebody's published guide is not this function's business — the holders
+  // are told either way, and `working()` already showed where it was.
+  if (g.kind === "task") {
+    const c = held[0] as ClaimRow;
+    const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
+    const said = c.note ? `; last progress: "${c.note}"` : "";
+    const markdown = withNote(g.markdown, `${at.slice(0, 10)} released from ${where}${said}`);
+    writes.push(
+      db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
+    );
+  }
+  await db.batch(writes);
+  // Two counts, because they are two different things: `claimants` is who to tell, deduped because
+  // one person told twice is one person told twice; `places` is how many claims went, which is
+  // what "taken back from three repos" means and is not the same number.
+  return {
+    state: "ready",
+    claimants: [...new Set(held.map((c) => c.account_id))],
+    places: held.length,
+  };
 }
 
 /**
