@@ -74,12 +74,14 @@ const QUERIES = {
      ORDER BY week DESC
      LIMIT 8`,
 
-  // §14 quality proxy, as close as it can honestly be computed.
+  // §14 quality proxy: "percent of pulled guides that came back with a passing verdict, and how
+  // many of those needed no follow-up edit".
   //
-  // It asks for "percent of pulled guides marked consumed without follow-up edits". `consumed` no
-  // longer means implemented — it means archived, the author's shelf — so counting it would answer
-  // a different question than the one the PRD is asking. The verdict is what replaced it, and it is
-  // a better instrument anyway: it is the reader's judgement rather than the author's.
+  // It used to ask for guides "marked consumed", and this printed a warning that the number was a
+  // substitution. `consumed` stopped meaning implemented — it is the author's shelf, archived and
+  // reversible — so §14 was rewritten around the verdict, which is the better instrument anyway:
+  // the reader's judgement rather than the author's. The warning outlived the disagreement it
+  // described and was telling operators a number was a stand-in when it is the metric as written.
   //
   // "Without follow-up edits" survives intact: `guide.updated` moving after a verdict means the
   // author changed the document in response to it.
@@ -92,6 +94,58 @@ const QUERIES = {
       JOIN guide g ON g.id = p.guide_id
       LEFT JOIN verdict v ON v.guide_id = p.guide_id
      WHERE p.account_id <> '' AND p.account_id <> g.account_id`,
+
+  // Not §14. The task queue, which none of the four above can see.
+  //
+  // The four §14 numbers all read `guide`, `pull` and `verdict` — the share-and-pull loop. A task
+  // is taken, worked and handed in through `claim`, and no metric read that table at all, so the
+  // whole of V2 was invisible here.
+  //
+  // WHY THIS IS A SNAPSHOT AND THE OTHERS ARE RATES. A claim holds where a task is now, not where
+  // it has been: `stalled` is derived on read rather than stored, and rejecting a task deletes its
+  // claim and puts it back in Ready. So "how many were rejected" cannot be answered from these
+  // rows, and is not asked. What survives a full pass round the loop is the guide's own status —
+  // `consumed` is a task its author approved — which is why `done` is the one cumulative figure
+  // here.
+  //
+  // `blocked` is folded into `ready`: it needs `task_block`, and the distinction is about whether
+  // a person has approved what it waits on, not about whether the queue is moving.
+  tasks: `
+    SELECT COUNT(*) AS tasks,
+           SUM(CASE WHEN g.status = 'consumed' THEN 1 ELSE 0 END) AS done,
+           SUM(CASE WHEN g.status = 'draft' THEN 1 ELSE 0 END) AS draft,
+           SUM(CASE WHEN g.status = 'published' AND c.guide_id IS NULL THEN 1 ELSE 0 END) AS ready,
+           SUM(CASE WHEN g.status = 'published' AND c.state = 'claimed'
+                     AND c.lease_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                    THEN 1 ELSE 0 END) AS claimed,
+           SUM(CASE WHEN g.status = 'published' AND c.state = 'claimed'
+                     AND c.lease_until <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                    THEN 1 ELSE 0 END) AS stalled,
+           SUM(CASE WHEN g.status = 'published' AND c.state = 'review' THEN 1 ELSE 0 END) AS review
+      FROM guide g
+      LEFT JOIN claim c ON c.guide_id = g.id AND c.place = ''
+     WHERE g.kind = 'task'`,
+
+  // What a hand-in brought with it, which is the only thing here that says whether the gate works.
+  //
+  // Three shapes, in the order they were added. A block of `evidence` is what migration 0025 asked
+  // for. `checks` (0028) is the same evidence sorted against the Acceptance line it answers. A
+  // check carrying `cmd` was run by packages/passalong/src/checks.js rather than described, and its
+  // exit code decided it — so `run` is the number that says whether the runner is doing anything,
+  // and it starts at zero by construction.
+  //
+  // Every claim that reached `review` is counted, including tasks since approved: the claim row
+  // survives approval, so this is cumulative rather than a picture of what is waiting right now.
+  evidence: `
+    SELECT COUNT(*) AS handed_in,
+           SUM(CASE WHEN c.evidence <> '' THEN 1 ELSE 0 END) AS with_evidence,
+           SUM(CASE WHEN c.checks <> '' THEN 1 ELSE 0 END) AS sorted,
+           SUM(CASE WHEN c.checks <> '' AND EXISTS (
+                 SELECT 1 FROM json_each(c.checks)
+                  WHERE json_extract(value, '$.cmd') IS NOT NULL
+               ) THEN 1 ELSE 0 END) AS run
+      FROM claim c
+     WHERE c.state = 'review'`,
 
   // §14 v2: "percent of transfers that cross a person boundary".
   // Three kinds, and they are the whole of `pull`: somebody else took it, you took your own in
@@ -189,11 +243,58 @@ function report(read) {
     `  ${q.works} came back working (${pct(q.works, q.pulled)}), ${q.broken} came back broken (${pct(q.broken, q.pulled)})`,
   );
   console.log(`  ${q.clean} of the working ones needed no edit to the guide afterwards`);
-  caveat(
-    "Not the metric as written. §14 asks for guides 'marked consumed', and `consumed` now means\n" +
-      "    archived rather than implemented — the verdict replaced it, and is the reader's\n" +
-      "    judgement rather than the author's. Update §14 or this stays a substitution.",
+  // Subtraction nobody was doing. A pull with no verdict is the loop's last step skipped, and it
+  // is the largest number in this section as often as not.
+  const silent = q.pulled - q.works - q.broken;
+  console.log(
+    `  ${silent} were pulled and never answered (${pct(silent, q.pulled)}) — no works, no broken`,
   );
+  caveat(
+    "Silence is not a verdict either way. A guide nobody answered reads the same as one still\n" +
+      "    being worked on, so this number is an upper bound on what was abandoned.",
+  );
+
+  const [t] = read(QUERIES.tasks);
+  rule("The task queue — where tasks are now");
+  if (!t.tasks) console.log("  no tasks yet");
+  else {
+    console.log(
+      `  ${plural(t.tasks, "task")}: ${t.done} approved · ${t.review} waiting on a person · ` +
+        `${t.claimed} being worked · ${t.stalled} stalled · ${t.ready} ready · ${t.draft} draft`,
+    );
+    caveat(
+      "A snapshot, not a rate. A claim says where a task is now: `stalled` is derived on read,\n" +
+        "    and rejecting one deletes its claim and puts it back in Ready, so how many were\n" +
+        "    rejected cannot be asked of these rows. `done` is the exception and is cumulative.",
+    );
+  }
+
+  const [e] = read(QUERIES.evidence);
+  rule("What hand-ins brought with them");
+  if (!e.handed_in) console.log("  nothing handed in yet");
+  else {
+    console.log(`  ${plural(e.handed_in, "hand-in")}, of which:`);
+    console.log(
+      `  ${e.with_evidence} carried evidence (${pct(e.with_evidence, e.handed_in)}) · ` +
+        `${e.sorted} sorted it against the Acceptance lines (${pct(e.sorted, e.handed_in)}) · ` +
+        `${e.run} had a command run for them (${pct(e.run, e.handed_in)})`,
+    );
+    caveat(
+      "The last figure is the one to watch, and it starts at zero: a check only carries `cmd`\n" +
+        "    when an agent sends one, and packages/passalong/src/checks.js runs it. If it stays\n" +
+        "    near zero the runner is decoration and the tool description is what to fix.",
+    );
+    caveat(
+      "A hand-in the runner refused is not here. It is refused before the API is called, so\n" +
+        "    nothing is written — which is right, and means the number this would most like to\n" +
+        "    report, how many false 'done's were caught, cannot be counted at all.",
+    );
+    caveat(
+      "Age reads as absence. A hand-in from before migration 0025 has no evidence to carry and\n" +
+        "    one from before 0028 has no `checks`, so a low figure here may be history rather\n" +
+        "    than a gap. `checks` is a task's shape besides: a handoff answers `ok`, not lines.",
+    );
+  }
 
   const [c] = read(QUERIES.crossing);
   const total = (c.crossed ?? 0) + (c.own ?? 0) + (c.anon ?? 0);

@@ -63,7 +63,58 @@ const q = (params) => {
   return s ? `?${s}` : "";
 };
 
-/** Mint a fresh account and return its token. No email, no password: the token is the account. */
+/**
+ * Sign in, or make the account, and come back with a token for this machine.
+ *
+ * Three calls, because the API answers a browser and this is not one: signing in sets a session
+ * cookie, and the CLI carries a bearer token instead — one that shows up in the hub's token list
+ * with a name on it, and can be revoked there without changing the password. So the cookie is used
+ * once, to mint the token, and then dropped.
+ *
+ * `make` is signup rather than sign-in. It is the caller's decision and not a fallback here: an
+ * account created because an address was mistyped is worse than being told there is no such
+ * account.
+ */
+export async function signIn(email, password, { make = false, label = "" } = {}) {
+  const res = await fetch(`${baseUrl()}${make ? "/v1/auth/signup" : "/v1/auth/login"}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  }).catch((err) => {
+    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
+  });
+  if (!res.ok) {
+    const said = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, said.message || res.statusText);
+  }
+  const { account } = await res.json();
+  // `getSetCookie` keeps the cookies apart; a joined `set-cookie` header cannot be split safely,
+  // because an Expires date has a comma in it.
+  const cookie = (res.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+  if (!cookie) throw new ApiError(500, "signed in, but no session came back");
+
+  const minted = await fetch(`${baseUrl()}/v1/tokens`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ name: label || "cli" }),
+  });
+  if (!minted.ok) {
+    const said = await minted.json().catch(() => ({}));
+    throw new ApiError(minted.status, said.message || "could not make a token for this machine");
+  }
+  const { token: made } = await minted.json();
+  return { account, token: made };
+}
+
+/**
+ * Mint an account with no email and no password.
+ *
+ * Nothing in this package calls it any more — `passalong login` asks for an email and a password,
+ * because an account nobody can sign in to is one that dies with the file it is stored in, and the
+ * CLI used to make one without ever saying so. It stays exported because the route it calls is
+ * still live and still right for the invite page, which mints before it claims, and because
+ * removing a published export is a breaking change for anyone who imported it.
+ */
 export const createAccount = () => call("/v1/accounts", { method: "POST", auth: false });
 export const me = () => call("/v1/me");
 export const updateMe = (patch) => call("/v1/me", { method: "PATCH", body: patch });

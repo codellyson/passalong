@@ -55,11 +55,27 @@ export function evidenceProblem(text: string): string | null {
  */
 export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "review" | "done";
 
-/** One Acceptance line, and what the agent ran for it. See migrations/0028_evidence_checks.sql. */
+/**
+ * One Acceptance line, and what the agent ran for it. See migrations/0028_evidence_checks.sql.
+ *
+ * `cmd`, `exit` and `ok` are present when a runner executed the check rather than the agent
+ * describing it — packages/passalong/src/checks.js, which runs locally where there is a shell.
+ * `exit` is what the process returned and `ok` is whether the check holds; they are two fields for
+ * the reason SARIF keeps `exitCode` beside `executionSuccessful`, "because not all programs exit
+ * with an exit code of 0 on success and non-0 on failure". `exit` is null when the command never
+ * ran at all, which is not the same as a check that failed.
+ */
 export interface Check {
   check: string;
   ran: string;
+  cmd?: string;
+  exit?: number | null;
+  ok?: boolean;
 }
+
+/** A check a runner executed, as opposed to one the agent wrote about. */
+const verified = (c: Check): boolean =>
+  Boolean(c?.cmd) && (typeof c?.exit === "number" || c?.exit === null);
 
 /**
  * Evidence sorted against the lines it answers, or the reason it is not evidence yet.
@@ -71,6 +87,17 @@ export function checksProblem(checks: Check[]): string | null {
   for (const c of checks) {
     if (!String(c?.check ?? "").trim())
       return "each entry needs `check`: which check it is evidence for, in the task's own words";
+    // A check a runner executed answers for itself. The length rule is there to catch a sentence
+    // standing in for output, and `test -f dist/app.js` exiting 0 is not that — it is the
+    // strongest evidence on offer, and refusing it for being short would push agents back to prose.
+    if (verified(c)) {
+      if (c.ok === false)
+        return (
+          `"${String(c.check).trim().slice(0, 60)}" was handed in with a command that did not ` +
+          "hold: a check that failed is not a check that passed"
+        );
+      continue;
+    }
     const bad = evidenceProblem(c?.ran ?? "");
     if (bad) return `for "${String(c.check).trim().slice(0, 60)}", ${bad}`;
   }
@@ -79,7 +106,16 @@ export function checksProblem(checks: Check[]): string | null {
 
 /** The checks as one block of text, which is what every surface that predates them reads. */
 export const flatten = (checks: Check[]): string =>
-  checks.map((c) => `${c.check.trim()}\n${c.ran.trim()}`).join("\n\n");
+  checks
+    .map((c) => {
+      // The command and what it returned belong in the flattened block too: every surface that
+      // predates `checks` reads only this, and "exited 0" is the part that makes it evidence.
+      const how = verified(c)
+        ? `\n[${c.cmd} → exited ${c.exit === null ? "nothing" : c.exit}]`
+        : "";
+      return `${c.check.trim()}${how}\n${String(c.ran ?? "").trim()}`;
+    })
+    .join("\n\n");
 
 export interface ClaimRow {
   guide_id: string;
@@ -96,6 +132,8 @@ export interface ClaimRow {
   evidence: string;
   /** The same evidence against the lines it answers, as JSON. Empty when it was sent as one block. */
   checks: string;
+  /** The claim's generation. 0 on a claim taken before 0029_claim_fence.sql existed. */
+  fence: number;
   report_id: string;
   pr: string;
   claimed_at: string;
@@ -160,6 +198,45 @@ export function stateOf(
 
 const leaseFrom = (at: string, ms = LEASE_MS) => new Date(Date.parse(at) + ms).toISOString();
 
+/**
+ * The next generation number for this guide in this place. See migrations/0029_claim_fence.sql.
+ *
+ * Counts up and never goes back, because the counter outlives every claim on that card — the claim
+ * row is deleted on release, on pass and on approve, and a number that reset with it would let the
+ * same agent's stale write match a later claim. A take that then loses the race burns a number,
+ * which costs nothing: what matters is that no number is ever handed out twice.
+ */
+async function nextFence(db: D1Database, id: string, place: string): Promise<number> {
+  await db
+    .prepare(
+      `INSERT INTO claim_fence (guide_id, place, held) VALUES (?, ?, 1)
+       ON CONFLICT(guide_id, place) DO UPDATE SET held = held + 1`,
+    )
+    .bind(id, place)
+    .run();
+  const row = await db
+    .prepare("SELECT held FROM claim_fence WHERE guide_id = ? AND place = ?")
+    .bind(id, place)
+    .first<{ held: number }>();
+  return row?.held ?? 1;
+}
+
+/**
+ * What a write has to satisfy to count as coming from the agent that holds the claim.
+ *
+ * `fence` is optional on the way in and checked when it is there: an agent on a CLI older than
+ * migration 0029 has no number to send, and refusing it would break every session mid-task on the
+ * day this shipped. `0` is what those claims carry, and a claim taken since carries a real number,
+ * so a stale write from a re-taken card is refused while an old client still works. Requiring it
+ * is the follow-up, once published clients carry it.
+ */
+const heldBy = (fence?: number) => (typeof fence === "number" ? " AND fence = ?" : "");
+
+/** What the agent is told when its number is not the current one: it is holding a stale card. */
+const STALE =
+  "this agent no longer holds that: it was released and taken again since. Take it again — " +
+  "what you did is still in the worktree, and nothing here was overwritten.";
+
 // A task the account may see: its own, or one shared to a team it is in.
 const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
   (SELECT team_id FROM membership WHERE account_id = ?1)))`;
@@ -221,11 +298,13 @@ export async function next(
 
   for (const task of results) {
     const lease = leaseFrom(at);
+    // A task's place is '', so the counter is per task. Burned when the insert below loses.
+    const fence = await nextFence(db, task.id, "");
     const res = await db
       .prepare(
         `INSERT INTO claim (guide_id, account_id, agent_id, host, repo, worktree, state,
-                            claimed_at, lease_until, updated)
-         VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?)
+                            claimed_at, lease_until, updated, fence)
+         VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?, ?)
          ON CONFLICT(guide_id, place) DO NOTHING`,
       )
       .bind(
@@ -238,6 +317,7 @@ export async function next(
         at,
         lease,
         at,
+        fence,
       )
       .run();
     if (res.meta.changes === 1) {
@@ -359,11 +439,12 @@ export async function take(
   }
 
   const place = task ? "" : repo;
+  const fence = await nextFence(db, id, place);
   const res = await db
     .prepare(
       `INSERT INTO claim (guide_id, place, account_id, agent_id, host, repo, worktree, state,
-                          claimed_at, lease_until, updated)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?)
+                          claimed_at, lease_until, updated, fence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?, ?)
        ON CONFLICT(guide_id, place) DO NOTHING`,
     )
     .bind(
@@ -377,6 +458,7 @@ export async function take(
       at,
       leaseFrom(at, leaseMs),
       at,
+      fence,
     )
     .run();
   if (res.meta.changes === 1) {
@@ -474,12 +556,12 @@ export async function renew(
   db: D1Database,
   id: string,
   who: Agent,
-  { at, note }: { at: string; note: string | null },
+  { at, note, fence }: { at: string; note: string | null; fence?: number },
 ): Promise<ClaimRow | null> {
   const res = await db
     .prepare(
       `UPDATE claim SET lease_until = ?, updated = ?, note = COALESCE(?, note)
-        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
+        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
       leaseFrom(at),
@@ -488,6 +570,7 @@ export async function renew(
       id,
       who.agent,
       who.account,
+      ...(typeof fence === "number" ? [fence] : []),
     )
     .run();
   return res.meta.changes === 1 ? claimFor(db, id, who) : null;
@@ -515,6 +598,7 @@ export async function finish(
     checks = [],
     pr = "",
     note = "",
+    fence,
   }: {
     at: string;
     report: string;
@@ -523,6 +607,8 @@ export async function finish(
     checks?: Check[];
     pr?: string;
     note?: string;
+    /** The claim's generation, from take. Checked when it is there. See 0029_claim_fence.sql. */
+    fence?: number;
   },
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
   // Checks are evidence, so a hand-in that brings them has brought it: `evidence` is filled from
@@ -547,7 +633,7 @@ export async function finish(
     .prepare(
       `UPDATE claim SET state = 'review', report_id = ?, pr = ?, evidence = ?, checks = ?,
               note = COALESCE(NULLIF(?, ''), note), updated = ?
-        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
+        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
       report,
@@ -557,7 +643,12 @@ export async function finish(
         ? JSON.stringify(
             checks.map((c) => ({
               check: c.check.trim().slice(0, NOTE_MAX),
-              ran: c.ran.trim().slice(0, EVIDENCE_MAX),
+              ran: String(c.ran ?? "")
+                .trim()
+                .slice(0, EVIDENCE_MAX),
+              ...(verified(c)
+                ? { cmd: String(c.cmd).slice(0, NOTE_MAX), exit: c.exit, ok: c.ok === true }
+                : {}),
             })),
           ).slice(0, EVIDENCE_MAX * 2)
         : "",
@@ -566,15 +657,94 @@ export async function finish(
       id,
       who.agent,
       who.account,
+      ...(typeof fence === "number" ? [fence] : []),
     )
     .run();
-  if (res.meta.changes !== 1)
+  if (res.meta.changes !== 1) {
+    // Two ways to miss, and they read differently to whoever is holding the worktree: the card was
+    // taken away, or it was taken away and given back and this write belongs to the claim before.
+    const now = await claimFor(db, id, who);
     return {
       status: 409,
-      error: "this agent does not hold that task — it was released, or never taken here",
+      error:
+        typeof fence === "number" && now && now.fence !== fence
+          ? STALE
+          : "this agent does not hold that task — it was released, or never taken here",
     };
+  }
   const claim = await claimFor(db, id, who);
   return claim ? { claim } : { status: 409, error: "the claim went away while finishing" };
+}
+
+/** A hold nobody has heard from, and who should be told about it. See stalled(). */
+export interface Stall {
+  guide_id: string;
+  title: string;
+  kind: string;
+  /** The guide's author — the only person who can release it. */
+  author: string;
+  /** Where it was last seen, for the sentence. Empty when a person took it in the browser. */
+  where: string;
+  note: string;
+  lease_until: string;
+}
+
+/**
+ * Holds whose lease has run out, for something on a clock to announce.
+ *
+ * `stalled` is derived on read and never stored, which is right — storing it would need something
+ * running on a clock to write it. The cost is that nothing can *tell* anyone: the state comes into
+ * existence when a person opens the hub, so work goes quiet and stays quiet until somebody
+ * happens to look. This is the one read that happens without a person, so the state reaches them.
+ *
+ * It does not release anything. A lapsed lease still holds its card (docs/V2.md §5) and this does
+ * not change that; it only stops the silence being the author's job to notice.
+ *
+ * Only what is still being worked on: a claim in `review` is waiting on a person, not gone quiet,
+ * and its lease lapsing means nothing.
+ *
+ * `since` is what makes this an announcement rather than a nag. Without it every run would return
+ * everything still quiet, and `notify` refreshes a repeat's timestamp — so a card nobody had got
+ * to would climb back up the feed on every tick, which on an hourly cron is how somebody learns to
+ * ignore the feed. A window returns each lease in the one run it crosses into silence. An agent
+ * that comes back and goes quiet again moves its lease forward and crosses again, which is a
+ * second thing happening and worth a second line.
+ *
+ * Pass a window wider than the gap between runs: a tick missed by a deploy would otherwise drop
+ * the notice for good, and the overlap costs nothing — `notify` coalesces a repeat onto the one
+ * row rather than writing another.
+ */
+export async function stalled(db: D1Database, at: string, since = ""): Promise<Stall[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.guide_id, c.note, c.lease_until, c.host, c.worktree,
+              g.title, g.kind, g.account_id AS author
+         FROM claim c JOIN guide g ON g.id = c.guide_id
+        WHERE c.state = 'claimed' AND c.lease_until <= ?1
+          AND (?2 = '' OR c.lease_until > ?2)
+        ORDER BY c.lease_until ASC
+        LIMIT 200`,
+    )
+    .bind(at, since)
+    .all<{
+      guide_id: string;
+      note: string;
+      lease_until: string;
+      host: string;
+      worktree: string;
+      title: string;
+      kind: string;
+      author: string;
+    }>();
+  return results.map((r) => ({
+    guide_id: r.guide_id,
+    title: r.title,
+    kind: r.kind,
+    author: r.author,
+    where: [r.host, r.worktree].filter(Boolean).join(":"),
+    note: r.note,
+    lease_until: r.lease_until,
+  }));
 }
 
 /** Every task this account can see, with its column and its claim. Oldest first. */
@@ -826,7 +996,7 @@ export async function pass(
   db: D1Database,
   id: string,
   who: Agent,
-  { at, why }: { at: string; why: string },
+  { at, why, fence }: { at: string; why: string; fence?: number },
 ): Promise<{ kind: string; author: string } | { error: string; status: 400 | 409 }> {
   const reason = String(why ?? "")
     .trim()
@@ -834,6 +1004,8 @@ export async function pass(
   if (!reason)
     return { status: 400, error: "say why you are passing it, so whoever is next knows" };
   const c = await claimFor(db, id, who);
+  // Passing gives the card back, so a stale one would hand back work somebody else is doing.
+  if (c && typeof fence === "number" && c.fence !== fence) return { status: 409, error: STALE };
   const g = await db
     .prepare("SELECT kind, account_id, markdown FROM guide WHERE id = ?")
     .bind(id)
@@ -873,14 +1045,15 @@ export async function handIn(
     note,
     evidence,
     person = false,
-  }: { at: string; note: string; evidence: string; person?: boolean },
+    fence,
+  }: { at: string; note: string; evidence: string; person?: boolean; fence?: number },
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
   const bad = person ? null : evidenceProblem(evidence);
   if (bad) return { status: 400, error: bad };
   const res = await db
     .prepare(
       `UPDATE claim SET state = 'review', evidence = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
-        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
+        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
       String(evidence ?? "")
@@ -893,12 +1066,19 @@ export async function handIn(
       id,
       who.agent,
       who.account,
+      ...(typeof fence === "number" ? [fence] : []),
     )
     .run();
   const claim = res.meta.changes === 1 ? await claimFor(db, id, who) : null;
-  return claim
-    ? { claim }
-    : { status: 409, error: "this agent does not hold that — take it first, or it was taken back" };
+  if (claim) return { claim };
+  const now = await claimFor(db, id, who);
+  return {
+    status: 409,
+    error:
+      typeof fence === "number" && now && now.fence !== fence
+        ? STALE
+        : "this agent does not hold that — take it first, or it was taken back",
+  };
 }
 
 /** One call worth making next, when to make it, and what it has to carry. */

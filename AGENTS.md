@@ -14,15 +14,34 @@ public one, for agents *using* Passalong rather than changing it.
 - `packages/passalong` — the `passalong` CLI and the MCP server. Plain ESM JavaScript, no build step,
   no runtime deps beyond `@modelcontextprotocol/sdk` + `zod`. Published to npm as `passalong`.
   - `src/guide.js` — the guide format: frontmatter parse/serialize, validation, ids, template.
-    **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both.
+    `kind` is decided once, on read: absent means `transfer`, `parseFrontmatter` seeds it, and the
+    publish route writes it back into the document. Nothing downstream may re-decide — six places
+    used to, and one of them guessed `task`. `validate()` refuses a guide with no kind, which can
+    now only be one built field by field in code.
+
+    **That is the rule for every field whose absence means something**, not a fact about `kind`:
+    the default is applied at the boundary, the answer is written into the record, and nothing
+    downstream applies it again. `packages/passalong/test/one-place.test.js` enforces it by reading
+    the source, and `Meta.kind` in `apps/api/src/guide.ts` is non-optional so the type says it too.
+    A fallback that is really a caller's invariant rather than a default — the task queue only ever
+    hands out tasks — is written as the constant it is, where it is relied on. Add a field to that
+    test's `GUARDED` list the day absence starts speaking for it.
+    **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both,
+    and `fixtures/guides/` is what now checks you did.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
-  - `src/mcp.js` — MCP tools. `take`, `progress`, `hand_in` and `pass` work every kind of guide
+  - `src/mcp.js` — MCP tools. `buildServer()` builds the surface and `serve()` connects it over
+    stdio, so `test/mcp-surface.test.js` can read what every tool tells a client. Each one carries
+    `annotations` saying what it does to the world, and `progress`, `hand_in` and `pass` carry an
+    `outputSchema` — pass the zod object, never its `.shape`, which advertises a closed object. `take`, `progress`, `hand_in` and `pass` work every kind of guide
     (docs/V2.md §11); each answer ends with the server's `next` (`steps()` in
     apps/api/src/claims.ts). `start_guide`, `ack_guide`, `verify_guide`, `next_task`,
     `task_progress` and `finish_task` are gone: ten tools for four jobs, each pair described
     almost the same way, is a list a model misreads — which is how a session published a guide
-    for work already pushed. One tool per job, one implementation each. Also `search_guides`, `inbox`, `board`, `activity`,
+    for work already pushed. One tool per job, one implementation each. Also `search_guides`, `inbox`,
+    `board`, `activity` and `clear_activity` — reading the feed and marking it seen are two tools,
+    because one tool that did both had to declare itself a write on every call to be honest about
+    the one call that was,
     `log`, `get_guide`, `publish_guide`, `guide_template`, `set_guide_status`, `file_bugs`,
     `attach_screenshot`, `plan_tasks`. `take` is the one an agent should reach for on work it means
     to do. `get_guide` only reads. `attach_screenshot` is on both servers, shaped for where it runs — a path locally, a
@@ -32,6 +51,16 @@ public one, for agents *using* Passalong rather than changing it.
     ChatGPT fills file inputs, so the HTTP server also has `create_upload`: a one-time link
     (`POST /v1/uploads`, spent by `PUT /v1/uploads/:token` without a credential) that an agent's
     sandbox sends the file to with curl. See `apps/api/src/uploads.ts`.
+  - `fixtures/guides/` — the corpus: one file per shape the format has to keep working, each in
+    canonical form so `serialize(parse(x))` returns it byte for byte. `test/corpus.test.js` holds
+    guide.js to it and `apps/api/test/corpus.test.mjs` reads the same files to hold the two
+    parsers to each other. A change that makes these drift is a change to every guide already
+    published: edit them deliberately, never to make a test go green. Not published to npm.
+  - `src/checks.js` — runs an Acceptance check's command at hand-in and records the exit code, so
+    a task's verdict is the process's and not the agent's. Local only: `mcp-http.ts` is a Worker
+    with no shell, so a hand-in over HTTP keeps the prose gate. It never reads a command out of a
+    guide — a guide comes from somebody else's account, and running what it says would make every
+    pull remote code execution.
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to
@@ -46,7 +75,11 @@ public one, for agents *using* Passalong rather than changing it.
   - `src/og.ts` reads its fonts through the `ASSETS` binding, which is **apps/web's** assets now.
   - `src/claims.ts` — the task queue (`docs/V2.md`): claim, lease, gate, `blocked_by`. Imports no
     sibling so `test/claims.test.mjs` can run it against real SQLite with every migration. The lock
-    is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked.
+    is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked. Each
+    claim also carries a generation from `claim_fence` (migration 0029): `take` hands it out, the
+    CLI keeps it in `.passalong/held.json`, and `progress`, `hand_in` and `pass` send it back, so
+    the same agent's write from a claim that was since released and re-taken is refused. It is
+    optional on the way in and checked when present — an older CLI has none to send.
   - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running
     local server (`npm run test:e2e`, skipped by `npm test`). It puts its accounts on a plan in the
     *local* D1 with `wrangler d1 execute --local`, so it refuses any API that is not localhost.
@@ -134,7 +167,7 @@ public one, for agents *using* Passalong rather than changing it.
   exists, so `shot.guide_id` is written on every guide write from the URLs in the markdown
   (`shotIds()`), never by the client. The `account_id` in that WHERE is load-bearing: without it,
   naming someone else's shot id in your markdown would claim their image, and deleting your guide
-  would delete it. Deleting a guide takes its shots; a nightly cron sweeps uploads no guide ever
+  would delete it. Deleting a guide takes its shots; an hourly cron sweeps uploads no guide ever
   claimed.
 - **Spacing comes from the scale, and the relationship decides the step.** `--s-1`..`--s-9` are a
   4px base and Tailwind's numbers are the same unit, so use them: `gap-2` for a label and its

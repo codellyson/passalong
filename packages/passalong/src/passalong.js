@@ -294,6 +294,44 @@ export async function taskProgress(id, note, { cwd = process.cwd() } = {}) {
  * write-up and then being refused leaves a guide nobody asked for behind every refused hand-in.
  * The rule and the wording are the server's — see evidenceProblem() in apps/api/src/claims.ts.
  */
+/**
+ * The claim generation this worktree was given when it took a guide, kept in `.passalong/held.json`
+ * beside `agent.json`. See apps/api/migrations/0029_claim_fence.sql.
+ *
+ * The agent never sees this number and is never asked for it — a model echoing an integer back
+ * three calls later is not a lock. `take` writes it, and every call that writes to the claim sends
+ * it, so a hand-in belonging to a claim that was released and re-taken is refused by the server
+ * rather than landing on somebody else's work.
+ */
+function fenceFile(cwd) {
+  return join(localDir(agent(cwd).worktree), "held.json");
+}
+
+function heldFences(cwd) {
+  try {
+    const held = JSON.parse(readFileSync(fenceFile(cwd), "utf8"));
+    return held && typeof held === "object" ? held : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The number this worktree holds for a guide, or undefined when it has none to send. */
+function fenceFor(id, cwd) {
+  const n = heldFences(cwd)[id];
+  return Number.isInteger(n) ? n : undefined;
+}
+
+function rememberFence(id, fence, cwd) {
+  if (!Number.isInteger(fence)) return;
+  const held = heldFences(cwd);
+  held[id] = fence;
+  writeFileSync(fenceFile(cwd), `${JSON.stringify(held, null, 2)}\n`);
+}
+
+/** A check a runner executed: the command it ran, and what the process returned. See checks.js. */
+const verified = (c) => Boolean(c?.cmd) && (typeof c?.exit === "number" || c?.exit === null);
+
 function requireEvidence(evidence) {
   const said = String(evidence || "").trim();
   if (said.length >= 16) return;
@@ -341,6 +379,7 @@ export async function take(id, { cwd = process.cwd(), any = false } = {}) {
   const who = agent(cwd);
   const r = await api.take({ ...who, ...(id ? { id: await resolveId(id) } : {}), any });
   if (!r.guide?.markdown) return r;
+  rememberFence(r.guide.id, r.guide.fence, cwd);
   const path = join(localDir(who.worktree), `${r.guide.id}.md`);
   writeFileSync(path, r.guide.markdown);
   store.save(parse(r.guide.markdown));
@@ -350,7 +389,12 @@ export async function take(id, { cwd = process.cwd(), any = false } = {}) {
 /** Word from the agent that holds it: the lease starts again, and `note` is what the hub shows. */
 export async function progress(id, note, { cwd = process.cwd() } = {}) {
   needsSync("reporting progress");
-  return api.progress(id, { agent: agent(cwd).agent, ...(note ? { note } : {}) });
+  const fence = fenceFor(id, cwd);
+  return api.progress(id, {
+    agent: agent(cwd).agent,
+    ...(note ? { note } : {}),
+    ...(fence === undefined ? {} : { fence }),
+  });
 }
 
 /**
@@ -375,19 +419,32 @@ export async function handIn(
   } = {},
 ) {
   needsSync("handing work in");
-  // Checks are evidence, sorted against the lines they answer: bringing them is bringing it.
-  if (checks.length) checks.forEach((c) => requireEvidence(c?.ran));
+  // Checks are evidence, sorted against the lines they answer: bringing them is bringing it. A
+  // check whose command was actually run is exempt from the length rule — its exit code is the
+  // evidence, and `test -f dist/app.js` exiting 0 says more than any sentence about it would.
+  if (checks.length) checks.forEach((c) => (verified(c) ? null : requireEvidence(c?.ran)));
   else requireEvidence(evidence);
   if (!report && markdown) {
     const g = parse(markdown);
     report = (await share(serialize({ meta: { ...g.meta, parent: id }, body: g.body }), { cwd }))
       .guide.meta.id;
   }
+  const fence = fenceFor(id, cwd);
   return api.handIn(id, {
     agent: agent(cwd).agent,
     note,
     evidence,
-    ...(checks.length ? { checks } : {}),
+    ...(fence === undefined ? {} : { fence }),
+    ...(checks.length
+      ? {
+          checks: checks.map((c) => ({
+            check: c.check,
+            ran: c.ran,
+            // Only present on a check that was run. The server keeps them apart the same way.
+            ...(verified(c) ? { cmd: c.cmd, exit: c.exit, ok: c.ok } : {}),
+          })),
+        }
+      : {}),
     ...(report ? { report, pr } : {}),
     ...(typeof ok === "boolean" ? { ok } : {}),
   });
@@ -413,7 +470,12 @@ export async function pass(id, why, { cwd = process.cwd() } = {}) {
   needsSync("passing work");
   if (!String(why || "").trim())
     throw new PassalongError("say why you are passing it, so whoever is next knows");
-  return api.pass(id, { agent: agent(cwd).agent, why });
+  const fence = fenceFor(id, cwd);
+  return api.pass(id, {
+    agent: agent(cwd).agent,
+    why,
+    ...(fence === undefined ? {} : { fence }),
+  });
 }
 
 /**

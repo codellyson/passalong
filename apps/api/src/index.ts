@@ -211,6 +211,16 @@ type Env = MailEnv &
      * is, by whoever already has that access.
      */
     ADMIN_ACCOUNTS?: string;
+    /**
+     * "1" turns on the one-click demo sign-in at POST /v1/auth/demo, for working on the hub
+     * without an account. Unset — the default, and what every wrangler.jsonc ships — means the
+     * route does not exist, and it is absent from both of them on purpose: a var that has to be
+     * added to turn this on cannot be left on by forgetting to remove it.
+     *
+     * The same shape as ADMIN_ACCOUNTS and for the same reason. A deployment that has not been
+     * told to open a door has no door, rather than one with a guessable lock.
+     */
+    DEMO_LOGIN?: string;
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
   };
@@ -596,12 +606,21 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     2,
     async (slice, marks) =>
       (
-        await c.env.DB.prepare(`SELECT id, title FROM guide WHERE id IN (${marks}) AND ${readable}`)
+        await c.env.DB.prepare(
+          `SELECT id, title, share_key FROM guide WHERE id IN (${marks}) AND ${readable}`,
+        )
           .bind(...slice, me, me)
-          .all<{ id: string; title: string }>()
+          .all<{ id: string; title: string; share_key: string }>()
       ).results,
   );
-  for (const row of parentRows) parentTitles.set(row.id, row.title);
+  // The address as well as the title. "follows Migrating the worker" was a link into a hub search
+  // for the parent's id, which finds it only when it happens to be in the list already loaded —
+  // so from an inbox row, where the parent usually is not, it found nothing at all.
+  const parentUrls = new Map<string, string>();
+  for (const row of parentRows) {
+    parentTitles.set(row.id, row.title);
+    parentUrls.set(row.id, shareUrl(base, row));
+  }
   const childCounts = new Map<string, number>();
   const childRows = await inSlices(
     rows.map((r) => r.id),
@@ -653,11 +672,14 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       report_title: reportTitles.get(r.report_id) || "",
       parent: r.parent_id || "",
       parent_title: parentTitles.get(r.parent_id) || "",
+      parent_url: parentUrls.get(r.parent_id) || "",
       children: childCounts.get(r.id) || 0,
       area: r.area || "",
       severity: r.severity || "",
-      // Empty means transfer, which is what every guide written before bug reports existed is.
-      kind: r.kind || "transfer",
+      // No fallback. Every row has a kind — migration 0023 backfilled the ones written before the
+      // column, and every write since goes through parseMeta, which seeds it. A `|| "transfer"`
+      // here would be this file restating a rule guide.js owns, and a second place to change.
+      kind: r.kind,
       verdict: latest
         ? {
             ok: Boolean(latest.ok),
@@ -710,6 +732,11 @@ const PUBLIC = new Set([
   "POST /v1/auth/login",
   "POST /v1/auth/forgot",
   "POST /v1/auth/reset",
+  // Open for the same reason as the two above — it exists to hand out a session, so it cannot ask
+  // for one. It is the only entry here that does not exist in production: the route itself answers
+  // 404 unless DEMO_LOGIN is "1" and the request is for localhost, so listing it costs nothing
+  // where it is off.
+  "POST /v1/auth/demo",
 ]);
 
 /**
@@ -964,6 +991,33 @@ app.post("/v1/auth/login", async (c) => {
   return c.json({ account: row.id }, 200, { "set-cookie": await startSession(c, row.id) });
 });
 
+/**
+ * A signed-in account in one click, for working on the hub locally without making one.
+ *
+ * Two gates, and both have to hold. `DEMO_LOGIN` must be "1", and it is in no wrangler.jsonc, so
+ * production has no such route to reach. The request must also be for localhost, so the var alone
+ * is not enough if it ever escapes a .dev.vars into somewhere real. Either one missing answers 404
+ * rather than 403: a door that is not open should not announce that it exists.
+ *
+ * Every call mints a NEW empty account. It is a scratch account and the point of it is starting
+ * from nothing — reusing one would accumulate whatever the last session was testing, which is the
+ * thing it exists to avoid. They pile up in the local database, which is local.
+ *
+ * The account has no email and no password: the session cookie is the whole of it, and nothing
+ * can sign in as it again once that cookie is gone. It is the only thing left that makes one —
+ * `passalong login` asks for an email and a password now, and so does the invite page.
+ */
+app.post("/v1/auth/demo", async (c) => {
+  const host = new URL(c.req.url).hostname;
+  const local = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+  if (c.env.DEMO_LOGIN !== "1" || !local) return c.notFound();
+  const id = rid(10);
+  await c.env.DB.prepare("INSERT INTO account (id, created, token_hash) VALUES (?, ?, ?)")
+    .bind(id, now(), `retired:${rid(24)}`)
+    .run();
+  return c.json({ account: id, demo: true }, 201, { "set-cookie": await startSession(c, id) });
+});
+
 app.post("/v1/auth/logout", async (c) => {
   const sid = readCookie(c.req.header("cookie"), SESSION_COOKIE);
   if (sid)
@@ -975,8 +1029,9 @@ app.post("/v1/auth/logout", async (c) => {
 
 /**
  * Claiming an account, or changing the password on one. Anonymous accounts — the ones `passalong
- * login` and invite links create — start with no email and no password; this is how they become
- * something you can sign in to.
+ * login` and invite links used to create — start with no email and no password; this is how they
+ * become something you can sign in to. Both ask up front now, so what is left here is the accounts
+ * made before that, which still need a way in.
  */
 app.post("/v1/auth/password", async (c) => {
   const account = c.get("account");
@@ -3037,6 +3092,11 @@ app.put("/v1/guides/:id", async (c) => {
   const url = shareUrl(base, { id, share_key });
   markdown = setField(markdown, "url", url);
   if (!meta.id) markdown = setField(markdown, "id", id);
+  // And what it is. `parseMeta` has already decided — absent reads as transfer — so this writes
+  // that decision into the document rather than leaving the next reader to make it again. A guide
+  // written before kinds existed gains one the first time it is shared, which is the only moment
+  // anything here is allowed to change somebody's markdown.
+  markdown = setField(markdown, "kind", meta.kind);
   // `parseMeta` already normalised what it read, so this writes the one style back into the
   // document the author will pull again. It is a no-op when they already agree, which is every
   // publish after the first.
@@ -3918,6 +3978,10 @@ function heldView(
     state: claim.state,
     note: claim.note,
     lease_until: claim.lease_until,
+    // The claim's generation. The CLI keeps it and sends it back with progress, hand_in and pass;
+    // a write carrying the wrong one is a write from a claim that has since been released and
+    // re-taken. See migrations/0029_claim_fence.sql.
+    fence: claim.fence,
     ...(g.markdown !== undefined ? { markdown: g.markdown } : {}),
   };
 }
@@ -3938,10 +4002,15 @@ app.post("/v1/take", async (c) => {
     if (!got) return c.json({ guide: null, ...claims.steps("", "nothing") });
     count(c, "task_claimed", { resumed: got.resumed });
     if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
+    // The queue hands out tasks and nothing else — next()'s SQL says `g.kind = 'task'` — so the
+    // fallback below is that invariant, not a guess about an empty kind.
     const row = await c.env.DB.prepare("SELECT kind, share_key FROM guide WHERE id = ?")
       .bind(got.task.id)
       .first<{ kind: string; share_key: string }>();
-    const kind = row?.kind || "task";
+    // Not a default: next() selects `g.kind = 'task'` and returns nothing else, so this is the
+    // queue's invariant written down where it is relied on. Reading it off the row and falling
+    // back would be a second opinion about what an absent kind means.
+    const kind = "task";
     return c.json({
       guide: {
         ...heldView(base, { ...got.task, kind, share_key: row?.share_key }, got.claim),
@@ -3993,7 +4062,11 @@ app.put("/v1/guides/:id/progress", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
   const note = typeof who.note === "string" ? who.note : null;
-  const claim = await claims.renew(c.env.DB, c.req.param("id"), who, { at: now(), note });
+  const claim = await claims.renew(c.env.DB, c.req.param("id"), who, {
+    at: now(),
+    note,
+    fence: fenceIn(who.fence),
+  });
   if (!claim) return stopWith(c, "this agent does not hold that — stop working on it");
   const kind = await c.env.DB.prepare("SELECT kind FROM guide WHERE id = ?")
     .bind(claim.guide_id)
@@ -4011,6 +4084,42 @@ app.put("/v1/guides/:id/progress", async (c) => {
  * Anything else needs `ok` — did its Verification hold — and a note when it did not, which is the
  * verdict its sender has always heard; the claim, if this agent took it, moves out of working.
  */
+/**
+ * Evidence against the line it answers, when the agent sorted it that way. Anything that is not a
+ * pair of strings is dropped rather than refused: the block of text is still required, so a
+ * malformed extra cannot leave a hand-in with nothing to read.
+ *
+ * A check a local runner executed also carries the command, what the process returned, and whether
+ * it holds (packages/passalong/src/checks.js). Those three are taken only as a set: a `cmd` with no
+ * `exit` beside it is an agent saying what it would have run, which is the claim this exists to
+ * replace.
+ */
+/** The generation an agent says it is holding, when its client is new enough to have one. */
+const fenceIn = (raw: unknown): number | undefined =>
+  typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : undefined;
+
+function checksIn(raw: unknown): claims.Check[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[])
+    .filter((c): c is claims.Check => {
+      const o = c as { check?: unknown; ran?: unknown };
+      return typeof o?.check === "string" && typeof o?.ran === "string";
+    })
+    .map((c) => {
+      const o = c as { cmd?: unknown; exit?: unknown; ok?: unknown };
+      const ran = typeof o.cmd === "string" && (typeof o.exit === "number" || o.exit === null);
+      if (!ran) return { check: c.check, ran: c.ran };
+      return {
+        check: c.check,
+        ran: c.ran,
+        cmd: o.cmd as string,
+        exit: o.exit as number | null,
+        ok: o.ok === true,
+      };
+    })
+    .slice(0, 50);
+}
+
 app.post("/v1/guides/:id/hand_in", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
@@ -4020,17 +4129,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   const note = typeof who.note === "string" ? who.note.trim().slice(0, NOTE_MAX) : "";
 
   const evidence = typeof who.evidence === "string" ? who.evidence : "";
-  // Evidence against the line it answers, when the agent sorted it that way. Anything that is not
-  // a pair of strings is dropped rather than refused: the block of text is still required, so a
-  // malformed extra cannot leave a hand-in with nothing to read.
-  const checks = Array.isArray(who.checks)
-    ? (who.checks as unknown[])
-        .filter((c): c is { check: string; ran: string } => {
-          const o = c as { check?: unknown; ran?: unknown };
-          return typeof o?.check === "string" && typeof o?.ran === "string";
-        })
-        .slice(0, 50)
-    : [];
+  const checks = checksIn(who.checks);
 
   if (found.row.kind === "task") {
     const report = typeof who.report === "string" ? who.report.trim() : "";
@@ -4040,6 +4139,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
       report,
       evidence,
       checks,
+      fence: fenceIn(who.fence),
       pr: typeof who.pr === "string" ? who.pr : "",
       note,
     });
@@ -4069,7 +4169,12 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   const bad = claims.evidenceProblem(evidence);
   if (bad) return err(c, 400, bad);
   await recordVerdict(c, found.row, who.ok, note);
-  await claims.handIn(c.env.DB, found.row.id, who, { at, note, evidence });
+  await claims.handIn(c.env.DB, found.row.id, who, {
+    at,
+    note,
+    evidence,
+    fence: fenceIn(who.fence),
+  });
   await claimEvidenceShots(c, who.account, found.row.id, evidence);
   return c.json({
     id: found.row.id,
@@ -4089,7 +4194,11 @@ app.post("/v1/guides/:id/pass", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
   const why = typeof who.why === "string" ? who.why : "";
-  const r = await claims.pass(c.env.DB, found.row.id, who, { at: now(), why });
+  const r = await claims.pass(c.env.DB, found.row.id, who, {
+    at: now(),
+    why,
+    fence: fenceIn(who.fence),
+  });
   // Passing a handoff nobody took is still a real answer to its sender: not me, and why.
   if ("error" in r && !(r.status === 409 && found.row.kind !== "task" && !found.owner))
     return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);

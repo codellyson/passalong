@@ -61,7 +61,7 @@ nothing would ever look for the file again.
 
 `guide_id` is written on every guide write, from the shot URLs in that guide's markdown, and is
 empty until some document names it. Deleting a guide deletes its shots and their objects. An
-upload nobody ever referenced is swept nightly once it is a day old — claiming happens minutes
+upload nobody ever referenced is swept hourly once it is a day old — claiming happens minutes
 after upload at worst, so a shorter window would race a tester who is still typing.
 
 ## upload

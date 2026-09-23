@@ -91,6 +91,8 @@ export interface Guide {
    */
   parent?: string;
   parent_title?: string;
+  /** Its address, so "follows X" opens X rather than searching the list already on screen. */
+  parent_url?: string;
   /** Follow-ups you can read: published guides that name this one as their parent. */
   children?: number;
   /** "bug", "task" or "transfer"; absent means transfer. */

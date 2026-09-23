@@ -25,7 +25,9 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 export function nowText({ held, waiting = {} }) {
   if (held) {
     const lines = [
-      `Passalong: You hold ${held.id} (${held.kind || "task"}): ${held.title || held.id}.`,
+      // `kind` is required on what /v1/working sends. The `|| "task"` that used to be here was
+      // both dead and wrong — absent has meant transfer since kinds existed, never task.
+      `Passalong: You hold ${held.id} (${held.kind}): ${held.title || held.id}.`,
     ];
     if (held.note) lines.push(`Last note: "${held.note}".`);
     if (held.state === "stalled")

@@ -220,8 +220,8 @@ const noteTone: Record<string, string> = {
             </div>
             <div class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2 bg-warn-soft px-4 py-3">
               <p class="m-0 grow basis-72 font-ui text-sm text-fg">
-                <b>You're only signed in on this browser.</b> Add a password to sign in anywhere else,
-                and to get back in if this browser forgets you.
+                <b>This account has no password.</b> It was made before we asked for one, or by the
+                terminal tool. Add one to sign in from another browser.
               </p>
               <button v-if="!claiming" class="btn primary sm" type="button" @click="claiming = true">Add a password</button>
             </div>

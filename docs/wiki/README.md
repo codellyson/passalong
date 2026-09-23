@@ -21,6 +21,7 @@ source wins — and the page is a bug. Each one names the file it describes so t
 - [Auth](auth.md) — tokens, sessions, passwords, and what is stored versus what is shown once
 - [Web view](web-view.md) — rendering owner-authored markdown safely, CSP, styles, OG cards
 - [Releasing](releasing.md) — how the Worker deploys and how the CLI reaches npm
+- [Determinism](determinism.md) — what the hand-off guarantees, what it cannot, and why
 
 ## The shape of the thing in one paragraph
 

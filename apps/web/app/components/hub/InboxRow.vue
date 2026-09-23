@@ -26,6 +26,24 @@ const toggle = (which: "pass" | "verdict") => {
   open.value = open.value === which ? null : which;
 };
 
+/**
+ * What kind of thing this is, as a word beside the title.
+ *
+ * The row says everything else in a sentence rather than a badge, and that is still right for who
+ * sent it and when. Kind is not that: a bug report and a transfer guide are read differently and
+ * answered differently — one is a defect to fix here, the other an implementation to repeat — and
+ * until this was added the two were identical in every row on the page.
+ *
+ * A transfer guide gets none. It is what most guides are and what every guide written before there
+ * were kinds is, so badging it would mark the ordinary case and leave the two worth spotting
+ * competing with it.
+ */
+const KINDS: Record<string, { label: string; class: string }> = {
+  bug: { label: "bug", class: "border-danger text-danger" },
+  task: { label: "task", class: "border-accent text-accent" },
+};
+const badge = computed(() => KINDS[g.value.kind ?? ""] ?? null);
+
 const sender = computed(() => fromName(g.value) || "them");
 const team = computed(() => teamLabel(g.value, data.value.me?.teams));
 
@@ -49,12 +67,23 @@ const who = computed(() => {
     class="m-0 flex flex-wrap items-center gap-x-4 gap-y-2 bg-raised px-4 py-3 shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
   >
     <div class="min-w-0 flex-1 basis-72">
-      <a
-        :href="g.url"
-        target="_blank"
-        rel="noopener"
-        class="block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-      >{{ g.title || "Untitled guide" }}</a>
+      <p class="m-0 flex flex-wrap items-baseline gap-x-2">
+        <span
+          v-if="badge"
+          :class="[
+            'shrink-0 rounded-1 border px-1.5 py-0.5 font-ui text-xs font-medium uppercase tracking-wide',
+            badge.class,
+          ]"
+          >{{ badge.label }}</span
+        >
+        <a
+          :href="g.url"
+          target="_blank"
+          rel="noopener"
+          class="text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
+          >{{ g.title || "Untitled guide" }}</a
+        >
+      </p>
       <p class="mt-1 mb-0 flex flex-wrap gap-x-1.5 font-ui text-sm text-muted">
         <span v-if="who">
           {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b>
@@ -66,13 +95,23 @@ const who = computed(() => {
              sign on the page that follow-ups exist. -->
         <span v-if="g.parent && g.parent_title">
           · follows
-          <NuxtLink :to="{ path: '/hub', query: { q: g.parent } }">{{ shorten(g.parent_title, 32).text }}</NuxtLink>
+          <!-- The parent itself, not a hub search for its id: from an inbox row the parent is
+               usually not in the list already loaded, so the search found nothing at all. The
+               fallback is that old search, for a parent the API could not address. -->
+          <a v-if="g.parent_url" :href="g.parent_url" target="_blank" rel="noopener">{{
+            shorten(g.parent_title, 32).text
+          }}</a>
+          <NuxtLink v-else :to="{ path: '/hub', query: { q: g.parent } }">{{
+            shorten(g.parent_title, 32).text
+          }}</NuxtLink>
         </span>
         <span v-if="g.children">
           ·
-          <NuxtLink :to="{ path: '/hub', query: { follows: g.id } }">
+          <!-- Straight to them, open beside the guide. This used to filter the hub to the children
+               as rows, which is a list to click through one at a time and not a way to read them. -->
+          <a :href="`${g.url}?with=all`" target="_blank" rel="noopener">
             {{ g.children }} {{ g.children === 1 ? "follow-up" : "follow-ups" }}
-          </NuxtLink>
+          </a>
         </span>
       </p>
     </div>

@@ -37,8 +37,18 @@ export const SETTABLE = ["draft", "published", "consumed"];
  *   bug       something broken there — do NOT follow anything; fix it
  *   task      work nobody has done yet — do what Goal asks, done when Acceptance holds
  *
- * A guide with no `kind` is a transfer guide: every guide written before this existed is one,
- * and defaulting the other way would turn them all into bug reports.
+ * A guide with no `kind` is a transfer guide: every guide written before this existed is one, and
+ * defaulting the other way would turn them all into bug reports.
+ *
+ * That default is applied once, on read, and written back — `parseFrontmatter` seeds it the way it
+ * seeds `tags`, so nothing downstream has to decide what an empty kind means. It was decided in six
+ * places, each with its own `|| "transfer"`, and one of them said `|| "task"`. A guide either says
+ * what it is or is read as a transfer guide and then says so; there is no third state for anything
+ * to disagree about.
+ *
+ * Which is also why publishing an untyped guide is not refused. Refusing it leaves the document
+ * exactly as ambiguous as it was and adds a second state — a guide that exists and cannot be
+ * shared — where the point was to have fewer.
  */
 export const KINDS = ["transfer", "bug", "task"];
 
@@ -245,6 +255,10 @@ export function parseFrontmatter(text) {
   // Only the lists every guide has. `blocked_by` is a task's, and defaulting it would write an
   // empty one into every guide anybody re-shares.
   for (const k of ["stack_assumptions", "tags"]) if (meta[k] === undefined) meta[k] = [];
+  // What it is, said rather than inferred. An unknown spelling is left alone for `validate()` to
+  // refuse by name: quietly turning `kind: buggy` into a transfer guide is the same guess this is
+  // here to remove.
+  if (!String(meta.kind ?? "").trim()) meta.kind = "transfer";
   // Both ends of this module: what it reads and what it writes are in one style, so a guide
   // written before there was a rule comes back normalised and goes out normalised.
   meta.tags = tagList(meta.tags);
@@ -320,7 +334,11 @@ export function sections(body) {
     const h = /^##\s+(.+?)\s*$/.exec(line);
     if (h) {
       current = h[1];
-      out[current] = "";
+      // A heading written twice adds to its section rather than replacing it. Resetting here lost
+      // the first block outright, so a guide with two `## Verification` headings was validated
+      // against only the second — and `splitSections()` in apps/api/src/guide.ts, which the web
+      // view reads, kept both. The corpus in fixtures/guides is where the two stopped agreeing.
+      if (!(current in out)) out[current] = "";
       continue;
     }
     if (current) out[current] += `${line}\n`;
@@ -365,8 +383,12 @@ export function validate({ meta, body }) {
   if (meta.status && !STATUSES.includes(meta.status)) {
     errors.push(`status must be one of ${STATUSES.join(", ")}`);
   }
-  const kind = meta.kind || "transfer";
-  if (!KINDS.includes(kind)) errors.push(`kind must be one of ${KINDS.join(", ")}`);
+  // Absent is refused here, and this is the one place it can be. Anything read from a document has
+  // a kind — `parseFrontmatter` seeds it — so what reaches this without one was built field by
+  // field in code, and code is exactly what should have to say what it is making.
+  const kind = meta.kind;
+  if (!kind) errors.push(`say what this is: kind must be one of ${KINDS.join(", ")}`);
+  else if (!KINDS.includes(kind)) errors.push(`kind must be one of ${KINDS.join(", ")}`);
   const have = sections(body);
   for (const s of REQUIRED[kind] || REQUIRED.transfer) {
     if (!have[s]) errors.push(`missing "## ${s}" section`);

@@ -11,10 +11,12 @@ import { fileURLToPath } from "node:url";
 import {
   approve,
   blockOn,
+  checksProblem,
   closeHandedIn,
   dropOutside,
   evidenceProblem,
   finish,
+  flatten,
   handedIn,
   handIn,
   LEASE_MS,
@@ -27,6 +29,7 @@ import {
   renew,
   repoKey,
   sendBackHandedIn,
+  stalled,
   stateOf,
   steps,
   take,
@@ -270,6 +273,260 @@ test("a check with nothing behind it is not evidence either", async () => {
   );
   assert.match((await fin([{ check: "it works", ran: "yes" }])).error, /what you ran/i);
   assert.equal(await stateIn(db, "t1"), "claimed", "a refused hand-in leaves it held");
+});
+
+test("a check a runner executed answers for itself, however short its output", async () => {
+  // The length rule exists to catch a sentence standing in for output. `test -f` prints nothing at
+  // all and is the strongest evidence on offer, so a run that happened is exempt from it.
+  assert.equal(checksProblem([{ check: "it builds", ran: "$ test -f dist/app.js" }]) || "", "");
+  assert.match(
+    checksProblem([{ check: "it builds", ran: "ok" }]) || "",
+    /what you ran and what came back/,
+    "prose still has to look like evidence",
+  );
+  assert.equal(
+    checksProblem([
+      {
+        check: "it builds",
+        ran: "$ test -f dist/app.js\n(no output; exited 0)",
+        cmd: "test -f dist/app.js",
+        exit: 0,
+        ok: true,
+      },
+    ]),
+    null,
+  );
+
+  // A command that never ran carries exit: null, and is still a check that does not hold.
+  assert.match(
+    checksProblem([
+      { check: "tests pass", ran: "timed out", cmd: "npm test", exit: null, ok: false },
+    ]) || "",
+    /did not hold/,
+  );
+  assert.match(
+    checksProblem([
+      { check: "tests pass", ran: "$ npm test\n1 failing", cmd: "npm test", exit: 1, ok: false },
+    ]) || "",
+    /a check that failed is not a check that passed/,
+  );
+});
+
+test("a hand-in records what the command returned, and the flattened block says so", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  await next(db, A, { at: T0 });
+  const checks = [
+    {
+      check: "the suite is green",
+      ran: "$ npm test\n42 passing",
+      cmd: "npm test",
+      exit: 0,
+      ok: true,
+    },
+    { check: "the badge reads 3", ran: "opened the hub by hand, it reads 3" },
+  ];
+  const done = await finish(db, "t1", A, { at: T0, report: "report", evidence: "", checks });
+  assert.equal("error" in done, false, done.error);
+
+  const kept = JSON.parse(done.claim.checks);
+  assert.equal(kept[0].cmd, "npm test");
+  assert.equal(kept[0].exit, 0);
+  assert.equal(kept[0].ok, true);
+  // The one nobody ran keeps its shape: no command, so nothing to say about a run.
+  assert.equal("cmd" in kept[1], false);
+
+  // Every surface older than `checks` reads the flattened block, so the exit code has to be in it.
+  assert.match(done.claim.evidence, /\[npm test → exited 0\]/);
+  assert.match(flatten(checks), /the badge reads 3\nopened the hub by hand/);
+});
+
+test("a stale agent cannot hand in over the card it used to hold", async () => {
+  // ABA. `agent_id` is minted per worktree and deliberately stable, so it cannot tell the claim
+  // before a release from the claim after one: the same agent takes a task, a person releases it,
+  // the same agent takes it again, and a hand-in still in flight from the first claim satisfies
+  // the old guard on the second. The generation number is what tells them apart.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+
+  const first = await next(db, A, { at: T0 });
+  const was = first.claim.fence;
+  assert.ok(was >= 1, "a fresh claim carries a generation");
+
+  await release(db, "t1", { account: "me", at: T0 });
+  const again = await next(db, A, { at: T0 });
+  assert.equal(again.claim.guide_id, "t1", "the same agent takes it again");
+  assert.ok(again.claim.fence > was, `${again.claim.fence} should be past ${was}`);
+
+  // The hand-in the first claim would have sent. Same agent, same account, same task.
+  const stale = await finish(db, "t1", A, {
+    at: T0,
+    report: "report",
+    evidence: PROOF,
+    fence: was,
+  });
+  assert.equal(stale.status, 409);
+  assert.match(stale.error, /released and taken again/);
+  assert.equal(await stateIn(db, "t1"), "claimed", "the live claim is untouched");
+
+  // The number it holds now works.
+  const good = await finish(db, "t1", A, {
+    at: T0,
+    report: "report",
+    evidence: PROOF,
+    fence: again.claim.fence,
+  });
+  assert.equal("error" in good, false, good.error);
+  assert.equal(await stateIn(db, "t1"), "review");
+});
+
+test("the counter outlives the claim, and only ever counts up", async () => {
+  // It lives in its own table for this reason: the claim row is deleted on release, on pass and on
+  // approve, and a number that went back to zero with it would not be a fence at all.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const seen = [];
+  for (let i = 0; i < 3; i++) {
+    const got = await next(db, A, { at: T0 });
+    seen.push(got.claim.fence);
+    await release(db, "t1", { account: "me", at: T0 });
+  }
+  assert.deepEqual(
+    seen,
+    [...seen].sort((x, y) => x - y),
+    "the generations come back in order",
+  );
+  assert.equal(new Set(seen).size, seen.length, "no generation is handed out twice");
+});
+
+test("resuming a claim keeps its generation, and progress renews with it", async () => {
+  // A restarted session in the same worktree takes its card back. That is the same claim, so its
+  // number must not move — the worktree still holds what it was given.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const first = await next(db, A, { at: T0 });
+  const resumed = await next(db, A, { at: T0 });
+  assert.equal(resumed.resumed, true);
+  assert.equal(resumed.claim.fence, first.claim.fence);
+
+  assert.ok(await renew(db, "t1", A, { at: T0, note: "still here", fence: first.claim.fence }));
+  assert.equal(
+    await renew(db, "t1", A, { at: T0, note: "stale", fence: first.claim.fence + 1 }),
+    null,
+    "a number that is not the current one renews nothing",
+  );
+});
+
+test("a client too old to send a generation still works", async () => {
+  // An agent on a CLI from before the migration has no number to send. Refusing it would break
+  // every session mid-task on the day this shipped, so it is checked when present and not before.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  await next(db, A, { at: T0 });
+  assert.ok(await renew(db, "t1", A, { at: T0, note: "no number" }));
+  const done = await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF });
+  assert.equal("error" in done, false, done.error);
+});
+
+test("a stale agent cannot pass back work somebody else is doing", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  // A handoff is not released by its author the way a task is — it is passed back. Same shape:
+  // the claim goes away and the same agent can take it again, which is where ABA lives.
+  const first = await take(db, "h1", B, { at: T0 });
+  await pass(db, "h1", B, { at: T0, why: "wrong repo", fence: first.claim.fence });
+  const second = await take(db, "h1", B, { at: T0 });
+  assert.equal(second.resumed, false, "the claim went away, so this is a new one");
+  assert.ok(second.claim.fence > first.claim.fence);
+
+  const stale = await pass(db, "h1", B, { at: T0, why: "not mine", fence: first.claim.fence });
+  assert.equal(stale.status, 409);
+  assert.match(stale.error, /released and taken again/);
+  const live = await db.prepare("SELECT agent_id FROM claim WHERE guide_id = ?").bind("h1").first();
+  assert.equal(live?.agent_id, "agent-b", "the live claim is still there");
+});
+
+test("work that has gone quiet can be found without a person looking at it", async () => {
+  // `stalled` is derived on read and never stored, so until this existed nothing could tell
+  // anybody: the state came into being when someone opened the hub, and a card sat held until its
+  // author happened to look. This is the read that happens on a clock instead.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("t2");
+  guide("report", { kind: "", target: "" });
+
+  const first = await next(db, A, { at: T0 });
+  assert.equal(first.task.id, "t1");
+  const after = later(LEASE_MS + 1);
+
+  assert.deepEqual(await stalled(db, T0), [], "a live lease is not quiet");
+  const quiet = await stalled(db, after);
+  assert.equal(quiet.length, 1);
+  assert.equal(quiet[0].guide_id, "t1");
+  assert.equal(quiet[0].author, "me", "the author is who can release it");
+  assert.equal(quiet[0].title, "task t1");
+
+  // The last thing it said travels with it: that is what somebody deciding whether to release it
+  // actually wants in front of them.
+  await renew(db, "t1", A, { at: T0, note: "migrating schema, 2 of 5" });
+  const said = await stalled(db, later(LEASE_MS * 2));
+  assert.equal(said[0].note, "migrating schema, 2 of 5");
+
+  // A hand-in is waiting on a person, not gone quiet. Its lease lapsing means nothing.
+  await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF });
+  assert.deepEqual(await stalled(db, later(LEASE_MS * 3)), [], "review is not silence");
+});
+
+test("a card that has gone quiet is announced once, not on every tick", async () => {
+  // Without the window every run returns everything still quiet, and notify() refreshes a repeat's
+  // timestamp — so on an hourly cron a card nobody had got to would climb back up the feed every
+  // hour, which is how somebody learns to ignore the feed.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const held = await next(db, A, { at: T0 });
+  const lapsed = Date.parse(held.claim.lease_until);
+  const hour = 60 * 60 * 1000;
+  const stamp = (ms) => new Date(ms).toISOString();
+  const window = (now) => stalled(db, stamp(now), stamp(now - 90 * 60 * 1000));
+
+  // The tick it goes quiet in.
+  assert.equal(
+    (await window(lapsed + 60_000)).length,
+    1,
+    "the run it crosses into silence says so",
+  );
+
+  // That tick not running — a deploy, an outage — is what the overlap is for: the next one still
+  // finds it, because the window reaches back further than the gap between runs.
+  assert.equal((await window(lapsed + hour)).length, 1, "a missed tick is covered by the next");
+
+  // After that it is old news, and saying it again is what makes a feed worth ignoring.
+  for (const n of [2, 3, 24])
+    assert.deepEqual(
+      await window(lapsed + n * hour),
+      [],
+      `still quiet ${n} hours later, and already said once`,
+    );
+
+  // Coming back and going quiet again is a second thing happening, and worth a second line.
+  const back = stamp(lapsed + 24 * hour);
+  assert.ok(await renew(db, "t1", A, { at: back, note: "picked it up again" }));
+  const quietAgain = Date.parse(back) + LEASE_MS;
+  const again = await window(quietAgain + 60_000);
+  assert.equal(again.length, 1, "it went quiet a second time");
+  assert.equal(again[0].note, "picked it up again");
+  assert.deepEqual(await window(quietAgain + 2 * hour), [], "and is old news again after that");
 });
 
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {

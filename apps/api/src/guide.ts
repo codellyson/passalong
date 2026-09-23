@@ -37,11 +37,15 @@ export interface Meta {
   source_context?: string;
   url?: string;
   /**
-   * What this guide is for: "bug", "task" or "transfer" (the default, and what an absent value
-   * means).
-   * The receiving agent behaves differently for each — see KINDS in packages/passalong/src/guide.js.
+   * What this guide is for: "bug", "task" or "transfer". The receiving agent behaves differently
+   * for each — see KINDS in packages/passalong/src/guide.js.
+   *
+   * Not optional. `parseMeta` seeds it on every path, including the early return for a document
+   * with no frontmatter, so a Meta that came from a document always says what it is. The type is
+   * where that guarantee is kept: leaving it optional invited every caller to answer `undefined`
+   * for itself, which is the whole of what went wrong.
    */
-  kind?: string;
+  kind: string;
   /**
    * The guide this one came out of — see migrations/0015_lineage.sql. A chain, not a set: the
    * parent is an ordinary guide somebody pulled, and this is what they learned doing it.
@@ -225,7 +229,10 @@ export function split(markdown: string): { front: string; body: string } | null 
 }
 
 export function parseMeta(markdown: string): Meta {
-  const meta: Meta = { tags: [], stack_assumptions: [] };
+  // Seeded here and not only at the end: a document with no frontmatter, or an unterminated one,
+  // returns early, and guide.js's parse() seeds it on that path too. The corpus caught the pair
+  // disagreeing about exactly that.
+  const meta: Meta = { tags: [], stack_assumptions: [], kind: "transfer" };
   const parts = split(markdown);
   if (!parts) return meta;
   let listKey: string | null = null;
@@ -257,6 +264,10 @@ export function parseMeta(markdown: string): Meta {
   // there was a rule are still stored as they were typed, and re-spelling them in the document is
   // something only their author can do — every surface that reads one shows one style meanwhile.
   meta.tags = tagList(meta.tags);
+  // What it is, said rather than inferred, exactly as packages/passalong/src/guide.js seeds it —
+  // that file defines the format and this mirrors it. An unknown spelling is left alone to be
+  // refused by name rather than quietly read as a transfer guide.
+  if (!String(meta.kind ?? "").trim()) meta.kind = "transfer";
   return meta;
 }
 

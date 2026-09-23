@@ -37,7 +37,13 @@ test("parseMeta mirrors the CLI parser for strings and lists", () => {
   assert.equal(m.title, "Add Paystack webhook: verify signature");
   assert.deepEqual(m.stack_assumptions, ["Next.js 15", "Postgres"]);
   assert.deepEqual(m.tags, ["paystack", "webhooks"]);
-  assert.deepEqual(parseMeta("no frontmatter"), { tags: [], stack_assumptions: [] });
+  // A kind as well, on this path too: a document with no frontmatter returns early, and the CLI
+  // parser seeds one there. The shared corpus caught the two disagreeing about exactly this.
+  assert.deepEqual(parseMeta("no frontmatter"), {
+    tags: [],
+    stack_assumptions: [],
+    kind: "transfer",
+  });
 });
 
 test("setField replaces an existing field in place", () => {

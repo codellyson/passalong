@@ -44,6 +44,9 @@ const row = (over = {}) => ({
 });
 
 test("every kind renders a sentence naming who did what", () => {
+  // Except one. `stalled` is the only event nobody caused, so it is the only sentence that does
+  // not open with an actor — see the case in line().
+
   const seen = KINDS.map((kind) => line(row({ kind })));
   assert.deepEqual(seen, [
     '@bob sent you "Add Paystack webhook verification" in khaime',
@@ -64,6 +67,7 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob accepted your work on "Add Paystack webhook verification", and closed it',
     '@bob sent "Add Paystack webhook verification" back',
     '@bob gave "Add Paystack webhook verification" to someone else',
+    '"Add Paystack webhook verification" has gone quiet — nobody has heard from whoever holds it',
   ]);
 });
 

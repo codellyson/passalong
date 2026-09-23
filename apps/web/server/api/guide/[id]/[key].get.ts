@@ -83,9 +83,16 @@ export default defineEventHandler(async (event) => {
    * to whichever column happened to come first.
    */
   const listed = new Set((children ?? []).map((c) => c.id));
-  const withIds = parseWith(getQuery(event).with, ID_RE)
-    .filter((c) => listed.has(c))
-    .slice(-DOCK_MAX);
+  // `?with=all` opens the first few without naming them. The hub links here that way: a row that
+  // says a guide has three follow-ups could not name their ids, so the only thing it could link to
+  // was a list of rows to click one at a time.
+  const asked = getQuery(event).with;
+  const all = String(Array.isArray(asked) ? asked[0] : (asked ?? "")).trim() === "all";
+  const withIds = all
+    ? (children ?? []).slice(0, DOCK_MAX).map((c) => c.id)
+    : parseWith(asked, ID_RE)
+        .filter((c) => listed.has(c))
+        .slice(-DOCK_MAX);
   const dockedRows = withIds.length
     ? ((
         await db(event)

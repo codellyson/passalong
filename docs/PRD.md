@@ -141,6 +141,8 @@ Decided 2026-09-11, building it. **A seat lifts whoever sits in it.** A free mem
 
 All four are computed by `pnpm metrics --dev` (or `--remote`), which reads `guide`, `pull` and `verdict` in D1 directly.
 
+Two figures beside them are not §14 and are printed anyway. **Verdict silence** is the pulled guides that came back with neither `works` nor `broken` — the loop's last step skipped, which the quality proxy hid inside its denominator. **The task queue** is where tasks are now and what their hand-ins brought, from `claim`: the four bullets above all read the share-and-pull loop, so until this was added the whole of V2 was invisible to the only instrument the product has.
+
 Added 2026-09-11, on making these measurable for the first time. Two notes that belong with the numbers rather than behind them.
 
 The **quality proxy** used to read "percent of pulled guides marked consumed without follow-up edits". `consumed` meant implemented when that was written and means archived now — the author's shelf — so counting it would have answered a different question than the one being asked. The verdict is what replaced it and is the better instrument anyway: the reader's judgement rather than the author's. "Without follow-up edits" survives unchanged, as `guide.updated` moving after a verdict.

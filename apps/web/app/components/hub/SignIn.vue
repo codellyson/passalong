@@ -97,6 +97,35 @@ function useToken(e: Event) {
   const t = field(e.target as HTMLFormElement, "token");
   if (t) emit("token", t);
 }
+
+/**
+ * The scratch account, for working on this screen and the hub behind it without making one.
+ *
+ * Shown only when the page is being served from localhost, and the route behind it refuses unless
+ * `DEMO_LOGIN=1` is set as well — so this is a convenience on top of the gate, not the gate. It is
+ * computed after mount because the server rendering this page has no window to ask, and a button
+ * that flickers in on a real host would be worse than one that appears a moment late on a fake one.
+ */
+const local = ref(false);
+onMounted(() => {
+  const h = window.location.hostname;
+  local.value = h === "localhost" || h === "127.0.0.1" || h === "[::1]";
+});
+
+const { mutate: demo, isPending: startingDemo } = useMutation({
+  mutationFn: async () => {
+    const res = await fetch("/v1/auth/demo", { method: "POST" });
+    // 404 is the route saying it is not turned on, which is a different thing to say than "that
+    // didn't work": the fix is a line in .dev.vars, and guessing at it wastes the next ten minutes.
+    if (res.status === 404)
+      throw new Error("Demo sign-in is off. Put DEMO_LOGIN=1 in apps/web/.dev.vars and restart.");
+    if (!res.ok) throw new Error("Could not start a demo account.");
+  },
+  onSuccess: () => emit("signedIn"),
+  onError: (err: Error) => {
+    authError.value = err.message;
+  },
+});
 </script>
 
 <template>
@@ -172,6 +201,14 @@ function useToken(e: Event) {
         </template>
       </p>
     </div>
+
+    <!-- Local only, and it says what it is: a throwaway account, not a tour of a filled-in one. -->
+    <p v-if="local" class="auth-alt">
+      <button class="linkish" type="button" :disabled="startingDemo" @click="demo()">
+        {{ startingDemo ? "Making one…" : "Skip: use a scratch account" }}
+      </button>
+      <span class="muted"> — empty, local, and a new one each time</span>
+    </p>
 
     <details class="more">
       <summary>Other ways in: an invite link, or the terminal tool</summary>

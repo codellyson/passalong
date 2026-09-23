@@ -8,6 +8,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as api from "./api.js";
+import { refusal, runChecks } from "./checks.js";
 import { AREAS, BUG_SECTIONS, parse, SECTIONS, TASK_SECTIONS, template } from "./guide.js";
 import * as passalong from "./passalong.js";
 
@@ -93,7 +94,65 @@ async function related(meta) {
     return "";
   }
 }
-const json = (data) => text(JSON.stringify(data, null, 2));
+/**
+ * An answer a client can read as data as well as prose.
+ *
+ * `structuredContent` is the same JSON the text block holds; the spec asks for both, because a
+ * tool "that returns structured content SHOULD also return the serialized JSON in a TextContent
+ * block" for clients that only read text. Only an object goes in the structured field — the spec
+ * allows any JSON value there, but a bare array or string tells a client nothing it could key on.
+ */
+const json = (data) => ({
+  ...text(JSON.stringify(data, null, 2)),
+  ...(data && typeof data === "object" && !Array.isArray(data) ? { structuredContent: data } : {}),
+});
+
+/**
+ * What each tool does to the world, said out loud. Mirrors the same block in
+ * apps/api/src/mcp-http.ts, which had these and this server did not — the same four jobs described
+ * to a client two different ways, on the surface most agents actually reach.
+ *
+ * MCP's defaults for a tool that says nothing are the worst case — it writes, it may destroy, it
+ * reaches outside — and a client acts on them: over HTTP, ChatGPT badged every tool here, `inbox`
+ * included, as a destructive public write. The spec is equally clear that these are hints and
+ * nothing more: "clients MUST consider tool annotations to be untrusted unless they come from
+ * trusted servers". They are a description, not a permission.
+ *
+ * `openWorldHint` is false for everything that stays inside Passalong. Only attach_screenshot
+ * reaches outside it, for a file on this machine that Passalong did not put there.
+ */
+/**
+ * What the three verbs that answer with JSON return. Declared only for those: `outputSchema` puts
+ * the obligation on the server — "Servers MUST provide structured results that conform to this
+ * schema", while a client only SHOULD check — so it is a promise, and promising a shape this
+ * server does not control would be worse than staying quiet. `take` is the reason for the rule
+ * rather than an exception to it: it answers with the guide's markdown and a lead-in to read, not
+ * with a record.
+ *
+ * Every field is optional and the objects are open. The four calls serve three kinds of guide and
+ * the routes add fields freely, so a required key here would be a promise broken by a kind that
+ * does not carry it.
+ */
+// The object itself is handed to registerTool, not its `.shape`: a shape is rebuilt into a closed
+// object and advertised as `additionalProperties: false`, which would be this server promising that
+// an answer carries nothing else — and then breaking that promise the first time a route adds a
+// field. Passing the object through keeps it open.
+const openObject = (shape) => z.object(shape).partial().passthrough();
+const progressOut = openObject({
+  id: z.string(),
+  lease_until: z.string(),
+  note: z.string(),
+});
+const handInOut = openObject({
+  id: z.string(),
+  state: z.string(),
+  report: z.string(),
+  ok: z.boolean(),
+});
+const passOut = openObject({ id: z.string(), passed: z.boolean() });
+
+const READS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
+const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError: true });
 
 /**
@@ -121,7 +180,12 @@ const failWith = (err) => {
   };
 };
 
-export async function serve() {
+/**
+ * The server, built but not connected. Split out so the tool surface can be read without a
+ * transport — `test/mcp-surface.test.js` lists the tools over an in-memory pair and checks what
+ * each one says about itself. apps/api/src/mcp-http.ts is shaped the same way.
+ */
+export function buildServer() {
   const server = new McpServer(
     { name: "passalong", version: VERSION },
     {
@@ -208,7 +272,12 @@ export async function serve() {
   const answer = (r, id) => {
     const { next, say, ...rest } = r || {};
     const note = nextNote({ next, say }, id);
-    return text(`${JSON.stringify(rest, null, 2)}${note ? `\n${note}` : ""}`);
+    // The note is what the agent acts on and it is prose, so it stays in the text half only. The
+    // structured half is the answer itself, which is what `outputSchema` below describes.
+    return {
+      ...text(`${JSON.stringify(rest, null, 2)}${note ? `\n${note}` : ""}`),
+      structuredContent: rest,
+    };
   };
 
   async function doTake({ id, cwd, any }) {
@@ -259,15 +328,28 @@ export async function serve() {
 
   async function doHandIn({ id, ok, note, evidence, checks, markdown, report, pr, cwd }) {
     try {
+      // A check that names a command is run here, before anything is recorded, and its exit code
+      // decides it rather than the agent's account of it. A failure is refused with the command's
+      // own output: the claim is still held, nothing is written, and the agent has what it needs
+      // to fix. Checks with no `cmd` pass straight through to the prose rule.
+      const at = cwd || process.cwd();
+      const done = runChecks(checks || [], { cwd: at });
+      if (done.failed)
+        return {
+          content: [
+            { type: "text", text: refusal(done.failed, { ran: done.ran, total: checks.length }) },
+          ],
+          isError: true,
+        };
       const r = await passalong.handIn(id, {
         ok,
         note: note || "",
         evidence: evidence || "",
-        checks: checks || [],
+        checks: done.checks,
         markdown,
         report,
         pr: pr || "",
-        cwd: cwd || process.cwd(),
+        cwd: at,
       });
       return answer(r, id);
     } catch (err) {
@@ -287,6 +369,7 @@ export async function serve() {
     "assign",
     {
       title: "Give it to someone else",
+      annotations: ADDS,
       description:
         "Reassign a guide or task the user wrote, or one assigned to them, to someone else in its team, when the user asks: " +
         '`to` is @handle for one person, #group for the people who do a thing, or "team" for ' +
@@ -310,6 +393,7 @@ export async function serve() {
     "search_guides",
     {
       title: "Search guides",
+      annotations: READS,
       description:
         "Search transfer guides by words in the title, tags, stack, or body: the user's own " +
         "(local and synced) plus every team they belong to. Empty query lists everything, newest first.",
@@ -332,6 +416,7 @@ export async function serve() {
     "inbox",
     {
       title: "Inbox",
+      annotations: READS,
       description:
         "Guides handed to this user (or to their teams) that they have not pulled yet. Call it " +
         "when starting work so handoffs are not missed. Needs sync (passalong login).",
@@ -350,6 +435,7 @@ export async function serve() {
     "board",
     {
       title: "Board",
+      annotations: READS,
       description:
         "The state of this user's transfers as queues: waiting on you (handed to you, not " +
         "pulled), not working (someone gave it a failing verdict — the most urgent), in flight " +
@@ -370,6 +456,7 @@ export async function serve() {
     "log",
     {
       title: "What this user did",
+      annotations: READS,
       description:
         "This user's own acts on guides, newest first: what they published, what they took " +
         "delivery of, and every verdict and ack they gave. Each item has a rendered `text` line " +
@@ -400,20 +487,47 @@ export async function serve() {
     "activity",
     {
       title: "Activity",
+      annotations: READS,
       description:
-        "What has happened to this user's guides and handoffs: who pulled one, who marked one " +
-        "consumed, who was handed what, who joined a team. Each item has a ready-made `text` " +
-        "line. Read-only by default — it does not clear the user's unread feed unless asked.",
+        "What has happened to this user's guides and handoffs: who pulled one, who archived one, " +
+        "who was handed what, who joined a team. Each item has a ready-made `text` line. This only " +
+        "reads; clear_activity is what marks the feed seen.",
       inputSchema: {
         all: z.boolean().default(false).describe("include what the user has already seen"),
-        mark_read: z.boolean().default(false).describe("clear the unread feed after reading"),
       },
     },
-    async ({ all, mark_read }) => {
+    async ({ all }) => {
       try {
-        const res = await passalong.activity({ all });
-        if (mark_read && res.unread) await passalong.seen();
-        return json(res);
+        return json(await passalong.activity({ all }));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  /**
+   * Split out of `activity`, which took `mark_read` and so read on one call and wrote on the next.
+   *
+   * An annotation cannot say "sometimes": `readOnlyHint` was false for a tool that almost always
+   * only reads, which is a client being told the cautious lie on every call rather than the truth
+   * on the one that matters. Two tools, each true about itself.
+   */
+  server.registerTool(
+    "clear_activity",
+    {
+      title: "Mark activity seen",
+      annotations: ADDS,
+      description:
+        "Clear the user's unread feed, after they have been shown what is in it. Read it with " +
+        "activity first — clearing what nobody was told about loses it.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const res = await passalong.activity({ all: false });
+        if (!res.unread) return json({ cleared: 0, unread: 0 });
+        await passalong.seen();
+        return json({ cleared: res.unread, unread: 0 });
       } catch (err) {
         return fail(err);
       }
@@ -424,6 +538,7 @@ export async function serve() {
     "plan_tasks",
     {
       title: "Plan a goal as tasks",
+      annotations: ADDS,
       description:
         "Write tasks for agents: one step for a single task, or a larger goal broken into steps " +
         "an agent can each finish and a person can each check, written as drafts in order. The " +
@@ -471,6 +586,7 @@ export async function serve() {
     "take",
     {
       title: "Take work",
+      annotations: ADDS,
       description:
         "Say you are doing it, and get it. With `id`, that guide — any kind: a task, a bug, a " +
         "handoff. With no id, the next thing waiting for this worktree's agent. While you hold it " +
@@ -500,6 +616,8 @@ export async function serve() {
     "progress",
     {
       title: "Report progress",
+      outputSchema: progressOut,
+      annotations: ADDS,
       description:
         "Say you are still on what you hold, with a one-line note the hub shows. 30 minutes " +
         "without one marks it stalled. If the answer says you no longer hold it, stop.",
@@ -519,11 +637,16 @@ export async function serve() {
     "hand_in",
     {
       title: "Hand it in",
+      outputSchema: handInOut,
+      annotations: ADDS,
       description:
         "Done here, with proof. Every hand-in carries what you ran and what came back. On a TASK " +
         "send `checks`: one entry per Acceptance line, each with that line and the evidence for " +
         "it — that is what its author reads, line against line, instead of hunting through a wall " +
-        "of output for the part that answers each one. `evidence` is the same thing as one block, " +
+        "of output for the part that answers each one. Give a check `cmd` when a command proves " +
+        "it: the command is run here before the hand-in lands, a non-zero exit refuses it, and " +
+        "what it printed is recorded instead of your account of it. Use `ran` for a check no " +
+        "command can settle. `evidence` is the same thing as one block, " +
         "for a handoff or a bug, which have no Acceptance lines. A task also takes `markdown`, a " +
         "transfer guide about what you did and decided — this publishes it and attaches it. A " +
         "handoff or a bug takes `ok`, whether its Verification held here, and `note` saying what " +
@@ -542,7 +665,19 @@ export async function serve() {
           .array(
             z.object({
               check: z.string().describe("the Acceptance line this answers, in the task's words"),
-              ran: z.string().describe("what you ran for it, and what came back"),
+              ran: z
+                .string()
+                .optional()
+                .describe("what you ran for it, and what came back; not needed when `cmd` is set"),
+              cmd: z
+                .string()
+                .optional()
+                .describe(
+                  "the shell command that proves this line, run here before the hand-in lands — " +
+                    "its exit code decides the check and its output is recorded as the evidence. " +
+                    "Non-zero refuses the hand-in. Leave it out for a check nobody can run, like " +
+                    '"the badge reads 3", and write `ran` instead',
+                ),
             }),
           )
           .optional()
@@ -571,6 +706,8 @@ export async function serve() {
     "pass",
     {
       title: "Pass it",
+      outputSchema: passOut,
+      annotations: ADDS,
       description:
         "Not yours to do, or you are stuck: give it back with the reason. It is open again for " +
         "the next agent, and the reason goes to whoever is next — say why, or they start where " +
@@ -591,6 +728,7 @@ export async function serve() {
     "get_guide",
     {
       title: "Get guide",
+      annotations: READS,
       description:
         "READ a transfer guide by passalong id or share link and return its full markdown. Also " +
         "writes it to .passalong/<id>.md in the working directory so it survives the session. " +
@@ -639,6 +777,7 @@ export async function serve() {
     "attach_screenshot",
     {
       title: "Attach a screenshot",
+      annotations: { ...ADDS, openWorldHint: true },
       description:
         "Upload an image from this machine as evidence, and get back the markdown line that " +
         "points at it. Put that line in the guide body — a guide travels as markdown to whoever " +
@@ -667,6 +806,7 @@ export async function serve() {
     "publish_guide",
     {
       title: "Publish guide",
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
       description:
         "Publish a guide from markdown (frontmatter + sections). Check what you hold first (take " +
         "with no id): if this session answers something you hold, hand_in that instead, and if the " +
@@ -734,6 +874,7 @@ export async function serve() {
     "file_bugs",
     {
       title: "File bugs",
+      annotations: ADDS,
       description:
         "File one or more bugs you found but are not fixing, as a set. Opens a report and " +
         "publishes each issue as its own guide — its own id, share link, and verdict — so a " +
@@ -819,6 +960,7 @@ export async function serve() {
     "guide_template",
     {
       title: "Guide template",
+      annotations: READS,
       description:
         "The empty guide skeleton with guidance comments for each section. By default a task " +
         "brief: Goal, Context, Constraints, Acceptance, Out of scope. `kind: transfer` gives the " +
@@ -840,6 +982,7 @@ export async function serve() {
     "set_guide_status",
     {
       title: "Set guide status",
+      annotations: ADDS,
       description:
         "Archive a guide (`consumed`) or put it back on the board (`published`). Archiving is the " +
         "author's shelf: off the board, out of the free tier's count, reversible — it is not a " +
@@ -857,5 +1000,10 @@ export async function serve() {
     },
   );
 
-  await server.connect(new StdioServerTransport());
+  return server;
+}
+
+/** The stdio server: `passalong mcp`, and what `passalong setup` registers with a client. */
+export async function serve() {
+  await buildServer().connect(new StdioServerTransport());
 }
