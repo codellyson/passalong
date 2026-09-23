@@ -1251,10 +1251,12 @@ app.delete("/v1/admin/gifts/:id", async (c) => {
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, password_hash, plan, plan_until FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, password_hash, plan, plan_until, role FROM account WHERE id = ?",
   )
     .bind(account)
-    .first<AccountRow & { password_hash: string; plan: string; plan_until: string }>();
+    .first<
+      AccountRow & { password_hash: string; plan: string; plan_until: string; role: string }
+    >();
   // A gift that has run out is `lapsed` here too, so the hub says what the ceiling already does.
   const ownPlan = planNow(me?.plan || "free", me?.plan_until, now());
   const room = await quota(c, account);
@@ -1286,6 +1288,9 @@ app.get("/v1/me", async (c) => {
     plan: ownPlan,
     // When it stops, and only for a plan that was given: a bought one ends when the provider says.
     plan_until: me?.plan_until || "",
+    // '' for everybody who uses Passalong, 'super' for whoever runs it (migrations/0027_super.sql).
+    // The hub draws the operator section from this; the routes check the database, not this field.
+    role: (await isAdmin(c.env.DB, c.env.ADMIN_ACCOUNTS, account)) ? "super" : me?.role || "",
     unread: await unreadCount(c.env, account),
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.

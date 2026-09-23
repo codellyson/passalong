@@ -26,6 +26,8 @@ export interface Me {
   plan: string;
   /** Set only on a plan that was given rather than bought: when it stops. See apps/api/src/gifts.ts. */
   plan_until?: string;
+  /** "" for everybody, "super" for whoever runs Passalong. Draws the operator band in Settings. */
+  role?: string;
   teams: Team[];
   /** Name, else @handle, else @account id — worked out by the API. */
   display?: string;

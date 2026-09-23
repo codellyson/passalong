@@ -190,3 +190,33 @@ test("a connector's host picks which app's steps a Reconnect opens", () => {
   assert.equal(appForHost("claude.ai"), "claude");
   assert.equal(appForHost("notchatgpt.com.evil.test"), "other");
 });
+
+// ---- the operator band (apps/web/app/components/hub/Admin.vue) ---------------------------------
+//
+// Read rather than rendered: there is no component runner here, and what matters about this band is
+// that it is drawn for a super and for nobody else, and that the destructive things ask first.
+
+const { readFileSync } = await import("node:fs");
+const settings = readFileSync(new URL("../app/pages/hub/settings.vue", import.meta.url), "utf8");
+const admin = readFileSync(new URL("../app/components/hub/Admin.vue", import.meta.url), "utf8");
+
+test("the operator band is drawn for a super, and is not in the page for anyone else", () => {
+  assert.match(settings, /role === "super"/);
+  // `v-if`, not a class that hides it: the markup itself is absent, so nobody learns it exists by
+  // reading the page. The routes behind it refuse everyone else regardless — this is the second
+  // lock, not the first.
+  assert.match(settings, /<div v-if="isSuper" :class="band">/);
+  assert.match(settings, /<HubAdmin \/>/);
+});
+
+test("taking a plan back and removing a super both ask on the row first", () => {
+  for (const name of ["taking", "dropping"]) {
+    assert.match(admin, new RegExp(`const ${name} = ref<string \\| null>\\(null\\)`));
+  }
+  assert.match(admin, /Take it back\?/);
+  assert.match(admin, /Remove\?/);
+});
+
+test("what the server can never show again is marked where it is shown", () => {
+  assert.match(admin, /Copy both now\. Neither is shown again\./);
+});
