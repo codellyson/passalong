@@ -6,7 +6,7 @@
   bug is still its own guide someone takes and answers for, so each row says where that one got to.
 -->
 <script setup lang="ts">
-import { useQuery } from "@tanstack/vue-query";
+import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import type { Guide } from "~/types/hub";
 import { areaLabel, severityLabel, severityTone } from "~/utils/severity";
 
@@ -26,7 +26,8 @@ interface ReportView {
 
 const route = useRoute();
 const id = computed(() => String(route.params.id));
-const { data, api, signedIn } = useHub();
+const { data, api, signedIn, onCloseGuide } = useHub();
+const queryClient = useQueryClient();
 
 usePage({
   title: "Bug report · Passalong",
@@ -51,6 +52,10 @@ const trouble = computed(() => (error.value ? error.value.message : ""));
 
 /** Where a bug has got to, in the same words the guides page uses. */
 function state(issue: Guide) {
+  // First, because a bug taken off the board is off it whatever it last said. The hub's rows drop
+  // out of the lane at that point; here they stay, so the row has to say so itself — and it says
+  // the same word `statusLine` says.
+  if (issue.status === "consumed") return { label: "archived", tone: "text-muted" };
   if (issue.failing) return { label: "didn't work", tone: "text-danger" };
   if (issue.verdict?.ok) return { label: "fixed", tone: "text-ok" };
   if (issue.taken_by?.length) return { label: "being worked on", tone: "text-muted" };
@@ -66,6 +71,30 @@ const team = computed(() =>
       report.value.team
     : "",
 );
+
+/**
+ * Closing, one bug or the whole set.
+ *
+ * A report of eleven bugs had no way off the board: the hub's group row and this page both draw
+ * their own markup, so neither inherited the Close it a single guide row has had since PR #46.
+ * The only exit was the fortnight the sweep waits before closing a guide nobody opened.
+ *
+ * Each bug is closed on its own call, because a report is a bundle of guides rather than something
+ * the server closes as a unit. The page reloads once at the end, not once per bug.
+ */
+const open = computed(() => (report.value?.areas ?? []).flatMap((a) => a.issues).filter(closable));
+const closing = ref<string | null>(null);
+
+async function close(issues: Guide[], mark: string) {
+  if (closing.value) return;
+  closing.value = mark;
+  try {
+    for (const issue of issues) await onCloseGuide(issue);
+    await queryClient.invalidateQueries({ queryKey: ["report", id.value] });
+  } finally {
+    closing.value = null;
+  }
+}
 </script>
 
 <template>
@@ -116,12 +145,38 @@ const team = computed(() =>
             <span class="shrink-0 font-ui text-xs" :class="state(issue).tone">
               {{ state(issue).label }}
             </span>
+            <button
+              v-if="closable(issue)"
+              class="linkish shrink-0 font-ui text-xs"
+              type="button"
+              :disabled="Boolean(closing)"
+              @click="close([issue], issue.id)"
+            >
+              {{ closing === issue.id ? "Closing…" : "Close" }}
+            </button>
           </li>
         </ul>
       </section>
 
-      <div>
+      <div class="flex flex-wrap gap-3">
         <NuxtLink to="/hub" class="btn">Back to your guides</NuxtLink>
+        <!-- The whole set off the board in one move, for a report whose bugs are all answered
+             or no longer worth fixing. Whoever each went to is told, and each can be put back. -->
+        <button
+          v-if="open.length"
+          class="btn"
+          type="button"
+          :disabled="Boolean(closing)"
+          @click="close(open, 'all')"
+        >
+          {{
+            closing === "all"
+              ? "Closing…"
+              : open.length === report.issues
+                ? "Close every bug"
+                : `Close the ${open.length} still open`
+          }}
+        </button>
       </div>
     </section>
 

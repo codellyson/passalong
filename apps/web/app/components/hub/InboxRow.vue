@@ -153,7 +153,7 @@ const who = computed(() => {
            and agents" heading next to Delete. `consumed` is reversible and the menu still says
            "Put it back". -->
       <button
-        v-else-if="g.mine && g.status !== 'consumed'"
+        v-else-if="closable(g)"
         class="btn sm whitespace-nowrap"
         type="button"
         :disabled="closing"
