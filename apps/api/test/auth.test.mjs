@@ -119,3 +119,42 @@ test("reading a cookie picks the right one out of the header", () => {
   // A value containing "=" survives the split.
   assert.equal(readCookie("pa_session=a=b=c", "pa_session"), "a=b=c");
 });
+
+test("the demo sign-in cannot exist anywhere it was not deliberately turned on", async () => {
+  // A route that hands out a session without asking for anything is an auth bypass by
+  // construction, so what is pinned here is that it takes two switches to open and that neither
+  // is on by default. Checked against the source because the Hono app is not importable from a
+  // test — the same way oauth.test.mjs holds the internal-call marker.
+  const { readFile } = await import("node:fs/promises");
+  const here = new URL("../src/index.ts", import.meta.url);
+  const src = await readFile(here, "utf8");
+
+  const route = src.slice(src.indexOf('app.post("/v1/auth/demo"'));
+  const body = route.slice(0, route.indexOf("\napp."));
+  assert.ok(body.length > 0, "the route should still be there");
+
+  // Switch one: an environment variable that is nowhere in either wrangler.jsonc, so a deployed
+  // Worker has nothing to read. Switch two: the request must be for localhost, so the variable
+  // escaping a .dev.vars into somewhere real is still not enough on its own.
+  assert.match(body, /c\.env\.DEMO_LOGIN !== "1"/, "the flag must be checked, and exactly");
+  assert.match(body, /hostname/, "the host must be checked too");
+  assert.match(body, /return c\.notFound\(\)/, "a door that is not open should not announce itself");
+
+  // Both in one condition: two separate ifs would let a later edit drop one and still read as
+  // guarded.
+  assert.match(
+    body,
+    /if \(c\.env\.DEMO_LOGIN !== "1" \|\| !local\) return c\.notFound\(\);/,
+    "one gate, both halves",
+  );
+
+  // It must not be able to sign in as an account that already exists: it makes a new one, and the
+  // INSERT is the whole of it. A SELECT here would be a way to pick a victim.
+  assert.match(body, /INSERT INTO account/, "it mints an account");
+  assert.ok(!/SELECT/.test(body), "it must never look an existing account up");
+
+  for (const f of ["../wrangler.jsonc", "../../web/wrangler.jsonc"]) {
+    const conf = await readFile(new URL(f, import.meta.url), "utf8");
+    assert.ok(!/DEMO_LOGIN/.test(conf), `${f} must never carry DEMO_LOGIN`);
+  }
+});

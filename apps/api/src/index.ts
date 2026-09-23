@@ -210,6 +210,16 @@ type Env = MailEnv &
      * is, by whoever already has that access.
      */
     ADMIN_ACCOUNTS?: string;
+    /**
+     * "1" turns on the one-click demo sign-in at POST /v1/auth/demo, for working on the hub
+     * without an account. Unset — the default, and what every wrangler.jsonc ships — means the
+     * route does not exist, and it is absent from both of them on purpose: a var that has to be
+     * added to turn this on cannot be left on by forgetting to remove it.
+     *
+     * The same shape as ADMIN_ACCOUNTS and for the same reason. A deployment that has not been
+     * told to open a door has no door, rather than one with a guessable lock.
+     */
+    DEMO_LOGIN?: string;
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
   };
@@ -709,6 +719,11 @@ const PUBLIC = new Set([
   "POST /v1/auth/login",
   "POST /v1/auth/forgot",
   "POST /v1/auth/reset",
+  // Open for the same reason as the two above — it exists to hand out a session, so it cannot ask
+  // for one. It is the only entry here that does not exist in production: the route itself answers
+  // 404 unless DEMO_LOGIN is "1" and the request is for localhost, so listing it costs nothing
+  // where it is off.
+  "POST /v1/auth/demo",
 ]);
 
 /**
@@ -961,6 +976,33 @@ app.post("/v1/auth/login", async (c) => {
   const ok = await verifyPassword(password, row ? row.password_hash : await decoyHash());
   if (!row || !ok) return err(c, 401, BAD_LOGIN);
   return c.json({ account: row.id }, 200, { "set-cookie": await startSession(c, row.id) });
+});
+
+/**
+ * A signed-in account in one click, for working on the hub locally without making one.
+ *
+ * Two gates, and both have to hold. `DEMO_LOGIN` must be "1", and it is in no wrangler.jsonc, so
+ * production has no such route to reach. The request must also be for localhost, so the var alone
+ * is not enough if it ever escapes a .dev.vars into somewhere real. Either one missing answers 404
+ * rather than 403: a door that is not open should not announce that it exists.
+ *
+ * Every call mints a NEW empty account. It is a scratch account and the point of it is starting
+ * from nothing — reusing one would accumulate whatever the last session was testing, which is the
+ * thing it exists to avoid. They pile up in the local database, which is local.
+ *
+ * The account has no email and no password, which is what `passalong login` and an invite link
+ * already make: the session cookie is the whole of it, and nothing can sign in as it again once
+ * that cookie is gone.
+ */
+app.post("/v1/auth/demo", async (c) => {
+  const host = new URL(c.req.url).hostname;
+  const local = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+  if (c.env.DEMO_LOGIN !== "1" || !local) return c.notFound();
+  const id = rid(10);
+  await c.env.DB.prepare("INSERT INTO account (id, created, token_hash) VALUES (?, ?, ?)")
+    .bind(id, now(), `retired:${rid(24)}`)
+    .run();
+  return c.json({ account: id, demo: true }, 201, { "set-cookie": await startSession(c, id) });
 });
 
 app.post("/v1/auth/logout", async (c) => {

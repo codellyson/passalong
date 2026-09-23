@@ -1,1 +1,7 @@
 PUBLIC_ORIGIN=http://localhost:8787
+
+# One-click scratch account at POST /v1/auth/demo, and the button for it on the sign-in screen.
+# Local only twice over: the route refuses unless this is "1" AND the request is for localhost,
+# and this line is in no wrangler.jsonc, so a deployed Worker has no such route. Goes in
+# apps/web/.dev.vars, which is what `nuxt dev` reads.
+DEMO_LOGIN=1

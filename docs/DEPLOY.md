@@ -163,6 +163,26 @@ passalong share ~/.passalong/guides/<id>.md --no-edit   # re-share anything you 
 Rollback: `wrangler rollback` in `apps/api`, or `wrangler deployments list` to pick a version.
 Migrations are forward-only; write a new migration rather than editing an applied one.
 
+### Signing in locally without making an account
+
+`POST /v1/auth/demo` mints an empty account and signs you into it, and the sign-in screen grows a
+**Skip: use a scratch account** button for it. Every click is a new account, because the point of
+it is starting from nothing.
+
+It takes two switches and neither is on by default:
+
+```sh
+echo 'DEMO_LOGIN=1' >> apps/web/.dev.vars   # gitignored; `nuxt dev` reads it
+```
+
+and the request has to be for `localhost`. `DEMO_LOGIN` is in neither `wrangler.jsonc`, so a
+deployed Worker has no such route to reach — with it off, the route answers 404 rather than 403,
+because a door that is not open should not announce that it exists. `apps/api/test/auth.test.mjs`
+holds both halves of the gate and checks that neither `wrangler.jsonc` ever carries the variable.
+
+The accounts pile up in the local D1. They are anonymous — no email, no password — so nothing can
+sign in as one again once its cookie is gone, and they cost a row each.
+
 ### A local D1 that refuses to migrate
 
 `wrangler d1 migrations apply passalong --local` failing with something like
