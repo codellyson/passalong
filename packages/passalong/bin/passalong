@@ -26,6 +26,13 @@
 //   passalong take <id>           you are doing it — said before the work, so the sender stops guessing
 //   passalong pass <id> <why>     it is not yours — hands it back to its author with your reason
 //   passalong assign <id> <to>    give it to @handle, a #group, or "team" — yours, or assigned to you
+//   passalong admin create <email>   make an account that runs Passalong (owner only)
+//   passalong admin list          who runs it
+//   passalong admin grant|revoke <@handle>   make an existing account an admin, or stop it being one
+//   passalong gift <who> --until <date> [--why "..."] [--seats N]
+//                                 give Solo to @handle, or Team to team/slug, until a date (operator only)
+//   passalong gifts               what has been given away, and what is still running
+//   passalong ungift <gift id>    take one back now
 //   passalong works <id>          you tried it and it holds up
 //   passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
 //   passalong done <id>           archive it: off your board and out of the free tier's count
@@ -487,6 +494,78 @@ const commands = {
     console.error(`${r.id} is now for ${r.to || "everyone in the team"}${back}`);
   },
 
+  // ---- who runs the product ---------------------------------------------------------------
+  // `passalong admin <create|list|grant|revoke>`. An admin signs in like anybody else: the role is
+  // a column, so there is no admin password and no admin token — only an account that has it.
+  // "admin" is the word everywhere a person reads; `super` stays the stored value.
+
+  async admin(f) {
+    const what = f._[0] || "list";
+    if (what === "create") {
+      const email = f._[1] || die("usage: passalong admin create <email>");
+      const r = await api.makeAdmin(email).catch((e) => die(e.message));
+      // Shown once, and only here. The link is a day long because it is handed to somebody
+      // rather than clicked on the spot.
+      // Three labelled values on stdout, so one can be cut out with awk. "password link", not
+      // "password": the value is a URL, and somebody will try to paste it into a password field.
+      console.log(`account        ${r.account}`);
+      console.log(`token          ${r.token}`);
+      console.log(`password link  ${r.password_url}`);
+      console.error(
+        `\n${r.email} is an admin. The token is for \`passalong login\`, the link sets their ` +
+          `password for the hub, and it expires ${r.expires.slice(0, 10)}. Neither is shown again.`,
+      );
+      return;
+    }
+    if (what === "grant" || what === "revoke") {
+      const who = f._[1] || die(`usage: passalong admin ${what} <@handle | account id>`);
+      const call = what === "grant" ? api.grantAdmin : api.revokeAdmin;
+      const r = await call(who).catch((e) => die(e.message));
+      console.error(
+        what === "grant" ? `${r.name} is now an admin` : `${r.name} is no longer an admin`,
+      );
+      return;
+    }
+    if (what !== "list") die("usage: passalong admin <create <email> | list | grant | revoke>");
+    const { supers = [] } = await api.listAdmins().catch((e) => die(e.message));
+    if (!supers.length) return console.error("nobody is an admin yet");
+    for (const s of supers)
+      console.log(`${s.id}  ${s.name}${s.email ? `  ${s.email}` : ""}  since ${s.since.slice(0, 10)}`);
+  },
+
+  // ---- giving a plan away -----------------------------------------------------------------
+  // Only for whoever the deployment names in ADMIN_ACCOUNTS; for everybody else the routes behind
+  // these are 404, and the message says so rather than pretending the command does not exist.
+
+  async gift(f) {
+    const to = f._[0] || die('usage: passalong gift <@handle | team/slug> --until 2027-09-23 [--why "..."]');
+    const until = f.until || die("say when it ends: --until 2027-09-23. A gift with no end is a price change");
+    const r = await api
+      .giveGift({ to, until, why: f.why || "", seats: Number(f.seats || 0) })
+      .catch((e) => die(e.message));
+    // The seat count is said back whether or not it was asked for: left off, it is the number of
+    // members the team has today, and an operator should read which number that turned out to be.
+    const seats = r.kind === "team" ? ` for ${r.seats} seat${r.seats === 1 ? "" : "s"}` : "";
+    console.error(`${r.to} is on ${r.plan}${seats} until ${r.until.slice(0, 10)} — gift ${r.id}`);
+  },
+
+  async gifts() {
+    const { gifts = [] } = await api.listGifts().catch((e) => die(e.message));
+    if (!gifts.length) return console.error("no plans given away yet");
+    for (const g of gifts) {
+      const state = g.live ? `until ${g.until.slice(0, 10)}` : "over";
+      console.log(
+        `${g.id}  ${g.plan.padEnd(5)} ${state.padEnd(16)} ${g.to}${g.why ? ` — ${g.why}` : ""}`,
+      );
+    }
+  },
+
+  async ungift(f) {
+    const id = f._[0] || die("usage: passalong ungift <gift id>  (passalong gifts lists them)");
+    await api.takeGiftBack(id).catch((e) => die(e.message));
+    console.error(`${id} taken back — that plan is lapsed as of now`);
+  },
+
   async works(f) {
     const id = f._[0] || die("usage: passalong works <id>");
     const r = await passalong.verdict(id, true, f._.slice(1).join(" ")).catch((e) => die(e.message));
@@ -747,5 +826,15 @@ const cmd = argv._.shift() || "help";
 // `passalong -v` can be read by a script comparing it against the registry.
 if (cmd === "-v" || cmd === "version" || (cmd === "help" && argv.version === true)) {
   console.log(JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version);
-} else if (cmd === "--help" || cmd === "-h" || !commands[cmd]) commands.help();
+} else if (cmd === "--help" || cmd === "-h" || cmd === "help") commands.help();
+// A command this build does not have used to print the help page and exit 0, which reads as "that
+// command exists and did nothing" — and the usual cause is an older passalong, where the command is
+// in the docs and not in the binary. So it fails, names what it does not know, and says the version
+// it is, which is the fact that explains it.
+else if (!commands[cmd])
+  die(
+    `unknown command "${cmd}" — run \`passalong help\` for the list. ` +
+      `This is passalong ${JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version}; ` +
+      "if you expected this command, `npm i -g passalong` for the newest one.",
+  );
 else await commands[cmd](argv).catch((e) => die(e.message));

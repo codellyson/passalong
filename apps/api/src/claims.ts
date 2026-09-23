@@ -55,6 +55,32 @@ export function evidenceProblem(text: string): string | null {
  */
 export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "review" | "done";
 
+/** One Acceptance line, and what the agent ran for it. See migrations/0028_evidence_checks.sql. */
+export interface Check {
+  check: string;
+  ran: string;
+}
+
+/**
+ * Evidence sorted against the lines it answers, or the reason it is not evidence yet.
+ *
+ * The same rule as evidenceProblem(), applied per line, plus the line itself: "it works" under an
+ * Acceptance line is the same claim it always was, just filed more neatly.
+ */
+export function checksProblem(checks: Check[]): string | null {
+  for (const c of checks) {
+    if (!String(c?.check ?? "").trim())
+      return "each entry needs `check`: which check it is evidence for, in the task's own words";
+    const bad = evidenceProblem(c?.ran ?? "");
+    if (bad) return `for "${String(c.check).trim().slice(0, 60)}", ${bad}`;
+  }
+  return null;
+}
+
+/** The checks as one block of text, which is what every surface that predates them reads. */
+export const flatten = (checks: Check[]): string =>
+  checks.map((c) => `${c.check.trim()}\n${c.ran.trim()}`).join("\n\n");
+
 export interface ClaimRow {
   guide_id: string;
   /** The lock's second half: '' for a task, the taker's repo for anything else. */
@@ -68,6 +94,8 @@ export interface ClaimRow {
   note: string;
   /** What the agent ran and what came back, sent with the hand-in. Empty until it hands in. */
   evidence: string;
+  /** The same evidence against the lines it answers, as JSON. Empty when it was sent as one block. */
+  checks: string;
   report_id: string;
   pr: string;
   claimed_at: string;
@@ -484,11 +512,23 @@ export async function finish(
     at,
     report,
     evidence,
+    checks = [],
     pr = "",
     note = "",
-  }: { at: string; report: string; evidence: string; pr?: string; note?: string },
+  }: {
+    at: string;
+    report: string;
+    evidence: string;
+    /** Evidence against each line the task asked for. The better shape, and not the only one. */
+    checks?: Check[];
+    pr?: string;
+    note?: string;
+  },
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
-  const bad = evidenceProblem(evidence);
+  // Checks are evidence, so a hand-in that brings them has brought it: `evidence` is filled from
+  // them rather than asked for twice.
+  const said = checks.length ? flatten(checks) : evidence;
+  const bad = checks.length ? checksProblem(checks) : evidenceProblem(evidence);
   if (bad) return { status: 400, error: bad };
   const guide = await db
     .prepare("SELECT kind FROM guide WHERE id = ? AND account_id = ?")
@@ -505,14 +545,22 @@ export async function finish(
     return { status: 400, error: "report is a task, not a transfer guide" };
   const res = await db
     .prepare(
-      `UPDATE claim SET state = 'review', report_id = ?, pr = ?, evidence = ?,
+      `UPDATE claim SET state = 'review', report_id = ?, pr = ?, evidence = ?, checks = ?,
               note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'`,
     )
     .bind(
       report,
       pr.trim().slice(0, 400),
-      evidence.trim().slice(0, EVIDENCE_MAX),
+      said.trim().slice(0, EVIDENCE_MAX),
+      checks.length
+        ? JSON.stringify(
+            checks.map((c) => ({
+              check: c.check.trim().slice(0, NOTE_MAX),
+              ran: c.ran.trim().slice(0, EVIDENCE_MAX),
+            })),
+          ).slice(0, EVIDENCE_MAX * 2)
+        : "",
       note.trim().slice(0, NOTE_MAX),
       at,
       id,
@@ -896,8 +944,12 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
       // as you go, or you are reconstructing it from memory at the end, which is the failure this
       // is here to stop.
       with:
-        "evidence: what you ran and what came back — the command and the lines that decided it, " +
-        "a test summary, a link to the change, or a screenshot url. Keep it as you go.",
+        kind === "task"
+          ? "checks: one entry per Acceptance line — that line, and what you ran for it. Its " +
+            "author reads them line against line, so evidence filed under the check it answers is " +
+            "worth more than the same output in one block. Keep it as you go."
+          : "evidence: what you ran and what came back — the command and the lines that decided " +
+            "it, a test summary, a link to the change, or a screenshot url. Keep it as you go.",
     },
     {
       tool: "pass",

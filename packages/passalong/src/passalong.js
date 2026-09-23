@@ -363,10 +363,21 @@ export async function progress(id, note, { cwd = process.cwd() } = {}) {
  */
 export async function handIn(
   id,
-  { ok, note = "", evidence = "", markdown, report, pr = "", cwd = process.cwd() } = {},
+  {
+    ok,
+    note = "",
+    evidence = "",
+    checks = [],
+    markdown,
+    report,
+    pr = "",
+    cwd = process.cwd(),
+  } = {},
 ) {
   needsSync("handing work in");
-  requireEvidence(evidence);
+  // Checks are evidence, sorted against the lines they answer: bringing them is bringing it.
+  if (checks.length) checks.forEach((c) => requireEvidence(c?.ran));
+  else requireEvidence(evidence);
   if (!report && markdown) {
     const g = parse(markdown);
     report = (await share(serialize({ meta: { ...g.meta, parent: id }, body: g.body }), { cwd }))
@@ -376,6 +387,7 @@ export async function handIn(
     agent: agent(cwd).agent,
     note,
     evidence,
+    ...(checks.length ? { checks } : {}),
     ...(report ? { report, pr } : {}),
     ...(typeof ok === "boolean" ? { ok } : {}),
   });

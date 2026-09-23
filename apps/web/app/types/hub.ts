@@ -24,6 +24,12 @@ export interface Me {
   /** This account's own subscription: "free", "solo" or "lapsed". Not the same fact as `sync` — a
       member of a paid team syncs without a ceiling and is still on `free` themselves. */
   plan: string;
+  /** Set only on a plan that was given rather than bought: when it stops. See apps/api/src/gifts.ts. */
+  plan_until?: string;
+  /** "" for everybody, "super" for whoever runs Passalong. Draws /admin, and the way to it. */
+  role?: string;
+  /** Whether this account may make or remove a super — only the deployment's ADMIN_ACCOUNTS may. */
+  can_make_supers?: boolean;
   teams: Team[];
   /** Name, else @handle, else @account id — worked out by the API. */
   display?: string;
@@ -192,6 +198,8 @@ export interface Task {
     note: string;
     /** What it ran and what came back, sent with the hand-in. Empty until it hands in. */
     evidence?: string;
+    /** The same evidence against the Acceptance line each piece answers, when the agent sorted it. */
+    checks?: { check: string; ran: string }[];
     report: string;
     report_title?: string;
     report_url?: string;

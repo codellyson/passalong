@@ -68,19 +68,23 @@ async function submit(e: Event) {
 </script>
 
 <template>
-  <section v-if="needed" :class="bare ? '' : 'mb-8 flex flex-col gap-4'">
-    <div
+  <section v-if="needed" :class="bare ? '' : '-mt-8 mb-8 flex flex-col gap-4'">
+    <!-- A row in the shell's band of standing notices, not a card of its own: this is true until
+         somebody sets a password, which is not today, and a filled card said otherwise every visit.
+         Same shape as the notices in Shell.vue — see the note there. -->
+    <p
       v-if="!bare"
-      class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2 bg-warn-soft px-4 py-3"
+      class="m-0 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-line py-2.5 font-ui text-sm text-muted"
     >
-      <p class="m-0 grow basis-72 font-ui text-sm text-fg">
-        <b>You're only signed in on this browser.</b> Add a password to sign in anywhere else, and to
-        get back in if this browser forgets you.
-      </p>
-      <button v-if="!open" class="btn primary sm" type="button" @click="open = true">
+      <span class="mt-1.5 size-1.5 shrink-0 rounded-pill bg-warn" aria-hidden="true" />
+      <span class="min-w-0 grow">
+        <b class="text-fg">You're only signed in on this browser.</b> Add a password to sign in
+        anywhere else, and to get back in if this browser forgets you.
+      </span>
+      <button v-if="!open" class="linkish shrink-0 font-medium" type="button" @click="open = true">
         Add a password
       </button>
-    </div>
+    </p>
 
     <form v-if="bare || open" class="appears flex flex-col gap-4" @submit.prevent="submit">
       <div :class="box">

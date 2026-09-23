@@ -45,6 +45,11 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
       <NuxtLink class="menu-item" to="/hub/settings" @click="open = false">
         Profile, teams and plans
       </NuxtLink>
+      <!-- Running the product is not a setting of yours, so it is its own page, and it is only
+           here for whoever runs it. -->
+      <NuxtLink v-if="data.me?.role === 'super'" class="menu-item" to="/admin" @click="open = false">
+        Admin
+      </NuxtLink>
       <a class="menu-item" href="/connect">Connect Claude or another assistant</a>
       <a class="menu-item" href="/">How Passalong works</a>
       <div class="menu-rule" />

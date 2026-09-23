@@ -107,6 +107,20 @@ export const children = (id, { markdown = false } = {}) =>
  */
 export const parent = (id, { markdown = false } = {}) =>
   call(`/v1/guides/${encodeURIComponent(id)}/parent${q({ markdown: markdown ? "1" : "" })}`);
+/**
+ * Giving a plan away, for whoever the deployment names in `ADMIN_ACCOUNTS`. Every other account
+ * gets a 404 from these, so the CLI does not have to know who the operator is either.
+ */
+export const makeAdmin = (email) => call("/v1/admin/accounts", { method: "POST", body: { email } });
+export const listAdmins = () => call("/v1/admin/accounts");
+export const grantAdmin = (who) =>
+  call(`/v1/admin/accounts/${encodeURIComponent(who)}`, { method: "PUT", body: {} });
+export const revokeAdmin = (who) =>
+  call(`/v1/admin/accounts/${encodeURIComponent(who)}`, { method: "DELETE" });
+export const giveGift = (body) => call("/v1/admin/gifts", { method: "POST", body });
+export const listGifts = () => call("/v1/admin/gifts");
+export const takeGiftBack = (id) =>
+  call(`/v1/admin/gifts/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const setStatus = (id, status) =>
   call(`/v1/guides/${id}/status`, { method: "PATCH", body: { status } });
 export const remove = (id) => call(`/v1/guides/${id}`, { method: "DELETE" });

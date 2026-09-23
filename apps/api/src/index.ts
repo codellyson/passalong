@@ -88,6 +88,17 @@ import {
   sendVerdict,
 } from "./email.js";
 import {
+  findSubject,
+  gift,
+  gifts,
+  isAdmin,
+  isPlatformOwner,
+  makeSuper,
+  revokeGift,
+  superAccounts,
+  unSuper,
+} from "./gifts.js";
+import {
   AREAS,
   clipFollowUp,
   dropField,
@@ -150,7 +161,15 @@ import {
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
-import { acceptsNewWork, type Ceiling, COUNTED, ceilingFor, isFull, seatsFull } from "./quota.js";
+import {
+  acceptsNewWork,
+  type Ceiling,
+  COUNTED,
+  ceilingFor,
+  isFull,
+  planNow,
+  seatsFull,
+} from "./quota.js";
 import { evidenceOn, holdShots, SHOT_TYPES, shotKey } from "./shots.js";
 import {
   isUploadToken,
@@ -183,6 +202,14 @@ type Env = MailEnv &
     PAYSTACK_SECRET?: string;
     PAYSTACK_PLAN?: string;
     FREE_SYNC_LIMIT: string;
+    /**
+     * Who may give a plan away: account ids, comma-separated. Empty — the default — means nobody,
+     * so a deployment that has not been told who the operator is has no admin routes at all rather
+     * than a guessable one. A secret and not a column on purpose: an admin flag in the database is
+     * reachable by every bug that can write a row, and this list is changed where the deployment
+     * is, by whoever already has that access.
+     */
+    ADMIN_ACCOUNTS?: string;
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
   };
@@ -325,6 +352,19 @@ const shareUrl = (base: string, row: Pick<GuideRow, "id" | "share_key">) =>
 
 const db = (c: { env: Env }) => c.env.DB;
 
+/**
+ * A team as it stands now: a plan that was given (migrations/0026_gifts.sql) stops on its date.
+ *
+ * Applied in the two helpers every caller already goes through, rather than at each of them. A
+ * plan is read on nearly every request — the ceiling, the seat check, what may be addressed to the
+ * team — and an expiry that had to be remembered at each of those is one that will be forgotten at
+ * one of them, which is the reading where a gift never ends.
+ */
+const asItStands = <T extends { plan: string; plan_until?: string }>(row: T, at: string): T => ({
+  ...row,
+  plan: planNow(row.plan, row.plan_until, at),
+});
+
 async function myTeams(c: Ctx): Promise<(TeamRow & { role: string })[]> {
   const { results } = await db(c)
     .prepare(
@@ -333,17 +373,19 @@ async function myTeams(c: Ctx): Promise<(TeamRow & { role: string })[]> {
     )
     .bind(c.get("account"))
     .all<TeamRow & { role: string }>();
-  return results;
+  const at = now();
+  return results.map((t) => asItStands(t, at));
 }
 
 async function teamBySlug(c: Ctx, slug: string): Promise<(TeamRow & { role: string }) | null> {
-  return db(c)
+  const row = await db(c)
     .prepare(
       `SELECT t.*, m.role FROM team t JOIN membership m ON m.team_id = t.id
        WHERE t.slug = ? AND m.account_id = ?`,
     )
     .bind(slug, c.get("account"))
     .first<TeamRow & { role: string }>();
+  return row ? asItStands(row, now()) : null;
 }
 
 /**
@@ -1054,15 +1096,200 @@ app.delete("/v1/tokens/:id", async (c) => {
   return c.json({ id: c.req.param("id"), revoked: true });
 });
 
+// ---- giving a plan away (migrations/0026_gifts.sql) --------------------------------------------
+//
+// The operator's own routes, and the only ones in the product that are not about guides. They are
+// here rather than in a separate admin service because there is one deployment and one database,
+// and a second Worker to run three statements would be a system to maintain for the rest of time.
+//
+// `ADMIN_ACCOUNTS` is the whole of the gate. Unset — which is what every deployment that has not
+// been told otherwise has — means these routes answer 404 to everyone, so nothing about them is
+// discoverable on a deployment that does not use them.
+
+/** 404, not 403: an operator route nobody is the operator of does not exist as far as callers go. */
+async function operator(c: Ctx & { env: Env }): Promise<string | null> {
+  const account = c.get("account");
+  return (await isAdmin(c.env.DB, c.env.ADMIN_ACCOUNTS, account)) ? account : null;
+}
+
+/**
+ * Who the role itself answers to: only an account the deployment names in `ADMIN_ACCOUNTS`.
+ *
+ * A super runs the product and cannot decide who else may, so an admin session left open cannot
+ * leave a permanent second owner behind. Changing that list is changing the deployment, which is
+ * the point: it is the one act in the product that no session can perform.
+ *
+ * A super who is not the owner is told why; anybody else still gets the 404 that says nothing.
+ */
+async function platformOwner(
+  c: Ctx & { env: Env },
+): Promise<{ id: string } | { refuse: 403 | 404 }> {
+  const account = c.get("account");
+  if (isPlatformOwner(c.env.ADMIN_ACCOUNTS, account)) return { id: account };
+  return { refuse: (await operator(c)) ? 403 : 404 };
+}
+
+// What happened and what to do about it. Why it works this way is in platformOwner() above; an
+// error is not where somebody wants the reasoning.
+const NOT_THE_OWNER =
+  "Only the owner account can add or remove an admin. Add your id to ADMIN_ACCOUNTS on the " +
+  "deployment, or ask whoever can.";
+
+/**
+ * Make an account that exists to run the product, and hand back the two ways into it.
+ *
+ * A separate account on purpose: admin work is then never done by the account that also publishes
+ * guides, so a compromised working session cannot comp anybody, and the log of who did what says
+ * which hat was on. It signs in like any other account — that is the whole point of the role being
+ * a column — so nothing new is issued and nothing new can leak: a token for the CLI, and a link to
+ * set a password for the hub, each shown exactly once.
+ *
+ * The link is the existing password-reset link, because "set your first password" and "set a new
+ * one" are the same act against the same table, and a second one-time-code path is a second place
+ * for an expiry bug to live.
+ */
+app.post("/v1/admin/accounts", async (c) => {
+  const owner = await platformOwner(c);
+  if ("refuse" in owner)
+    return err(c, owner.refuse, owner.refuse === 403 ? NOT_THE_OWNER : "Not found.");
+  const by = owner.id;
+  const { email } = (await c.req.json().catch(() => ({}))) as { email?: string };
+  const address = (email || "").trim().toLowerCase();
+  if (!EMAIL_RE.test(address)) return err(c, 400, NOT_AN_EMAIL);
+  const taken = await c.env.DB.prepare("SELECT id FROM account WHERE email = ?")
+    .bind(address)
+    .first();
+  if (taken)
+    return err(
+      c,
+      409,
+      "There's already an account with that email. Make the existing one a super instead.",
+    );
+
+  const id = rid(10);
+  const token = `pa_${rand(32)}`;
+  const code = rand(40);
+  const at = now();
+  await c.env.DB.batch([
+    // token_hash is the retired identity column, as in POST /v1/accounts. See migration 0005.
+    c.env.DB.prepare(
+      `INSERT INTO account (id, created, token_hash, email, role, role_since, role_by)
+       VALUES (?, ?, ?, ?, 'super', ?, ?)`,
+    ).bind(id, at, `retired:${rid(24)}`, address, at, by),
+    c.env.DB.prepare(
+      "INSERT INTO token (id, account_id, name, hash, created) VALUES (?, ?, ?, ?, ?)",
+    ).bind(rid(10), id, "admin cli", await sha256(token), at),
+    c.env.DB.prepare(
+      "INSERT INTO reset (hash, account_id, created, expires) VALUES (?, ?, ?, ?)",
+    ).bind(await sha256(code), id, at, new Date(Date.now() + 24 * 3600e3).toISOString()),
+  ]);
+  // Mailed as well when the deployment can send, so the person it is for gets it without the
+  // operator copying a link out of a terminal into a chat window.
+  await sendReset(c.env, { to: address, url: `${origin(c)}/reset#${code}` }).catch(() => {});
+  count(c, "account_created", { kind: "super" });
+  return c.json(
+    {
+      account: id,
+      email: address,
+      role: "super",
+      token,
+      // A day, not an hour: this one is handed over rather than clicked on the spot.
+      password_url: `${origin(c)}/reset#${code}`,
+      expires: new Date(Date.now() + 24 * 3600e3).toISOString(),
+    },
+    201,
+  );
+});
+
+/** Who runs the product. */
+app.get("/v1/admin/accounts", async (c) => {
+  if (!(await operator(c))) return err(c, 404, "Not found.");
+  return c.json({ supers: await superAccounts(c.env.DB) });
+});
+
+/** Make an account that already exists a super. */
+app.put("/v1/admin/accounts/:id", async (c) => {
+  const owner = await platformOwner(c);
+  if ("refuse" in owner)
+    return err(c, owner.refuse, owner.refuse === 403 ? NOT_THE_OWNER : "Not found.");
+  const by = owner.id;
+  const who = await findSubject(c.env.DB, c.req.param("id"));
+  if (!who || who.kind !== "account") return err(c, 404, `no account "${c.req.param("id")}"`);
+  await makeSuper(c.env.DB, { account: who.id, by, at: now() });
+  return c.json({ account: who.id, name: who.name, role: "super" });
+});
+
+/** Take the role back. The account keeps everything else it has. */
+app.delete("/v1/admin/accounts/:id", async (c) => {
+  const owner = await platformOwner(c);
+  if ("refuse" in owner)
+    return err(c, owner.refuse, owner.refuse === 403 ? NOT_THE_OWNER : "Not found.");
+  const by = owner.id;
+  const who = await findSubject(c.env.DB, c.req.param("id"));
+  if (!who || who.kind !== "account") return err(c, 404, `no account "${c.req.param("id")}"`);
+  const r = await unSuper(c.env.DB, { account: who.id, by, at: now() });
+  if ("error" in r) return err(c, r.status, r.error);
+  return c.json({ account: who.id, name: who.name, role: "" });
+});
+
+/** Give Solo to a person or Team to a team, until a date. */
+app.post("/v1/admin/gifts", async (c) => {
+  const by = await operator(c);
+  if (!by) return err(c, 404, "Not found.");
+  const body = (await c.req.json().catch(() => ({}))) as {
+    to?: string;
+    until?: string;
+    why?: string;
+    seats?: number;
+  };
+  const given = await gift(c.env.DB, {
+    to: String(body.to ?? ""),
+    until: String(body.until ?? ""),
+    why: String(body.why ?? ""),
+    seats: Number(body.seats ?? 0),
+    by,
+    at: now(),
+  });
+  if ("error" in given) return err(c, given.status, given.error);
+  count(c, "plan_gifted", { kind: given.subject.kind });
+  return c.json({
+    id: given.id,
+    to: given.subject.name,
+    kind: given.subject.kind,
+    plan: given.subject.kind === "account" ? "solo" : "team",
+    until: given.until,
+    seats: given.seats,
+  });
+});
+
+/** What has been given, newest first, and whether each one is still doing anything. */
+app.get("/v1/admin/gifts", async (c) => {
+  if (!(await operator(c))) return err(c, 404, "Not found.");
+  return c.json({ gifts: await gifts(c.env.DB, { at: now() }) });
+});
+
+/** Take one back. The plan goes to `lapsed`; a subscription bought since is left alone. */
+app.delete("/v1/admin/gifts/:id", async (c) => {
+  if (!(await operator(c))) return err(c, 404, "Not found.");
+  const r = await revokeGift(c.env.DB, c.req.param("id"), { at: now() });
+  if ("error" in r) return err(c, r.status, r.error);
+  count(c, "plan_gift_revoked", {});
+  return c.json({ id: c.req.param("id"), revoked: true });
+});
+
 // ---- identity ---------------------------------------------------------------------------
 
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, password_hash, plan FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, password_hash, plan, plan_until, role FROM account WHERE id = ?",
   )
     .bind(account)
-    .first<AccountRow & { password_hash: string; plan: string }>();
+    .first<
+      AccountRow & { password_hash: string; plan: string; plan_until: string; role: string }
+    >();
+  // A gift that has run out is `lapsed` here too, so the hub says what the ceiling already does.
+  const ownPlan = planNow(me?.plan || "free", me?.plan_until, now());
   const room = await quota(c, account);
   // The plan rides along with the team it belongs to. Without it the hub would have to fetch every
   // team to find out why a limit vanished, and the banner that explains the ceiling is drawn before
@@ -1089,7 +1316,15 @@ app.get("/v1/me", async (c) => {
     sync: room.plan,
     // This account's own subscription, which is a different fact from what it may sync: a member of
     // a paid team syncs without a ceiling and is still on `free` themselves.
-    plan: me?.plan || "free",
+    plan: ownPlan,
+    // When it stops, and only for a plan that was given: a bought one ends when the provider says.
+    plan_until: me?.plan_until || "",
+    // '' for everybody who uses Passalong, 'super' for whoever runs it (migrations/0027_super.sql).
+    // The hub draws the operator section from this; the routes check the database, not this field.
+    role: (await isAdmin(c.env.DB, c.env.ADMIN_ACCOUNTS, account)) ? "super" : me?.role || "",
+    // Whether this account may make or remove a super, which only the deployment's own list may
+    // do. Named for what it permits rather than "owner", which already means something on a team.
+    can_make_supers: isPlatformOwner(c.env.ADMIN_ACCOUNTS, account),
     unread: await unreadCount(c.env, account),
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.
@@ -1106,6 +1341,7 @@ app.get("/v1/me", async (c) => {
  */
 async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceiling> {
   const marks = COUNTED.map(() => "?").join(", ");
+  const at = now();
   // `paid` is the whole of the plan's effect on an individual: being in one team that is currently
   // paying removes this account's ceiling. Asked here rather than stored on the account, so the
   // answer cannot be stale — see ceilingFor().
@@ -1114,11 +1350,20 @@ async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceilin
             (SELECT sync_limit FROM account WHERE id = ?) AS own,
             (SELECT grandfathered FROM account WHERE id = ?) AS old,
             (SELECT plan FROM account WHERE id = ?) AS own_plan,
+            (SELECT plan_until FROM account WHERE id = ?) AS own_until,
             (SELECT COUNT(*) FROM membership m JOIN team t ON t.id = m.team_id
-              WHERE m.account_id = ? AND t.plan = 'team') AS paid`,
+              WHERE m.account_id = ? AND t.plan = 'team'
+                AND (t.plan_until = '' OR t.plan_until > ?)) AS paid`,
   )
-    .bind(account, ...COUNTED, account, account, account, account)
-    .first<{ used: number; own: number; old: number; paid: number; own_plan: string }>();
+    .bind(account, ...COUNTED, account, account, account, account, account, at)
+    .first<{
+      used: number;
+      own: number;
+      old: number;
+      paid: number;
+      own_plan: string;
+      own_until: string;
+    }>();
   return {
     used: row?.used ?? 0,
     ...ceilingFor(
@@ -1127,7 +1372,9 @@ async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceilin
       c.env.FREE_SYNC_LIMIT,
       row?.old,
       c.env.FREE_SIGNUP,
-      row?.own_plan,
+      // The mirror of planNow(), because this one is a COUNT and cannot be done in TS: a team whose
+      // gift has run out is not a team that is paying.
+      planNow(row?.own_plan ?? "free", row?.own_until, at),
     ),
   };
 }
@@ -1539,12 +1786,14 @@ app.post("/v1/invites/:code/accept", async (c) => {
     // is a count that drifts the first time a member leaves, and the drift is invisible until it
     // has been wrong for a month. An existing member re-opening their invite link is never
     // refused: they already occupy the seat this is protecting.
-    const room = await c.env.DB.prepare(
-      "SELECT t.plan, t.seats, (SELECT COUNT(*) FROM membership WHERE team_id = t.id) AS members" +
+    const found = await c.env.DB.prepare(
+      "SELECT t.plan, t.plan_until, t.seats," +
+        " (SELECT COUNT(*) FROM membership WHERE team_id = t.id) AS members" +
         " FROM team t WHERE t.id = ?",
     )
       .bind(inv.team_id)
-      .first<{ plan: string; seats: number; members: number }>();
+      .first<{ plan: string; plan_until: string; seats: number; members: number }>();
+    const room = found ? asItStands(found, now()) : null;
     if (room && !acceptsNewWork(room.plan))
       return err(
         c,
@@ -2297,8 +2546,10 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
     "";
   if (soloId && !change.team_id) {
     const plan = change.plan === "team" ? "solo" : change.plan;
+    // `plan_until` is cleared: a subscription is not a gift, and a date left over from one would
+    // expire a plan somebody is now being charged for. See migrations/0026_gifts.sql.
     const done = await c.env.DB.prepare(
-      "UPDATE account SET plan = ?, plan_since = ?, subscription_id = ? WHERE id = ?",
+      "UPDATE account SET plan = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
     )
       .bind(plan, now(), change.subscription_id, soloId)
       .run();
@@ -2327,8 +2578,10 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
   // The subscription id is written here and only here, which is what binds a team to the thing
   // paying for it. Never cleared on a lapse: a lapsed team that renews is the same subscription,
   // and forgetting it would orphan every event that follows.
+  // `plan_until` cleared for the same reason as above: what the team is on is now the provider's
+  // to end, not a date an operator typed.
   await c.env.DB.prepare(
-    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, subscription_id = ? WHERE id = ?",
+    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
   )
     .bind(change.plan, change.seats ?? team.seats, now(), change.subscription_id, team.id)
     .run();
@@ -2351,10 +2604,13 @@ app.post("/v1/subscribe", async (c) => {
   if (!provider || !isProvider(provider))
     return err(c, 400, "Choose Stripe or Paystack to pay with.");
 
-  const me = await c.env.DB.prepare("SELECT email, plan FROM account WHERE id = ?")
+  const me = await c.env.DB.prepare("SELECT email, plan, subscription_id FROM account WHERE id = ?")
     .bind(account)
-    .first<{ email: string; plan: string }>();
-  if (me?.plan === "solo") return err(c, 400, "You're already on the Solo plan.");
+    .first<{ email: string; plan: string; subscription_id: string }>();
+  // Asked of the subscription, not of the plan: somebody on a gifted Solo (0026_gifts.sql) has the
+  // plan and pays nothing, and telling them they already have it would leave them no way to buy
+  // the thing before their gift runs out.
+  if (me?.subscription_id) return err(c, 400, "You're already on the Solo plan.");
   if (!me?.email)
     return err(
       c,
@@ -3411,6 +3667,22 @@ const NO_AGENT =
   "worktree's .passalong/agent.json";
 
 /** One task as the API answers it: where it is, and who has it. */
+/** A claim's `checks` column as a list. Anything unreadable is nothing, never half a list. */
+function readChecks(raw: string): { check: string; ran: string }[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (c): c is { check: string; ran: string } =>
+        typeof (c as { check?: unknown })?.check === "string" &&
+        typeof (c as { ran?: unknown })?.ran === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
 function taskView(
   task: { id: string; title: string; target: string; status: string; created: string },
   claim: claims.ClaimRow | null,
@@ -3430,6 +3702,9 @@ function taskView(
           worktree: claim.worktree,
           note: claim.note,
           evidence: claim.evidence,
+          // Parsed here, once: the hub reads a list, and a screen that has to JSON.parse a column
+          // is a screen that has to decide what to do when it does not parse.
+          checks: readChecks(claim.checks),
           report: claim.report_id,
           pr: claim.pr,
           claimed_at: claim.claimed_at,
@@ -3538,6 +3813,7 @@ app.post("/v1/tasks/:id/finish", async (c) => {
     at: now(),
     report,
     evidence: typeof who.evidence === "string" ? who.evidence : "",
+    checks: Array.isArray(who.checks) ? (who.checks as claims.Check[]) : [],
     pr: typeof who.pr === "string" ? who.pr : "",
     note: typeof who.note === "string" ? who.note : "",
   });
@@ -3731,6 +4007,17 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   const note = typeof who.note === "string" ? who.note.trim().slice(0, NOTE_MAX) : "";
 
   const evidence = typeof who.evidence === "string" ? who.evidence : "";
+  // Evidence against the line it answers, when the agent sorted it that way. Anything that is not
+  // a pair of strings is dropped rather than refused: the block of text is still required, so a
+  // malformed extra cannot leave a hand-in with nothing to read.
+  const checks = Array.isArray(who.checks)
+    ? (who.checks as unknown[])
+        .filter((c): c is { check: string; ran: string } => {
+          const o = c as { check?: unknown; ran?: unknown };
+          return typeof o?.check === "string" && typeof o?.ran === "string";
+        })
+        .slice(0, 50)
+    : [];
 
   if (found.row.kind === "task") {
     const report = typeof who.report === "string" ? who.report.trim() : "";
@@ -3739,6 +4026,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
       at,
       report,
       evidence,
+      checks,
       pr: typeof who.pr === "string" ? who.pr : "",
       note,
     });

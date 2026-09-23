@@ -16,9 +16,13 @@ session's history. Write for execution, not for permanence.
 
 - **The session answers something you hold** — hand it in (`passalong hand_in <id> …`) instead.
   Publishing a second guide about it leaves two records of one piece of work. Every hand-in carries
-  `evidence`: what you ran and what came back — the command and the lines that decided it, a test
-  summary, a link to the change, or a screenshot url. Copy each one out of the session as you go;
-  at the end you would be writing from memory, which is what evidence exists to replace.
+  what you ran and what came back — the command and the lines that decided it, a test summary, a
+  link to the change, or a screenshot url. Copy each one out of the session as you go; at the end
+  you would be writing from memory, which is what evidence exists to replace. On a **task**, send
+  it as `checks`: one entry per Acceptance line, each with that line and the evidence for it. Its
+  author reads them line against line, and evidence filed under the check it answers is worth more
+  than the same output in one block. On a handoff or a bug, which have no Acceptance lines, send
+  `evidence` as one block.
 - **The work never left this repo** — committed and pushed on a branch the team can already see,
   with a pull request to review — then it has crossed no boundary, and a transfer guide is one more
   thing for somebody to read. What is worth publishing from a session like that is what is *still

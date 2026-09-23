@@ -230,6 +230,48 @@ test("finishing needs a transfer guide, and moves the task to review", async () 
   assert.equal(await next(db, A, { at: T0 }), null);
 });
 
+test("a task can hand in evidence against each line it was asked for", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  await next(db, A, { at: T0 });
+  const done = await finish(db, "t1", A, {
+    at: T0,
+    report: "report",
+    evidence: "",
+    checks: [
+      { check: "the sixth is refused with 429", ran: "$ for i in 1..6 → 200 200 200 200 200 429" },
+      { check: "the refusal says when to try again", ran: "$ curl -si … → Retry-After: 60" },
+    ],
+  });
+  assert.equal(done.error, undefined);
+  assert.deepEqual(JSON.parse(done.claim.checks), [
+    { check: "the sixth is refused with 429", ran: "$ for i in 1..6 → 200 200 200 200 200 429" },
+    { check: "the refusal says when to try again", ran: "$ curl -si … → Retry-After: 60" },
+  ]);
+  // `evidence` is filled from them, so every surface that reads the block of text — the CLI, the
+  // handed-in row — keeps working without knowing this column exists.
+  assert.match(done.claim.evidence, /the sixth is refused with 429/);
+  assert.match(done.claim.evidence, /Retry-After: 60/);
+});
+
+test("a check with nothing behind it is not evidence either", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  await next(db, A, { at: T0 });
+  const fin = (checks) => finish(db, "t1", A, { at: T0, report: "report", evidence: "", checks });
+  assert.match((await fin([{ check: "it works", ran: "" }])).error, /what you ran/i);
+  assert.match(
+    (await fin([{ check: "", ran: "npm test → 285 pass, 0 fail" }])).error,
+    /which check/i,
+  );
+  assert.match((await fin([{ check: "it works", ran: "yes" }])).error, /what you ran/i);
+  assert.equal(await stateIn(db, "t1"), "claimed", "a refused hand-in leaves it held");
+});
+
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {
   const db = d1();
   const guide = seed(db);
@@ -615,7 +657,7 @@ test("every answer says what to do next, and an answer to stop says to stop", ()
     for (const event of ["taken", "progress"])
       assert.match(
         steps(kind, event).next.find((x) => x.tool === "hand_in").with || "",
-        /evidence/,
+        kind === "task" ? /checks: one entry per Acceptance line/ : /evidence/,
         `${kind} after ${event}`,
       );
   assert.deepEqual(tools(steps("task", "handed_in")), ["take"]);

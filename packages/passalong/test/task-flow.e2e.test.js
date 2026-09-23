@@ -310,6 +310,43 @@ const PNG = Buffer.from(
   "base64",
 );
 
+test("a task's evidence can arrive against the line it answers", { skip }, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { id, dir } = await readyTask(env, "Evidence per line");
+  await p.take(id, { cwd: dir });
+  await p.handIn(id, {
+    markdown:
+      "---\ntitle: Per line, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    checks: [
+      { check: "the hub follows the OS setting", ran: "$ npm test -w apps/web → 58 pass, 0 fail" },
+    ],
+    cwd: dir,
+  });
+  const row = (await p.tasks()).find((t) => t.id === id);
+  assert.equal(row.state, "review");
+  assert.deepEqual(row.claim.checks, [
+    { check: "the hub follows the OS setting", ran: "$ npm test -w apps/web → 58 pass, 0 fail" },
+  ]);
+  // The block of text is filled from them, so everything that reads `evidence` still works.
+  assert.match(row.claim.evidence, /58 pass, 0 fail/);
+});
+
+test("a check with nothing behind it is refused, like any other claim", { skip }, async () => {
+  const env = await setup();
+  const { p } = env;
+  const { id, dir } = await readyTask(env, "Evidence per line, refused");
+  await p.take(id, { cwd: dir });
+  await assert.rejects(
+    p.handIn(id, {
+      markdown: "---\ntitle: x\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      checks: [{ check: "the hub follows the OS setting", ran: "it works" }],
+      cwd: dir,
+    }),
+    /what you ran and what came back/,
+  );
+});
+
 test("a follow-up is never handed over alone: the guide it came out of comes with it", {
   skip,
 }, async () => {

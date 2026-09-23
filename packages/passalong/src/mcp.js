@@ -257,12 +257,13 @@ export async function serve() {
     }
   }
 
-  async function doHandIn({ id, ok, note, evidence, markdown, report, pr, cwd }) {
+  async function doHandIn({ id, ok, note, evidence, checks, markdown, report, pr, cwd }) {
     try {
       const r = await passalong.handIn(id, {
         ok,
         note: note || "",
         evidence: evidence || "",
+        checks: checks || [],
         markdown,
         report,
         pr: pr || "",
@@ -519,20 +520,33 @@ export async function serve() {
     {
       title: "Hand it in",
       description:
-        "Done here, with proof. `evidence` is required on every hand-in: what you ran and what " +
-        "came back. A task also takes `markdown`, a transfer guide about what you did, decided " +
-        "and how you checked each Acceptance line — this publishes it and attaches it; its author " +
-        "reviews it. A handoff or a bug takes `ok`, whether its Verification held here, and " +
-        "`note` saying what went wrong when it did not. More context than a note holds goes in a " +
-        "follow-up: publish_guide with `parent` set to this id.",
+        "Done here, with proof. Every hand-in carries what you ran and what came back. On a TASK " +
+        "send `checks`: one entry per Acceptance line, each with that line and the evidence for " +
+        "it — that is what its author reads, line against line, instead of hunting through a wall " +
+        "of output for the part that answers each one. `evidence` is the same thing as one block, " +
+        "for a handoff or a bug, which have no Acceptance lines. A task also takes `markdown`, a " +
+        "transfer guide about what you did and decided — this publishes it and attaches it. A " +
+        "handoff or a bug takes `ok`, whether its Verification held here, and `note` saying what " +
+        "went wrong when it did not. More context than a note holds goes in a follow-up: " +
+        "publish_guide with `parent` set to this id.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         evidence: z
           .string()
+          .optional()
           .describe(
             "what you ran and what came back: the command and the lines that decided it, a test " +
               'summary, a link to the change, or a screenshot url. "it works" is a claim, not evidence',
           ),
+        checks: z
+          .array(
+            z.object({
+              check: z.string().describe("the Acceptance line this answers, in the task's words"),
+              ran: z.string().describe("what you ran for it, and what came back"),
+            }),
+          )
+          .optional()
+          .describe("task: one entry per Acceptance line, in the order you worked them"),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),
         markdown: z

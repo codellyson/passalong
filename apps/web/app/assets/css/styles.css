@@ -112,6 +112,12 @@
      own answer. One height, one type size, two sizes of each. */
   --control-h: 2.5rem;
   --control-h-sm: 2rem;
+  /* Side padding on a control, and it is not the same number as the space above and below the
+     text. A button's corners are rounded, so the arc eats into the room at each end of the label
+     while leaving the room over it alone: at 16px the ends read as crowded against a border that
+     the flat top edge does not. Roughly twice the vertical gap is what reads as even. */
+  --control-pad: 1.25rem;
+  --control-pad-sm: 0.875rem;
   --control-text: var(--t-sm);
 
   --r-1: 0.5rem;
@@ -136,7 +142,9 @@
      `--surface` is the recessed fill (code, inputs), `--surface-raised` the lifted one (cards,
      panels). Borders alone used to carry every boundary; now fill does most of it. */
   color-scheme: light dark;
-  --bg: light-dark(#fbfaf7, #14130f);
+  /* Plain, not papered: the page itself carries no tint, so the only coloured things on it are
+     the ones meant to be read as coloured — a raised card, a recessed code block, a state. */
+  --bg: light-dark(#ffffff, #121110);
   --surface: light-dark(#f4f2ec, #1e1c18);
   --surface-raised: light-dark(#ffffff, #1c1a16);
   --fg: light-dark(#1c1b19, #ece9e1);
@@ -432,7 +440,7 @@ button.primary,
   gap: var(--s-2);
   font: 500 var(--control-text) / 1 var(--font-sans);
   height: var(--control-h);
-  padding: 0 var(--s-4);
+  padding: 0 var(--control-pad);
   border-radius: var(--r-1);
   border: 1px solid transparent;
   cursor: pointer;
@@ -471,7 +479,7 @@ button.primary,
    line tall. */
 .btn.sm {
   height: var(--control-h-sm);
-  padding: 0 var(--s-3);
+  padding: 0 var(--control-pad-sm);
 }
 .btn.icon {
   height: var(--control-h-sm);
@@ -543,14 +551,18 @@ button.primary[disabled],
 }
 /* Outlined: the same weight as tonal, for a tone that should not carry a fill until you reach
    for it. */
+/* The ring is quieter than the label it holds. At full strength the border carried as much colour
+   as the text and more length, so an outlined button shouted louder than the filled one beside it —
+   and "send back" is the second choice on that row, not the first. The label stays at full tone,
+   which is what says which button this is; the ring only has to draw the shape. */
 .btn.outline {
   background: transparent;
-  border-color: var(--tone);
+  border-color: color-mix(in oklab, var(--tone) 40%, transparent);
   color: var(--tone);
 }
 .btn.outline:hover {
   background: var(--tone-soft);
-  border-color: var(--tone);
+  border-color: color-mix(in oklab, var(--tone) 65%, transparent);
   color: var(--tone);
 }
 /* Destructive: a normal button until you are on it. It used to be muted at rest, which read as

@@ -190,3 +190,69 @@ test("a connector's host picks which app's steps a Reconnect opens", () => {
   assert.equal(appForHost("claude.ai"), "claude");
   assert.equal(appForHost("notchatgpt.com.evil.test"), "other");
 });
+
+// ---- running the product (apps/web/app/pages/admin.vue) ----------------------------------------
+//
+// Read rather than rendered: there is no component runner here, and what matters is where this
+// lives and who reaches it — not in a customer's Settings, and not shown to a customer at all.
+
+const { readFileSync } = await import("node:fs");
+const settings = readFileSync(new URL("../app/pages/hub/settings.vue", import.meta.url), "utf8");
+const page = readFileSync(new URL("../app/pages/admin.vue", import.meta.url), "utf8");
+const menu = readFileSync(
+  new URL("../app/components/hub/AccountMenu.vue", import.meta.url),
+  "utf8",
+);
+const admin = readFileSync(new URL("../app/components/hub/Admin.vue", import.meta.url), "utf8");
+
+test("running the product is its own page, and no part of a customer's settings", () => {
+  // Settings is what somebody keeps about themselves. Comping another account is the business
+  // being run, and beside a team's own owner/member roles it read as one more of those.
+  assert.doesNotMatch(settings, /HubAdmin|Operator|isSuper/);
+  assert.match(page, /const isSuper = computed\(\(\) => data\.value\.me\?\.role === "super"\)/);
+  assert.match(page, /<HubAdmin v-else-if="isSuper" \/>/);
+});
+
+test("a customer who finds the address is sent back to their work, not refused", () => {
+  assert.match(page, /navigateTo\("\/hub"\)/);
+  // Only once the account has loaded: an empty `me` on first paint is not "not a super".
+  assert.match(page, /!pending\.value && data\.value\.me && !isSuper\.value/);
+  // `loading` is an object of per-endpoint flags, so `!loading.value` is never true: an earlier
+  // version of this line meant the redirect never ran and a customer sat on an empty Admin page.
+  assert.match(page, /const pending = computed\(\(\) => loading\.value\.me\)/);
+  assert.match(page, /noindex: true/);
+});
+
+test("only a super is shown the way there", () => {
+  assert.match(menu, /v-if="data\.me\?\.role === 'super'"/);
+  assert.match(menu, /to="\/admin"/);
+});
+
+test("taking a plan back and removing an admin both ask on the row, in the row's own words", () => {
+  for (const name of ["taking", "dropping"]) {
+    assert.match(admin, new RegExp(`const ${name} = ref<string \\| null>\\(null\\)`));
+  }
+  // The question names what it is about, and the buttons carry the action rather than Yes/No —
+  // in a table row the question has left focus by the time the eye reaches them.
+  assert.match(admin, /Take \{\{ g\.to \}\}'s plan back\?/);
+  assert.match(admin, />Take it back</);
+  assert.match(admin, />Keep it</);
+  assert.match(admin, /Remove \{\{ s\.name \}\}\?/);
+  assert.match(admin, />Remove admin</);
+});
+
+test("a super sees who else there is; only the deployment's own account can change it", () => {
+  // Absent, not disabled: the controls that hand out the role are drawn for nobody else, and the
+  // routes behind them refuse anyway. See platformOwner() in apps/api/src/index.ts.
+  assert.match(
+    admin,
+    /const canMakeSupers = computed\(\(\) => data\.value\.me\?\.can_make_supers === true\)/,
+  );
+  assert.match(admin, /<form v-if="canMakeSupers"/);
+  assert.match(admin, /<section v-if="canMakeSupers"/);
+  assert.match(admin, /Only the owner account can add or remove one\./);
+});
+
+test("what the server can never show again is marked where it is shown", () => {
+  assert.match(admin, /Copy both now\. Neither is shown again\./);
+});

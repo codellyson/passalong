@@ -69,6 +69,26 @@ const plansOffered = computed(() =>
 );
 const route = useRoute();
 
+/**
+ * The reading column, named once. The navbar sits outside <main> so that its background can span
+ * the viewport without `100vw` — see the template — and its content has to line up with the page
+ * under it, so both take their width from here.
+ */
+const measure = computed(() =>
+  route.path === "/hub/settings" || route.path === "/hub" ? "max-w-[70rem]" : "max-w-[54rem]",
+);
+/**
+ * One standing notice: a row, not a card. Shared with HubClaim so the two read as one band.
+ * `first:border-t-0` is why they are rows — stacked, the hairlines make a list rather than a pile.
+ */
+const notice =
+  "m-0 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-line py-2.5 font-ui text-sm text-muted first:border-t-0";
+/** The signal the fill used to carry, at the size a standing condition deserves. */
+const dot = "mt-1.5 size-1.5 shrink-0 rounded-pill bg-warn";
+
+/** The bar belongs to the signed-in shell, and to the moment before the server has said so. */
+const framed = computed(() => signedIn.value || maybe.value || meFailed.value);
+
 // Nothing is fetched during SSR: neither credential is visible from the server, so the first
 // render is always the signed-out screen and the client decides from there.
 onMounted(() => {
@@ -135,11 +155,49 @@ const active = (to: string) =>
        an app picker beside its steps. Tasks too: its review puts an inbox beside a pane that holds
        two columns, what was asked against what came back, and at 54rem each column wrapped every
        Acceptance line to four or five lines. -->
-  <main
-    :class="
-      route.path === '/hub/settings' || route.path === '/hub' ? 'max-w-[70rem]' : 'max-w-[54rem]'
-    "
+  <!-- The navbar, outside <main> and spanning the viewport by being a block in the page rather
+       than a box one viewport wide. `100vw` counts the vertical scrollbar, so the old full-bleed
+       pseudo-element was about eight pixels wider than the page and the browser drew a horizontal
+       scrollbar on every screen. A plain block has no such opinion, and its content lines up with
+       the page under it because both use `measure`. -->
+  <div
+    v-if="framed"
+    class="sticky top-0 z-30 border-b border-line bg-raised/85 py-2.5 backdrop-blur-md"
   >
+    <div class="mx-auto flex w-full items-center gap-2 px-[var(--s-5)] sm:gap-6" :class="measure">
+      <!-- One row at every width. On a phone the brand is its mark, New is a plus, the account
+           is an avatar, and the theme switch moves into the account menu. -->
+      <AppBrand to="/hub" compact />
+      <nav
+        class="flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1"
+        aria-label="Hub"
+      >
+        <NuxtLink
+          v-for="t in tabs"
+          :key="t.to"
+          :to="t.to"
+          class="rounded-1 px-2.5 py-1.5 font-ui text-sm whitespace-nowrap no-underline transition-colors sm:px-3"
+          :class="active(t.to) ? 'font-semibold text-fg' : 'font-medium text-muted hover:text-fg'"
+          :aria-current="active(t.to) ? 'page' : undefined"
+        >
+          {{ t.label }}
+        </NuxtLink>
+      </nav>
+      <div class="ml-auto flex shrink-0 items-center gap-2">
+        <!-- Reachable signed in or out: the sign-in screen is as likely as any to be too bright.
+             Signed in on a phone it is in the account menu instead, to keep the bar one row. -->
+        <AppThemeToggle :class="signedIn ? 'max-sm:hidden' : ''" />
+        <template v-if="signedIn">
+          <HubNewMenu />
+          <HubAccountMenu />
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Less room above than the 48px every other page gets: those open on a heading with nothing
+       over it, and this one opens under a navbar that is already a band of its own. -->
+  <main class="pt-6" :class="measure">
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->
@@ -155,47 +213,6 @@ const active = (to: string) =>
     />
 
     <section v-else class="hub">
-      <!-- The app's navbar: pinned to the top, full width, on its own raised background, so it reads
-           as the frame around the page rather than one more row of tabs inside it — which is what
-           the page's own tabs (Needs you, Working now…) now are. A div, not <header>: the global
-           header rule adds its own border, padding and margin, and it outranks utility classes.
-           The full-bleed background and its hairline are a pseudo-element one viewport wide behind
-           the bar, so the bar stays inside <main> and keeps its measure. It was a shadow clipped to
-           the bar's height, and the clip cut off the bar's own menus. -->
-      <div
-        class="sticky top-0 z-30 -mt-12 mb-8 py-2.5 before:absolute before:inset-y-0 before:left-1/2 before:-z-10 before:w-screen before:-translate-x-1/2 before:border-b before:border-line before:bg-raised/85 before:backdrop-blur-md before:content-['']"
-      >
-        <!-- One row at every width. On a phone the brand is its mark, New is a plus, the account
-             is an avatar, and the theme switch moves into the account menu. -->
-        <div class="flex items-center gap-2 sm:gap-6">
-          <AppBrand to="/hub" compact />
-          <nav
-            class="flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1"
-            aria-label="Hub"
-          >
-            <NuxtLink
-              v-for="t in tabs"
-              :key="t.to"
-              :to="t.to"
-              class="rounded-1 px-2.5 py-1.5 font-ui text-sm whitespace-nowrap no-underline transition-colors sm:px-3"
-              :class="active(t.to) ? 'font-semibold text-fg' : 'font-medium text-muted hover:text-fg'"
-              :aria-current="active(t.to) ? 'page' : undefined"
-            >
-              {{ t.label }}
-            </NuxtLink>
-          </nav>
-          <div class="ml-auto flex shrink-0 items-center gap-2">
-            <!-- Reachable signed in or out: the sign-in screen is as likely as any to be too bright.
-                 Signed in on a phone it is in the account menu instead, to keep the bar one row. -->
-            <AppThemeToggle :class="signedIn ? 'max-sm:hidden' : ''" />
-            <template v-if="signedIn">
-              <HubNewMenu />
-              <HubAccountMenu />
-            </template>
-          </div>
-        </div>
-      </div>
-
       <template v-if="heading">
         <h1 class="mt-0">{{ heading }}</h1>
         <p v-if="$slots.sub" class="-mt-2 mb-6 font-ui text-sm text-muted"><slot name="sub" /></p>
@@ -219,40 +236,45 @@ const active = (to: string) =>
         <button class="btn sm" @click="error = null">Dismiss</button>
       </div>
 
-      <!-- Specific about which half stops: everything in the team can still be read and answered,
-           and only new guides are refused. -->
-      <p
-        v-for="t in lapsed"
-        :key="t.slug"
-        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
-      >
-        <b class="text-fg">{{ t.name }} can't take new guides right now.</b>
-        Its plan has lapsed. Everything already in it can still be read and answered, and nobody new
-        can join. {{ t.role === "owner" ? "Renew it in Settings." : "Ask the team owner to renew it." }}
-      </p>
+      <!-- Standing notices, as one band of quiet rows rather than a stack of filled cards.
+           Each of these is true for weeks — a plan not chosen, a team lapsed, a browser with no
+           password — and filled warning cards for a permanent condition take the top of the page,
+           the loudest colour on it and the reader's first glance, every single visit, for something
+           nobody is going to act on right now. A dot carries the signal, a hairline separates the
+           rows, and the work starts higher up the page. -->
+      <div v-if="lapsed.length || noPlan || nearLimit" class="mb-8 flex flex-col">
+        <!-- Specific about which half stops: everything in the team can still be read and answered,
+             and only new guides are refused. -->
+        <p v-for="t in lapsed" :key="t.slug" :class="notice">
+          <span :class="dot" aria-hidden="true" />
+          <span class="min-w-0 grow">
+            <b class="text-fg">{{ t.name }} can't take new guides right now.</b>
+            Its plan has lapsed. Everything already in it can still be read and answered, and nobody
+            new can join.
+            {{ t.role === "owner" ? "Renew it in Settings." : "Ask the team owner to renew it." }}
+          </span>
+        </p>
 
-      <p
-        v-if="noPlan"
-        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
-      >
-        <b class="text-fg">Sending guides needs a plan.</b>
-        Guides you already have stay where they are.
-        <NuxtLink v-if="plansOffered" to="/hub/settings#plan">Choose a plan</NuxtLink>
-      </p>
+        <p v-if="noPlan" :class="notice">
+          <span :class="dot" aria-hidden="true" />
+          <span class="min-w-0 grow">
+            <b class="text-fg">Sending guides needs a plan.</b>
+            Guides you already have stay where they are.
+          </span>
+          <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">Choose a plan</NuxtLink>
+        </p>
 
-      <p
-        v-if="nearLimit"
-        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
-      >
-        <b class="text-fg">You're using {{ data.me?.guides }} of {{ data.me?.limit }} guides on the free plan.</b>
-        <template v-if="full"> New guides can't be sent until you make room.</template>
-        Archiving a finished guide frees a space.
-        <NuxtLink :to="{ path: '/hub', query: { done: '1' } }">Show Done</NuxtLink>
-        <template v-if="plansOffered">
-          ·
-          <NuxtLink to="/hub/settings#plan">See plans</NuxtLink>
-        </template>
-      </p>
+        <p v-if="nearLimit" :class="notice">
+          <span :class="dot" aria-hidden="true" />
+          <span class="min-w-0 grow">
+            <b class="text-fg">You're using {{ data.me?.guides }} of {{ data.me?.limit }} guides on the free plan.</b>
+            <template v-if="full"> New guides can't be sent until you make room.</template>
+            Archiving a finished guide frees a space.
+          </span>
+          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub', query: { done: '1' } }">Show Done</NuxtLink>
+          <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>
+        </p>
+      </div>
 
       <!-- Between the guess and the answer there is no data, so the page's own empty states would
            read as facts — "nothing is waiting on you" is the wrong sentence to show someone whose
