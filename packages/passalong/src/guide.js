@@ -320,7 +320,11 @@ export function sections(body) {
     const h = /^##\s+(.+?)\s*$/.exec(line);
     if (h) {
       current = h[1];
-      out[current] = "";
+      // A heading written twice adds to its section rather than replacing it. Resetting here lost
+      // the first block outright, so a guide with two `## Verification` headings was validated
+      // against only the second — and `splitSections()` in apps/api/src/guide.ts, which the web
+      // view reads, kept both. The corpus in fixtures/guides is where the two stopped agreeing.
+      if (!(current in out)) out[current] = "";
       continue;
     }
     if (current) out[current] += `${line}\n`;

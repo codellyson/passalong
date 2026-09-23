@@ -338,10 +338,27 @@ Passalong cannot. A task's `Acceptance` *is* its specification — the agent has
 work. That removes an anti-gaming guarantee the benchmarks rely on, which is a further argument for
 executing the check rather than accepting a report of it.
 
-**2. Give the two parsers a shared corpus.** One fixture set, a round-trip assertion in both
-`packages/passalong/test/guide.test.js` and `apps/api/test/guide.test.mjs`, and a check that the two
-implementations agree byte for byte. The measured 14.5% drift is what an unenforced mirror looks
-like from the inside, and the format lives in markdown files in other people's repositories.
+**2. Give the two parsers a shared corpus.** *Implemented, in
+`packages/passalong/fixtures/guides/`.* One file per shape the format has to keep working, each in
+canonical form, so `serialize(parse(x))` returns it byte for byte and a change to `META_ORDER`,
+`quote()` or `tag()` lands as a diff in a file somebody has to read rather than as a silent rewrite
+of guides already in other people's repositories. `test/corpus.test.js` holds guide.js to the
+corpus and pins the normalisations that are meant to happen as input/output pairs;
+`apps/api/test/corpus.test.mjs` reads the same files and holds `guide.ts` to `guide.js` on
+frontmatter, body, sections, tags and unreachable images.
+
+Both assertions were checked by mutation rather than assumed: dropping `_` from `tag()` in the
+mirror fails three cross-parser tests, and swapping two entries in `META_ORDER` fails eight in the
+corpus suite.
+
+It found one divergence immediately. `sections()` reset a section on every heading, so a guide with
+two `## Verification` blocks was validated against the second alone, while `splitSections()` in
+`guide.ts` — which the web view reads — kept both. guide.js now appends, and the two agree.
+
+It also pinned one thing as-is rather than fixing it: the frontmatter is read line by line on
+`\r?\n` so it comes back as LF, but the body is taken whole and only trimmed, so a `\r` inside it
+survives. Normalising the body would rewrite the bytes of every guide written on Windows, which is
+the silent rewrite the corpus exists to make visible rather than commit.
 
 **3. Add a monotonic counter to the claim row.** The compare-and-set guard already fences the
 dangerous write; a counter closes the ABA case and matches KCL's `leaseCounter`. Cheap, and it is

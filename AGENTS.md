@@ -14,7 +14,8 @@ public one, for agents *using* Passalong rather than changing it.
 - `packages/passalong` — the `passalong` CLI and the MCP server. Plain ESM JavaScript, no build step,
   no runtime deps beyond `@modelcontextprotocol/sdk` + `zod`. Published to npm as `passalong`.
   - `src/guide.js` — the guide format: frontmatter parse/serialize, validation, ids, template.
-    **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both.
+    **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both,
+    and `fixtures/guides/` is what now checks you did.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
   - `src/mcp.js` — MCP tools. `take`, `progress`, `hand_in` and `pass` work every kind of guide
@@ -32,6 +33,11 @@ public one, for agents *using* Passalong rather than changing it.
     ChatGPT fills file inputs, so the HTTP server also has `create_upload`: a one-time link
     (`POST /v1/uploads`, spent by `PUT /v1/uploads/:token` without a credential) that an agent's
     sandbox sends the file to with curl. See `apps/api/src/uploads.ts`.
+  - `fixtures/guides/` — the corpus: one file per shape the format has to keep working, each in
+    canonical form so `serialize(parse(x))` returns it byte for byte. `test/corpus.test.js` holds
+    guide.js to it and `apps/api/test/corpus.test.mjs` reads the same files to hold the two
+    parsers to each other. A change that makes these drift is a change to every guide already
+    published: edit them deliberately, never to make a test go green. Not published to npm.
   - `src/checks.js` — runs an Acceptance check's command at hand-in and records the exit code, so
     a task's verdict is the process's and not the agent's. Local only: `mcp-http.ts` is a Worker
     with no shell, so a hand-in over HTTP keeps the prose gate. It never reads a command out of a
