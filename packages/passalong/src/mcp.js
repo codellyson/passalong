@@ -487,21 +487,47 @@ export function buildServer() {
     "activity",
     {
       title: "Activity",
-      annotations: ADDS,
+      annotations: READS,
       description:
-        "What has happened to this user's guides and handoffs: who pulled one, who marked one " +
-        "consumed, who was handed what, who joined a team. Each item has a ready-made `text` " +
-        "line. Read-only by default — it does not clear the user's unread feed unless asked.",
+        "What has happened to this user's guides and handoffs: who pulled one, who archived one, " +
+        "who was handed what, who joined a team. Each item has a ready-made `text` line. This only " +
+        "reads; clear_activity is what marks the feed seen.",
       inputSchema: {
         all: z.boolean().default(false).describe("include what the user has already seen"),
-        mark_read: z.boolean().default(false).describe("clear the unread feed after reading"),
       },
     },
-    async ({ all, mark_read }) => {
+    async ({ all }) => {
       try {
-        const res = await passalong.activity({ all });
-        if (mark_read && res.unread) await passalong.seen();
-        return json(res);
+        return json(await passalong.activity({ all }));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  /**
+   * Split out of `activity`, which took `mark_read` and so read on one call and wrote on the next.
+   *
+   * An annotation cannot say "sometimes": `readOnlyHint` was false for a tool that almost always
+   * only reads, which is a client being told the cautious lie on every call rather than the truth
+   * on the one that matters. Two tools, each true about itself.
+   */
+  server.registerTool(
+    "clear_activity",
+    {
+      title: "Mark activity seen",
+      annotations: ADDS,
+      description:
+        "Clear the user's unread feed, after they have been shown what is in it. Read it with " +
+        "activity first — clearing what nobody was told about loses it.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const res = await passalong.activity({ all: false });
+        if (!res.unread) return json({ cleared: 0, unread: 0 });
+        await passalong.seen();
+        return json({ cleared: res.unread, unread: 0 });
       } catch (err) {
         return fail(err);
       }

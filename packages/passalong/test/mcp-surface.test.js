@@ -21,7 +21,15 @@ async function tools() {
   return new Map(tools.map((t) => [t.name, t]));
 }
 
-const READ_ONLY = ["search_guides", "inbox", "board", "log", "get_guide", "guide_template"];
+const READ_ONLY = [
+  "search_guides",
+  "inbox",
+  "board",
+  "log",
+  "get_guide",
+  "guide_template",
+  "activity",
+];
 const WRITES = [
   "assign",
   "plan_tasks",
@@ -33,9 +41,9 @@ const WRITES = [
   "set_guide_status",
   "publish_guide",
   "attach_screenshot",
-  // Reads by default, and clears the unread feed when asked to. An annotation cannot say
-  // "sometimes", so it says the cautious thing.
-  "activity",
+  // Was `activity` with a `mark_read` flag, which made one tool read on one call and write on the
+  // next — so its annotation had to claim it writes, on every call, to be honest about one of them.
+  "clear_activity",
 ];
 
 test("every tool says what it does to the world", async () => {

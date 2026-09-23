@@ -35,7 +35,7 @@
 //   passalong ungift <gift id>    take one back now
 //   passalong works <id>          you tried it and it holds up
 //   passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
-//   passalong done <id>           archive it: off your board and out of the free tier's count
+//   passalong archive <id>        off your board and out of the free tier's count (was `done`)
 //   passalong rm <id>             delete a guide locally and from sync
 //   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
 //   passalong login [token]       sign in with your email and password, or attach this machine with a token
@@ -615,14 +615,27 @@ const commands = {
   /**
    * Archive a guide: off your board, and out of what the free tier counts.
    *
-   * It was deprecated for meaning "I implemented it", which is the reader's judgement and belongs
-   * to the verdict. As shelf space it has a job nothing else does — it is the only way under the
-   * sync limit that does not delete the work, and the 402 says so by name.
+   * The command was `done`, and the status it sets is still `consumed`, because both once meant "I
+   * implemented it". That meaning went to the verdict, where it belongs — it is the reader's
+   * judgement, not the author's — and what was left is shelf space, which has a job nothing else
+   * does: the only way under the sync limit that does not delete the work, and the 402 says so by
+   * name. So the command says what it does now.
+   *
+   * `consumed` stays on disk. It is a status inside markdown files in other people's
+   * repositories, and `validate()` refuses a status it does not know, so renaming the value would
+   * make a guide shared a month ago fail to re-share today. The word people read and the token the
+   * format stores are allowed to differ; what is not allowed is two words for people.
    */
-  async done(f) {
-    const id = f._[0] || die("usage: passalong done <id>");
+  async archive(f) {
+    const id = f._[0] || die("usage: passalong archive <id>");
     const g = await passalong.setStatus(id, "consumed").catch((e) => die(e.message));
     console.error(`${g.meta.id} archived — off your board, and it no longer counts against sync`);
+  },
+
+  /** What `archive` was called. Kept so a script written against it still runs, and says so. */
+  async done(f) {
+    console.error("`passalong done` is now `passalong archive` — it archives, it does not mark work done.");
+    return commands.archive(f);
   },
 
   async rm(f) {

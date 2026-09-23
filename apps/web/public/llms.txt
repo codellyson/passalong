@@ -124,7 +124,8 @@ passalong login                 # optional: sync across machines
 `passalong setup` registers a stdio MCP server exposing: `take`, `progress`, `hand_in`, `pass`,
 `assign` (give a guide or task you wrote to @handle, #group or the whole team),
 `publish_guide`, `file_bugs`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`,
-`attach_screenshot`, `inbox`, `board`, `activity`, `log`, `plan_tasks`.
+`attach_screenshot`, `inbox`, `board`, `activity` (reads), `clear_activity` (marks it seen),
+`log`, `plan_tasks`.
 
 Every guide, whatever its kind, is worked with four calls:
 

@@ -74,12 +74,14 @@ const QUERIES = {
      ORDER BY week DESC
      LIMIT 8`,
 
-  // §14 quality proxy, as close as it can honestly be computed.
+  // §14 quality proxy: "percent of pulled guides that came back with a passing verdict, and how
+  // many of those needed no follow-up edit".
   //
-  // It asks for "percent of pulled guides marked consumed without follow-up edits". `consumed` no
-  // longer means implemented — it means archived, the author's shelf — so counting it would answer
-  // a different question than the one the PRD is asking. The verdict is what replaced it, and it is
-  // a better instrument anyway: it is the reader's judgement rather than the author's.
+  // It used to ask for guides "marked consumed", and this printed a warning that the number was a
+  // substitution. `consumed` stopped meaning implemented — it is the author's shelf, archived and
+  // reversible — so §14 was rewritten around the verdict, which is the better instrument anyway:
+  // the reader's judgement rather than the author's. The warning outlived the disagreement it
+  // described and was telling operators a number was a stand-in when it is the metric as written.
   //
   // "Without follow-up edits" survives intact: `guide.updated` moving after a verdict means the
   // author changed the document in response to it.
@@ -246,11 +248,6 @@ function report(read) {
   const silent = q.pulled - q.works - q.broken;
   console.log(
     `  ${silent} were pulled and never answered (${pct(silent, q.pulled)}) — no works, no broken`,
-  );
-  caveat(
-    "Not the metric as written. §14 asks for guides 'marked consumed', and `consumed` now means\n" +
-      "    archived rather than implemented — the verdict replaced it, and is the reader's\n" +
-      "    judgement rather than the author's. Update §14 or this stays a substitution.",
   );
   caveat(
     "Silence is not a verdict either way. A guide nobody answered reads the same as one still\n" +
