@@ -676,6 +676,65 @@ export async function finish(
   return claim ? { claim } : { status: 409, error: "the claim went away while finishing" };
 }
 
+/** A hold nobody has heard from, and who should be told about it. See stalled(). */
+export interface Stall {
+  guide_id: string;
+  title: string;
+  kind: string;
+  /** The guide's author — the only person who can release it. */
+  author: string;
+  /** Where it was last seen, for the sentence. Empty when a person took it in the browser. */
+  where: string;
+  note: string;
+  lease_until: string;
+}
+
+/**
+ * Holds whose lease has run out, for something on a clock to announce.
+ *
+ * `stalled` is derived on read and never stored, which is right — storing it would need something
+ * running on a clock to write it. The cost is that nothing can *tell* anyone: the state comes into
+ * existence when a person opens the hub, so work goes quiet and stays quiet until somebody
+ * happens to look. This is the one read that happens without a person, so the state reaches them.
+ *
+ * It does not release anything. A lapsed lease still holds its card (docs/V2.md §5) and this does
+ * not change that; it only stops the silence being the author's job to notice.
+ *
+ * Only what is still being worked on: a claim in `review` is waiting on a person, not gone quiet,
+ * and its lease lapsing means nothing.
+ */
+export async function stalled(db: D1Database, at: string): Promise<Stall[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.guide_id, c.note, c.lease_until, c.host, c.worktree,
+              g.title, g.kind, g.account_id AS author
+         FROM claim c JOIN guide g ON g.id = c.guide_id
+        WHERE c.state = 'claimed' AND c.lease_until <= ?
+        ORDER BY c.lease_until ASC
+        LIMIT 200`,
+    )
+    .bind(at)
+    .all<{
+      guide_id: string;
+      note: string;
+      lease_until: string;
+      host: string;
+      worktree: string;
+      title: string;
+      kind: string;
+      author: string;
+    }>();
+  return results.map((r) => ({
+    guide_id: r.guide_id,
+    title: r.title,
+    kind: r.kind,
+    author: r.author,
+    where: [r.host, r.worktree].filter(Boolean).join(":"),
+    note: r.note,
+    lease_until: r.lease_until,
+  }));
+}
+
 /** Every task this account can see, with its column and its claim. Oldest first. */
 export async function list(
   db: D1Database,

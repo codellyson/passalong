@@ -29,6 +29,7 @@ import {
   renew,
   repoKey,
   sendBackHandedIn,
+  stalled,
   stateOf,
   steps,
   take,
@@ -452,6 +453,38 @@ test("a stale agent cannot pass back work somebody else is doing", async () => {
   assert.match(stale.error, /released and taken again/);
   const live = await db.prepare("SELECT agent_id FROM claim WHERE guide_id = ?").bind("h1").first();
   assert.equal(live?.agent_id, "agent-b", "the live claim is still there");
+});
+
+test("work that has gone quiet can be found without a person looking at it", async () => {
+  // `stalled` is derived on read and never stored, so until this existed nothing could tell
+  // anybody: the state came into being when someone opened the hub, and a card sat held until its
+  // author happened to look. This is the read that happens on a clock instead.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("t2");
+  guide("report", { kind: "", target: "" });
+
+  const first = await next(db, A, { at: T0 });
+  assert.equal(first.task.id, "t1");
+  const after = later(LEASE_MS + 1);
+
+  assert.deepEqual(await stalled(db, T0), [], "a live lease is not quiet");
+  const quiet = await stalled(db, after);
+  assert.equal(quiet.length, 1);
+  assert.equal(quiet[0].guide_id, "t1");
+  assert.equal(quiet[0].author, "me", "the author is who can release it");
+  assert.equal(quiet[0].title, "task t1");
+
+  // The last thing it said travels with it: that is what somebody deciding whether to release it
+  // actually wants in front of them.
+  await renew(db, "t1", A, { at: T0, note: "migrating schema, 2 of 5" });
+  const said = await stalled(db, later(LEASE_MS * 2));
+  assert.equal(said[0].note, "migrating schema, 2 of 5");
+
+  // A hand-in is waiting on a person, not gone quiet. Its lease lapsing means nothing.
+  await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF });
+  assert.deepEqual(await stalled(db, later(LEASE_MS * 3)), [], "review is not silence");
 });
 
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {
