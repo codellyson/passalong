@@ -990,9 +990,9 @@ app.post("/v1/auth/login", async (c) => {
  * from nothing — reusing one would accumulate whatever the last session was testing, which is the
  * thing it exists to avoid. They pile up in the local database, which is local.
  *
- * The account has no email and no password, which is what `passalong login` and an invite link
- * already make: the session cookie is the whole of it, and nothing can sign in as it again once
- * that cookie is gone.
+ * The account has no email and no password: the session cookie is the whole of it, and nothing
+ * can sign in as it again once that cookie is gone. It is the only thing left that makes one —
+ * `passalong login` asks for an email and a password now, and so does the invite page.
  */
 app.post("/v1/auth/demo", async (c) => {
   const host = new URL(c.req.url).hostname;
@@ -1016,8 +1016,9 @@ app.post("/v1/auth/logout", async (c) => {
 
 /**
  * Claiming an account, or changing the password on one. Anonymous accounts — the ones `passalong
- * login` and invite links create — start with no email and no password; this is how they become
- * something you can sign in to.
+ * login` and invite links used to create — start with no email and no password; this is how they
+ * become something you can sign in to. Both ask up front now, so what is left here is the accounts
+ * made before that, which still need a way in.
  */
 app.post("/v1/auth/password", async (c) => {
   const account = c.get("account");

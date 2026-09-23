@@ -39,7 +39,7 @@ passalong done <id>           deprecated: mark consumed
 passalong promote <id>        deprecated: mark promoted
 passalong rm <id>             delete a guide locally and from sync
 passalong export [dir]        dump every guide as plain markdown
-passalong login [token]       create an account, or attach this machine with a token from your hub
+passalong login [token]       sign in with your email and password, or attach this machine with a token
 passalong me [--handle H] [--name N] [--email E]   who you are to teammates
 passalong team                current team and its members
 passalong team create <name>  start a team (you become its owner)

@@ -27,9 +27,16 @@ sign up when a third party is down is worse than accepting one weak password.
 
 ## Tokens
 
-`pa_…`, minted by `passalong login` and by `POST /v1/tokens`. Shown once; only `sha256` is kept.
-Used by the CLI and by MCP servers, so a password never goes near a terminal. Named and revocable
-from the hub — `last_used` is recorded so a stale one is identifiable.
+`pa_…`, minted by `POST /v1/tokens` and by `POST /v1/accounts`. Shown once; only `sha256` is kept.
+Used by the CLI and by MCP servers. Named and revocable from the hub — `last_used` is recorded so a
+stale one is identifiable.
+
+`passalong login` asks for an email and a password, signs in, mints a token named for the machine,
+and drops the session: the password is typed once and never stored, and the thing kept on disk is a
+credential that can be revoked from the hub without changing it. It used to mint an anonymous
+account instead — no email, no password — which meant the CLI quietly made accounts that could only
+ever be reached from the one file they were written to. `POST /v1/accounts` still makes those, for
+the invite page, which mints before it claims.
 
 ## Sessions
 
