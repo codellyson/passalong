@@ -7,13 +7,40 @@
   runs, what it last said, and when it was last heard from. A stalled agent stays on the list: it
   still holds the lock, and that is exactly when you want to see it.
 
-  Read-only. Taking work back is the author's call and lives on the work's own row.
+  Nearly read-only. It used to be entirely so, on the rule that taking work back is the author's
+  call and lives on the work's own row — which was true while only a task could be taken back. A
+  handoff has no such row: the guide lists know who *acknowledged* one, and that is not who holds
+  the claim. This is the only view that knows, so the author's one action lives here, on their own
+  work only.
 -->
 <script setup lang="ts">
 import type { Working } from "~/types/hub";
 
 /** `bare` drops the heading, for a page that already names the section (the hub's tab). */
 const props = defineProps<{ rows: Working[]; bare?: boolean }>();
+
+const { onTakeBack } = useHub();
+
+/**
+ * You wrote it, so you can have it back — from anyone's agent, including your own.
+ *
+ * The first version of this also required the holder to be somebody else, reasoning that you would
+ * stop your own agent where it runs rather than take the work off it. That is wrong twice: it is
+ * the commonest case there is — your own agents, on your own tasks, one of them gone quiet — and
+ * the server's rule is simply that the author asks, which is what a task's own release button has
+ * always done.
+ */
+const canTakeBack = (w: Working) => w.mine;
+const taking = ref<string | null>(null);
+async function takeBack(w: Working) {
+  if (taking.value) return;
+  taking.value = w.id;
+  try {
+    await onTakeBack(w);
+  } finally {
+    taking.value = null;
+  }
+}
 
 const who = (w: Working) => (w.by.you ? "You" : personName(w.by.name, w.by.handle) || "A teammate");
 
@@ -48,7 +75,7 @@ const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "
       <li
         v-for="w in props.rows"
         :key="`${w.id}-${w.agent}`"
-        class="grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-x-3 px-4 py-3 shadow-[inset_0_1px_0_var(--line)] first:shadow-none sm:grid-cols-[1.75rem_minmax(0,14rem)_minmax(0,1fr)_auto]"
+        class="grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-x-3 px-4 py-3 shadow-[inset_0_1px_0_var(--line)] first:shadow-none sm:grid-cols-[1.75rem_minmax(0,14rem)_minmax(0,1fr)_auto_auto]"
       >
         <span
           class="avatar"
@@ -87,6 +114,21 @@ const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "
           <template v-if="person(w)">took it {{ rel(w.claimed_at) }}</template>
           <template v-else>{{ w.state === "stalled" ? "went quiet" : "heard" }} {{ rel(heard(w)) }}</template>
         </span>
+
+        <!-- Its own track, not a fifth thing squeezed into the timing's: without one it wrapped to
+             the next implicit row and landed in the 1.75rem avatar column, where "Take it back"
+             broke across three lines and read as "sack". An `auto` track is zero wide on the rows
+             that have no button. -->
+        <button
+          v-if="canTakeBack(w)"
+          class="btn sm col-start-2 justify-self-start whitespace-nowrap sm:col-start-auto sm:justify-self-end"
+          type="button"
+          :disabled="taking === w.id"
+          :title="`Put ${w.title || w.id} back, and tell whoever has it`"
+          @click="takeBack(w)"
+        >
+          {{ taking === w.id ? "Taking back…" : "Take it back" }}
+        </button>
       </li>
     </ul>
   </section>

@@ -529,6 +529,78 @@ test("a card that has gone quiet is announced once, not on every tick", async ()
   assert.deepEqual(await window(quietAgain + 2 * hour), [], "and is old news again after that");
 });
 
+test("an author takes a handoff back from everyone holding it", async () => {
+  // It was tasks only, which left an asymmetry nobody chose: a task you could reclaim, a handoff
+  // you could not. The author's only ways out were `close` — which marks it done, and it is not —
+  // or assigning it to a third party, which takes it back as a side effect of giving it away.
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+
+  // A handoff has one claim per repo, so several people can hold it at once and each is right to.
+  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
+  const bo = { account: "me", agent: "agent-bo", repo: "o/two" };
+  assert.equal((await take(db, "h1", ada, { at: T0 })).resumed, false);
+  assert.equal((await take(db, "h1", bo, { at: T0 })).resumed, false);
+  assert.equal((await working(db, "me", T0)).length, 2, "both hold it");
+
+  const back = await release(db, "h1", { account: "me", at: T0 });
+  assert.equal("error" in back, false, back.error);
+  assert.deepEqual(back.claimants, ["me"], "whoever had it, told once each");
+  assert.equal(back.places, 2, "and two claims went, which is a different number");
+  assert.equal(back.state, "ready");
+  assert.deepEqual(await working(db, "me", T0), [], "taken back from everyone, not just the first");
+
+  // And it is open again, to them or anyone else.
+  assert.equal((await take(db, "h1", ada, { at: T0 })).resumed, false, "free to take again");
+});
+
+test("only the author takes it back, and only what somebody is holding", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  guide("report", { kind: "", target: "" });
+
+  assert.equal((await release(db, "h1", { account: "me", at: T0 })).status, 409, "nobody holds it");
+  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
+  await take(db, "h1", ada, { at: T0 });
+  assert.equal(
+    (await release(db, "h1", { account: "someone-else", at: T0 })).status,
+    404,
+    "not yours to take back",
+  );
+
+  // Handed in is waiting on the author, not being worked on: approving or sending it back is the
+  // answer, and taking it back would throw away the evidence somebody just wrote up.
+  await handIn(db, "h1", ada, { at: T0, note: "done", evidence: PROOF });
+  const held = await release(db, "h1", { account: "me", at: T0 });
+  assert.equal(held.status, 409);
+  assert.match(held.error, /handed in and waiting on you/);
+});
+
+test("releasing a task still writes where the work was left", async () => {
+  // The task path is unchanged: `## Review notes` is a task's section, and a handoff has no place
+  // for one — inventing a section inside somebody's published guide is not release's business.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const C = { account: "me", agent: "agent-c", repo: "o/r", host: "laptop", worktree: "/src/app" };
+  await next(db, C, { at: T0 });
+  await renew(db, "t1", C, { at: T0, note: "schema done, routes next" });
+  const back = await release(db, "t1", { account: "me", at: T0 });
+  assert.deepEqual(back.claimants, ["me"]);
+  const md = (await db.prepare("SELECT markdown FROM guide WHERE id = ?").bind("t1").first())
+    .markdown;
+  for (const part of [/Review notes/, /laptop/, /schema done, routes next/]) assert.match(md, part);
+
+  guide("h2", { kind: "transfer", target: "" });
+  await take(db, "h2", C, { at: T0 });
+  await release(db, "h2", { account: "me", at: T0 });
+  const hmd = (await db.prepare("SELECT markdown FROM guide WHERE id = ?").bind("h2").first())
+    .markdown;
+  assert.doesNotMatch(hmd, /Review notes/, "a handoff's document is left alone");
+});
+
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {
   const db = d1();
   const guide = seed(db);

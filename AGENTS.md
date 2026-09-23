@@ -85,6 +85,10 @@ public one, for agents *using* Passalong rather than changing it.
     CLI keeps it in `.passalong/held.json`, and `progress`, `hand_in` and `pass` send it back, so
     the same agent's write from a claim that was since released and re-taken is refused. It is
     optional on the way in and checked when present — an older CLI has none to send.
+    `release()` is the author's take-back for **any** kind, and drops every live claim: a handoff
+    has one per repo, and taking it back means from whoever has it. `POST /v1/guides/:id/release`
+    is the path; `/v1/tasks/:id/release` is the same handler under its old name, because an
+    installed CLI still calls it.
   - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running
     local server (`npm run test:e2e`, skipped by `npm test`). It puts its accounts on a plan in the
     *local* D1 with `wrangler d1 execute --local`, so it refuses any API that is not localhost.

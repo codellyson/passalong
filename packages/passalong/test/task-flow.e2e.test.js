@@ -119,7 +119,7 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
   assert.equal(second.id, id);
   assert.match(second.markdown, /toggle does nothing on Safari/);
   await p.taskProgress(id, "safari fix in progress", { cwd: b });
-  await p.releaseTask(id);
+  await p.release(id);
   assert.equal(await state(), "ready");
   await assert.rejects(p.taskProgress(id, "still going", { cwd: b }), (e) => e.status === 409);
 
