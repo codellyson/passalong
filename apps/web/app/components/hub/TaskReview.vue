@@ -135,9 +135,14 @@ const press =
            colour, and at 4px apart the groups ran together: every line in the list was shouting.
            The colour moves to a dot, which still sorts the groups at a glance, and the heading
            steps back so the titles are what you read. -->
-      <section v-for="g in groups" :key="g.key" class="mt-3 flex flex-col gap-1 first:mt-0">
+      <!-- The rows breathe: each is two lines that belong together — a title and what came back
+           for it — and at 4px apart with 8px of padding, one row's second line sat as close to the
+           next row's first as to its own. The pair is 4px inside and 32px from the next pair —
+           8px of gap and 12px of padding on each row — so the eye binds each title to its own line
+           before it reads either. -->
+      <section v-for="g in groups" :key="g.key" class="mt-4 flex flex-col gap-2 first:mt-0">
         <h2
-          class="m-0 flex items-center gap-2 px-3 pt-2 pb-1 font-ui text-xs font-medium tracking-wide text-muted uppercase"
+          class="m-0 flex items-center gap-2 px-3 pt-2 pb-1.5 font-ui text-xs font-medium tracking-wide text-muted uppercase"
         >
           <span class="size-1.5 shrink-0 rounded-pill" :class="g.tone" aria-hidden="true" />
           {{ g.title }}
@@ -146,7 +151,7 @@ const press =
         <button
           v-for="t in g.items"
           :key="t.id"
-          class="block w-full rounded-1 border-0 px-3 py-2 text-left transition-[background-color,box-shadow] duration-150 ease-out"
+          class="block w-full rounded-1 border-0 px-3 py-3 text-left transition-[background-color,box-shadow] duration-150 ease-out"
           :class="
             selected?.id === t.id
               ? 'bg-accent-soft shadow-[inset_3px_0_0_var(--accent)]'
@@ -155,8 +160,10 @@ const press =
           :aria-current="selected?.id === t.id ? 'true' : undefined"
           @click="pick(t.id)"
         >
-          <span class="block font-ui text-sm font-semibold leading-snug text-fg">{{ t.title }}</span>
-          <span class="mt-1 line-clamp-2 font-ui text-xs text-muted">
+          <!-- Two lines at most, so one long title cannot turn its row into a wall beside the
+               others and make the list read as ragged. -->
+          <span class="line-clamp-2 block font-ui text-sm font-semibold leading-snug text-fg">{{ t.title }}</span>
+          <span class="mt-1 line-clamp-2 font-ui text-xs leading-snug text-muted">
             {{
               g.key === "review"
                 ? t.claim?.report_title
