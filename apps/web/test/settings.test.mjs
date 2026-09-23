@@ -191,22 +191,41 @@ test("a connector's host picks which app's steps a Reconnect opens", () => {
   assert.equal(appForHost("notchatgpt.com.evil.test"), "other");
 });
 
-// ---- the operator band (apps/web/app/components/hub/Admin.vue) ---------------------------------
+// ---- running the product (apps/web/app/pages/admin.vue) ----------------------------------------
 //
-// Read rather than rendered: there is no component runner here, and what matters about this band is
-// that it is drawn for a super and for nobody else, and that the destructive things ask first.
+// Read rather than rendered: there is no component runner here, and what matters is where this
+// lives and who reaches it — not in a customer's Settings, and not shown to a customer at all.
 
 const { readFileSync } = await import("node:fs");
 const settings = readFileSync(new URL("../app/pages/hub/settings.vue", import.meta.url), "utf8");
+const page = readFileSync(new URL("../app/pages/admin.vue", import.meta.url), "utf8");
+const menu = readFileSync(
+  new URL("../app/components/hub/AccountMenu.vue", import.meta.url),
+  "utf8",
+);
 const admin = readFileSync(new URL("../app/components/hub/Admin.vue", import.meta.url), "utf8");
 
-test("the operator band is drawn for a super, and is not in the page for anyone else", () => {
-  assert.match(settings, /role === "super"/);
-  // `v-if`, not a class that hides it: the markup itself is absent, so nobody learns it exists by
-  // reading the page. The routes behind it refuse everyone else regardless — this is the second
-  // lock, not the first.
-  assert.match(settings, /<div v-if="isSuper" :class="band">/);
-  assert.match(settings, /<HubAdmin \/>/);
+test("running the product is its own page, and no part of a customer's settings", () => {
+  // Settings is what somebody keeps about themselves. Comping another account is the business
+  // being run, and beside a team's own owner/member roles it read as one more of those.
+  assert.doesNotMatch(settings, /HubAdmin|Operator|isSuper/);
+  assert.match(page, /const isSuper = computed\(\(\) => data\.value\.me\?\.role === "super"\)/);
+  assert.match(page, /<HubAdmin v-else-if="isSuper" \/>/);
+});
+
+test("a customer who finds the address is sent back to their work, not refused", () => {
+  assert.match(page, /navigateTo\("\/hub"\)/);
+  // Only once the account has loaded: an empty `me` on first paint is not "not a super".
+  assert.match(page, /!pending\.value && data\.value\.me && !isSuper\.value/);
+  // `loading` is an object of per-endpoint flags, so `!loading.value` is never true: an earlier
+  // version of this line meant the redirect never ran and a customer sat on an empty Admin page.
+  assert.match(page, /const pending = computed\(\(\) => loading\.value\.me\)/);
+  assert.match(page, /noindex: true/);
+});
+
+test("only a super is shown the way there", () => {
+  assert.match(menu, /v-if="data\.me\?\.role === 'super'"/);
+  assert.match(menu, /to="\/admin"/);
 });
 
 test("taking a plan back and removing a super both ask on the row first", () => {

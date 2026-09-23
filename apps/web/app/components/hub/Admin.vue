@@ -1,16 +1,13 @@
 <!--
-  Running the product: who is a super, and what has been given away (apps/api/src/gifts.ts).
-
-  Drawn only for a super — the routes behind it answer 404 to everyone else, so this is a second
-  lock on a door that is already locked, not the lock itself.
+  What /admin is made of: who is a super, and what has been given away (apps/api/src/gifts.ts).
 
   Three things, in the order they are needed. What has been given, because that is the list nobody
   can hold in their head: who has a plan they did not pay for, until when, and why. Then giving one,
   which is a decision made while looking at that list. Then who may make those decisions at all,
   which changes twice a year.
 
-  Reads its own data rather than joining the hub's: none of it is on a page anybody else opens, and
-  a payload every visitor carries for three operators is a payload three operators are worth.
+  Reads its own data rather than joining the hub's: none of it belongs on a page a customer opens,
+  and a payload every visitor carries for three operators is a payload three operators are worth.
 -->
 <script setup lang="ts">
 interface Gift {

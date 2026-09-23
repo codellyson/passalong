@@ -27,8 +27,6 @@ const extras = useTeamExtras();
 const me = computed(() => data.value.me);
 const connectors = computed(() => connectorsData.value ?? []);
 const needsPassword = computed(() => Boolean(me.value) && !me.value?.has_password);
-/** Whoever runs the product sees one more band. Everyone else never learns it is there. */
-const isSuper = computed(() => me.value?.role === "super");
 
 const items = computed(() =>
   attention({
@@ -110,14 +108,6 @@ const nav = computed(() => {
       group: "Teams",
       links: [...teams, { href: "#new-team", label: "New team", note: "", tone: "" }],
     },
-    ...(isSuper.value
-      ? [
-          {
-            group: "Operator",
-            links: [{ href: "#operator", label: "Plans and supers", note: "", tone: "" }],
-          },
-        ]
-      : []),
     {
       group: "Access",
       links: [
@@ -262,20 +252,6 @@ const noteTone: Record<string, string> = {
           <h2 :class="bandLabel">Teams</h2>
           <section :class="sec" aria-label="Your teams">
             <HubTeamList />
-          </section>
-        </div>
-
-        <div v-if="isSuper" :class="band">
-          <h2 :class="bandLabel">Operator</h2>
-          <section id="operator" :class="sec" aria-labelledby="operator-h">
-            <div :class="secHead">
-              <h3 id="operator-h" :class="title">Plans and supers</h3>
-              <p :class="blurb">
-                Only you and whoever else runs Passalong can see this. Giving a plan away costs
-                somebody nothing and is not a subscription: each one ends on its date.
-              </p>
-            </div>
-            <HubAdmin />
           </section>
         </div>
 
