@@ -14,6 +14,12 @@ import { DYNAMIC_TTL_MS } from "#api/oauth";
 import { registrationCutoff, sweepRegistrations } from "#api/oauth-clients";
 import { sweepOrphans } from "#api/shots";
 
+/**
+ * How far back a run looks for leases that have just lapsed. Wider than the gap between ticks in
+ * wrangler.jsonc (hourly), so a run missed by a deploy is covered by the next one.
+ */
+const STALL_WINDOW_MS = 90 * 60 * 1000;
+
 export default defineNitroPlugin((nitro) => {
   nitro.hooks.hook("cloudflare:scheduled", async (payload: { env?: unknown }) => {
     const env = payload?.env as { DB?: unknown; SHOTS?: unknown } | undefined;
@@ -57,8 +63,13 @@ export default defineNitroPlugin((nitro) => {
      * somebody's own agent going quiet on their own task.
      */
     try {
-      const at = new Date().toISOString();
-      const quiet = await stalled(env.DB as D1Database, at);
+      const now = Date.now();
+      const at = new Date(now).toISOString();
+      // Ninety minutes against an hourly tick. Each lease is returned in the one run it crosses
+      // into silence, and the half-hour of overlap means a tick missed by a deploy still catches
+      // what lapsed during it rather than losing the notice for good.
+      const since = new Date(now - STALL_WINDOW_MS).toISOString();
+      const quiet = await stalled(env.DB as D1Database, at, since);
       for (const s of quiet)
         await notify(env as Parameters<typeof notify>[0], {
           to: s.author,

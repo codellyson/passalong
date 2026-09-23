@@ -33,10 +33,14 @@
   "send_email": [{ "name": "EMAIL" }],
 
   // The product's one database. Both halves used to bind it; now only this Worker does.
-  // Nightly, at a minute nobody else picked. The only scheduled work this Worker does is deleting
-  // screenshots that were uploaded and never attached to a guide — see server/plugins/sweep.ts.
+  // Hourly, at a minute nobody else picked. It was nightly, when the only scheduled work was
+  // deleting screenshots nobody attached to a guide; telling somebody their work has gone quiet
+  // is the job that cares when it runs, and a lease lapses after thirty minutes. See
+  // server/plugins/sweep.ts — the sweeps are idempotent and delete nothing sooner than their own
+  // cutoffs allow, so running them twenty-four times as often changes how much they find, not
+  // what.
   "triggers": {
-    "crons": ["17 4 * * *"]
+    "crons": ["17 * * * *"]
   },
 
   "r2_buckets": [

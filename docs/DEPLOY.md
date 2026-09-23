@@ -10,7 +10,7 @@ first, because the package's default API URL points at it.
 | API + web view | Worker `passalong-web` on `passalong.dev` (and `passalong.kreativekorna.com`) | `apps/web/wrangler.jsonc` |
 | Database | D1 `passalong` (id `2b2c58a0-…`, WEUR) | binding in `apps/web`, migrations in `apps/api` |
 | Screenshots | R2 `passalong-shots` — evidence attached to bug reports | `apps/web/wrangler.jsonc` |
-| Nightly sweep | cron `17 4 * * *` → `apps/web/server/plugins/sweep.ts` | same file |
+| Hourly cron | `17 * * * *` → `apps/web/server/plugins/sweep.ts` | sweeps, and tells an author when work has gone quiet |
 | CLI + MCP | npm `passalong`, binary `passalong` | `packages/passalong/package.json` |
 | Default API URL | `DEFAULT_API` in `packages/passalong/src/api.js` | must match the route above |
 

@@ -702,18 +702,30 @@ export interface Stall {
  *
  * Only what is still being worked on: a claim in `review` is waiting on a person, not gone quiet,
  * and its lease lapsing means nothing.
+ *
+ * `since` is what makes this an announcement rather than a nag. Without it every run would return
+ * everything still quiet, and `notify` refreshes a repeat's timestamp — so a card nobody had got
+ * to would climb back up the feed on every tick, which on an hourly cron is how somebody learns to
+ * ignore the feed. A window returns each lease in the one run it crosses into silence. An agent
+ * that comes back and goes quiet again moves its lease forward and crosses again, which is a
+ * second thing happening and worth a second line.
+ *
+ * Pass a window wider than the gap between runs: a tick missed by a deploy would otherwise drop
+ * the notice for good, and the overlap costs nothing — `notify` coalesces a repeat onto the one
+ * row rather than writing another.
  */
-export async function stalled(db: D1Database, at: string): Promise<Stall[]> {
+export async function stalled(db: D1Database, at: string, since = ""): Promise<Stall[]> {
   const { results } = await db
     .prepare(
       `SELECT c.guide_id, c.note, c.lease_until, c.host, c.worktree,
               g.title, g.kind, g.account_id AS author
          FROM claim c JOIN guide g ON g.id = c.guide_id
-        WHERE c.state = 'claimed' AND c.lease_until <= ?
+        WHERE c.state = 'claimed' AND c.lease_until <= ?1
+          AND (?2 = '' OR c.lease_until > ?2)
         ORDER BY c.lease_until ASC
         LIMIT 200`,
     )
-    .bind(at)
+    .bind(at, since)
     .all<{
       guide_id: string;
       note: string;

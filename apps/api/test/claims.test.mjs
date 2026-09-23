@@ -487,6 +487,48 @@ test("work that has gone quiet can be found without a person looking at it", asy
   assert.deepEqual(await stalled(db, later(LEASE_MS * 3)), [], "review is not silence");
 });
 
+test("a card that has gone quiet is announced once, not on every tick", async () => {
+  // Without the window every run returns everything still quiet, and notify() refreshes a repeat's
+  // timestamp — so on an hourly cron a card nobody had got to would climb back up the feed every
+  // hour, which is how somebody learns to ignore the feed.
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const held = await next(db, A, { at: T0 });
+  const lapsed = Date.parse(held.claim.lease_until);
+  const hour = 60 * 60 * 1000;
+  const stamp = (ms) => new Date(ms).toISOString();
+  const window = (now) => stalled(db, stamp(now), stamp(now - 90 * 60 * 1000));
+
+  // The tick it goes quiet in.
+  assert.equal(
+    (await window(lapsed + 60_000)).length,
+    1,
+    "the run it crosses into silence says so",
+  );
+
+  // That tick not running — a deploy, an outage — is what the overlap is for: the next one still
+  // finds it, because the window reaches back further than the gap between runs.
+  assert.equal((await window(lapsed + hour)).length, 1, "a missed tick is covered by the next");
+
+  // After that it is old news, and saying it again is what makes a feed worth ignoring.
+  for (const n of [2, 3, 24])
+    assert.deepEqual(
+      await window(lapsed + n * hour),
+      [],
+      `still quiet ${n} hours later, and already said once`,
+    );
+
+  // Coming back and going quiet again is a second thing happening, and worth a second line.
+  const back = stamp(lapsed + 24 * hour);
+  assert.ok(await renew(db, "t1", A, { at: back, note: "picked it up again" }));
+  const quietAgain = Date.parse(back) + LEASE_MS;
+  const again = await window(quietAgain + 60_000);
+  assert.equal(again.length, 1, "it went quiet a second time");
+  assert.equal(again[0].note, "picked it up again");
+  assert.deepEqual(await window(quietAgain + 2 * hour), [], "and is old news again after that");
+});
+
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {
   const db = d1();
   const guide = seed(db);

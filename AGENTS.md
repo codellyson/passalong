@@ -167,7 +167,7 @@ public one, for agents *using* Passalong rather than changing it.
   exists, so `shot.guide_id` is written on every guide write from the URLs in the markdown
   (`shotIds()`), never by the client. The `account_id` in that WHERE is load-bearing: without it,
   naming someone else's shot id in your markdown would claim their image, and deleting your guide
-  would delete it. Deleting a guide takes its shots; a nightly cron sweeps uploads no guide ever
+  would delete it. Deleting a guide takes its shots; an hourly cron sweeps uploads no guide ever
   claimed.
 - **Spacing comes from the scale, and the relationship decides the step.** `--s-1`..`--s-9` are a
   4px base and Tailwind's numbers are the same unit, so use them: `gap-2` for a label and its
