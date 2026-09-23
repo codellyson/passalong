@@ -134,14 +134,32 @@ test("a team is given the team plan, with the seats it was given", async () => {
   seed(db);
   const r = await gift(db, { to: "team/acme", until: NEXT_YEAR, seats: 5, by: "boss", at: NOW });
   assert.equal(r.error, undefined);
+  assert.equal(r.seats, 5);
   assert.deepEqual(
     { ...db.raw.prepare("SELECT plan, seats, plan_until FROM team WHERE id = 'tm'").get() },
-    {
-      plan: "team",
-      seats: 5,
-      plan_until: NEXT_YEAR,
-    },
+    { plan: "team", seats: 5, plan_until: NEXT_YEAR },
   );
+});
+
+test("seats left off cover the team as it is today, never as many as it likes", async () => {
+  // Zero is the stored value for a team that never bought seats, and seatsFull() reads it as no
+  // limit — right for a free team, wrong for a gift, where nobody chose it. A team comped without
+  // a number would otherwise have grown without one.
+  const db = d1();
+  seed(db);
+  const joins = db.raw.prepare(
+    "INSERT INTO membership (team_id, account_id, joined) VALUES ('tm', ?, ?)",
+  );
+  joins.run("boss", NOW);
+  joins.run("ada", NOW);
+  const r = await gift(db, { to: "team/acme", until: NEXT_YEAR, by: "boss", at: NOW });
+  assert.equal(r.seats, 2, "the two people in it");
+  assert.equal(db.raw.prepare("SELECT seats FROM team WHERE id = 'tm'").get().seats, 2);
+
+  // A team with nobody in it still gets a seat, so the number is never the "no limit" zero.
+  db.raw.prepare("DELETE FROM membership WHERE team_id = 'tm'").run();
+  const empty = await gift(db, { to: "team/acme", until: NEXT_YEAR, by: "boss", at: NOW });
+  assert.equal(empty.seats, 1);
 });
 
 test("a gift ends: no date, or one already past, is refused", async () => {

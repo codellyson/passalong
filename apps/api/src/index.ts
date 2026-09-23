@@ -1258,6 +1258,7 @@ app.post("/v1/admin/gifts", async (c) => {
     kind: given.subject.kind,
     plan: given.subject.kind === "account" ? "solo" : "team",
     until: given.until,
+    seats: given.seats,
   });
 });
 

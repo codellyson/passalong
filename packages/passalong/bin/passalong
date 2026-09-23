@@ -543,7 +543,9 @@ const commands = {
     const r = await api
       .giveGift({ to, until, why: f.why || "", seats: Number(f.seats || 0) })
       .catch((e) => die(e.message));
-    const seats = r.kind === "team" && f.seats ? ` for ${f.seats} seats` : "";
+    // The seat count is said back whether or not it was asked for: left off, it is the number of
+    // members the team has today, and an operator should read which number that turned out to be.
+    const seats = r.kind === "team" ? ` for ${r.seats} seat${r.seats === 1 ? "" : "s"}` : "";
     console.error(`${r.to} is on ${r.plan}${seats} until ${r.until.slice(0, 10)} — gift ${r.id}`);
   },
 

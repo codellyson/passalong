@@ -172,7 +172,7 @@ export async function gift(
     by,
     at,
   }: { to: string; until: string; why?: string; seats?: number; by: string; at: string },
-): Promise<{ id: string; subject: Subject; until: string } | Refusal> {
+): Promise<{ id: string; subject: Subject; until: string; seats: number } | Refusal> {
   const said = String(until ?? "").trim();
   if (!said) return { status: 400, error: "say when it ends: a gift with no `until` never ends" };
   if (!ISO.test(said) || Number.isNaN(Date.parse(said)))
@@ -196,7 +196,14 @@ export async function gift(
     };
 
   const plan = subject.kind === "account" ? "solo" : "team";
-  const seatCount = subject.kind === "team" ? Math.max(0, Math.trunc(Number(seats) || 0)) : 0;
+  // Seats left off means "the team as it is today", not "as many as it likes". Zero is the stored
+  // value for a team that never bought seats, and seatsFull() reads it as no limit — which is the
+  // right answer for a free team and the wrong one for a gift, where nobody chose it. So an
+  // unstated count becomes the number of members it has, and the answer says which number that was.
+  const seatCount =
+    subject.kind === "team"
+      ? Math.max(1, Math.trunc(Number(seats) || 0) || (await members(db, subject.id)))
+      : 0;
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
   await db.batch([
     subject.kind === "account"
@@ -227,7 +234,16 @@ export async function gift(
         at,
       ),
   ]);
-  return { id, subject, until: ends };
+  return { id, subject, until: ends, seats: seatCount };
+}
+
+/** How many people are in a team right now. What an unstated seat count is taken to mean. */
+async function members(db: D1Database, team: string): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
+    .bind(team)
+    .first<{ n: number }>();
+  return Number(row?.n ?? 0);
 }
 
 /**
