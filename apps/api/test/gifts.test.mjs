@@ -14,6 +14,7 @@ import {
   gift,
   gifts,
   isAdmin,
+  isPlatformOwner,
   makeSuper,
   revokeGift,
   superAccounts,
@@ -219,6 +220,20 @@ test("a super is one by the role on the account, and the deployment's list still
   assert.equal(await isAdmin(db, "", "boss"), false);
 });
 
+test("being a super is permission to run the product, not to decide who else may", async () => {
+  const db = d1();
+  seed(db);
+  await makeSuper(db, { account: "ada", by: "boss", at: NOW });
+  // Ada runs the product: she can comp accounts and read what has been given.
+  assert.equal(await isAdmin(db, "boss", "ada"), true);
+  // She cannot make another one. Only the deployment's own list can, so an admin session somebody
+  // walks up to cannot leave a permanent second owner behind.
+  assert.equal(isPlatformOwner("boss", "ada"), false);
+  assert.equal(isPlatformOwner("boss", "boss"), true);
+  assert.equal(isPlatformOwner("", "boss"), false, "unset names nobody");
+  assert.equal(isPlatformOwner("boss", ""), false);
+});
+
 test("a role says when it was given and by whom, and taking it back leaves the account alone", async () => {
   const db = d1();
   seed(db);
@@ -276,10 +291,23 @@ test("every operator route is gated, and says nothing when the caller is not one
   assert.ok(routes.length > 0, "found the routes");
   // 404 rather than 403: a route nobody is the operator of should not confirm it exists.
   assert.match(routes, /isAdmin\(c\.env\.DB, c\.env\.ADMIN_ACCOUNTS, account\)/);
-  const gated = [...routes.matchAll(/err\(c, 404, "Not found\."\)/g)].length;
   const paths = [...routes.matchAll(/app\.(post|get|put|delete)\("\/v1\/admin\//g)].length;
+  const gated =
+    [...routes.matchAll(/err\(c, 404, "Not found\."\)/g)].length +
+    [...routes.matchAll(/await platformOwner\(c\)/g)].length;
   assert.equal(paths, 7, "three for gifts, four for the accounts that run the product");
   assert.equal(gated, paths, "each one checks first");
+});
+
+test("handing out the role is the deployment's to allow, and nothing else is", () => {
+  // Making, granting and revoking a super: three of the four account routes. Reading who they are
+  // is a super's business; changing who they are is not.
+  assert.equal([...routes.matchAll(/await platformOwner\(c\)/g)].length, 3);
+  assert.match(routes, /isPlatformOwner\(c\.env\.ADMIN_ACCOUNTS, account\)/);
+  // A super who is not the owner is told why; anybody else keeps getting the answer that says
+  // nothing about whether the route is there.
+  assert.match(routes, /refuse: \(await operator\(c\)\) \? 403 : 404/);
+  assert.match(routes, /Only an account named in the deployment's ADMIN_ACCOUNTS/);
 });
 
 test("a subscription arriving clears the date a gift left behind", () => {

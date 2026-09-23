@@ -16,8 +16,15 @@
  * every request reads a plan, and almost none of them give one away.
  */
 
-/** The deployment's break-glass list, as ids. Unset — the default — is nobody. */
-function listed(list: unknown, account: string): boolean {
+/**
+ * Whoever the deployment itself names in `ADMIN_ACCOUNTS`: the platform's owner.
+ *
+ * This is the only thing that can make or unmake a super. A super runs the product day to day —
+ * comping accounts, reading what has been given — and cannot mint another one, so an admin session
+ * somebody walks up to cannot leave a permanent second owner behind. Changing who may is changing
+ * the deployment, by whoever already has that access.
+ */
+export function isPlatformOwner(list: unknown, account: string): boolean {
   if (!account) return false;
   return String(list ?? "")
     .split(",")
@@ -29,15 +36,15 @@ function listed(list: unknown, account: string): boolean {
 /**
  * Whether this account runs the product.
  *
- * Two ways to be one, and the order says which is the everyday answer: `role = 'super'` on the
- * account (migrations/0027_super.sql), or the id in the deployment's `ADMIN_ACCOUNTS`. The secret
- * is kept for the two jobs a column cannot do — making the first super on a fresh deployment, and
- * getting back in when nobody is left who can — and is checked beside the column, never instead of
- * it, so revoking a role is not undone by a stale entry in a secret nobody remembers editing.
+ * Two ways to be one: `role = 'super'` on the account (migrations/0027_super.sql), or the id in the
+ * deployment's `ADMIN_ACCOUNTS`, which is the platform's owner and is a super by definition.
+ *
+ * Being a super is permission to run the product, not to decide who else may: isPlatformOwner() is
+ * what the routes that hand out the role ask instead.
  */
 export async function isAdmin(db: D1Database, list: unknown, account: string): Promise<boolean> {
   if (!account) return false;
-  if (listed(list, account)) return true;
+  if (isPlatformOwner(list, account)) return true;
   const row = await db
     .prepare("SELECT role FROM account WHERE id = ?")
     .bind(account)

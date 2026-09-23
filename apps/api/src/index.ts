@@ -92,6 +92,7 @@ import {
   gift,
   gifts,
   isAdmin,
+  isPlatformOwner,
   makeSuper,
   revokeGift,
   superAccounts,
@@ -1112,6 +1113,25 @@ async function operator(c: Ctx & { env: Env }): Promise<string | null> {
 }
 
 /**
+ * Who the role itself answers to: only an account the deployment names in `ADMIN_ACCOUNTS`.
+ *
+ * A super runs the product and cannot decide who else may, so an admin session left open cannot
+ * leave a permanent second owner behind. Changing that list is changing the deployment, which is
+ * the point: it is the one act in the product that no session can perform.
+ *
+ * A super who is not the owner is told why; anybody else still gets the 404 that says nothing.
+ */
+async function platformOwner(c: Ctx & { env: Env }): Promise<{ id: string } | { refuse: 403 | 404 }> {
+  const account = c.get("account");
+  if (isPlatformOwner(c.env.ADMIN_ACCOUNTS, account)) return { id: account };
+  return { refuse: (await operator(c)) ? 403 : 404 };
+}
+
+const NOT_THE_OWNER =
+  "Only an account named in the deployment's ADMIN_ACCOUNTS can make or remove a super. " +
+  "Being a super is permission to run Passalong, not to decide who else may.";
+
+/**
  * Make an account that exists to run the product, and hand back the two ways into it.
  *
  * A separate account on purpose: admin work is then never done by the account that also publishes
@@ -1125,8 +1145,10 @@ async function operator(c: Ctx & { env: Env }): Promise<string | null> {
  * for an expiry bug to live.
  */
 app.post("/v1/admin/accounts", async (c) => {
-  const by = await operator(c);
-  if (!by) return err(c, 404, "Not found.");
+  const owner = await platformOwner(c);
+  if ("refuse" in owner)
+    return err(c, owner.refuse, owner.refuse === 403 ? NOT_THE_OWNER : "Not found.");
+  const by = owner.id;
   const { email } = (await c.req.json().catch(() => ({}))) as { email?: string };
   const address = (email || "").trim().toLowerCase();
   if (!EMAIL_RE.test(address)) return err(c, 400, NOT_AN_EMAIL);
@@ -1183,8 +1205,10 @@ app.get("/v1/admin/accounts", async (c) => {
 
 /** Make an account that already exists a super. */
 app.put("/v1/admin/accounts/:id", async (c) => {
-  const by = await operator(c);
-  if (!by) return err(c, 404, "Not found.");
+  const owner = await platformOwner(c);
+  if ("refuse" in owner)
+    return err(c, owner.refuse, owner.refuse === 403 ? NOT_THE_OWNER : "Not found.");
+  const by = owner.id;
   const who = await findSubject(c.env.DB, c.req.param("id"));
   if (!who || who.kind !== "account") return err(c, 404, `no account "${c.req.param("id")}"`);
   await makeSuper(c.env.DB, { account: who.id, by, at: now() });
@@ -1193,8 +1217,10 @@ app.put("/v1/admin/accounts/:id", async (c) => {
 
 /** Take the role back. The account keeps everything else it has. */
 app.delete("/v1/admin/accounts/:id", async (c) => {
-  const by = await operator(c);
-  if (!by) return err(c, 404, "Not found.");
+  const owner = await platformOwner(c);
+  if ("refuse" in owner)
+    return err(c, owner.refuse, owner.refuse === 403 ? NOT_THE_OWNER : "Not found.");
+  const by = owner.id;
   const who = await findSubject(c.env.DB, c.req.param("id"));
   if (!who || who.kind !== "account") return err(c, 404, `no account "${c.req.param("id")}"`);
   const r = await unSuper(c.env.DB, { account: who.id, by, at: now() });
@@ -1291,6 +1317,9 @@ app.get("/v1/me", async (c) => {
     // '' for everybody who uses Passalong, 'super' for whoever runs it (migrations/0027_super.sql).
     // The hub draws the operator section from this; the routes check the database, not this field.
     role: (await isAdmin(c.env.DB, c.env.ADMIN_ACCOUNTS, account)) ? "super" : me?.role || "",
+    // Whether this account may make or remove a super, which only the deployment's own list may
+    // do. Named for what it permits rather than "owner", which already means something on a team.
+    can_make_supers: isPlatformOwner(c.env.ADMIN_ACCOUNTS, account),
     unread: await unreadCount(c.env, account),
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.

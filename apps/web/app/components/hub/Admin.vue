@@ -28,7 +28,13 @@ interface Super {
   by: string;
 }
 
-const { api, json } = useHub();
+const { data, api, json } = useHub();
+/**
+ * Whether this account may hand the role out. Only the deployment's own `ADMIN_ACCOUNTS` may, so a
+ * super sees who else there is and cannot change it — the controls are absent rather than refused,
+ * and the routes refuse them anyway.
+ */
+const canMakeSupers = computed(() => data.value.me?.can_make_supers === true);
 
 const gifts = ref<Gift[]>([]);
 const supers = ref<Super[]>([]);
@@ -216,7 +222,12 @@ const head =
       <div class="flex flex-wrap items-baseline gap-x-3">
         <h4 class="m-0 font-ui text-sm font-semibold text-fg">Who runs Passalong</h4>
         <span class="font-ui text-xs text-muted">
-          A super signs in like anyone else. The last one cannot be removed.
+          A super signs in like anyone else, and runs Passalong.
+          {{
+            canMakeSupers
+              ? "The last one cannot be removed."
+              : "Only the deployment can make or remove one."
+          }}
         </span>
       </div>
 
@@ -230,7 +241,8 @@ const head =
             </td>
             <td :class="cell" class="text-muted">since {{ day(s.since) }}</td>
             <td :class="cell" class="text-right">
-              <span v-if="dropping === s.id" class="inline-flex items-center gap-2">
+              <template v-if="!canMakeSupers" />
+              <span v-else-if="dropping === s.id" class="inline-flex items-center gap-2">
                 <span class="font-ui text-xs text-muted">Remove?</span>
                 <button class="btn outline danger sm" type="button" :disabled="busy" @click="drop(s.id)">Yes</button>
                 <button class="btn sm" type="button" @click="dropping = null">No</button>
@@ -247,7 +259,7 @@ const head =
         </tbody>
       </table>
 
-      <form class="flex flex-wrap items-end gap-3" @submit.prevent="makeSuper">
+      <form v-if="canMakeSupers" class="flex flex-wrap items-end gap-3" @submit.prevent="makeSuper">
         <div class="grow basis-56">
           <label :class="label" for="admin-promote">Make an existing account a super</label>
           <input id="admin-promote" v-model="promote" :class="field" placeholder="@ada" required />
@@ -256,8 +268,9 @@ const head =
       </form>
     </section>
 
-    <!-- A new account that exists only to run the product. -->
-    <section class="flex flex-col gap-3">
+    <!-- A new account that exists only to run the product. Only the deployment's own account can
+         make one, so for every other super this section is not here at all. -->
+    <section v-if="canMakeSupers" class="flex flex-col gap-3">
       <div class="flex flex-wrap items-baseline gap-x-3">
         <h4 class="m-0 font-ui text-sm font-semibold text-fg">A new admin account</h4>
         <span class="font-ui text-xs text-muted">

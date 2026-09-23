@@ -26,8 +26,10 @@ export interface Me {
   plan: string;
   /** Set only on a plan that was given rather than bought: when it stops. See apps/api/src/gifts.ts. */
   plan_until?: string;
-  /** "" for everybody, "super" for whoever runs Passalong. Draws the operator band in Settings. */
+  /** "" for everybody, "super" for whoever runs Passalong. Draws /admin, and the way to it. */
   role?: string;
+  /** Whether this account may make or remove a super — only the deployment's ADMIN_ACCOUNTS may. */
+  can_make_supers?: boolean;
   teams: Team[];
   /** Name, else @handle, else @account id — worked out by the API. */
   display?: string;

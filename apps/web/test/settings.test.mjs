@@ -236,6 +236,18 @@ test("taking a plan back and removing a super both ask on the row first", () => 
   assert.match(admin, /Remove\?/);
 });
 
+test("a super sees who else there is; only the deployment's own account can change it", () => {
+  // Absent, not disabled: the controls that hand out the role are drawn for nobody else, and the
+  // routes behind them refuse anyway. See platformOwner() in apps/api/src/index.ts.
+  assert.match(
+    admin,
+    /const canMakeSupers = computed\(\(\) => data\.value\.me\?\.can_make_supers === true\)/,
+  );
+  assert.match(admin, /<form v-if="canMakeSupers"/);
+  assert.match(admin, /<section v-if="canMakeSupers"/);
+  assert.match(admin, /Only the deployment can make or remove one\./);
+});
+
 test("what the server can never show again is marked where it is shown", () => {
   assert.match(admin, /Copy both now\. Neither is shown again\./);
 });
