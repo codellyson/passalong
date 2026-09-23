@@ -163,6 +163,36 @@ passalong share ~/.passalong/guides/<id>.md --no-edit   # re-share anything you 
 Rollback: `wrangler rollback` in `apps/api`, or `wrangler deployments list` to pick a version.
 Migrations are forward-only; write a new migration rather than editing an applied one.
 
+### A local D1 that refuses to migrate
+
+`wrangler d1 migrations apply passalong --local` failing with something like
+`duplicate column name: <x>` means the local database already has the change but `d1_migrations`
+never recorded it — a run that applied a file and was interrupted before writing its row. Wrangler
+then retries that file forever, and everything after it never runs, so the local schema silently
+falls behind while the command keeps failing the same way.
+
+Look before touching anything. The database is at
+`apps/web/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/<hash>.sqlite`:
+
+```sh
+sqlite3 "$DB" "select name from d1_migrations order by id;"   # what it thinks it has
+sqlite3 "$DB" "pragma table_info(<table>);"                   # what it actually has
+```
+
+If the schema really does have what the failing file adds, record it and carry on — take a copy
+first, because this is a database:
+
+```sh
+sqlite3 "$DB" ".backup /tmp/d1-before.sqlite"
+sqlite3 "$DB" "INSERT INTO d1_migrations (name) VALUES ('<file>.sql');"
+pnpm -C apps/web exec wrangler d1 migrations apply passalong --local
+```
+
+Deleting the file and starting over also works and loses whatever you were dogfooding with, which
+is usually the point of having it. Prefer the bookkeeping fix. Either way, running
+`pnpm -C packages/passalong test:e2e` against a local server on 3001 is what says the database is
+actually usable again.
+
 ## 2. npm package
 
 0.1.0 was published by hand (2FA: `npm publish --otp=<code>`). Releases now go through
