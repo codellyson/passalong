@@ -24,10 +24,19 @@ usePage({
 /** Frontmatter, in order. From llms.txt "Guide format". */
 const FIELDS = [
   { name: "id", note: "8 characters from a no-lookalike alphabet. An address, not a secret." },
-  { name: "title", note: "What the work accomplishes, as a verb phrase. It is the line in an inbox." },
+  {
+    name: "title",
+    note: "What the work accomplishes, as a verb phrase. It is the line in an inbox.",
+  },
   { name: "kind", note: "transfer (or absent), bug or task. Read it before acting." },
-  { name: "created", note: "When it was written. Stamped for you; the reader uses it to judge the stack." },
-  { name: "author", note: "Who wrote it, from git. Who to ask when the guide turns out to be wrong." },
+  {
+    name: "created",
+    note: "When it was written. Stamped for you; the reader uses it to judge the stack.",
+  },
+  {
+    name: "author",
+    note: "Who wrote it, from git. Who to ask when the guide turns out to be wrong.",
+  },
   { name: "source_context", note: "The project and branch the work was done in, as repo@branch." },
   { name: "status", note: "draft or published; consumed is the author's shelf." },
   { name: "team", note: "The team it is shared with, by slug. Without one it is yours alone." },
@@ -149,7 +158,7 @@ npm test -w apps/api -- webhook                                                #
 Comparing with \`===\` leaks where two signatures diverge, one character at a time. Use a
 constant-time compare. And Paystack sends a test event on save: it is signed with the same
 secret, so a 401 there means the secret is wrong, not that the check works.
-\`;
+`;
 </script>
 
 <template>
