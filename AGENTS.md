@@ -56,8 +56,10 @@ public one, for agents *using* Passalong rather than changing it.
     guide.js to it and `apps/api/test/corpus.test.mjs` reads the same files to hold the two
     parsers to each other. A change that makes these drift is a change to every guide already
     published: edit them deliberately, never to make a test go green. Not published to npm.
-  - `src/checks.js` — runs an Acceptance check's command at hand-in and records the exit code, so
-    a task's verdict is the process's and not the agent's. Local only: `mcp-http.ts` is a Worker
+  - `src/checks.js` — runs a check's command at hand-in and records the exit code, so
+    a verdict is the process's and not the agent's. `checks` answer `## Acceptance` on a task and
+    `## Verification` on a handoff or a bug — the same field either way, because the response to a
+    guide is evidence against what it asked for. Local only: `mcp-http.ts` is a Worker
     with no shell, so a hand-in over HTTP keeps the prose gate. It never reads a command out of a
     guide — a guide comes from somebody else's account, and running what it says would make every
     pull remote code execution.

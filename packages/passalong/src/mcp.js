@@ -640,18 +640,20 @@ export function buildServer() {
       outputSchema: handInOut,
       annotations: ADDS,
       description:
-        "Done here, with proof. Every hand-in carries what you ran and what came back. On a TASK " +
-        "send `checks`: one entry per Acceptance line, each with that line and the evidence for " +
-        "it — that is what its author reads, line against line, instead of hunting through a wall " +
-        "of output for the part that answers each one. Give a check `cmd` when a command proves " +
-        "it: the command is run here before the hand-in lands, a non-zero exit refuses it, and " +
-        "what it printed is recorded instead of your account of it. Use `ran` for a check no " +
-        "command can settle. `evidence` is the same thing as one block, " +
-        "for a handoff or a bug, which have no Acceptance lines. A task also takes `markdown`, a " +
-        "transfer guide about what you did and decided — this publishes it and attaches it. A " +
-        "handoff or a bug takes `ok`, whether its Verification held here, and `note` saying what " +
-        "went wrong when it did not. More context than a note holds goes in a follow-up: " +
-        "publish_guide with `parent` set to this id.",
+        "Done here, with proof, sorted against the line it answers. Send `checks`: one entry per " +
+        "line the guide asks for — `## Acceptance` on a task, `## Verification` on a handoff or a " +
+        "bug — each with that line and the evidence for it. That is what its author reads, line " +
+        "against line, instead of hunting through a wall of output for the part that answers each " +
+        "one, AND IT IS HOW YOU KNOW YOU ARE DONE: every line has one. Give a check `cmd` when a " +
+        "command proves it: the command is run here before the hand-in lands, a non-zero exit " +
+        "refuses it, and what it printed is recorded instead of your account of it. Use `ran` for " +
+        "a check no command can settle. `evidence` as one block is the older shape and still " +
+        "works. A task also takes `markdown`, a transfer guide about what you did and decided — " +
+        "this publishes it and attaches it. A handoff or a bug takes `ok`, whether its " +
+        "Verification held here, and `note` saying what went wrong when it did not. DO NOT " +
+        "publish a guide to carry your evidence: it belongs on this call, and a second document " +
+        'titled "Hand-in evidence" is the thing `checks` exists to replace. A follow-up guide is ' +
+        "for work somebody else should now do, not for answering.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         evidence: z
@@ -664,7 +666,12 @@ export function buildServer() {
         checks: z
           .array(
             z.object({
-              check: z.string().describe("the Acceptance line this answers, in the task's words"),
+              check: z
+                .string()
+                .describe(
+                  "the line this answers, in the guide's own words: an Acceptance line on a task, " +
+                    "a Verification line on a handoff or a bug",
+                ),
               ran: z
                 .string()
                 .optional()
@@ -681,7 +688,10 @@ export function buildServer() {
             }),
           )
           .optional()
-          .describe("task: one entry per Acceptance line, in the order you worked them"),
+          .describe(
+            "one entry per line the guide asks for — Acceptance on a task, Verification on a " +
+              "handoff or a bug — in the order you worked them",
+          ),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),
         markdown: z

@@ -1092,21 +1092,56 @@ export async function handIn(
     at,
     note,
     evidence,
+    checks = [],
     person = false,
     fence,
-  }: { at: string; note: string; evidence: string; person?: boolean; fence?: number },
+  }: {
+    at: string;
+    note: string;
+    evidence: string;
+    /**
+     * The guide's `## Verification`, line by line, with what was run for each.
+     *
+     * A task has had this since migration 0028, against `## Acceptance`. A handoff — the product's
+     * main artifact — answered with a boolean and a paragraph, so the expectation was a list and
+     * the response was prose. An agent that has read a guide and done the work then has no shape
+     * to fill and no way to tell when it is finished, which is why hand-ins came back as a
+     * separate published guide titled "Hand-in evidence: …", or as `pass` with a note.
+     *
+     * Same field, same column, same rule: the response is evidence against what was asked.
+     */
+    checks?: Check[];
+    person?: boolean;
+    fence?: number;
+  },
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
-  const bad = person ? null : evidenceProblem(evidence);
+  // Checks are evidence, so a hand-in that brings them has brought it — as in finish().
+  const said = checks.length ? flatten(checks) : evidence;
+  const bad = person ? null : checks.length ? checksProblem(checks) : evidenceProblem(evidence);
   if (bad) return { status: 400, error: bad };
   const res = await db
     .prepare(
-      `UPDATE claim SET state = 'review', evidence = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
+      `UPDATE claim SET state = 'review', evidence = ?, checks = ?,
+              note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
-      String(evidence ?? "")
+      String(said ?? "")
         .trim()
         .slice(0, EVIDENCE_MAX),
+      checks.length
+        ? JSON.stringify(
+            checks.map((c) => ({
+              check: c.check.trim().slice(0, NOTE_MAX),
+              ran: String(c.ran ?? "")
+                .trim()
+                .slice(0, EVIDENCE_MAX),
+              ...(c.cmd && (typeof c.exit === "number" || c.exit === null)
+                ? { cmd: String(c.cmd).slice(0, NOTE_MAX), exit: c.exit, ok: c.ok === true }
+                : {}),
+            })),
+          ).slice(0, EVIDENCE_MAX * 2)
+        : "",
       String(note ?? "")
         .trim()
         .slice(0, NOTE_MAX),
@@ -1153,7 +1188,7 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
   const done =
     kind === "task"
       ? "every line of Acceptance holds"
-      : "you ran its Verification here, and it holds or it does not";
+      : "every line of its Verification has been run here and has an answer";
   const working: Step[] = [
     {
       tool: "progress",
@@ -1171,13 +1206,20 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
       // of work, the rules it read at the start are the first thing gone. Keep evidence collected
       // as you go, or you are reconstructing it from memory at the end, which is the failure this
       // is here to stop.
+      // The same shape for both, against the section each kind asks with. A handoff used to be
+      // told to send "evidence" — a paragraph, answering a list — so an agent that had read the
+      // guide and done the work had nothing shaped like the question, and improvised: prose, or a
+      // second guide titled "Hand-in evidence: …", or `pass` with a note. The list it is answering
+      // is already written down; this points at it.
       with:
         kind === "task"
           ? "checks: one entry per Acceptance line — that line, and what you ran for it. Its " +
             "author reads them line against line, so evidence filed under the check it answers is " +
             "worth more than the same output in one block. Keep it as you go."
-          : "evidence: what you ran and what came back — the command and the lines that decided " +
-            "it, a test summary, a link to the change, or a screenshot url. Keep it as you go.",
+          : "checks: one entry per line of its `## Verification` — that line, and what you ran " +
+            "for it. That is what its author reads, line against line. You are done when every " +
+            "line has one. Keep them as you go; `evidence` as one block is the older shape and " +
+            "still accepted.",
     },
     {
       tool: "pass",

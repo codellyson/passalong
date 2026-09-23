@@ -26,6 +26,24 @@ const where = computed(() => {
   return [props.h.place, machine].filter(Boolean).join(" · ");
 });
 
+/**
+ * What was run, against the line it answers.
+ *
+ * The evidence used to arrive as one block, so a reviewer read "the sixth is refused with 429" in
+ * the guide and then went hunting for `429` in a wall of output, once per line. The agent already
+ * knows which output answers which line — it quoted the line — so it says so, and this draws the
+ * pairs. A hand-in from before this, or from a person in the browser, has only the block, and that
+ * is what the fallback below is for.
+ */
+const checks = computed(() => {
+  try {
+    const rows = JSON.parse(props.h.checks || "[]");
+    return Array.isArray(rows) ? rows.filter((r) => r?.check) : [];
+  } catch {
+    return [];
+  }
+});
+
 const sending = ref(false);
 const why = ref("");
 const field = ref<HTMLTextAreaElement | null>(null);
@@ -61,9 +79,26 @@ function send() {
       <p v-if="h.note" class="mt-2 mb-0 text-sm text-muted">“{{ h.note }}”</p>
       <!-- The note is what they say; this is what ran. Folded, because the row is a queue of
            several and the decision is usually made on the title and the note. -->
-      <details v-if="h.evidence" class="mt-2">
-        <summary class="cursor-pointer font-ui text-xs text-muted">What they ran</summary>
-        <HubEvidence :text="h.evidence" />
+      <details v-if="checks.length || h.evidence" class="mt-2">
+        <summary class="cursor-pointer font-ui text-xs text-muted">
+          {{ checks.length ? `What they ran, line by line (${checks.length})` : "What they ran" }}
+        </summary>
+        <!-- One block per line the guide asked for, the evidence under the line it answers. -->
+        <ol v-if="checks.length" class="m-0 mt-2 list-none space-y-3 p-0">
+          <li v-for="(c, i) in checks" :key="i">
+            <p class="m-0 flex items-baseline gap-2 font-ui text-sm font-medium text-fg">
+              <span
+                v-if="c.cmd"
+                class="shrink-0 rounded-1 border px-1.5 py-0.5 font-ui text-xs font-medium"
+                :class="c.ok ? 'border-ok text-ok' : 'border-danger text-danger'"
+                :title="`${c.cmd} → exited ${c.exit === null ? 'nothing' : c.exit}`"
+              >{{ c.ok ? "ran" : "failed" }}</span>
+              {{ c.check }}
+            </p>
+            <HubEvidence :text="c.ran" />
+          </li>
+        </ol>
+        <HubEvidence v-else :text="h.evidence" />
       </details>
       <p v-if="where" class="mt-3 mb-0 font-code text-xs text-muted">{{ where }}</p>
 
