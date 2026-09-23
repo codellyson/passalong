@@ -130,5 +130,40 @@ async function submit() {
     </form>
 
     <p v-if="error && !onHandle" class="m-0 rounded-2 border border-danger bg-danger-soft px-3 py-3 font-ui text-sm text-danger">{{ error }}</p>
+
+    <!-- The account's id, which the product otherwise never shows: the menu prints your name, or
+         your @name, and falls back to the id only when you have neither — so somebody with a name
+         can use Passalong for a year without ever seeing it. It is what a deployment's
+         ADMIN_ACCOUNTS wants, and an id is an address rather than a secret (they are minted from a
+         no-lookalike alphabet for reading aloud), so it is shown rather than hidden. -->
+    <p v-if="bare && me?.account" class="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-line pt-4 font-ui text-sm text-muted">
+      <span>Account id</span>
+      <code class="font-code text-xs text-fg">{{ me.account }}</code>
+      <button class="linkish" type="button" @click="copy(me.account, $event.currentTarget)">
+        <span data-label>Copy</span>
+      </button>
+      <span class="basis-full text-xs">
+        Yours to quote in a support question, and what a deployment names in
+        <code class="font-code">ADMIN_ACCOUNTS</code>. Not a secret: what guards your account is
+        your password and your tokens.
+      </span>
+    </p>
+
+    <!-- Whether you run Passalong, and by which of the two routes — because they differ in what
+         they permit, and the only signal until now was an Admin item quietly appearing in a menu. -->
+    <p v-if="bare && me?.role === 'super'" class="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-line pt-4 font-ui text-sm text-muted">
+      <span class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold tracking-wide text-accent uppercase">
+        admin
+      </span>
+      <span class="min-w-0 grow">
+        You run Passalong.
+        {{
+          me.can_make_supers
+            ? "This deployment names your account, so you can also add and remove admins."
+            : "Somebody made this account an admin; only an account the deployment names can add or remove one."
+        }}
+      </span>
+      <NuxtLink class="shrink-0 font-medium" to="/admin">Open Admin</NuxtLink>
+    </p>
   </div>
 </template>

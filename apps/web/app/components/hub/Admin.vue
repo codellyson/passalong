@@ -33,6 +33,7 @@ interface Super {
 }
 
 const { data, api, json } = useHub();
+
 /**
  * Whether this account may hand the role out. Only the deployment's own `ADMIN_ACCOUNTS` may, so a
  * super sees who else there is and cannot change it — the controls are absent rather than refused,
@@ -212,10 +213,14 @@ const head =
            fields carry their own borders; a filled panel around them was a second boundary saying
            the same thing, and it made the form read as a separate card from the list it belongs to. -->
       <form class="mt-2 flex flex-wrap items-end gap-3" @submit.prevent="give">
-        <div class="grow basis-56">
-          <label :class="label" for="gift-to">Who</label>
-          <input id="gift-to" v-model="to" :class="field" placeholder="@ada, or team/acme" required />
-        </div>
+        <HubPersonPicker
+          id="gift-to"
+          v-model="to"
+          class="grow basis-56"
+          label="Who"
+          placeholder="a name, a handle, or an email"
+          required
+        />
         <div class="basis-40">
           <label :class="label" for="gift-until">Until</label>
           <input id="gift-until" v-model="until" :class="field" type="date" required />
@@ -281,10 +286,14 @@ const head =
       </table>
 
       <form v-if="canMakeSupers" class="flex flex-wrap items-end gap-3" @submit.prevent="makeSuper">
-        <div class="grow basis-56">
-          <label :class="label" for="admin-promote">Make an existing account an admin</label>
-          <input id="admin-promote" v-model="promote" :class="field" placeholder="@ada" required />
-        </div>
+        <HubPersonPicker
+          id="admin-promote"
+          v-model="promote"
+          class="grow basis-56"
+          label="Make an existing account an admin"
+          placeholder="a name, a handle, or an email"
+          required
+        />
         <button class="btn" type="submit" :disabled="busy || !promote.trim()">Make admin</button>
       </form>
     </section>
