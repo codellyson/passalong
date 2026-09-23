@@ -8,7 +8,7 @@
 // is handled where it happens — claimed when the guide naming it is written, deleted with that
 // guide — and the leftover case is the upload nobody ever referenced, which nothing else is in a
 // position to notice.
-import { stalled } from "#api/claims";
+import { closeGuide, STALE_SENT_MS, staleSent, stalled } from "#api/claims";
 import { notify } from "#api/notify";
 import { DYNAMIC_TTL_MS } from "#api/oauth";
 import { registrationCutoff, sweepRegistrations } from "#api/oauth-clients";
@@ -84,6 +84,40 @@ export default defineNitroPlugin((nitro) => {
       if (quiet.length) console.log(`told about ${quiet.length} stalled hold(s)`);
     } catch (err) {
       console.error("stall notice failed", err);
+    }
+
+    /**
+     * Guides sent to somebody that nothing ever happened to.
+     *
+     * Leaving `Open` needs the receiver to open it and say it worked. When they never do, the
+     * author is the one person who knows and the only exits are a menu item three levels down or
+     * nothing at all — so a board fills with work that was finished weeks ago and a free plan
+     * fills with it too.
+     *
+     * Both sides are told, including the author: this happened without them, and a guide that
+     * left the board silently is worse than one that stayed. `consumed` is reversible, and the
+     * notification is how somebody knows there is something to reverse.
+     */
+    try {
+      const at = new Date().toISOString();
+      const before = new Date(Date.now() - STALE_SENT_MS).toISOString();
+      const old = await staleSent(env.DB as D1Database, before);
+      for (const g of old) {
+        const done = await closeGuide(env.DB as D1Database, g.id, { account: g.account_id, at });
+        if ("error" in done) continue;
+        for (const to of [g.account_id, g.to].filter(Boolean))
+          await notify(env as Parameters<typeof notify>[0], {
+            to,
+            kind: "shelved",
+            guide_id: g.id,
+            actor_id: "",
+            team_id: g.team_id,
+            note: "not opened for a fortnight; put it back from your log if it is still live",
+          });
+      }
+      if (old.length) console.log(`closed ${old.length} sent guide(s) nobody opened`);
+    } catch (err) {
+      console.error("stale close failed", err);
     }
   });
 });

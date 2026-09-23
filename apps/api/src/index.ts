@@ -4405,23 +4405,64 @@ app.get("/v1/handed_in", async (c) => {
 });
 
 /** Accept what was handed in: the guide is done, and whoever had it is told. */
+/**
+ * Who a guide was addressed to: the person named, else the group's members, else the team.
+ *
+ * `already` is who has been told something else about it already — whoever held it hears `closed`
+ * rather than `consumed`, and one event twice in two sentences is worse than once.
+ */
+async function addressees(
+  c: Ctx & { env: Env },
+  row: GuideRow | undefined,
+  already: string[] = [],
+): Promise<string[]> {
+  if (!row) return [];
+  const seen = new Set([row.account_id, ...already]);
+  const keep = (ids: string[]) => ids.filter((id) => id && !seen.has(id));
+  if (row.to_account_id) return keep([row.to_account_id]);
+  if (row.to_group_id) {
+    const { results } = await c.env.DB.prepare(
+      "SELECT account_id FROM group_member WHERE group_id = ?",
+    )
+      .bind(row.to_group_id)
+      .all<{ account_id: string }>();
+    return keep(results.map((r) => r.account_id));
+  }
+  if (row.team_id) {
+    const { results } = await c.env.DB.prepare(
+      "SELECT account_id FROM membership WHERE team_id = ?",
+    )
+      .bind(row.team_id)
+      .all<{ account_id: string }>();
+    return keep(results.map((r) => r.account_id));
+  }
+  return [];
+}
+
 app.post("/v1/guides/:id/close", async (c) => {
-  const r = await claims.closeHandedIn(c.env.DB, c.req.param("id"), {
+  const r = await claims.closeGuide(c.env.DB, c.req.param("id"), {
     account: c.get("account"),
     at: now(),
   });
   if ("error" in r) return err(c, r.status, r.error);
   const found = await readableGuide(c, c.req.param("id"));
+  const id = c.req.param("id");
+  const team_id = found?.row.team_id || "";
   for (const to of r.claimants)
+    await notify(c.env, { to, kind: "closed", guide_id: id, actor_id: c.get("account"), team_id });
+  // And whoever it was addressed to, who is usually nobody in `claimants` — that is the whole
+  // case this exists for: a guide the receiver never opened. `closed` reads as "accepted your
+  // work", which is wrong for somebody who did none, so they hear `consumed`: it is done with.
+  for (const to of await addressees(c, found?.row, r.claimants))
     await notify(c.env, {
       to,
-      kind: "closed",
-      guide_id: c.req.param("id"),
+      kind: "consumed",
+      guide_id: id,
       actor_id: c.get("account"),
-      team_id: found?.row.team_id || "",
+      team_id,
     });
   count(c, "handoff_closed", {});
-  return c.json({ id: c.req.param("id"), state: "done" });
+  return c.json({ id, state: "done" });
 });
 
 /** Turn one repo's hand-in down, with why: it is open there again, and its taker is told. */

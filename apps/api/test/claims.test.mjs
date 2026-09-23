@@ -12,7 +12,9 @@ import {
   approve,
   blockOn,
   checksProblem,
-  closeHandedIn,
+  closeGuide,
+  STALE_SENT_MS,
+  staleSent,
   dropOutside,
   evidenceProblem,
   finish,
@@ -671,6 +673,72 @@ test("a handoff's checks are held to the same rule as a task's", async () => {
   assert.match(failed.error, /did not hold/);
 });
 
+test("a sent guide nothing happened to is closed by the clock; one in play is not", async () => {
+  // Leaving `Open` needs the receiver to open it and say it worked. When they never do, the author
+  // is the one person who knows the work is finished and has no verb for it, so the board fills
+  // with guides sent weeks ago and the free plan fills with them too.
+  const db = d1();
+  const guide = seed(db);
+  const old = new Date(Date.parse(T0) - STALE_SENT_MS - 60_000).toISOString();
+  const sent = (id, over = {}) => {
+    guide(id, { kind: "transfer", target: "", created: old, ...over });
+    db.raw.prepare("UPDATE guide SET updated = ?, to_account_id = ? WHERE id = ?").run(old, "other", id);
+  };
+
+  sent("untouched");
+  sent("pulled");
+  sent("acked");
+  sent("held");
+  sent("judged");
+  sent("nobodys"); // addressed to no one at all
+  db.raw.prepare("UPDATE guide SET to_account_id = '' WHERE id = 'nobodys'").run();
+
+  db.raw
+    .prepare("INSERT INTO pull (guide_id, account_id, via, at) VALUES (?, ?, 'cli', ?)")
+    .run("pulled", "other", T0);
+  db.raw
+    .prepare("INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES (?, ?, 1, '', ?)")
+    .run("acked", "other", T0);
+  // The claim written straight in: `take` would refuse, because a guide with no team is not
+  // visible to anyone but its author, and what is being tested here is the query and not take().
+  db.raw
+    .prepare(
+      `INSERT INTO claim (guide_id, place, account_id, agent_id, state, claimed_at, lease_until, updated)
+       VALUES (?, 'o/r', 'other', 'agent-other', 'claimed', ?, ?, ?)`,
+    )
+    .run("held", T0, T0, T0);
+  db.raw
+    .prepare("INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES (?, ?, 1, '', ?)")
+    .run("judged", "other", T0);
+
+  const stale = await staleSent(db, T0);
+  assert.deepEqual(
+    stale.map((g) => g.id).sort(),
+    ["untouched"],
+    "only the one nobody pulled, acked, took or judged — the rest are conversations in progress",
+  );
+  assert.equal(stale[0].to, "other", "and it knows who to tell");
+
+  // Recent silence is not stale silence: the cutoff is a fortnight back, and a guide touched
+  // since then is inside it.
+  const earlier = new Date(Date.parse(old) - 1000).toISOString();
+  assert.deepEqual(await staleSent(db, earlier), [], "nothing is older than a cutoff before it");
+});
+
+test("the author closes a guide nobody ever handed in", async () => {
+  // closeGuide was called closeHandedIn and read as though a hand-in were the precondition. It
+  // never was — the gate is only that you wrote it — and that name is why the hub offered it on a
+  // hand-in row and nowhere else.
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  assert.equal((await closeGuide(db, "h1", { account: "other", at: T0 })).status, 404, "not yours");
+  const done = await closeGuide(db, "h1", { account: "me", at: T0 });
+  assert.deepEqual(done.claimants, [], "nobody had it, and that is the case this is for");
+  const row = await db.prepare("SELECT status FROM guide WHERE id = ?").bind("h1").first();
+  assert.equal(row.status, "consumed", "off the board, and reversible");
+});
+
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {
   const db = d1();
   const guide = seed(db);
@@ -1112,8 +1180,8 @@ test("the author sees what was handed in on a handoff, and can close it", async 
   assert.equal(row.claim.place, "o/r");
   assert.deepEqual(await handedIn(db, "other"), [], "only the author's to close");
 
-  assert.equal((await closeHandedIn(db, "h1", { account: "other", at: T0 })).status, 404);
-  const closed = await closeHandedIn(db, "h1", { account: "me", at: T0 });
+  assert.equal((await closeGuide(db, "h1", { account: "other", at: T0 })).status, 404);
+  const closed = await closeGuide(db, "h1", { account: "me", at: T0 });
   assert.deepEqual(closed.claimants, ["other"]);
   assert.equal(db.raw.prepare("SELECT status FROM guide WHERE id = 'h1'").get().status, "consumed");
   assert.deepEqual(await handedIn(db, "me"), []);

@@ -53,6 +53,8 @@ export const KINDS = [
   "reassigned",
   // The one event with no actor: a lease ran out and nobody did anything, which is the news.
   "stalled",
+  // The other one. A guide sent to somebody sat untouched long enough that the clock shelved it.
+  "shelved",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -599,6 +601,10 @@ export function line(r: LineFacts): string {
       return `${who} said ${title} didn't work${note}`;
     case "joined":
       return `${who} joined ${team || "your team"}`;
+    case "shelved":
+      // Also actorless. "Someone is done with X" would name a person for something a clock did,
+      // and the person it would name is whoever never opened it.
+      return `${title} was closed — nobody opened it${note}`;
     case "stalled":
       // No actor: nothing happened, time passed. Every other sentence here starts with who did it,
       // and "Someone" — what `who` falls back to — would read as a person having done something to

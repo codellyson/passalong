@@ -12,7 +12,7 @@ import type { LaneRow } from "~/utils/lanes";
 
 const props = defineProps<{ row: LaneRow }>();
 
-const { data, onAck } = useHub();
+const { data, onAck, onCloseGuide } = useHub();
 
 const g = computed(() => props.row.g);
 const key = computed(() => props.row.state?.key);
@@ -45,6 +45,24 @@ const KINDS: Record<string, { label: string; class: string }> = {
 const badge = computed(() => KINDS[g.value.kind ?? ""] ?? null);
 
 const sender = computed(() => fromName(g.value) || "them");
+
+/**
+ * The author says it is finished, without waiting for somebody who never opened it.
+ *
+ * It is the same call the hand-in row has had all along — the gate was only ever that you wrote
+ * it — and it was reachable from one row out of all of them because the function was called
+ * `closeHandedIn` and everyone believed the name.
+ */
+const closing = ref(false);
+async function close() {
+  if (closing.value) return;
+  closing.value = true;
+  try {
+    await onCloseGuide(g.value);
+  } finally {
+    closing.value = false;
+  }
+}
 const team = computed(() => teamLabel(g.value, data.value.me?.teams));
 
 /** "from Bami in Khaime", "to Ada in Khaime", "to the Frontend group in Khaime", "to Khaime". */
@@ -128,6 +146,21 @@ const who = computed(() => {
         @click="toggle('verdict')"
       >
         Tell {{ sender }} how it went
+      </button>
+      <!-- On the row, not three levels into a menu. Leaving this lane otherwise needs the person it
+           was sent to to open it and say it worked; when they never do, the author is the one who
+           knows the work is finished and had no verb for it but Archive, sitting under a "Terminals
+           and agents" heading next to Delete. `consumed` is reversible and the menu still says
+           "Put it back". -->
+      <button
+        v-else-if="g.mine && g.status !== 'consumed'"
+        class="btn sm whitespace-nowrap"
+        type="button"
+        :disabled="closing"
+        :title="`Take ${g.title || g.id} off the board. Whoever it went to is told, and you can put it back.`"
+        @click="close"
+      >
+        {{ closing ? "Closing…" : "Close it" }}
       </button>
       <HubRowMenu :g="g" @ack="open = 'ack'" @verdict="open = 'verdict'" />
     </div>
