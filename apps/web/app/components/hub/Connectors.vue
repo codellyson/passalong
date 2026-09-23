@@ -119,6 +119,10 @@ async function remove(id: string) {
 /** `{path}` in a step's text, split so the path can be set apart. */
 const parts = (text: string) => text.split("{path}");
 
+/** A requirement's value, run on into the sentence after its label. Only the first letter drops
+ *  case: "From ChatGPT's form" lowercased whole would rename the app. */
+const runOn = (value: string) => value.charAt(0).toLowerCase() + value.slice(1);
+
 const groups = computed(() => {
   const out: { name: string; apps: ConnectApp[] }[] = [];
   for (const a of APPS) {
@@ -153,7 +157,6 @@ const tone = {
   bad: "bg-danger-soft text-danger",
   idle: "bg-surface text-muted",
 };
-const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
 </script>
 
 <template>
@@ -164,7 +167,7 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
     >
       <div
         ref="picker"
-        class="border-b border-line bg-surface p-2 md:border-r md:border-b-0"
+        class="border-b border-line p-2 md:border-r md:border-b-0"
         role="radiogroup"
         aria-label="What are you connecting?"
         @keydown="arrow"
@@ -180,62 +183,52 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
             :aria-checked="a.id === connect.app"
             :tabindex="a.id === connect.app ? 0 : -1"
             class="grid w-full cursor-pointer grid-cols-[2rem_1fr] items-center gap-2 rounded-1 border px-2 py-1.5 text-left"
-            :class="a.id === connect.app ? 'border-line-strong bg-raised' : 'border-transparent bg-transparent hover:bg-raised'"
+            :class="a.id === connect.app ? 'border-line bg-surface' : 'border-transparent bg-transparent hover:bg-surface'"
             @click="stepsFor(a.id)"
           >
             <span
               class="grid size-8 place-items-center rounded-1 border"
-              :class="a.id === connect.app ? 'border-transparent bg-accent-soft text-accent' : 'border-line bg-bg text-fg'"
+              :class="a.id === connect.app ? 'border-transparent bg-accent-soft text-accent' : 'border-line bg-surface text-fg'"
             >
               <AppMark :name="a.mark" :size="18" />
             </span>
-            <span class="min-w-0">
-              <span class="block font-ui text-sm font-medium text-fg">{{ a.name }}</span>
-              <span class="block font-ui text-xs text-muted">{{ a.how }}</span>
-            </span>
+            <span class="min-w-0 truncate font-ui text-sm font-medium text-fg">{{ a.name }}</span>
           </button>
         </template>
       </div>
 
       <div class="flex min-w-0 flex-col gap-5 p-5" aria-live="polite">
-        <div class="flex flex-wrap items-start gap-3">
-          <span class="grid size-10 shrink-0 place-items-center rounded-1 border border-line bg-bg text-fg">
-            <AppMark :name="app.mark" :size="22" />
+        <div class="flex min-w-0 items-start gap-3">
+          <span class="grid size-9 shrink-0 place-items-center rounded-1 border border-line bg-bg text-fg">
+            <AppMark :name="app.mark" :size="20" />
           </span>
-          <div class="min-w-48 grow">
-            <h4 class="m-0 font-ui text-lg font-semibold text-fg">{{ app.name }}</h4>
+          <div class="min-w-0">
+            <h4 class="m-0 font-ui text-base font-semibold text-fg">{{ app.name }}</h4>
             <p class="mt-1 mb-0 max-w-prose font-ui text-sm text-muted">{{ app.lede }}</p>
+            <!-- What the app needs, on one line. It was a three-cell bordered grid with a coloured
+                 dot per cell and no legend saying what a colour meant; every cell also said again
+                 what a step below says. A line of text is the same facts without the furniture. -->
+            <p class="mt-2 mb-0 font-ui text-xs text-muted">
+              <template v-for="(r, i) in app.requirements" :key="r.label">
+                <span v-if="i" aria-hidden="true"> · </span>{{ r.label }}:
+                <span :class="r.need === 'you' ? 'text-fg' : ''">{{ runOn(r.value) }}</span>
+              </template>
+            </p>
           </div>
-          <span class="rounded-pill border border-accent px-3 py-0.5 font-ui text-xs font-medium text-accent">
-            {{ app.method }}
-          </span>
         </div>
 
-        <dl class="m-0 grid rounded-1 border border-line sm:grid-cols-3" :aria-label="`What ${app.name} needs`">
-          <div
-            v-for="r in app.requirements"
-            :key="r.label"
-            class="border-b border-line px-3 py-2 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0"
-          >
-            <dt class="font-ui text-xs tracking-wide text-muted uppercase">{{ r.label }}</dt>
-            <dd class="m-0 flex items-baseline gap-2 font-ui text-sm text-fg">
-              <span class="inline-block size-2 shrink-0 rounded-pill" :class="dot[r.need]" aria-hidden="true" />{{ r.value }}
-            </dd>
-          </div>
-        </dl>
-
-        <ol class="m-0 flex list-none flex-col gap-4 p-0">
-          <li v-for="(s, i) in app.steps" :key="s.text" class="grid grid-cols-[1.5rem_1fr] gap-3">
-            <span class="grid size-6 place-items-center rounded-pill border border-line-strong font-code text-xs text-muted">{{ i + 1 }}</span>
+        <ol class="m-0 flex list-none flex-col gap-3 p-0">
+          <li v-for="(s, i) in app.steps" :key="s.text" class="grid grid-cols-[1.25rem_1fr] gap-3">
+            <span class="pt-0.5 font-code text-xs text-muted tabular-nums">{{ i + 1 }}.</span>
             <div class="flex min-w-0 flex-col gap-2 font-ui text-sm text-fg">
-              <p class="m-0">
+              <p class="m-0 max-w-prose">
                 <template v-for="(p, n) in parts(s.text)" :key="n">
                   <b v-if="n > 0" class="font-medium">{{ s.path }}</b>{{ p }}
                 </template>
               </p>
-              <div v-if="s.copy" class="flex max-w-full items-stretch overflow-hidden rounded-1 border border-line-strong bg-surface">
+              <div v-if="s.copy" class="flex max-w-full items-stretch overflow-hidden rounded-1 border border-line bg-surface">
                 <pre class="m-0 min-w-0 flex-1 overflow-x-auto px-3 py-2 font-code text-xs">{{ s.copy }}</pre>
-                <button type="button" class="btn sm rounded-none border-0 border-l border-line-strong" @click="copy(s.copy, $event.currentTarget)">
+                <button type="button" class="btn sm rounded-none border-0 border-l border-line" @click="copy(s.copy, $event.currentTarget)">
                   <AppIcon name="copy" /><span data-label>Copy</span>
                 </button>
               </div>
@@ -243,7 +236,7 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
                 <template v-for="[k, v] in s.fields" :key="k">
                   <dt class="text-muted">{{ k }}</dt>
                   <dd class="m-0">
-                    <span v-if="v === null" class="rounded-1 bg-ok-soft px-1.5 font-code text-xs text-ok">leave empty</span>
+                    <span v-if="v === null" class="font-code text-xs text-ok">leave empty</span>
                     <template v-else>{{ v }}</template>
                   </dd>
                 </template>
@@ -252,15 +245,16 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
           </li>
         </ol>
 
+        <!-- One filled box, for the note that costs a person a broken connector. Anything else is
+             a sentence: five stacked tinted panels read as five warnings and none of them was. -->
         <div v-if="app.notes.length" class="flex flex-col gap-2">
           <p
             v-for="n in app.notes"
             :key="n.label"
-            class="m-0 grid grid-cols-[auto_1fr] gap-3 rounded-1 px-3 py-2 font-ui text-sm"
-            :class="n.tone === 'warn' ? 'bg-warn-soft' : 'bg-surface'"
+            class="m-0 max-w-prose font-ui text-sm"
+            :class="n.tone === 'warn' ? 'rounded-1 bg-warn-soft px-3 py-2 text-fg' : 'text-muted'"
           >
-            <span class="pt-0.5 text-xs tracking-wide uppercase" :class="n.tone === 'warn' ? 'text-warn' : 'text-muted'">{{ n.label }}</span>
-            <span>{{ n.text }}</span>
+            <b class="font-medium" :class="n.tone === 'warn' ? 'text-warn' : 'text-fg'">{{ n.label }}: </b>{{ n.text }}
           </p>
         </div>
 
@@ -274,7 +268,7 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
                   : `${app.name} asked for a client ID instead`
             }}
           </summary>
-          <form class="mt-3 flex flex-col gap-3 rounded-1 border border-dashed border-line-strong p-3" @submit.prevent="createClient">
+          <form class="mt-3 flex flex-col gap-3 rounded-1 border border-line p-3" @submit.prevent="createClient">
             <p v-if="app.manual.callback" class="m-0 font-ui text-sm text-muted">
               Filled in for {{ app.name }}. Nothing to choose.
             </p>
@@ -291,9 +285,8 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
               >
             </div>
             <label class="flex items-start gap-2 font-ui text-sm text-muted" :for="`secret-${app.id}`">
-              <input :id="`secret-${app.id}`" v-model="confidential" type="checkbox" class="mt-1 w-auto">
-              Give it a secret too. Only if the app has a client secret field it won't leave empty — a
-              secret it never sends means it never gets in.
+              <input :id="`secret-${app.id}`" v-model="confidential" type="checkbox" class="mt-0.5">
+              Give it a secret — only if the app has a client secret field it won't leave empty.
             </label>
             <button class="btn primary sm self-start" type="submit" :disabled="busy || !callback.trim()">
               {{ busy ? "Creating…" : "Create client ID" }}
@@ -323,14 +316,11 @@ const dot = { none: "bg-ok", done: "bg-accent", you: "bg-warn" };
         </div>
 
         <div v-if="app.kind === 'oauth'" class="flex flex-col gap-2 border-t border-line pt-4">
-          <div class="flex flex-wrap items-baseline gap-3">
-            <b class="font-ui text-sm text-fg">
-              {{ progress.reached >= 3 ? `${progress.match?.name || app.name} is connected` : `Waiting for ${app.name}` }}
-            </b>
-            <span class="font-ui text-sm text-muted">Fills in as it happens.</span>
-          </div>
+          <b class="font-ui text-sm text-fg">
+            {{ progress.reached >= 3 ? `${progress.match?.name || app.name} is connected` : `Waiting for ${app.name}` }}
+          </b>
           <ol class="m-0 grid list-none grid-cols-3 gap-2 p-0">
-            <li v-for="(s, i) in STAGES" :key="s" class="flex flex-col gap-1.5 font-ui text-sm" :class="stageState(i) === 'todo' ? 'text-muted' : 'text-fg'">
+            <li v-for="(s, i) in STAGES" :key="s" class="flex flex-col gap-1.5 font-ui text-xs" :class="stageState(i) === 'todo' ? 'text-muted' : 'text-fg'">
               <span class="block h-1 overflow-hidden rounded-pill bg-line">
                 <span
                   class="block h-full rounded-pill transition-[width] duration-300"

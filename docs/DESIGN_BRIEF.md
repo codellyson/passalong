@@ -385,13 +385,13 @@ open questions on how much latitude you have.
 
 | Token | Light | Dark |
 |---|---|---|
-| `bg` | `#fbfaf7` | `#14130f` |
-| `surface` | `#f4f2ec` | `#1e1c18` |
-| `surface-raised` | `#ffffff` | `#1c1a16` |
-| `fg` | `#1c1b19` | `#ece9e1` |
-| `muted` | `#6b6862` | `#9c988f` |
-| `line` | `#e4e0d8` | `#2e2b25` |
-| `line-strong` | `#cfcabf` | `#423e36` |
+| `bg` | `#ffffff` | `#111111` |
+| `surface` | `#f4f4f4` | `#1b1b1b` |
+| `surface-raised` | `#ffffff` | `#191919` |
+| `fg` | `#1a1a1a` | `#eaeaea` |
+| `muted` | `#6a6a6a` | `#9a9a9a` |
+| `line` | `#e4e4e4` | `#2c2c2c` |
+| `line-strong` | `#cbcbcb` | `#414141` |
 | `accent` | `#b5451b` | `#f08a5b` |
 | `accent-soft` | `#f7e7de` | `#33241c` |
 | `danger` | `#ab2f21` | `#e0705e` |
