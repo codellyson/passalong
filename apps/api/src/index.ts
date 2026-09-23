@@ -1121,15 +1121,19 @@ async function operator(c: Ctx & { env: Env }): Promise<string | null> {
  *
  * A super who is not the owner is told why; anybody else still gets the 404 that says nothing.
  */
-async function platformOwner(c: Ctx & { env: Env }): Promise<{ id: string } | { refuse: 403 | 404 }> {
+async function platformOwner(
+  c: Ctx & { env: Env },
+): Promise<{ id: string } | { refuse: 403 | 404 }> {
   const account = c.get("account");
   if (isPlatformOwner(c.env.ADMIN_ACCOUNTS, account)) return { id: account };
   return { refuse: (await operator(c)) ? 403 : 404 };
 }
 
+// What happened and what to do about it. Why it works this way is in platformOwner() above; an
+// error is not where somebody wants the reasoning.
 const NOT_THE_OWNER =
-  "Only an account named in the deployment's ADMIN_ACCOUNTS can make or remove a super. " +
-  "Being a super is permission to run Passalong, not to decide who else may.";
+  "Only the owner account can add or remove an admin. Add your id to ADMIN_ACCOUNTS on the " +
+  "deployment, or ask whoever can.";
 
 /**
  * Make an account that exists to run the product, and hand back the two ways into it.

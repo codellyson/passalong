@@ -253,18 +253,18 @@ test("a role says when it was given and by whom, and taking it back leaves the a
   assert.equal(db.raw.prepare("SELECT id FROM account WHERE id = 'ada'").get().id, "ada");
   assert.match(
     (await unSuper(db, { account: "ada", by: "boss", at: later })).error,
-    /not a super/i,
+    /not an admin/i,
   );
 });
 
-test("the last super cannot take the role from themselves", async () => {
+test("the last admin cannot take the role from themselves", async () => {
   // Otherwise the product has no operator and no way to make one without editing a secret and
   // redeploying — which is the thing the role exists to stop being the everyday answer.
   const db = d1();
   seed(db);
   await makeSuper(db, { account: "ada", by: "boss", at: NOW });
   const r = await unSuper(db, { account: "ada", by: "ada", at: NOW });
-  assert.match(r.error, /last super/i);
+  assert.match(r.error, /last admin/i);
   assert.equal(await isAdmin(db, "", "ada"), true);
 });
 
@@ -307,7 +307,7 @@ test("handing out the role is the deployment's to allow, and nothing else is", (
   // A super who is not the owner is told why; anybody else keeps getting the answer that says
   // nothing about whether the route is there.
   assert.match(routes, /refuse: \(await operator\(c\)\) \? 403 : 404/);
-  assert.match(routes, /Only an account named in the deployment's ADMIN_ACCOUNTS/);
+  assert.match(routes, /Only the owner account can add or remove an admin/);
 });
 
 test("a subscription arriving clears the date a gift left behind", () => {

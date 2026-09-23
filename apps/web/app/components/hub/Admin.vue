@@ -1,5 +1,9 @@
 <!--
-  What /admin is made of: who is a super, and what has been given away (apps/api/src/gifts.ts).
+  What /admin is made of: who runs Passalong, and what has been given away (apps/api/src/gifts.ts).
+
+  One word for the role everywhere a person reads it: admin. `super` is the value in the column and
+  the name in the code, and two words for one thing is how somebody ends up looking for a command
+  that does not exist.
 
   Three things, in the order they are needed. What has been given, because that is the list nobody
   can hold in their head: who has a plan they did not pay for, until when, and why. Then giving one,
@@ -152,9 +156,9 @@ const head =
         </span>
       </div>
 
-      <HubSkeleton v-if="loading" variant="lines" :rows="2" label="Loading what has been given" />
+      <HubSkeleton v-if="loading" variant="lines" :rows="2" label="Loading plans given away" />
       <p v-else-if="!gifts.length" class="m-0 font-ui text-sm text-muted">
-        Nothing has been given away yet.
+        No plans given yet. Give one to comp a design partner, or to put a support problem right.
       </p>
       <table v-else class="w-full border-collapse">
         <thead>
@@ -163,7 +167,9 @@ const head =
             <th :class="head">Plan</th>
             <th :class="head">Until</th>
             <th :class="head">Why</th>
-            <th :class="head"><span class="sr-only">Take back</span></th>
+            <!-- Room kept for the confirm that opens in this column, so asking does not reflow
+                 the four columns the reader is comparing. -->
+            <th :class="head" class="w-56 text-right"><span class="sr-only">Take back</span></th>
           </tr>
         </thead>
         <tbody>
@@ -181,12 +187,19 @@ const head =
               {{ g.live ? day(g.until) : "over" }}
             </td>
             <td :class="cell" class="text-muted">{{ g.why || "—" }}</td>
-            <td :class="cell" class="text-right">
+            <td :class="cell" class="text-right whitespace-nowrap">
               <template v-if="g.live">
-                <span v-if="taking === g.id" class="inline-flex items-center gap-2">
-                  <span class="font-ui text-xs text-muted">Take it back?</span>
-                  <button class="btn outline danger sm" type="button" :disabled="busy" @click="takeBack(g.id)">Yes</button>
-                  <button class="btn sm" type="button" @click="taking = null">No</button>
+                <!-- The buttons carry the action, not the answer: by the time your eye reaches
+                     them in a table row, the question has left focus. -->
+                <!-- The question above the buttons, not beside them: asking then grows the row
+                     downwards instead of widening this column and reflowing the four the reader
+                     is comparing. -->
+                <span v-if="taking === g.id" class="flex flex-col items-end gap-1">
+                  <span class="font-ui text-xs text-muted">Take {{ g.to }}'s plan back?</span>
+                  <span class="flex gap-2">
+                    <button class="btn outline danger sm" type="button" :disabled="busy" @click="takeBack(g.id)">Take it back</button>
+                    <button class="btn sm" type="button" @click="taking = null">Keep it</button>
+                  </span>
                 </span>
                 <button v-else class="linkish font-medium" type="button" @click="taking = g.id">Take back</button>
               </template>
@@ -213,7 +226,7 @@ const head =
           <label :class="label" for="gift-seats">Seats</label>
           <input id="gift-seats" v-model="seats" :class="field" type="number" min="1" />
         </div>
-        <button class="btn primary" type="submit" :disabled="busy || !to.trim() || !until">Give it</button>
+        <button class="btn primary" type="submit" :disabled="busy || !to.trim() || !until">Give plan</button>
       </form>
     </section>
 
@@ -221,17 +234,20 @@ const head =
     <section class="flex flex-col gap-3">
       <div class="flex flex-wrap items-baseline gap-x-3">
         <h4 class="m-0 font-ui text-sm font-semibold text-fg">Who runs Passalong</h4>
+        <!-- "admin" everywhere a person reads it. `super` stays the stored value and the name in
+             the code; two words for one role is how somebody ends up searching for a command that
+             does not exist. -->
         <span class="font-ui text-xs text-muted">
-          A super signs in like anyone else, and runs Passalong.
+          An admin signs in like anyone else.
           {{
             canMakeSupers
-              ? "The last one cannot be removed."
-              : "Only the deployment can make or remove one."
+              ? "The last one can't be removed."
+              : "Only the owner account can add or remove one."
           }}
         </span>
       </div>
 
-      <HubSkeleton v-if="loading" variant="lines" :rows="2" label="Loading who runs it" />
+      <HubSkeleton v-if="loading" variant="lines" :rows="2" label="Loading admins" />
       <table v-else class="w-full border-collapse">
         <tbody>
           <tr v-for="s in supers" :key="s.id">
@@ -240,20 +256,23 @@ const head =
               <span v-if="s.email" class="ml-2 text-muted">{{ s.email }}</span>
             </td>
             <td :class="cell" class="text-muted">since {{ day(s.since) }}</td>
-            <td :class="cell" class="text-right">
+            <td :class="cell" class="w-56 text-right whitespace-nowrap">
               <template v-if="!canMakeSupers" />
-              <span v-else-if="dropping === s.id" class="inline-flex items-center gap-2">
-                <span class="font-ui text-xs text-muted">Remove?</span>
-                <button class="btn outline danger sm" type="button" :disabled="busy" @click="drop(s.id)">Yes</button>
-                <button class="btn sm" type="button" @click="dropping = null">No</button>
+              <span v-else-if="dropping === s.id" class="flex flex-col items-end gap-1">
+                <span class="font-ui text-xs text-muted">Remove {{ s.name }}?</span>
+                <span class="flex gap-2">
+                  <button class="btn outline danger sm" type="button" :disabled="busy" @click="drop(s.id)">Remove admin</button>
+                  <button class="btn sm" type="button" @click="dropping = null">Keep</button>
+                </span>
               </span>
               <button v-else class="linkish font-medium" type="button" @click="dropping = s.id">Remove</button>
             </td>
           </tr>
           <tr v-if="!supers.length">
             <td :class="cell" class="text-muted" colspan="3">
-              Nobody holds the role. Whoever is named in the deployment's ADMIN_ACCOUNTS can still
-              act, and should make a super here.
+              No admins yet. You can act because your id is in
+              <code class="font-code">ADMIN_ACCOUNTS</code> — add one here so it doesn't depend on
+              that.
             </td>
           </tr>
         </tbody>
@@ -261,10 +280,10 @@ const head =
 
       <form v-if="canMakeSupers" class="flex flex-wrap items-end gap-3" @submit.prevent="makeSuper">
         <div class="grow basis-56">
-          <label :class="label" for="admin-promote">Make an existing account a super</label>
+          <label :class="label" for="admin-promote">Make an existing account an admin</label>
           <input id="admin-promote" v-model="promote" :class="field" placeholder="@ada" required />
         </div>
-        <button class="btn" type="submit" :disabled="busy || !promote.trim()">Make super</button>
+        <button class="btn" type="submit" :disabled="busy || !promote.trim()">Make admin</button>
       </form>
     </section>
 
@@ -274,7 +293,7 @@ const head =
       <div class="flex flex-wrap items-baseline gap-x-3">
         <h4 class="m-0 font-ui text-sm font-semibold text-fg">A new admin account</h4>
         <span class="font-ui text-xs text-muted">
-          Separate from the account that publishes guides, so admin work is never done by it.
+          A separate account, so admin work is never done by the one that publishes guides.
         </span>
       </div>
 
@@ -282,13 +301,13 @@ const head =
            says so where the values are rather than underneath them. -->
       <div v-if="made" class="rounded-2 border border-accent bg-accent-soft p-3">
         <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <b class="font-ui text-sm text-fg">{{ made.email }} is a super</b>
+          <b class="font-ui text-sm text-fg">{{ made.email }} is an admin</b>
           <span class="font-ui text-sm text-accent">Copy both now. Neither is shown again.</span>
         </div>
         <dl class="m-0 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-2">
           <dt class="font-ui text-xs text-muted">Token</dt>
           <dd class="m-0 font-code text-xs break-all text-fg">{{ made.token }}</dd>
-          <dt class="font-ui text-xs text-muted">Password</dt>
+          <dt class="font-ui text-xs text-muted">Password link</dt>
           <dd class="m-0 font-code text-xs break-all text-fg">{{ made.password_url }}</dd>
         </dl>
         <p class="mt-2 mb-0 font-ui text-xs text-muted">

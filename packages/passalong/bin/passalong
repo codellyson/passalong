@@ -26,9 +26,9 @@
 //   passalong take <id>           you are doing it — said before the work, so the sender stops guessing
 //   passalong pass <id> <why>     it is not yours — hands it back to its author with your reason
 //   passalong assign <id> <to>    give it to @handle, a #group, or "team" — yours, or assigned to you
-//   passalong admin create <email>   make an account that runs the product (operator only)
+//   passalong admin create <email>   make an account that runs Passalong (owner only)
 //   passalong admin list          who runs it
-//   passalong admin grant|revoke <@handle>   give or take the role on an existing account
+//   passalong admin grant|revoke <@handle>   make an existing account an admin, or stop it being one
 //   passalong gift <who> --until <date> [--why "..."] [--seats N]
 //                                 give Solo to @handle, or Team to team/slug, until a date (operator only)
 //   passalong gifts               what has been given away, and what is still running
@@ -495,8 +495,9 @@ const commands = {
   },
 
   // ---- who runs the product ---------------------------------------------------------------
-  // `passalong admin <create|list|grant|revoke>`. A super signs in like anybody else: the role is
+  // `passalong admin <create|list|grant|revoke>`. An admin signs in like anybody else: the role is
   // a column, so there is no admin password and no admin token — only an account that has it.
+  // "admin" is the word everywhere a person reads; `super` stays the stored value.
 
   async admin(f) {
     const what = f._[0] || "list";
@@ -505,11 +506,13 @@ const commands = {
       const r = await api.makeAdmin(email).catch((e) => die(e.message));
       // Shown once, and only here. The link is a day long because it is handed to somebody
       // rather than clicked on the spot.
-      console.log(`account   ${r.account}`);
-      console.log(`token     ${r.token}`);
-      console.log(`password  ${r.password_url}`);
+      // Three labelled values on stdout, so one can be cut out with awk. "password link", not
+      // "password": the value is a URL, and somebody will try to paste it into a password field.
+      console.log(`account        ${r.account}`);
+      console.log(`token          ${r.token}`);
+      console.log(`password link  ${r.password_url}`);
       console.error(
-        `\n${r.email} is a super. The token is for \`passalong login\`, the link sets their ` +
+        `\n${r.email} is an admin. The token is for \`passalong login\`, the link sets their ` +
           `password for the hub, and it expires ${r.expires.slice(0, 10)}. Neither is shown again.`,
       );
       return;
@@ -519,13 +522,13 @@ const commands = {
       const call = what === "grant" ? api.grantAdmin : api.revokeAdmin;
       const r = await call(who).catch((e) => die(e.message));
       console.error(
-        what === "grant" ? `${r.name} is now a super` : `${r.name} is no longer a super`,
+        what === "grant" ? `${r.name} is now an admin` : `${r.name} is no longer an admin`,
       );
       return;
     }
     if (what !== "list") die("usage: passalong admin <create <email> | list | grant | revoke>");
     const { supers = [] } = await api.listAdmins().catch((e) => die(e.message));
-    if (!supers.length) return console.error("nobody is a super yet");
+    if (!supers.length) return console.error("nobody is an admin yet");
     for (const s of supers)
       console.log(`${s.id}  ${s.name}${s.email ? `  ${s.email}` : ""}  since ${s.since.slice(0, 10)}`);
   },

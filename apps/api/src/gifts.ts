@@ -80,7 +80,7 @@ export async function unSuper(
     .bind(account)
     .first<{ role: string }>();
   if (!row) return { status: 404, error: `no account ${account}` };
-  if (row.role !== "super") return { status: 409, error: `${account} is not a super` };
+  if (row.role !== "super") return { status: 409, error: `${account} is not an admin` };
   const others = await db
     .prepare("SELECT COUNT(*) AS n FROM account WHERE role = 'super' AND id <> ?")
     .bind(account)
@@ -89,8 +89,7 @@ export async function unSuper(
     return {
       status: 409,
       error:
-        "that is the last super — make another one first, or nobody can make one without the " +
-        "deployment's ADMIN_ACCOUNTS",
+        "that is the last admin — add another one first, or only the owner account can add one",
     };
   await db
     .prepare("UPDATE account SET role = '', role_since = ?, role_by = ? WHERE id = ?")

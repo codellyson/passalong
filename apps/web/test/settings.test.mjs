@@ -228,12 +228,17 @@ test("only a super is shown the way there", () => {
   assert.match(menu, /to="\/admin"/);
 });
 
-test("taking a plan back and removing a super both ask on the row first", () => {
+test("taking a plan back and removing an admin both ask on the row, in the row's own words", () => {
   for (const name of ["taking", "dropping"]) {
     assert.match(admin, new RegExp(`const ${name} = ref<string \\| null>\\(null\\)`));
   }
-  assert.match(admin, /Take it back\?/);
-  assert.match(admin, /Remove\?/);
+  // The question names what it is about, and the buttons carry the action rather than Yes/No —
+  // in a table row the question has left focus by the time the eye reaches them.
+  assert.match(admin, /Take \{\{ g\.to \}\}'s plan back\?/);
+  assert.match(admin, />Take it back</);
+  assert.match(admin, />Keep it</);
+  assert.match(admin, /Remove \{\{ s\.name \}\}\?/);
+  assert.match(admin, />Remove admin</);
 });
 
 test("a super sees who else there is; only the deployment's own account can change it", () => {
@@ -245,7 +250,7 @@ test("a super sees who else there is; only the deployment's own account can chan
   );
   assert.match(admin, /<form v-if="canMakeSupers"/);
   assert.match(admin, /<section v-if="canMakeSupers"/);
-  assert.match(admin, /Only the deployment can make or remove one\./);
+  assert.match(admin, /Only the owner account can add or remove one\./);
 });
 
 test("what the server can never show again is marked where it is shown", () => {

@@ -38,8 +38,8 @@ watchEffect(() => {
       <header v-if="isSuper || pending">
         <h1 class="m-0">Admin</h1>
         <p class="mt-2 mb-0 font-ui text-sm text-muted">
-          Plans given away, and who runs Passalong. Nobody else can see this page, and a plan given
-          here costs the person nothing — it is not a subscription, and each one ends on its date.
+          Plans given away, and who runs Passalong. Nobody else can see this page. A plan given here
+          costs the person nothing and ends on its date.
         </p>
       </header>
 
