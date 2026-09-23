@@ -112,6 +112,12 @@
      own answer. One height, one type size, two sizes of each. */
   --control-h: 2.5rem;
   --control-h-sm: 2rem;
+  /* Side padding on a control, and it is not the same number as the space above and below the
+     text. A button's corners are rounded, so the arc eats into the room at each end of the label
+     while leaving the room over it alone: at 16px the ends read as crowded against a border that
+     the flat top edge does not. Roughly twice the vertical gap is what reads as even. */
+  --control-pad: 1.25rem;
+  --control-pad-sm: 0.875rem;
   --control-text: var(--t-sm);
 
   --r-1: 0.5rem;
@@ -434,7 +440,7 @@ button.primary,
   gap: var(--s-2);
   font: 500 var(--control-text) / 1 var(--font-sans);
   height: var(--control-h);
-  padding: 0 var(--s-4);
+  padding: 0 var(--control-pad);
   border-radius: var(--r-1);
   border: 1px solid transparent;
   cursor: pointer;
@@ -473,7 +479,7 @@ button.primary,
    line tall. */
 .btn.sm {
   height: var(--control-h-sm);
-  padding: 0 var(--s-3);
+  padding: 0 var(--control-pad-sm);
 }
 .btn.icon {
   height: var(--control-h-sm);
