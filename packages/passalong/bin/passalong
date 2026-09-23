@@ -881,6 +881,15 @@ const commands = {
     await serve();
   },
 
+  /**
+   * Ask the registry what the latest version is and write it down. Not in the help, because it is
+   * not for a person: `passalong` spawns it, detached, when the answer on file is a day old.
+   */
+  async ["refresh-update"]() {
+    const { refresh } = await import("../src/update.js");
+    await refresh();
+  },
+
   async help() {
     const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
     const lines = src.split("\n").filter((l) => l.startsWith("//   passalong "));
@@ -908,4 +917,31 @@ else if (!commands[cmd])
       `This is passalong ${JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version}; ` +
       "if you expected this command, `npm i -g passalong` for the newest one.",
   );
-else await commands[cmd](argv).catch((e) => die(e.message));
+else {
+  await commands[cmd](argv).catch((e) => die(e.message));
+  // After the command, never before it: a version check is not worth a millisecond of somebody's
+  // first impression, and it must never be the reason a command felt slow. `mcp` is a server that
+  // does not return, and the hooks are read by an agent rather than a person — a line neither of
+  // them asked for is noise in a transcript.
+  if (!["mcp", "now", "refresh-update"].includes(cmd)) {
+    try {
+      const { cachedNotice } = await import("../src/update.js");
+      const current = JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version;
+      const { notice, stale } = cachedNotice({ current });
+      if (notice) console.error(notice);
+      // The refresh is a process this one does not wait for: detached, output thrown away,
+      // unref'd so the exit is not held open by it. Measuring the alternative is what settled it —
+      // the registry took six to ten seconds to answer, so awaiting it meant every command paid
+      // that or the check silently never worked.
+      if (stale) {
+        const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "refresh-update"], {
+          detached: true,
+          stdio: "ignore",
+        });
+        child.unref();
+      }
+    } catch {
+      // Nothing about being out of date is worth failing a command that already worked.
+    }
+  }
+}
