@@ -2,7 +2,7 @@
 // which the stripper erases, so they load without Nuxt.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { arrange, laneOf, statusLine } from "../app/utils/lanes.ts";
+import { arrange, closable, laneOf, statusLine } from "../app/utils/lanes.ts";
 import { handleFrom, personName } from "../app/utils/people.ts";
 
 const state = (key, attention = false) => ({ key, attention });
@@ -135,4 +135,11 @@ test("a guide given to someone else says who has it now", () => {
     my_ack: { taken: true, note: "", at: "t" },
   };
   assert.equal(statusLine({ g, state: null }).text, "given to Bami");
+});
+
+test("only the author closes a guide, and only while it is on the board", () => {
+  assert.equal(closable({ mine: true, status: "published" }), true);
+  assert.equal(closable({ mine: false, status: "published" }), false, "a reader cannot close it");
+  assert.equal(closable({ mine: true, status: "consumed" }), false, "already off the board");
+  assert.equal(closable({ mine: true, status: "draft" }), true, "a draft is still yours to drop");
 });

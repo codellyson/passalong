@@ -6,7 +6,7 @@
   bugs worst first with one status each.
 -->
 <script setup lang="ts">
-import type { ReportGroup } from "~/utils/lanes";
+import type { LaneRow, ReportGroup } from "~/utils/lanes";
 
 const props = defineProps<{
   group: ReportGroup;
@@ -14,7 +14,7 @@ const props = defineProps<{
   open?: boolean;
 }>();
 
-const { data } = useHub();
+const { data, onCloseGuide } = useHub();
 
 const expanded = ref(false);
 const shown = computed(() => expanded.value || props.open);
@@ -50,6 +50,42 @@ const TONE = {
   ok: "text-ok",
   "": "text-muted",
 } as const;
+
+/**
+ * Closing, one bug or the batch.
+ *
+ * A bundled report had no way off the board at all: this row draws its own markup rather than
+ * reusing the guide row, so it inherited neither the row menu nor the Close it button, and the
+ * report page has no action either. Eleven bugs filed together were eleven guides that could only
+ * leave by waiting a fortnight for the clock.
+ *
+ * Each bug is closed on its own call — the same one a single row makes — because a report is a
+ * bundle of guides and not a thing the server closes as a unit. The list refreshes once at the end
+ * rather than eleven times.
+ */
+const mine = (r: LaneRow) => closable(r.g);
+const stillOpen = computed(() => rows.value.filter(mine));
+const closing = ref<string | null>(null);
+
+async function closeOne(r: (typeof rows.value)[number]) {
+  if (closing.value) return;
+  closing.value = r.g.id;
+  try {
+    await onCloseGuide(r.g);
+  } finally {
+    closing.value = null;
+  }
+}
+
+async function closeAll() {
+  if (closing.value) return;
+  closing.value = "all";
+  try {
+    for (const r of stillOpen.value) await onCloseGuide(r.g);
+  } finally {
+    closing.value = null;
+  }
+}
 </script>
 
 <template>
@@ -82,6 +118,19 @@ const TONE = {
           <span :class="progress.tone">· {{ progress.text }}</span>
         </span>
       </button>
+      <!-- The batch off the board in one move. A report of eleven is eleven guides, and closing
+           them one at a time was not possible from here at all: this row draws its own markup, so
+           it inherited neither the row menu nor a row's Close it. -->
+      <button
+        v-if="stillOpen.length"
+        class="btn sm whitespace-nowrap"
+        type="button"
+        :disabled="Boolean(closing)"
+        :title="`Take ${stillOpen.length === 1 ? 'this bug' : `all ${stillOpen.length} bugs`} off the board. Whoever they went to is told, and you can put them back.`"
+        @click="closeAll"
+      >
+        {{ closing === "all" ? "Closing…" : stillOpen.length === rows.length ? "Close all" : `Close ${stillOpen.length}` }}
+      </button>
       <NuxtLink :to="`/hub/report/${group.report}`" class="btn sm">
         <AppIcon name="open" />Open report
       </NuxtLink>
@@ -107,6 +156,16 @@ const TONE = {
           </a>
         </span>
         <span class="font-ui text-xs" :class="TONE[statusLine(r).tone]">{{ statusLine(r).text }}</span>
+        <!-- And one at a time, for a report half of which is done. -->
+        <button
+          v-if="mine(r)"
+          class="linkish font-ui text-xs whitespace-nowrap"
+          type="button"
+          :disabled="Boolean(closing)"
+          @click="closeOne(r)"
+        >
+          {{ closing === r.g.id ? "Closing…" : "Close" }}
+        </button>
       </li>
     </ul>
   </li>
