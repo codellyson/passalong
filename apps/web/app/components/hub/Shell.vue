@@ -77,6 +77,15 @@ const route = useRoute();
 const measure = computed(() =>
   route.path === "/hub/settings" || route.path === "/hub" ? "max-w-[70rem]" : "max-w-[54rem]",
 );
+/**
+ * One standing notice: a row, not a card. Shared with HubClaim so the two read as one band.
+ * `first:border-t-0` is why they are rows — stacked, the hairlines make a list rather than a pile.
+ */
+const notice =
+  "m-0 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-line py-2.5 font-ui text-sm text-muted first:border-t-0";
+/** The signal the fill used to carry, at the size a standing condition deserves. */
+const dot = "mt-1.5 size-1.5 shrink-0 rounded-pill bg-warn";
+
 /** The bar belongs to the signed-in shell, and to the moment before the server has said so. */
 const framed = computed(() => signedIn.value || maybe.value || meFailed.value);
 
@@ -225,40 +234,45 @@ const active = (to: string) =>
         <button class="btn sm" @click="error = null">Dismiss</button>
       </div>
 
-      <!-- Specific about which half stops: everything in the team can still be read and answered,
-           and only new guides are refused. -->
-      <p
-        v-for="t in lapsed"
-        :key="t.slug"
-        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
-      >
-        <b class="text-fg">{{ t.name }} can't take new guides right now.</b>
-        Its plan has lapsed. Everything already in it can still be read and answered, and nobody new
-        can join. {{ t.role === "owner" ? "Renew it in Settings." : "Ask the team owner to renew it." }}
-      </p>
+      <!-- Standing notices, as one band of quiet rows rather than a stack of filled cards.
+           Each of these is true for weeks — a plan not chosen, a team lapsed, a browser with no
+           password — and filled warning cards for a permanent condition take the top of the page,
+           the loudest colour on it and the reader's first glance, every single visit, for something
+           nobody is going to act on right now. A dot carries the signal, a hairline separates the
+           rows, and the work starts higher up the page. -->
+      <div v-if="lapsed.length || noPlan || nearLimit" class="mb-8 flex flex-col">
+        <!-- Specific about which half stops: everything in the team can still be read and answered,
+             and only new guides are refused. -->
+        <p v-for="t in lapsed" :key="t.slug" :class="notice">
+          <span :class="dot" aria-hidden="true" />
+          <span class="min-w-0 grow">
+            <b class="text-fg">{{ t.name }} can't take new guides right now.</b>
+            Its plan has lapsed. Everything already in it can still be read and answered, and nobody
+            new can join.
+            {{ t.role === "owner" ? "Renew it in Settings." : "Ask the team owner to renew it." }}
+          </span>
+        </p>
 
-      <p
-        v-if="noPlan"
-        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
-      >
-        <b class="text-fg">Sending guides needs a plan.</b>
-        Guides you already have stay where they are.
-        <NuxtLink v-if="plansOffered" to="/hub/settings#plan">Choose a plan</NuxtLink>
-      </p>
+        <p v-if="noPlan" :class="notice">
+          <span :class="dot" aria-hidden="true" />
+          <span class="min-w-0 grow">
+            <b class="text-fg">Sending guides needs a plan.</b>
+            Guides you already have stay where they are.
+          </span>
+          <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">Choose a plan</NuxtLink>
+        </p>
 
-      <p
-        v-if="nearLimit"
-        class="mb-6 rounded-2 border border-warn bg-warn-soft px-4 py-3 font-ui text-sm text-muted"
-      >
-        <b class="text-fg">You're using {{ data.me?.guides }} of {{ data.me?.limit }} guides on the free plan.</b>
-        <template v-if="full"> New guides can't be sent until you make room.</template>
-        Archiving a finished guide frees a space.
-        <NuxtLink :to="{ path: '/hub', query: { done: '1' } }">Show Done</NuxtLink>
-        <template v-if="plansOffered">
-          ·
-          <NuxtLink to="/hub/settings#plan">See plans</NuxtLink>
-        </template>
-      </p>
+        <p v-if="nearLimit" :class="notice">
+          <span :class="dot" aria-hidden="true" />
+          <span class="min-w-0 grow">
+            <b class="text-fg">You're using {{ data.me?.guides }} of {{ data.me?.limit }} guides on the free plan.</b>
+            <template v-if="full"> New guides can't be sent until you make room.</template>
+            Archiving a finished guide frees a space.
+          </span>
+          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub', query: { done: '1' } }">Show Done</NuxtLink>
+          <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>
+        </p>
+      </div>
 
       <!-- Between the guess and the answer there is no data, so the page's own empty states would
            read as facts — "nothing is waiting on you" is the wrong sentence to show someone whose

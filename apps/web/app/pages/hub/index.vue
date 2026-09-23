@@ -256,15 +256,10 @@ const list =
     <HubFirstRun v-if="first" />
 
     <div v-else class="flex flex-col gap-6">
-      <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <h1 class="m-0 flex flex-wrap items-center gap-2 text-h2">
-          Work<template v-if="hasTeams"> in <HubScopes /></template>
-          <span v-if="updating || scopeChanging" role="status" class="font-ui text-sm font-normal text-muted">Updating…</span>
-        </h1>
-        <div class="toolbar m-0 min-w-[14rem] grow basis-56 sm:max-w-xs">
-          <input v-model="q" type="search" placeholder="Search work" aria-label="Search work" />
-        </div>
-      </div>
+      <h1 class="m-0 flex flex-wrap items-center gap-2 text-h2">
+        Work<template v-if="hasTeams"> in <HubScopes /></template>
+        <span v-if="updating || scopeChanging" role="status" class="font-ui text-sm font-normal text-muted">Updating…</span>
+      </h1>
 
       <!-- Named, not "one guide": the filter is only useful if you can see which guide it is. -->
       <p v-if="follows" class="m-0 font-ui text-sm text-muted">
@@ -279,33 +274,41 @@ const list =
       <!-- A list that failed to load draws nothing rather than its empty state: the shell's banner
            already says what happened and offers Try again. -->
       <template v-if="!unavailable">
-        <div
-          ref="tablist"
-          class="-mb-2 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line [scrollbar-width:none]"
-          role="tablist"
-          aria-label="Work"
-          @keydown="arrowTabs"
-        >
-          <button
-            v-for="t in tabs"
-            :id="`tab-${t.id}`"
-            :key="t.id"
-            type="button"
-            role="tab"
-            :aria-selected="tab === t.id"
-            :aria-controls="`panel-${t.id}`"
-            :tabindex="tab === t.id ? 0 : -1"
-            class="-mb-px flex cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-2.5 font-ui text-sm whitespace-nowrap"
-            :class="tab === t.id ? 'border-accent font-semibold text-fg' : 'border-transparent text-muted hover:text-fg'"
-            @click="pick(t.id)"
+        <!-- Tabs and search are one band: both answer "which of my work am I looking at", and as
+             two rows — search floated against the title, tabs under it — they read as two unrelated
+             decisions with a gulf of empty page between them. -->
+        <div class="-mb-2 flex flex-wrap items-end gap-x-6 gap-y-3 border-b border-line">
+          <div
+            ref="tablist"
+            class="flex min-w-0 grow gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
+            role="tablist"
+            aria-label="Work"
+            @keydown="arrowTabs"
           >
-            {{ t.label }}
-            <span
-              v-if="!waiting"
-              class="min-w-5 rounded-pill px-1.5 py-0.5 text-center text-xs tabular-nums"
-              :class="t.tone === 'accent' ? 'bg-accent text-accent-fg font-semibold' : 'bg-surface text-muted'"
-            >{{ t.count }}</span>
-          </button>
+            <button
+              v-for="t in tabs"
+              :id="`tab-${t.id}`"
+              :key="t.id"
+              type="button"
+              role="tab"
+              :aria-selected="tab === t.id"
+              :aria-controls="`panel-${t.id}`"
+              :tabindex="tab === t.id ? 0 : -1"
+              class="-mb-px flex cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-2.5 font-ui text-sm whitespace-nowrap"
+              :class="tab === t.id ? 'border-accent font-semibold text-fg' : 'border-transparent text-muted hover:text-fg'"
+              @click="pick(t.id)"
+            >
+              {{ t.label }}
+              <span
+                v-if="!waiting"
+                class="min-w-5 rounded-pill px-1.5 py-0.5 text-center text-xs tabular-nums"
+                :class="t.tone === 'accent' ? 'bg-accent text-accent-fg font-semibold' : 'bg-surface text-muted'"
+              >{{ t.count }}</span>
+            </button>
+          </div>
+          <div class="toolbar m-0 mb-2 w-full min-w-[12rem] sm:w-auto sm:max-w-xs">
+            <input v-model="q" type="search" placeholder="Search work" aria-label="Search work" />
+          </div>
         </div>
 
         <section
