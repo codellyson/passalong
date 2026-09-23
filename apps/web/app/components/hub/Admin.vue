@@ -33,6 +33,54 @@ interface Super {
 }
 
 const { data, api, json } = useHub();
+
+/**
+ * Who somebody might mean, as they type.
+ *
+ * The routes take `@handle`, `team/slug` or an account id, all three exact — and nobody remembers
+ * a handle. A native <datalist> rather than a written-from-scratch combobox: the browser gives the
+ * list, the filtering, the keyboard and the screen-reader behaviour, and what is typed stays a
+ * plain string, which is what the field has to send anyway.
+ */
+interface Person {
+  id: string;
+  handle: string;
+  name: string;
+  email: string;
+  role: string;
+}
+const suggestions = ref<{ value: string; label: string }[]>([]);
+let lookingUp: ReturnType<typeof setTimeout> | undefined;
+
+/** One line in the list: what it will put in the field, and who that is. */
+const personOption = (p: Person) => ({
+  value: p.handle ? `@${p.handle}` : p.id,
+  label: [p.name, p.handle ? `@${p.handle}` : p.id, p.email].filter(Boolean).join(" · "),
+});
+
+function look(q: string) {
+  clearTimeout(lookingUp);
+  // Typed, not pasted: a request per keystroke is a request per keystroke.
+  lookingUp = setTimeout(async () => {
+    const said = q.trim();
+    if (said.length < 2) return (suggestions.value = []);
+    try {
+      const r = await api<{ people: Person[]; teams: { slug: string; name: string }[] }>(
+        `/v1/admin/people?q=${encodeURIComponent(said)}`,
+      );
+      suggestions.value = [
+        ...(r?.people ?? []).map(personOption),
+        ...(r?.teams ?? []).map((t) => ({
+          value: `team/${t.slug}`,
+          label: `${t.name || t.slug} · the whole team`,
+        })),
+      ];
+    } catch {
+      // A picker that cannot reach the server is a field you type into, which is what it was.
+      suggestions.value = [];
+    }
+  }, 200);
+}
 /**
  * Whether this account may hand the role out. Only the deployment's own `ADMIN_ACCOUNTS` may, so a
  * super sees who else there is and cannot change it — the controls are absent rather than refused,
@@ -143,6 +191,12 @@ const head =
 
 <template>
   <div class="flex flex-col gap-8">
+    <!-- One list, shared by both fields: only one of them is being typed into at a time, and the
+         browser matches against whatever it currently holds. -->
+    <datalist id="admin-people">
+      <option v-for="s in suggestions" :key="s.value" :value="s.value">{{ s.label }}</option>
+    </datalist>
+
     <p v-if="failed" class="m-0 rounded-1 bg-danger-soft px-3 py-2 font-ui text-sm text-danger">
       {{ failed }}
     </p>
@@ -214,7 +268,16 @@ const head =
       <form class="mt-2 flex flex-wrap items-end gap-3" @submit.prevent="give">
         <div class="grow basis-56">
           <label :class="label" for="gift-to">Who</label>
-          <input id="gift-to" v-model="to" :class="field" placeholder="@ada, or team/acme" required />
+          <input
+            id="gift-to"
+            v-model="to"
+            :class="field"
+            list="admin-people"
+            autocomplete="off"
+            placeholder="a name, a handle, or an email"
+            required
+            @input="look(to)"
+          />
         </div>
         <div class="basis-40">
           <label :class="label" for="gift-until">Until</label>
@@ -283,7 +346,16 @@ const head =
       <form v-if="canMakeSupers" class="flex flex-wrap items-end gap-3" @submit.prevent="makeSuper">
         <div class="grow basis-56">
           <label :class="label" for="admin-promote">Make an existing account an admin</label>
-          <input id="admin-promote" v-model="promote" :class="field" placeholder="@ada" required />
+          <input
+            id="admin-promote"
+            v-model="promote"
+            :class="field"
+            list="admin-people"
+            autocomplete="off"
+            placeholder="a name, a handle, or an email"
+            required
+            @input="look(promote)"
+          />
         </div>
         <button class="btn" type="submit" :disabled="busy || !promote.trim()">Make admin</button>
       </form>

@@ -241,6 +241,41 @@ test("taking a plan back and removing an admin both ask on the row, in the row's
   assert.match(admin, />Remove admin</);
 });
 
+const identity = readFileSync(
+  new URL("../app/components/hub/Identity.vue", import.meta.url),
+  "utf8",
+);
+
+test("Settings shows the account id, because nothing else in the product does", () => {
+  // The menu prints your name, or your @name, and falls back to the id only when you have
+  // neither — so somebody with a name can use Passalong for a year without ever seeing it, and it
+  // is the value a deployment's ADMIN_ACCOUNTS wants.
+  assert.match(identity, /Account id/);
+  assert.match(identity, /copy\(me\.account, \$event\.currentTarget\)/);
+  assert.match(identity, /ADMIN_ACCOUNTS/);
+  // Said plainly: an id is an address, and treating it as a secret is what sent people hunting.
+  assert.match(identity, /Not a secret/);
+});
+
+test("Settings says whether you run Passalong, and by which of the two routes", () => {
+  assert.match(identity, /me\?\.role === 'super'/);
+  assert.match(identity, /You run Passalong/);
+  assert.match(identity, /can_make_supers/);
+  assert.match(identity, /Open Admin/);
+});
+
+test("the fields that ask for a person do not ask you to remember a handle", () => {
+  // The routes take `@handle`, `team/slug` or an id, all exact. A native datalist gives the list,
+  // the filtering and the keyboard for free, and what is typed stays the plain string the field
+  // has to send anyway.
+  assert.match(admin, /<datalist id="admin-people">/);
+  assert.equal([...admin.matchAll(/list="admin-people"/g)].length, 2, "both fields");
+  assert.match(admin, /\/v1\/admin\/people\?q=/);
+  // Typed, not pasted: one request per keystroke is one request per keystroke.
+  assert.match(admin, /setTimeout\(async \(\) => \{/);
+  assert.match(admin, /said\.length < 2/);
+});
+
 test("a super sees who else there is; only the deployment's own account can change it", () => {
   // Absent, not disabled: the controls that hand out the role are drawn for nobody else, and the
   // routes behind them refuse anyway. See platformOwner() in apps/api/src/index.ts.

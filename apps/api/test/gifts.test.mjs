@@ -10,6 +10,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  findPeople,
   findSubject,
   gift,
   gifts,
@@ -84,6 +85,28 @@ test("the deployment's list is read as ids, and unset means nobody", async () =>
   assert.equal(await isAdmin(db, "", "boss"), false);
   assert.equal(await isAdmin(db, undefined, "boss"), false);
   assert.equal(await isAdmin(db, "boss", ""), false, "an empty account matches no empty entry");
+});
+
+test("the picker finds a person by name, handle, email or id, and a team by either", async () => {
+  // Because nobody remembers handles: an operator comping a customer knows a name, or half an
+  // email, and was left guessing at the rest of an exact `@handle`.
+  const db = d1();
+  seed(db);
+  const names = async (q) => (await findPeople(db, q)).people.map((p) => p.handle || p.id);
+  assert.deepEqual(await names("lovel"), ["ada"], "part of a name");
+  assert.deepEqual(await names("@ada"), ["ada"], "the @ is not part of what is stored");
+  assert.deepEqual(await names("ADA"), ["ada"], "case is not a thing anybody types carefully");
+  assert.deepEqual(await names("ada"), ["ada"]);
+  assert.deepEqual(await names("boss"), ["boss"], "an id, on the nose");
+  assert.deepEqual(
+    (await findPeople(db, "acme")).teams.map((t) => ({ ...t })),
+    [{ slug: "acme", name: "Acme" }],
+  );
+
+  // Two characters before it answers: one letter matches most of a directory, which is a list
+  // nobody reads and a query nobody meant.
+  assert.deepEqual(await names("a"), []);
+  assert.deepEqual((await findPeople(db, "")).teams, []);
 });
 
 test("a handle names a person and team/slug names a team", async () => {
@@ -313,7 +336,7 @@ test("every operator route is gated, and says nothing when the caller is not one
   const gated =
     [...routes.matchAll(/err\(c, 404, "Not found\."\)/g)].length +
     [...routes.matchAll(/await platformOwner\(c\)/g)].length;
-  assert.equal(paths, 7, "three for gifts, four for the accounts that run the product");
+  assert.equal(paths, 8, "three for gifts, four for the admins, one picker behind the same gate");
   assert.equal(gated, paths, "each one checks first");
 });
 

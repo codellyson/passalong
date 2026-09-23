@@ -88,6 +88,7 @@ import {
   sendVerdict,
 } from "./email.js";
 import {
+  findPeople,
   findSubject,
   gift,
   gifts,
@@ -1199,6 +1200,18 @@ app.post("/v1/admin/accounts", async (c) => {
     },
     201,
   );
+});
+
+/**
+ * Who somebody might mean, for the fields that ask for a person or a team.
+ *
+ * Operator-only like the rest: this searches every account on the deployment, which is nobody
+ * else's business. It is deliberately not the team picker — a plan is given to a customer, who is
+ * in no team of yours.
+ */
+app.get("/v1/admin/people", async (c) => {
+  if (!(await operator(c))) return err(c, 404, "Not found.");
+  return c.json(await findPeople(c.env.DB, c.req.query("q") || ""));
 });
 
 /** Who runs the product. */

@@ -98,6 +98,56 @@ export async function unSuper(
   return {};
 }
 
+/**
+ * People and teams matching what somebody has typed, for the field that asks who a gift is for.
+ *
+ * Because nobody remembers handles. The operator routes take `@handle`, `team/slug` or an account
+ * id — all three exact — and an operator comping a customer knows a name, or half an email, and
+ * was left guessing at the rest.
+ *
+ * Matching is a contains on the three things somebody might type: the name, the handle, the email.
+ * The id is matched too, on the nose, so a support question quoting one still resolves. Ten of
+ * each, which is a picker rather than a directory: a query that matches more than ten is a query
+ * worth making narrower.
+ */
+export async function findPeople(
+  db: D1Database,
+  q: string,
+): Promise<{
+  people: { id: string; handle: string; name: string; email: string; role: string }[];
+  teams: { slug: string; name: string }[];
+}> {
+  const said = String(q ?? "")
+    .trim()
+    .replace(/^@/, "")
+    .toLowerCase();
+  if (said.length < 2) return { people: [], teams: [] };
+  const like = `%${said.replace(/[%_]/g, "")}%`;
+  const [people, teams] = await Promise.all([
+    db
+      .prepare(
+        `SELECT id, COALESCE(handle, '') AS handle, COALESCE(name, '') AS name,
+                COALESCE(email, '') AS email, COALESCE(role, '') AS role
+           FROM account
+          WHERE id = ?1 OR LOWER(handle) LIKE ?2 OR LOWER(name) LIKE ?2 OR LOWER(email) LIKE ?2
+          -- An exact handle first, then accounts somebody has filled in: a deployment collects
+          -- anonymous ids over time, and ten of those is a list with the answer missing.
+          ORDER BY (LOWER(handle) = ?1) DESC, (name <> '') DESC, (email <> '') DESC, handle
+          LIMIT 10`,
+      )
+      .bind(said, like)
+      .all<{ id: string; handle: string; name: string; email: string; role: string }>(),
+    db
+      .prepare(
+        `SELECT slug, COALESCE(name, '') AS name FROM team
+          WHERE LOWER(slug) LIKE ?1 OR LOWER(name) LIKE ?1 ORDER BY slug LIMIT 10`,
+      )
+      .bind(like)
+      .all<{ slug: string; name: string }>(),
+  ]);
+  return { people: people.results, teams: teams.results };
+}
+
 /** Who runs the product, for the one listing there is. */
 export async function superAccounts(
   db: D1Database,
