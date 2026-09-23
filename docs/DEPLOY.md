@@ -218,6 +218,18 @@ actually usable again.
 0.1.0 was published by hand (2FA: `npm publish --otp=<code>`). Releases now go through
 `pnpm release` and the tag-triggered workflow below; manual publishing is the fallback.
 
+**A release is not finished when the workflow goes green.** npm's trusted-publishing registration
+for this package is stage-only, so `release.yml` stages a version and stops; a person approves it
+with 2FA, from `npm stage approve <stage-id>` or npmjs.com → passalong → Staged Packages. Nobody
+did that for v0.4.0 or v0.7.0 — both tagged, both staged by a passing run, neither ever on npm —
+because the only thing that said so was a step summary on a run that passed.
+
+So the staging run now carries a warning annotation, and `release-live.yml` asks the registry once
+a day whether the newest tag is installable. It goes red, and stays red, six hours after a tag
+whose version never made it, and GitHub mails whoever owns the repo when a scheduled workflow fails
+on master. If a tagged version is superseded and should never ship, delete its tag rather than
+leaving the check red: `git push origin :refs/tags/vX.Y.Z`.
+
 ```sh
 cd packages/passalong
 npm pack --dry-run          # 10 files, ~20 kB: bin/, src/, skill/, README

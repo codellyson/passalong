@@ -74,10 +74,15 @@ jobs:
         run: cd packages/passalong && npm stage publish
 
       # A staged version is invisible to `npm install` until someone approves it, so the run has
-      # to say so — otherwise a green tick reads as "shipped".
+      # to say so — otherwise a green tick reads as "shipped". It read as shipped anyway: v0.4.0
+      # and v0.7.0 were both tagged, both staged by a green run, and neither was ever approved,
+      # because the only place that said so was a summary nobody opens on a run that passed. So the
+      # run also carries a warning annotation, which shows on the run itself and in the tag's
+      # checks, and release-live.yml turns red and stays red until the version is actually on npm.
       - name: How to finish it
         if: steps.check.outputs.stage == 'true'
         run: |
+          echo "::warning title=Not published yet::passalong@${{ steps.check.outputs.version }} is STAGED, not live. Approve it: npm stage approve <stage-id> (2FA), or npmjs.com → passalong → Staged Packages."
           {
             echo "### passalong@${{ steps.check.outputs.version }} is staged, not live"
             echo
