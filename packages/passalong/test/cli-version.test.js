@@ -38,3 +38,18 @@ test("help still answers for no command at all", () => {
   assert.equal(r.status, 0);
   assert.match(`${r.stdout}${r.stderr}`, /passalong version/);
 });
+
+// A command this build does not have is the shape of "you are on an older passalong": the feature
+// is in the docs, the binary is not. Printing the help page for it read as "that command exists
+// and did nothing", which sent people looking for the bug in the wrong place.
+test("an unknown command says so, and says what to check", () => {
+  // A name no build will ever have, standing in for one an older build does not have yet.
+  const r = run("gift-the-whole-team", "team/acme", "--until", "2027-09-23");
+  assert.equal(r.status, 1, "it fails rather than printing help and exiting 0");
+  assert.equal(r.stdout, "", "nothing on stdout: a script reading this is not handed a help page");
+  assert.match(r.stderr, /unknown command "gift-the-whole-team"/);
+  assert.match(r.stderr, /passalong help/);
+  // The likeliest cause when the command is in the docs and not in the binary: an older install.
+  assert.match(r.stderr, new RegExp(`This is passalong ${version.replace(/\./g, "\\.")}`));
+  assert.match(r.stderr, /npm i -g passalong/);
+});

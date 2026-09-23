@@ -821,5 +821,15 @@ const cmd = argv._.shift() || "help";
 // `passalong -v` can be read by a script comparing it against the registry.
 if (cmd === "-v" || cmd === "version" || (cmd === "help" && argv.version === true)) {
   console.log(JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version);
-} else if (cmd === "--help" || cmd === "-h" || !commands[cmd]) commands.help();
+} else if (cmd === "--help" || cmd === "-h" || cmd === "help") commands.help();
+// A command this build does not have used to print the help page and exit 0, which reads as "that
+// command exists and did nothing" — and the usual cause is an older passalong, where the command is
+// in the docs and not in the binary. So it fails, names what it does not know, and says the version
+// it is, which is the fact that explains it.
+else if (!commands[cmd])
+  die(
+    `unknown command "${cmd}" — run \`passalong help\` for the list. ` +
+      `This is passalong ${JSON.parse(readFileSync(join(PKG, "package.json"), "utf8")).version}; ` +
+      "if you expected this command, `npm i -g passalong` for the newest one.",
+  );
 else await commands[cmd](argv).catch((e) => die(e.message));
