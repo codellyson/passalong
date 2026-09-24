@@ -138,3 +138,38 @@ test("a hand-in has somewhere to say what it took, and both servers offer it", a
   assert.match(http, /writeup: z\s*\n?\s*\.string\(\)/, "the HTTP server takes it too");
   assert.match(http, /writeup: args\.writeup/, "and passes it on");
 });
+
+/**
+ * The two servers say the same things in front of a guide.
+ *
+ * `KEEP_EVIDENCE` and `SEARCH_WIDE` are written out once per server and held together by a comment
+ * that says "mirrors the other one". A comment does not fail. An agent reaching Passalong over
+ * HTTP and an agent reaching it over stdio are the same agent doing the same work, and a rule that
+ * reached one of them was a rule half the users never got.
+ */
+test("both servers say the same thing in front of a guide", async () => {
+  const read = (p) => readFile(new URL(p, import.meta.url), "utf8");
+  const [stdio, http] = await Promise.all([
+    read("../src/mcp.js"),
+    read("../../../apps/api/src/mcp-http.ts"),
+  ]);
+  // Adjacent string literals are joined before matching. These blocks are written as a run of
+  // concatenated pieces and the formatter chooses the breaks, so a sentence that reads as one
+  // thing in the file crosses a `" + "` in the source — and matching the raw text would fail on a
+  // reflow that changed nothing anybody reads.
+  const said = (src) => src.replace(/["']\s*\+\s*\n?\s*["']/g, "");
+  for (const line of [
+    "KEEP YOUR EVIDENCE AS YOU GO",
+    "SEARCH THE WHOLE TREE BEFORE YOU CONCLUDE",
+    '"I looked" is a claim; the search and what it printed is evidence',
+  ]) {
+    assert.ok(said(stdio).includes(line), `stdio is missing: ${line}`);
+    assert.ok(said(http).includes(line), `the HTTP server is missing: ${line}`);
+  }
+  // And both attach it to the two kinds an agent has to locate things in for itself. A transfer
+  // guide gets neither, on purpose: it is handed over untouched, and anything in front of it is
+  // one more thing that is not the document.
+  for (const src of [stdio, http]) {
+    assert.equal(src.split("SEARCH_WIDE +").length - 1, 2, "on the bug lead and the task lead");
+  }
+});
