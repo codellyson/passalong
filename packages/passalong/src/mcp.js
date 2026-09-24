@@ -35,6 +35,24 @@ const KEEP_EVIDENCE =
   "writing from memory, which is the thing evidence is here to replace.\n\n";
 
 /**
+ * Said in front of every guide an agent has to locate things in for itself — a bug and a task.
+ *
+ * The failure it is here to stop: an agent lists one directory, or opens the one file it expected,
+ * and concludes from that. It then reports that a thing is absent, or that it found the only
+ * occurrence, having never looked past the place it happened to start. The conclusion is confident
+ * and wrong, and nothing downstream can tell, because the evidence it brings is real — it is just
+ * evidence of a search that was too small.
+ *
+ * Mirrors SEARCH_WIDE in apps/api/src/mcp-http.ts.
+ */
+const SEARCH_WIDE =
+  "SEARCH THE WHOLE TREE BEFORE YOU CONCLUDE. Listing a directory, or reading the one file you " +
+  "expected, tells you what is in that directory — not whether the thing exists, and not whether " +
+  "you have found all of it. Before you report that something is absent, is the only one, or is " +
+  'already handled, search across the repository and let the output be your reason. "I looked" ' +
+  "is a claim; the search and what it printed is evidence.\n\n";
+
+/**
  * What to say in front of a guide whose kind changes what the reader should do with it.
  *
  * The heading text is what an agent keys on, and a bug's or a task's headings are close enough to
@@ -48,6 +66,7 @@ function leadFor(meta) {
       "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
       "— those steps produce the defect. Fix what Problem describes, then check " +
       "Verification and answer with hand_in.\n\n" +
+      SEARCH_WIDE +
       KEEP_EVIDENCE
     );
   if (meta.kind === "task")
@@ -57,6 +76,7 @@ function leadFor(meta) {
       "under Acceptance holds. Opening it here does not make it yours: to work on it, call take " +
       "with its id in the repo it is for, so no other agent can. Then progress, and hand_in " +
       "with a write-up.\n\n" +
+      SEARCH_WIDE +
       KEEP_EVIDENCE
     );
   // A transfer guide is handed over untouched: it is a document to follow, and anything in front
