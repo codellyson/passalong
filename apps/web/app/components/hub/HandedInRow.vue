@@ -77,6 +77,12 @@ function send() {
         class="mt-2 block text-base leading-snug font-semibold text-fg no-underline hover:text-accent"
       >{{ h.title || h.id }}</a>
       <p v-if="h.note" class="mt-2 mb-0 text-sm text-muted">“{{ h.note }}”</p>
+      <!-- What they had to change to make it work there. Not folded, unlike the evidence below:
+           it is the one thing on this row that may mean the guide itself should change, and that
+           decision is the author's. The next person to open the guide is shown it too. -->
+      <p v-if="h.writeup" class="mt-2 mb-0 border-l-2 border-line-strong pl-3 text-sm whitespace-pre-wrap text-fg">
+        {{ h.writeup }}
+      </p>
       <!-- The note is what they say; this is what ran. Folded, because the row is a queue of
            several and the decision is usually made on the title and the note. -->
       <details v-if="checks.length || h.evidence" class="mt-2">

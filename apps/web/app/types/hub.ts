@@ -250,6 +250,8 @@ export interface HandedIn {
   note: string;
   /** What it ran and what came back, sent with the hand-in. See migrations/0025_claim_evidence.sql. */
   evidence: string;
+  /** What they had to adapt to make it work there. Prose, often empty. See 0031_writeup.sql. */
+  writeup?: string;
   at: string;
 }
 

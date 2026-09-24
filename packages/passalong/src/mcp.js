@@ -326,7 +326,7 @@ export function buildServer() {
     }
   }
 
-  async function doHandIn({ id, ok, note, evidence, checks, markdown, report, pr, cwd }) {
+  async function doHandIn({ id, ok, note, evidence, checks, writeup, markdown, report, pr, cwd }) {
     try {
       // A check that names a command is run here, before anything is recorded, and its exit code
       // decides it rather than the agent's account of it. A failure is refused with the command's
@@ -346,6 +346,7 @@ export function buildServer() {
         note: note || "",
         evidence: evidence || "",
         checks: done.checks,
+        writeup: writeup || "",
         markdown,
         report,
         pr: pr || "",
@@ -652,8 +653,10 @@ export function buildServer() {
         "this publishes it and attaches it. A handoff or a bug takes `ok`, whether its " +
         "Verification held here, and `note` saying what went wrong when it did not. DO NOT " +
         "publish a guide to carry your evidence: it belongs on this call, and a second document " +
-        'titled "Hand-in evidence" is the thing `checks` exists to replace. A follow-up guide is ' +
-        "for work somebody else should now do, not for answering.",
+        'titled "Hand-in evidence" is the thing `checks` exists to replace. If it worked but you ' +
+        "had to adapt something, that goes in `writeup` and the next reader of the guide is shown " +
+        "it — that is its home. A follow-up guide is for work somebody else should now do, not " +
+        "for answering.",
       inputSchema: {
         id: z.string().describe("passalong id"),
         evidence: z
@@ -694,6 +697,15 @@ export function buildServer() {
           ),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),
+        writeup: z
+          .string()
+          .optional()
+          .describe(
+            "handoff or bug: what you had to adapt to make it work here — a version, a name, a " +
+              "step that needed something the guide does not mention. Prose, and optional: leave " +
+              "it out when it worked as written. The next person to open the guide is shown it, " +
+              "which is why it does not need to be a guide of its own",
+          ),
         markdown: z
           .string()
           .optional()

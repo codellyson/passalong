@@ -6,6 +6,7 @@
 // said nothing at all. These assertions are the part of that which can be checked mechanically:
 // every tool describes itself, and a tool that promises a shape returns that shape.
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -111,4 +112,29 @@ test("a tool promises a shape only where this server decides the shape", async (
       `${name} would refuse a field a route adds later`,
     );
   }
+});
+
+test("a hand-in has somewhere to say what it took, and both servers offer it", async () => {
+  // The last channel an agent had to publish a guide for. A handoff that WORKED, and had to adapt
+  // something to get there, could answer with `ok` (a boolean), `note` (280 characters) and
+  // `evidence` (refused unless it is what you ran). The adaptation went out as a follow-up guide
+  // with an id, a share link and an inbox row asking somebody to take it.
+  const hand = (await tools()).get("hand_in");
+  const writeup = hand.inputSchema.properties.writeup;
+  assert.ok(writeup, "hand_in takes a write-up");
+  assert.doesNotMatch(
+    JSON.stringify(hand.inputSchema.required ?? []),
+    /writeup/,
+    "and never requires one: most hand-ins have nothing to adapt",
+  );
+  assert.match(writeup.description, /adapt/i);
+
+  // Said the same way on the surface reached over HTTP. Two servers describing one call two
+  // different ways is how an agent learns a rule on one and breaks it on the other.
+  const http = await readFile(
+    new URL("../../../apps/api/src/mcp-http.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(http, /writeup: z\s*\n?\s*\.string\(\)/, "the HTTP server takes it too");
+  assert.match(http, /writeup: args\.writeup/, "and passes it on");
 });

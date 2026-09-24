@@ -1147,6 +1147,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     checks?: { check: string; ran: string }[];
     ok?: boolean;
     note?: string;
+    writeup?: string;
     report?: string;
     pr?: string;
   }) =>
@@ -1155,6 +1156,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       note: args.note ?? "",
       evidence: args.evidence ?? "",
       ...(args.checks?.length ? { checks: args.checks } : {}),
+      // Sent only when there is something to say: the field is for a hand-in that had to adapt
+      // something, and most did not.
+      ...(args.writeup ? { writeup: args.writeup } : {}),
       ...(args.report ? { report: args.report, pr: args.pr ?? "" } : {}),
       ...(typeof args.ok === "boolean" ? { ok: args.ok } : {}),
     });
@@ -1220,7 +1224,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "for a handoff or a bug, which have no Acceptance lines; send it when you are not sending " +
         "`checks`. A task also takes `report`, the id of a transfer guide you published about the " +
         "work (publish_guide it first). A handoff or a bug takes `ok`, whether its Verification " +
-        "held, and `note` saying what went wrong when it did not.",
+        "held, and `note` saying what went wrong when it did not. If it held but you had to change " +
+        "something to get there, put that in `writeup`: the next person to open the guide is " +
+        "shown it, so it does not need to be a guide of its own.",
       inputSchema: {
         id: z.string(),
         agent: AGENT,
@@ -1238,6 +1244,14 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           .describe("task: one entry per Acceptance line, in the order you worked them"),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),
+        writeup: z
+          .string()
+          .optional()
+          .describe(
+            "handoff or bug: what you had to adapt to make it work here — a version, a name, a " +
+              "step that needed something the guide does not mention. Optional; leave it out " +
+              "when it worked as written. The next person to open the guide is shown it",
+          ),
         report: z.string().optional().describe("task: id of the transfer guide about this work"),
         pr: z.string().optional().describe("task: PR or branch link"),
       },
