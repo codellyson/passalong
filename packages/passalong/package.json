@@ -1,6 +1,6 @@
 {
   "name": "passalong",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Hand a finished implementation from one context to another, in a form an AI agent can act on.",
   "keywords": [
     "mcp",
