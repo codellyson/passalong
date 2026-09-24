@@ -318,16 +318,24 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
   await p.handIn(id, {
     markdown:
       "---\ntitle: Per line, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    // A real command, run here by the CLI's own runner before the hand-in leaves this process:
+    // its exit code decides the check and what it printed is recorded. It used to be a command
+    // pasted into `ran`, which is the agent typing a string that looks like a run — indistinguishable
+    // in the text from this, and proof of nothing.
     checks: [
-      { check: "the hub follows the OS setting", ran: "$ npm test -w apps/web → 58 pass, 0 fail" },
+      {
+        check: "the hub follows the OS setting",
+        cmd: "node -e \"console.log('58 pass, 0 fail')\"",
+      },
     ],
     cwd: dir,
   });
   const row = (await p.tasks()).find((t) => t.id === id);
   assert.equal(row.state, "review");
-  assert.deepEqual(row.claim.checks, [
-    { check: "the hub follows the OS setting", ran: "$ npm test -w apps/web → 58 pass, 0 fail" },
-  ]);
+  assert.equal(row.claim.checks.length, 1);
+  assert.equal(row.claim.checks[0].check, "the hub follows the OS setting");
+  assert.equal(row.claim.checks[0].exit, 0, "the runner recorded what it returned");
+  assert.match(row.claim.checks[0].ran, /58 pass, 0 fail/, "and kept its output, not an account");
   // The block of text is filled from them, so everything that reads `evidence` still works.
   assert.match(row.claim.evidence, /58 pass, 0 fail/);
 });
@@ -344,6 +352,29 @@ test("a check with nothing behind it is refused, like any other claim", { skip }
       cwd: dir,
     }),
     /what you ran and what came back/,
+  );
+});
+
+test("a check answered in words is refused, however much it says", { skip }, async () => {
+  // Long enough to clear the length rule and still nothing that ran or was shown. This is the one
+  // the product was letting through: "a Sales Order PDF renders with the store's brand colour",
+  // answered with a paragraph about what the agent saw, and nothing in the system had looked.
+  const env = await setup();
+  const { p } = env;
+  const { id, dir } = await readyTask(env, "Described, not shown");
+  await p.take(id, { cwd: dir });
+  await assert.rejects(
+    p.handIn(id, {
+      markdown: "---\ntitle: x\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      checks: [
+        {
+          check: "the PDF renders with the store's brand colour",
+          ran: "Opened SO-00026 in the viewer and the header bar is #1f6feb, which matches.",
+        },
+      ],
+      cwd: dir,
+    }),
+    /Run it or show it/,
   );
 });
 

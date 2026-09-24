@@ -2115,6 +2115,40 @@ article.prose details.rest > summary {
   overflow-wrap: anywhere;
 }
 
+/* What a command printed, in the face that says so. Same treatment as `.notworking-ran`: the two
+   are the same kind of thing — output nobody typed into a box — and a reader should not have to
+   learn that twice. */
+.adapted-ran {
+  margin: var(--s-2) 0 0;
+  padding: var(--s-3);
+  border-radius: var(--r-2);
+  background: var(--bg);
+  color: var(--fg);
+  font: var(--t-xs) / 1.6 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* "ran" on a check the runner executed: its exit code decided the hand-in, so the badge is the
+   page's one claim of fact about that line. The command and what it returned are in the title. */
+.adapted-badge {
+  flex-shrink: 0;
+  padding: 0.1em 0.45em;
+  border: 1px solid var(--ok);
+  border-radius: var(--r-1);
+  color: var(--ok);
+  font: 600 var(--t-xs) / 1.4 var(--font-ui);
+}
+
+/* Bounded, because it is the part nobody checked and it was burying the guide it is about: a
+   4000-character write-up rendered whole pushed the first heading off the screen. Scrolls rather
+   than truncates — the words are all still there, they just stop being the page. */
+.adapted-prose {
+  max-height: 11rem;
+  overflow-y: auto;
+  padding-right: var(--s-2);
+}
+
 /* The seam in the verify view: the point where the guide stops being re-ordered and goes back to
    the author's own sequence. Set apart from the prose because it is the page talking, not the
    guide. */

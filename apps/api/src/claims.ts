@@ -87,6 +87,20 @@ const verified = (c: Check): boolean =>
   Boolean(c?.cmd) && (typeof c?.exit === "number" || c?.exit === null);
 
 /**
+ * A screenshot or an upload, in text. Both `attach_screenshot` and `create_upload` end at the same
+ * address, so one pattern answers for both.
+ *
+ * Written out here rather than imported from guide.ts, which owns the same regex: this module
+ * takes no sibling `.ts` import on purpose — see the note at the top — because it is tested against
+ * a real SQLite and Node's type stripping cannot follow a value import. A test holds the two
+ * copies to the same pattern.
+ */
+const SHOT_RE = /\/v1\/shots\/[a-z0-9]{6,16}\b/;
+
+/** A check the agent showed rather than ran: it points at a picture somebody can open. */
+const shown = (c: Check): boolean => SHOT_RE.test(String(c?.ran ?? ""));
+
+/**
  * Evidence sorted against the lines it answers, or the reason it is not evidence yet.
  *
  * The same rule as evidenceProblem(), applied per line, plus the line itself: "it works" under an
@@ -109,6 +123,31 @@ export function checksProblem(checks: Check[]): string | null {
     }
     const bad = evidenceProblem(c?.ran ?? "");
     if (bad) return `for "${String(c.check).trim().slice(0, 60)}", ${bad}`;
+    // Ran, or shown. Nothing else is evidence.
+    //
+    // This refuses a command the agent pasted into `ran` as well as a sentence, and that is the
+    // point rather than a side effect: "$ test -f dist/app.js" typed by the agent and the same
+    // string executed by the runner are indistinguishable in the text and completely different in
+    // what they prove. `cmd` is how the second one is said, and it costs nothing to say it.
+    //
+    // A check with no `cmd` is, by the agent's own filing, one no command settled — so it is the
+    // visual or manual case, and the only thing that can answer it is a picture of it. Prose there
+    // is the agent telling you what it saw: "a Sales Order PDF renders with the store's brand
+    // colour" came back as "opened SO-00026 and the header bar is #1f6feb", which passed, and
+    // nothing in the system had looked at anything.
+    //
+    // The asymmetry this removes: an image the USER showed the agent has been mandatory before
+    // publish_guide and file_bugs for as long as those have existed, while an image that is the
+    // only possible proof of the agent's OWN claim was never asked for once.
+    if (!shown(c))
+      return (
+        `"${String(c.check).trim().slice(0, 60)}" was answered in words. Run it or show it: put ` +
+        "the command in `cmd` and it is executed here, before this hand-in lands, and what it " +
+        "prints is recorded instead of your account of it — pasting a command into `ran` is still " +
+        "you typing. If no command can settle it, call attach_screenshot (create_upload for a " +
+        "file on disk) and put the line it gives you in `ran`. If it can be neither run nor " +
+        "shown, it is not a check: say it in `writeup`, where it reads as your account."
+      );
   }
   return null;
 }

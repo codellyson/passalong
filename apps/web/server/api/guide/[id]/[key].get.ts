@@ -192,13 +192,47 @@ export default defineEventHandler(async (event) => {
     (
       await db(event)
         .prepare(
-          `SELECT writeup, at FROM verdict
-            WHERE guide_id = ? AND ok = 1 AND writeup <> '' ORDER BY at DESC LIMIT 5`,
+          `SELECT writeup, checks, at FROM verdict
+            WHERE guide_id = ? AND ok = 1 AND (writeup <> '' OR checks <> '')
+            ORDER BY at DESC LIMIT 5`,
         )
         .bind(row.id)
-        .all<{ writeup: string; at: string }>()
+        .all<{ writeup: string; checks: string; at: string }>()
     ).results ?? []
-  ).map((v) => ({ at: v.at, writeup: v.writeup }));
+  )
+    .map((v) => {
+      /**
+       * What was run, kept apart from what was said about it.
+       *
+       * A check carrying `cmd` and an `exit` was executed by the runner before the hand-in was
+       * allowed to land, and a non-zero exit refused it — the agent did not write that output and
+       * could not have. A check with only `ran` is the agent's account of a command, and `writeup`
+       * is prose. All three used to be one undifferentiated block of trust, with the prose at the
+       * top of the page and the executed commands not on the page at all.
+       */
+      let rows: { check: string; ran: string; cmd?: string; exit?: number | null }[] = [];
+      try {
+        const parsed = JSON.parse(v.checks || "[]");
+        if (Array.isArray(parsed)) rows = parsed.filter((r) => r?.check);
+      } catch {
+        rows = [];
+      }
+      const verified = (c: (typeof rows)[number]) =>
+        Boolean(c.cmd) && (typeof c.exit === "number" || c.exit === null);
+      return {
+        at: v.at,
+        writeup: v.writeup,
+        ran: rows.filter(verified),
+        said: rows.filter((c) => !verified(c)),
+      };
+    })
+    // A hand-in that brought neither has nothing to show. It can still have happened — the page
+    // is not a log — but an empty block under "somebody ran this" would say otherwise.
+    .filter((v) => v.writeup || v.ran.length || v.said.length)
+    // What a command printed outranks what an agent wrote about it, here and in the markup below.
+    // Sorting by it means the reader meets the strongest thing on offer first, whichever hand-in
+    // it came from, rather than the most recent prose.
+    .sort((a, b) => b.ran.length - a.ran.length);
 
   const body = bodyOf(row.markdown);
   const { html, outline, rest, cut } = renderBody(body, view);

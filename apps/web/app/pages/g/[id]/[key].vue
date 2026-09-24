@@ -372,13 +372,46 @@ usePage({
              paragraph about this guide. Nobody is named, as above. -->
         <aside v-if="adapted.length" class="adapted">
           <p class="m-0 font-ui text-sm font-semibold">
-            {{ adapted.length === 1 ? "One person had to adapt this" : `${adapted.length} people had to adapt this` }}
+            {{ adapted.length === 1 ? "One person ran this" : `${adapted.length} people ran this` }}
           </p>
           <div v-for="(a, i) in adapted" :key="i" class="mt-3">
             <p class="m-0 font-ui text-sm text-muted">
-              <time :datetime="a.at">{{ a.at.slice(0, 10) }}</time> — it worked here, with changes
+              <time :datetime="a.at">{{ a.at.slice(0, 10) }}</time> — it worked here
             </p>
-            <p class="adapted-said">{{ a.writeup }}</p>
+
+            <!-- Commands the runner executed before the hand-in was allowed to land: a non-zero
+                 exit refused it, so this output is the one thing on the page the agent did not
+                 write. It goes first for that reason. -->
+            <ul v-if="a.ran.length" class="m-0 mt-2 list-none p-0">
+              <li v-for="(c, j) in a.ran" :key="`ran-${j}`" class="mt-2">
+                <p class="m-0 flex items-baseline gap-2 font-ui text-sm font-medium">
+                  <span class="adapted-badge" :title="`${c.cmd} → exited ${c.exit === null ? 'nothing' : c.exit}`">ran</span>
+                  {{ c.check }}
+                </p>
+                <pre class="adapted-ran">{{ c.ran }}</pre>
+              </li>
+            </ul>
+
+            <!-- A check with no command behind it. Still answered line against line, still the
+                 agent's own account of what happened — so it is named as that, not as output. -->
+            <ul v-if="a.said.length" class="m-0 mt-2 list-none p-0">
+              <li v-for="(c, j) in a.said" :key="`said-${j}`" class="mt-2">
+                <p class="m-0 font-ui text-sm font-medium">{{ c.check }}</p>
+                <p class="adapted-said">{{ c.ran }}</p>
+              </li>
+            </ul>
+
+            <!-- And prose last, labelled, because nothing checked it. It used to be the whole
+                 block and sat at the top of the page, above the guide it is about. -->
+            <template v-if="a.writeup">
+              <p class="mt-3 mb-0 font-ui text-xs tracking-wide text-muted uppercase">
+                What they said they changed
+              </p>
+              <p class="adapted-said adapted-prose">{{ a.writeup }}</p>
+            </template>
+            <p v-else-if="!a.ran.length && !a.said.length" class="adapted-said">
+              Nothing was recorded about what it took.
+            </p>
           </div>
         </aside>
 

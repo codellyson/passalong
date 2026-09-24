@@ -706,14 +706,16 @@ export function buildServer() {
                   "the shell command that proves this line, run here before the hand-in lands — " +
                     "its exit code decides the check and its output is recorded as the evidence. " +
                     "Non-zero refuses the hand-in. Leave it out for a check nobody can run, like " +
-                    '"the badge reads 3", and write `ran` instead',
+                    '"the badge reads 3" — then SHOW it with attach_screenshot and put the line it returns in `ran`; a check is run or shown, and describing what you saw is refused',
                 ),
             }),
           )
           .optional()
           .describe(
             "one entry per line the guide asks for — Acceptance on a task, Verification on a " +
-              "handoff or a bug — in the order you worked them",
+              "handoff or a bug — in the order you worked them. Each is RUN (`cmd`) or SHOWN (an " +
+              "attach_screenshot line in `ran`). Pasting a command you typed into `ran` is not " +
+              "running it and is refused",
           ),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z.string().optional().describe("one line; required when ok is false"),

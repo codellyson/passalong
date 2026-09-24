@@ -7,6 +7,7 @@ import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import * as api from "./api.js";
 import { context } from "./capture.js";
+import { refusal, runChecks } from "./checks.js";
 import {
   bugGuide,
   ID_RE,
@@ -420,6 +421,21 @@ export async function handIn(
   } = {},
 ) {
   needsSync("handing work in");
+  // A check that names a command is run here, before anything is sent.
+  //
+  // The MCP server did this and this function did not, so "put the command in `cmd` and it is
+  // executed here" was true over one transport and a quiet lie over the other: a `cmd` handed to
+  // this function was passed along as a string nothing had executed. Checks that already carry an
+  // exit came from the server's own runner and are left alone, so nothing runs twice.
+  const pending = checks.filter((c) => c?.cmd && typeof c?.exit !== "number" && c?.exit !== null);
+  if (pending.length) {
+    const done = runChecks(pending, { cwd });
+    const byCheck = new Map(done.checks.map((c) => [c.check, c]));
+    checks = checks.map((c) => byCheck.get(c.check) ?? c);
+    if (done.failed) {
+      throw new Error(refusal(done.failed, { ran: done.ran, total: checks.length }));
+    }
+  }
   // Checks are evidence, sorted against the lines they answer: bringing them is bringing it. A
   // check whose command was actually run is exempt from the length rule — its exit code is the
   // evidence, and `test -f dist/app.js` exiting 0 says more than any sentence about it would.

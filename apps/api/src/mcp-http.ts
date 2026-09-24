@@ -1244,7 +1244,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "for a handoff or a bug, which have no Acceptance lines; send it when you are not sending " +
         "`checks`. A task also takes `report`, the id of a transfer guide you published about the " +
         "work (publish_guide it first). A handoff or a bug takes `ok`, whether its Verification " +
-        "held, and `note` saying what went wrong when it did not. If it held but you had to change " +
+        "held, and `note` saying what went wrong when it did not. EVERY CHECK IS RUN OR SHOWN: put the " +
+        "command in `cmd` and it is executed here before this hand-in lands, or, when no command " +
+        "can settle it, call attach_screenshot and put the line it returns in `ran`. A command " +
+        "you paste into `ran` is you typing, and an account of what you saw is refused. If it held but you had to change " +
         "something to get there, put that in `writeup`: the next person to open the guide is " +
         "shown it, so it does not need to be a guide of its own.",
       inputSchema: {

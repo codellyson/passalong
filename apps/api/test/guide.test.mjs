@@ -469,7 +469,7 @@ test("a guide that worked with changes says so, on itself", async () => {
   );
   // Its own query, not one over both: a guide with five write-ups must never push a "this did not
   // hold" off the list the reader is warned by.
-  assert.match(page, /FROM verdict\s*\n\s*WHERE guide_id = \? AND ok = 1 AND writeup <> ''/);
+  assert.match(page, /WHERE guide_id = \? AND ok = 1 AND \(writeup <> '' OR checks <> ''\)/);
   assert.match(
     page,
     /FROM verdict\s*\n\s*WHERE guide_id = \? AND ok = 0/,
@@ -480,4 +480,35 @@ test("a guide that worked with changes says so, on itself", async () => {
     /SELECT[^;]*account_id[^;]*FROM verdict/,
     "and nobody is named: the key in the URL is the whole authorisation, so this page is public",
   );
+});
+
+test("what ran outranks what was said about it, on the guide", async () => {
+  // The page showed a passing hand-in's `writeup` — prose nothing checked — at the top, above the
+  // guide it is about, and did not show that hand-in's `checks` at all. The executed commands, the
+  // one thing on the page the agent could not have written, were only in the author's hub row. So
+  // the surface gave its best position to its weakest evidence.
+  const page = await readFile(
+    new URL("../../web/server/api/guide/[id]/[key].get.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(page, /SELECT writeup, checks, at FROM verdict/, "the page asks for both");
+  // A check the runner executed carries `cmd` and an `exit`; one with only `ran` is the agent's
+  // account. They are separated here, not merged into a count of "evidence".
+  assert.match(page, /ran: rows\.filter\(verified\)/);
+  assert.match(page, /said: rows\.filter\(\(c\) => !verified\(c\)\)/);
+  assert.match(page, /\.sort\(\(a, b\) => b\.ran\.length - a\.ran\.length\)/, "run evidence first");
+
+  const view = await readFile(
+    new URL("../../web/app/pages/g/[id]/[key].vue", import.meta.url),
+    "utf8",
+  );
+  // Order in the markup is the ranking a reader actually meets.
+  const at = (needle) => {
+    const i = view.indexOf(needle);
+    assert.ok(i > 0, `${needle} should be on the page`);
+    return i;
+  };
+  assert.ok(at("a.ran") < at("a.said"), "executed commands before the agent's account of them");
+  assert.ok(at("a.said") < at("a.writeup"), "and both before prose");
+  assert.match(view, /What they said they changed/, "prose is labelled as what it is");
 });
