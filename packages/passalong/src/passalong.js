@@ -651,6 +651,46 @@ export const SHOT_TYPES = {
  * Local because it reads a path. An agent in a terminal has one; a hosted assistant does not, and
  * reaches the same route through `attach_screenshot` on the HTTP server instead.
  */
+/**
+ * The same upload, for an agent that has the image and not a path to it.
+ *
+ * `attach()` takes a path because a screenshot usually lands on disk. An agent driving a browser
+ * often has the opposite: the pane hands back an image as a tool result and never writes a file, so
+ * the only door into evidence was one it could not open. It did what anyone would — swapped to
+ * `grep` and `tsc` checks and put what it saw in `writeup` — and said so itself: "a grep proves the
+ * code changed, not that the screen renders right."
+ *
+ * Base64 in a tool call, which the HTTP server's instructions rightly warn against, because there
+ * the alternative is `create_upload` and a curl. Here there is no alternative for bytes held in
+ * memory, and this server is a local process talking to the same upload the file path uses.
+ */
+export async function attachBytes(data, { name = "", type = "image/png" } = {}) {
+  if (!api.loggedIn())
+    throw new PassalongError("attaching evidence needs sync — run `passalong login` first");
+  const allowed = new Set(Object.values(SHOT_TYPES));
+  if (!allowed.has(type))
+    throw new PassalongError(`screenshots must be ${[...allowed].join(", ")} — ${type} is not one`);
+  let bytes;
+  try {
+    // A data: URL is what several browser tools hand back, so it is accepted rather than made the
+    // caller's problem to strip.
+    bytes = Buffer.from(String(data).replace(/^data:[^,]*,/, ""), "base64");
+  } catch {
+    throw new PassalongError("`data` is not base64");
+  }
+  if (!bytes.length) throw new PassalongError("`data` decoded to nothing");
+  // The server's own ceiling, checked here so a large paste fails before it is sent rather than
+  // after. Anything bigger belongs in create_upload, which streams from a file.
+  if (bytes.length > 5 * 1024 * 1024)
+    throw new PassalongError(
+      `that image is ${Math.round(bytes.length / 1024 / 1024)}MB and the limit is 5MB — ` +
+        "write it to a file and use create_upload, which streams",
+    );
+  const label = name || "screenshot";
+  const shot = await api.uploadShot(bytes, type, label);
+  return { ...shot, markdown: `![${label}](${shot.url})` };
+}
+
 export async function attach(file, { name = "" } = {}) {
   if (!api.loggedIn())
     throw new PassalongError("attaching evidence needs sync — run `passalong login` first");

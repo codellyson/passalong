@@ -173,3 +173,18 @@ test("both servers say the same thing in front of a guide", async () => {
     assert.equal(src.split("SEARCH_WIDE +").length - 1, 2, "on the bug lead and the task lead");
   }
 });
+
+test("a screenshot goes in whether you have a file or only the bytes", async () => {
+  // The rule that a check is run or shown is only as good as the door into "shown". attach_screenshot
+  // took a path on this machine, and an agent driving a browser usually has the opposite: the pane
+  // hands the image back as a tool result and never writes a file. The agent did what anyone would
+  // — swapped to grep and tsc checks, put what it saw in `writeup` — and said so: "a grep proves
+  // the code changed, not that the screen renders right."
+  const shot = (await tools()).get("attach_screenshot");
+  const props = shot.inputSchema.properties;
+  assert.ok(props.file, "a path still works");
+  assert.ok(props.data, "and so do the bytes");
+  assert.match(props.data.description, /base64/);
+  assert.deepEqual(shot.inputSchema.required ?? [], [], "neither is required on its own");
+  assert.match(props.type.description, /image\/png/);
+});

@@ -1079,3 +1079,34 @@ test("taken, then given to someone else: it stops being yours", { skip }, async 
   assert.ok(!mine.for_me);
   as(owner);
 });
+
+test("an image held as bytes attaches, and answers the check it was taken for", {
+  skip,
+}, async () => {
+  // The door that was missing. attach_screenshot took a path on this machine, so an agent whose
+  // browser hands images back inline and never writes a file had no way to show anything — and,
+  // refused for describing what it saw, it swapped to grep checks and put the observation in
+  // `writeup`: "a grep proves the code changed, not that the screen renders right."
+  const env = await setup();
+  const { p } = env;
+  const { id, dir } = await readyTask(env, "Evidence from bytes");
+
+  const shot = await p.attachBytes(PNG.toString("base64"), { name: "the rendered header" });
+  assert.ok(shot.id, "the bytes uploaded");
+  assert.match(shot.markdown, /^!\[the rendered header\]\(/);
+  assert.match(shot.url, /\/v1\/shots\//);
+  // A data: URL is what several browser tools hand back, so it goes in without being stripped first.
+  const asUrl = await p.attachBytes(`data:image/png;base64,${PNG.toString("base64")}`, {});
+  assert.ok(asUrl.id);
+
+  // And it is what makes a check showable rather than described: the same check refused a
+  // paragraph a moment ago.
+  await p.take(id, { cwd: dir });
+  await p.handIn(id, {
+    markdown: "---\ntitle: Shown, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    checks: [{ check: "the header renders in the brand colour", ran: `here it is: ${shot.url}` }],
+    cwd: dir,
+  });
+  const row = (await p.tasks()).find((t) => t.id === id);
+  assert.equal(row.state, "review", "a shown check is evidence");
+});
