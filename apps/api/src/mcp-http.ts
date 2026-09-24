@@ -108,6 +108,31 @@ async function answer(call: Call, method: string, path: string, id: string, body
 }
 
 /**
+ * Where an attached image's markdown line belongs, which is not always a guide.
+ *
+ * This tool said one thing — "put that line in the guide body" — and hand_in said "do not publish
+ * a guide to carry your evidence". For an agent holding a screenshot as proof of the work it was
+ * handing in, those are contradictory, and only one of them named a destination. So it published:
+ * six screenshots of a delivered change became a follow-up guide with Problem, Solution shape,
+ * Decisions and rationale, Steps, Verification and Gotchas wrapped round them, because that is the
+ * template a publishable document has to fill. Fifteen hundred words to deliver six pictures.
+ *
+ * Mirrors WHERE_THE_LINE_GOES in packages/passalong/src/mcp.js.
+ */
+const WHERE_THE_LINE_GOES =
+  "WHERE THE LINE GOES DEPENDS ON WHAT THE IMAGE IS EVIDENCE OF. Proof that work you are handing i" +
+  "n holds — a screen that renders right, a total that matches — goes in that check's `ran` on han" +
+  "d_in, and nothing is published: a check answered with a picture is shown, which is what the han" +
+  "d-in asks for. Only an image that is part of a DOCUMENT goes in a guide body — the screenshot i" +
+  "n a bug report, a diagram a guide is explaining — and then it must be in the markdown, because " +
+  "a guide travels as markdown to whoever holds its link and evidence beside the document does not" +
+  " travel at all; publishing claims whatever the markdown names, so attach first and publish afte" +
+  "r. DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS. Six images and a caption each is a hand-in, not" +
+  " a document, and wrapping them in Problem / Solution shape / Decisions / Steps / Verification t" +
+  "o make them publishable is how a set of pictures becomes fifteen hundred words nobody asked for" +
+  ". png, jpg, webp or gif.";
+
+/**
  * Said in front of every guide an agent opens, whatever its kind: the hand-in needs evidence, and
  * evidence is collected while the work happens, not reconstructed from memory once it is done.
  * Mirrors KEEP_EVIDENCE in packages/passalong/src/mcp.js.
@@ -1247,7 +1272,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "held, and `note` saying what went wrong when it did not. EVERY CHECK IS RUN OR SHOWN: put the " +
         "command in `cmd` and it is executed here before this hand-in lands, or, when no command " +
         "can settle it, call attach_screenshot and put the line it returns in `ran` — capture it to " +
-        "a file first if your browser hands images back inline. A command " +
+        "a file first if your browser hands images back inline. DO NOT PUBLISH A GUIDE TO CARRY " +
+        "EVIDENCE, screenshots included: it belongs on this call, and a set of pictures wrapped " +
+        "in Problem / Steps / Verification to make it publishable is a document nobody asked " +
+        "for. A command " +
         "you paste into `ran` is you typing, and an account of what you saw is refused. If it held but you had to change " +
         "something to get there, put that in `writeup`: the next person to open the guide is " +
         "shown it, so it does not need to be a guide of its own.",
@@ -1452,10 +1480,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       title: "Attach a screenshot",
       annotations: { ...ADDS, openWorldHint: true },
       description:
-        "Store an image a user attached, so a bug report can point at it. Returns the markdown to " +
-        `put in the guide body — evidence lives in the document, not beside it. ${vocabulary.shotTypes}. ` +
-        "Call this before file_bugs or publish_guide, then paste the returned line into the " +
-        "issue's Problem or Reproduce section; publishing claims whatever the markdown names.",
+        "Store an image as evidence and get back the markdown line that points at it. " +
+        `${vocabulary.shotTypes}. ` +
+        WHERE_THE_LINE_GOES,
       inputSchema: {
         file: fileInput.describe("the attached image, filled in by the client"),
       },

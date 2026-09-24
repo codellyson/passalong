@@ -162,6 +162,12 @@ test("both servers say the same thing in front of a guide", async () => {
     "KEEP YOUR EVIDENCE AS YOU GO",
     "SEARCH THE WHOLE TREE BEFORE YOU CONCLUDE",
     '"I looked" is a claim; the search and what it printed is evidence',
+    // This one is why the rule has a test. attach_screenshot said "put that line in the guide
+    // body" while hand_in said "do not publish a guide to carry your evidence", and only the first
+    // named a destination — so six screenshots of a delivered change were published as a guide
+    // with Problem, Solution shape, Decisions, Steps, Verification and Gotchas wrapped round them.
+    "WHERE THE LINE GOES DEPENDS ON WHAT THE IMAGE IS EVIDENCE OF",
+    "DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS",
   ]) {
     assert.ok(said(stdio).includes(line), `stdio is missing: ${line}`);
     assert.ok(said(http).includes(line), `the HTTP server is missing: ${line}`);
@@ -187,4 +193,15 @@ test("a screenshot goes in whether you have a file or only the bytes", async () 
   assert.match(props.data.description, /base64/);
   assert.deepEqual(shot.inputSchema.required ?? [], [], "neither is required on its own");
   assert.match(props.type.description, /image\/png/);
+});
+
+test("attach_screenshot sends hand-in evidence to the hand-in, not to a guide", async () => {
+  // The contradiction that produced a 1500-word guide to deliver six pictures: this tool named one
+  // destination, the guide body, and hand_in said not to publish a guide for evidence. An agent
+  // holding a screenshot of work it was handing in could satisfy only one of them.
+  const shot = (await tools()).get("attach_screenshot");
+  assert.match(shot.description, /`ran` on hand_in/, "proof of a hand-in goes on the hand-in");
+  assert.match(shot.description, /nothing is published/);
+  assert.match(shot.description, /part of a DOCUMENT goes in a guide body/, "and the other case");
+  assert.match(shot.description, /DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS/);
 });
