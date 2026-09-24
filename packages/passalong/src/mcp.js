@@ -29,6 +29,19 @@ const text = (s) => ({ content: [{ type: "text", text: s }] });
  * evidence is collected while the work happens, not reconstructed from memory once it is done.
  * Mirrors KEEP_EVIDENCE in apps/api/src/mcp-http.ts.
  */
+const WHERE_THE_LINE_GOES =
+  "WHERE THE LINE GOES DEPENDS ON WHAT THE IMAGE IS EVIDENCE OF. Proof that work you are handing i" +
+  "n holds — a screen that renders right, a total that matches — goes in that check's `ran` on han" +
+  "d_in, and nothing is published: a check answered with a picture is shown, which is what the han" +
+  "d-in asks for. Only an image that is part of a DOCUMENT goes in a guide body — the screenshot i" +
+  "n a bug report, a diagram a guide is explaining — and then it must be in the markdown, because " +
+  "a guide travels as markdown to whoever holds its link and evidence beside the document does not" +
+  " travel at all; publishing claims whatever the markdown names, so attach first and publish afte" +
+  "r. DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS. Six images and a caption each is a hand-in, not" +
+  " a document, and wrapping them in Problem / Solution shape / Decisions / Steps / Verification t" +
+  "o make them publishable is how a set of pictures becomes fifteen hundred words nobody asked for" +
+  ". png, jpg, webp or gif.";
+
 const KEEP_EVIDENCE =
   "KEEP YOUR EVIDENCE AS YOU GO. hand_in needs it: the commands you ran and what came back, the " +
   "test summary, the link to the change. Copy each one when it happens — at the end you will be " +
@@ -824,11 +837,8 @@ export function buildServer() {
       annotations: { ...ADDS, openWorldHint: true },
       description:
         "Upload an image as evidence — a path in `file`, or the bytes in `data` when you have " +
-        "the image and no file — and get back the markdown line that " +
-        "points at it. Put that line in the guide body — a guide travels as markdown to whoever " +
-        "holds its link, so evidence beside the document does not travel at all. Publishing " +
-        "claims whatever the markdown names, so attach first and publish after. png, jpg, webp " +
-        "or gif.",
+        "the image and no file — and get back the markdown line that points at it. " +
+        WHERE_THE_LINE_GOES,
       inputSchema: {
         file: z
           .string()
