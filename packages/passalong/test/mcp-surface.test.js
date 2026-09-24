@@ -168,6 +168,11 @@ test("both servers say the same thing in front of a guide", async () => {
     // with Problem, Solution shape, Decisions, Steps, Verification and Gotchas wrapped round them.
     "WHERE THE LINE GOES DEPENDS ON WHAT THE IMAGE IS EVIDENCE OF",
     "DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS",
+    // Added after an agent short of a picture built `src/app/notes-preview` to have something to
+    // photograph, shot it, `rm -rf`'d it, and offered the shots as evidence that the real screen
+    // rendered. The rule was satisfied; the page in the picture no longer existed.
+    "SHOOT THE RUNNING THING, NOT SOMETHING YOU BUILT TO SHOOT",
+    "NEVER DELETE WHAT YOUR EVIDENCE POINTS AT",
   ]) {
     assert.ok(said(stdio).includes(line), `stdio is missing: ${line}`);
     assert.ok(said(http).includes(line), `the HTTP server is missing: ${line}`);
@@ -177,6 +182,7 @@ test("both servers say the same thing in front of a guide", async () => {
   // one more thing that is not the document.
   for (const src of [stdio, http]) {
     assert.equal(src.split("SEARCH_WIDE +").length - 1, 2, "on the bug lead and the task lead");
+    assert.equal(src.split("SHOOT_THE_REAL_THING +").length - 1, 2, "and so is this one");
   }
 });
 

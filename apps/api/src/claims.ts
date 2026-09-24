@@ -149,7 +149,10 @@ export function checksProblem(checks: Check[]): string | null {
         "screenshot your browser handed back inline and never wrote to disk still goes in. If " +
         "you cannot get at the bytes either, capture it to a file — a headless browser\'s " +
         "page.screenshot({ path }) — rather than describing what you saw. A check that can be " +
-        "neither run nor shown is not a check: say it in `writeup`, where it reads as your account."
+        "neither run nor shown is not a check: say it in `writeup`, where it reads as your " +
+        "account. Shoot the running thing: a scratch page built so there was something to " +
+        "photograph is a picture of your own scaffolding, and deleting it afterwards leaves a " +
+        "shot nobody can take again."
       );
   }
   return null;

@@ -137,6 +137,26 @@ const WHERE_THE_LINE_GOES =
  * evidence is collected while the work happens, not reconstructed from memory once it is done.
  * Mirrors KEEP_EVIDENCE in packages/passalong/src/mcp.js.
  */
+/**
+ * What a screenshot has to be a screenshot OF.
+ *
+ * "A check is run or shown" made a picture mandatory, and an agent short of one built a page to
+ * photograph: it added `src/app/notes-preview`, shot that, then `rm -rf`'d it and published the
+ * shots as evidence that the real screen rendered. The rule was satisfied and almost nothing was
+ * proved — the measure had become the target, and the page the picture showed no longer existed.
+ *
+ * Mirrors SHOOT_THE_REAL_THING in packages/passalong/src/mcp.js.
+ */
+const SHOOT_THE_REAL_THING =
+  "SHOOT THE RUNNING THING, NOT SOMETHING YOU BUILT TO SHOOT. A screenshot is worth what the sc" +
+  "reen behind it is worth: the real route in the real app, reached the way a reader would reac" +
+  "h it. A scratch page, a story, a harness or a component rendered on its own is a picture of " +
+  "your scaffolding, and it can look right while the thing the guide is about does not. If the " +
+  "only way you could get a picture was to build something, that is not evidence the real scree" +
+  "n works — say what you built and why in `writeup`, and leave the check to the commands that " +
+  "do hold. NEVER DELETE WHAT YOUR EVIDENCE POINTS AT: a shot of a page you removed afterwards " +
+  "is one nobody can take again, including you.";
+
 const KEEP_EVIDENCE =
   "KEEP YOUR EVIDENCE AS YOU GO. hand_in needs it: the commands you ran and what came back, the " +
   "test summary, the link to the change. Copy each one when it happens — at the end you will be " +
@@ -168,6 +188,7 @@ function leadFor(kind: string) {
       "those steps produce the defect. Fix what Problem describes, then check Verification and " +
       "answer with hand_in.\n\n" +
       SEARCH_WIDE +
+      SHOOT_THE_REAL_THING +
       KEEP_EVIDENCE
     );
   if (kind === "task")
@@ -176,6 +197,7 @@ function leadFor(kind: string) {
       "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
       "under Acceptance holds.\n\n" +
       SEARCH_WIDE +
+      SHOOT_THE_REAL_THING +
       KEEP_EVIDENCE
     );
   // A transfer guide is handed over untouched: it is a document to follow, and anything in front
