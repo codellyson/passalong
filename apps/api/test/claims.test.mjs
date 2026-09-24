@@ -4,6 +4,7 @@
 // `node:sqlite` behind a few lines that answer the way D1's prepare/bind/first/all/run do.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
@@ -246,14 +247,38 @@ test("a task can hand in evidence against each line it was asked for", async () 
     report: "report",
     evidence: "",
     checks: [
-      { check: "the sixth is refused with 429", ran: "$ for i in 1..6 → 200 200 200 200 200 429" },
-      { check: "the refusal says when to try again", ran: "$ curl -si … → Retry-After: 60" },
+      {
+        check: "the sixth is refused with 429",
+        ran: "$ for i in 1..6 → 200 200 200 200 200 429",
+        cmd: "./scripts/burst.sh",
+        exit: 0,
+        ok: true,
+      },
+      {
+        check: "the refusal says when to try again",
+        ran: "$ curl -si … → Retry-After: 60",
+        cmd: "curl -si localhost:3001/v1/accounts",
+        exit: 0,
+        ok: true,
+      },
     ],
   });
   assert.equal(done.error, undefined);
   assert.deepEqual(JSON.parse(done.claim.checks), [
-    { check: "the sixth is refused with 429", ran: "$ for i in 1..6 → 200 200 200 200 200 429" },
-    { check: "the refusal says when to try again", ran: "$ curl -si … → Retry-After: 60" },
+    {
+      check: "the sixth is refused with 429",
+      ran: "$ for i in 1..6 → 200 200 200 200 200 429",
+      cmd: "./scripts/burst.sh",
+      exit: 0,
+      ok: true,
+    },
+    {
+      check: "the refusal says when to try again",
+      ran: "$ curl -si … → Retry-After: 60",
+      cmd: "curl -si localhost:3001/v1/accounts",
+      exit: 0,
+      ok: true,
+    },
   ]);
   // `evidence` is filled from them, so every surface that reads the block of text — the CLI, the
   // handed-in row — keeps working without knowing this column exists.
@@ -280,7 +305,15 @@ test("a check with nothing behind it is not evidence either", async () => {
 test("a check a runner executed answers for itself, however short its output", async () => {
   // The length rule exists to catch a sentence standing in for output. `test -f` prints nothing at
   // all and is the strongest evidence on offer, so a run that happened is exempt from it.
-  assert.equal(checksProblem([{ check: "it builds", ran: "$ test -f dist/app.js" }]) || "", "");
+  //
+  // A command the agent PASTED is not a run that happened. These two are the same string and prove
+  // completely different things, and only `cmd` tells them apart, so the pasted one is refused and
+  // told to say so properly.
+  assert.match(
+    checksProblem([{ check: "it builds", ran: "$ test -f dist/app.js" }]) || "",
+    /Run it or show it/,
+    "pasting a command is still the agent typing",
+  );
   assert.match(
     checksProblem([{ check: "it builds", ran: "ok" }]) || "",
     /what you ran and what came back/,
@@ -328,7 +361,10 @@ test("a hand-in records what the command returned, and the flattened block says 
       exit: 0,
       ok: true,
     },
-    { check: "the badge reads 3", ran: "opened the hub by hand, it reads 3" },
+    {
+      check: "the badge reads 3",
+      ran: "opened the hub by hand, it reads 3 — http://localhost/v1/shots/ab12cd34",
+    },
   ];
   const done = await finish(db, "t1", A, { at: T0, report: "report", evidence: "", checks });
   assert.equal("error" in done, false, done.error);
@@ -616,7 +652,13 @@ test("a handoff answers its Verification line by line, the way a task answers Ac
   await take(db, "h1", ada, { at: T0 });
 
   const checks = [
-    { check: "the sixth request is refused with 429", ran: "$ curl -si … → HTTP/1.1 429" },
+    {
+      check: "the sixth request is refused with 429",
+      ran: "$ curl -si … → HTTP/1.1 429",
+      cmd: "./scripts/burst.sh",
+      exit: 0,
+      ok: true,
+    },
     {
       check: "the retry header names a wait",
       ran: "$ curl -sI … | grep -i retry-after\nRetry-After: 60",
@@ -1323,4 +1365,59 @@ test("a write-up is never what a hand-in is refused for", async () => {
   });
   assert.equal(thin.status, 400, "and it is not evidence either");
   assert.match(thin.error, /send `evidence`/);
+});
+
+test("a check is run or shown, and prose about a picture is neither", async () => {
+  // The asymmetry this closes: an image the USER showed an agent has been mandatory before
+  // publish_guide and file_bugs for as long as those existed — "a screenshot you described instead
+  // of attaching is the most useful thing in the report, thrown away" — while an image that is the
+  // only possible proof of the agent's OWN claim was never asked for once. So "a Sales Order PDF
+  // renders with the store's brand colour" came back as "opened SO-00026, the header bar is
+  // #1f6feb", and passed, and nothing in the system had looked at anything.
+  const visual = "a Sales Order PDF renders with the store's brand colour";
+  const described = checksProblem([
+    { check: visual, ran: "Opened SO-00026 in the viewer and the header bar is #1f6feb." },
+  ]);
+  assert.match(described || "", /Run it or show it/);
+  assert.match(described || "", /attach_screenshot/, "and it says how");
+  assert.match(described || "", /writeup/, "and where a check that is neither belongs");
+
+  // Shown: attach_screenshot and create_upload both end at the same address, so one pattern answers
+  // for both, and it is the URL that counts rather than the words around it.
+  assert.equal(
+    checksProblem([
+      { check: visual, ran: "the header bar is #1f6feb — http://localhost/v1/shots/ab12cd34" },
+    ]),
+    null,
+  );
+  // Run: unchanged, and still exempt from the length rule because an exit code is not prose.
+  assert.equal(
+    checksProblem([
+      { check: visual, ran: "(no output)", cmd: "node scripts/render.mjs", exit: 0, ok: true },
+    ]),
+    null,
+  );
+
+  // A client-internal handle is not a picture anybody else can open — the failure guide.ts already
+  // refuses at publish, arriving here by the other door.
+  assert.match(
+    checksProblem([{ check: visual, ran: "here it is: attachment://file_0000abc" }]) || "",
+    /Run it or show it/,
+  );
+});
+
+test("claims.ts and guide.ts agree on what a screenshot url looks like", async () => {
+  // claims.ts takes no sibling `.ts` import on purpose — it is tested against a real SQLite and
+  // Node's type stripping cannot follow a value import — so the pattern is written out twice. A
+  // comment saying "same as the other one" does not fail; this does.
+  const read = async (f) => await readFile(new URL(`../src/${f}`, import.meta.url), "utf8");
+  const [claims, guide] = await Promise.all([read("claims.ts"), read("guide.ts")]);
+  // Compared as text, not as a regex about a regex: the escaping of the second is unreadable and
+  // gets in the way of the one thing being checked. In two pieces, because guide.ts captures the
+  // id and this file only asks whether there is one — that difference is the point of each and is
+  // allowed to stay; the address and the shape of an id are what must not drift.
+  for (const piece of [String.raw`\/v1\/shots\/`, "[a-z0-9]{6,16}"]) {
+    assert.ok(claims.includes(piece), `claims.ts is missing ${piece}`);
+    assert.ok(guide.includes(piece), `guide.ts is missing ${piece}`);
+  }
 });
