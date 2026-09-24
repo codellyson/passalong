@@ -117,6 +117,24 @@ const KEEP_EVIDENCE =
   "test summary, the link to the change. Copy each one when it happens — at the end you will be " +
   "writing from memory, which is the thing evidence is here to replace.\n\n";
 
+/**
+ * Said in front of every guide an agent has to locate things in for itself — a bug and a task.
+ *
+ * The failure it is here to stop: an agent lists one directory, or opens the one file it expected,
+ * and concludes from that. It then reports that a thing is absent, or that it found the only
+ * occurrence, having never looked past the place it happened to start. The conclusion is confident
+ * and wrong, and nothing downstream can tell, because the evidence it brings is real — it is just
+ * evidence of a search that was too small.
+ *
+ * Mirrors SEARCH_WIDE in packages/passalong/src/mcp.js.
+ */
+const SEARCH_WIDE =
+  "SEARCH THE WHOLE TREE BEFORE YOU CONCLUDE. Listing a directory, or reading the one file you " +
+  "expected, tells you what is in that directory — not whether the thing exists, and not whether " +
+  "you have found all of it. Before you report that something is absent, is the only one, or is " +
+  'already handled, search across the repository and let the output be your reason. "I looked" ' +
+  "is a claim; the search and what it printed is evidence.\n\n";
+
 /** What to say in front of a guide, by kind. Mirrors leadFor() in packages/passalong/src/mcp.js. */
 function leadFor(kind: string) {
   if (kind === "bug")
@@ -124,6 +142,7 @@ function leadFor(kind: string) {
       "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions — " +
       "those steps produce the defect. Fix what Problem describes, then check Verification and " +
       "answer with hand_in.\n\n" +
+      SEARCH_WIDE +
       KEEP_EVIDENCE
     );
   if (kind === "task")
@@ -131,6 +150,7 @@ function leadFor(kind: string) {
       "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
       "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
       "under Acceptance holds.\n\n" +
+      SEARCH_WIDE +
       KEEP_EVIDENCE
     );
   // A transfer guide is handed over untouched: it is a document to follow, and anything in front
