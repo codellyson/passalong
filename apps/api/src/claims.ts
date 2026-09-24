@@ -28,6 +28,15 @@ export const NOTE_MAX = 280;
 export const EVIDENCE_MAX = 4000;
 
 /**
+ * The longest write-up kept: what somebody had to adapt to make a guide work where they ran it.
+ *
+ * Same size as evidence and a different thing. Evidence is what ran; a write-up is prose, and it
+ * is the only part of a hand-in the next reader of the guide is shown. Its own size, because the
+ * two are refused for different reasons and one of them may want changing without the other.
+ */
+export const WRITEUP_MAX = 4000;
+
+/**
  * What a hand-in has to bring, in the words an agent is refused with. See docs/V2.md §11.
  *
  * "Done" is the agent's word for its own work, and a write-up is the agent's word written longer.
@@ -132,6 +141,8 @@ export interface ClaimRow {
   evidence: string;
   /** The same evidence against the lines it answers, as JSON. Empty when it was sent as one block. */
   checks: string;
+  /** What had to be adapted to make it work here. Prose, optional, and shown on the guide. */
+  writeup: string;
   /** The claim's generation. 0 on a claim taken before 0029_claim_fence.sql existed. */
   fence: number;
   report_id: string;
@@ -1093,6 +1104,7 @@ export async function handIn(
     note,
     evidence,
     checks = [],
+    writeup = "",
     person = false,
     fence,
   }: {
@@ -1111,6 +1123,16 @@ export async function handIn(
      * Same field, same column, same rule: the response is evidence against what was asked.
      */
     checks?: Check[];
+    /**
+     * What had to be adapted to make it work here, in prose.
+     *
+     * Never required and never refused for its shape: it is the part of a hand-in that has no
+     * right answer, and a rule about its length would only teach agents to pad it. It is also the
+     * only part the next reader of the guide is shown, which is the whole reason it exists —
+     * "step 4 needed MAIL_FROM and the bucket name here" was becoming a published guide because
+     * `ok` is a boolean, `note` is 280 characters, and `evidence` is what you ran.
+     */
+    writeup?: string;
     person?: boolean;
     fence?: number;
   },
@@ -1121,7 +1143,7 @@ export async function handIn(
   if (bad) return { status: 400, error: bad };
   const res = await db
     .prepare(
-      `UPDATE claim SET state = 'review', evidence = ?, checks = ?,
+      `UPDATE claim SET state = 'review', evidence = ?, checks = ?, writeup = ?,
               note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
@@ -1142,6 +1164,9 @@ export async function handIn(
             })),
           ).slice(0, EVIDENCE_MAX * 2)
         : "",
+      String(writeup ?? "")
+        .trim()
+        .slice(0, WRITEUP_MAX),
       String(note ?? "")
         .trim()
         .slice(0, NOTE_MAX),
@@ -1219,7 +1244,9 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
           : "checks: one entry per line of its `## Verification` — that line, and what you ran " +
             "for it. That is what its author reads, line against line. You are done when every " +
             "line has one. Keep them as you go; `evidence` as one block is the older shape and " +
-            "still accepted.",
+            "still accepted. Anything you had to adapt to make it work here goes in `writeup`, " +
+            "and the next person to open the guide is shown it — that is its home, not a new " +
+            "guide.",
     },
     {
       tool: "pass",

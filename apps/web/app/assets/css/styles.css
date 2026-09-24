@@ -2092,6 +2092,29 @@ article.prose details.rest > summary {
   overflow-wrap: anywhere;
 }
 
+/* What people had to change to make this work. Not a warning — it held — so it is the page's own
+   quiet voice rather than the danger colour: read before you start, and worth less alarm than a
+   guide somebody could not get to work at all. */
+.adapted {
+  margin: 0 0 var(--s-6);
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--raised);
+}
+
+.adapted time {
+  font-variant-numeric: tabular-nums;
+}
+
+.adapted-said {
+  margin: var(--s-2) 0 0;
+  font: var(--t-sm) / 1.7 var(--font-sans);
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* The seam in the verify view: the point where the guide stops being re-ordered and goes back to
    the author's own sequence. Set apart from the prose because it is the page talking, not the
    guide. */

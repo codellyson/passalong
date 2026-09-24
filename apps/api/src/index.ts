@@ -3530,14 +3530,23 @@ async function recordVerdict(
   row: GuideRow,
   ok: boolean,
   note: string,
-  { detail = "", checks = "" }: { detail?: string; checks?: string } = {},
+  {
+    detail = "",
+    checks = "",
+    writeup = "",
+  }: { detail?: string; checks?: string; writeup?: string } = {},
 ) {
   const account = c.get("account");
   await c.env.DB.prepare(
-    `INSERT INTO verdict (guide_id, account_id, ok, note, detail, checks, at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO verdict (guide_id, account_id, ok, note, detail, checks, writeup, at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note,
-       detail = excluded.detail, checks = excluded.checks, at = excluded.at`,
+       detail = excluded.detail, checks = excluded.checks,
+       -- Kept when the new hand-in has nothing to add. A verdict is one row per account, so the
+       -- same person handing the same guide in from a second repo would otherwise erase what they
+       -- wrote the first time by saying nothing — and silence is not a retraction.
+       writeup = CASE WHEN excluded.writeup <> '' THEN excluded.writeup ELSE verdict.writeup END,
+       at = excluded.at`,
   )
     .bind(
       row.id,
@@ -3546,6 +3555,7 @@ async function recordVerdict(
       note,
       String(detail ?? "").slice(0, claims.EVIDENCE_MAX),
       String(checks ?? "").slice(0, claims.EVIDENCE_MAX * 2),
+      String(writeup ?? "").slice(0, claims.WRITEUP_MAX),
       now(),
     )
     .run();
@@ -4178,6 +4188,10 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
 
   const evidence = typeof who.evidence === "string" ? who.evidence : "";
   const checks = checksIn(who.checks);
+  // What had to be adapted to make it work where they ran it. Never required: most hand-ins have
+  // nothing to add, and a field an agent must fill gets filled with "nothing to report".
+  const writeup =
+    typeof who.writeup === "string" ? who.writeup.trim().slice(0, claims.WRITEUP_MAX) : "";
 
   if (found.row.kind === "task") {
     const report = typeof who.report === "string" ? who.report.trim() : "";
@@ -4222,12 +4236,14 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   await recordVerdict(c, found.row, who.ok, note, {
     detail: evidence,
     checks: checks.length ? JSON.stringify(checks) : "",
+    writeup,
   });
   await claims.handIn(c.env.DB, found.row.id, who, {
     at,
     note,
     evidence,
     checks,
+    writeup,
     fence: fenceIn(who.fence),
   });
   await claimEvidenceShots(c, who.account, found.row.id, evidence);
@@ -4436,6 +4452,10 @@ app.get("/v1/handed_in", async (c) => {
       // sent it that way. The flat block stays, because a hand-in from before this, or from a
       // person in the browser, has only that.
       checks: r.claim.checks,
+      // What they had to adapt. The author sees it here before they close, and the next person to
+      // open the guide sees it there; both, because the author is the one who decides whether the
+      // guide itself should change, and they cannot decide that from a row that hides it.
+      writeup: r.claim.writeup,
       at: r.claim.updated,
     })),
   });

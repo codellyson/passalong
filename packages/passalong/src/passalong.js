@@ -412,6 +412,7 @@ export async function handIn(
     note = "",
     evidence = "",
     checks = [],
+    writeup = "",
     markdown,
     report,
     pr = "",
@@ -446,6 +447,9 @@ export async function handIn(
         }
       : {}),
     ...(report ? { report, pr } : {}),
+    // Left out when there is nothing to say, rather than sent as "": most hand-ins have nothing
+    // to adapt, and the field is for the ones that do.
+    ...(writeup ? { writeup } : {}),
     ...(typeof ok === "boolean" ? { ok } : {}),
   });
 }

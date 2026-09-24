@@ -259,7 +259,8 @@ test("a correction is a verdict with room, shown on the guide", async () => {
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   const at = src.indexOf("async function recordVerdict");
   const fn = src.slice(at, at + 1400);
-  assert.match(fn, /detail = "", checks = ""/, "a verdict carries why, at the length that takes");
+  assert.match(fn, /detail = ""/, "a verdict carries why, at the length that takes");
+  assert.match(fn, /checks = ""/, "sorted against the line each part answers");
   assert.match(fn, /INSERT INTO verdict[\s\S]*detail, checks/, "and stores both");
 
   // A failing hand-in already collected the evidence; it lands on the verdict now, not only the
@@ -442,4 +443,41 @@ test("a field can be taken out of the frontmatter, and nothing else moves", () =
   assert.equal(dropField(md, "to"), "---\nid: aa\nteam: khaime\ntitle: t\n---\n\nbody\n");
   assert.equal(dropField(md, "missing"), md, "absent is a no-op");
   assert.equal(parseMeta(dropField(md, "to")).to, undefined);
+});
+
+test("a guide that worked with changes says so, on itself", async () => {
+  // The other half of the correction channel, and the last thing an agent had to publish a guide
+  // to say. A hand-in that HELD, and had to adapt something to get there, had `ok` (a boolean),
+  // `note` (280 characters) and `evidence` (what you ran). So the adaptation arrived as a
+  // follow-up guide — "The email step needs MAIL_FROM and the R2 bucket name" — with an id, a
+  // share link and an inbox row asking somebody to take it, when it is a paragraph about a guide.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const handIn = src.slice(src.indexOf('app.post("/v1/guides/:id/hand_in"'));
+  const route = handIn.slice(0, handIn.indexOf("\napp."));
+  assert.match(route, /recordVerdict\([\s\S]*writeup,/, "the hand-in feeds the verdict");
+  assert.match(route, /claims\.handIn\([\s\S]*writeup,/, "and the claim, for the author's row");
+
+  // A later hand-in with nothing to add must not erase what an earlier one wrote: a verdict is one
+  // row per account, and silence is not a retraction.
+  const at = src.indexOf("async function recordVerdict");
+  const fn = src.slice(at, at + 1400);
+  assert.match(fn, /writeup = CASE WHEN excluded\.writeup <> ''/);
+
+  const page = await readFile(
+    new URL("../../web/server/api/guide/[id]/[key].get.ts", import.meta.url),
+    "utf8",
+  );
+  // Its own query, not one over both: a guide with five write-ups must never push a "this did not
+  // hold" off the list the reader is warned by.
+  assert.match(page, /FROM verdict\s*\n\s*WHERE guide_id = \? AND ok = 1 AND writeup <> ''/);
+  assert.match(
+    page,
+    /FROM verdict\s*\n\s*WHERE guide_id = \? AND ok = 0/,
+    "the warning still stands alone",
+  );
+  assert.doesNotMatch(
+    page,
+    /SELECT[^;]*account_id[^;]*FROM verdict/,
+    "and nobody is named: the key in the URL is the whole authorisation, so this page is public",
+  );
 });

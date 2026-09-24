@@ -173,9 +173,37 @@ export default defineEventHandler(async (event) => {
     })(),
   }));
 
+  /**
+   * What people had to adapt to make this work where they ran it.
+   *
+   * The other half of the same hole the aside above fills. A hand-in that said it did not hold had
+   * nowhere to put the report, so it became a guide titled "Correction: …". A hand-in that DID
+   * hold, and found that step 4 needed MAIL_FROM and the bucket name on that codebase, had `ok`
+   * (a boolean), `note` (280 characters) and `evidence` (what you ran) — so it became a guide too,
+   * titled "The email step needs MAIL_FROM and the R2 bucket name", with an id and a share link
+   * and an inbox row asking somebody to take it, when what it is is a paragraph about this guide.
+   *
+   * It is a separate query rather than one over both, so a guide with five write-ups can never
+   * push a "this did not hold" off the list: the warning is the one thing that must always show.
+   * Nobody is named here, for the reason the failing list names nobody — this page is as public as
+   * its link, and the hub, which knows who is asking, is where people have names.
+   */
+  const adapted = (
+    (
+      await db(event)
+        .prepare(
+          `SELECT writeup, at FROM verdict
+            WHERE guide_id = ? AND ok = 1 AND writeup <> '' ORDER BY at DESC LIMIT 5`,
+        )
+        .bind(row.id)
+        .all<{ writeup: string; at: string }>()
+    ).results ?? []
+  ).map((v) => ({ at: v.at, writeup: v.writeup }));
+
   const body = bodyOf(row.markdown);
   const { html, outline, rest, cut } = renderBody(body, view);
   return {
+    adapted,
     failing,
     id: row.id,
     meta: parseMeta(row.markdown),

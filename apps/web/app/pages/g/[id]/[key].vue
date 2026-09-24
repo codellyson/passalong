@@ -114,6 +114,8 @@ const followUp = computed(() => followUpAsk(id.value));
 const followUps = computed(() => guide.value?.followUps ?? []);
 /** Standing verdicts saying it does not hold, with what was run. See the server route. */
 const failing = computed(() => guide.value?.failing ?? []);
+/** What people had to change to make it work where they ran it. See the server route. */
+const adapted = computed(() => guide.value?.adapted ?? []);
 const parent = computed(() => guide.value?.parent ?? null);
 
 // ---- the dock ----------------------------------------------------------------------------------
@@ -360,6 +362,23 @@ usePage({
               </li>
             </ul>
             <pre v-else-if="f.detail" class="notworking-ran">{{ f.detail }}</pre>
+          </div>
+        </aside>
+
+        <!-- After the warning and before the guide, for the same reason the warning is there: it is
+             what somebody about to follow the Steps needs before they start, not after. This is a
+             hand-in that DID hold and had something to say about what it took — which had no home
+             either, so it arrived as a follow-up guide with an id and an inbox row, when it is a
+             paragraph about this guide. Nobody is named, as above. -->
+        <aside v-if="adapted.length" class="adapted">
+          <p class="m-0 font-ui text-sm font-semibold">
+            {{ adapted.length === 1 ? "One person had to adapt this" : `${adapted.length} people had to adapt this` }}
+          </p>
+          <div v-for="(a, i) in adapted" :key="i" class="mt-3">
+            <p class="m-0 font-ui text-sm text-muted">
+              <time :datetime="a.at">{{ a.at.slice(0, 10) }}</time> — it worked here, with changes
+            </p>
+            <p class="adapted-said">{{ a.writeup }}</p>
           </div>
         </aside>
 

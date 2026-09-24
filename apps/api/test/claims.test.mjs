@@ -1274,3 +1274,53 @@ test("a team's handoff a teammate already said worked is not taken again, and sa
   db.raw.exec("UPDATE guide SET to_account_id = 'me' WHERE id = 'h1'");
   assert.equal((await take(db, "h1", third, { at: T0 })).claim.agent_id, "agent-third");
 });
+
+test("a hand-in that worked can say what it took, and that is not a new guide", async () => {
+  // The last of the four channels an agent had to manufacture a guide for. `ok` is a boolean,
+  // `note` is 280 characters, and `evidence` is refused unless it is what you ran — so an agent
+  // that followed a guide, landed it, and found that one step needed something the guide never
+  // mentions had nowhere to put that sentence. It published it: "The email step needs MAIL_FROM
+  // and the R2 bucket name", with an id, a share link and an inbox row asking somebody to take it.
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
+  await take(db, "h1", ada, { at: T0 });
+
+  const said =
+    "Step 4 needed MAIL_FROM and the bucket name; the guide assumes both are in wrangler.toml.";
+  const done = await handIn(db, "h1", ada, {
+    at: T0,
+    note: "worked",
+    evidence: PROOF,
+    writeup: said,
+  });
+  assert.ok("claim" in done, done.error);
+  assert.equal(done.claim.writeup, said, "it lands on the claim, beside the evidence");
+  assert.equal(done.claim.evidence, PROOF, "and does not stand in for it");
+});
+
+test("a write-up is never what a hand-in is refused for", async () => {
+  // It is prose about something nobody can specify in advance. A rule about its length would only
+  // teach agents to pad it, and a hand-in with real evidence and nothing to adapt is the common
+  // case, not a lapse.
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
+  await take(db, "h1", ada, { at: T0 });
+  const done = await handIn(db, "h1", ada, { at: T0, note: "worked", evidence: PROOF });
+  assert.ok("claim" in done, "no write-up is not a problem");
+  assert.equal(done.claim.writeup, "");
+
+  guide("h2", { kind: "transfer", target: "" });
+  await take(db, "h2", ada, { at: T0 });
+  const thin = await handIn(db, "h2", ada, {
+    at: T0,
+    note: "worked",
+    evidence: "",
+    writeup: "a lot",
+  });
+  assert.equal(thin.status, 400, "and it is not evidence either");
+  assert.match(thin.error, /send `evidence`/);
+});
