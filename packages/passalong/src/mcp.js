@@ -823,19 +823,47 @@ export function buildServer() {
       title: "Attach a screenshot",
       annotations: { ...ADDS, openWorldHint: true },
       description:
-        "Upload an image from this machine as evidence, and get back the markdown line that " +
+        "Upload an image as evidence — a path in `file`, or the bytes in `data` when you have " +
+        "the image and no file — and get back the markdown line that " +
         "points at it. Put that line in the guide body — a guide travels as markdown to whoever " +
         "holds its link, so evidence beside the document does not travel at all. Publishing " +
         "claims whatever the markdown names, so attach first and publish after. png, jpg, webp " +
         "or gif.",
       inputSchema: {
-        file: z.string().describe("path to the image on this machine"),
+        file: z
+          .string()
+          .default("")
+          .describe("path to the image on this machine; leave out when sending `data`"),
+        data: z
+          .string()
+          .default("")
+          .describe(
+            "the image itself, base64 (a data: URL is fine), for when you have the bytes and no " +
+              "file — a browser tool that hands back an image inline and never writes to disk. " +
+              "5MB; larger belongs in create_upload",
+          ),
+        type: z
+          .string()
+          .default("image/png")
+          .describe("media type of `data`: image/png, image/jpeg, image/webp or image/gif"),
         name: z.string().default("").describe("label for the image; defaults to its filename"),
       },
     },
-    async ({ file, name }) => {
+    async ({ file, data, type, name }) => {
       try {
-        const shot = await passalong.attach(file, { name: name || "" });
+        if (!file && !data) {
+          return fail(
+            new Error(
+              "send `file` (a path on this machine) or `data` (the image, base64). If your " +
+                "screenshot is a tool result you cannot write out, capture it to a file instead " +
+                "— a headless browser's page.screenshot({ path }) or your platform's capture " +
+                "command — and pass that path.",
+            ),
+          );
+        }
+        const shot = data
+          ? await passalong.attachBytes(data, { name: name || "", type: type || "image/png" })
+          : await passalong.attach(file, { name: name || "" });
         return text(
           `${JSON.stringify({ id: shot.id, url: shot.url, bytes: shot.bytes }, null, 2)}\n\n` +
             `Put this in the guide body:\n${shot.markdown}`,

@@ -1246,7 +1246,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "work (publish_guide it first). A handoff or a bug takes `ok`, whether its Verification " +
         "held, and `note` saying what went wrong when it did not. EVERY CHECK IS RUN OR SHOWN: put the " +
         "command in `cmd` and it is executed here before this hand-in lands, or, when no command " +
-        "can settle it, call attach_screenshot and put the line it returns in `ran`. A command " +
+        "can settle it, call attach_screenshot and put the line it returns in `ran` — capture it to " +
+        "a file first if your browser hands images back inline. A command " +
         "you paste into `ran` is you typing, and an account of what you saw is refused. If it held but you had to change " +
         "something to get there, put that in `writeup`: the next person to open the guide is " +
         "shown it, so it does not need to be a guide of its own.",

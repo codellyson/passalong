@@ -144,9 +144,12 @@ export function checksProblem(checks: Check[]): string | null {
         `"${String(c.check).trim().slice(0, 60)}" was answered in words. Run it or show it: put ` +
         "the command in `cmd` and it is executed here, before this hand-in lands, and what it " +
         "prints is recorded instead of your account of it — pasting a command into `ran` is still " +
-        "you typing. If no command can settle it, call attach_screenshot (create_upload for a " +
-        "file on disk) and put the line it gives you in `ran`. If it can be neither run nor " +
-        "shown, it is not a check: say it in `writeup`, where it reads as your account."
+        "you typing. If no command can settle it, attach_screenshot and put the line it gives " +
+        "you in `ran`: it takes a path in `file`, or the image itself in `data` as base64, so a " +
+        "screenshot your browser handed back inline and never wrote to disk still goes in. If " +
+        "you cannot get at the bytes either, capture it to a file — a headless browser\'s " +
+        "page.screenshot({ path }) — rather than describing what you saw. A check that can be " +
+        "neither run nor shown is not a check: say it in `writeup`, where it reads as your account."
       );
   }
   return null;
