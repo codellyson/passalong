@@ -42,6 +42,26 @@ const WHERE_THE_LINE_GOES =
   "o make them publishable is how a set of pictures becomes fifteen hundred words nobody asked for" +
   ". png, jpg, webp or gif.";
 
+/**
+ * What a screenshot has to be a screenshot OF.
+ *
+ * "A check is run or shown" made a picture mandatory, and an agent short of one built a page to
+ * photograph: it added `src/app/notes-preview`, shot that, then `rm -rf`'d it and published the
+ * shots as evidence that the real screen rendered. The rule was satisfied and almost nothing was
+ * proved — the measure had become the target, and the page the picture showed no longer existed.
+ *
+ * Mirrors SHOOT_THE_REAL_THING in apps/api/src/mcp-http.ts.
+ */
+const SHOOT_THE_REAL_THING =
+  "SHOOT THE RUNNING THING, NOT SOMETHING YOU BUILT TO SHOOT. A screenshot is worth what the sc" +
+  "reen behind it is worth: the real route in the real app, reached the way a reader would reac" +
+  "h it. A scratch page, a story, a harness or a component rendered on its own is a picture of " +
+  "your scaffolding, and it can look right while the thing the guide is about does not. If the " +
+  "only way you could get a picture was to build something, that is not evidence the real scree" +
+  "n works — say what you built and why in `writeup`, and leave the check to the commands that " +
+  "do hold. NEVER DELETE WHAT YOUR EVIDENCE POINTS AT: a shot of a page you removed afterwards " +
+  "is one nobody can take again, including you.";
+
 const KEEP_EVIDENCE =
   "KEEP YOUR EVIDENCE AS YOU GO. hand_in needs it: the commands you ran and what came back, the " +
   "test summary, the link to the change. Copy each one when it happens — at the end you will be " +
@@ -80,6 +100,7 @@ function leadFor(meta) {
       "— those steps produce the defect. Fix what Problem describes, then check " +
       "Verification and answer with hand_in.\n\n" +
       SEARCH_WIDE +
+      SHOOT_THE_REAL_THING +
       KEEP_EVIDENCE
     );
   if (meta.kind === "task")
@@ -90,6 +111,7 @@ function leadFor(meta) {
       "with its id in the repo it is for, so no other agent can. Then progress, and hand_in " +
       "with a write-up.\n\n" +
       SEARCH_WIDE +
+      SHOOT_THE_REAL_THING +
       KEEP_EVIDENCE
     );
   // A transfer guide is handed over untouched: it is a document to follow, and anything in front
