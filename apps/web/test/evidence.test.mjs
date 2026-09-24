@@ -9,6 +9,14 @@ import { test } from "node:test";
 import { evidenceParts } from "../app/utils/evidence.ts";
 
 const SHOT = "https://passalong.dev/v1/shots/k3mq2xa7";
+/**
+ * What a shot is drawn as: the path, whatever origin it was written against.
+ *
+ * The page's CSP is `img-src 'self'`, so an absolute URL recorded against another host — the old
+ * passalong.kreativekorna.com, a staging origin, a hand-in from before PUBLIC_ORIGIN changed — is
+ * blocked by the browser, and a blocked image looks exactly like evidence nobody attached.
+ */
+const AT = "/v1/shots/k3mq2xa7";
 
 test("plain output is one run, kept exactly as it was written", () => {
   const text = "$ npm test\n> 285 pass, 0 fail\n\n  indented, and  spaced";
@@ -19,13 +27,13 @@ test("a screenshot is its own block, in the order it was written", () => {
   const parts = evidenceParts(`before\n![the 429](${SHOT})\nafter`);
   assert.deepEqual(parts, [
     { kind: "run", parts: [{ text: "before" }] },
-    { kind: "shot", url: SHOT, alt: "the 429" },
+    { kind: "shot", url: AT, alt: "the 429" },
     { kind: "run", parts: [{ text: "after" }] },
   ]);
 });
 
 test("a bare screenshot url is a screenshot too, with no alt to give it", () => {
-  assert.deepEqual(evidenceParts(SHOT), [{ kind: "shot", url: SHOT, alt: "" }]);
+  assert.deepEqual(evidenceParts(SHOT), [{ kind: "shot", url: AT, alt: "" }]);
 });
 
 test("any other link is followable where it sits, and stays in the run", () => {
@@ -43,14 +51,18 @@ test("only a screenshot this server serves is drawn; anything else is a link", (
     { kind: "run", parts: [{ text: "![shot](" }, { text: outside, url: outside }, { text: ")" }] },
   ]);
   assert.deepEqual(evidenceParts("http://passalong.dev/v1/shots/abc123"), [
-    { kind: "shot", url: "http://passalong.dev/v1/shots/abc123", alt: "" },
+    { kind: "shot", url: "/v1/shots/abc123", alt: "" },
+  ]);
+  // Written against an origin this page is not on, and still drawn: the id is what identifies it.
+  assert.deepEqual(evidenceParts("https://passalong.kreativekorna.com/v1/shots/abc123"), [
+    { kind: "shot", url: "/v1/shots/abc123", alt: "" },
   ]);
 });
 
 test("nothing, or only whitespace, is nothing to show", () => {
   assert.deepEqual(evidenceParts(""), []);
   assert.deepEqual(evidenceParts("   \n\n "), []);
-  assert.deepEqual(evidenceParts(`\n${SHOT}\n \n`), [{ kind: "shot", url: SHOT, alt: "" }]);
+  assert.deepEqual(evidenceParts(`\n${SHOT}\n \n`), [{ kind: "shot", url: AT, alt: "" }]);
 });
 
 test("a trailing full stop is not part of the link", () => {
@@ -58,4 +70,21 @@ test("a trailing full stop is not part of the link", () => {
   assert.deepEqual(evidenceParts(`see ${pr}.`), [
     { kind: "run", parts: [{ text: "see " }, { text: pr, url: pr }, { text: "." }] },
   ]);
+});
+
+test("the guide page draws evidence with the renderer, not as raw text", async () => {
+  // It printed `![Sales Order PDF](https://passalong.dev/v1/shots/d2eg7b2xaqx7)` as characters.
+  // The hub had the renderer from the day evidence could carry a picture; the share page — the one
+  // the link goes to, the one somebody outside the team opens — put the same text in a <pre>.
+  const { readFile } = await import("node:fs/promises");
+  const page = await readFile(new URL("../app/pages/g/[id]/[key].vue", import.meta.url), "utf8");
+  for (const slot of ["c.ran", "f.detail", "a.writeup"]) {
+    assert.match(
+      page,
+      new RegExp(`<HubEvidence[^>]*:text="${slot.replace(".", "\\.")}"`),
+      `${slot} is drawn by the renderer`,
+    );
+  }
+  // And nothing is left printing evidence into a <pre> of its own.
+  assert.doesNotMatch(page, /<pre[^>]*>\{\{\s*(c\.ran|f\.detail|a\.writeup)/);
 });

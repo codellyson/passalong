@@ -10,7 +10,18 @@
   writer of the evidence chose would make a reviewer's browser fetch from a stranger.
 -->
 <script setup lang="ts">
-const props = defineProps<{ text: string }>();
+const props = defineProps<{
+  text: string;
+  /**
+   * Draw the words as prose rather than terminal output.
+   *
+   * A check with no command behind it is the agent's sentence about what it saw, and the share
+   * page says so by setting it in the reading face instead of the mono one. It still comes through
+   * here, because a screenshot in it has to become a picture wherever it was written — that was
+   * the bug: the guide page printed `![Sales Order PDF](https://…/v1/shots/d2eg7b2xaqx7)` as text.
+   */
+  prose?: boolean;
+}>();
 const parts = computed(() => evidenceParts(props.text));
 
 /**
@@ -48,12 +59,21 @@ const open = ref(false);
          evidence behind a bar nobody looks for. A long run is folded instead, which says there is
          more and opens it where it is. -->
     <div
-      class="relative overflow-hidden rounded-1 bg-surface p-3"
-      :class="long && !open ? 'max-h-[24rem]' : ''"
+      class="relative overflow-hidden"
+      :class="[prose ? '' : 'rounded-1 bg-surface p-3', long && !open ? 'max-h-[24rem]' : '']"
     >
       <template v-for="(p, i) in parts" :key="i">
+        <p
+          v-if="p.kind === 'run' && prose"
+          class="m-0 font-ui text-sm leading-relaxed whitespace-pre-wrap text-fg"
+        ><template v-for="(part, k) in p.parts" :key="k"><a
+            v-if="part.url"
+            :href="part.url"
+            target="_blank"
+            rel="noopener nofollow"
+          >{{ part.text }}</a><template v-else>{{ part.text }}</template></template></p>
         <pre
-          v-if="p.kind === 'run'"
+          v-else-if="p.kind === 'run'"
           class="m-0 font-code text-xs leading-relaxed whitespace-pre-wrap break-words text-fg"
         ><template v-for="(part, k) in p.parts" :key="k"><a
             v-if="part.url"
@@ -79,7 +99,8 @@ const open = ref(false);
       <!-- The fold is visible, not a hard cut: a flat edge reads as the end of the evidence. -->
       <div
         v-if="long && !open"
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-[var(--surface)]"
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent"
+        :class="prose ? 'to-[var(--raised)]' : 'to-[var(--surface)]'"
         aria-hidden="true"
       />
     </div>

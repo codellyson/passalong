@@ -358,10 +358,10 @@ usePage({
             <ul v-if="f.checks.length" class="m-0 mt-2 list-none p-0">
               <li v-for="(c, j) in f.checks" :key="j" class="mt-2">
                 <p class="m-0 font-ui text-sm font-medium">{{ c.check }}</p>
-                <pre class="notworking-ran">{{ c.ran }}</pre>
+                <HubEvidence :text="c.ran" />
               </li>
             </ul>
-            <pre v-else-if="f.detail" class="notworking-ran">{{ f.detail }}</pre>
+            <HubEvidence v-else-if="f.detail" :text="f.detail" />
           </div>
         </aside>
 
@@ -388,7 +388,7 @@ usePage({
                   <span class="adapted-badge" :title="`${c.cmd} → exited ${c.exit === null ? 'nothing' : c.exit}`">ran</span>
                   {{ c.check }}
                 </p>
-                <pre class="adapted-ran">{{ c.ran }}</pre>
+                <HubEvidence :text="c.ran" />
               </li>
             </ul>
 
@@ -397,7 +397,7 @@ usePage({
             <ul v-if="a.said.length" class="m-0 mt-2 list-none p-0">
               <li v-for="(c, j) in a.said" :key="`said-${j}`" class="mt-2">
                 <p class="m-0 font-ui text-sm font-medium">{{ c.check }}</p>
-                <p class="adapted-said">{{ c.ran }}</p>
+                <HubEvidence :text="c.ran" prose />
               </li>
             </ul>
 
@@ -407,7 +407,7 @@ usePage({
               <p class="mt-3 mb-0 font-ui text-xs tracking-wide text-muted uppercase">
                 What they said they changed
               </p>
-              <p class="adapted-said adapted-prose">{{ a.writeup }}</p>
+              <HubEvidence :text="a.writeup" prose />
             </template>
             <p v-else-if="!a.ran.length && !a.said.length" class="adapted-said">
               Nothing was recorded about what it took.
