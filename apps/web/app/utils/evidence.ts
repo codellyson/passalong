@@ -21,6 +21,7 @@ export interface EvidenceRun {
 /** A screenshot this server serves, drawn as a picture. */
 export interface EvidenceShot {
   kind: "shot";
+  /** `/v1/shots/<id>` — a path, so whichever origin the reader is on serves it. */
   url: string;
   alt: string;
 }
@@ -74,7 +75,19 @@ export function evidenceParts(text: string): EvidencePart[] {
   for (const m of said.matchAll(SHOTS)) {
     const start = m.index ?? 0;
     out.push(...run(said.slice(at, start)));
-    out.push({ kind: "shot", url: (m[2] || m[3]) as string, alt: m[1] || "" });
+    // Kept as a path, not the address it was written as.
+    //
+    // A shot is identified by its id, and every origin this product has served from answers the
+    // same `/v1/shots/<id>`. The page's own Content-Security-Policy is `img-src 'self'`, so an
+    // absolute URL recorded against a different host — the old passalong.kreativekorna.com, a
+    // staging origin, a hand-in made before PUBLIC_ORIGIN changed — is blocked, and a blocked
+    // image is indistinguishable from evidence nobody attached. Same-origin by construction.
+    const absolute = (m[2] || m[3]) as string;
+    out.push({
+      kind: "shot",
+      url: absolute.slice(absolute.indexOf("/v1/shots/")),
+      alt: m[1] || "",
+    });
     at = start + m[0].length;
   }
   out.push(...run(said.slice(at)));
