@@ -232,7 +232,7 @@ export function parseMeta(markdown: string): Meta {
   // Seeded here and not only at the end: a document with no frontmatter, or an unterminated one,
   // returns early, and guide.js's parse() seeds it on that path too. The corpus caught the pair
   // disagreeing about exactly that.
-  const meta: Meta = { tags: [], stack_assumptions: [], kind: "transfer" };
+  const meta: Meta = { tags: [], stack_assumptions: [], kind: "" };
   const parts = split(markdown);
   if (!parts) return meta;
   let listKey: string | null = null;
@@ -264,10 +264,21 @@ export function parseMeta(markdown: string): Meta {
   // there was a rule are still stored as they were typed, and re-spelling them in the document is
   // something only their author can do — every surface that reads one shows one style meanwhile.
   meta.tags = tagList(meta.tags);
-  // What it is, said rather than inferred, exactly as packages/passalong/src/guide.js seeds it —
-  // that file defines the format and this mirrors it. An unknown spelling is left alone to be
-  // refused by name rather than quietly read as a transfer guide.
-  if (!String(meta.kind ?? "").trim()) meta.kind = "transfer";
+  // Absent is absent. It is NOT a transfer guide.
+  //
+  // This line, and the sentence publish_guide tells every agent — "kind: task (the default)" —
+  // disagreed for thirteen days. An agent that left `kind:` off, believing what it had been told,
+  // got a transfer guide. 162 of 200 guides in real use are labelled transfer; their titles are
+  // tasks and bug reports. Everything downstream followed from that: a transfer has no states, so
+  // nothing could show as in progress; it demands Problem and Steps, so a two-line correction was
+  // padded to six sections; and there is nowhere to report into one, so agents published a second
+  // guide to carry what they had found.
+  //
+  // So it stays empty and validate() refuses it by name. The back-compat this default protected
+  // is a guide written before kinds existed being re-shared; that guide is re-shared once with an
+  // explicit `kind: transfer`, which is a sentence its author can write, unlike thirteen days of
+  // mislabelled work nobody could see.
+  meta.kind = String(meta.kind ?? "").trim();
   return meta;
 }
 

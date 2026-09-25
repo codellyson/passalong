@@ -18,6 +18,7 @@ import {
 const SAMPLE = `---
 id: k3mq2xa7
 title: "Add Paystack webhook: verify signature"
+kind: transfer
 created: 2026-09-03T10:00:00.000Z
 author: Lukman
 source_context: monieplan@main
@@ -156,11 +157,19 @@ test("a task is a brief with Acceptance and no Steps", () => {
   assert.ok(validate(open).some((e) => /## Acceptance/.test(e)));
 });
 
-test("a guide with no kind is read as a transfer guide, and then says so", () => {
-  // It used to come back undefined and be decided again by every reader — six of them, and one
-  // decided `task`. Now the read decides once and the document carries the answer.
-  assert.equal(parse(SAMPLE).meta.kind, "transfer");
-  assert.deepEqual(validate(parse(SAMPLE)), []);
+test("a guide with no kind is refused, not read as a transfer guide", () => {
+  // This test used to assert the opposite, and the opposite was the bug. Seeding `transfer` for an
+  // unstated kind, while publish_guide's own description promised "kind: task (the default)",
+  // stored 162 of 200 real guides as transfers when their titles were tasks and bug reports. A
+  // transfer has no states, so nothing showed as in progress; it demands Problem and Steps, so
+  // short corrections were padded into six sections; and there is nowhere to report into one, so
+  // agents published a second guide to carry what they found.
+  const unsaid = SAMPLE.replace("kind: transfer\n", "");
+  assert.equal(parse(unsaid).meta.kind, "", "absent is absent");
+  assert.ok(
+    validate(parse(unsaid)).some((e) => /say what this is/.test(e)),
+    "and the author is asked which of the three it is",
+  );
   // ...and a transfer guide still requires the Steps a bug refuses.
   assert.ok(
     validate({ meta: { title: "t" }, body: "## Problem\np\n## Reproduce\nx" }).some((e) =>

@@ -11,7 +11,7 @@ delete process.env.PASSALONG_TOKEN;
 const { share } = await import("../src/passalong.js");
 
 const DOC = (id = "") =>
-  `---\n${id ? `id: ${id}\n` : ""}title: What the migration actually needed\n---\n\n## Problem\nx\n\n## Steps\n1. y\n`;
+  `---\n${id ? `id: ${id}\n` : ""}title: What the migration actually needed\nkind: transfer\n---\n\n## Problem\nx\n\n## Steps\n1. y\n`;
 
 test("--follows records the parent in the document that gets stored", async () => {
   // A bare id resolves without the network, so this is the whole write path end to end.

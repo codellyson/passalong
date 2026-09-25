@@ -255,10 +255,21 @@ export function parseFrontmatter(text) {
   // Only the lists every guide has. `blocked_by` is a task's, and defaulting it would write an
   // empty one into every guide anybody re-shares.
   for (const k of ["stack_assumptions", "tags"]) if (meta[k] === undefined) meta[k] = [];
-  // What it is, said rather than inferred. An unknown spelling is left alone for `validate()` to
-  // refuse by name: quietly turning `kind: buggy` into a transfer guide is the same guess this is
-  // here to remove.
-  if (!String(meta.kind ?? "").trim()) meta.kind = "transfer";
+  // Absent is absent. It is NOT a transfer guide.
+  //
+  // This line, and the sentence publish_guide tells every agent — "kind: task (the default)" —
+  // disagreed for thirteen days. An agent that left `kind:` off, believing what it had been told,
+  // got a transfer guide. 162 of 200 guides in real use are labelled transfer; their titles are
+  // tasks and bug reports. Everything downstream followed from that: a transfer has no states, so
+  // nothing could show as in progress; it demands Problem and Steps, so a two-line correction was
+  // padded to six sections; and there is nowhere to report into one, so agents published a second
+  // guide to carry what they had found.
+  //
+  // So it stays empty and `validate()` refuses it by name. The back-compat this default protected
+  // is a guide written before kinds existed being re-shared; that guide is re-shared once with an
+  // explicit `kind: transfer`, which is a sentence its author can write, unlike thirteen days of
+  // mislabelled work nobody could see.
+  meta.kind = String(meta.kind ?? "").trim();
   // Both ends of this module: what it reads and what it writes are in one style, so a guide
   // written before there was a rule comes back normalised and goes out normalised.
   meta.tags = tagList(meta.tags);
@@ -305,6 +316,10 @@ export function serializeFrontmatter(meta) {
   ];
   const out = [];
   for (const key of keys) {
+    // A kind nobody stated is left unstated. Writing `kind: ""` would put an answer in the
+    // document that its author never gave, and the next parse would read it back as a stated
+    // empty rather than an absent one — which is the whole distinction validate() turns on.
+    if (key === "kind" && !String(meta[key] ?? "").trim()) continue;
     const v = key === "tags" ? tagList(meta[key]) : meta[key];
     if (Array.isArray(v)) {
       out.push(v.length ? `${key}: [${v.map(quote).join(", ")}]` : `${key}: []`);
@@ -497,8 +512,9 @@ export function bugGuide({
 
 /** A draft with the section skeleton. Placeholders are HTML comments so they vanish when rendered. */
 export function template(meta = {}) {
-  // A task unless asked otherwise: most guides assign work. The transfer skeleton writes its kind
-  // out, since an absent kind: still means transfer to every client already installed.
+  // A task unless asked otherwise: most guides assign work. Every skeleton writes its kind out —
+  // absent is now refused rather than read as transfer, so a template that left it off would
+  // produce a document its own author could not publish.
   if (meta.kind === "bug") return bugTemplate(meta);
   if (meta.kind !== "transfer") return taskTemplate(meta);
   const body = [
