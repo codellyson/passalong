@@ -78,6 +78,7 @@ import {
   verifyStripe,
 } from "./billing.js";
 import * as claims from "./claims.js";
+import { CLIENT_HEADER, tooOld } from "./clients.js";
 import {
   type MailEnv,
   sendConsumed,
@@ -862,6 +863,13 @@ app.use("/v1/*", async (c, next) => {
             401,
             "That token isn't recognized, or it was revoked. Make a new one in your hub.",
           );
+    }
+    // A CLI too old to follow today's rules is refused here, on every call, because the refusal
+    // is the one text its agent is sure to read (clients.ts). `/v1/mcp` is the hosted server,
+    // which a token can also reach and which has no package to update.
+    if (c.req.path !== "/v1/mcp") {
+      const stale = tooOld(c.req.header(CLIENT_HEADER), c.req.header("user-agent"));
+      if (stale) return err(c, 426, stale);
     }
     c.set("account", row.account_id);
     // Best effort, off the response path: knowing a token is unused is what makes it safe to
@@ -3058,6 +3066,40 @@ app.put("/v1/guides/:id", async (c) => {
   if (existing && existing.account_id !== account)
     return err(c, 403, "That guide id is already used by another account. Choose a different id.");
 
+  // Handed in means the actor's turn is over. A new guide under work its publisher has handed in,
+  // and that is waiting on its author, is refused.
+  //
+  // Every follow-up in real use that nobody asked for came from exactly here: an agent handed in,
+  // was told something about its evidence, and published a second guide to carry what it had
+  // found — "Hand-in evidence: …", six screenshots with Problem and Steps around them. The author
+  // then had two documents to review and one of them was the agent answering itself. Instructions
+  // saying not to were already on hand_in; the note on every `take` said the opposite ("what you
+  // found doing it — publish that"), and an agent follows the text it read last.
+  //
+  // Only new guides: a write-up published before the hand-in can still be corrected. Only the
+  // hand-in's own account, and never the author of the parent, who is the one reviewing it. Only
+  // until the author answers: a send-back or a close deletes the claim, and an approved task is
+  // `consumed` while its claim stays in review, so it is excluded by status.
+  if (parentId && !existing) {
+    const handed = await c.env.DB.prepare(
+      `SELECT 1 FROM claim c JOIN guide g ON g.id = c.guide_id
+        WHERE c.guide_id = ? AND c.account_id = ? AND c.state = 'review' AND g.account_id <> ?
+          AND g.status <> 'consumed'
+        LIMIT 1`,
+    )
+      .bind(parentId, account, account)
+      .first();
+    if (handed)
+      return err(
+        c,
+        409,
+        `You handed ${parentId} in, and it is waiting on its author. What you did and found ` +
+          "belongs on that hand-in — `checks` for what you ran, `writeup` for what you had to " +
+          "adapt — not in a new guide. Nothing more is needed from you: stop, and tell the " +
+          "person it is handed in.",
+      );
+  }
+
   // Frontmatter still round-trips `promoted`, because the document is the record and a guide shared
   // a month ago must re-share today. It cannot be acquired, though: only a guide already carrying
   // the status keeps it, and that is read from the stored row rather than the markdown just sent.
@@ -4214,6 +4256,9 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   // nothing to add, and a field an agent must fill gets filled with "nothing to report".
   const writeup =
     typeof who.writeup === "string" ? who.writeup.trim().slice(0, claims.WRITEUP_MAX) : "";
+  // What it could break — the PR template's "Risk", for whoever reviews it. Optional for the same
+  // reason as the write-up: required, it is "low risk" on every hand-in and says nothing.
+  const risk = typeof who.risk === "string" ? who.risk.trim().slice(0, NOTE_MAX) : "";
 
   if (found.row.kind === "task") {
     const report = typeof who.report === "string" ? who.report.trim() : "";
@@ -4226,6 +4271,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
       fence: fenceIn(who.fence),
       pr: typeof who.pr === "string" ? who.pr : "",
       note,
+      risk,
     });
     if ("error" in done)
       return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
@@ -4266,6 +4312,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
     evidence,
     checks,
     writeup,
+    risk,
     fence: fenceIn(who.fence),
   });
   await claimEvidenceShots(c, who.account, found.row.id, evidence);
@@ -4478,6 +4525,8 @@ app.get("/v1/handed_in", async (c) => {
       // open the guide sees it there; both, because the author is the one who decides whether the
       // guide itself should change, and they cannot decide that from a row that hides it.
       writeup: r.claim.writeup,
+      // What they think it could break, so the author knows where to look before closing.
+      risk: r.claim.risk,
       at: r.claim.updated,
     })),
   });

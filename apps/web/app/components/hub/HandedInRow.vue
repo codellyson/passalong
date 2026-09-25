@@ -26,23 +26,8 @@ const where = computed(() => {
   return [props.h.place, machine].filter(Boolean).join(" · ");
 });
 
-/**
- * What was run, against the line it answers.
- *
- * The evidence used to arrive as one block, so a reviewer read "the sixth is refused with 429" in
- * the guide and then went hunting for `429` in a wall of output, once per line. The agent already
- * knows which output answers which line — it quoted the line — so it says so, and this draws the
- * pairs. A hand-in from before this, or from a person in the browser, has only the block, and that
- * is what the fallback below is for.
- */
-const checks = computed(() => {
-  try {
-    const rows = JSON.parse(props.h.checks || "[]");
-    return Array.isArray(rows) ? rows.filter((r) => r?.check) : [];
-  } catch {
-    return [];
-  }
-});
+/** Close waits until what they ran has been opened. See HandIn.vue. */
+const read = ref(false);
 
 /** What was handed in, named. The author is deciding here, and a bug and a task are not judged
  * the same way. See app/utils/kind.ts. */
@@ -85,35 +70,13 @@ function send() {
           :class="badge.class"
         >{{ badge.label }}</span>{{ h.title || h.id }}</a>
       <p v-if="h.note" class="mt-2 mb-0 text-sm text-muted">“{{ h.note }}”</p>
-      <!-- What they had to change to make it work there. Not folded, unlike the evidence below:
-           it is the one thing on this row that may mean the guide itself should change, and that
-           decision is the author's. The next person to open the guide is shown it too. -->
-      <p v-if="h.writeup" class="mt-2 mb-0 border-l-2 border-line-strong pl-3 text-sm whitespace-pre-wrap text-fg">
-        {{ h.writeup }}
-      </p>
-      <!-- The note is what they say; this is what ran. Folded, because the row is a queue of
-           several and the decision is usually made on the title and the note. -->
-      <details v-if="checks.length || h.evidence" class="mt-2">
-        <summary class="cursor-pointer font-ui text-xs text-muted">
-          {{ checks.length ? `What they ran, line by line (${checks.length})` : "What they ran" }}
-        </summary>
-        <!-- One block per line the guide asked for, the evidence under the line it answers. -->
-        <ol v-if="checks.length" class="m-0 mt-2 list-none space-y-3 p-0">
-          <li v-for="(c, i) in checks" :key="i">
-            <p class="m-0 flex items-baseline gap-2 font-ui text-sm font-medium text-fg">
-              <span
-                v-if="c.cmd"
-                class="shrink-0 rounded-1 border px-1.5 py-0.5 font-ui text-xs font-medium"
-                :class="c.ok ? 'border-ok text-ok' : 'border-danger text-danger'"
-                :title="`${c.cmd} → exited ${c.exit === null ? 'nothing' : c.exit}`"
-              >{{ c.ok ? "ran" : "failed" }}</span>
-              {{ c.check }}
-            </p>
-            <HubEvidence :text="c.ran" />
-          </li>
-        </ol>
-        <HubEvidence v-else :text="h.evidence" />
-      </details>
+      <HubHandIn
+        :evidence="h.evidence"
+        :checks="h.checks"
+        :writeup="h.writeup"
+        :risk="h.risk"
+        @read="read = true"
+      />
       <p v-if="where" class="mt-3 mb-0 font-code text-xs text-muted">{{ where }}</p>
 
       <div
@@ -145,9 +108,12 @@ function send() {
       </div>
     </div>
 
-    <div v-if="!sending" class="flex shrink-0 items-center gap-2">
-      <button class="btn primary sm" @click="onCloseHandedIn(h)">close</button>
-      <button class="btn outline danger sm" @click="askWhy">send back</button>
+    <div v-if="!sending" class="flex shrink-0 flex-col items-end gap-1">
+      <div class="flex items-center gap-2">
+        <button class="btn primary sm" :disabled="!read" @click="onCloseHandedIn(h)">close</button>
+        <button class="btn outline danger sm" @click="askWhy">send back</button>
+      </div>
+      <span v-if="!read" class="font-ui text-xs text-muted">open what they ran to close</span>
     </div>
   </li>
 </template>

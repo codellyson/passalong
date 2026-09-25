@@ -188,6 +188,8 @@ export interface ClaimRow {
   checks: string;
   /** What had to be adapted to make it work here. Prose, optional, and shown on the guide. */
   writeup: string;
+  /** What it could break, in the hand-in's own words. Optional, for the reviewer. See 0032. */
+  risk: string;
   /** The claim's generation. 0 on a claim taken before 0029_claim_fence.sql existed. */
   fence: number;
   report_id: string;
@@ -654,6 +656,7 @@ export async function finish(
     checks = [],
     pr = "",
     note = "",
+    risk = "",
     fence,
   }: {
     at: string;
@@ -663,6 +666,8 @@ export async function finish(
     checks?: Check[];
     pr?: string;
     note?: string;
+    /** What it could break. See 0032_claim_risk.sql. */
+    risk?: string;
     /** The claim's generation, from take. Checked when it is there. See 0029_claim_fence.sql. */
     fence?: number;
   },
@@ -688,7 +693,7 @@ export async function finish(
   const res = await db
     .prepare(
       `UPDATE claim SET state = 'review', report_id = ?, pr = ?, evidence = ?, checks = ?,
-              note = COALESCE(NULLIF(?, ''), note), updated = ?
+              risk = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
@@ -708,6 +713,9 @@ export async function finish(
             })),
           ).slice(0, EVIDENCE_MAX * 2)
         : "",
+      String(risk ?? "")
+        .trim()
+        .slice(0, NOTE_MAX),
       note.trim().slice(0, NOTE_MAX),
       at,
       id,
@@ -1150,6 +1158,7 @@ export async function handIn(
     evidence,
     checks = [],
     writeup = "",
+    risk = "",
     person = false,
     fence,
   }: {
@@ -1178,6 +1187,8 @@ export async function handIn(
      * `ok` is a boolean, `note` is 280 characters, and `evidence` is what you ran.
      */
     writeup?: string;
+    /** What it could break. See 0032_claim_risk.sql. */
+    risk?: string;
     person?: boolean;
     fence?: number;
   },
@@ -1188,7 +1199,7 @@ export async function handIn(
   if (bad) return { status: 400, error: bad };
   const res = await db
     .prepare(
-      `UPDATE claim SET state = 'review', evidence = ?, checks = ?, writeup = ?,
+      `UPDATE claim SET state = 'review', evidence = ?, checks = ?, writeup = ?, risk = ?,
               note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
@@ -1212,6 +1223,9 @@ export async function handIn(
       String(writeup ?? "")
         .trim()
         .slice(0, WRITEUP_MAX),
+      String(risk ?? "")
+        .trim()
+        .slice(0, NOTE_MAX),
       String(note ?? "")
         .trim()
         .slice(0, NOTE_MAX),

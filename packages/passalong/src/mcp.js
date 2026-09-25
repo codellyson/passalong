@@ -383,7 +383,19 @@ export function buildServer() {
     }
   }
 
-  async function doHandIn({ id, ok, note, evidence, checks, writeup, markdown, report, pr, cwd }) {
+  async function doHandIn({
+    id,
+    ok,
+    note,
+    evidence,
+    checks,
+    writeup,
+    risk,
+    markdown,
+    report,
+    pr,
+    cwd,
+  }) {
     try {
       // A check that names a command is run here, before anything is recorded, and its exit code
       // decides it rather than the agent's account of it. A failure is refused with the command's
@@ -404,6 +416,7 @@ export function buildServer() {
         evidence: evidence || "",
         checks: done.checks,
         writeup: writeup || "",
+        risk: risk || "",
         markdown,
         report,
         pr: pr || "",
@@ -764,6 +777,15 @@ export function buildServer() {
               "step that needed something the guide does not mention. Prose, and optional: leave " +
               "it out when it worked as written. The next person to open the guide is shown it, " +
               "which is why it does not need to be a guide of its own",
+          ),
+        risk: z
+          .string()
+          .optional()
+          .describe(
+            "what this could break, in one line — the part of a PR template's Risk that is " +
+              "worth reading: a shared helper changed, a migration that cannot be undone, a " +
+              "route other clients call. Optional; leave it out when there is nothing specific, " +
+              'rather than writing "low risk". Its author reads it before accepting the work',
           ),
         markdown: z
           .string()

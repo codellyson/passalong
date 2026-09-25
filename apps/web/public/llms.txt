@@ -186,8 +186,11 @@ second copy, and every copy counts against the author's synced limit.
 
 A follow-up is more context for a guide, written as a guide of its own and linked under the
 original. When a guide needs more context — a missing detail, a step that needed explaining, what
-changed since, what you found doing it — publish that context with `parent` set to the guide's id on
-`publish_guide`, or `passalong share --follows <id>`. A follow-up is a whole guide, not a reply: it
+changed since — publish that context with `parent` set to the guide's id on `publish_guide`, or
+`passalong share --follows <id>`. What you did and found working on a guide is not a follow-up: it
+goes on `hand_in`, in `checks` and `writeup` — and `risk`, one line on what it could break, when
+there is something specific. Once you have handed a guide in, a new guide under it
+is refused until its author has answered. A follow-up is a whole guide, not a reply: it
 has its own id, verdicts and pulls. `parent` on `publish_guide` and `--follows` need passalong 0.3.1
 or later.
 

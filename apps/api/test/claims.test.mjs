@@ -616,6 +616,26 @@ test("only the author takes it back, and only what somebody is holding", async (
   assert.match(held.error, /handed in and waiting on you/);
 });
 
+// The PR template's Risk: the one part of it a hand-in had no place for. Kept on the claim for the
+// reviewer, one line, and optional — never invented when it was not sent.
+test("a hand-in can say what it could break, on a handoff and a task alike", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
+  await take(db, "h1", ada, { at: T0 });
+  const risky = "changes the shared date helper every report uses";
+  const h = await handIn(db, "h1", ada, { at: T0, note: "", evidence: PROOF, risk: risky });
+  assert.equal(h.claim.risk, risky);
+
+  await next(db, A, { at: T0 });
+  const t = await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF });
+  assert.equal(t.claim.risk, "", "not sent is empty, not a default");
+  assert.equal((await db.prepare("SELECT risk FROM claim WHERE guide_id = 't1'").first()).risk, "");
+});
+
 test("releasing a task still writes where the work was left", async () => {
   // The task path is unchanged: `## Review notes` is a task's section, and a handoff has no place
   // for one — inventing a section inside somebody's published guide is not release's business.
