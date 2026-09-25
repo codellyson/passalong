@@ -31,8 +31,10 @@ or `?view=verify` for the view that leads with what to check and folds the imple
 `kind:` in the frontmatter says what a guide is for. Each asks for different behaviour, so read it
 before acting on anything.
 
-- `kind: task` is the default for a new guide; a guide with no `kind:` line is a transfer.
-- `kind: transfer` (or absent) — finished work to repeat here. Follow its `Steps`.
+- There is no default. A guide with no `kind:` line is refused, and so is a spelling that is not
+  one of the three. Say which it is; nothing will guess on your behalf.
+- `kind: transfer` — context exchange: what the next agent needs in order not to start cold, and
+  finished work to repeat here. It requires no sections, so write what is worth knowing and stop.
 - `kind: bug` — a defect to fix where it is. It has no `Steps` and nothing in it is a procedure to
   apply: `Reproduce` is how to see the bug and running it produces the bug, `Verification` is the
   behaviour that should have happened. Fix the defect, then check `Verification` and report back.
