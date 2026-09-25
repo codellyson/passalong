@@ -261,7 +261,9 @@ export function buildServer() {
         "Collect it as you work rather than writing it from memory at the end. hand_in without " +
         "it is refused, because the write-up and the verdict are both your word for your own " +
         "work and evidence is the part the person reviewing it can check.\n" +
-        `kind: task (the default) is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
+        "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
+        "is a spelling that is not one of the three. " +
+        `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
         "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
         "alone, and treat Acceptance as the definition of done. hand_in with `markdown`: a " +
         "transfer guide about what you did (guide_template kind transfer shows the shape) — its " +

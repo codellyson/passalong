@@ -14,14 +14,27 @@ public one, for agents *using* Passalong rather than changing it.
 - `packages/passalong` — the `passalong` CLI and the MCP server. Plain ESM JavaScript, no build step,
   no runtime deps beyond `@modelcontextprotocol/sdk` + `zod`. Published to npm as `passalong`.
   - `src/guide.js` — the guide format: frontmatter parse/serialize, validation, ids, template.
-    `kind` is decided once, on read: absent means `transfer`, `parseFrontmatter` seeds it, and the
-    publish route writes it back into the document. Nothing downstream may re-decide — six places
-    used to, and one of them guessed `task`. `validate()` refuses a guide with no kind, which can
-    now only be one built field by field in code.
+    **`kind` is stated by its author or the guide is refused.** `parseFrontmatter` normalises it
+    and seeds nothing; `validate()` refuses an absent one by name; `serializeFrontmatter` omits it
+    rather than writing `kind: ""`, because a stated empty and an absent one are different things
+    and the refusal turns on the difference. `PUT /v1/guides/:id` refuses it too — that is the
+    half that matters, because it runs for every client whatever version it is on.
 
-    **That is the rule for every field whose absence means something**, not a fact about `kind`:
-    the default is applied at the boundary, the answer is written into the record, and nothing
-    downstream applies it again. `packages/passalong/test/one-place.test.js` enforces it by reading
+    It used to seed `transfer`, while `publish_guide` told every agent "kind: task (the default)".
+    The two disagreed for thirteen days: 162 of 200 guides in real use were stored as transfers
+    while their titles were tasks and bug reports. A transfer has no states, so nothing showed as
+    in progress; it required Problem and Steps, so two-line corrections were padded into six
+    sections; and there is nowhere to report into one, so agents published a second guide to carry
+    what they found. **A silent default is a fabrication the product commits on the author's
+    behalf** — it puts an answer in the record that nobody gave.
+
+    Code that *builds* a guide states the kind it is building: a task's report is a transfer, said
+    where it is made. That is not a default, it is the caller knowing what it is constructing.
+
+    **The rule for every field whose absence means something**: either the author states it and
+    the boundary normalises it, or absence is refused. What is never allowed is inventing the
+    answer and writing it into the record, and nothing downstream may re-decide — six places used
+    to, and one of them guessed `task`. `packages/passalong/test/one-place.test.js` enforces it by reading
     the source, and `Meta.kind` in `apps/api/src/guide.ts` is non-optional so the type says it too.
     A fallback that is really a caller's invariant rather than a default — the task queue only ever
     hands out tasks — is written as the constant it is, where it is relied on. Add a field to that
@@ -153,10 +166,12 @@ public one, for agents *using* Passalong rather than changing it.
   `POST /v1/mcp`, for assistants that add remote servers. The HTTP one owns no logic — each tool
   dispatches back through the app's own routes with the caller's bearer token, so a rule lives in
   the route and nowhere else. Stateless on purpose: nothing subscribes, so nothing needs a session.
-- **A guide has a kind, and each asks something different of whoever receives one.** `transfer`
-  (or absent — every guide written before migration 0007 is one, and every installed client still
-  writes one that way; the API stores it spelled out since migration 0023) is finished work to repeat:
-  follow its `Steps`. `bug` is a defect to fix where it is. A bug's repro goes under `## Reproduce`
+- **A guide has a kind, it is always stated, and each asks something different of whoever receives
+  one.** `transfer` is context exchange — whatever the next agent needs in order not to start cold.
+  It **requires no sections**: context has no fixed shape, and demanding `## Problem` and `## Steps`
+  is what padded short notes into documents (of 56 follow-ups in real use, the ones filling that
+  template average 599 words and ten of sixteen were never opened; the ones ignoring it average 137
+  and every one was opened). `bug` is a defect to fix where it is. A bug's repro goes under `## Reproduce`
   and **never** `## Steps`, because `Steps` is the heading the MCP server tells every agent to
   follow — a repro under it means an agent reproduces the defect, checks the Verification, finds it
   false because the bug is real, and reports the guide as broken. `validate()` refuses a bug with a

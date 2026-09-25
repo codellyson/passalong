@@ -44,6 +44,10 @@ const checks = computed(() => {
   }
 });
 
+/** What was handed in, named. The author is deciding here, and a bug and a task are not judged
+ * the same way. See app/utils/kind.ts. */
+const badge = computed(() => kindBadge(props.h.kind));
+
 const sending = ref(false);
 const why = ref("");
 const field = ref<HTMLTextAreaElement | null>(null);
@@ -75,7 +79,11 @@ function send() {
         target="_blank"
         rel="noopener"
         class="mt-2 block text-base leading-snug font-semibold text-fg no-underline hover:text-accent"
-      >{{ h.title || h.id }}</a>
+      ><span
+          v-if="badge"
+          class="mr-2 rounded-1 border px-1.5 py-0.5 align-middle font-ui text-xs font-medium tracking-wide uppercase"
+          :class="badge.class"
+        >{{ badge.label }}</span>{{ h.title || h.id }}</a>
       <p v-if="h.note" class="mt-2 mb-0 text-sm text-muted">“{{ h.note }}”</p>
       <!-- What they had to change to make it work there. Not folded, unlike the evidence below:
            it is the one thing on this row that may mean the guide itself should change, and that

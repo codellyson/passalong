@@ -3087,16 +3087,38 @@ app.put("/v1/guides/:id", async (c) => {
     }
   }
 
+  /**
+   * What it is, said by its author. Refused here rather than guessed.
+   *
+   * This is the server half of the fix: the CLI parser stopped seeding `transfer`, but a client on
+   * any older version still publishes documents with no `kind:` line, and the row below used to
+   * coerce whatever arrived into `transfer`. Between them, 162 of 200 real guides were stored as
+   * transfers while their titles were tasks and bug reports — and publish_guide's own description
+   * had been promising "kind: task (the default)" the whole time.
+   *
+   * It has to be here because this runs for every client whatever version it is on, which is the
+   * lesson of a rule that shipped server-side while its remedy shipped by npm and never arrived.
+   */
+  const said = slug(meta.kind, 16);
+  if (!said)
+    return err(
+      c,
+      400,
+      "say what this is: add `kind: task`, `kind: bug` or `kind: transfer` to the frontmatter. " +
+        "A task is work nobody has done yet, a bug is a defect to report, and a transfer is " +
+        "context handed to whoever picks the work up.",
+    );
+  if (!["task", "bug", "transfer"].includes(said))
+    return err(c, 400, `"${said}" is not a kind. Use \`task\`, \`bug\` or \`transfer\`.`);
+
   const base = origin(c);
   const share_key = existing?.share_key ?? rid(22);
   const url = shareUrl(base, { id, share_key });
   markdown = setField(markdown, "url", url);
   if (!meta.id) markdown = setField(markdown, "id", id);
-  // And what it is. `parseMeta` has already decided — absent reads as transfer — so this writes
-  // that decision into the document rather than leaving the next reader to make it again. A guide
-  // written before kinds existed gains one the first time it is shared, which is the only moment
-  // anything here is allowed to change somebody's markdown.
-  markdown = setField(markdown, "kind", meta.kind);
+  // And what it is, written back in the one spelling. Never invented: the guard above has already
+  // refused a document that did not say, so this only ever normalises what its author wrote.
+  markdown = setField(markdown, "kind", said);
   // `parseMeta` already normalised what it read, so this writes the one style back into the
   // document the author will pull again. It is a no-op when they already agree, which is every
   // publish after the first.
@@ -3131,18 +3153,18 @@ app.put("/v1/guides/:id", async (c) => {
       report?.id || "",
       slug(meta.area),
       slug(meta.severity, 8),
-      // Spelled out, never empty: no kind: line is a transfer, as it always was (migration 0023).
-      ["bug", "task"].includes(slug(meta.kind, 16)) ? slug(meta.kind, 16) : "transfer",
+      // Exactly what was said. It used to read `["bug","task"].includes(k) ? k : "transfer"`,
+      // which turned every unstated and every misspelled kind into a transfer guide.
+      said,
       parentId,
       // Only a task is for a repo; on anything else the field means nothing to the queue.
-      slug(meta.kind, 16) === "task" ? claims.repoKey(meta.target_context).slice(0, 200) : "",
+      said === "task" ? claims.repoKey(meta.target_context).slice(0, 200) : "",
     )
     .run();
 
   await claimShots(c, account, id, markdown);
   // What a task waits for is rewritten from its frontmatter on every publish, like the rest of it.
-  if (slug(meta.kind, 16) === "task")
-    await claims.blockOn(c.env.DB, id, meta.blocked_by || [], { account });
+  if (said === "task") await claims.blockOn(c.env.DB, id, meta.blocked_by || [], { account });
 
   // Tell whoever the guide just became relevant to. Re-publishing an unchanged address is not a
   // new event, so only a *newly* addressed person or a newly shared team hears anything.

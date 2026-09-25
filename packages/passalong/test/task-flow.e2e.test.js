@@ -96,8 +96,12 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
   };
   const [a, b] = [worktree(), worktree()];
   const report = async (cwd) =>
-    (await p.share(`---\ntitle: what I did\n---\n\n## Problem\np\n\n## Steps\n1. x\n`, { cwd }))
-      .guide.meta.id;
+    (
+      await p.share(
+        `---\ntitle: what I did\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n`,
+        { cwd },
+      )
+    ).guide.meta.id;
 
   const task = serialize({
     meta: { title: "Add dark mode", kind: "task", target_context: `e2e/${account}` },
@@ -1109,4 +1113,48 @@ test("an image held as bytes attaches, and answers the check it was taken for", 
   });
   const row = (await p.tasks()).find((t) => t.id === id);
   assert.equal(row.state, "review", "a shown check is evidence");
+});
+
+test("the server refuses a guide that does not say what it is", { skip }, async () => {
+  // The load-bearing half. The CLI parser no longer seeds `transfer`, but a client on any older
+  // version still publishes documents with no `kind:` line — and the row used to coerce whatever
+  // arrived into transfer. That is how 162 of 200 real guides were stored as transfers while their
+  // titles were tasks and bug reports, with publish_guide's own description promising the default
+  // was task. Enforcement belongs where every client reaches it, whatever version it is on.
+  const env = await setup();
+  const body = "\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const rid = () => `k${Math.random().toString(36).slice(2, 9)}`;
+  const put = (md) =>
+    fetch(`${API}/v1/guides/${rid()}`, {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ markdown: md }),
+    });
+
+  const absent = await put(`---\ntitle: Never says\n---${body}`);
+  assert.equal(absent.status, 400, "an unstated kind is refused");
+  assert.match((await absent.json()).message, /say what this is/);
+
+  const wrong = await put(`---\ntitle: Says wrongly\nkind: buggy\n---${body}`);
+  assert.equal(wrong.status, 400, "and so is a spelling that is not a kind");
+  assert.match((await wrong.json()).message, /is not a kind/);
+
+  // And a stated one is stored exactly as stated, not folded into transfer.
+  const id = rid();
+  const ok = await fetch(`${API}/v1/guides/${id}`, {
+    method: "PUT",
+    headers: {
+      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      markdown: `---\ntitle: Says so\nkind: task\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
+    }),
+  });
+  assert.equal(ok.status, 201);
+  assert.deepEqual(await rows(`SELECT kind FROM guide WHERE id = '${id}'`), [{ kind: "task" }]);
+  assert.ok(env);
 });

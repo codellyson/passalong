@@ -67,7 +67,8 @@ const heard = (w: Working) => new Date(Date.parse(w.lease_until) - 30 * 60 * 100
 const blocked = (w: Working) => /^BLOCKED:/i.test(w.note);
 
 /** The kind, only when it is not the default: most of what is held is a task. */
-const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "bug" : "handoff");
+/** The same badge every other lane draws, so one guide wears one mark. See app/utils/kind.ts. */
+const badge = (w: Working) => kindBadge(w.kind);
 </script>
 
 <template>
@@ -104,9 +105,10 @@ const kindLabel = (w: Working) => (w.kind === "task" ? "" : w.kind === "bug" ? "
             class="block truncate font-ui text-sm font-semibold text-fg no-underline hover:text-accent"
           >
             <span
-              v-if="kindLabel(w)"
-              class="mr-1.5 rounded-pill bg-surface px-1.5 py-0.5 align-middle font-ui text-xs font-medium text-muted"
-            >{{ kindLabel(w) }}</span>{{ w.title || w.id }}
+              v-if="badge(w)"
+              class="mr-1.5 rounded-1 border px-1.5 py-0.5 align-middle font-ui text-xs font-medium tracking-wide uppercase"
+              :class="badge(w)?.class"
+            >{{ badge(w)?.label }}</span>{{ w.title || w.id }}
           </a>
           <p v-if="w.note" class="m-0 truncate font-ui text-xs" :class="blocked(w) ? 'text-warn' : 'text-muted'">
             “{{ w.note }}”

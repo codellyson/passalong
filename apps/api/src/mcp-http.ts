@@ -671,7 +671,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "Collect it as you work rather than writing it from memory at the end. hand_in without " +
         "it is refused, because the write-up and the verdict are both your word for your own " +
         "work and evidence is the part the person reviewing it can check.\n" +
-        "kind: task (the default) is work nobody has done yet. It has no Steps: work out how to " +
+        "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
+        "is a spelling that is not one of the three. " +
+        "kind: task is work nobody has done yet. It has no Steps: work out how to " +
         "reach Goal within Constraints, leave Out of scope alone, and treat Acceptance as the " +
         "definition of done. When Acceptance holds, publish_guide a transfer guide about what you " +
         "did, then hand_in with its id as `report`.\n" +

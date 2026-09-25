@@ -37,12 +37,17 @@ test("parseMeta mirrors the CLI parser for strings and lists", () => {
   assert.equal(m.title, "Add Paystack webhook: verify signature");
   assert.deepEqual(m.stack_assumptions, ["Next.js 15", "Postgres"]);
   assert.deepEqual(m.tags, ["paystack", "webhooks"]);
-  // A kind as well, on this path too: a document with no frontmatter returns early, and the CLI
-  // parser seeds one there. The shared corpus caught the two disagreeing about exactly this.
+  // A kind as well, on this path too: a document with no frontmatter returns early, and the two
+  // parsers have to leave it in the same state there. The shared corpus caught them disagreeing
+  // about exactly this.
+  //
+  // Empty, not "transfer". A silent default told 162 of 200 real guides they were transfers when
+  // their titles were tasks and bug reports — while publish_guide's own description promised
+  // "kind: task (the default)". Absent is now absent, and validate() refuses it by name.
   assert.deepEqual(parseMeta("no frontmatter"), {
     tags: [],
     stack_assumptions: [],
-    kind: "transfer",
+    kind: "",
   });
 });
 

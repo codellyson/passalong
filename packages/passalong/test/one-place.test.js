@@ -151,18 +151,26 @@ test("a defaulted field is defaulted in one place", () => {
   );
 });
 
-test("the boundary still applies the defaults it owns", () => {
-  // The guard above is only worth having while the boundary is doing the work. If the seeding is
-  // deleted, every reader goes back to deciding for itself and this suite would sit there green.
+test("the boundary normalises kind in one place, and invents nothing", () => {
+  // This test used to demand the opposite — `meta.kind = "transfer"` in both parsers — and that
+  // demand was the bug. The concern behind it still holds: if NOTHING normalises, every reader
+  // decides for itself again. So the invariant moved rather than went away. Both parsers put kind
+  // into one shape, neither supplies a value nobody wrote, and validate() refuses what is missing.
   const js = readFileSync(join(root, "packages/passalong/src/guide.js"), "utf8");
   const ts = readFileSync(join(root, "apps/api/src/guide.ts"), "utf8");
   for (const [name, src] of [
     ["guide.js", js],
     ["guide.ts", ts],
-  ])
+  ]) {
     assert.match(
       src,
-      /meta\.kind = "transfer"/,
-      `${name} must seed kind, or nothing does and everything guesses again`,
+      /meta\.kind = String\(meta\.kind \?\? ""\)\.trim\(\)/,
+      `${name} must normalise kind, or nothing does and every reader guesses again`,
     );
+    assert.doesNotMatch(
+      src,
+      /meta\.kind = "(transfer|task|bug)"/,
+      `${name} must not decide a kind its author did not write`,
+    );
+  }
 });

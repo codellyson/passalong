@@ -358,8 +358,16 @@ export async function finishTask(
   requireEvidence(evidence);
   if (!report && markdown) {
     const g = parse(markdown);
-    report = (await share(serialize({ meta: { ...g.meta, parent: id }, body: g.body }), { cwd }))
-      .guide.meta.id;
+    // A task's report is a transfer guide, and this code is what is making one — so it says so
+    // rather than hoping the agent's frontmatter did. Absent is refused now, and refusing an
+    // agent's hand-in because its write-up left a line off would be this function's omission
+    // charged to the agent. Stated, not defaulted: `kind` is the one field here that is not the
+    // author's to leave open, because the caller already knows the answer.
+    report = (
+      await share(serialize({ meta: { ...g.meta, kind: "transfer", parent: id }, body: g.body }), {
+        cwd,
+      })
+    ).guide.meta.id;
   }
   if (!report)
     throw new PassalongError(
@@ -443,8 +451,16 @@ export async function handIn(
   else requireEvidence(evidence);
   if (!report && markdown) {
     const g = parse(markdown);
-    report = (await share(serialize({ meta: { ...g.meta, parent: id }, body: g.body }), { cwd }))
-      .guide.meta.id;
+    // A task's report is a transfer guide, and this code is what is making one — so it says so
+    // rather than hoping the agent's frontmatter did. Absent is refused now, and refusing an
+    // agent's hand-in because its write-up left a line off would be this function's omission
+    // charged to the agent. Stated, not defaulted: `kind` is the one field here that is not the
+    // author's to leave open, because the caller already knows the answer.
+    report = (
+      await share(serialize({ meta: { ...g.meta, kind: "transfer", parent: id }, body: g.body }), {
+        cwd,
+      })
+    ).guide.meta.id;
   }
   const fence = fenceFor(id, cwd);
   return api.handIn(id, {
