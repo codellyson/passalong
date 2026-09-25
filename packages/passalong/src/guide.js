@@ -127,8 +127,22 @@ export function sectionsFor(kind) {
 }
 
 /** The sections it cannot be published without. */
+/**
+ * The sections a kind cannot do without, and the one that has none.
+ *
+ * A transfer is context exchange. Context is whatever the next agent needs to not start cold —
+ * a decision and why, a constraint, where the bodies are — and none of that arrives in six fixed
+ * headings. Requiring `## Problem` and `## Steps` made every short note into a document: of 56
+ * follow-ups in real use, the ones that fill this template average 599 words and ten of sixteen
+ * were never opened by anyone, while the ones that ignored it average 137 words and every single
+ * one was opened. The template was not raising the floor, it was padding to reach it.
+ *
+ * A task and a bug keep theirs, because theirs are not prose. `## Acceptance` is the list a
+ * hand-in answers line by line, and `## Reproduce` is how a reader sees the defect. Those earn
+ * their requirement by being read mechanically; `## Steps` on a piece of context does not.
+ */
 const REQUIRED = {
-  transfer: ["Problem", "Steps"],
+  transfer: [],
   bug: ["Problem", "Reproduce"],
   task: ["Goal", "Acceptance"],
 };

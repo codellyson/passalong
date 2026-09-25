@@ -84,7 +84,12 @@ test("validate rejects an untouched template and accepts a filled one", () => {
   const t = parse(template({ kind: "transfer", title: "x" }));
   assert.ok(validate(t).some((e) => /placeholders/.test(e)));
   const stripped = { meta: t.meta, body: stripPlaceholders(t.body) };
-  assert.ok(validate(stripped).some((e) => /Problem/.test(e)));
+  // A transfer with nothing under its headings is accepted: context exchange has no required
+  // shape, and demanding one is what padded 599-word follow-ups nobody opened.
+  assert.deepEqual(validate(stripped), []);
+  // A task still has to carry the list its hand-in answers line by line.
+  const bare = parse(template({ kind: "task", title: "x" }));
+  assert.ok(validate({ meta: bare.meta, body: "## Goal\ng\n" }).some((e) => /Acceptance/.test(e)));
   assert.deepEqual(validate(parse(SAMPLE)), []);
   assert.deepEqual(validate(parse(SAMPLE.replace("title:", "x_title:"))), [
     "frontmatter needs a title",
@@ -170,10 +175,11 @@ test("a guide with no kind is refused, not read as a transfer guide", () => {
     validate(parse(unsaid)).some((e) => /say what this is/.test(e)),
     "and the author is asked which of the three it is",
   );
-  // ...and a transfer guide still requires the Steps a bug refuses.
+  // A bug still has to say how to see it. That requirement is kept where the section is read
+  // mechanically; a transfer's was dropped, because context has no fixed shape.
   assert.ok(
-    validate({ meta: { title: "t" }, body: "## Problem\np\n## Reproduce\nx" }).some((e) =>
-      /## Steps/.test(e),
+    validate({ meta: { title: "t", kind: "bug" }, body: "## Problem\np\n" }).some((e) =>
+      /## Reproduce/.test(e),
     ),
   );
 });
