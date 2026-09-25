@@ -26,23 +26,8 @@ const toggle = (which: "pass" | "verdict") => {
   open.value = open.value === which ? null : which;
 };
 
-/**
- * What kind of thing this is, as a word beside the title.
- *
- * The row says everything else in a sentence rather than a badge, and that is still right for who
- * sent it and when. Kind is not that: a bug report and a transfer guide are read differently and
- * answered differently — one is a defect to fix here, the other an implementation to repeat — and
- * until this was added the two were identical in every row on the page.
- *
- * A transfer guide gets none. It is what most guides are and what every guide written before there
- * were kinds is, so badging it would mark the ordinary case and leave the two worth spotting
- * competing with it.
- */
-const KINDS: Record<string, { label: string; class: string }> = {
-  bug: { label: "bug", class: "border-danger text-danger" },
-  task: { label: "task", class: "border-accent text-accent" },
-};
-const badge = computed(() => KINDS[g.value.kind ?? ""] ?? null);
+/** What kind of thing this is, as a word beside the title. See app/utils/kind.ts. */
+const badge = computed(() => kindBadge(g.value.kind));
 
 const sender = computed(() => fromName(g.value) || "them");
 
