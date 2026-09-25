@@ -39,8 +39,10 @@ test("below the floor is refused with what to run and who restarts it", () => {
   assert.equal(tooOld("", "curl/8.7.1", "0.12.0"), "", "not the CLI, so never refused as one");
 });
 
-// The floor deploys on merge. Above what npm hands out, every agent is refused with nothing it can
-// install to get past it — so today's floor refuses nobody, and it is raised after a release.
-test("today's floor refuses no released CLI that cannot state its version", () => {
-  assert.equal(tooOld("", "node"), "", `MIN_CLIENT ${MIN_CLIENT} must not pass ${UNSTATED} yet`);
+// The floor deploys on merge, so it is raised only after that version is `latest` on npm. Once it
+// is past the last release that sent no header, every CLI that cannot say its version is refused.
+test("a CLI that cannot state its version is below today's floor, and is told to update", () => {
+  assert.ok(older(UNSTATED, MIN_CLIENT), `MIN_CLIENT ${MIN_CLIENT} is past ${UNSTATED}`);
+  assert.match(tooOld("", "node"), /npm i -g passalong@latest/);
+  assert.equal(tooOld(MIN_CLIENT, "node"), "", "the floor itself is served");
 });

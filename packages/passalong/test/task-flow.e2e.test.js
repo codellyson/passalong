@@ -874,9 +874,8 @@ test("a CLI below the server's floor is refused with what to run; the rest are s
   assert.equal(old.status, 426);
   assert.match((await old.json()).message, /npm i -g passalong@latest/);
   assert.equal((await me({ "x-passalong-version": VERSION })).status, 200);
-  // Today's floor is the last release that sent no header, so an unstated CLI is still served —
-  // until 0.12.0 is on npm and the floor is raised past it.
-  assert.equal((await me({})).status, 200);
+  // Node's own fetch with no version is every CLI up to 0.11.0, which is below the floor.
+  assert.equal((await me({})).status, 426);
 });
 
 test("handed in means the actor's turn is over: no new guide under it until the author answers", {

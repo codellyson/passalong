@@ -22,8 +22,11 @@ export const CLIENT_HEADER = "x-passalong-version";
  * The oldest CLI this server serves. **Raise it only once that version is `latest` on npm**: this
  * deploys on merge, and a floor above what npm hands out refuses every agent with nothing it can
  * install to get past it.
+ *
+ * 0.12.0 since it went `latest` on 2026-09-25: the first release that sends its version, and the
+ * first whose follow-up note stopped telling agents to publish what they found as a new guide.
  */
-export const MIN_CLIENT = "0.11.0";
+export const MIN_CLIENT = "0.12.0";
 
 /**
  * What a CLI that sends no version is counted as: the last release that did not send one.
