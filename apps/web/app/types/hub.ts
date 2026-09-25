@@ -202,6 +202,8 @@ export interface Task {
     evidence?: string;
     /** The same evidence against the Acceptance line each piece answers, when the agent sorted it. */
     checks?: { check: string; ran: string }[];
+    /** What they think it could break. One line, often empty. See 0032_claim_risk.sql. */
+    risk?: string;
     report: string;
     report_title?: string;
     report_url?: string;
@@ -252,6 +254,8 @@ export interface HandedIn {
   evidence: string;
   /** What they had to adapt to make it work there. Prose, often empty. See 0031_writeup.sql. */
   writeup?: string;
+  /** What they think it could break. One line, often empty. See 0032_claim_risk.sql. */
+  risk?: string;
   at: string;
 }
 

@@ -999,8 +999,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           `parent=${id}, and whoever opens this bug gets it too. -->`
         : "<!-- passalong: a follow-up is more context for this guide, written as its own guide. " +
           "If this guide needs more — a missing detail, a step that needed explaining, what " +
-          "changed since, what you found doing it — publish that with publish_guide " +
-          `parent=${id}, and whoever opens this guide gets it too. -->`;
+          "changed since — publish that with publish_guide " +
+          `parent=${id}, and whoever opens this guide gets it too. What you did and found ` +
+          "working on it is not a follow-up: it goes on hand_in, in `checks` and `writeup`. -->";
       const [context, from] = await Promise.all([followUps(call, id), parentOf(call, id)]);
       return {
         content: [
@@ -1217,6 +1218,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     ok?: boolean;
     note?: string;
     writeup?: string;
+    risk?: string;
     report?: string;
     pr?: string;
   }) =>
@@ -1228,6 +1230,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       // Sent only when there is something to say: the field is for a hand-in that had to adapt
       // something, and most did not.
       ...(args.writeup ? { writeup: args.writeup } : {}),
+      ...(args.risk ? { risk: args.risk } : {}),
       ...(args.report ? { report: args.report, pr: args.pr ?? "" } : {}),
       ...(typeof args.ok === "boolean" ? { ok: args.ok } : {}),
     });
@@ -1327,6 +1330,15 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
             "handoff or bug: what you had to adapt to make it work here — a version, a name, a " +
               "step that needed something the guide does not mention. Optional; leave it out " +
               "when it worked as written. The next person to open the guide is shown it",
+          ),
+        risk: z
+          .string()
+          .optional()
+          .describe(
+            "what this could break, in one line — the part of a PR template's Risk that is " +
+              "worth reading: a shared helper changed, a migration that cannot be undone, a " +
+              "route other clients call. Optional; leave it out when there is nothing specific, " +
+              'rather than writing "low risk". Its author reads it before accepting the work',
           ),
         report: z.string().optional().describe("task: id of the transfer guide about this work"),
         pr: z.string().optional().describe("task: PR or branch link"),

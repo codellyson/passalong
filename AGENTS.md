@@ -185,6 +185,30 @@ public one, for agents *using* Passalong rather than changing it.
   `stack_assumptions` and `tags` and nothing else — defaulting it would write `blocked_by: []` into
   every guide anybody re-shares. A blocker counts as finished when a person approved it, never when
   an agent finished it.
+- **A CLI too old for the server's rules is refused, not warned.** Every CLI call carries
+  `x-passalong-version` (`VERSION` in `src/api.js`), and the token branch of the auth middleware
+  answers **426** below `MIN_CLIENT` (`apps/api/src/clients.ts`) with the install command and the
+  restart only a person can do. Rules deploy on merge while the text telling agents how to follow
+  them ships with a reinstall, and for two weeks agents on 0.9.0 were refused by one and misled by
+  the other. `passalong mcp` prints no update notice and an agent never reads stderr, so the
+  refusal on the call it just made is the one text it is sure to see. CLIs up to 0.11.0 send no
+  header and are known by Node's own `user-agent: node`; browsers, curl, SDKs and `/v1/mcp` are
+  never gated. **Raise `MIN_CLIENT` only after that version is `latest` on npm** — a floor above
+  what npm hands out refuses every agent with nothing it can install.
+- **A hand-in answers the PR template, minus the boxes.** What changed is `writeup`, how it was
+  verified and the evidence are `checks` (run or shown, never ticked), and what it could break is
+  `risk` (migration 0032, on the claim, for the reviewer only) — one line, optional, because a
+  required risk field says "low risk" every time. Ownership is the reviewer's, not the agent's:
+  close and approve on a hub row stay disabled until the evidence has been opened
+  (`HubHandIn`'s `read`). An agent ticking "I verified it" is the self-attestation `checks`
+  exists to replace.
+- **Handed in means the actor's turn is over.** `PUT /v1/guides/:id` refuses a *new* guide whose
+  `parent:` the publisher has handed in and that is waiting on its author (409). Every follow-up
+  nobody asked for came from there: an agent handed in, then published a second guide to carry
+  what it found. What the actor did and found goes on the hand-in, in `checks` and `writeup`.
+  The note on every `take` used to say the opposite ("what you found doing it — publish that"),
+  and an agent follows the text it read last. The author is never refused, and the rule ends when
+  the author answers: send-back and close delete the claim, and an approved task is `consumed`.
 - **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
   people can take and answer for separately — one document holding six has one verdict, and "four
   of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is

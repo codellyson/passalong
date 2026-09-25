@@ -18,6 +18,8 @@ import type { Task } from "~/types/hub";
 
 const props = defineProps<{ t: Task }>();
 const { onApprove, onReject, onRelease, onTaskReady } = useHub();
+/** Approve waits until what they ran has been opened. See HandIn.vue. */
+const read = ref(false);
 
 const TONE: Record<Task["state"], { badge: string; stripe: string; label: string }> = {
   review: { badge: "bg-accent-soft text-accent", stripe: "border-l-accent", label: "review" },
@@ -123,6 +125,13 @@ function send() {
           · commit <code class="font-code">{{ t.claim.pr.slice(0, 7) }}</code>
         </template>
       </p>
+      <HubHandIn
+        v-if="t.state === 'review' && t.claim"
+        :evidence="t.claim.evidence"
+        :checks="t.claim.checks"
+        :risk="t.claim.risk"
+        @read="read = true"
+      />
 
       <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
         <code class="shrink-0 font-code">{{ t.id }}</code>
@@ -174,8 +183,13 @@ function send() {
       <!-- The gate and the queue moves are the author's alone; an assignee only passes it on. -->
       <template v-if="!t.mine" />
       <template v-else-if="t.state === 'review'">
-        <button class="btn primary sm" @click="onApprove(t)">approve</button>
+        <button
+          class="btn primary sm"
+          :disabled="!read"
+          @click="onApprove(t)"
+        >approve</button>
         <button class="btn outline danger sm" @click="askWhy">send back</button>
+        <span v-if="!read" class="font-ui text-xs text-muted">open what they ran to approve</span>
       </template>
       <button
         v-else-if="t.state === 'claimed' || t.state === 'stalled'"

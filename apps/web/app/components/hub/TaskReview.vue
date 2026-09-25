@@ -222,6 +222,14 @@ const press =
       <template v-if="selected.state === 'review'">
         <p v-if="loading" class="m-0 font-ui text-sm text-muted">Loading the task and its write-up…</p>
         <template v-else>
+          <!-- What they think it could break, before the lines: it says which of them to read
+               hardest. -->
+          <p v-if="selected.claim?.risk" class="mt-0 mb-4 flex items-baseline gap-2 font-ui text-sm">
+            <span class="shrink-0 rounded-1 border border-warn px-1.5 py-0.5 text-xs font-medium tracking-wide text-warn uppercase">
+              risk
+            </span>
+            <span class="whitespace-pre-wrap">{{ selected.claim.risk }}</span>
+          </p>
           <!-- Line against line: what was asked, and what ran for it. One row per Acceptance
                line, the evidence under the line it answers, so the reviewer's eye never has to
                carry `429` from one column to a block of output at the bottom of the page. -->

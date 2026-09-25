@@ -422,6 +422,7 @@ export async function handIn(
     evidence = "",
     checks = [],
     writeup = "",
+    risk = "",
     markdown,
     report,
     pr = "",
@@ -482,6 +483,8 @@ export async function handIn(
     // Left out when there is nothing to say, rather than sent as "": most hand-ins have nothing
     // to adapt, and the field is for the ones that do.
     ...(writeup ? { writeup } : {}),
+    // What it could break, for the reviewer. Left out when empty, like the write-up.
+    ...(risk ? { risk } : {}),
     ...(typeof ok === "boolean" ? { ok } : {}),
   });
 }
@@ -729,6 +732,11 @@ export async function attach(file, { name = "" } = {}) {
  * found doing it. Whoever opens the original, person or agent, gets its follow-ups with it, which
  * is why context belongs there rather than in a one-line verdict note.
  *
+ * What an agent did and found working on the guide is not context for it: that is the hand-in,
+ * and the note says so. It used to list "what you found doing it" among the things to publish, on
+ * every `take`, while hand_in said a follow-up was not for answering — the agent followed the one
+ * it read last, and the author got a second guide to review with the evidence inside it.
+ *
  * Trailing, like the handoff nudge, so it never sits in front of the frontmatter. It is here and
  * not only in the server's instructions because an agent reads the payload it is working from and
  * skims everything else — the same reason the bug lead is inside the document. For a bug, the
@@ -745,9 +753,10 @@ export function followUpNote(meta = {}) {
     );
   return (
     "<!-- passalong: a follow-up is more context for this guide, written as its own guide. If " +
-    "this guide needs more — a missing detail, a step that needed explaining, what changed since, " +
-    `what you found doing it — publish that with publish_guide parent=${meta.id}, and whoever ` +
-    "opens this guide gets it too. -->"
+    "this guide needs more — a missing detail, a step that needed explaining, what changed since " +
+    `— publish that with publish_guide parent=${meta.id}, and whoever opens this guide gets it ` +
+    "too. What you did and found working on it is not a follow-up: it goes on hand_in, in " +
+    "`checks` and `writeup`. -->"
   );
 }
 
