@@ -23,9 +23,27 @@ const key = computed(() => String(route.params.key));
 const view = computed(() => (route.query.view === "verify" ? "verify" : "guide"));
 const withParam = computed(() => (typeof route.query.with === "string" ? route.query.with : ""));
 
+/**
+ * The document alone, for the hub's page about this guide, which frames it. The hub draws the
+ * title, where the guide has got to and every way to answer it beside the frame, so here the rail,
+ * the heading and the answer box would each be said twice. Still this page, with this page's
+ * headers and no script: the frame is how the hub shows a guide without rendering it itself.
+ *
+ * Nothing in the frame may navigate the frame. A link that did would load a page without this
+ * flag, and the full page — rail, title, dock — would come back squeezed into the hub's column.
+ * So every link opens a tab of its own (the frame's sandbox lets exactly that out), and the
+ * follow-up box and the parent line, which exist to lead somewhere, give way to the hub's
+ * "Tied to", which leads to the hub's page for each.
+ */
+const embed = computed(() => route.query.embed === "1");
+
+if (embed.value) useHead({ base: { target: "_blank" } });
+
 const { data: guide } = await useFetch(
   () => `/api/guide/${encodeURIComponent(id.value)}/${encodeURIComponent(key.value)}`,
-  { query: { view, with: withParam } },
+  // Framed, there is no dock: the hub lists the follow-ups beside the frame, and a row of columns
+  // inside a frame is columns inside a column.
+  { query: { view, with: computed(() => (embed.value ? "" : withParam.value)) } },
 );
 if (!guide.value) throw createError({ statusCode: 404, statusMessage: "no such guide" });
 
@@ -164,7 +182,9 @@ usePage({
       :class="
         dockOpen
           ? 'dock-guide'
-          : 'max-w-[64rem] md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10'
+          : embed
+            ? 'max-w-[46rem] pt-6'
+            : 'max-w-[64rem] md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10'
       "
     >
       <!-- Sticky with no script: the rail scrolls with the document until it reaches the top and
@@ -189,7 +209,7 @@ usePage({
       </div>
 
       <aside
-        v-else
+        v-else-if="!embed"
         class="border-b border-line pt-6 pb-4 md:sticky md:top-8 md:self-start md:border-b-0 md:py-8"
       >
         <AppBrand />
@@ -246,9 +266,9 @@ usePage({
 
       <div class="min-w-0" :class="dockOpen ? 'pt-6' : 'md:py-8'">
         <header class="mb-6 border-b-0 pb-0">
-          <h1 class="mt-0">{{ str(meta?.title) || "Untitled guide" }}</h1>
+          <h1 v-if="!embed" class="mt-0">{{ str(meta?.title) || "Untitled guide" }}</h1>
 
-          <p v-if="parent" class="mt-2 mb-0 font-ui text-sm text-muted">
+          <p v-if="parent && !embed" class="mt-2 mb-0 font-ui text-sm text-muted">
             More context for <a :href="parent.url">{{ parent.title || "an earlier guide" }}</a>.
           </p>
 
@@ -259,7 +279,8 @@ usePage({
           <!-- Labelled, because the difference between the repo it came out of and the stack it
                assumes is not something a reader should have to infer from two grey strings. -->
           <dl
-            class="mt-4 mb-0 grid gap-x-6 gap-y-3 border-t border-b border-line py-3 [grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))]"
+            class="mb-0 grid gap-x-6 gap-y-3 border-b border-line py-3 [grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))]"
+            :class="embed ? 'mt-0 pt-0' : 'mt-4 border-t'"
           >
             <div v-for="f in facts" :key="f.label" :class="f.wide ? '[grid-column:1/-1]' : ''">
               <dt :class="rail">{{ f.label }}</dt>
@@ -276,7 +297,7 @@ usePage({
              on it — above the document, not after the last section. Each one opens as a column
              beside the guide, or on its own page. -->
         <section
-          v-if="followUps.length"
+          v-if="followUps.length && !embed"
           class="mb-6 rounded-2 border border-accent bg-accent-soft px-4 py-3"
           aria-labelledby="follow-ups"
         >
@@ -431,7 +452,7 @@ usePage({
         <!-- The answer, on the page the link opened. Every control here is a plain link or a
              <details>, because this page runs no script: the buttons lead into the hub, which signs
              the visitor in if they need it and asks the question there. -->
-        <div class="pull">
+        <div v-if="!embed" class="pull">
           <p v-if="isBug" class="mt-0 mb-3 font-ui text-sm text-muted">
             <b class="text-fg">This is a bug report.</b> The steps under Reproduce show the problem;
             they aren't a fix. Fix what Problem describes, then check Verification.

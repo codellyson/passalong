@@ -74,8 +74,12 @@ const route = useRoute();
  * the viewport without `100vw` — see the template — and its content has to line up with the page
  * under it, so both take their width from here.
  */
+// A guide's own page is wide for the same reason Settings is: the guide and what surrounds it sit
+// side by side.
 const measure = computed(() =>
-  route.path === "/hub/settings" || route.path === "/hub" ? "max-w-[70rem]" : "max-w-[54rem]",
+  route.path === "/hub/settings" || route.path === "/hub" || route.path.startsWith("/hub/g/")
+    ? "max-w-[70rem]"
+    : "max-w-[54rem]",
 );
 /**
  * One standing notice: a row, not a card. Shared with HubClaim so the two read as one band.

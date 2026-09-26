@@ -40,6 +40,7 @@ export interface Verdict {
   by: string | null;
   by_name?: string;
   note: string | null;
+  at?: string;
 }
 
 export interface Pull {
@@ -272,4 +273,38 @@ export interface HubData {
   tasks: Task[];
   working: Working[];
   handedIn: HandedIn[];
+}
+
+/** One place a guide is held, with what came back if it was handed in. See GET /v1/guides/:id/context. */
+export interface ContextClaim {
+  /** '' for a task; the taker's repo for a handoff or a bug, which is taken once per repo. */
+  place: string;
+  state: "claimed" | "stalled" | "review";
+  by: { handle: string; name: string };
+  agent: string;
+  host: string;
+  repo: string;
+  note: string;
+  writeup: string;
+  evidence: string;
+  checks: { check: string; ran: string }[];
+  /** The reviewer's, so only the author is sent it. */
+  risk: string;
+  pr: string;
+  /** The write-up guide it handed in, when this reader can open it. */
+  report: { id: string; title: string; url: string } | null;
+  claimed_at: string;
+  lease_until: string;
+  updated: string;
+}
+
+/** Everything around one guide, for its page in the hub. No markdown: that stays on the share page. */
+export interface GuideContext {
+  guide: Guide;
+  owner: boolean;
+  claims: ContextClaim[];
+  parent: Guide | null;
+  children: Guide[];
+  blocked_by: Guide[];
+  blocks: Guide[];
 }

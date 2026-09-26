@@ -151,9 +151,9 @@ async function closeAll() {
             :class="DOT[r.g.severity || ''] || 'bg-line-strong'"
             :title="r.g.severity ? severityLabel(r.g.severity) : 'no severity'"
           />
-          <a :href="r.g.url" target="_blank" rel="noopener" class="text-fg no-underline hover:text-accent">
+          <NuxtLink :to="`/hub/g/${r.g.id}`" class="text-fg no-underline hover:text-accent">
             {{ r.g.title || "Untitled bug" }}
-          </a>
+          </NuxtLink>
         </span>
         <span class="font-ui text-xs" :class="TONE[statusLine(r).tone]">{{ statusLine(r).text }}</span>
         <!-- And one at a time, for a report half of which is done. -->

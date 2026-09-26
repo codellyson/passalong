@@ -554,6 +554,13 @@ public one, for agents *using* Passalong rather than changing it.
   `x-robots-tag: noindex, nofollow, noarchive` (route rule in `nuxt.config.ts`, and `VIEW_HEADERS`
   in `apps/api/src/index.ts` for the raw `.md`): a disallowed page's meta is never read, and the
   `.md` has no `<head>`. No canonical link on a noindex page either.
+- **The hub shows a guide by framing it, never by rendering it.** `/hub/g/:id` is a guide's
+  signed-in page: who holds it, the hand-in, the answers, and every guide it is tied to, from
+  `GET /v1/guides/:id/context`, which records no pull. The document itself is the share page at
+  `?embed=1` in a sandboxed same-origin iframe with no `allow-scripts`, which is why the hub's
+  policy carries `frame-src 'self'` and nothing wider. Turning a guide's markdown into the hub's
+  own HTML would put a stranger's document on the one page that runs script and holds the token.
+  Row titles open this page; the share link stays one click away on it.
 - **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
   `application/ld+json` when deciding whether a page runs script; without that the landing would
   get the hub's nonce policy.

@@ -194,9 +194,9 @@ const press =
     >
       <header class="mb-5">
         <h2 class="m-0 text-xl leading-snug">
-          <a :href="selected.url" target="_blank" rel="noopener" class="text-fg no-underline hover:text-accent">
+          <NuxtLink :to="`/hub/g/${selected.id}`" class="text-fg no-underline hover:text-accent">
             {{ selected.title }}
-          </a>
+          </NuxtLink>
         </h2>
         <p class="mt-2 mb-0 flex flex-wrap items-center gap-x-3 gap-y-1 font-ui text-xs text-muted">
           <span class="font-code">{{ selected.target || "no repo" }}</span>

@@ -79,12 +79,10 @@ const who = computed(() => {
           ]"
           >{{ badge.label }}</span
         >
-        <a
-          :href="g.url"
-          target="_blank"
-          rel="noopener"
+        <NuxtLink
+          :to="`/hub/g/${g.id}`"
           class="text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-          >{{ g.title || "Untitled guide" }}</a
+          >{{ g.title || "Untitled guide" }}</NuxtLink
         >
       </p>
       <p class="mt-1 mb-0 flex flex-wrap gap-x-1.5 font-ui text-sm text-muted">

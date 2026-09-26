@@ -67,6 +67,7 @@ export const hubKeys = {
   tasks: ["tasks"] as const,
   working: ["working"] as const,
   handedIn: ["handed-in"] as const,
+  context: (id: string) => ["guide-context", id] as const,
 };
 
 type GuideList = { guides: Guide[] };
