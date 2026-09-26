@@ -4767,18 +4767,29 @@ app.get("/g/:id/:key{.+\\.md}", async (c) => {
 // The site's own unfurl card. `/` is the page most people meet first and it had no image at all,
 // so a link to the product previewed as a bare text row — the same blank card the guide pages were
 // fixed for. Static in every sense: it takes no parameters and changes only when this code does.
-app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c)));
+app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c), later(c)));
 
 app.get("/g/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
   if (!row) return c.text("no such guide", 404, VIEW_HEADERS);
   const people = await accounts(c, [row.account_id]);
-  return renderOgImage(c.env, c.req.url, {
-    id: row.id,
-    meta: parseMeta(row.markdown),
-    from: nameOf(people, row.account_id),
-  });
+  return renderOgImage(
+    c.env,
+    c.req.url,
+    { id: row.id, meta: parseMeta(row.markdown), from: nameOf(people, row.account_id) },
+    later(c),
+  );
 });
+
+/** `waitUntil`, where there is an execution context. Accessing it throws where there is none. */
+function later(c: { executionCtx: { waitUntil(p: Promise<unknown>): void } }) {
+  try {
+    const ctx = c.executionCtx;
+    return (p: Promise<unknown>) => ctx.waitUntil(p);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * The API, described for agents that only speak HTTP — a ChatGPT action, Gemini function calling,

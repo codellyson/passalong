@@ -600,6 +600,10 @@ ships scripts and inlines styles whatever the config says.
 - `src/og.ts` renders each guide's unfurl card (`/g/:id/:key/og.png`). `workers-og` is ~1.7MB of
   JS and wasm, so it is behind a dynamic `import()`: every other route would otherwise pay for it
   on a cold start. Satori's parser does not decode HTML entities — write literal characters.
+  A drawn card is kept in the edge cache (`cached()`), keyed by a hash of its markup, because the
+  CDN never caches a Worker's own response whatever its `cache-control` says. The markup is the
+  card, so an edit is a new key and nothing needs purging; bump `DRAWN_WITH` when a change to the
+  renderer (fonts, size, format) would draw the same markup differently.
 - `/hub`, `/join/:code` and `/reset` are the only pages allowed to run script. Their header is
   written per response by `apps/web/server/plugins/csp.ts` with a nonce; `/` and `/g/**` are
   `noScripts` with no `script-src` at all (`shared/csp.ts`). Guide pages render markdown someone
