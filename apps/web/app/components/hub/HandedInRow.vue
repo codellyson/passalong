@@ -23,7 +23,7 @@ const who = computed(() => {
 const where = computed(() => {
   const tree = props.h.worktree.split("/").filter(Boolean).pop() || "";
   const machine = [props.h.host, tree].filter(Boolean).join(":");
-  return [props.h.place, machine].filter(Boolean).join(" · ");
+  return [props.h.place, machine].filter(Boolean).join(" on ");
 });
 
 /** Close waits until what they ran has been opened. See HandIn.vue. */
@@ -49,24 +49,30 @@ function send() {
 </script>
 
 <template>
+  <!-- The inbox row's anatomy: kind and title on one line, then who, when and where it stands in
+       muted text, and the actions on the right. It used to carry a coral stripe down its left edge
+       and a filled HANDED IN pill, a look no other row in the hub had. The list's ends round it. -->
   <li
-    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] border-l-accent bg-raised px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
+    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 bg-raised px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
   >
-    <div class="min-w-0 flex-1 basis-64">
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
-        <span class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold tracking-wide text-accent uppercase">
-          handed in
-        </span>
-        <span>{{ who }} · {{ rel(h.at) }}</span>
-      </div>
-      <NuxtLink
-        :to="`/hub/g/${h.id}`"
-        class="mt-2 block text-base leading-snug font-semibold text-fg no-underline hover:text-accent"
-      ><span
+    <div class="min-w-0 flex-1 basis-72">
+      <p class="m-0 flex flex-wrap items-baseline gap-x-2">
+        <span
           v-if="badge"
-          class="mr-2 rounded-1 border px-1.5 py-0.5 align-middle font-ui text-xs font-medium tracking-wide uppercase"
+          class="shrink-0 rounded-1 border px-1.5 py-0.5 font-ui text-xs font-medium tracking-wide uppercase"
           :class="badge.class"
-        >{{ badge.label }}</span>{{ h.title || h.id }}</NuxtLink>
+        >{{ badge.label }}</span>
+        <NuxtLink
+          :to="`/hub/g/${h.id}`"
+          class="text-base leading-snug font-semibold text-fg no-underline hover:text-accent"
+        >{{ h.title || h.id }}</NuxtLink>
+      </p>
+      <p class="mt-1 mb-0 flex flex-wrap gap-x-1.5 font-ui text-sm text-muted">
+        <span><b class="font-medium text-fg">{{ who }}</b> handed it in</span>
+        <span>· {{ rel(h.at) }}</span>
+        <span v-if="where" class="font-code text-xs leading-5">· {{ where }}</span>
+        <span class="text-accent">· waiting on you</span>
+      </p>
       <p v-if="h.note" class="mt-2 mb-0 text-sm text-muted">“{{ h.note }}”</p>
       <HubHandIn
         :evidence="h.evidence"
@@ -75,7 +81,6 @@ function send() {
         :risk="h.risk"
         @read="read = true"
       />
-      <p v-if="where" class="mt-3 mb-0 font-code text-xs text-muted">{{ where }}</p>
 
       <div
         v-if="sending"
@@ -94,24 +99,24 @@ function send() {
           v-model="why"
           rows="2"
           maxlength="1000"
-          placeholder="the migration never ran on staging"
-          class="block w-full resize-y rounded-1 border border-line-strong bg-raised p-2 font-ui text-sm text-fg"
+          placeholder="The migration never ran on staging."
+          class="block w-full resize-y"
           @keydown.meta.enter="send"
           @keydown.ctrl.enter="send"
         />
         <div class="mt-2 flex flex-wrap gap-2">
-          <button class="btn primary" :disabled="!why.trim()" @click="send">send it back</button>
-          <button class="btn" @click="sending = false">back</button>
+          <button class="btn primary sm" :disabled="!why.trim()" @click="send">Send it back</button>
+          <button class="btn sm" @click="sending = false">Cancel</button>
         </div>
       </div>
     </div>
 
     <div v-if="!sending" class="flex shrink-0 flex-col items-end gap-1">
       <div class="flex items-center gap-2">
-        <button class="btn primary sm" :disabled="!read" @click="onCloseHandedIn(h)">close</button>
-        <button class="btn outline danger sm" @click="askWhy">send back</button>
+        <button class="btn primary sm" :disabled="!read" @click="onCloseHandedIn(h)">Close it</button>
+        <button class="btn outline danger sm" @click="askWhy">Send back</button>
       </div>
-      <span v-if="!read" class="font-ui text-xs text-muted">open what they ran to close</span>
+      <span v-if="!read" class="font-ui text-xs text-muted">Open what they ran to close it</span>
     </div>
   </li>
 </template>
