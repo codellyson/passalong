@@ -571,7 +571,11 @@ public one, for agents *using* Passalong rather than changing it.
   `?embed=1` in a sandboxed same-origin iframe with no `allow-scripts`, which is why the hub's
   policy carries `frame-src 'self'` and nothing wider. Turning a guide's markdown into the hub's
   own HTML would put a stranger's document on the one page that runs script and holds the token.
-  Row titles open this page; the share link stays one click away on it.
+  Row titles open this page; the share link stays one click away on it. Its sidebar leads with
+  **Progress** (`utils/progress.ts`): what happened to the guide in order, built from that same
+  context — acks, claims, hand-ins, verdicts with their screenshots, follow-ups — and ending on
+  where it stands. It owns no table, for the reason the log owns none, so a hold that was released
+  or sent back is gone from it with its claim row; verdict and archive receipts are not "opened".
 - **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
   `application/ld+json` when deciding whether a page runs script; without that the landing would
   get the hub's nonce policy.

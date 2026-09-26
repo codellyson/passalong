@@ -142,6 +142,9 @@ const reopen = () =>
 const holding = computed(() => (ctx.value?.claims ?? []).some((k) => k.state !== "review"));
 const reviewing = computed(() => (ctx.value?.claims ?? []).some((k) => k.state === "review"));
 
+/** What happened to it, in order. See utils/progress.ts. */
+const progress = computed(() => (ctx.value ? progressOf(ctx.value) : []));
+
 const card = "rounded-3 bg-raised px-5 py-4";
 const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted";
 </script>
@@ -215,6 +218,40 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         </section>
 
         <aside class="flex flex-col gap-4">
+          <!-- Progress: what happened to it, in order, ending on where it is now. A rule runs down
+               the left and each beat is a dot on it in its tone; "now" is the coral diamond. Who
+               opened it, who took it, what they said and showed — the Answers card said these in
+               pieces, with no sense of when. -->
+          <section :class="card" class="flex flex-col gap-4" aria-labelledby="progress-h">
+            <h2 id="progress-h" :class="label">Progress</h2>
+            <ol class="relative m-0 flex list-none flex-col gap-5 p-0">
+              <span class="absolute top-2 bottom-2 left-[0.3125rem] w-px bg-line-strong" aria-hidden="true" />
+              <li v-for="(b, i) in progress" :key="i" class="relative flex gap-3">
+                <span
+                  class="relative z-10 mt-1.5 size-2.5 shrink-0 rounded-pill ring-4 ring-raised"
+                  :class="BEAT_DOT[b.tone]"
+                  aria-hidden="true"
+                />
+                <div class="flex min-w-0 flex-col gap-2 font-ui text-sm">
+                  <p class="m-0">
+                    <b class="font-medium">{{ b.who }}</b> {{ b.what }}
+                    <span class="text-muted">· <time :datetime="b.at">{{ rel(b.at) }}</time></span>
+                  </p>
+                  <p v-if="b.said" class="m-0 rounded-2 bg-field px-3 py-2 text-muted">{{ b.said }}</p>
+                  <div v-if="b.proof" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" prose /></div>
+                  <NuxtLink v-if="b.link" :to="`/hub/g/${b.link.id}`" class="self-start">{{ b.link.title }} →</NuxtLink>
+                </div>
+              </li>
+              <li class="relative flex gap-3">
+                <span
+                  class="relative z-10 mt-1.5 size-2.5 shrink-0 rotate-45 rounded-[2px] bg-coral ring-4 ring-raised"
+                  aria-hidden="true"
+                />
+                <p class="m-0 font-ui text-sm font-medium">Now — {{ standing }}</p>
+              </li>
+            </ol>
+          </section>
+
           <!-- Who has it, and what came back. One entry per place: a handoff is taken once per repo. -->
           <section v-if="ctx.claims.length" :class="card" class="flex flex-col gap-4">
             <h2 :class="label">Who has it</h2>
@@ -274,34 +311,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             </div>
           </section>
 
-          <!-- What people said back: each verdict with what it showed, who took it, who passed, who
-               opened it. A "works" carries screenshots of it working; they are drawn here, where
-               the author decides whether to believe it. -->
-          <section
-            v-if="ctx.verdicts.length || g.taken_by?.length || g.declined?.length || g.pulled_by?.length"
-            :class="card"
-            class="flex flex-col gap-3 font-ui text-sm"
-          >
-            <h2 :class="label">Answers</h2>
-            <div v-for="v in ctx.verdicts" :key="v.by.handle + v.at" class="flex flex-col gap-2">
-              <p class="m-0">
-                <b :class="v.ok ? 'text-ok' : 'text-danger'">{{ v.ok ? "Works" : "Didn't work" }}</b>
-                — {{ who(v.by) }} · {{ rel(v.at) }}
-              </p>
-              <HubEvidence v-if="v.detail" :text="v.detail" prose />
-              <p v-else-if="v.note" class="m-0 text-muted">“{{ v.note }}”</p>
-            </div>
-            <p v-if="g.taken_by?.length" class="m-0">
-              Taken by <b class="font-medium">{{ (g.taken_by_names?.length ? g.taken_by_names : g.taken_by).join(", ") }}</b>
-            </p>
-            <p v-for="d in g.declined" :key="d.by + d.at" class="m-0">
-              Passed by <b class="font-medium">{{ d.by_name || `@${d.by}` }}</b> · {{ rel(d.at) }}
-              <span v-if="d.note" class="mt-1 block text-muted">“{{ d.note }}”</span>
-            </p>
-            <p v-if="g.pulled_by?.length" class="m-0 text-muted">
-              Opened by {{ g.pulled_by.map((p) => (p.handle ? `@${p.handle}` : "a link")).join(", ") }}
-            </p>
-          </section>
+
 
           <!-- The guides it is tied to. Each opens here, so the chain is walked without leaving. -->
           <section
