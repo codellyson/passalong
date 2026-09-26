@@ -3526,7 +3526,7 @@ app.get("/v1/guides/:id/context", async (c) => {
         .bind(...bind, me, me)
         .all<GuideRow>()
     ).results;
-  const [held, parentRows, childRows, blockerRows, blocksRows, said] = await Promise.all([
+  const [held, parentRows, childRows, blockerRows, blocksRows, said, answered] = await Promise.all([
     c.env.DB.prepare(
       `SELECT c.*, COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
          FROM claim c LEFT JOIN account a ON a.id = c.account_id
@@ -3569,6 +3569,14 @@ app.get("/v1/guides/:id/context", async (c) => {
         handle: string;
         name: string;
       }>(),
+    // Who said they are on it or passed, and when — the page's progress is these in order.
+    c.env.DB.prepare(
+      `SELECT k.taken, k.note, k.at, COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
+         FROM ack k LEFT JOIN account a ON a.id = k.account_id
+        WHERE k.guide_id = ? ORDER BY k.at`,
+    )
+      .bind(row.id)
+      .all<{ taken: number; note: string; at: string; handle: string; name: string }>(),
   ]);
   const claimRows = held.results;
   // A hand-in's write-up is a guide of its own; name it only when this caller can read it.
@@ -3615,6 +3623,12 @@ app.get("/v1/guides/:id/context", async (c) => {
       note: v.note,
       detail: v.detail,
       at: v.at,
+    })),
+    acks: answered.results.map((k) => ({
+      taken: Boolean(k.taken),
+      by: { handle: k.handle, name: k.name },
+      note: k.note,
+      at: k.at,
     })),
     parent: pick(parentRows)[0] ?? null,
     children: pick(childRows),

@@ -130,8 +130,8 @@ uploaded (`POST /v1/shots`), named by its `/v1/shots/<id>` URL in `note` or `det
 it answers 400. Proof on a guide is deleted 5 days after the guide is closed.
 
 `GET /v1/guides/:id/context` is the hub's read of a guide and records **no** pull: the guide's
-summary, every live claim with what was handed in (`risk` to the author only), the guide it
-follows, its follow-ups, and the tasks it blocks and is blocked by. Each related guide is filtered
+summary, every live claim with what was handed in (`risk` to the author only), every verdict
+with what it showed, every ack with when it was given, the guide it follows, its follow-ups, and the tasks it blocks and is blocked by. Each related guide is filtered
 for the caller on its own, as `/children` and `/parent` are. It carries no markdown.
 
 ## Web routes

@@ -45,6 +45,8 @@ export interface Verdict {
 
 export interface Pull {
   handle: string | null;
+  /** How it arrived: "cli", "link", or a receipt a verdict ("verdict") or archive ("web") wrote. */
+  via?: string;
   at: string;
 }
 
@@ -311,6 +313,8 @@ export interface GuideContext {
     detail: string;
     at: string;
   }[];
+  /** Each person's standing answer to "are you taking this?", with when they gave it. */
+  acks: { taken: boolean; by: { handle: string; name: string }; note: string; at: string }[];
   parent: Guide | null;
   children: Guide[];
   blocked_by: Guide[];
