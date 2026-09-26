@@ -135,3 +135,27 @@ test("a receipt a verdict wrote is not someone opening it", () => {
   );
   assert.deepEqual(say(beats), ["You wrote the task", "@ada opened it"]);
 });
+
+test("a verdict's proof reads as prose; a hand-in's evidence stays terminal output", () => {
+  const beats = progressOf(
+    ctx({
+      claims: [
+        {
+          place: "",
+          state: "review",
+          by: { handle: "agent", name: "" },
+          note: "",
+          evidence: "$ pnpm test\n# pass 3",
+          claimed_at: T(1),
+          updated: T(2),
+          report: null,
+        },
+      ],
+      verdicts: [
+        { ok: true, by: { handle: "bo", name: "" }, note: "", detail: "flipped to Paid", at: T(3) },
+      ],
+    }),
+  );
+  assert.equal(beats.find((b) => b.what === "handed it in").prose, undefined);
+  assert.equal(beats.find((b) => b.what === "says it works").prose, true);
+});

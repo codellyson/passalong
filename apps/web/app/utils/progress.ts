@@ -21,6 +21,11 @@ export interface Beat {
   said?: string;
   /** Evidence that may carry screenshots, drawn by HubEvidence. */
   proof?: string;
+  /**
+   * Whether the proof is somebody's sentence rather than terminal output. A verdict's report is
+   * prose; a hand-in's evidence is what an agent ran, and reflowing it loses the alignment.
+   */
+  prose?: boolean;
   tone: BeatTone;
   /** Another guide this beat is about. */
   link?: { id: string; title: string };
@@ -98,6 +103,7 @@ export function progressOf(ctx: GuideContext): Beat[] {
       what: v.ok ? "says it works" : "says it didn't work",
       said: v.detail ? undefined : v.note || undefined,
       proof: v.detail || undefined,
+      prose: true,
       tone: v.ok ? "ok" : "danger",
     });
   for (const c of ctx.children)

@@ -238,7 +238,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                     <span class="text-muted">· <time :datetime="b.at">{{ rel(b.at) }}</time></span>
                   </p>
                   <p v-if="b.said" class="m-0 rounded-2 bg-field px-3 py-2 text-muted">{{ b.said }}</p>
-                  <div v-if="b.proof" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" prose /></div>
+                  <div v-if="b.proof" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" :prose="b.prose" /></div>
                   <NuxtLink v-if="b.link" :to="`/hub/g/${b.link.id}`" class="self-start">{{ b.link.title }} →</NuxtLink>
                 </div>
               </li>
