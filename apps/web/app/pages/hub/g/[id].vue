@@ -13,6 +13,11 @@
 -->
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
+import {
+  HubPrototypeVariantDocument,
+  HubPrototypeVariantMap,
+  HubPrototypeVariantStory,
+} from "#components";
 import type { ContextClaim, Guide, GuideContext, HandedIn, Task, Working } from "~/types/hub";
 
 const route = useRoute();
@@ -54,6 +59,21 @@ const badge = computed(() => kindBadge(g.value?.kind));
 const isTask = computed(() => g.value?.kind === "task");
 
 /** The share page, as a path: whichever host the hub is on serves it, so the frame is same-origin. */
+// PROTOTYPE: `?variant=` flips between layouts of this page (components/hub/prototype). A is the
+// page as it ships. Delete this, the switcher and the variants once one has won.
+const VARIANTS = [
+  { key: "A", name: "Current" },
+  { key: "B", name: "Document" },
+  { key: "C", name: "Story" },
+  { key: "D", name: "Map" },
+];
+const variant = computed(() => {
+  const v = String(route.query.variant || "A");
+  return VARIANTS.some((x) => x.key === v) ? v : "A";
+});
+/** The share page with nothing the variants already say beside it. */
+const bareFrame = computed(() => (frame.value ? `${frame.value}&bare=1` : ""));
+
 const frame = computed(() => {
   if (!g.value?.url) return "";
   try {
@@ -151,6 +171,24 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
     <p v-if="trouble" :class="card" class="font-ui text-sm text-danger">
       {{ trouble }} <NuxtLink to="/hub">Back to your work</NuxtLink>
     </p>
+
+    <template v-else-if="ctx && g && variant !== 'A'">
+      <component
+        :is="variant === 'B' ? HubPrototypeVariantDocument : variant === 'C' ? HubPrototypeVariantStory : HubPrototypeVariantMap"
+        :ctx="ctx"
+        :src="bareFrame"
+        :standing="standing"
+      >
+        <template #actions>
+          <NuxtLink v-if="!g.mine" class="btn primary" :to="`/hub/answer/${g.id}`">Answer it</NuxtLink>
+          <button v-if="ctx.owner && holding" class="btn outline warn" type="button" :disabled="Boolean(busy)" @click="takeBack">Take it back</button>
+          <button v-if="ctx.owner && g.status !== 'consumed' && !reviewing" class="btn" type="button" :disabled="Boolean(busy)" @click="close">Close it</button>
+          <button class="btn" type="button" @click="copy(g.url, $event.currentTarget)">
+            <AppIcon name="copy" /><span data-label>Copy link</span>
+          </button>
+        </template>
+      </component>
+    </template>
 
     <article v-else-if="ctx && g" class="flex flex-col gap-6">
       <header class="m-0 flex flex-col gap-2 border-b-0 p-0">
@@ -347,5 +385,6 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
       <span class="block h-7 w-2/3 rounded-pill bg-line-strong" aria-hidden="true" />
       <HubSkeleton :rows="3" label="Loading the guide" />
     </div>
+    <PrototypeSwitcher :variants="VARIANTS" />
   </HubShell>
 </template>

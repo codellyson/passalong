@@ -36,6 +36,9 @@ const withParam = computed(() => (typeof route.query.with === "string" ? route.q
  * "Tied to", which leads to the hub's page for each.
  */
 const embed = computed(() => route.query.embed === "1");
+// PROTOTYPE (hub guide page variants): `bare=1` drops the facts and tags too, for the hub
+// variants that already say them beside the frame. Delete with the prototype.
+const bare = computed(() => embed.value && route.query.bare === "1");
 
 if (embed.value) useHead({ base: { target: "_blank" } });
 
@@ -183,7 +186,7 @@ usePage({
         dockOpen
           ? 'dock-guide'
           : embed
-            ? 'max-w-[46rem] pt-6'
+            ? bare ? 'max-w-[46rem] !p-0' : 'max-w-[46rem] pt-6'
             : 'max-w-[64rem] md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10'
       "
     >
@@ -265,7 +268,7 @@ usePage({
       </aside>
 
       <div class="min-w-0" :class="dockOpen ? 'pt-6' : 'md:py-8'">
-        <header class="mb-6 border-b-0 pb-0">
+        <header v-if="!bare" class="mb-6 border-b-0 pb-0">
           <h1 v-if="!embed" class="mt-0">{{ str(meta?.title) || "Untitled guide" }}</h1>
 
           <p v-if="parent && !embed" class="mt-2 mb-0 font-ui text-sm text-muted">
