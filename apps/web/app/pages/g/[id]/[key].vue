@@ -272,7 +272,9 @@ usePage({
             More context for <a :href="parent.url">{{ parent.title || "an earlier guide" }}</a>.
           </p>
 
-          <p v-if="guide.pulls" class="mt-2 mb-0 font-ui text-sm text-muted">
+          <!-- Framed in the hub, Progress already says who opened it and when, and this line sat
+               jammed against the facts under it. -->
+          <p v-if="guide.pulls && !embed" class="mt-2 mb-0 font-ui text-sm text-muted">
             Opened {{ guide.pulls === 1 ? "once" : `${guide.pulls} times` }}
           </p>
 

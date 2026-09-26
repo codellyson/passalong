@@ -51,6 +51,21 @@ const shots = computed(() => parts.value.filter((p) => p.kind === "shot").length
 /** Folded only when there is enough to be worth folding: a short run is just shown. */
 const long = computed(() => lines.value > FOLD + 4 || shots.value > 1);
 const open = ref(false);
+
+/**
+ * A screenshot, opened over the page at full size. The review is the whole point of proof, and a
+ * thumbnail the width of a sidebar cannot be checked — "Paid" on a captured order is four pixels
+ * tall there. It used to open in a new tab, which took the reviewer off the page they were deciding
+ * on. A plain click opens it here; a modified or middle click still gets the tab, from the link.
+ */
+const zoom = ref<HTMLDialogElement | null>(null);
+const zoomed = ref<{ url: string; alt: string } | null>(null);
+function enlarge(e: MouseEvent, url: string, alt: string) {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  zoomed.value = { url, alt };
+  zoom.value?.showModal();
+}
 </script>
 
 <template>
@@ -84,7 +99,14 @@ const open = ref(false);
         <!-- A screenshot is the part of the evidence a reviewer reads fastest and the part that was
              being cut in half, so it is shown whole and opens full size in a tab. -->
         <figure v-else class="my-3 first:mt-0 last:mb-0">
-          <a :href="p.url" target="_blank" rel="noopener">
+          <a
+            :href="p.url"
+            target="_blank"
+            rel="noopener"
+            class="block cursor-zoom-in"
+            :aria-label="`Open ${p.alt || 'the screenshot'} full size`"
+            @click="enlarge($event, p.url, p.alt)"
+          >
             <img
               :src="p.url"
               :alt="p.alt || 'a screenshot from the hand-in'"
@@ -100,7 +122,7 @@ const open = ref(false);
       <div
         v-if="long && !open"
         class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent"
-        :class="prose ? 'to-[var(--raised)]' : 'to-[var(--surface)]'"
+        :class="prose ? 'to-[var(--surface-raised)]' : 'to-[var(--surface)]'"
         aria-hidden="true"
       />
     </div>
@@ -114,5 +136,28 @@ const open = ref(false);
     >
       {{ open ? "Show less" : `Show all ${lines} lines${shots ? ` and ${shots} screenshots` : ""}` }}
     </button>
+
+    <!-- The full-size view. A native <dialog>: Esc closes it, focus is held inside, and the page
+         behind is inert. A click on the dimmed backdrop — outside the picture — closes it too. -->
+    <dialog
+      ref="zoom"
+      class="m-auto max-h-[94vh] max-w-[94vw] rounded-3 border-0 bg-bg p-0 text-fg shadow-[0_24px_80px_rgb(0_0_0/0.45)] backdrop:bg-black/70"
+      :aria-label="zoomed?.alt || 'Screenshot'"
+      @click.self="zoom?.close()"
+      @close="zoomed = null"
+    >
+      <figure v-if="zoomed" class="m-0 flex flex-col">
+        <img :src="zoomed.url" :alt="zoomed.alt" class="block max-h-[82vh] max-w-full object-contain" />
+        <figcaption class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 font-ui text-sm">
+          <span class="text-muted">{{ zoomed.alt || "Screenshot" }}</span>
+          <span class="flex gap-2">
+            <a class="btn sm" :href="zoomed.url" target="_blank" rel="noopener">
+              <AppIcon name="open" />Open in a tab
+            </a>
+            <button class="btn sm" type="button" @click="zoom?.close()">Close</button>
+          </span>
+        </figcaption>
+      </figure>
+    </dialog>
   </div>
 </template>

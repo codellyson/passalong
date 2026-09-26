@@ -341,14 +341,6 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               <HubGuideLink v-for="c in ctx.children" :key="c.id" :g="c" />
             </div>
           </section>
-
-          <section v-if="g.tags.length || g.stack_assumptions.length" :class="card" class="flex flex-col gap-3">
-            <h2 :class="label">Assumes</h2>
-            <p class="m-0 flex flex-wrap gap-2">
-              <span v-for="s in g.stack_assumptions" :key="`s-${s}`" class="tag">{{ s }}</span>
-              <span v-for="t in g.tags" :key="`t-${t}`" class="tag">#{{ t }}</span>
-            </p>
-          </section>
         </aside>
       </div>
     </article>
