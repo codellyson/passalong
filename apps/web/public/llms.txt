@@ -22,8 +22,9 @@ or `?view=verify` for the view that leads with what to check and folds the imple
 2. Anything under `stack_assumptions` in the frontmatter is what the author's environment was.
    Adapt those to the current codebase rather than copying them.
 3. Run the `Verification` steps before reporting success.
-4. Report back: `passalong works <id>` if it holds up, `passalong broken <id> "<why>"` if it does
-   not. The reason reaches the author the same day. This is the part that makes the next guide
+4. Report back: `passalong works <id> <screenshot.png>` if it holds up — a "works" needs at least
+   one screenshot of it working, and is refused without one — or `passalong broken <id> "<why>"` if
+   it does not. The reason reaches the author the same day. This is the part that makes the next guide
    better, so do not skip it.
 
 ## Three kinds of guide
@@ -98,7 +99,8 @@ passalong login                 # optional: sync across machines
 - `passalong log [repo]` — what you did, newest first, under a heading per month
 - `passalong list [query]` — your guides and your teams'
 - `passalong open <id> [--print]` — view in the browser, or the terminal
-- `passalong works <id>` / `passalong broken <id> <why>` — the verdict, after trying it
+- `passalong works <id> <screenshot.png...>` / `passalong broken <id> <why>` — the verdict, after
+  trying it. "Works" needs a screenshot of it working; it is removed 5 days after the guide closes
 - `passalong done <id>` — implemented on the receiving side
 - `passalong export [dir]` — every guide as plain markdown
 - `passalong team create|invite|join|use` — teams

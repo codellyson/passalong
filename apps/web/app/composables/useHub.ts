@@ -406,16 +406,18 @@ function build(queryClient: QueryClient) {
 
   /**
    * The reader's answer to "does this work?", and the only way a sender learns their handoff did
-   * not land. A failure must say why; the cap is the server's (280).
+   * not land. A failure must say why and a success must show it — screenshots, in `detail`. The
+   * note cap is the server's (280).
    */
-  const onVerdict = (g: Guide, ok: boolean, note = "") => {
+  const onVerdict = (g: Guide, ok: boolean, note = "", detail = "") => {
     const said = note.trim().slice(0, 280);
     // The server answers a noteless failure with a 400. Not sending it is the same rule, said
     // before the round trip rather than after.
     if (!ok && !said) return Promise.resolve(false);
     const me = meQ.data.value;
     return change(
-      () => api(`/v1/guides/${g.id}/verdict`, json("PUT", { ok, note: said })),
+      // A "works" carries its screenshots in `detail`: the server refuses one without.
+      () => api(`/v1/guides/${g.id}/verdict`, json("PUT", { ok, note: said, detail })),
       () => {
         const byName = me?.display || me?.name || (me?.handle ? `@${me.handle}` : "");
         patchGuides(g.id, (x) => withVerdict(x, ok, said, me?.handle ?? null, byName));

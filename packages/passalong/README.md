@@ -33,7 +33,7 @@ passalong activity [--all]    what happened while you were away; clears unless -
 passalong list [query]        your guides and your teams', local and synced
 passalong open <id> [--print] view a guide in the browser (or the terminal)
 passalong hub                 open your synced guides in the browser
-passalong works <id>          you tried it and it holds up
+passalong works <id> <shot>   you tried it and it holds up, with a screenshot of it working
 passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
 passalong archive <id>        off your board and out of the free tier's count (was `done`)
 passalong promote <id>        deprecated: mark promoted
@@ -67,9 +67,11 @@ passalong inbox                         # on Ada's side: what was handed to you
 passalong activity                      # back on your side: it landed, and who pulled it
 ```
 
-A receiver who tries the work reports back with `passalong works <id>` or `passalong broken <id> <why>`.
-That is separate from `done`, which means *implemented*: a verdict means it actually runs, a failing
-one has to say why, and the author sees it on their board and in their inbox.
+A receiver who tries the work reports back with `passalong works <id> <screenshot.png>` or
+`passalong broken <id> <why>`. That is separate from `done`, which means *implemented*: a verdict
+means it actually runs. A passing one has to show it — at least one screenshot of it working, kept
+until 5 days after the guide is closed — a failing one has to say why, and the author sees it on
+their board and in their inbox.
 
 Sign in at [the hub](https://passalong.dev/hub) with an email and password, and mint
 an API token there for the CLI and MCP servers — named, revocable, and shown once. Your password

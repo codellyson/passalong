@@ -274,18 +274,23 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             </div>
           </section>
 
-          <!-- What people said back: the verdict, who took it, who passed, who opened it. -->
+          <!-- What people said back: each verdict with what it showed, who took it, who passed, who
+               opened it. A "works" carries screenshots of it working; they are drawn here, where
+               the author decides whether to believe it. -->
           <section
-            v-if="g.verdict || g.taken_by?.length || g.declined?.length || g.pulled_by?.length"
+            v-if="ctx.verdicts.length || g.taken_by?.length || g.declined?.length || g.pulled_by?.length"
             :class="card"
             class="flex flex-col gap-3 font-ui text-sm"
           >
             <h2 :class="label">Answers</h2>
-            <p v-if="g.verdict" class="m-0">
-              <b :class="g.verdict.ok ? 'text-ok' : 'text-danger'">{{ g.verdict.ok ? "Works" : "Didn't work" }}</b>
-              — {{ g.verdict.by_name || `@${g.verdict.by}` }} · {{ rel(g.verdict.at) }}
-              <span v-if="g.verdict.note" class="mt-1 block text-muted">“{{ g.verdict.note }}”</span>
-            </p>
+            <div v-for="v in ctx.verdicts" :key="v.by.handle + v.at" class="flex flex-col gap-2">
+              <p class="m-0">
+                <b :class="v.ok ? 'text-ok' : 'text-danger'">{{ v.ok ? "Works" : "Didn't work" }}</b>
+                — {{ who(v.by) }} · {{ rel(v.at) }}
+              </p>
+              <HubEvidence v-if="v.detail" :text="v.detail" prose />
+              <p v-else-if="v.note" class="m-0 text-muted">“{{ v.note }}”</p>
+            </div>
             <p v-if="g.taken_by?.length" class="m-0">
               Taken by <b class="font-medium">{{ (g.taken_by_names?.length ? g.taken_by_names : g.taken_by).join(", ") }}</b>
             </p>

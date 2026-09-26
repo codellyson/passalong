@@ -471,6 +471,17 @@ public one, for agents *using* Passalong rather than changing it.
   Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),
   not yet pulled by me. Every pull is a `pull` row; the sender sees them as `pulled_by`. Handles
   are global and unique.
+- **"It works" is shown, not said, and the proof does not outlive the review.** `PUT
+  /v1/guides/:id/verdict` with `ok: true` is refused (`NEEDS_PROOF`) unless its note or `detail`
+  names at least one `/v1/shots/<id>` **this account uploaded** — pointing at somebody else's
+  screenshot is not proof. People said guides worked that did not, and a note was only their word.
+  The shots are claimed for the guide, and `evidenceOn` reads verdict `detail` as well as claim
+  evidence so an author's edit cannot release them. `sweepProof` (hourly, `shots.ts`) deletes a
+  closed guide's proof `PROOF_DAYS` (5) after it closed — anything the guide holds that its own
+  markdown does not name — and rewrites the text that pointed at it to say it was removed rather
+  than leave a broken image. Screenshots only: video was left out for storage. Agent hand-ins keep
+  their own evidence rule (commands and output count), since a screenshot of a migration proves
+  nothing a test run does not.
 - **Receipt is not only `pull`.** A browser-only receiver never runs `pull`, so a verdict or a
   non-author `consumed` also writes a `pull` row (`via` = "verdict"/"web"), deduped per
   (guide, account) and without the "pulled" notification — the verdict is the news. Without this a
