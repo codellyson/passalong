@@ -60,3 +60,30 @@ test("the scheme is only believed from the header, so nothing loops", () => {
 test("a lookalike host is not mistaken for www", () => {
   assert.equal(canonicalRedirect("https://www.passalong.dev.evil.test/hub"), null);
 });
+
+// ---- what links are minted against --------------------------------------------------------
+
+test("a production request mints links on the apex, whichever host it arrived at", async () => {
+  const { mintOrigin } = await import("../src/hosts.ts");
+  const apex = "https://passalong.dev";
+  assert.equal(mintOrigin(apex, "https://passalong.dev/v1/shots"), apex);
+  assert.equal(mintOrigin(apex, "https://passalong.kreativekorna.com/v1/shots"), apex);
+  assert.equal(mintOrigin(apex, "https://passalong-web.codellyson.workers.dev/v1/x"), apex);
+});
+
+test("a development server mints its own address, so a local upload is a local link", async () => {
+  const { mintOrigin } = await import("../src/hosts.ts");
+  const apex = "https://passalong.dev";
+  assert.equal(mintOrigin(apex, "http://localhost:3000/v1/shots"), "http://localhost:3000");
+  assert.equal(mintOrigin(apex, "http://127.0.0.1:8787/v1/shots"), "http://127.0.0.1:8787");
+  assert.equal(mintOrigin(apex, "http://[::1]:3000/v1/shots"), "http://[::1]:3000");
+  assert.equal(
+    mintOrigin(apex, "http://passalong.localhost:3000/x"),
+    "http://passalong.localhost:3000",
+  );
+});
+
+test("with no public origin set, the request's own origin is used", async () => {
+  const { mintOrigin } = await import("../src/hosts.ts");
+  assert.equal(mintOrigin(undefined, "https://example.org/v1/x"), "https://example.org");
+});

@@ -119,6 +119,7 @@ import {
   tagList,
   unreachableImages,
 } from "./guide.js";
+import { mintOrigin } from "./hosts.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
 import {
@@ -278,7 +279,7 @@ const NOT_AN_EMAIL = "That doesn't look like an email address. Check it and try 
 // Share links are built from the request origin. Under `wrangler dev` a custom-domain route makes
 // requests look like they came from production, so local dev overrides it via .dev.vars.
 const origin = (c: { env: Env; req: { url: string } }) =>
-  c.env.PUBLIC_ORIGIN || new URL(c.req.url).origin;
+  mintOrigin(c.env.PUBLIC_ORIGIN, c.req.url);
 
 interface AccountRow {
   id: string;
