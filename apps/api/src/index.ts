@@ -173,7 +173,7 @@ import {
   planNow,
   seatsFull,
 } from "./quota.js";
-import { evidenceOn, holdShots, SHOT_TYPES, shotKey } from "./shots.js";
+import { evidenceOn, holdShots, PROOF_DAYS, SHOT_TYPES, shotKey } from "./shots.js";
 import {
   isUploadToken,
   publicUpload,
@@ -3526,7 +3526,7 @@ app.get("/v1/guides/:id/context", async (c) => {
         .bind(...bind, me, me)
         .all<GuideRow>()
     ).results;
-  const [held, parentRows, childRows, blockerRows, blocksRows] = await Promise.all([
+  const [held, parentRows, childRows, blockerRows, blocksRows, said] = await Promise.all([
     c.env.DB.prepare(
       `SELECT c.*, COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
          FROM claim c LEFT JOIN account a ON a.id = c.account_id
@@ -3552,6 +3552,23 @@ app.get("/v1/guides/:id/context", async (c) => {
         WHERE b.blocker_id = ? AND ${readable} ORDER BY g.created`,
       row.id,
     ),
+    // What each person who answered showed: a "works" carries screenshots of it working, a
+    // "didn't work" the whole report. The summary above has only the latest one-line note.
+    c.env.DB.prepare(
+      `SELECT v.ok, v.note, v.detail, v.at, COALESCE(a.handle, '') AS handle,
+              COALESCE(a.name, '') AS name
+         FROM verdict v LEFT JOIN account a ON a.id = v.account_id
+        WHERE v.guide_id = ? ORDER BY v.at DESC`,
+    )
+      .bind(row.id)
+      .all<{
+        ok: number;
+        note: string;
+        detail: string;
+        at: string;
+        handle: string;
+        name: string;
+      }>(),
   ]);
   const claimRows = held.results;
   // A hand-in's write-up is a guide of its own; name it only when this caller can read it.
@@ -3591,6 +3608,13 @@ app.get("/v1/guides/:id/context", async (c) => {
       claimed_at: k.claimed_at,
       lease_until: k.lease_until,
       updated: k.updated,
+    })),
+    verdicts: said.results.map((v) => ({
+      ok: Boolean(v.ok),
+      by: { handle: v.handle, name: v.name },
+      note: v.note,
+      detail: v.detail,
+      at: v.at,
     })),
     parent: pick(parentRows)[0] ?? null,
     children: pick(childRows),
@@ -3806,6 +3830,15 @@ async function recordAck(c: Ctx & { env: Env }, row: GuideRow, taken: boolean, n
   count(c, "guide_acked", { taken });
 }
 
+/** Said when "it works" arrives with nothing to look at. Names the one command that fixes it. */
+const NEEDS_PROOF =
+  "Show that it works: add at least one screenshot of it working. " +
+  "`passalong works <id> <image>` uploads it for you; in the hub, add it on the Works form. " +
+  // 0.12.0 and older take no image on `works`, but they have `attach`, and a note holding the
+  // link it prints is proof. Said here, because the refusal is the one text an old CLI shows.
+  "On an older CLI: `passalong attach <image>`, then `passalong works <id> <the link it printed>`. " +
+  `Screenshots are removed ${PROOF_DAYS} days after the guide is closed.`;
+
 app.put("/v1/guides/:id/verdict", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
@@ -3823,21 +3856,39 @@ app.put("/v1/guides/:id/verdict", async (c) => {
   // anything longer than this is a conversation the product deliberately does not host.
   if (!body.ok && !note)
     return err(c, 400, "Say what went wrong, so the author knows what to fix.");
+  const detail = typeof body.detail === "string" ? body.detail.trim() : "";
+
+  // "It works" is shown, not said. People said a guide worked and the author found it did not, and
+  // a note is only the sender's word for it. A screenshot of it working is the part the author can
+  // look at — and it has to be one this account uploaded, or pointing at a screenshot somebody else
+  // took would pass. Removed PROOF_DAYS after the guide is closed; see shots.ts.
+  if (body.ok) {
+    const named = [...new Set([...shotIds(detail), ...shotIds(note)])];
+    const own = named.length
+      ? (
+          await c.env.DB.prepare(
+            `SELECT id FROM shot WHERE account_id = ? AND id IN (${named.map(() => "?").join(",")})`,
+          )
+            .bind(account, ...named)
+            .all<{ id: string }>()
+        ).results
+      : [];
+    if (!own.length) return err(c, 400, NEEDS_PROOF);
+  }
 
   // What the row shows is one line; what the guide shows can be the whole report. A correction
   // that did not fit in 280 characters is exactly why people published them as guides instead.
-  await recordVerdict(c, found.row, body.ok, note, {
-    detail: typeof body.detail === "string" ? body.detail.trim() : "",
-  });
+  await recordVerdict(c, found.row, body.ok, note, { detail });
+  await claimEvidenceShots(c, account, found.row.id, `${note}\n${detail}`);
   // Said in the browser by the person holding it: that is handing it in, so the hold moves to
   // waiting on the author, who closes it or sends it back. No hold, nothing to move.
   await claims.handIn(
     c.env.DB,
     found.row.id,
     { account, agent: personAgent(account) },
-    // A person in the hub, not an agent with a terminal: their word is the evidence, and asking
-    // them to paste one would be the form this product does not have.
-    { at: now(), note, evidence: note, person: true },
+    // A person in the hub, not an agent with a terminal: what they showed is the evidence — the
+    // screenshots a "works" needs, or the reason a "didn't work" needs.
+    { at: now(), note, evidence: detail || note, person: true },
   );
   return c.json({ id: found.row.id, ok: body.ok, note });
 });
@@ -4767,18 +4818,29 @@ app.get("/g/:id/:key{.+\\.md}", async (c) => {
 // The site's own unfurl card. `/` is the page most people meet first and it had no image at all,
 // so a link to the product previewed as a bare text row — the same blank card the guide pages were
 // fixed for. Static in every sense: it takes no parameters and changes only when this code does.
-app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c)));
+app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c), later(c)));
 
 app.get("/g/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
   if (!row) return c.text("no such guide", 404, VIEW_HEADERS);
   const people = await accounts(c, [row.account_id]);
-  return renderOgImage(c.env, c.req.url, {
-    id: row.id,
-    meta: parseMeta(row.markdown),
-    from: nameOf(people, row.account_id),
-  });
+  return renderOgImage(
+    c.env,
+    c.req.url,
+    { id: row.id, meta: parseMeta(row.markdown), from: nameOf(people, row.account_id) },
+    later(c),
+  );
 });
+
+/** `waitUntil`, where there is an execution context. Accessing it throws where there is none. */
+function later(c: { executionCtx: { waitUntil(p: Promise<unknown>): void } }) {
+  try {
+    const ctx = c.executionCtx;
+    return (p: Promise<unknown>) => ctx.waitUntil(p);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * The API, described for agents that only speak HTTP — a ChatGPT action, Gemini function calling,

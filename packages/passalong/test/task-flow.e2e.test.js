@@ -9,7 +9,7 @@
 // works against a local server whose database is apps/web's — never point this at a real one.
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -38,6 +38,16 @@ function setup() {
     return { account, p, ...guide };
   })();
   return ready;
+}
+
+/**
+ * Upload a screenshot as whoever is signed in, and the markdown that shows it: "it works" is
+ * refused without a screenshot of it working. PNG is the 1×1 image declared further down.
+ */
+async function proof() {
+  const api = await import("../src/api.js");
+  const shot = await api.uploadShot(PNG, "image/png", "it-works.png");
+  return `![it works](${shot.url})`;
 }
 
 /** A fresh worktree of this account's own repo, and a ready task for it. */
@@ -629,7 +639,14 @@ test("a task is answered with the task tools, and the guide ones say so", { skip
   // A verdict or an ack on a task would be an answer nobody reads: its author reviews it from the
   // queue. Both are refused, and the refusal names the tools that do the job.
   const task = /take[^.]*hand_in|hand_in[^.]*take/;
-  await assert.rejects(p.verdict(id, true, ""), (e) => e.status === 400 && task.test(e.message));
+  // With a screenshot, so it gets as far as the server: the CLI refuses a "works" without one
+  // before asking, and that refusal is not the one this test is about.
+  const shotFile = join(mkdtempSync(join(tmpdir(), "passalong-shot-")), "works.png");
+  writeFileSync(shotFile, PNG);
+  await assert.rejects(
+    p.verdict(id, true, "", { images: [shotFile] }),
+    (e) => e.status === 400 && task.test(e.message),
+  );
   await assert.rejects(api.ack(id, true, ""), (e) => e.status === 400 && task.test(e.message));
 });
 
@@ -837,7 +854,7 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
 
   // "It worked" from the browser hands it in: out of working, into the author's list.
   as(mate.token);
-  await api.verdict(id, true, "streams fine now");
+  await api.verdict(id, true, "streams fine now", await proof());
   as(owner);
   assert.equal(
     (await call("GET", "/v1/working")).working.find((w) => w.id === id),
@@ -1145,7 +1162,7 @@ test("a team's guide one teammate said worked stops asking the others, so nobody
     "Bo sees it before anyone answers",
   );
   as(ada.token);
-  await api.verdict(id, true, "totals match now");
+  await api.verdict(id, true, "totals match now", await proof());
 
   // Bo is no longer asked, and Bo's agent is told Ada did it rather than doing it again.
   as(bo.token);

@@ -303,6 +303,14 @@ export interface GuideContext {
   guide: Guide;
   owner: boolean;
   claims: ContextClaim[];
+  /** Every standing verdict, newest first, with what it showed: a "works" carries screenshots. */
+  verdicts: {
+    ok: boolean;
+    by: { handle: string; name: string };
+    note: string;
+    detail: string;
+    at: string;
+  }[];
   parent: Guide | null;
   children: Guide[];
   blocked_by: Guide[];

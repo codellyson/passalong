@@ -125,6 +125,10 @@ list of things you are inviting a model to call.
 deliberate: a pull is the event the author needs to see, and making it a separate call would mean
 trusting clients to report it. Keep it in mind when adding caching or prefetching.
 
+`PUT /v1/guides/:id/verdict` with `ok: true` needs proof: at least one screenshot the caller
+uploaded (`POST /v1/shots`), named by its `/v1/shots/<id>` URL in `note` or `detail`. Without one
+it answers 400. Proof on a guide is deleted 5 days after the guide is closed.
+
 `GET /v1/guides/:id/context` is the hub's read of a guide and records **no** pull: the guide's
 summary, every live claim with what was handed in (`risk` to the author only), the guide it
 follows, its follow-ups, and the tasks it blocks and is blocked by. Each related guide is filtered

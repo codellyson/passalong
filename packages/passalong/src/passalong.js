@@ -908,13 +908,40 @@ export async function activity({ all = false, limit = 50 } = {}) {
  * "Correction: …" instead, because measurements, commands and commit ids do not fit in a tweet.
  * The first line is the summary a row shows; the whole thing is what the guide shows.
  */
-export async function verdict(id, ok, note = "") {
+export async function verdict(id, ok, note = "", { images = [] } = {}) {
   if (!api.loggedIn()) throw new PassalongError("verdicts need sync — run `passalong login` first");
   const said = note.trim();
   if (!ok && !said)
     throw new PassalongError("say what went wrong: passalong broken <id> <what happened>");
+  // "It works" is shown, not said: the server refuses one with no screenshot of it working, so
+  // the refusal is said here before anything is uploaded, in the words of the command that fixes it.
+  if (ok && !images.length && !/\/v1\/shots\/[a-z0-9]{6,16}/.test(said))
+    throw new PassalongError(
+      "show it working: passalong works <id> <screenshot.png> [what you checked]",
+    );
+  const guide = await resolveId(id);
+  const shots = [];
+  for (const file of images) shots.push((await attach(file)).markdown);
   const line = said.split("\n")[0].slice(0, 280);
-  return api.verdict(await resolveId(id), ok, line, said.length > line.length ? said : "");
+  const detail = [said.length > line.length || shots.length ? said : "", ...shots]
+    .filter(Boolean)
+    .join("\n");
+  return api.verdict(guide, ok, line, detail);
+}
+
+/**
+ * The words after `passalong works <id>`, split into the screenshots and the note: an argument is a
+ * screenshot when it names an image file that exists, and everything else is what was checked.
+ */
+export function proofArgs(args) {
+  const images = [];
+  const words = [];
+  for (const a of args) {
+    const ext = a.slice(a.lastIndexOf(".")).toLowerCase();
+    if (SHOT_TYPES[ext] && existsSync(a)) images.push(a);
+    else words.push(a);
+  }
+  return { images, note: words.join(" ") };
 }
 
 /**

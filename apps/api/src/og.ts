@@ -142,7 +142,16 @@ function siteCard(): string {
  *     pnpm --filter @passalong/web build
  *     npx wrangler dev .output/server/index.mjs --assets .output/public
  */
-async function renderCard(env: Env, base: string, markup: string): Promise<Response> {
+async function renderCard(
+  env: Env,
+  base: string,
+  markup: string,
+  later?: Later,
+): Promise<Response> {
+  return cached(base, markup, () => draw(env, base, markup), later);
+}
+
+async function draw(env: Env, base: string, markup: string): Promise<Response> {
   const [og, fonts] = await Promise.all([
     import("workers-og").catch((e) => {
       throw new Error(
@@ -163,6 +172,56 @@ async function renderCard(env: Env, base: string, markup: string): Promise<Respo
   });
 }
 
+/** Where a finished card is kept: the Worker's edge cache, or nowhere (`nuxt dev`, Node tests). */
+export interface Cards {
+  match(req: Request): Promise<Response | undefined>;
+  put(req: Request, res: Response): Promise<void>;
+}
+/** `executionCtx.waitUntil`, so storing a card never holds up the response that carries it. */
+export type Later = (p: Promise<unknown>) => void;
+
+const edge = (): Cards | null =>
+  (globalThis as { caches?: { default?: Cards } }).caches?.default ?? null;
+
+/**
+ * Bumped when the renderer changes in a way the markup cannot show — the fonts, the size, the
+ * format. Everything else a card depends on is in the markup, so it is in the key already.
+ */
+const DRAWN_WITH = "onest-400,onest-600.woff 1200x630 png";
+
+/**
+ * A card is drawn once and then served from the edge cache.
+ *
+ * Every unfurl was a fresh render — a second or more of wasm on every crawler fetch — because a
+ * response a Worker makes is never cached by Cloudflare's CDN, whatever its `cache-control` says;
+ * only the Cache API stores it. The key is a hash of the markup, not the guide's address: the card
+ * is exactly its markup, so a retitled guide, a status change or a renamed author is a new key and
+ * never a stale picture, and nothing has to remember to purge. It also keeps the share key, which
+ * is the guide's secret, out of the cache key entirely. The key's path is never routed, so nothing
+ * outside this function can read an entry.
+ */
+export async function cached(
+  base: string,
+  markup: string,
+  render: () => Promise<Response>,
+  later?: Later,
+  cards: Cards | null = edge(),
+): Promise<Response> {
+  if (!cards) return render();
+  const bytes = new TextEncoder().encode(`${DRAWN_WITH}\n${markup}`);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  const hex = [...digest.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const key = new Request(`${new URL(base).origin}/__og/${hex}.png`);
+  const hit = await cards.match(key);
+  if (hit) return hit;
+  const res = await render();
+  if (!res.ok) return res;
+  const store = cards.put(key, res.clone()).catch(() => {});
+  if (later) later(store);
+  else await store;
+  return res;
+}
+
 /**
  * PNG bytes for one guide's unfurl card, 1200×630.
  *
@@ -173,15 +232,17 @@ export async function renderOgImage(
   env: Env,
   base: string,
   g: { id: string; meta: Meta; from?: string },
+  later?: Later,
 ): Promise<Response> {
   return renderCard(
     env,
     base,
     card({ title: g.meta.title || g.id, from: g.from || "", meta: g.meta }),
+    later,
   );
 }
 
 /** PNG bytes for the site's own unfurl card, 1200×630. */
-export async function renderSiteOgImage(env: Env, base: string): Promise<Response> {
-  return renderCard(env, base, siteCard());
+export async function renderSiteOgImage(env: Env, base: string, later?: Later): Promise<Response> {
+  return renderCard(env, base, siteCard(), later);
 }
