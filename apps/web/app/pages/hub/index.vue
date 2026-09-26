@@ -4,7 +4,7 @@
   Tasks and handoffs used to be two pages, with two ideas of who has what. They are one thing — a
   guide handed from one context to another — so they are one page, in the order a person needs it:
 
-    Needs you     work handed in for you to review (HubTaskReview), agents stuck on you, and guides
+    Needs you     one list (HubNeedsYou): work handed in for you to review, agents stuck on you, and guides
                   handed to you that you have not answered
     Taken         who has what, across every kind (HubTaken, GET /v1/working)
     Open          what nobody is on yet: ready, blocked and draft tasks, a teammate's task waiting
@@ -131,7 +131,7 @@ const taskHit = (t: Task) =>
   !follows.value && hit([t.title, t.id, t.target, t.claim?.note, t.claim?.report_title]);
 const tasks = computed(() => data.value.tasks.filter(taskHit));
 
-/** Yours, and waiting on you: mirrors the groups in HubTaskReview. */
+/** Yours, and waiting on you: mirrors the task groups in HubNeedsYou. */
 const taskNeedsYou = (t: Task) =>
   t.mine &&
   (t.state === "review" ||
@@ -324,24 +324,11 @@ const list =
         >
           <!-- ---- Needs you ---- -->
           <template v-if="tab === 'needs'">
-            <HubTaskReview :tasks="tasks" />
-            <div v-if="handedIn.length">
-              <h3 :class="sub">Handed in · {{ handedIn.length }}</h3>
-              <p class="mt-1 mb-3 font-ui text-sm text-muted">
-                Handoffs you sent, done where they went. Close them, or send one back with why.
-              </p>
-              <ul :class="list">
-                <HubHandedInRow v-for="h in handedIn" :key="`${h.id}-${h.place}`" :h="h" />
-              </ul>
-            </div>
+            <!-- One list for everything that needs you, the picked item beside it. Handed in and Sent
+                 to you used to be lists of their own below a task review a screen tall, where nobody
+                 found them. -->
             <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
-            <div v-else-if="lanes.needs.length">
-              <h3 :class="sub">Sent to you · {{ lanes.needs.length }}</h3>
-              <p class="mt-1 mb-3 font-ui text-sm text-muted">Handed to you, and waiting on your answer.</p>
-              <ul :class="list">
-                <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />
-              </ul>
-            </div>
+            <HubNeedsYou v-else :tasks="tasks" :handed-in="handedIn" :rows="lanes.needs" />
             <!-- All clear is one quiet line, not an empty section. -->
             <div
               v-if="!waiting && !needsCount"
