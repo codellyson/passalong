@@ -87,17 +87,20 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
             target="_blank"
             rel="noopener nofollow"
           >{{ part.text }}</a><template v-else>{{ part.text }}</template></template></p>
+        <!-- Bare: the global `pre` rule draws its own fill, border and padding, which inside this
+             well made a box within a box. -->
         <pre
           v-else-if="p.kind === 'run'"
-          class="m-0 font-code text-xs leading-relaxed whitespace-pre-wrap break-words text-fg"
+          class="m-0 rounded-none border-0 bg-transparent p-0 font-code text-xs leading-relaxed whitespace-pre-wrap break-words text-fg"
         ><template v-for="(part, k) in p.parts" :key="k"><a
             v-if="part.url"
             :href="part.url"
             target="_blank"
             rel="noopener nofollow"
           >{{ part.text }}</a><template v-else>{{ part.text }}</template></template></pre>
-        <!-- A screenshot is the part of the evidence a reviewer reads fastest and the part that was
-             being cut in half, so it is shown whole and opens full size in a tab. -->
+        <!-- A screenshot is the part of the evidence a reviewer reads fastest, so it is shown whole,
+             capped at a thumbnail's height so one picture does not fill the page, and a click
+             opens it full size over the page. -->
         <figure v-else class="my-3 first:mt-0 last:mb-0">
           <a
             :href="p.url"
@@ -111,7 +114,7 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
               :src="p.url"
               :alt="p.alt || 'a screenshot from the hand-in'"
               loading="lazy"
-              class="block max-w-full rounded-1 outline outline-image-edge"
+              class="block max-h-72 w-auto max-w-full rounded-1 outline outline-image-edge"
             />
           </a>
           <figcaption v-if="p.alt" class="mt-1 font-ui text-xs text-muted">{{ p.alt }}</figcaption>

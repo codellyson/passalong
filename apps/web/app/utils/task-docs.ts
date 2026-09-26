@@ -44,6 +44,29 @@ export function codeParts(text: string): { code: boolean; text: string }[] {
     );
 }
 
+/**
+ * A line of a guide as parts to render as text: `code`, **bold**, and everything else. Never HTML —
+ * the line is markdown somebody else wrote, and this runs in the hub, which runs script. Only the
+ * two marks people actually put in an Acceptance line are read; anything else stays as typed, which
+ * is what the raw `**Paid**` in the review pane was, before this.
+ */
+export function inlineParts(text: string): { kind: "code" | "bold" | "text"; text: string }[] {
+  const out: { kind: "code" | "bold" | "text"; text: string }[] = [];
+  for (const p of codeParts(text)) {
+    if (p.code) {
+      out.push({ kind: "code", text: p.text });
+      continue;
+    }
+    for (const q of p.text.split(/(\*\*[^*]+\*\*)/).filter(Boolean))
+      out.push(
+        q.length > 4 && q.startsWith("**") && q.endsWith("**")
+          ? { kind: "bold", text: q.slice(2, -2) }
+          : { kind: "text", text: q },
+      );
+  }
+  return out;
+}
+
 /** One Acceptance line, and the evidence the agent filed against it. */
 export interface CheckedLine {
   asked: string;
