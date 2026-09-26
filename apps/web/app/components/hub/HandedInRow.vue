@@ -50,7 +50,7 @@ function send() {
 
 <template>
   <li
-    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] border-l-accent bg-raised px-4 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
+    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] border-l-accent bg-raised px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
   >
     <div class="min-w-0 flex-1 basis-64">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
@@ -59,16 +59,14 @@ function send() {
         </span>
         <span>{{ who }} · {{ rel(h.at) }}</span>
       </div>
-      <a
-        :href="h.url"
-        target="_blank"
-        rel="noopener"
+      <NuxtLink
+        :to="`/hub/g/${h.id}`"
         class="mt-2 block text-base leading-snug font-semibold text-fg no-underline hover:text-accent"
       ><span
           v-if="badge"
           class="mr-2 rounded-1 border px-1.5 py-0.5 align-middle font-ui text-xs font-medium tracking-wide uppercase"
           :class="badge.class"
-        >{{ badge.label }}</span>{{ h.title || h.id }}</a>
+        >{{ badge.label }}</span>{{ h.title || h.id }}</NuxtLink>
       <p v-if="h.note" class="mt-2 mb-0 text-sm text-muted">“{{ h.note }}”</p>
       <HubHandIn
         :evidence="h.evidence"

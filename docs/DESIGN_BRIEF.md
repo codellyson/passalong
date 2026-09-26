@@ -412,7 +412,7 @@ open questions on how much latitude you have.
 | `--t-sm` | 0.875rem | all metadata, all buttons |
 | `--t-xs` | 0.8125rem | tags, chips |
 
-Two self-hosted variable faces: **Instrument Sans** for the interface and **Source Serif 4** for guide
+Two self-hosted variable faces: **Onest** for the interface and **Newsreader** for guide
 prose only. A monospace stack is used for ids, commands and tags but is not self-hosted — it falls
 back to the system.
 

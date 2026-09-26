@@ -3,23 +3,31 @@
    reason: `font-src 'self'` allows this origin and nothing else. */
 
 /* ---- fonts ---------------------------------------------------------------------------------
-   Three variable faces, latin subset, ~120KB together. Instrument Sans carries the interface;
-   Source Serif carries guide prose, where the reading is long and a serif earns its place;
+   Three variable faces, latin subset, all OFL. Onest carries the interface: a soft, warm
+   grotesque that holds its shape at 480 with tight tracking, which is the whole display voice.
+   Newsreader carries guide prose and the italic turn in a headline — a reading face, and one with
+   a real italic, where the old serif had none and the browser slanted the roman to fake it.
    JetBrains Mono carries everything the machine wrote — ids, tags, commands, code.
-   `swap` so a slow font never blanks the text — the fallback metrics below are close enough
-   that the swap does not jump the layout. */
+   `swap` so a slow font never blanks the text. */
 @font-face {
-  font-family: "Instrument Sans";
-  src: url("/fonts/instrument-sans-var.woff2") format("woff2-variations");
-  font-weight: 400 700;
+  font-family: "Onest";
+  src: url("/fonts/onest-var.woff2") format("woff2-variations");
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: "Source Serif 4";
-  src: url("/fonts/source-serif-4-var.woff2") format("woff2-variations");
-  font-weight: 200 900;
+  font-family: "Newsreader";
+  src: url("/fonts/newsreader-var.woff2") format("woff2-variations");
+  font-weight: 200 800;
   font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader";
+  src: url("/fonts/newsreader-italic-var.woff2") format("woff2-variations");
+  font-weight: 200 800;
+  font-style: italic;
   font-display: swap;
 }
 /* The third face, and the one that was missing.
@@ -63,17 +71,22 @@
 :root {
   color-scheme: light dark;
 
-  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: "Source Serif 4", Georgia, "Iowan Old Style", serif;
+  --font-sans: "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Newsreader", Georgia, "Iowan Old Style", serif;
   /* The system stack stays as the fallback, so a slow font never leaves this text unrendered. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", monospace;
 
   /* Type. The display step is fluid so the hero fills a phone and a laptop equally. */
-  --t-display: clamp(2.25rem, 1.2rem + 4.6vw, 3.5rem);
-  --t-h1: clamp(1.75rem, 1.3rem + 1.8vw, 2.25rem);
-  --t-h2: 1.3125rem;
-  --t-h3: 1.0625rem;
-  --t-body: 1.0625rem;
+  /* The scale: 72 display, 40 / 24 / 18 titles, 16 body, 14 label, 13 caption. Few steps,
+     far apart, so a heading is never mistaken for a paragraph set slightly larger. */
+  --t-display: clamp(2.75rem, 1.2rem + 6vw, 4.5rem);
+  --t-h1: clamp(1.875rem, 1.4rem + 1.8vw, 2.5rem);
+  --t-h2: 1.5rem;
+  --t-h3: 1.125rem;
+  --t-body: 1rem;
+  --t-lede: 1.125rem;
+  /* A landing section's heading: between the 40 title and the 56 headline, fluid between them. */
+  --t-section: clamp(2rem, 1.2rem + 3.4vw, 3.25rem);
   --t-sm: 0.875rem;
   --t-xs: 0.8125rem;
 
@@ -120,9 +133,11 @@
   --control-pad-sm: 0.875rem;
   --control-text: var(--t-sm);
 
+  /* Small for a row inside a list, medium for a field, large for a card: 8, 12, 24. A card at 24px
+     is the broad, friendly block the whole look rests on; nothing that is a card goes below 16. */
   --r-1: 0.5rem;
-  --r-2: 0.625rem;
-  --r-3: 1rem;
+  --r-2: 0.75rem;
+  --r-3: 1.5rem;
   --r-pill: 999px;
 
   /* Motion. `--motion` is for something already on screen changing — a hover, a focus ring, a
@@ -142,57 +157,57 @@
      `--surface` is the recessed fill (code, inputs), `--surface-raised` the lifted one (cards,
      panels). Borders alone used to carry every boundary; now fill does most of it. */
   color-scheme: light dark;
-  /* Plain, not papered: the page itself carries no tint, so the only coloured things on it are
-     the ones meant to be read as coloured — a raised card, a recessed code block, a state.
-     The neutrals are neutral, with no hue at all. They used to carry a warm cast borrowed from
-     the rust accent, which on a dark ground read as brown paper behind every panel and left the
-     accent nothing to stand against. Rust is still the brand; it is now the only warm thing. */
-  --bg: light-dark(#ffffff, #111111);
-  --surface: light-dark(#f4f4f4, #1b1b1b);
-  --surface-raised: light-dark(#ffffff, #191919);
-  --fg: light-dark(#1a1a1a, #eaeaea);
-  --muted: light-dark(#6a6a6a, #9a9a9a);
-  --line: light-dark(#e4e4e4, #2c2c2c);
-  --line-strong: light-dark(#cbcbcb, #414141);
-  --accent: light-dark(#b5451b, #f08a5b);
-  --accent-hover: light-dark(#97390f, #f7a077);
-  --accent-fg: light-dark(#fffaf7, #1a1410);
-  --accent-soft: light-dark(#f7e7de, #33241c);
-  --danger: light-dark(#ab2f21, #e0705e);
-  /* Semantic status, deliberately separate from the brand accent. A failed transfer and a
-     well-travelled one were both painted `--accent` before, which is most of why the board read as
-     one undifferentiated colour. Rust stays the brand; these three carry meaning. */
-  --danger-soft: light-dark(#f7e0dc, #34201c);
-  --ok: light-dark(#3f6b45, #86c493);
-  --ok-soft: light-dark(#e2ecdd, #1e2a20);
-  --warn: light-dark(#8a5a08, #dfae5f);
-  --warn-soft: light-dark(#f6e8cd, #2e2619);
-  --code: light-dark(#f4f4f4, #1b1b1b);
+  /* Warm, low-glare, and never pure white. The page is a pale cream, a card is a deeper cream laid
+     on it, and a field or a menu is the one near-white thing — the surface you act on sits closest.
+     Hierarchy comes from fill, not from outlines: a card has no border and next to no shadow.
+
+     Ink does the deciding. The primary action is an ink pill, links are ink, and coral is
+     punctuation — a marker under the current page, a dot for something unread, the turn in the
+     hero. It is never the fill of a button and never a flood.
+
+     Coral itself (`--coral`) is 2.6:1 on the canvas, which is fine for a mark and illegible as
+     text, so `--accent` is the same hue taken down to a readable 5:1 for the places a word has to
+     be coral. The spec's muted grey (#858481, 3.7:1) is darkened for the same reason. */
+  --bg: light-dark(#fffcfa, #191816);
+  --surface: light-dark(#f2ebe3, #2c2a26);
+  --surface-raised: light-dark(#f7f2ed, #23211e);
+  --field: light-dark(#fffefe, #1e1d1a);
+  --fg: light-dark(#252522, #f4efe9);
+  --muted: light-dark(#6e6c68, #a39f98);
+  --line: light-dark(#efe6dc, #33302c);
+  --line-strong: light-dark(#e0d4c7, #45413c);
+  --coral: #f2805d;
+  --accent: light-dark(#b8481f, #f2805d);
+  --accent-hover: light-dark(#9c3b17, #f7a077);
+  --accent-fg: light-dark(#fffcfa, #1a1410);
+  --accent-soft: light-dark(#fce9e0, #3a261e);
+  /* The primary action. Ink on the canvas in light, and the canvas inverted in dark: the button is
+     always the highest-contrast thing on the page, which is what makes it the one to press. */
+  --ink: var(--fg);
+  --on-ink: var(--bg);
+  --danger: light-dark(#b8322a, #ef7a6c);
+  /* Semantic status, deliberately separate from the brand accent. Rust coral is the brand; these
+     three carry meaning, and each is taken to a readable text weight on the cream. */
+  --danger-soft: light-dark(#fbe3de, #3a211d);
+  --ok: light-dark(#3a7a2a, #7fcf6a);
+  --ok-soft: light-dark(#e6f0dc, #1f2a1b);
+  --warn: light-dark(#86750f, #d6c530);
+  --warn-soft: light-dark(#f5efcc, #2d2a17);
+  --code: light-dark(#f2ebe3, #2c2a26);
   /* The hairline around an image. Pure black on light, pure white on dark, at a tenth: a tinted
      neutral picks up the surface behind it and reads as dirt on the picture's edge. */
   --image-edge: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
-  /* A shadow is a list rather than a colour, so the pair goes in each colour slot. The dark
-     theme's second layer is transparent because dark needs one layer where light needs two. */
-  --shadow-1:
-    0 1px 2px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.3)),
-    0 1px 3px light-dark(rgb(0 0 0 / 0.06), transparent);
-  --shadow-2:
-    0 2px 4px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.25)),
-    0 8px 24px light-dark(rgb(0 0 0 / 0.07), rgb(0 0 0 / 0.35));
-  /* The edge of a raised surface, drawn as a shadow rather than a border: a 1px ring and a little
-     depth. It is transparent, so it reads the same on any background a card lands on, where a
-     fixed border colour was only ever right on one. Dark mode is the ring alone, because layered
-     depth is invisible on a dark ground. Structure — dividers, table rules, inputs, a selected or
-     focused state — stays a border. `--edge-ring` is split out so a state can recolour the ring
-     (see .panel) without redrawing the depth. */
-  --edge-ring: light-dark(oklch(0 0 0 / 0.06), oklch(1 0 0 / 0.08));
-  --edge-ring-hover: light-dark(oklch(0 0 0 / 0.08), oklch(1 0 0 / 0.13));
-  --edge-depth:
-    0 1px 2px -1px light-dark(oklch(0 0 0 / 0.06), transparent),
-    0 2px 4px 0 light-dark(oklch(0 0 0 / 0.04), transparent);
-  --edge-depth-hover:
-    0 1px 2px -1px light-dark(oklch(0 0 0 / 0.08), transparent),
-    0 2px 4px 0 light-dark(oklch(0 0 0 / 0.06), transparent);
+  /* The look is mostly flat. Depth is for something that behaves like a product surface — a
+     menu, a field, the active segment of a toggle — and it is one quiet shadow, never a stack. */
+  --shadow-1: 0 1px 3px light-dark(rgb(0 0 0 / 0.1), rgb(0 0 0 / 0.4));
+  --shadow-2: 0 6px 24px light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.45));
+  /* The edge of a card. The fill carries the card now, so the ring is the faintest line that still
+     separates two rows sitting flush, and there is no depth under it at all. `--edge-ring` is split
+     out so a state can recolour the ring (see .panel) without redrawing the rest. */
+  --edge-ring: light-dark(oklch(0.4 0.03 60 / 0.06), oklch(1 0 0 / 0.06));
+  --edge-ring-hover: light-dark(oklch(0.4 0.03 60 / 0.12), oklch(1 0 0 / 0.12));
+  --edge-depth: 0 0 0 0 transparent;
+  --edge-depth-hover: 0 0 0 0 transparent;
   --edge-shadow: 0 0 0 1px var(--edge-ring), var(--edge-depth);
   --edge-shadow-hover: 0 0 0 1px var(--edge-ring-hover), var(--edge-depth-hover);
 }
@@ -233,34 +248,37 @@ main {
 }
 /* The landing runs wider than a reading column: it holds a hero and side-by-side panels. */
 main.wide {
-  max-width: 62rem;
+  max-width: 67.5rem;
 }
 
 /* ---- type ---------------------------------------------------------------------------------- */
+/* Medium-light and tightly tracked. A heading at 480 with negative tracking reads as a soft,
+   compact word shape; at 600 it read as blunt SaaS. Weight is not what makes it a heading — size,
+   tracking and the muted text around it are. */
 h1,
 h2,
 h3 {
-  /* Tight tracking is what stops large type reading as a blown-up paragraph. */
-  letter-spacing: -0.021em;
+  letter-spacing: -0.03em;
   text-wrap: balance;
+  font-weight: 480;
 }
 h1 {
   font-size: var(--t-h1);
-  line-height: 1.15;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
   margin: var(--s-2) 0 var(--s-3);
-  font-weight: 600;
 }
 h2 {
   font-size: var(--t-h2);
   line-height: 1.3;
   margin: var(--s-6) 0 var(--s-3);
-  font-weight: 600;
 }
 h3 {
   font-size: var(--t-h3);
   line-height: 1.4;
+  letter-spacing: -0.015em;
   margin: var(--s-5) 0 var(--s-2);
-  font-weight: 600;
+  font-weight: 500;
 }
 p {
   margin: 0 0 var(--s-4);
@@ -269,30 +287,37 @@ strong,
 b {
   font-weight: 600;
 }
+/* Links are ink with a quiet underline, and the underline turns coral under the pointer. Coral
+   on every link at rest was coral on every meta line in a list — a flood, not punctuation. */
 a {
-  color: var(--accent);
-  text-underline-offset: 0.15em;
-  text-decoration-thickness: from-font;
+  color: var(--fg);
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in oklab, var(--fg) 28%, transparent);
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color var(--motion) ease;
 }
 a:hover {
-  color: var(--accent-hover);
+  color: var(--fg);
+  text-decoration-color: var(--coral);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  font: 600 var(--t-xs) / 1 var(--font-sans);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent);
+  font: 500 1.0625rem / 1 var(--font-sans);
+  letter-spacing: -0.03em;
+  color: var(--fg);
   text-decoration: none;
+}
+.brand:hover {
+  color: var(--fg);
 }
 /* No radius here: the mark carries its own corner (rx 14 on a 64 grid). An 8px radius on top of it
    at 18px was 44% of the side, and turned the square mark into a circle. */
 .brand img {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.375rem;
+  height: 1.375rem;
 }
 
 header {
@@ -444,7 +469,9 @@ button.primary,
   font: 500 var(--control-text) / 1 var(--font-sans);
   height: var(--control-h);
   padding: 0 var(--control-pad);
-  border-radius: var(--r-1);
+  /* Every button is a pill. The shape is what says "control" before the label is read; a card is
+     a broad rounded block and a button never is. */
+  border-radius: var(--r-pill);
   border: 1px solid transparent;
   cursor: pointer;
   text-decoration: none;
@@ -470,7 +497,7 @@ button.primary,
    to say "control" at rest and firms up under the pointer, where it is the only one that matters. */
 .btn {
   background: transparent;
-  border-color: var(--line);
+  border-color: var(--line-strong);
   color: var(--fg);
 }
 .btn:hover {
@@ -498,8 +525,7 @@ button.primary,
 .btn.lg {
   font-size: var(--t-body);
   height: calc(var(--control-h) + var(--s-2));
-  padding: 0 var(--s-5);
-  border-radius: var(--r-2);
+  padding: 0 var(--s-6);
 }
 
 /* Colour, set apart from weight: these say which, not how loud. */
@@ -517,22 +543,26 @@ button.primary,
 }
 
 /* Filled: one per view. */
+/* An ink pill, never a coral one. The fill is what makes it the loudest control on the page, so
+   the colour does not also have to; hover and press change opacity rather than hue, which keeps
+   the ink the same ink. */
 button.primary,
 .btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
-  /* Weight is the hierarchy: filled and 600 is the loudest a control gets, and every other kind
-     stays at 500 so a row of them reads as one thing with one emphasis in it. No shadow — nothing
-     else on these pages floats, and a lifted button in a flat design reads as a different era
-     rather than a more important control. */
-  font-weight: 600;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-ink);
+  font-weight: 500;
 }
 button.primary:hover,
 .btn.primary:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  color: var(--accent-fg);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-ink);
+  opacity: 0.9;
+}
+button.primary:active,
+.btn.primary:active {
+  opacity: 0.8;
 }
 button.primary[disabled],
 .btn.primary[disabled] {
@@ -590,10 +620,10 @@ button.primary[disabled],
   flex-direction: column;
   gap: 0.125rem;
   padding: var(--s-2);
-  background: var(--surface-raised);
+  background: var(--field);
   /* 16px: an 8px item inside 8px of padding. At 10px the items' corners sat visibly off the
      menu's own. */
-  border-radius: var(--r-3);
+  border-radius: calc(var(--r-1) + var(--s-2));
   /* Floats over the page, so its edge is a ring on top of the lift shadow, not a border. */
   box-shadow:
     0 0 0 1px var(--edge-ring),
@@ -711,9 +741,9 @@ button.primary[disabled],
   background: var(--surface);
 }
 .chip.on {
-  color: var(--accent-fg);
-  background: var(--accent);
-  border-color: var(--accent);
+  color: var(--on-ink);
+  background: var(--ink);
+  border-color: var(--ink);
 }
 
 /* ---- form fields ----------------------------------------------------------------------------
@@ -726,8 +756,8 @@ select {
   padding: 0 var(--s-4);
   height: var(--control-h);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-1);
-  background: var(--surface-raised);
+  border-radius: var(--r-2);
+  background: var(--field);
   color: var(--fg);
   transition:
     border-color var(--motion) ease,
@@ -757,7 +787,7 @@ input::placeholder {
   color: var(--muted);
 }
 input:hover {
-  border-color: var(--muted);
+  border-color: color-mix(in oklab, var(--muted) 55%, var(--line-strong));
 }
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -786,14 +816,14 @@ select:focus {
   height: var(--control-h);
   padding-left: var(--s-3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-1);
-  background: var(--surface-raised);
+  border-radius: var(--r-2);
+  background: var(--field);
   transition:
     border-color var(--motion) ease,
     box-shadow var(--motion) ease;
 }
 .affix:hover {
-  border-color: var(--muted);
+  border-color: color-mix(in oklab, var(--muted) 55%, var(--line-strong));
 }
 .affix:focus-within {
   border-color: var(--accent);
@@ -947,7 +977,7 @@ input[name="token"],
 }
 .guide .title {
   font-size: var(--t-h3);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.015em;
   color: var(--fg);
   text-decoration: none;
@@ -1067,7 +1097,8 @@ details.more summary:hover {
 .empty h2 {
   margin: 0 0 var(--s-2);
   /* h2, not h3: h3 is the body size, so the heading only differed by its weight. */
-  font: 600 var(--t-h2) / 1.3 var(--font-sans);
+  font: 480 var(--t-h2) / 1.3 var(--font-sans);
+  letter-spacing: -0.03em;
   color: var(--fg);
 }
 .empty p {
@@ -1094,8 +1125,8 @@ details.more summary:hover {
   padding: 0 var(--s-3);
   overflow-x: auto;
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-1);
-  background: var(--surface-raised);
+  border-radius: var(--r-2);
+  background: var(--field);
   color: var(--fg);
   font: var(--t-sm) / 1 var(--font-mono);
   white-space: nowrap;
@@ -1205,9 +1236,9 @@ form.join label {
   display: block;
   margin-top: var(--s-3);
   padding: var(--s-3);
-  background: var(--surface-raised);
+  background: var(--field);
   border: 1px solid var(--line);
-  border-radius: var(--r-1);
+  border-radius: var(--r-2);
   overflow-x: auto;
   white-space: pre;
 }
@@ -1228,7 +1259,9 @@ form.join label {
 .landing {
   /* Sections set their own top margin, so the page has one rhythm rather than each block
      negotiating with its neighbours. */
-  --gap: clamp(var(--s-8), 12vh, 8.5rem);
+  /* About 120px between sections on a laptop, 80 on a phone: calm at the page level, so the dense
+     rounded groups inside each section read as groups. */
+  --gap: clamp(5rem, 3.5rem + 5vw, 7.5rem);
 }
 
 /* The mark sat alone at the top and both ways in were buried in the hero, so a returning
@@ -1263,14 +1296,14 @@ form.join label {
    product in a small `h1.eyebrow` for search engines, and sets its claim in a <p> styled like this. */
 .hero h1:not(.eyebrow),
 .hero .headline {
-  /* Serif, and this is the argument the page is making: the thing this product makes is written
-     prose that someone else reads. Setting the claim in the face that carries guides says that
-     before any of the words do — and a grotesque display line says only "software". */
-  font-family: var(--font-serif);
-  font-size: clamp(2.5rem, 1.1rem + 6vw, 4.25rem);
-  line-height: 1.03;
-  letter-spacing: -0.022em;
-  font-weight: 400;
+  /* Sans at 480, tracked in hard: a soft, compact display line rather than a blunt one. The serif
+     is kept for the turn alone, where it is an accent — the face guides are read in, arriving in
+     the one phrase that says what is wrong. */
+  font-family: var(--font-sans);
+  font-size: var(--t-display);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+  font-weight: 480;
   margin: 0 auto var(--s-5);
   max-width: 15em;
   text-wrap: balance;
@@ -1279,16 +1312,24 @@ form.join label {
    is the turn; the colour is separate and belongs to the hero alone. Three accent lines down one
    page is three places to look, which is none — so the claim gets it and the sections that follow
    make the same move in type only. */
+/* Serif italic, in every place a line turns: the sans has no italic of its own, and a slanted
+   grotesque is a browser guess. The serif is the page's one editorial accent, and this is it. */
 .turn {
   display: block;
+  font-family: var(--font-serif);
   font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.025em;
 }
 .hero .turn {
-  color: var(--accent);
+  /* Berry red, from the mark: display-sized, so it needs 3:1 rather than the 4.5:1 body text does,
+     and it clears that where the plain coral (2.6:1) would not. */
+  color: light-dark(#ed5a31, var(--coral));
 }
 .lede {
-  font-size: clamp(1.0625rem, 1rem + 0.4vw, 1.25rem);
-  line-height: 1.6;
+  font-size: var(--t-lede);
+  line-height: 1.55;
+  letter-spacing: -0.0075em;
   color: var(--muted);
   max-width: 34rem;
   margin: 0 auto var(--s-6);
@@ -1300,22 +1341,34 @@ form.join label {
    back to sign in rather than to be convinced. */
 .ways {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
   flex-wrap: wrap;
   gap: var(--s-2) var(--s-5);
   margin: 0;
 }
+/* The one way in that is a button: an ink pill, the only filled control on the page. */
 .ways .go {
-  font: 600 1.0625rem / 1.4 var(--font-sans);
-  color: var(--fg);
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 0.4em;
+  display: inline-flex;
+  align-items: center;
+  height: calc(var(--control-h) + var(--s-2));
+  padding: 0 var(--s-6);
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--on-ink);
+  font: 500 0.9375rem / 1 var(--font-sans);
+  text-decoration: none;
+  transition:
+    opacity var(--motion) ease,
+    scale var(--motion) ease-out;
 }
 .ways .go:hover {
-  color: var(--accent);
+  color: var(--on-ink);
+  opacity: 0.9;
+}
+.ways .go:active {
+  scale: 0.96;
+  opacity: 0.8;
 }
 /* Underlined, if faintly: muted and bare it read as a caption beside the command, not as a way in. */
 .ways .quiet {
@@ -1335,10 +1388,12 @@ form.join label {
    button, and a command someone has to drag across is one they retype wrong. */
 .ways .install {
   max-width: 100%;
-  padding: var(--s-2) var(--s-3);
-  border-radius: var(--r-1);
-  background: var(--surface-raised);
-  box-shadow: 0 0 0 1px var(--line-strong);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-pill);
+  background: var(--field);
+  box-shadow:
+    0 0 0 1px var(--line-strong),
+    var(--shadow-2);
   color: var(--fg);
   font: var(--t-sm) / 1.4 var(--font-mono);
   user-select: all;
@@ -1366,27 +1421,49 @@ form.join label {
   text-align: center;
 }
 .faq h2 {
-  font-family: var(--font-serif);
-  font-size: clamp(1.75rem, 1.1rem + 3vw, 2.75rem);
+  font-family: var(--font-sans);
+  font-size: var(--t-section);
   line-height: 1.15;
-  letter-spacing: -0.02em;
-  font-weight: 400;
-  margin: 0 0 var(--s-6);
+  letter-spacing: -0.04em;
+  font-weight: 480;
+  margin: 0 0 var(--s-7);
 }
+/* Questions as a conversation: the question in a cream bubble on the left, the answer in an ink
+   one on the right, the way it would be asked and answered. Each pair sits close; pairs sit apart. */
 .faq dl {
   display: grid;
-  gap: var(--s-5);
+  gap: var(--s-2);
   margin: 0;
 }
+.faq dt,
+.faq dd {
+  max-width: min(32rem, 88%);
+  padding: 0.875rem var(--s-5);
+  border-radius: 1.75rem;
+  font-size: 1.0625rem;
+  line-height: 1.45;
+  letter-spacing: -0.0075em;
+  text-wrap: pretty;
+}
 .faq dt {
-  font-weight: 600;
+  justify-self: start;
+  background: var(--surface-raised);
   color: var(--fg);
+  font-weight: 500;
+  border-bottom-left-radius: var(--r-1);
+}
+.faq dt:not(:first-child) {
+  margin-top: var(--s-5);
 }
 .faq dd {
-  margin: var(--s-1) 0 0;
-  color: var(--muted);
-  line-height: 1.6;
-  text-wrap: pretty;
+  justify-self: end;
+  margin: 0;
+  background: var(--ink);
+  color: var(--on-ink);
+  border-bottom-right-radius: var(--r-1);
+}
+.faq dd a {
+  color: inherit;
 }
 .pricing h2:has(+ .note) {
   margin-bottom: var(--s-4);
@@ -1575,12 +1652,15 @@ form.join label {
 
 .steps {
   display: grid;
-  gap: var(--s-6) var(--s-5);
+  gap: var(--s-3);
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   margin: var(--gap) 0 0;
 }
 .steps article {
-  max-width: 22rem;
+  max-width: none;
+  padding: var(--s-6);
+  border-radius: var(--r-3);
+  background: var(--surface-raised);
 }
 /* Four steps wrap as three and a stray one under auto-fit, which reads as a step left over. So a
    row of four is two by two, and one column on a phone. Never four across: in this container that
@@ -1589,7 +1669,7 @@ form.join label {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .steps:has(> article:nth-child(4)) article {
-  max-width: 28rem;
+  max-width: none;
 }
 @media (max-width: 36rem) {
   .steps:has(> article:nth-child(4)) {
@@ -1606,7 +1686,7 @@ form.join label {
 }
 .steps h2 {
   margin: 0 0 var(--s-2);
-  font: 600 1.0625rem / 1.4 var(--font-sans);
+  font: 500 1.0625rem / 1.4 var(--font-sans);
   letter-spacing: normal;
 }
 .steps p {
@@ -1624,11 +1704,11 @@ form.join label {
   text-align: center;
 }
 .statement h2 {
-  font-family: var(--font-serif);
-  font-size: clamp(1.75rem, 1.1rem + 3vw, 2.75rem);
+  font-family: var(--font-sans);
+  font-size: var(--t-section);
   line-height: 1.15;
-  letter-spacing: -0.02em;
-  font-weight: 400;
+  letter-spacing: -0.04em;
+  font-weight: 480;
   margin: 0 0 var(--s-5);
   text-wrap: balance;
 }
@@ -1645,12 +1725,12 @@ form.join label {
   text-align: center;
 }
 .closer h2 {
-  font-family: var(--font-serif);
-  font-size: clamp(1.75rem, 1.1rem + 3vw, 2.75rem);
+  font-family: var(--font-sans);
+  font-size: var(--t-section);
   line-height: 1.12;
-  letter-spacing: -0.02em;
-  font-weight: 400;
-  margin: 0 0 var(--s-6);
+  letter-spacing: -0.04em;
+  font-weight: 480;
+  margin: 0 0 var(--s-7);
   text-wrap: balance;
 }
 /* What it costs. Centred heading on the page's one axis, then the two tiers as columns under a
@@ -1671,25 +1751,30 @@ form.join label {
 /* The same size as every other section heading on the page: they are all h2s, and a smaller one
    read as a subordinate section rather than a peer. */
 .pricing h2 {
-  font-family: var(--font-serif);
-  font-size: clamp(1.75rem, 1.1rem + 3vw, 2.75rem);
-  font-weight: 400;
-  letter-spacing: -0.02em;
+  font-family: var(--font-sans);
+  font-size: var(--t-section);
+  font-weight: 480;
+  letter-spacing: -0.04em;
   line-height: 1.15;
   margin: 0 0 var(--s-7);
   text-wrap: balance;
 }
 .tiers {
   display: grid;
-  gap: var(--s-6) var(--s-6);
   /* `auto-fit` drops three to two and then to one on its own, at the point where a column would be
      narrower than its own figure. That is the whole responsive behaviour needed. */
   /* Three peers or one column, never two and a stray: 2 + 1 put "Larger" alone on a row, reading
      as a tier added later. Three columns of 14rem and their gaps need 48rem of viewport. */
   grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
   text-align: start;
-  border-top: 1px solid var(--line);
-  padding-top: var(--s-6);
+}
+/* Each plan is a cream block of its own, the repeated card set the page is built from: close
+   together so the three read as one product, broad-cornered so each reads as a thing to pick. */
+.tiers > article {
+  padding: var(--s-6) var(--s-5);
+  border-radius: var(--r-3);
+  background: var(--surface-raised);
 }
 @media (min-width: 48rem) {
   .tiers {
@@ -1705,11 +1790,11 @@ form.join label {
 }
 .tiers .figure {
   margin: 0 0 var(--s-3);
-  font-family: var(--font-serif);
-  font-size: 2rem;
-  font-weight: 400;
+  font-family: var(--font-sans);
+  font-size: 2.5rem;
+  font-weight: 500;
   line-height: 1.1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.04em;
   color: var(--fg);
 }
 /* The period sits under the amount rather than beside it: "$6 per seat, per month" on one line puts
@@ -1772,10 +1857,10 @@ form.join label {
 }
 .rails h2 {
   margin: 0 0 var(--s-4);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
-  font-weight: 400;
-  letter-spacing: -0.018em;
+  font-weight: 480;
+  letter-spacing: -0.035em;
   line-height: 1.2;
 }
 .rails .eyebrow {
@@ -1987,11 +2072,12 @@ article.prose a {
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
-/* Inline code is a thing you type, in a paragraph you read. The tint says which words are
-   literal; a code block is a different animal and keeps the recessed fill. */
+/* Inline code is a thing you type, in a paragraph you read. A cream tint in ink says which words
+   are literal without sounding an alarm — coral stays punctuation. A code block is a different
+   animal and keeps the recessed fill. */
 article.prose :not(pre) > code {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--surface);
+  color: var(--fg);
   border-radius: var(--r-1);
 }
 article.prose pre {
@@ -2089,7 +2175,7 @@ article.prose details.rest > summary {
   padding: var(--s-4);
   border: 1px solid var(--line);
   border-radius: var(--r-3);
-  background: var(--raised);
+  background: var(--surface-raised);
 }
 
 .adapted time {
@@ -2429,4 +2515,24 @@ main.guide-page {
   .dock {
     scroll-behavior: auto;
   }
+}
+
+/* ---- the marker ------------------------------------------------------------------------------
+   Where you are, as a tiny coral diamond under the link rather than a bar or a fill. It is the one
+   place coral is used to mean "here", and it is small on purpose: a nav that shouts where you are
+   leaves nothing for the page to say. Drawn, so it sits on the same centre in every font. Opt-in
+   with `nav.marked`: a vertical list marks its current row on the left edge instead. */
+nav.marked [aria-current="page"] {
+  position: relative;
+}
+nav.marked [aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -0.125rem;
+  width: 0.375rem;
+  height: 0.375rem;
+  background: var(--coral);
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 1px;
 }

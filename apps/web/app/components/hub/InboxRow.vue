@@ -67,7 +67,7 @@ const who = computed(() => {
        corners without clipping the row menu too. The ends take the list's own radius: its edge is a
        shadow outside it now, not a 1px border inside, so there is no inset to subtract. -->
   <li
-    class="m-0 flex flex-wrap items-center gap-x-4 gap-y-2 bg-raised px-4 py-3 shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
+    class="m-0 flex flex-wrap items-center gap-x-4 gap-y-2 bg-raised px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
   >
     <div class="min-w-0 flex-1 basis-72">
       <p class="m-0 flex flex-wrap items-baseline gap-x-2">
@@ -79,12 +79,10 @@ const who = computed(() => {
           ]"
           >{{ badge.label }}</span
         >
-        <a
-          :href="g.url"
-          target="_blank"
-          rel="noopener"
+        <NuxtLink
+          :to="`/hub/g/${g.id}`"
           class="text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-          >{{ g.title || "Untitled guide" }}</a
+          >{{ g.title || "Untitled guide" }}</NuxtLink
         >
       </p>
       <p class="mt-1 mb-0 flex flex-wrap gap-x-1.5 font-ui text-sm text-muted">

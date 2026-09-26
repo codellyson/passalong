@@ -25,6 +25,7 @@
 //   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
 //   GET    /v1/guides/:id              guide as markdown (owner or team member); records a pull
+//   GET    /v1/guides/:id/context      everything around a guide, for the hub; records no pull
 //   PATCH  /v1/guides/:id/status       { status }  owner: any; team member: consumed/published
 //   PUT    /v1/guides/:id/ack          { taken, note }  the reader's first word back
 //   PUT    /v1/guides/:id/verdict      { ok, note? } → does it actually work?
@@ -3494,6 +3495,107 @@ app.get("/v1/guides/:id/parent", async (c) => {
       by: claim ? { name: claim.name, handle: claim.handle } : null,
       ...(withMarkdown ? { markdown: clipFollowUp(parent.row.id, parent.row.markdown) } : {}),
     },
+  });
+});
+
+/**
+ * Everything around one guide, for the hub's page about it: where it is, who has it, what was
+ * handed in, and the guides it is tied to. No markdown and no pull.
+ *
+ * The hub reads a guide's content from its share page in a script-less frame, never through this,
+ * because the hub runs script and a guide is markdown somebody else wrote. And looking at your own
+ * board is not opening the guide: a pull row moves it into its author's "landed" queue and mails
+ * them, so this route answers from rows that already exist and writes none.
+ *
+ * Every related guide is filtered on its own, as /children and /parent are: being able to read
+ * this one does not hand you the title of a blocker in a team you are not in. `risk` is the
+ * reviewer's (migration 0032), so only the author sees it; the rest of a hand-in is what
+ * `GET /v1/tasks` already shows anyone who can see the task.
+ */
+app.get("/v1/guides/:id/context", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const me = c.get("account");
+  const at = now();
+  const row = found.row;
+  const readable =
+    "(g.account_id = ? OR g.team_id IN (SELECT team_id FROM membership WHERE account_id = ?))";
+  const related = async (sql: string, ...bind: unknown[]) =>
+    (
+      await c.env.DB.prepare(sql)
+        .bind(...bind, me, me)
+        .all<GuideRow>()
+    ).results;
+  const [held, parentRows, childRows, blockerRows, blocksRows] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT c.*, COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
+         FROM claim c LEFT JOIN account a ON a.id = c.account_id
+        WHERE c.guide_id = ? ORDER BY c.updated DESC`,
+    )
+      .bind(row.id)
+      .all<claims.ClaimRow & { by_handle: string; by_name: string }>(),
+    row.parent_id
+      ? related(`SELECT g.* FROM guide g WHERE g.id = ? AND ${readable}`, row.parent_id)
+      : Promise.resolve([] as GuideRow[]),
+    related(
+      `SELECT g.* FROM guide g WHERE g.parent_id = ? AND g.status <> 'draft' AND ${readable}
+        ORDER BY g.created DESC LIMIT 100`,
+      row.id,
+    ),
+    related(
+      `SELECT g.* FROM task_block b JOIN guide g ON g.id = b.blocker_id
+        WHERE b.guide_id = ? AND ${readable} ORDER BY g.created`,
+      row.id,
+    ),
+    related(
+      `SELECT g.* FROM task_block b JOIN guide g ON g.id = b.guide_id
+        WHERE b.blocker_id = ? AND ${readable} ORDER BY g.created`,
+      row.id,
+    ),
+  ]);
+  const claimRows = held.results;
+  // A hand-in's write-up is a guide of its own; name it only when this caller can read it.
+  const reportIds = [...new Set(claimRows.map((k) => k.report_id).filter(Boolean))];
+  const reportRows = reportIds.length
+    ? await related(
+        `SELECT g.* FROM guide g WHERE g.id IN (${reportIds.map(() => "?").join(",")}) AND ${readable}`,
+        ...reportIds,
+      )
+    : [];
+  const base = origin(c);
+  const reports = new Map(
+    reportRows.map((r) => [r.id, { id: r.id, title: r.title, url: shareUrl(base, r) }]),
+  );
+
+  const all = [row, ...parentRows, ...childRows, ...blockerRows, ...blocksRows];
+  const views = new Map((await summaries(c, all)).map((v) => [v.id, v]));
+  const pick = (rows: GuideRow[]) => rows.map((r) => views.get(r.id)).filter(Boolean);
+
+  return c.json({
+    guide: views.get(row.id),
+    owner: found.owner,
+    claims: claimRows.map((k) => ({
+      place: k.place,
+      state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
+      by: { handle: k.by_handle, name: k.by_name },
+      agent: k.agent_id,
+      host: k.host,
+      repo: k.repo,
+      note: k.note,
+      writeup: k.writeup,
+      evidence: k.evidence,
+      checks: readChecks(k.checks),
+      risk: found.owner ? k.risk : "",
+      pr: k.pr,
+      report: reports.get(k.report_id) ?? null,
+      claimed_at: k.claimed_at,
+      lease_until: k.lease_until,
+      updated: k.updated,
+    })),
+    parent: pick(parentRows)[0] ?? null,
+    children: pick(childRows),
+    blocked_by: pick(blockerRows),
+    blocks: pick(blocksRows),
   });
 });
 

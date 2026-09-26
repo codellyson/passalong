@@ -9,8 +9,8 @@
 // other route on this Worker — the whole API — would otherwise pay to parse it on a cold start.
 //
 // Fonts come from `public/fonts` through the ASSETS binding rather than being bundled, for the
-// same reason. Satori cannot read woff2, so these are the .ttf pair; the stylesheet's variable
-// woff2 stays the thing browsers download.
+// same reason. Satori cannot read woff2, so these are the static .woff pair; the stylesheet's
+// variable woff2 stays the thing browsers download.
 import type { Meta } from "./guide.js";
 
 type Env = { ASSETS: Fetcher };
@@ -24,10 +24,10 @@ function loadFonts(env: Env, base: string): Promise<Font[]> {
   if (!FONTS) {
     FONTS = Promise.all(
       ([400, 600] as const).map(async (weight) => {
-        const res = await env.ASSETS.fetch(new URL(`/fonts/instrument-sans-${weight}.ttf`, base));
+        const res = await env.ASSETS.fetch(new URL(`/fonts/onest-${weight}.woff`, base));
         if (!res.ok) throw new Error(`font ${weight}: ${res.status}`);
         return {
-          name: "Instrument Sans",
+          name: "Onest",
           data: await res.arrayBuffer(),
           weight,
           style: "normal" as const,
@@ -57,12 +57,12 @@ const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1
 // Light palette only: unfurl cards are composited on someone else's background, and a card that
 // follows the *server's* colour scheme would be a coin flip. These match :root in styles.css.
 const C = {
-  bg: "#fbfaf7",
-  fg: "#1c1b19",
-  muted: "#6b6862",
-  line: "#e4e0d8",
+  bg: "#fffcfa",
+  fg: "#252522",
+  muted: "#6e6c68",
+  line: "#efe6dc",
   accent: "#b5451b",
-  soft: "#f7e7de",
+  soft: "#fce9e0",
 };
 
 /**
@@ -88,7 +88,7 @@ function card(o: { title: string; from: string; meta: Meta }): string {
     `<div style="display:flex;background:${C.soft};color:${C.accent};font-size:24px;font-weight:600;padding:8px 18px;border-radius:999px;margin-right:12px;">${esc(t)}</div>`;
 
   return `
-<div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Instrument Sans';">
+<div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Onest';">
   <div style="display:flex;flex-direction:column;">
     <div style="display:flex;align-items:center;">
       ${MARK}
@@ -115,7 +115,7 @@ function card(o: { title: string; from: string; meta: Meta }): string {
  */
 function siteCard(): string {
   return `
-<div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Instrument Sans';">
+<div style="display:flex;flex-direction:column;justify-content:space-between;width:1200px;height:630px;background:${C.bg};padding:72px;font-family:'Onest';">
   <div style="display:flex;align-items:center;">
     ${MARK}
     <div style="display:flex;color:${C.accent};font-size:26px;font-weight:600;letter-spacing:4px;">PASSALONG</div>

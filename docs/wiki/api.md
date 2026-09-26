@@ -125,12 +125,17 @@ list of things you are inviting a model to call.
 deliberate: a pull is the event the author needs to see, and making it a separate call would mean
 trusting clients to report it. Keep it in mind when adding caching or prefetching.
 
+`GET /v1/guides/:id/context` is the hub's read of a guide and records **no** pull: the guide's
+summary, every live claim with what was handed in (`risk` to the author only), the guide it
+follows, its follow-ups, and the tasks it blocks and is blocked by. Each related guide is filtered
+for the caller on its own, as `/children` and `/parent` are. It carries no markdown.
+
 ## Web routes
 
 | Route | Serves |
 | --- | --- |
 | `GET /` | The landing page |
-| `GET /g/:id/:key` | The read-only guide view. `?view=verify` leads with `Verification`. |
+| `GET /g/:id/:key` | The read-only guide view. `?view=verify` leads with `Verification`; `?embed=1` is the document alone, for the hub to frame. |
 | `GET /g/:id/:key.md` | Raw markdown. Also records a pull. |
 | `GET /g/:id/:key/og.png` | The unfurl card. Deliberately does **not** record a pull — crawlers, not people. |
 | `GET /hub` | Your transfers, teams and tokens; talks to `/v1/*` |
@@ -138,6 +143,7 @@ trusting clients to report it. Keep it in mind when adding caching or prefetchin
 | `GET /reset` | Set a new password from an emailed link |
 | `GET /hub/report` | File a set of bugs; the one authoring surface in the product |
 | `GET /hub/report/:id` | One report and its issues |
+| `GET /hub/g/:id` | One guide signed in: the share page framed beside who has it, what came back and what it is tied to |
 | `GET /health` | `{"ok":true}` — what CI smoke-tests |
 
 Guide pages are `noindex` and `/g/` is disallowed in `robots.txt`. The share key is the secret, so

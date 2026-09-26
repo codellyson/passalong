@@ -280,7 +280,7 @@ const list =
         <!-- Tabs and search are one band: both answer "which of my work am I looking at", and as
              two rows — search floated against the title, tabs under it — they read as two unrelated
              decisions with a gulf of empty page between them. -->
-        <div class="-mb-2 flex flex-wrap items-end gap-x-6 gap-y-3 border-b border-line">
+        <div class="flex flex-wrap items-end gap-x-6 gap-y-3 border-b border-line">
           <div
             ref="tablist"
             class="flex min-w-0 grow gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
@@ -318,7 +318,7 @@ const list =
           :id="`panel-${tab}`"
           role="tabpanel"
           :aria-labelledby="`tab-${tab}`"
-          class="flex flex-col gap-6 transition-opacity"
+          class="flex flex-col gap-8 transition-opacity"
           :class="scopeChanging ? 'opacity-60' : ''"
           :aria-busy="waiting || scopeChanging"
         >

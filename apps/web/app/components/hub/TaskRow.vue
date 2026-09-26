@@ -91,7 +91,7 @@ function send() {
 
 <template>
   <li
-    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] bg-raised px-4 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
+    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] bg-raised px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
     :class="tone.stripe"
   >
     <div class="min-w-0 flex-1 basis-64">
@@ -103,12 +103,10 @@ function send() {
         <span v-if="t.state === 'stalled' && heard">last heard {{ rel(heard) }}</span>
         <span v-else>{{ rel(t.created) }}</span>
       </div>
-      <a
-        :href="t.url"
-        target="_blank"
-        rel="noopener"
+      <NuxtLink
+        :to="`/hub/g/${t.id}`"
         class="mt-2 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-      >{{ t.title || t.id }}</a>
+      >{{ t.title || t.id }}</NuxtLink>
 
       <p v-if="t.claim?.note" class="mt-2 mb-0 text-sm text-muted">“{{ t.claim.note }}”</p>
       <p v-if="t.state === 'review' && t.claim?.report" class="mt-2 mb-0 text-sm">

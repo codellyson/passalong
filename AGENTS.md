@@ -119,7 +119,7 @@ public one, for agents *using* Passalong rather than changing it.
     the same reason: a page request to www would never reach the mount.
   - `nitro.experimental.wasm` is required, not optional. Without it the bundler tries to parse
     `workers-og`'s `.wasm` as JavaScript and the build dies on the first byte.
-  - `public/fonts/instrument-sans-{400,600}.ttf` look unused and are not: `src/og.ts` reads them
+  - `public/fonts/onest-{400,600}.woff` look unused and are not: `src/og.ts` reads them
     through `ASSETS`. Satori cannot read woff2, and the stylesheet loads the variable woff2, so
     nothing else references the pair. Deleting them returns 500 on every unfurl card — which is
     exactly what happened once during the port.
@@ -225,6 +225,14 @@ public one, for agents *using* Passalong rather than changing it.
   `mt-8` between sections. Half-steps are off the scale — `-1.5`, `-2.5` and `-3.5` were all in use
   and one relationship had four different values, which is what made the interface look unfinished
   before anyone could say why. `-0.5` is the one exception: 2px inside a chip is a sub-unit.
+- **Ink decides, coral punctuates.** The look follows a warm cream system: `--bg` is a pale cream,
+  a card is `--surface-raised` (a deeper cream at `rounded-3`, 24px) with almost no edge, and
+  `--field` is the one near-white surface, for inputs, menus and command wells. The primary action
+  is an ink pill (`.btn.primary`, `bg-ink text-on-ink`) and every `.btn` is a pill. `--coral` is
+  2.6:1 on the canvas, so it is only ever a mark — the nav's diamond (`nav.marked`), an unread dot,
+  a link's underline — and `--accent` is the same hue at a readable 5:1 for any word that has to be
+  coral. Headings are 480 with negative tracking, never 600+; the serif is the editorial accent
+  (guide prose and the italic `.turn`), not the display face.
 - **A raised surface's edge is a shadow; a border is structure.** Cards, list containers, panels,
   menus and the sign-in card take `shadow-edge` (`--edge-shadow` in styles.css: a 1px ring plus a
   little depth in light, the ring alone in dark), never `border border-line`. Borders stay where
@@ -546,6 +554,13 @@ public one, for agents *using* Passalong rather than changing it.
   `x-robots-tag: noindex, nofollow, noarchive` (route rule in `nuxt.config.ts`, and `VIEW_HEADERS`
   in `apps/api/src/index.ts` for the raw `.md`): a disallowed page's meta is never read, and the
   `.md` has no `<head>`. No canonical link on a noindex page either.
+- **The hub shows a guide by framing it, never by rendering it.** `/hub/g/:id` is a guide's
+  signed-in page: who holds it, the hand-in, the answers, and every guide it is tied to, from
+  `GET /v1/guides/:id/context`, which records no pull. The document itself is the share page at
+  `?embed=1` in a sandboxed same-origin iframe with no `allow-scripts`, which is why the hub's
+  policy carries `frame-src 'self'` and nothing wider. Turning a guide's markdown into the hub's
+  own HTML would put a stranger's document on the one page that runs script and holds the token.
+  Row titles open this page; the share link stays one click away on it.
 - **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
   `application/ld+json` when deciding whether a page runs script; without that the landing would
   get the hub's nonce policy.

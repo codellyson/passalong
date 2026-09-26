@@ -83,7 +83,7 @@ const badge = (w: Working) => kindBadge(w.kind);
       <li
         v-for="w in props.rows"
         :key="`${w.id}-${w.agent}`"
-        class="grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-x-3 px-4 py-3 shadow-[inset_0_1px_0_var(--line)] first:shadow-none sm:grid-cols-[1.75rem_minmax(0,14rem)_minmax(0,1fr)_auto_auto]"
+        class="grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-x-3 px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none sm:grid-cols-[1.75rem_minmax(0,14rem)_minmax(0,1fr)_auto_auto]"
       >
         <span
           class="avatar"
@@ -98,10 +98,8 @@ const badge = (w: Working) => kindBadge(w.kind);
         </div>
 
         <div class="col-start-2 min-w-0 sm:col-start-auto">
-          <a
-            :href="w.url"
-            target="_blank"
-            rel="noopener"
+          <NuxtLink
+            :to="`/hub/g/${w.id}`"
             class="block truncate font-ui text-sm font-semibold text-fg no-underline hover:text-accent"
           >
             <span
@@ -109,7 +107,7 @@ const badge = (w: Working) => kindBadge(w.kind);
               class="mr-1.5 rounded-1 border px-1.5 py-0.5 align-middle font-ui text-xs font-medium tracking-wide uppercase"
               :class="badge(w)?.class"
             >{{ badge(w)?.label }}</span>{{ w.title || w.id }}
-          </a>
+          </NuxtLink>
           <p v-if="w.note" class="m-0 truncate font-ui text-xs" :class="blocked(w) ? 'text-warn' : 'text-muted'">
             “{{ w.note }}”
           </p>
