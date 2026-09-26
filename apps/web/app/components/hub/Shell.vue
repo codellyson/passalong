@@ -162,14 +162,14 @@ const active = (to: string) =>
        the page under it because both use `measure`. -->
   <div
     v-if="framed"
-    class="sticky top-0 z-30 border-b border-line bg-raised/85 py-2.5 backdrop-blur-md"
+    class="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md"
   >
-    <div class="mx-auto flex w-full items-center gap-2 px-[var(--s-5)] sm:gap-6" :class="measure">
+    <div class="mx-auto flex h-16 w-full items-center gap-2 px-[var(--s-5)] sm:gap-6" :class="measure">
       <!-- One row at every width. On a phone the brand is its mark, New is a plus, the account
            is an avatar, and the theme switch moves into the account menu. -->
       <AppBrand to="/hub" compact />
       <nav
-        class="flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1"
+        class="marked flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1"
         aria-label="Hub"
       >
         <NuxtLink
@@ -197,7 +197,7 @@ const active = (to: string) =>
 
   <!-- Less room above than the 48px every other page gets: those open on a heading with nothing
        over it, and this one opens under a navbar that is already a band of its own. -->
-  <main class="pt-6" :class="measure">
+  <main class="pt-8" :class="measure">
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->

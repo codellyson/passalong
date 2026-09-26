@@ -92,7 +92,7 @@ async function closeAll() {
   <li
     class="group/report m-0 bg-raised shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
   >
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
       <button
         type="button"
         class="min-w-0 flex-1 basis-72 cursor-pointer border-0 bg-transparent p-0 text-left"

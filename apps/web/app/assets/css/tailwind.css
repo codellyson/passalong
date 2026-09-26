@@ -47,6 +47,15 @@
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-image-edge: var(--image-edge);
+  --color-field: var(--field);
+  --color-coral: var(--coral);
+  --color-ink: var(--ink);
+  --color-on-ink: var(--on-ink);
+
+  /* Weight stays low: 480 for headings, 500 for controls and names. `font-semibold` is
+     the heaviest a row title gets, so it sits just above the controls beside it rather than at 600,
+     which next to 480 headings made a list item louder than the page title above it. */
+  --font-weight-semibold: 550;
 
   --text-xs: var(--t-xs);
   --text-sm: var(--t-sm);

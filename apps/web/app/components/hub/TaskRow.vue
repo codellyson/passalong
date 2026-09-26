@@ -91,7 +91,7 @@ function send() {
 
 <template>
   <li
-    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] bg-raised px-4 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
+    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] bg-raised px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
     :class="tone.stripe"
   >
     <div class="min-w-0 flex-1 basis-64">

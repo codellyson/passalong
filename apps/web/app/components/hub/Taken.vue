@@ -83,7 +83,7 @@ const badge = (w: Working) => kindBadge(w.kind);
       <li
         v-for="w in props.rows"
         :key="`${w.id}-${w.agent}`"
-        class="grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-x-3 px-4 py-3 shadow-[inset_0_1px_0_var(--line)] first:shadow-none sm:grid-cols-[1.75rem_minmax(0,14rem)_minmax(0,1fr)_auto_auto]"
+        class="grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-x-3 px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none sm:grid-cols-[1.75rem_minmax(0,14rem)_minmax(0,1fr)_auto_auto]"
       >
         <span
           class="avatar"
