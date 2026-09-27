@@ -282,6 +282,35 @@ export function parseMeta(markdown: string): Meta {
   return meta;
 }
 
+/**
+ * Frontmatter fields holding more than this format can: a nested map, a block scalar (`|`), a
+ * sequence under a field that is not a list. `parseMeta` keeps only the key's own line, so each of
+ * these would be stored as `""` with its content gone — a design.md's `colors:` block did exactly
+ * that. The format does not grow to hold them; the publish refuses them by name, so nothing is lost
+ * without its author being told. Mirrors `unheldFields` in packages/passalong/src/guide.js.
+ */
+export function unheldFields(markdown: string): string[] {
+  const parts = split(markdown);
+  if (!parts) return [];
+  const out = new Set<string>();
+  let key: string | null = null;
+  let listKey: string | null = null;
+  for (const line of parts.front.split(/\r?\n/)) {
+    if (line.trim() === "" || line.trim().startsWith("#")) continue;
+    if (listKey && /^\s*-\s*/.test(line)) continue;
+    const kv = /^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/.exec(line);
+    if (kv) {
+      key = kv[1] as string;
+      listKey = (kv[2] as string).trim() === "" && LIST_FIELDS.has(key) ? key : null;
+      continue;
+    }
+    // Anything else is a line the parser skips: an indented child, or an item under a field that
+    // is not a list. It belongs to the key above it, and that is the key to name.
+    out.add(key ?? line.trim());
+  }
+  return [...out];
+}
+
 function quote(v: string): string {
   return /[:#[\]{}"'|>&*!%@`,]|^\s|\s$|^$/.test(v) ? `"${v.replace(/"/g, '\\"')}"` : v;
 }

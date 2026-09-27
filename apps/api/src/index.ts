@@ -122,6 +122,7 @@ import {
   slug,
   tag,
   tagList,
+  unheldFields,
   unreachableImages,
 } from "./guide.js";
 import { mintOrigin } from "./hosts.js";
@@ -3106,6 +3107,17 @@ app.put("/v1/guides/:id", async (c) => {
   }
   if (markdown.length > 512 * 1024)
     return err(c, 413, "This guide is over 512 KB. Move large logs or files out and link to them.");
+  // Before anything reads the meta: what it lacks is exactly what this is about. Refused rather
+  // than stored, because the stored copy would be the document with those fields emptied.
+  const unheld = unheldFields(markdown);
+  if (unheld.length)
+    return err(
+      c,
+      400,
+      `${unheld.map((k) => `"${k}"`).join(", ")} in the frontmatter ${unheld.length === 1 ? "holds" : "hold"} ` +
+        "more than a string or a list of strings, and would be dropped. Move it into the body — a " +
+        "fenced yaml block keeps it as written.",
+    );
   const meta: Meta = parseMeta(markdown);
   if (meta.id && meta.id !== id)
     return err(c, 400, "The id in the guide's frontmatter doesn't match the id it is saved under.");
