@@ -19,15 +19,31 @@ const DIR = join(HERE, "..", "..", "..", "packages", "passalong", "fixtures", "g
 const doc = (front) => `---\n${front}\n---\n\nbody\n`;
 
 const CASES = [
-  ["a nested map", "title: t\nkind: transfer\ncolors:\n  primary: \"#3ECF8E\"\n  accent: x", ["colors"]],
+  [
+    "a nested map",
+    'title: t\nkind: transfer\ncolors:\n  primary: "#3ECF8E"\n  accent: x',
+    ["colors"],
+  ],
   [
     "a map nested two deep",
     "title: t\nkind: transfer\ntypography:\n  display:\n    fontSize: 72px",
     ["typography"],
   ],
-  ["a block scalar", "title: t\nkind: transfer\ndescription: |\n  line one\n  line two", ["description"]],
-  ["a sequence under a field that is not a list", "title: t\nkind: transfer\nowners:\n  - ada", ["owners"]],
-  ["several at once, each named once", "colors:\n  a: 1\n  b: 2\nspacing:\n  xs: 4px\ntitle: t", ["colors", "spacing"]],
+  [
+    "a block scalar",
+    "title: t\nkind: transfer\ndescription: |\n  line one\n  line two",
+    ["description"],
+  ],
+  [
+    "a sequence under a field that is not a list",
+    "title: t\nkind: transfer\nowners:\n  - ada",
+    ["owners"],
+  ],
+  [
+    "several at once, each named once",
+    "colors:\n  a: 1\n  b: 2\nspacing:\n  xs: 4px\ntitle: t",
+    ["colors", "spacing"],
+  ],
   ["a block list under a list field", "title: t\ntags:\n  - ui\n  - design", []],
   ["a block list flush with its key", "title: t\nstack_assumptions:\n- node 22", []],
   ["an inline list", "title: t\ntags: [ui, design]", []],

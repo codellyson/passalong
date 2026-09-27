@@ -91,3 +91,23 @@ export function tooOld(
     "update yourself, then tell the person the restart is needed, and stop until it is done."
   );
 }
+
+/**
+ * What wrote a guide, in one string: `cli@<version>`, `mcp`, `hub` or `api`.
+ *
+ * Stored on the guide row at every publish (migration 0035), so a malformed guide can be traced to
+ * the release that produced it. The surface is known from the credential, which the server checked
+ * itself; the version is what the CLI said, and it is diagnostic, not a permission — nothing is
+ * decided by it that `tooOld` does not already decide.
+ */
+export function writtenBy(
+  via: "internal" | "session" | "token",
+  header?: string | null,
+  userAgent?: string | null,
+): string {
+  if (via === "internal") return "mcp";
+  if (via === "session") return "hub";
+  const { version, stated } = clientVersion(header, userAgent);
+  if (!version) return "api";
+  return stated ? `cli@${version.slice(0, 32)}` : `cli@<=${UNSTATED}`;
+}

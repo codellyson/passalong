@@ -26,12 +26,15 @@ Dark-first, hairline borders.
 `;
 
 test("share refuses frontmatter it would empty, naming each field, and stores nothing", async () => {
-  await assert.rejects(() => share(DESIGN), (err) => {
-    assert.match(err.message, /frontmatter "colors" holds more than a string/);
-    assert.match(err.message, /frontmatter "typography" holds more than a string/);
-    assert.match(err.message, /fenced yaml block/);
-    return true;
-  });
+  await assert.rejects(
+    () => share(DESIGN),
+    (err) => {
+      assert.match(err.message, /frontmatter "colors" holds more than a string/);
+      assert.match(err.message, /frontmatter "typography" holds more than a string/);
+      assert.match(err.message, /fenced yaml block/);
+      return true;
+    },
+  );
   const stored = readdirSync(HOME, { recursive: true }).filter((f) => String(f).endsWith(".md"));
   assert.deepEqual(stored, []);
 });
