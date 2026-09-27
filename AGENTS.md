@@ -599,6 +599,14 @@ public one, for agents *using* Passalong rather than changing it.
   context — acks, claims, hand-ins, verdicts with their screenshots, follow-ups — and ending on
   where it stands. It owns no table, for the reason the log owns none, so a hold that was released
   or sent back is gone from it with its claim row; verdict and archive receipts are not "opened".
+- **The blog is markdown in the repo, bundled into the Worker.** Posts are
+  `apps/web/content/blog/<slug>.md` with `title`, `date`, `description`, `author` and `draft`.
+  A Worker has no filesystem, so they are Nitro server assets (`nitro.serverAssets` in
+  nuxt.config.ts) read through `useStorage("assets:blog")` in `server/utils/blog.ts`. `/blog` and
+  `/blog/**` are `noScripts` with `VIEW_HEADERS` like docs. A draft renders at its address, noindex,
+  and is left out of the index, `/blog/rss.xml` and the sitemap. `/blog` itself is a draft in
+  shared/pages.ts until its first post goes out: publishing is `draft: false` on the post, on
+  `/blog`, and a line in public/llms.txt (test/public-pages.test.mjs insists).
 - **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
   `application/ld+json` when deciding whether a page runs script; without that the landing would
   get the hub's nonce policy.
