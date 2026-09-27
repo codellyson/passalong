@@ -78,6 +78,9 @@ export default defineNuxtConfig({
         { property: "og:site_name", content: "Passalong" },
       ],
       link: [
+        // The .ico first, for anything that asks for /favicon.ico by habit; the SVG after it is what
+        // every current browser picks.
+        { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
         { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
         { rel: "icon", href: "/icon-192.png", type: "image/png", sizes: "192x192" },
         { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
