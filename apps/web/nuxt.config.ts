@@ -21,6 +21,13 @@ export default defineNuxtConfig({
     // binding. Nothing else does — satori cannot read woff2, and the stylesheet loads the variable
     // woff2 — so the pair looks unused and is not. Deleting it returns 500 on every unfurl card.
     experimental: { wasm: true },
+
+    // Blog posts are markdown files in content/blog, and a Worker has no filesystem to read them
+    // from at request time. As server assets they are bundled into the Worker at build and read
+    // through useStorage("assets:blog") — see server/utils/blog.ts.
+    serverAssets: [
+      { baseName: "blog", dir: fileURLToPath(new URL("./content/blog", import.meta.url)) },
+    ],
   },
 
   // The guide format is defined once, in apps/api/src/guide.ts, and mirrored from
@@ -78,6 +85,9 @@ export default defineNuxtConfig({
         { property: "og:site_name", content: "Passalong" },
       ],
       link: [
+        // The .ico first, for anything that asks for /favicon.ico by habit; the SVG after it is what
+        // every current browser picks.
+        { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
         { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
         { rel: "icon", href: "/icon-192.png", type: "image/png", sizes: "192x192" },
         { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
@@ -118,6 +128,10 @@ export default defineNuxtConfig({
     "/docs": { noScripts: true, headers: VIEW_HEADERS },
     "/docs/**": { noScripts: true, headers: VIEW_HEADERS },
     "/faq": { noScripts: true, headers: VIEW_HEADERS },
+    // The blog is prose we wrote, and it gets the landing's treatment anyway: no script, and the
+    // strict policy. Both spellings, as for docs.
+    "/blog": { noScripts: true, headers: VIEW_HEADERS },
+    "/blog/**": { noScripts: true, headers: VIEW_HEADERS },
 
     // The hub, the invite page and the password reset run script, so their header is written per
     // response by server/plugins/csp.ts — it carries a nonce, which a route rule cannot.

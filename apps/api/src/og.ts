@@ -66,12 +66,13 @@ const C = {
 };
 
 /**
- * The mark, exactly as apps/web/public/favicon.svg draws it: a rust square with two offset cream
- * bars. Both cards used to draw only the square, which unfurled as a blank tile nobody recognised
- * as the logo. Satori renders an <img> whose source is a data URI without fetching anything, so the
- * SVG is inlined here. Keep it in step with favicon.svg.
+ * The mark, exactly as apps/web/public/favicon.svg draws it: the rust squircle with the white P.
+ * The cards used to draw only a plain square, which unfurled as a blank tile nobody recognised as
+ * the logo. Satori renders an <img> whose source is a data URI without fetching anything, so the
+ * SVG is inlined here. Keep it in step with favicon.svg; the card cache keys on the markup, so a
+ * change here redraws every card.
  */
-const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${C.accent}"/><rect x="8" y="21" width="34" height="9" rx="4.5" fill="${C.bg}"/><rect x="22" y="34" width="34" height="9" rx="4.5" fill="${C.bg}" opacity=".85"/></svg>`;
+const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 0C55.2 0 64 8.8 64 32S55.2 64 32 64 0 55.2 0 32 8.8 0 32 0Z" fill="${C.accent}"/><path d="M20 47V18H34.5a9 9 0 0 1 0 18H32" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const MARK = `<img src="data:image/svg+xml;base64,${btoa(MARK_SVG)}" width="44" height="44" style="margin-right:18px;" />`;
 
 /** The card markup. Satori supports a flexbox subset, so every container declares display. */

@@ -32,6 +32,9 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/docs", draft: false, footer: "Docs", updated: "2026-09-23" },
   { path: "/docs/guide-format", draft: false, footer: "Guide format", updated: "2026-09-23" },
   { path: "/faq", draft: false, footer: "FAQ", updated: "2026-09-23" },
+  // A draft until its first post is published. The posts themselves are content/blog/*.md, each
+  // with its own `draft`, and the sitemap lists the published ones once /blog is.
+  { path: "/blog", draft: true, footer: "Blog", updated: "2026-09-27" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */
