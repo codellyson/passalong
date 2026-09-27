@@ -256,9 +256,11 @@ test("Settings shows the account id, because nothing else in the product does", 
   // is the value a deployment's ADMIN_ACCOUNTS wants.
   assert.match(identity, /Account id/);
   assert.match(identity, /copy\(me\.account, \$event\.currentTarget\)/);
-  assert.match(identity, /ADMIN_ACCOUNTS/);
+  // Named only to whoever runs Passalong: to everybody else ADMIN_ACCOUNTS is a setting they cannot
+  // act on, and it read as an instruction.
+  assert.match(identity, /v-if="me\.role === 'super'">\s+It's also what a deployment lists in <code class="font-code">ADMIN_ACCOUNTS/);
   // Said plainly: an id is an address, and treating it as a secret is what sent people hunting.
-  assert.match(identity, /Not a secret/);
+  assert.match(identity, /isn't a secret/);
 });
 
 test("Settings says whether you run Passalong, and by which of the two routes", () => {
