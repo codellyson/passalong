@@ -79,6 +79,17 @@ const addressed = computed(() => {
   return x.team ? x.team_name || x.team : "";
 });
 
+/**
+ * What last wrote it, as a person reads it — so a guide that came out wrong can be traced to the
+ * release that wrote it. Nothing when it is unknown: a guide from before this was recorded.
+ */
+const writer = computed(() => {
+  const c = g.value?.client || "";
+  if (c.startsWith("cli@<=")) return `passalong ${c.slice(6)} or older`;
+  if (c.startsWith("cli@")) return `passalong ${c.slice(4)}`;
+  return { mcp: "the hosted MCP server", hub: "the hub", api: "the API" }[c] || "";
+});
+
 /** One line saying where the guide stands, before any detail. */
 const standing = computed(() => {
   const c = ctx.value;
@@ -167,6 +178,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <span v-if="addressed">· to <b class="font-medium text-fg">{{ addressed }}</b></span>
           <span>· {{ rel(g.created) }}</span>
           <span v-if="g.source_context">· {{ g.source_context }}</span>
+          <span v-if="writer">· via {{ writer }}</span>
         </p>
         <h1 class="m-0">{{ g.title || "Untitled guide" }}</h1>
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
