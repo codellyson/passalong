@@ -8,6 +8,7 @@ const { toasts, dismiss } = useLive();
 const DOT: Record<string, string> = {
   failed: "bg-danger",
   task_rejected: "bg-danger",
+  blocked: "bg-danger",
   sent_back: "bg-danger",
   declined: "bg-warn",
   stalled: "bg-warn",

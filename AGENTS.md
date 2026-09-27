@@ -557,6 +557,19 @@ public one, for agents *using* Passalong rather than changing it.
   (`useLive`), not EventSource, because EventSource cannot send the bearer token a token sign-in
   uses, and it disconnects while the tab is hidden and catches up — a few toasts and a count —
   when it is shown. Durable Objects would push without polling; this needed no new infrastructure.
+- **Push reaches a device only for what needs you, and says nothing it should not.** Web Push
+  (`src/webpush.ts`: VAPID and RFC 8291 encryption on WebCrypto, no library — `web-push` needs
+  Node's crypto) goes out from `notify()` through a hook the app sets (`onPush`), for `PUSHED`
+  kinds only: sent to you, handed in, works, didn't work, sent back, went quiet, stuck on you. A
+  phone that buzzes for every open gets muted. Devices are `push_subscription` rows (migration
+  0034), one per browser, turned on from Settings — permission is asked on the button, never on
+  load, because a refused prompt cannot be asked again. `private` is per device, since a lock screen
+  is. A 404/410 from the push service deletes the row. `public/sw.js` has **no fetch handler**, so
+  the pages it controls, guide pages included, load exactly as without it. Two events had no way to
+  reach you and now do: `blocked` (a progress note starting `BLOCKED:`, first time only) and your
+  own agent's `task_finished`, both sent without an actor so `notify()` does not drop them as
+  self-inflicted. Keys: `node scripts/vapid-keys.mjs`; without `VAPID_*` the hub says push is not
+  set up. iOS delivers web push only to the home-screen app.
 - **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
   to whoever should hear it: `handoff`, `shared`, `pulled`, `consumed`, `joined`. Rows first,
   delivery second — mail is a channel over the row, so the feed works with no mailer configured.

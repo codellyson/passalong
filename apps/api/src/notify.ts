@@ -55,6 +55,10 @@ export const KINDS = [
   "stalled",
   // The other one. A guide sent to somebody sat untouched long enough that the clock shelved it.
   "shelved",
+  // An agent said it cannot go on without you: a progress note starting BLOCKED:. Actorless, like
+  // stalled, because the one it is most often about is your own agent — and notify() drops what
+  // you caused yourself.
+  "blocked",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -116,6 +120,41 @@ export interface Row {
 }
 
 /** Record one event and, if it is new, deliver it. Never throws; callers are on the write path. */
+/**
+ * What reaches a device when the hub is not open: only what needs you. Opened, taken, joined and
+ * the rest stay in the feed and the hub's toasts — a phone that buzzes whenever a teammate opens a
+ * link is one somebody mutes by the end of the day.
+ */
+export const PUSHED = new Set<Kind>([
+  "handoff",
+  "task_finished",
+  "verified",
+  "failed",
+  "task_rejected",
+  "sent_back",
+  "stalled",
+  "blocked",
+]);
+
+/** What a push carries: the feed's own sentence, the guide it is about, and its kind. */
+export interface PushMessage {
+  text: string;
+  guide: string;
+  kind: Kind;
+}
+type Deliver = (env: NotifyEnv, to: string, message: PushMessage) => Promise<void>;
+let deliver: Deliver | null = null;
+
+/**
+ * Where a pushed notification goes. Set once by the app (index.ts) rather than imported here: this
+ * file imports no sibling, so every test that reads a sentence can import it, and the sender needs
+ * the Web Push code and the subscriptions table. The cron's notifications run in the same isolate
+ * as the app, so they are delivered the same way.
+ */
+export function onPush(fn: Deliver) {
+  deliver = fn;
+}
+
 export async function notify(env: NotifyEnv, e: Event): Promise<void> {
   if (!e.to || e.to === e.actor_id) return;
   const at = new Date().toISOString();
@@ -129,6 +168,15 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
     )
       .bind(e.to, e.kind, e.guide_id || "", e.actor_id || "", e.team_id || "", at, e.note || "")
       .first<{ id: number; times: number; emailed_at: string }>();
+    if (row && deliver && PUSHED.has(e.kind)) {
+      // The sentence is rendered from the row, joined the way the feed joins it, so a push says
+      // exactly what the feed and the toast say. A failed push never fails the action.
+      const full = await env.DB.prepare(`${FEED_SQL} AND n.id = ?`).bind(e.to, row.id).first<Row>();
+      if (full)
+        await deliver(env, e.to, { text: line(full), guide: e.guide_id || "", kind: e.kind }).catch(
+          (err) => console.error("push", e.kind, (err as Error).message),
+        );
+    }
     if (!row || !e.mail || row.times !== 1 || row.emailed_at) return;
     if (await e.mail()) {
       await env.DB.prepare("UPDATE notification SET emailed_at = ? WHERE id = ?")
@@ -621,7 +669,9 @@ export function line(r: LineFacts): string {
     case "task_claimed":
       return `${who}'s agent took the task ${title}`;
     case "task_finished":
-      return `${who}'s agent finished ${title}, and it is waiting for your review`;
+      // Actorless when it was your own agent: notify() drops what you caused, and your agent
+      // finishing your task is the hand-in you most need to hear about.
+      return `${r.actor || r.actor_real ? `${who}'s agent` : "Your agent"} finished ${title}, and it is waiting for your review`;
     case "task_approved":
       return `${who} approved ${title}`;
     case "task_rejected":
@@ -632,6 +682,8 @@ export function line(r: LineFacts): string {
       return `${who} accepted your work on ${title}, and closed it`;
     case "sent_back":
       return `${who} sent ${title} back${note}`;
+    case "blocked":
+      return `The agent holding ${title} is stuck on you${note}`;
     case "reassigned":
       return `${who} gave ${title} to someone else${note}`;
     default:

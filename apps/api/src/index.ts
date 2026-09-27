@@ -24,6 +24,9 @@
 //   GET    /v1/notifications?unread=   what happened while you were away
 //   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
 //   GET    /v1/events                  live notifications and guide changes, as Server-Sent Events
+//   GET    /v1/push                    push set up here?, its key, and your devices
+//   POST   /v1/push/subscriptions      { endpoint, keys, label?, private? } turn push on for a device
+//   PATCH  /v1/push/subscriptions/:id  { private } · DELETE removes it · POST …/test sends a test
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
 //   GET    /v1/guides/:id              guide as markdown (owner or team member); records a pull
 //   GET    /v1/guides/:id/context      everything around a guide, for the hub; records no pull
@@ -134,6 +137,8 @@ import {
   summary as notifSummary,
   notify,
   notifyAll,
+  onPush,
+  type PushMessage,
   post,
   unreadCount,
   webhookAllowed,
@@ -186,6 +191,7 @@ import {
   UPLOAD_PREFIX,
   UPLOAD_TTL_MS,
 } from "./uploads.js";
+import { sendPush, type Vapid } from "./webpush.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -196,6 +202,10 @@ type Env = MailEnv &
     /** Screenshot bytes. Optional: a deployment without the bucket refuses uploads and serves
         every other route exactly as before. */
     SHOTS?: R2Bucket;
+    /** Web Push (webpush.ts). All three or none: without them the hub says push is not set up. */
+    VAPID_PUBLIC_KEY?: string;
+    VAPID_PRIVATE_KEY?: string;
+    VAPID_SUBJECT?: string;
     ACCOUNT_LIMIT?: RateLimiter;
     /** Per-IP throttle on OAuth dynamic client registration, the other unauthenticated write. */
     OAUTH_REGISTER_LIMIT?: RateLimiter;
@@ -2851,6 +2861,162 @@ app.get("/v1/notifications", async (c) => {
   });
 });
 
+// ---- push -----------------------------------------------------------------------------------
+
+const vapidOf = (env: Env): Vapid | null =>
+  env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
+    ? {
+        publicKey: env.VAPID_PUBLIC_KEY,
+        privateKey: env.VAPID_PRIVATE_KEY,
+        subject: env.VAPID_SUBJECT || "mailto:hello@passalong.dev",
+      }
+    : null;
+
+interface PushRow {
+  id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  private: number;
+}
+
+/**
+ * Tell every device this account turned push on for. A private device gets one line that names
+ * nothing; the rest get the feed's sentence. One guide per topic, so a phone that was off wakes to
+ * the latest word on each guide rather than a backlog. A device the push service says is gone is
+ * forgotten.
+ */
+async function deliverPush(env: Env, account: string, m: PushMessage, only?: string) {
+  const vapid = vapidOf(env);
+  if (!vapid) return;
+  const { results } = await env.DB.prepare(
+    `SELECT id, endpoint, p256dh, auth, private FROM push_subscription WHERE account_id = ?${only ? " AND id = ?" : ""}`,
+  )
+    .bind(account, ...(only ? [only] : []))
+    .all<PushRow>();
+  const at = now();
+  await Promise.all(
+    results.map(async (d) => {
+      const out = await sendPush(
+        d,
+        {
+          title: "Passalong",
+          body: d.private ? "Something needs you in Passalong." : m.text,
+          url: m.guide ? `/hub/g/${m.guide}` : "/hub",
+          tag: m.guide || m.kind,
+        },
+        vapid,
+        {
+          topic: (m.guide || m.kind).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32),
+          urgency: m.kind === "blocked" ? "high" : "normal",
+        },
+      );
+      if (out === "gone")
+        await env.DB.prepare("DELETE FROM push_subscription WHERE id = ?").bind(d.id).run();
+      else if (out === "sent")
+        await env.DB.prepare("UPDATE push_subscription SET last_ok = ? WHERE id = ?")
+          .bind(at, d.id)
+          .run();
+    }),
+  );
+}
+onPush((env, to, m) => deliverPush(env as Env, to, m));
+
+const B64URL = /^[A-Za-z0-9_-]+$/;
+const b64len = (s: string) => Math.floor((s.length * 3) / 4);
+
+/** Whether push is set up here, the key to subscribe with, and this account's devices. */
+app.get("/v1/push", async (c) => {
+  const vapid = vapidOf(c.env);
+  const { results } = await c.env.DB.prepare(
+    // The endpoint too: it is how the page knows which of these is the browser it is running in.
+    "SELECT id, endpoint, label, private, created, last_ok FROM push_subscription WHERE account_id = ? ORDER BY created",
+  )
+    .bind(c.get("account"))
+    .all<{
+      id: string;
+      endpoint: string;
+      label: string;
+      private: number;
+      created: string;
+      last_ok: string;
+    }>();
+  return c.json({
+    available: Boolean(vapid),
+    key: vapid?.publicKey || "",
+    devices: results.map((d) => ({ ...d, private: Boolean(d.private) })),
+  });
+});
+
+/**
+ * Turn push on for this device: the browser's subscription, as PushSubscription.toJSON() gives it.
+ * An endpoint already known moves to this account, since it is one browser either way.
+ */
+app.post("/v1/push/subscriptions", async (c) => {
+  if (!vapidOf(c.env)) return err(c, 501, "Notifications aren't set up on this server.");
+  const body = (await c.req.json().catch(() => ({}))) as {
+    endpoint?: unknown;
+    keys?: { p256dh?: unknown; auth?: unknown };
+    label?: unknown;
+    private?: unknown;
+  };
+  const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+  const p256dh = typeof body.keys?.p256dh === "string" ? body.keys.p256dh : "";
+  const auth = typeof body.keys?.auth === "string" ? body.keys.auth : "";
+  let https = false;
+  try {
+    https = new URL(endpoint).protocol === "https:";
+  } catch {}
+  if (!https || endpoint.length > 1000)
+    return err(c, 400, "That isn't a push subscription this server can send to.");
+  // A P-256 public key is 65 bytes and an auth secret 16; anything else is not a browser's.
+  if (!B64URL.test(p256dh) || b64len(p256dh) !== 65 || !B64URL.test(auth) || b64len(auth) !== 16)
+    return err(c, 400, "That subscription's keys are not the right shape.");
+  const label =
+    typeof body.label === "string" ? body.label.replace(/[^\x20-\x7e]/g, "").slice(0, 80) : "";
+  const id = rid(12);
+  const row = await c.env.DB.prepare(
+    `INSERT INTO push_subscription (id, account_id, endpoint, p256dh, auth, label, private, created)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(endpoint) DO UPDATE SET account_id = excluded.account_id, p256dh = excluded.p256dh,
+       auth = excluded.auth, label = excluded.label, private = excluded.private
+     RETURNING id`,
+  )
+    .bind(id, c.get("account"), endpoint, p256dh, auth, label, body.private ? 1 : 0, now())
+    .first<{ id: string }>();
+  return c.json({ id: row?.id || id }, 201);
+});
+
+app.patch("/v1/push/subscriptions/:id", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { private?: unknown };
+  const r = await c.env.DB.prepare(
+    "UPDATE push_subscription SET private = ? WHERE id = ? AND account_id = ?",
+  )
+    .bind(body.private ? 1 : 0, c.req.param("id"), c.get("account"))
+    .run();
+  if (!r.meta.changes) return err(c, 404, "That device isn't one of yours.");
+  return c.json({ id: c.req.param("id"), private: Boolean(body.private) });
+});
+
+app.delete("/v1/push/subscriptions/:id", async (c) => {
+  await c.env.DB.prepare("DELETE FROM push_subscription WHERE id = ? AND account_id = ?")
+    .bind(c.req.param("id"), c.get("account"))
+    .run();
+  return c.body(null, 204);
+});
+
+/** A test notice to one of your devices, so turning it on can be checked from Settings. */
+app.post("/v1/push/subscriptions/:id/test", async (c) => {
+  if (!vapidOf(c.env)) return err(c, 501, "Notifications aren't set up on this server.");
+  await deliverPush(
+    c.env,
+    c.get("account"),
+    { text: "Notifications are on for this device.", guide: "", kind: "handoff" },
+    c.req.param("id"),
+  );
+  return c.json({ sent: true });
+});
+
 /**
  * The live stream: notifications and changes to guides you can see, as Server-Sent Events. See
  * events.ts for the shape and why it polls. `Last-Event-ID` (or `?since`) resumes from a cursor.
@@ -4037,11 +4203,15 @@ async function taskEvent(
     .bind(id)
     .first<{ account_id: string; team_id: string }>();
   if (!row) return;
+  const recipient = to || row.account_id;
   await notify(c.env, {
-    to: to || row.account_id,
+    to: recipient,
     kind,
     guide_id: id,
-    actor_id: c.get("account"),
+    // Your own agent finishing your task is the hand-in you most need to hear about, and with you
+    // as its actor notify() would drop it as something you did to yourself. It is sent without an
+    // actor and reads "Your agent finished …". Every other task event keeps its actor.
+    actor_id: kind === "task_finished" && c.get("account") === recipient ? "" : c.get("account"),
     team_id: row.team_id,
     note,
   });
@@ -4391,15 +4561,33 @@ app.put("/v1/guides/:id/progress", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
   const note = typeof who.note === "string" ? who.note : null;
+  // What it said last, to tell a new block from the same one repeated on every progress call.
+  const before = await c.env.DB.prepare(
+    "SELECT note FROM claim WHERE guide_id = ? AND agent_id = ? AND account_id = ?",
+  )
+    .bind(c.req.param("id"), who.agent, who.account)
+    .first<{ note: string }>();
   const claim = await claims.renew(c.env.DB, c.req.param("id"), who, {
     at: now(),
     note,
     fence: fenceIn(who.fence),
   });
   if (!claim) return stopWith(c, "this agent does not hold that — stop working on it");
-  const kind = await c.env.DB.prepare("SELECT kind FROM guide WHERE id = ?")
+  const kind = await c.env.DB.prepare("SELECT kind, account_id, team_id FROM guide WHERE id = ?")
     .bind(claim.guide_id)
-    .first<{ kind: string }>();
+    .first<{ kind: string; account_id: string; team_id: string }>();
+  // An agent that stops on you says so with BLOCKED:, and the hub lists it under Stuck on you. The
+  // first such note is news for the guide's author; the same block renewed is not.
+  const blocked = /^BLOCKED:/i;
+  if (kind && blocked.test(claim.note) && !blocked.test(before?.note || ""))
+    await notify(c.env, {
+      to: kind.account_id,
+      kind: "blocked",
+      guide_id: claim.guide_id,
+      actor_id: "",
+      team_id: kind.team_id,
+      note: claim.note.replace(blocked, "").trim(),
+    });
   return c.json({
     id: claim.guide_id,
     lease_until: claim.lease_until,

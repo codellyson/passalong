@@ -91,6 +91,7 @@ const nav = computed(() => {
           note: me.value?.handle ? `@${me.value.handle}` : "no @name",
           tone: me.value?.handle ? "" : "warn",
         },
+        { href: "#notifications", label: "Notifications", note: "", tone: "" },
       ],
     },
     {
@@ -234,6 +235,17 @@ const noteTone: Record<string, string> = {
               <p :class="blurb">What teammates see, and the @name they send work to.</p>
             </div>
             <HubIdentity bare />
+          </section>
+
+          <section id="notifications" :class="sec" aria-labelledby="notifications-h">
+            <div :class="secHead">
+              <h3 id="notifications-h" :class="title">Notifications</h3>
+              <p :class="blurb">
+                When the hub isn't open: something sent to you, handed in, didn't work, sent back, gone
+                quiet, or stuck on you. Per device.
+              </p>
+            </div>
+            <HubPushSettings />
           </section>
         </div>
 

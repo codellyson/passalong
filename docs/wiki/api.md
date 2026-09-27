@@ -134,6 +134,11 @@ notification (the same shape as `GET /v1/notifications`), `event: change` carrie
 for a guide whose hold, progress, verdict or ack moved. Each event's `id` is a cursor; send it back
 as `Last-Event-ID` to resume. A connection ends after about four minutes.
 
+`GET /v1/push` says whether push is set up and lists your devices; `POST /v1/push/subscriptions`
+takes a browser's `PushSubscription.toJSON()` (https endpoint, 65-byte `p256dh`, 16-byte `auth`)
+plus `label` and `private`; `PATCH` sets `private`, `DELETE` removes one, and
+`POST /v1/push/subscriptions/:id/test` sends a test notice to it.
+
 `GET /v1/guides/:id/context` is the hub's read of a guide and records **no** pull: the guide's
 summary, every live claim with what was handed in (`risk` to the author only), every verdict
 with what it showed, every ack with when it was given, the guide it follows, its follow-ups, and the tasks it blocks and is blocked by. Each related guide is filtered
