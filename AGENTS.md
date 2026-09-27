@@ -9,6 +9,11 @@ Reference material lives beside it — `docs/wiki/` has the schema, the `/v1` su
 model, how the web view stays safe, and how releases work. `apps/web/public/llms.txt` is the
 public one, for agents *using* Passalong rather than changing it.
 
+`docs/llm-wiki/` is the synthesis: one page per concept, how the parts connect, the decisions behind
+them and what is still open — the fastest way to the whole picture. **Keep it true:** a change that
+alters what one of its pages says updates that page and adds a line to its `log.md`, in the same
+change. Its README says how.
+
 ## Layout
 
 - `packages/passalong` — the `passalong` CLI and the MCP server. Plain ESM JavaScript, no build step,
