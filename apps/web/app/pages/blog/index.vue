@@ -46,7 +46,6 @@ const long = (d: string) =>
     <AppMasthead />
 
     <header class="hero">
-      <p class="eyebrow">Blog</p>
       <h1>What we're building, <span class="turn">and why.</span></h1>
       <p class="lede">
         Notes on handing work between AI coding agents — and on the people who send it and check
