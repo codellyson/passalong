@@ -100,6 +100,11 @@ export interface Guide {
   children?: number;
   /** "bug", "task" or "transfer"; absent means transfer. */
   kind?: string;
+  /**
+   * What last wrote it: `cli@<version>`, `mcp`, `hub` or `api` — see migrations/0035. Empty on a
+   * guide last written before that, which is unknown rather than any of the four.
+   */
+  client?: string;
   area?: string;
   severity?: string;
   /** Set by the board's SQL, not worked out here — see the note on `load()`. */

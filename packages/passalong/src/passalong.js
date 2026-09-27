@@ -16,6 +16,7 @@ import {
   serialize,
   stamp,
   stripPlaceholders,
+  unheldFields,
   validate,
 } from "./guide.js";
 import * as store from "./store.js";
@@ -60,7 +61,13 @@ export async function share(markdown, { cwd = process.cwd(), to, follows } = {})
   if (follows) guide.meta.parent = await resolveId(String(follows).trim());
   if (guide.meta.to && !guide.meta.team)
     throw new PassalongError("`to:` needs a team — address a handoff as team/handle");
-  const errors = validate(guide);
+  const errors = [
+    ...unheldFields(markdown).map(
+      (k) =>
+        `frontmatter "${k}" holds more than a string or a list of strings, and it would be dropped — move it into the body (a fenced yaml block keeps it as written)`,
+    ),
+    ...validate(guide),
+  ];
   if (errors.length)
     throw new PassalongError(`guide is not ready to share:\n  - ${errors.join("\n  - ")}`);
   // A task stays a draft when it is shared. Draft is the column a task waits in until a person

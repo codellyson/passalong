@@ -290,6 +290,37 @@ export function parseFrontmatter(text) {
   return meta;
 }
 
+/**
+ * Frontmatter fields holding more than this format can: a nested map, a block scalar (`|`), a
+ * sequence under a field that is not a list. `parseFrontmatter` keeps only the key's own line, so
+ * each of these would come back as `""` with its content gone — a design.md's `colors:` block did
+ * exactly that, and a publish would have stored the document with every token wiped. The format
+ * does not grow to hold them (strings and string lists only); the publish refuses them by name
+ * instead, so nothing is lost without its author being told. Mirrors `unheldFields` in
+ * apps/api/src/guide.ts, which is the refusal every client meets.
+ */
+export function unheldFields(markdown) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(markdown);
+  if (!m) return [];
+  const out = new Set();
+  let key = null;
+  let listKey = null;
+  for (const line of m[1].split(/\r?\n/)) {
+    if (line.trim() === "" || line.trim().startsWith("#")) continue;
+    if (listKey && /^\s*-\s*/.test(line)) continue;
+    const kv = /^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/.exec(line);
+    if (kv) {
+      key = kv[1];
+      listKey = kv[2].trim() === "" && LIST_FIELDS.has(key) ? key : null;
+      continue;
+    }
+    // Anything else is a line the parser skips: an indented child, or an item under a field
+    // that is not a list. It belongs to the key above it, and that is the key to name.
+    out.add(key ?? line.trim());
+  }
+  return [...out];
+}
+
 function quote(v) {
   const s = String(v ?? "");
   // Quote anything YAML would misread: colons, leading symbols, or empty.

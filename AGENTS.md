@@ -164,6 +164,15 @@ change. Its README says how.
 
 ## Contracts
 
+- **What wrote a guide is a column, not a field (migration 0035).** `guide.client` is
+  `cli@<version>` (from `x-passalong-version`), `mcp`, `hub` or `api`, decided by `writtenBy()`
+  in `clients.ts` from the credential the middleware already checked, and replaced on every
+  `PUT /v1/guides/:id` because the last write produced the markdown stored now. Never frontmatter:
+  a field in the document travels with it and is re-published by whichever client pulls it next,
+  naming the wrong writer. `""` is every row from before it — unknown, not guessed.
+  `pnpm metrics` prints it. Frontmatter the parser cannot hold (a nested map, a `|` block, a list
+  under a field that is not a list) is refused by name through `unheldFields()` in both parsers,
+  never emptied.
 - **Guides are plain markdown.** Never introduce a field the frontmatter parser can't round-trip
   (strings and string lists only). `passalong export` must always be a complete backup.
 - **The MCP server is served two ways and implemented once.** `packages/passalong/src/mcp.js` is

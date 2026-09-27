@@ -83,7 +83,7 @@ import {
   verifyStripe,
 } from "./billing.js";
 import * as claims from "./claims.js";
-import { CLIENT_HEADER, tooOld } from "./clients.js";
+import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
 import {
   type MailEnv,
   sendConsumed,
@@ -122,6 +122,7 @@ import {
   slug,
   tag,
   tagList,
+  unheldFields,
   unreachableImages,
 } from "./guide.js";
 import { mintOrigin } from "./hosts.js";
@@ -240,7 +241,8 @@ type Env = MailEnv &
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
   };
-type Vars = { account: string };
+/** `client` is what the credential says wrote this request — see `writtenBy` in clients.ts. */
+type Vars = { account: string; client: string };
 type Ctx = { env: Env; req: { url: string }; get: (k: "account") => string };
 
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -335,6 +337,8 @@ interface GuideRow {
   kind: string;
   /** The guide this one came out of. See migrations/0015_lineage.sql. */
   parent_id: string;
+  /** What last wrote it: `cli@<version>`, `mcp`, `hub`, `api`, or "" from before 0035. */
+  client: string;
 }
 interface ReportRow {
   id: string;
@@ -696,6 +700,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       // column, and every write since goes through parseMeta, which seeds it. A `|| "transfer"`
       // here would be this file restating a rule guide.js owns, and a second place to change.
       kind: r.kind,
+      // Which release wrote it, for tracing a malformed guide back. Empty from before 0035.
+      client: r.client || "",
       verdict: latest
         ? {
             ok: Boolean(latest.ok),
@@ -828,6 +834,7 @@ app.use("/v1/*", async (c, next) => {
   const internal = (c.req.raw as unknown as Marked)[INTERNAL];
   if (typeof internal === "string" && internal) {
     c.set("account", internal);
+    c.set("client", writtenBy("internal"));
     return next();
   }
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
@@ -887,6 +894,7 @@ app.use("/v1/*", async (c, next) => {
       if (stale) return err(c, 426, stale);
     }
     c.set("account", row.account_id);
+    c.set("client", writtenBy("token", c.req.header(CLIENT_HEADER), c.req.header("user-agent")));
     // Best effort, off the response path: knowing a token is unused is what makes it safe to
     // revoke. `executionCtx` throws where there is none, so this never speaks for itself.
     try {
@@ -906,6 +914,7 @@ app.use("/v1/*", async (c, next) => {
       .first<{ account_id: string }>();
     if (!row) return err(c, 401, "Your session has ended. Sign in again to carry on.");
     c.set("account", row.account_id);
+    c.set("client", writtenBy("session"));
     return next();
   }
   // A client with no credential at all is the ordinary first request to an MCP endpoint. Answering
@@ -3106,6 +3115,17 @@ app.put("/v1/guides/:id", async (c) => {
   }
   if (markdown.length > 512 * 1024)
     return err(c, 413, "This guide is over 512 KB. Move large logs or files out and link to them.");
+  // Before anything reads the meta: what it lacks is exactly what this is about. Refused rather
+  // than stored, because the stored copy would be the document with those fields emptied.
+  const unheld = unheldFields(markdown);
+  if (unheld.length)
+    return err(
+      c,
+      400,
+      `${unheld.map((k) => `"${k}"`).join(", ")} in the frontmatter ${unheld.length === 1 ? "holds" : "hold"} ` +
+        "more than a string or a list of strings, and would be dropped. Move it into the body — a " +
+        "fenced yaml block keeps it as written.",
+    );
   const meta: Meta = parseMeta(markdown);
   if (meta.id && meta.id !== id)
     return err(c, 400, "The id in the guide's frontmatter doesn't match the id it is saved under.");
@@ -3376,13 +3396,13 @@ app.put("/v1/guides/:id", async (c) => {
   const created = String(meta.created || existing?.created || t);
 
   await c.env.DB.prepare(
-    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind, parent_id, target)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind, parent_id, target, client)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status, source_context=excluded.source_context,
        tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated,
        team_id=excluded.team_id, to_account_id=excluded.to_account_id, to_group_id=excluded.to_group_id,
        report_id=excluded.report_id, area=excluded.area, severity=excluded.severity, kind=excluded.kind,
-       parent_id=excluded.parent_id, target=excluded.target`,
+       parent_id=excluded.parent_id, target=excluded.target, client=excluded.client`,
   )
     .bind(
       id,
@@ -3408,6 +3428,8 @@ app.put("/v1/guides/:id", async (c) => {
       parentId,
       // Only a task is for a repo; on anything else the field means nothing to the queue.
       said === "task" ? claims.repoKey(meta.target_context).slice(0, 200) : "",
+      // The last write is what produced the markdown stored now, so it is replaced every time.
+      c.get("client") || "",
     )
     .run();
 

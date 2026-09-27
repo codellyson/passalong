@@ -1,7 +1,7 @@
 // Which CLI is calling, and whether it is too old to serve. See src/clients.ts.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clientVersion, MIN_CLIENT, older, tooOld, UNSTATED } from "../src/clients.ts";
+import { clientVersion, MIN_CLIENT, older, tooOld, UNSTATED, writtenBy } from "../src/clients.ts";
 
 test("a CLI that states its version is taken at its word", () => {
   assert.deepEqual(clientVersion("0.12.0", "node"), { version: "0.12.0", stated: true });
@@ -45,4 +45,13 @@ test("a CLI that cannot state its version is below today's floor, and is told to
   assert.ok(older(UNSTATED, MIN_CLIENT), `MIN_CLIENT ${MIN_CLIENT} is past ${UNSTATED}`);
   assert.match(tooOld("", "node"), /npm i -g passalong@latest/);
   assert.equal(tooOld(MIN_CLIENT, "node"), "", "the floor itself is served");
+});
+
+test("what wrote a guide: the surface from the credential, the CLI by the version it said", () => {
+  assert.equal(writtenBy("internal", "0.13.0", "node"), "mcp");
+  assert.equal(writtenBy("session", "0.13.0", "node"), "hub");
+  assert.equal(writtenBy("token", "0.13.0", "node"), "cli@0.13.0");
+  assert.equal(writtenBy("token", "", "node"), `cli@<=${UNSTATED}`);
+  assert.equal(writtenBy("token", "", "curl/8.7.1"), "api");
+  assert.equal(writtenBy("token", "x".repeat(200), "node").length, "cli@".length + 32);
 });

@@ -1,0 +1,12 @@
+-- What last wrote a guide: the passalong CLI by version, or the surface it came through.
+--
+-- When a guide turns up malformed, the first question is which release produced it, and nothing
+-- recorded that. `cli@0.13.0` is a CLI that said its version; `cli@<=0.11.0` is one from before it
+-- could; `mcp` is the hosted server, `hub` the browser, `api` anything else holding a token. Set on
+-- every PUT /v1/guides/:id, because the last write is what produced the markdown stored now.
+--
+-- A column and never frontmatter: it is a fact about a write, not something the author said, and
+-- a field in the document would travel with it and be re-published by whatever client pulled it
+-- next — naming the wrong writer. Empty on every row from before this migration: unknown, and said
+-- so, rather than guessed.
+ALTER TABLE guide ADD COLUMN client TEXT NOT NULL DEFAULT '';
