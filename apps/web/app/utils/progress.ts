@@ -81,7 +81,9 @@ export function progressOf(ctx: GuideContext): Beat[] {
         at: k.updated,
         who: nameOf(k.by),
         what: "handed it in",
-        said: same ? undefined : k.note || undefined,
+        // The note is dropped when the evidence already opens with it: a person answering in the
+        // browser hands in with their note as the first line of the evidence.
+        said: same || (k.note && k.evidence.startsWith(k.note)) ? undefined : k.note || undefined,
         proof: same ? undefined : k.evidence || undefined,
         tone: "ok",
         link: k.report ? { id: k.report.id, title: k.report.title || "The write-up" } : undefined,

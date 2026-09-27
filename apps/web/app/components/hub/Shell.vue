@@ -95,7 +95,10 @@ const framed = computed(() => signedIn.value || maybe.value || meFailed.value);
 
 // Nothing is fetched during SSR: neither credential is visible from the server, so the first
 // render is always the signed-out screen and the client decides from there.
+// The hub, live: events from the server refresh what they touch and arrive as toasts.
+const live = useLive();
 onMounted(() => {
+  live.start();
   adoptToken();
   // Moving between hub pages remounts this shell. That must not refetch: the queries are shared
   // and cached, and calling `load()` here invalidated all of them on every navigation, which
@@ -294,4 +297,5 @@ const active = (to: string) =>
       <slot v-else-if="signedIn" />
     </section>
   </main>
+  <HubToasts v-if="framed" />
 </template>

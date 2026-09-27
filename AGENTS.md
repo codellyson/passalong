@@ -547,6 +547,16 @@ public one, for agents *using* Passalong rather than changing it.
   copy without calling the API unless the guide has a team, and the quality proxy asked for
   `consumed`, which changed meaning. A report that quietly substitutes a near-miss is worse than
   one that says so.
+- **The hub is live, and the stream owns no table.** `GET /v1/events` (`src/events.ts`) is
+  Server-Sent Events for the signed-in account: `note` for each notification addressed to it (a
+  toast in the hub, `HubToasts`) and `change` for any guide it can see whose hold, progress note,
+  verdict or ack moved (a quiet refresh — progress notes never toast). It polls D1 every 3 seconds
+  from a cursor that is a **time, not a row id**, because notifications coalesce by bumping `at` on
+  an existing row; migration 0033 indexes the three times it reads. Each connection ends after four
+  minutes and the client resumes from `Last-Event-ID`. The hub reads it with fetch
+  (`useLive`), not EventSource, because EventSource cannot send the bearer token a token sign-in
+  uses, and it disconnects while the tab is hidden and catches up — a few toasts and a count —
+  when it is shown. Durable Objects would push without polling; this needed no new infrastructure.
 - **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
   to whoever should hear it: `handoff`, `shared`, `pulled`, `consumed`, `joined`. Rows first,
   delivery second — mail is a channel over the row, so the feed works with no mailer configured.

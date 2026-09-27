@@ -517,6 +517,14 @@ export async function feed(
   return results;
 }
 
+/** Notifications for an account that happened after `since`, oldest first: the live stream's read. */
+export async function feedSince(env: NotifyEnv, account: string, since: string): Promise<Row[]> {
+  const { results } = await env.DB.prepare(`${FEED_SQL} AND n.at > ? ORDER BY n.at ASC LIMIT 50`)
+    .bind(account, since)
+    .all<Row>();
+  return results;
+}
+
 export async function unreadCount(env: NotifyEnv, account: string): Promise<number> {
   const row = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM notification WHERE account_id = ? AND read_at = ''",

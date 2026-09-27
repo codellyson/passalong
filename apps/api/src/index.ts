@@ -23,6 +23,7 @@
 //   GET    /v1/log?repo=&since=       what you did, newest first
 //   GET    /v1/notifications?unread=   what happened while you were away
 //   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
+//   GET    /v1/events                  live notifications and guide changes, as Server-Sent Events
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
 //   GET    /v1/guides/:id              guide as markdown (owner or team member); records a pull
 //   GET    /v1/guides/:id/context      everything around a guide, for the hub; records no pull
@@ -89,6 +90,7 @@ import {
   sendReset,
   sendVerdict,
 } from "./email.js";
+import { eventStream, startAt } from "./events.js";
 import {
   findPeople,
   findSubject,
@@ -126,6 +128,7 @@ import {
   announce,
   displayName,
   feed,
+  feedSince,
   line,
   markRead,
   summary as notifSummary,
@@ -2845,6 +2848,42 @@ app.get("/v1/notifications", async (c) => {
   return c.json({
     notifications: rows.map(notifSummary),
     unread: await unreadCount(c.env, account),
+  });
+});
+
+/**
+ * The live stream: notifications and changes to guides you can see, as Server-Sent Events. See
+ * events.ts for the shape and why it polls. `Last-Event-ID` (or `?since`) resumes from a cursor.
+ */
+app.get("/v1/events", (c) => {
+  const account = c.get("account");
+  const since = startAt(c.req.header("last-event-id") || c.req.query("since"));
+  const source = {
+    notes: async (after: string) =>
+      (await feedSince(c.env, account, after)).map((r) => notifSummary(r)),
+    // Anything that moved on a guide this account can read: a hold or its progress note, a verdict,
+    // an ack. The hub refreshes that guide; it is not news on its own, so it is never a toast.
+    changes: async (after: string) =>
+      (
+        await c.env.DB.prepare(
+          `SELECT x.guide_id, MAX(x.at) AS at FROM (
+             SELECT guide_id, updated AS at FROM claim WHERE updated > ?1
+             UNION ALL SELECT guide_id, at FROM verdict WHERE at > ?1
+             UNION ALL SELECT guide_id, at FROM ack WHERE at > ?1
+           ) x JOIN guide g ON g.id = x.guide_id
+           WHERE g.account_id = ?2 OR g.team_id IN (SELECT team_id FROM membership WHERE account_id = ?2)
+           GROUP BY x.guide_id ORDER BY at LIMIT 50`,
+        )
+          .bind(after, account)
+          .all<{ guide_id: string; at: string }>()
+      ).results,
+  };
+  return new Response(eventStream(source, since, { signal: c.req.raw.signal }), {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+    },
   });
 });
 

@@ -159,3 +159,25 @@ test("a verdict's proof reads as prose; a hand-in's evidence stays terminal outp
   assert.equal(beats.find((b) => b.what === "handed it in").prose, undefined);
   assert.equal(beats.find((b) => b.what === "says it works").prose, true);
 });
+
+test("a hand-in whose evidence opens with its note says the note once", () => {
+  const beats = progressOf(
+    ctx({
+      claims: [
+        {
+          place: "",
+          state: "review",
+          by: { handle: "bo", name: "" },
+          note: "Refunded in Stripe",
+          evidence: "Refunded in Stripe\n![s](https://x/v1/shots/abc123def456)",
+          claimed_at: T(1),
+          updated: T(2),
+          report: null,
+        },
+      ],
+    }),
+  );
+  const handed = beats.find((b) => b.what === "handed it in");
+  assert.equal(handed.said, undefined);
+  assert.ok(handed.proof.startsWith("Refunded in Stripe"));
+});

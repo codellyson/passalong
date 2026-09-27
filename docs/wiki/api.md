@@ -129,6 +129,11 @@ trusting clients to report it. Keep it in mind when adding caching or prefetchin
 uploaded (`POST /v1/shots`), named by its `/v1/shots/<id>` URL in `note` or `detail`. Without one
 it answers 400. Proof on a guide is deleted 5 days after the guide is closed.
 
+`GET /v1/events` is a Server-Sent Events stream for the signed-in account: `event: note` carries a
+notification (the same shape as `GET /v1/notifications`), `event: change` carries `{ guide_id, at }`
+for a guide whose hold, progress, verdict or ack moved. Each event's `id` is a cursor; send it back
+as `Last-Event-ID` to resume. A connection ends after about four minutes.
+
 `GET /v1/guides/:id/context` is the hub's read of a guide and records **no** pull: the guide's
 summary, every live claim with what was handed in (`risk` to the author only), every verdict
 with what it showed, every ack with when it was given, the guide it follows, its follow-ups, and the tasks it blocks and is blocked by. Each related guide is filtered
