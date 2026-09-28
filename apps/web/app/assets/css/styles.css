@@ -1292,10 +1292,7 @@ form.join label {
   padding: clamp(var(--s-7), 9vh, var(--s-9)) 0 0;
   text-align: center;
 }
-/* `.headline` is the same display line when it is not the page's heading: the landing names the
-   product in a small `h1.eyebrow` for search engines, and sets its claim in a <p> styled like this. */
-.hero h1:not(.eyebrow),
-.hero .headline {
+.hero h1 {
   /* Sans at 480, tracked in hard: a soft, compact display line rather than a blunt one. The serif
      is kept for the turn alone, where it is an accent — the face guides are read in, arriving in
      the one phrase that says what is wrong. */
@@ -1416,7 +1413,6 @@ form.join label {
   margin: var(--gap) auto 0;
   max-width: 38rem;
 }
-.faq > .eyebrow,
 .faq h2 {
   text-align: center;
 }
@@ -1518,10 +1514,10 @@ form.join label {
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
+/* The landing's small labels are set in the sans, in sentence case. Tracked mono capitals read as
+   decoration on a page whose headings already say what each block is. */
 .specimen dt {
-  font: 500 var(--t-xs) / 1 var(--font-mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font: 500 var(--t-sm) / 1.3 var(--font-sans);
   color: var(--muted);
 }
 .specimen dd {
@@ -1586,9 +1582,7 @@ form.join label {
 }
 .specimen .side {
   margin: 0 0 var(--s-3);
-  font: 500 var(--t-xs) / 1 var(--font-mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font: 500 var(--t-sm) / 1.3 var(--font-sans);
   color: var(--accent);
 }
 .specimen .checks {
@@ -1680,8 +1674,8 @@ form.join label {
    accent discs down a page spend the accent on ordinal information. */
 .steps .n {
   margin: 0 0 var(--s-3);
-  font: 500 var(--t-xs) / 1 var(--font-mono);
-  letter-spacing: 0.16em;
+  font: 500 var(--t-sm) / 1.3 var(--font-sans);
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
 .steps h2 {
@@ -1781,12 +1775,11 @@ form.join label {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+/* A plan's name is a heading, so it reads as one: the sans, in the foreground colour. */
 .tiers h3 {
   margin: 0 0 var(--s-2);
-  font: 500 var(--t-xs) / 1 var(--font-mono);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font: 600 var(--t-sm) / 1.3 var(--font-sans);
+  color: var(--fg);
 }
 .tiers .figure {
   margin: 0 0 var(--s-3);
@@ -1863,9 +1856,6 @@ form.join label {
   letter-spacing: -0.035em;
   line-height: 1.2;
 }
-.rails .eyebrow {
-  margin-bottom: var(--s-2);
-}
 .rails .say p {
   color: var(--muted);
   line-height: 1.7;
@@ -1937,9 +1927,6 @@ form.join label {
   text-decoration: underline;
   text-underline-offset: 0.3em;
 }
-.site-foot .eyebrow {
-  margin-bottom: var(--s-1);
-}
 /* The theme switch sits in the footer rather than pinned to a corner. A fixed control on a page
    that runs no script is one nobody can dismiss, and this is a setting — it belongs where the
    other settings-shaped links are. */
@@ -1984,19 +1971,6 @@ form.join label {
   .site-foot .who {
     grid-column: 1 / -1;
   }
-}
-.eyebrow {
-  /* 1.4, not 1: the landing's h1 is an eyebrow, and on a phone it wraps to two lines, which at a
-     line-height of 1 set the capitals on top of each other. One line looks the same either way. */
-  font: 600 var(--t-xs) / 1.4 var(--font-sans);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: var(--s-3);
-}
-/* An eyebrow that is the page's h1 keeps the eyebrow's spacing, not the heading's. */
-h1.eyebrow {
-  margin: 0 0 var(--s-3);
 }
 
 /* ---- leaf overrides --------------------------------------------------------------------------
@@ -2255,8 +2229,7 @@ details.more .invite-paste {
   .hero {
     text-align: start;
   }
-  .hero h1:not(.eyebrow),
-  .hero .headline,
+  .hero h1,
   .lede {
     margin-inline: 0;
   }

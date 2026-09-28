@@ -29,7 +29,6 @@ usePage({
  */
 const TOPICS = [
   {
-    eyebrow: "Start",
     h: "Install and connect",
     p:
       "`npm i -g passalong` installs it, `passalong setup` registers the MCP server, the capture " +
@@ -40,7 +39,6 @@ const TOPICS = [
     link: "Connect your tools",
   },
   {
-    eyebrow: "The document",
     h: "The guide format",
     p:
       "Markdown with frontmatter, and headings that do not move: Problem, Steps, Verification, " +
@@ -50,7 +48,6 @@ const TOPICS = [
     link: "Read the format",
   },
   {
-    eyebrow: "Sending",
     h: "Share a guide",
     p:
       'In Claude Code, say "pass this along" and the capture skill writes the guide from the ' +
@@ -61,7 +58,6 @@ const TOPICS = [
     link: "Connect an assistant",
   },
   {
-    eyebrow: "Receiving",
     h: "Pick one up and answer",
     p:
       "Four calls, whatever the guide is: take it — which is what tells the sender somebody is on " +
@@ -71,7 +67,6 @@ const TOPICS = [
     link: "",
   },
   {
-    eyebrow: "More context",
     h: "Follow-ups and bug reports",
     p:
       "A follow-up is more context for a guide, written as its own guide: `passalong share " +
@@ -82,7 +77,6 @@ const TOPICS = [
     link: "Attaching screenshots",
   },
   {
-    eyebrow: "Reference",
     h: "CLI, MCP tools and API",
     p:
       "Every command and every MCP tool is listed in llms.txt, which is written for an agent and " +
@@ -99,7 +93,6 @@ const TOPICS = [
     <AppMasthead />
 
     <header class="hero">
-      <p class="eyebrow">Docs</p>
       <h1>
         Write it once,
         <span class="turn">and have the next agent act on it.</span>
@@ -114,7 +107,6 @@ const TOPICS = [
 
     <div class="rails">
       <section v-for="t in TOPICS" :key="t.h">
-        <p class="eyebrow">{{ t.eyebrow }}</p>
         <h2>{{ t.h }}</h2>
         <div class="say">
           <!-- Backticks in the copy render as code, the way they do everywhere else in the

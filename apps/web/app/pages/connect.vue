@@ -101,7 +101,6 @@ useHead({
     <AppMasthead />
 
     <header class="hero">
-      <p class="eyebrow">Three ways in</p>
       <h1>
         Connect it to what
         <span class="turn">you already use.</span>
@@ -116,11 +115,11 @@ useHead({
 
     <div class="rails">
       <section>
-        <p class="eyebrow">Claude Code · Cursor · Zed · Gemini CLI</p>
         <h2>Run it locally</h2>
         <div class="say">
           <p>
-            Worth doing where you can: a local server works offline, reads and writes
+            For Claude Code, Cursor, Zed and Gemini CLI, and worth doing where you can: a local
+            server works offline, reads and writes
             <code>.passalong/</code> in the repo you are standing in, and knows which repo that is.
             <code>passalong setup</code> wires Claude Code for you; elsewhere, point your editor at
             the command <code>passalong</code> with the argument <code>mcp</code>.
@@ -132,11 +131,11 @@ passalong setup     # Claude Code: skill, MCP server and hooks</code></pre>
       </section>
 
       <section>
-        <p class="eyebrow">Claude · ChatGPT · Cursor · any assistant with MCP connectors</p>
         <h2>Point it at a URL</h2>
         <div class="say">
           <p>
-            Assistants that add outside tools add them as MCP servers reached over a URL. Paste
+            Claude, ChatGPT, Cursor and any assistant with MCP connectors add outside tools as MCP
+            servers reached over a URL. Paste
             this as the server URL. You get every tool that does not need a working directory: take
             work, report progress, hand it in or pass it, see your work as a live board where the app
             can draw one, search and read guides,
@@ -180,7 +179,6 @@ passalong setup     # Claude Code: skill, MCP server and hooks</code></pre>
            standard file input yet, so how an image reaches a tool depends on the client. Each
            route below was checked working before it was written here. -->
       <section id="screenshots">
-        <p class="eyebrow">Screenshots · evidence for a bug</p>
         <h2>Attach the screenshot</h2>
         <div class="say">
           <p>
@@ -216,7 +214,6 @@ passalong setup     # Claude Code: skill, MCP server and hooks</code></pre>
       </section>
 
       <section>
-        <p class="eyebrow">Gemini · scripts · anything that calls HTTP</p>
         <h2>Call the API</h2>
         <div class="say">
           <p>
@@ -277,7 +274,6 @@ passalong setup     # Claude Code: skill, MCP server and hooks</code></pre>
     </section>
 
     <section class="closer">
-      <p class="eyebrow">Nothing to be built for it</p>
       <h2>
         Everything here is one document
         <span class="turn">and one key.</span>

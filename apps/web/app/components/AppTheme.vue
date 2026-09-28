@@ -27,7 +27,6 @@ const modes = [
 
 <template>
   <div class="theme-pick">
-    <p class="eyebrow">Appearance</p>
     <p class="modes">
       <template v-for="m in modes" :key="m.to">
         <span v-if="now === m.to" class="here" aria-current="true">{{ m.label }}</span>
