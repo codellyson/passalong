@@ -32,13 +32,24 @@ test("a push never fails the action that caused it", () => {
 });
 
 test("the app wires delivery, and a private device's notice names nothing", () => {
-  assert.match(index, /onPush\(\(env, to, m\) => deliverPush\(env as Env, to, m\)\)/);
+  assert.match(index, /onPush\(\(env, to, m\) => deliverPush\(env as Env, to, m\)/);
   assert.match(index, /body: d\.private \? "Something needs you in Passalong\." : m\.text/);
   // A subscription the push service says is gone is forgotten.
   assert.match(
     index,
-    /if \(out === "gone"\)\s+await env\.DB\.prepare\("DELETE FROM push_subscription WHERE id = \?"\)/,
+    /if \(out\.outcome === "gone"\)\s+await env\.DB\.prepare\("DELETE FROM push_subscription WHERE id = \?"\)/,
   );
+});
+
+test("a failed send is logged with what the push service said, never dropped", () => {
+  assert.match(index, /if \(out\.outcome !== "sent"\)\s+console\.error\(\s*"push"/);
+});
+
+test("the Settings test reports the push service's answer, and is never hidden by the hub", () => {
+  const route = index.slice(index.indexOf('app.post("/v1/push/subscriptions/:id/test"'));
+  assert.match(route, /out\.outcome === "failed"/);
+  assert.match(route.slice(0, 1200), /c\.req\.param\("id"\),\s+true,/);
+  assert.match(index, /\.\.\.\(always \? \{ always: true \} : \{\}\)/);
 });
 
 test("your own agent finishing your task reaches you, without an actor", () => {

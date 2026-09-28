@@ -192,7 +192,7 @@ import {
   UPLOAD_PREFIX,
   UPLOAD_TTL_MS,
 } from "./uploads.js";
-import { sendPush, type Vapid } from "./webpush.js";
+import { type Sent, sendPush, type Vapid } from "./webpush.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -2895,16 +2895,22 @@ interface PushRow {
  * the latest word on each guide rather than a backlog. A device the push service says is gone is
  * forgotten.
  */
-async function deliverPush(env: Env, account: string, m: PushMessage, only?: string) {
+async function deliverPush(
+  env: Env,
+  account: string,
+  m: PushMessage,
+  only?: string,
+  always = false,
+): Promise<Sent[]> {
   const vapid = vapidOf(env);
-  if (!vapid) return;
+  if (!vapid) return [];
   const { results } = await env.DB.prepare(
     `SELECT id, endpoint, p256dh, auth, private FROM push_subscription WHERE account_id = ?${only ? " AND id = ?" : ""}`,
   )
     .bind(account, ...(only ? [only] : []))
     .all<PushRow>();
   const at = now();
-  await Promise.all(
+  return Promise.all(
     results.map(async (d) => {
       const out = await sendPush(
         d,
@@ -2913,6 +2919,9 @@ async function deliverPush(env: Env, account: string, m: PushMessage, only?: str
           body: d.private ? "Something needs you in Passalong." : m.text,
           url: m.guide ? `/hub/g/${m.guide}` : "/hub",
           tag: m.guide || m.kind,
+          // A test is shown even to somebody looking at the hub, where a real one becomes a toast:
+          // the test is sent from Settings, inside the hub, so otherwise nobody ever sees one.
+          ...(always ? { always: true } : {}),
         },
         vapid,
         {
@@ -2920,16 +2929,27 @@ async function deliverPush(env: Env, account: string, m: PushMessage, only?: str
           urgency: m.kind === "blocked" ? "high" : "normal",
         },
       );
-      if (out === "gone")
+      if (out.outcome === "gone")
         await env.DB.prepare("DELETE FROM push_subscription WHERE id = ?").bind(d.id).run();
-      else if (out === "sent")
+      else if (out.outcome === "sent")
         await env.DB.prepare("UPDATE push_subscription SET last_ok = ? WHERE id = ?")
           .bind(at, d.id)
           .run();
+      // Loud, because nothing else is: the notification row exists either way, so the hub looks
+      // right while no device is reached. The host names the push service and nothing more.
+      if (out.outcome !== "sent")
+        console.error(
+          "push",
+          out.outcome,
+          out.status,
+          new URL(d.endpoint).host,
+          out.detail || "(no detail)",
+        );
+      return out;
     }),
   );
 }
-onPush((env, to, m) => deliverPush(env as Env, to, m));
+onPush((env, to, m) => deliverPush(env as Env, to, m).then(() => {}));
 
 const B64URL = /^[A-Za-z0-9_-]+$/;
 const b64len = (s: string) => Math.floor((s.length * 3) / 4);
@@ -3017,12 +3037,29 @@ app.delete("/v1/push/subscriptions/:id", async (c) => {
 /** A test notice to one of your devices, so turning it on can be checked from Settings. */
 app.post("/v1/push/subscriptions/:id/test", async (c) => {
   if (!vapidOf(c.env)) return err(c, 501, "Notifications aren't set up on this server.");
-  await deliverPush(
+  const [out] = await deliverPush(
     c.env,
     c.get("account"),
     { text: "Notifications are on for this device.", guide: "", kind: "handoff" },
     c.req.param("id"),
+    true,
   );
+  // What the push service actually said, rather than "sent" whatever happened: a test that always
+  // succeeds is how a broken setup looked healthy from Settings.
+  if (!out)
+    return err(c, 404, "That device isn't registered any more. Turn notifications on again.");
+  if (out.outcome === "gone")
+    return err(
+      c,
+      410,
+      "This device's subscription has expired. Turn notifications off and on again.",
+    );
+  if (out.outcome === "failed")
+    return err(
+      c,
+      502,
+      `The push service refused it (${out.status || "unreachable"}${out.detail ? `: ${out.detail}` : ""}).`,
+    );
   return c.json({ sent: true });
 });
 

@@ -164,6 +164,18 @@ export async function encrypt(
 export type Outcome = "sent" | "gone" | "failed";
 
 /**
+ * What the push service said. `status` is 0 when it could not be reached at all, and `detail` is
+ * the start of its answer on a failure — Google, Apple and Mozilla each say why they refused a send
+ * (a bad JWT, a key mismatch, a body too large), and without it a failure is indistinguishable from
+ * a success nobody saw.
+ */
+export interface Sent {
+  outcome: Outcome;
+  status: number;
+  detail: string;
+}
+
+/**
  * Send one message to one browser. "gone" means the push service says this subscription no longer
  * exists (404 or 410) and the caller should forget it; "failed" is anything else, kept for next time.
  */
@@ -176,7 +188,7 @@ export async function sendPush(
     urgency = "normal",
     topic,
   }: { ttl?: number; urgency?: string; topic?: string } = {},
-): Promise<Outcome> {
+): Promise<Sent> {
   const body = await encrypt(sub, bytes(JSON.stringify(message)));
   const res = await fetch(sub.endpoint, {
     method: "POST",
@@ -191,10 +203,12 @@ export async function sendPush(
       ...(topic ? { topic } : {}),
     },
     body,
-  }).catch(() => null);
-  if (!res) return "failed";
-  if (res.status === 404 || res.status === 410) return "gone";
-  return res.ok ? "sent" : "failed";
+  }).catch((e: Error) => e);
+  if (res instanceof Error) return { outcome: "failed", status: 0, detail: res.message };
+  if (res.ok) return { outcome: "sent", status: res.status, detail: "" };
+  const detail = (await res.text().catch(() => "")).replace(/\s+/g, " ").trim().slice(0, 200);
+  const outcome = res.status === 404 || res.status === 410 ? "gone" : "failed";
+  return { outcome, status: res.status, detail };
 }
 
 /** A fresh VAPID key pair, base64url: for `scripts/vapid-keys.mjs` and the tests. */

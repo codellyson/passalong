@@ -142,9 +142,15 @@ async function setPrivate(d: Device, value: boolean) {
 
 async function test(d: Device) {
   busy.value = `test:${d.id}`;
+  tested.value = false;
+  problem.value = "";
   try {
     await api(`/v1/push/subscriptions/${d.id}/test`, json("POST"));
     tested.value = true;
+  } catch (e) {
+    // The server says what the push service answered; that is the one clue worth showing.
+    problem.value = (e as Error).message;
+    await load().catch(() => {});
   } finally {
     busy.value = "";
   }
