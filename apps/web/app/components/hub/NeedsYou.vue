@@ -13,7 +13,7 @@
     Handed in                 a handoff or bug done where it went: its evidence, then Close it or
                               Send back
     Sent to you               are you taking it — and once you are, how did it go
-    Stuck on you, Went quiet  an agent waiting on you, or silent: resume it, or take it back
+    Stuck on you, Went quiet  an agent waiting on you, or silent: resume it, or stop the agent
 
   Surfaces follow the rest of the hub: the list is the cream list with flush rows every lane uses,
   and the item you are reading gets the near-white fill and the coral diamond — coral as a marker,
@@ -437,16 +437,16 @@ const TONE = {
               The agent stopped and is waiting for this. Sort it out, then run
               <code>passalong work</code> in
               <AppShorten class="font-code" :value="task.claim?.worktree || ''" :max="28" /> to
-              resume it, or take it back.
+              resume it, or stop this agent.
             </template>
             <template v-else>
               It is still locked to that agent. Resume it from
               <AppShorten class="font-code" :value="task.claim?.worktree || ''" :max="28" />, or
-              take it back so another agent can.
+              stop this agent so another one can take it.
             </template>
           </p>
           <div>
-            <button class="btn outline warn" :disabled="busy" @click="act(() => onRelease(task!))">Take it back</button>
+            <button class="btn outline warn" :disabled="busy" @click="act(() => onRelease(task!))">Stop this agent</button>
           </div>
         </template>
       </template>

@@ -6,8 +6,8 @@
   is its author's call, and offering a teammate buttons the server refuses is a board that lies.
 
     review    approve, or send it back with a reason — and the write-up to read before either
-    claimed   take it back
-    stalled   take it back; the agent went quiet, and the row says since when
+    claimed   stop the agent holding it
+    stalled   stop the agent holding it; it went quiet, and the row says since when
     draft     make it ready
 
   Reject opens a form on the row, like a failed verdict does: the reason is what the next agent
@@ -214,7 +214,7 @@ function send() {
           v-else-if="t.state === 'claimed' || t.state === 'stalled'"
           class="btn outline warn sm"
           @click="onRelease(t)"
-        >Take it back</button>
+        >Stop this agent</button>
         <button v-else-if="t.state === 'draft'" class="btn sm" @click="onTaskReady(t)">Make ready</button>
       </div>
       <span v-if="t.mine && t.state === 'review' && !read" class="font-ui text-xs text-muted">

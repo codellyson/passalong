@@ -190,7 +190,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             type="button"
             :disabled="Boolean(busy)"
             @click="takeBack"
-          >{{ busy === "release" ? "Taking back…" : "Take it back" }}</button>
+          >{{ busy === "release" ? "Stopping…" : "Stop this agent" }}</button>
           <button
             v-if="ctx.owner && g.status !== 'consumed' && !reviewing"
             class="btn"
