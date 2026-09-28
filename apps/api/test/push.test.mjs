@@ -17,11 +17,12 @@ test("only what needs you is pushed; the rest stays in the feed and the toasts",
     "handoff",
     "sent_back",
     "stalled",
+    "taken",
     "task_finished",
     "task_rejected",
     "verified",
   ]);
-  for (const quiet of ["pulled", "taken", "joined", "shared", "consumed", "task_claimed"])
+  for (const quiet of ["pulled", "joined", "shared", "consumed", "task_claimed"])
     assert.ok(!PUSHED.has(quiet), `${quiet} is not pushed`);
   for (const k of PUSHED) assert.ok(KINDS.includes(k), `${k} is a real kind`);
 });
