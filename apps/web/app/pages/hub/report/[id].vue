@@ -116,6 +116,8 @@ async function close(issues: Guide[], mark: string) {
         </p>
       </div>
 
+      <HubBulkBar :also="[['report', id]]" />
+
       <!-- One block per area, in the order they were filed. The grouping is derived from the
            bugs every time, so an area with nothing left in it stops appearing. -->
       <section
@@ -134,6 +136,7 @@ async function close(issues: Guide[], mark: string) {
             :key="issue.id"
             class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-4 py-3 first:border-t-0"
           >
+            <HubSelectBox :id="issue.id" :title="issue.title" :archived="issue.status === 'consumed'" :mine="issue.mine" />
             <span
               v-if="issue.severity"
               class="shrink-0 rounded-pill px-2 py-0.5 font-ui text-xs font-semibold"

@@ -388,6 +388,49 @@ function build(queryClient: QueryClient) {
     }, [hubKeys.allGuides, hubKeys.board, hubKeys.me]);
 
   /**
+   * Archive, unarchive or delete several guides at once — the selection bar's one call.
+   *
+   * No optimistic patching: a status change moves guides between buckets the board defines in
+   * SQL, and guessing those here is how the two drift. It sends each change, four at a time, then
+   * reloads once. A refusal does not stop the rest; it is counted and said, with the first reason.
+   */
+  async function onBulk(
+    ids: string[],
+    action: "archive" | "unarchive" | "delete",
+    also: QueryKey[] = [],
+  ): Promise<number> {
+    error.value = null;
+    const call = (id: string) =>
+      action === "delete"
+        ? api(`/v1/guides/${id}`, { method: "DELETE" })
+        : api(
+            `/v1/guides/${id}/status`,
+            json("PATCH", { status: action === "archive" ? "consumed" : "published" }),
+          );
+    const failed: string[] = [];
+    for (let i = 0; i < ids.length; i += 4) {
+      const batch = await Promise.allSettled(ids.slice(i, i + 4).map(call));
+      for (const r of batch)
+        if (r.status === "rejected" && !(r.reason instanceof SignedOut))
+          failed.push((r.reason as Error).message);
+    }
+    await refresh(
+      hubKeys.allGuides,
+      hubKeys.board,
+      hubKeys.me,
+      hubKeys.tasks,
+      hubKeys.working,
+      hubKeys.handedIn,
+      ...also,
+    );
+    if (failed.length) {
+      const verb = { archive: "archived", unarchive: "unarchived", delete: "deleted" }[action];
+      error.value = `${failed.length} of ${ids.length} could not be ${verb}: ${failed[0]}`;
+    }
+    return ids.length - failed.length;
+  }
+
+  /**
    * The reader's first word back, before any work: taking it, or handing it back with a reason.
    * Passing needs the reason for the same cause a failing verdict does.
    */
@@ -593,6 +636,7 @@ function build(queryClient: QueryClient) {
     onAck,
     onArchive,
     onRemove,
+    onBulk,
     onVerdict,
     onTaskReady,
     onApprove,
