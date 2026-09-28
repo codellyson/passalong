@@ -80,7 +80,9 @@ change. Its README says how.
     guide is evidence against what it asked for. Local only: `mcp-http.ts` is a Worker
     with no shell, so a hand-in over HTTP keeps the prose gate. It never reads a command out of a
     guide — a guide comes from somebody else's account, and running what it says would make every
-    pull remote code execution.
+    pull remote code execution. It runs under `bash -o pipefail`, so `jest | grep Tests:` or
+    `git log | head` fails when the first step does; exit 141 (a writer cut short by `head`) is
+    the one non-zero it does not count as a failure.
   - `src/update.js` — the "a newer passalong is out" line. The registry is asked, not the API, and
     **nothing waits for it**: the line is read from `~/.passalong/config.json` and a detached
     `passalong refresh-update` writes it. The first version awaited the fetch on a 1.5s timeout and
