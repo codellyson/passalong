@@ -208,6 +208,10 @@ const fallback = computed<Tab>(() =>
   needsCount.value ? "needs" : workingCount.value ? "working" : openCount.value ? "open" : "needs",
 );
 const tab = computed<Tab>(() => asked.value ?? fallback.value);
+// A selection belongs to the list it was made on: switching tabs ends it rather than carrying
+// ticks on rows nobody can see.
+const { stop: stopSelecting } = useSelection();
+watch(tab, stopSelecting);
 const tabs = computed(() => [
   {
     id: "needs" as const,
@@ -326,6 +330,10 @@ const list =
           :class="scopeChanging ? 'opacity-60' : ''"
           :aria-busy="waiting || scopeChanging"
         >
+          <!-- Picking several to archive or delete: on the lists that are shelves (Open, Done), not
+               on Needs you or Being worked on, which are work waiting on an answer. -->
+          <HubBulkBar v-if="(tab === 'open' && openCount) || (tab === 'done' && doneCount)" />
+
           <!-- ---- Needs you ---- -->
           <template v-if="tab === 'needs'">
             <!-- One list for everything that needs you, the picked item beside it. Handed in and Sent

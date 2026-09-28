@@ -145,6 +145,7 @@ async function closeAll() {
         :key="r.g.id"
         class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 py-2 pr-4 pl-10"
       >
+        <HubSelectBox :id="r.g.id" :title="r.g.title" :archived="r.g.status === 'consumed'" :mine="r.g.mine" />
         <span class="min-w-0 flex-1 basis-64 text-sm leading-snug">
           <span
             class="mr-2 inline-block size-2 rounded-full align-middle"
