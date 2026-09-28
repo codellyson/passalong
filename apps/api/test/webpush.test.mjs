@@ -5,7 +5,7 @@
 // signature (RFC 8292). If either were wrong, a real browser would drop the message silently.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { b64url, encrypt, fromB64url, vapidHeader, vapidKeys } from "../src/webpush.ts";
+import { b64url, encrypt, fromB64url, sendPush, vapidHeader, vapidKeys } from "../src/webpush.ts";
 
 const enc = new TextEncoder();
 const concat = (...p) => {
@@ -117,4 +117,44 @@ test("the VAPID header is signed by the key the browser subscribed with, for tha
     enc.encode(`${h}.${c}`),
   );
   assert.ok(ok, "the signature verifies against the public key");
+});
+
+test("sendPush says what the push service answered", async () => {
+  const keys = await vapidKeys();
+  const v = { ...keys, subject: "mailto:test@example.com" };
+  const ua = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, [
+    "deriveBits",
+  ]);
+  const sub = {
+    endpoint: "https://push.example.com/abc",
+    p256dh: b64url(new Uint8Array(await crypto.subtle.exportKey("raw", ua.publicKey))),
+    auth: b64url(crypto.getRandomValues(new Uint8Array(16))),
+  };
+  const real = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response("", { status: 201 });
+    assert.deepEqual(await sendPush(sub, { body: "x" }, v), {
+      outcome: "sent",
+      status: 201,
+      detail: "",
+    });
+    globalThis.fetch = async () => new Response("  invalid JWT\n provided ", { status: 403 });
+    assert.deepEqual(await sendPush(sub, { body: "x" }, v), {
+      outcome: "failed",
+      status: 403,
+      detail: "invalid JWT provided",
+    });
+    globalThis.fetch = async () => new Response("expired", { status: 410 });
+    assert.equal((await sendPush(sub, { body: "x" }, v)).outcome, "gone");
+    globalThis.fetch = async () => {
+      throw new Error("network down");
+    };
+    assert.deepEqual(await sendPush(sub, { body: "x" }, v), {
+      outcome: "failed",
+      status: 0,
+      detail: "network down",
+    });
+  } finally {
+    globalThis.fetch = real;
+  }
 });

@@ -121,12 +121,15 @@ export interface Row {
 
 /** Record one event and, if it is new, deliver it. Never throws; callers are on the write path. */
 /**
- * What reaches a device when the hub is not open: only what needs you. Opened, taken, joined and
- * the rest stay in the feed and the hub's toasts — a phone that buzzes whenever a teammate opens a
+ * What reaches a device when the hub is not open: only what needs you, and someone taking what
+ * you sent. Opened, joined and the rest stay in the feed and the hub's toasts — a phone that buzzes whenever a teammate opens a
  * link is one somebody mutes by the end of the day.
  */
 export const PUSHED = new Set<Kind>([
   "handoff",
+  // Someone saying they are taking what you sent. It is the answer to the question a handoff
+  // leaves open, and the author asked for it on their phone; one per person who takes it.
+  "taken",
   "task_finished",
   "verified",
   "failed",

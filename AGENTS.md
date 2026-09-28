@@ -581,7 +581,8 @@ change. Its README says how.
 - **Push reaches a device only for what needs you, and says nothing it should not.** Web Push
   (`src/webpush.ts`: VAPID and RFC 8291 encryption on WebCrypto, no library — `web-push` needs
   Node's crypto) goes out from `notify()` through a hook the app sets (`onPush`), for `PUSHED`
-  kinds only: sent to you, handed in, works, didn't work, sent back, went quiet, stuck on you. A
+  kinds only: sent to you, taken, handed in, works, didn't work, sent back, went quiet, stuck on
+  you. A
   phone that buzzes for every open gets muted. Devices are `push_subscription` rows (migration
   0034), one per browser, turned on from Settings — permission is asked on the button, never on
   load, because a refused prompt cannot be asked again. `private` is per device, since a lock screen

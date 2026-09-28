@@ -32,7 +32,7 @@ self.addEventListener("push", (event) => {
         icon: "/icon-192.png",
         badge: "/icon-192.png",
       });
-      if (looking) {
+      if (looking && !m.always) {
         const shown = await self.registration.getNotifications({ tag: m.tag || "passalong" });
         for (const n of shown) n.close();
       }
