@@ -22,6 +22,26 @@
  * exit code is the whole verdict here, which is also how a CI step decides.
  */
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+
+/**
+ * The shell a check runs in: bash with `pipefail` wherever there is one.
+ *
+ * A plain shell reports a pipeline's last command. `npx jest 2>&1 | grep Tests:` then passes when
+ * jest fails, because grep found the summary line, and `git log main..HEAD | head -60` passes when
+ * git dies with "fatal: ambiguous argument", because head exited 0 — which is exactly how a hand-in
+ * came back marked "ran, it worked here" with the fatal error sitting in its own output. With
+ * pipefail, any failing step fails the check.
+ */
+const BASH =
+  process.platform === "win32" ? "" : ["/bin/bash", "/usr/bin/bash"].find(existsSync) || "";
+
+/**
+ * 141 is 128 + SIGPIPE: the command was still writing when a later step stopped reading, which is
+ * what `| head` does on purpose. Under pipefail that is the pipeline's status, and it is not a
+ * failure — git printed what head wanted and was told to stop.
+ */
+const SIGPIPE = 141;
 
 /** How long a check may run before it is killed. Long enough for a real suite, short of a lease. */
 export const CHECK_TIMEOUT_MS = 10 * 60 * 1000;
@@ -58,13 +78,15 @@ export function runCheck(check, { cwd = process.cwd(), timeoutMs = CHECK_TIMEOUT
   const cmd = String(check?.cmd ?? "").trim();
   if (!cmd) return { check: check.check, ran: check.ran };
 
-  const r = spawnSync(cmd, {
-    shell: true,
+  const opts = {
     cwd,
     timeout: timeoutMs,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
-  });
+  };
+  const r = BASH
+    ? spawnSync(BASH, ["-o", "pipefail", "-c", cmd], opts)
+    : spawnSync(cmd, { ...opts, shell: true });
 
   const out = tail(`${r.stdout ?? ""}${r.stderr ?? ""}`);
   // `status` is null when the child was killed rather than exited: a timeout, or a signal.
@@ -84,15 +106,20 @@ export function runCheck(check, { cwd = process.cwd(), timeoutMs = CHECK_TIMEOUT
     };
   }
 
+  const cutShort = Boolean(BASH) && r.status === SIGPIPE;
   return {
     check: check.check,
     cmd,
     exit: r.status,
-    ok: r.status === 0,
+    ok: r.status === 0 || cutShort,
     // The recorded evidence is what the process printed, not what the agent said about it. An
     // empty run is written out rather than left blank: the exit code is what decided it, and a
     // blank `ran` reads like evidence nobody supplied.
-    ran: out ? `$ ${cmd}\n${out}` : `$ ${cmd}\n(no output; exited ${r.status})`,
+    ran:
+      (out ? `$ ${cmd}\n${out}` : `$ ${cmd}\n(no output; exited ${r.status})`) +
+      (cutShort
+        ? "\n(exit 141: a later step stopped reading early, as `head` does; not a failure)"
+        : ""),
   };
 }
 

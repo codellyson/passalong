@@ -129,7 +129,7 @@ function run(work: () => void) {
              the guide out of the way, not gone. It is also how to make room on the free plan
              without throwing anything away. -->
         <button v-if="archived" class="menu-item" @click="run(() => onArchive(g, false))">
-          Put it back
+          Unarchive
         </button>
         <button v-else class="menu-item" @click="run(() => onArchive(g, true))">Archive</button>
         <button v-if="!confirming" class="menu-item destructive" @click="confirming = true">

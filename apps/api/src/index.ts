@@ -3831,6 +3831,9 @@ app.get("/v1/guides/:id/context", async (c) => {
       place: k.place,
       state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
       by: { handle: k.by_handle, name: k.by_name },
+      // Yours: the page speaks to you about your own hand-in ("waiting on Ibrahim"), not about
+      // "its author" in the third person.
+      mine: k.account_id === c.get("account"),
       agent: k.agent_id,
       host: k.host,
       repo: k.repo,
@@ -4181,9 +4184,7 @@ app.put("/v1/guides/:id/ack", async (c) => {
   return c.json({ id: found.row.id, taken: body.taken, note });
 });
 
-/** The claim-holder a person is when they take something in the browser, rather than an agent. */
-const personAgent = (account: string) =>
-  `person-${account.toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
+const personAgent = claims.personAgent;
 
 // ---- tasks -------------------------------------------------------------------------------
 

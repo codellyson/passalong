@@ -57,7 +57,8 @@ const isTask = computed(() => g.value?.kind === "task");
 const frame = computed(() => {
   if (!g.value?.url) return "";
   try {
-    return `${new URL(g.value.url).pathname}?embed=1`;
+    // While something is handed in, the hub shows it above the frame; the frame need not repeat it.
+    return `${new URL(g.value.url).pathname}?embed=1${returned.value.length ? "&adapted=0" : ""}`;
   } catch {
     return "";
   }
@@ -98,8 +99,15 @@ const standing = computed(() => {
   if (g.value.status === "draft") return "A draft: nobody can take it until it is ready.";
   const review = c.claims.filter((k) => k.state === "review").length;
   const held = c.claims.filter((k) => k.state !== "review").length;
+  const author = fromName(g.value) || "its author";
+  if (c.owner && review)
+    return `Finished${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting on you to accept it or ask for changes.`;
+  // Said to the person who handed it in, in their own terms: it is done on their side, and whose
+  // move it is now has a name.
+  if (c.claims.some((k) => k.mine && k.state === "review"))
+    return `You handed it in. Waiting on ${author} to accept it.`;
   if (review)
-    return `Handed in${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting on ${c.owner ? "you" : "its author"}.`;
+    return `Finished${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting on ${author}.`;
   if (held) return `Being worked on${held > 1 ? ` in ${held} places` : ""}.`;
   if (g.value.failing) return "Someone ran it and it didn't work.";
   if (g.value.verdict?.ok) return "Someone ran it and it works.";
@@ -150,7 +158,53 @@ const close = () => run("close", async () => g.value && (await onCloseGuide(g.va
 const reopen = () =>
   run("reopen", async () => g.value && (await onArchive(g.value as Guide, false)));
 
+/** One line for each button whose name alone does not say what it does. */
+const hints = computed(() => {
+  const c = ctx.value;
+  if (!c || !g.value) return [];
+  const out: string[] = [];
+  if (!g.value.mine && !handedInByMe.value)
+    out.push("Respond: say whether you are taking it, and later whether it worked.");
+  if (c.owner && holding.value)
+    out.push(
+      "Stop this agent: it goes back to waiting and the agent is told to stop. Nothing is deleted.",
+    );
+  if (c.owner && g.value.status !== "consumed" && !reviewing.value)
+    out.push("Archive: moves it off your board. You can unarchive it.");
+  return out;
+});
+
 const holding = computed(() => (ctx.value?.claims ?? []).some((k) => k.state !== "review"));
+const handedInByMe = computed(() =>
+  (ctx.value?.claims ?? []).some((k) => k.mine && k.state === "review"),
+);
+/** What came back: the hand-ins, read in the main column rather than squeezed into the side. */
+const returned = computed(() => (ctx.value?.claims ?? []).filter((k) => k.state === "review"));
+
+// ---- the frame fits the guide -------------------------------------------------------------
+
+/**
+ * The frame is as tall as the guide in it. A fixed height gave the guide a scrollbar of its own
+ * inside the page's, and in a full-page view it simply stopped, with the sidebar running on
+ * beside empty space. The frame is same-origin, so the hub — which runs script — can measure it;
+ * the guide page inside still runs none.
+ */
+const frameEl = ref<HTMLIFrameElement | null>(null);
+const frameHeight = ref(0);
+let watcher: ResizeObserver | null = null;
+function fit() {
+  const doc = frameEl.value?.contentDocument;
+  if (!doc?.documentElement) return;
+  const measure = () => {
+    frameHeight.value = Math.ceil(doc.documentElement.scrollHeight);
+  };
+  measure();
+  watcher?.disconnect();
+  // Opening a <details> in the guide changes its height; follow it.
+  watcher = new ResizeObserver(measure);
+  watcher.observe(doc.documentElement);
+}
+onBeforeUnmount(() => watcher?.disconnect());
 const reviewing = computed(() => (ctx.value?.claims ?? []).some((k) => k.state === "review"));
 
 /** What happened to it, in order. See utils/progress.ts. */
@@ -183,28 +237,28 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <h1 class="m-0">{{ g.title || "Untitled guide" }}</h1>
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
         <div class="mt-2 flex flex-wrap items-center gap-2">
-          <NuxtLink v-if="!g.mine" class="btn primary" :to="`/hub/answer/${g.id}`">Answer it</NuxtLink>
+          <NuxtLink v-if="!g.mine && !handedInByMe" class="btn primary" :to="`/hub/answer/${g.id}`">Respond</NuxtLink>
           <button
             v-if="ctx.owner && holding"
             class="btn outline warn"
             type="button"
             :disabled="Boolean(busy)"
             @click="takeBack"
-          >{{ busy === "release" ? "Taking back…" : "Take it back" }}</button>
+          >{{ busy === "release" ? "Stopping…" : "Stop this agent" }}</button>
           <button
             v-if="ctx.owner && g.status !== 'consumed' && !reviewing"
             class="btn"
             type="button"
             :disabled="Boolean(busy)"
             @click="close"
-          >{{ busy === "close" ? "Closing…" : "Close it" }}</button>
+          >{{ busy === "close" ? "Archiving…" : "Archive" }}</button>
           <button
             v-if="ctx.owner && g.status === 'consumed'"
             class="btn"
             type="button"
             :disabled="Boolean(busy)"
             @click="reopen"
-          >{{ busy === "reopen" ? "Putting back…" : "Put it back" }}</button>
+          >{{ busy === "reopen" ? "Unarchiving…" : "Unarchive" }}</button>
           <button class="btn" type="button" @click="copy(g.url, $event.currentTarget)">
             <AppIcon name="copy" /><span data-label>Copy share link</span>
           </button>
@@ -212,9 +266,69 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <AppIcon name="open" />Open share page
           </a>
         </div>
+        <!-- What the less obvious buttons do, said beside them rather than in a tooltip: a title
+             attribute is delayed, unstyled and never shown on a phone. -->
+        <ul v-if="hints.length" class="m-0 flex list-none flex-col gap-1 p-0 font-ui text-xs text-muted">
+          <li v-for="h in hints" :key="h">{{ h }}</li>
+        </ul>
       </header>
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div class="flex min-w-0 flex-col gap-6">
+        <!-- What came back, above the guide it answers: the write-up is the thing to read on a
+             handed-in guide, and it read as a 40-line column in a sidebar. -->
+        <section
+          v-for="k in returned"
+          :key="`back:${k.place}`"
+          :class="card"
+          class="flex flex-col gap-3"
+          :aria-label="`What ${who(k.by)} handed in`"
+        >
+          <h2 :class="label">What came back</h2>
+          <p class="m-0 flex flex-wrap items-center gap-2 font-ui text-sm">
+            <b class="font-medium">{{ k.mine ? "You" : who(k.by) }}</b>
+            <span class="text-muted">handed it in · {{ rel(k.updated) }}</span>
+            <span v-if="where(k)" class="font-code text-xs text-muted">· {{ where(k) }}</span>
+          </p>
+          <p v-if="k.note" class="m-0 font-ui text-sm text-muted">“{{ k.note }}”</p>
+          <p v-if="k.report || k.pr" class="m-0 flex flex-wrap gap-x-3 font-ui text-sm">
+            <NuxtLink v-if="k.report" :to="`/hub/g/${k.report.id}`">{{ k.report.title || "The write-up" }}</NuxtLink>
+            <a v-if="k.pr" :href="k.pr" target="_blank" rel="noopener">The change</a>
+          </p>
+          <HubHandIn
+            :evidence="k.evidence"
+            :checks="k.checks"
+            :writeup="k.writeup"
+            :risk="k.risk"
+            @read="read = new Set([...read, k.place])"
+          />
+          <div v-if="ctx.owner" class="flex flex-col gap-2">
+            <div class="flex flex-wrap gap-2">
+              <button
+                class="btn primary sm"
+                type="button"
+                :disabled="Boolean(busy) || !read.has(k.place)"
+                @click="accept(k)"
+              >{{ busy === `accept:${k.place}` ? "Accepting…" : isTask ? "Approve" : "Accept" }}</button>
+              <button
+                class="btn outline danger sm"
+                type="button"
+                :aria-expanded="sendingBack === k.place"
+                @click="sendingBack = sendingBack === k.place ? null : k.place"
+              >Ask for changes</button>
+            </div>
+            <p v-if="!read.has(k.place)" class="m-0 font-ui text-xs text-muted">
+              Open what it ran before you accept it.
+            </p>
+            <form v-if="sendingBack === k.place" class="flex flex-col gap-2" @submit.prevent="sendBack(k, $event)">
+              <textarea name="why" required placeholder="What is still wrong — the next agent reads this first" />
+              <button class="btn danger outline sm self-start" :disabled="Boolean(busy)">
+                {{ busy === `back:${k.place}` ? "Sending…" : "Send request" }}
+              </button>
+            </form>
+          </div>
+        </section>
+
         <!-- The document. Sandboxed with no script, on top of a page whose own policy already
              allows none: it can open a link in a new tab and nothing else. -->
         <section class="overflow-hidden rounded-3 bg-bg shadow-edge" aria-label="The guide">
@@ -224,10 +338,13 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             :title="g.title || 'The guide'"
             sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             referrerpolicy="no-referrer"
-            loading="lazy"
-            class="block h-[78vh] min-h-[28rem] w-full border-0"
+            class="block min-h-[28rem] w-full border-0"
+            :style="frameHeight ? { height: `${frameHeight}px` } : undefined"
+            ref="frameEl"
+            @load="fit"
           />
         </section>
+        </div>
 
         <aside class="flex flex-col gap-4">
           <!-- Progress: what happened to it, in order, ending on where it is now. A rule runs down
@@ -249,8 +366,8 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                     <b class="font-medium">{{ b.who }}</b> {{ b.what }}
                     <span class="text-muted">· <time :datetime="b.at">{{ rel(b.at) }}</time></span>
                   </p>
-                  <p v-if="b.said" class="m-0 rounded-2 bg-field px-3 py-2 text-muted">{{ b.said }}</p>
-                  <div v-if="b.proof" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" :prose="b.prose" /></div>
+                  <p v-if="b.said && !b.handIn" class="m-0 rounded-2 bg-field px-3 py-2 text-muted">{{ b.said }}</p>
+                  <div v-if="b.proof && !b.handIn" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" :prose="b.prose" /></div>
                   <NuxtLink v-if="b.link" :to="`/hub/g/${b.link.id}`" class="self-start">{{ b.link.title }} →</NuxtLink>
                 </div>
               </li>
@@ -280,46 +397,8 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                 <span class="text-muted">· {{ rel(k.updated) }}</span>
               </p>
               <p v-if="where(k)" class="m-0 font-code text-xs text-muted">{{ where(k) }}</p>
-              <p v-if="k.note" class="m-0 font-ui text-sm text-muted">“{{ k.note }}”</p>
-              <template v-if="k.state === 'review'">
-                <p v-if="k.report || k.pr" class="m-0 flex flex-wrap gap-x-3 font-ui text-sm">
-                  <NuxtLink v-if="k.report" :to="`/hub/g/${k.report.id}`">{{ k.report.title || "The write-up" }}</NuxtLink>
-                  <a v-if="k.pr" :href="k.pr" target="_blank" rel="noopener">The change</a>
-                </p>
-                <HubHandIn
-                  :evidence="k.evidence"
-                  :checks="k.checks"
-                  :writeup="k.writeup"
-                  :risk="k.risk"
-                  @read="read = new Set([...read, k.place])"
-                />
-                <div v-if="ctx.owner" class="flex flex-col gap-2">
-                  <div class="flex flex-wrap gap-2">
-                    <button
-                      class="btn primary sm"
-                      type="button"
-                      :disabled="Boolean(busy) || !read.has(k.place)"
-                      :title="read.has(k.place) ? undefined : 'Open the evidence first'"
-                      @click="accept(k)"
-                    >{{ busy === `accept:${k.place}` ? "Accepting…" : isTask ? "Approve" : "Accept" }}</button>
-                    <button
-                      class="btn outline danger sm"
-                      type="button"
-                      :aria-expanded="sendingBack === k.place"
-                      @click="sendingBack = sendingBack === k.place ? null : k.place"
-                    >Send back</button>
-                  </div>
-                  <p v-if="!read.has(k.place)" class="m-0 font-ui text-xs text-muted">
-                    Open what it ran before you accept it.
-                  </p>
-                  <form v-if="sendingBack === k.place" class="flex flex-col gap-2" @submit.prevent="sendBack(k, $event)">
-                    <textarea name="why" required placeholder="What is still wrong — the next agent reads this first" />
-                    <button class="btn danger outline sm self-start" :disabled="Boolean(busy)">
-                      {{ busy === `back:${k.place}` ? "Sending…" : "Send it back" }}
-                    </button>
-                  </form>
-                </div>
-              </template>
+              <p v-if="k.note && k.state !== 'review'" class="m-0 font-ui text-sm text-muted">“{{ k.note }}”</p>
+              <p v-if="k.state === 'review'" class="m-0 font-ui text-xs text-muted">What they handed in is beside the guide.</p>
             </div>
           </section>
 

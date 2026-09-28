@@ -133,7 +133,11 @@ const followUps = computed(() => guide.value?.followUps ?? []);
 /** Standing verdicts saying it does not hold, with what was run. See the server route. */
 const failing = computed(() => guide.value?.failing ?? []);
 /** What people had to change to make it work where they ran it. See the server route. */
-const adapted = computed(() => guide.value?.adapted ?? []);
+// Framed in the hub while a hand-in is waiting, the hub shows that hand-in above the frame in
+// full; the frame leaves the list out rather than saying the same run twice on one screen.
+const adapted = computed(() =>
+  embed.value && route.query.adapted === "0" ? [] : (guide.value?.adapted ?? []),
+);
 const parent = computed(() => guide.value?.parent ?? null);
 
 // ---- the dock ----------------------------------------------------------------------------------
@@ -477,8 +481,8 @@ usePage({
               Tell {{ author }} whether you're taking it. You'll be asked to sign in if you aren't.
             </p>
             <p class="mt-3 mb-0 flex flex-wrap items-center gap-2">
-              <a class="btn primary" :href="answer('take')">Take it</a>
-              <a class="btn" :href="answer('pass')">Pass</a>
+              <a class="btn primary" :href="answer('take')">I'll do this</a>
+              <a class="btn" :href="answer('pass')">Not for me</a>
               <a class="ml-1 font-ui text-sm" :href="answer('report')">Already on it? Say how it went</a>
             </p>
           </template>

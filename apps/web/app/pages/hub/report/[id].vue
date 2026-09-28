@@ -152,7 +152,7 @@ async function close(issues: Guide[], mark: string) {
               :disabled="Boolean(closing)"
               @click="close([issue], issue.id)"
             >
-              {{ closing === issue.id ? "Closing…" : "Close" }}
+              {{ closing === issue.id ? "Archiving…" : "Archive" }}
             </button>
           </li>
         </ul>
@@ -171,10 +171,10 @@ async function close(issues: Guide[], mark: string) {
         >
           {{
             closing === "all"
-              ? "Closing…"
+              ? "Archiving…"
               : open.length === report.issues
-                ? "Close every bug"
-                : `Close the ${open.length} still open`
+                ? "Archive every bug"
+                : `Archive the ${open.length} still open`
           }}
         </button>
       </div>

@@ -6,8 +6,8 @@
   is its author's call, and offering a teammate buttons the server refuses is a board that lies.
 
     review    approve, or send it back with a reason — and the write-up to read before either
-    claimed   take it back
-    stalled   take it back; the agent went quiet, and the row says since when
+    claimed   stop the agent holding it
+    stalled   stop the agent holding it; it went silent, and the row says since when
     draft     make it ready
 
   Reject opens a form on the row, like a failed verdict does: the reason is what the next agent
@@ -28,7 +28,7 @@ const read = ref(false);
  */
 const STATE: Record<Task["state"], { text: string; tone: string }> = {
   review: { text: "handed in, waiting on you", tone: "text-accent" },
-  stalled: { text: "went quiet", tone: "text-warn" },
+  stalled: { text: "agent went silent", tone: "text-warn" },
   claimed: { text: "being worked on", tone: "text-ok" },
   ready: { text: "ready for the next agent", tone: "text-muted" },
   blocked: { text: "blocked", tone: "text-muted" },
@@ -188,7 +188,7 @@ function send() {
           @keydown.ctrl.enter="send"
         />
         <div class="mt-2 flex flex-wrap gap-2">
-          <button class="btn primary sm" :disabled="!why.trim()" @click="send">Send it back</button>
+          <button class="btn primary sm" :disabled="!why.trim()" @click="send">Send request</button>
           <button class="btn sm" @click="rejecting = false">Cancel</button>
         </div>
       </div>
@@ -208,14 +208,14 @@ function send() {
         <template v-if="!t.mine" />
         <template v-else-if="t.state === 'review'">
           <button class="btn primary sm" :disabled="!read" @click="onApprove(t)">Approve</button>
-          <button class="btn outline danger sm" @click="askWhy">Send back</button>
+          <button class="btn outline danger sm" @click="askWhy">Ask for changes</button>
         </template>
         <button
           v-else-if="t.state === 'claimed' || t.state === 'stalled'"
           class="btn outline warn sm"
           @click="onRelease(t)"
-        >Take it back</button>
-        <button v-else-if="t.state === 'draft'" class="btn sm" @click="onTaskReady(t)">Make ready</button>
+        >Stop this agent</button>
+        <button v-else-if="t.state === 'draft'" class="btn sm" @click="onTaskReady(t)">Ready for agents</button>
       </div>
       <span v-if="t.mine && t.state === 'review' && !read" class="font-ui text-xs text-muted">
         Open what they ran to approve it

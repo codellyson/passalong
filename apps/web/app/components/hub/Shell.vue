@@ -278,7 +278,7 @@ const active = (to: string) =>
             <template v-if="full"> New guides can't be sent until you make room.</template>
             Archiving a finished guide frees a space.
           </span>
-          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub', query: { done: '1' } }">Show Done</NuxtLink>
+          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub', query: { done: '1' } }">Show finished work</NuxtLink>
           <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>
         </p>
       </div>

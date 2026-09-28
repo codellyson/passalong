@@ -10,10 +10,11 @@
     Waiting for your review   a task handed in: what you asked for against what it says it checked,
                               line by line, "not met?" on each (chosen over a stacked board and a
                               kanban, prototype/task-review)
-    Handed in                 a handoff or bug done where it went: its evidence, then Close it or
-                              Send back
+    Finished: review it       a handoff or bug done where it went: its evidence, then Accept or
+                              Ask for changes
     Sent to you               are you taking it — and once you are, how did it go
-    Stuck on you, Went quiet  an agent waiting on you, or silent: resume it, or take it back
+    Waiting on you, Agent went silent
+                              an agent waiting on you, or silent: resume it, or stop the agent
 
   Surfaces follow the rest of the hub: the list is the cream list with flush rows every lane uses,
   and the item you are reading gets the near-white fill and the coral diamond — coral as a marker,
@@ -52,14 +53,16 @@ const groups = computed(() =>
     {
       key: "review",
       title: "Waiting for your review",
+      note: "Tasks an agent finished. Approve them, or ask for changes.",
       tone: "bg-accent",
       items: props.tasks
         .filter((t) => t.mine && t.state === "review")
-        .map((t) => task$(t, t.claim?.report_title || "Handed in")),
+        .map((t) => task$(t, t.claim?.report_title || "Finished")),
     },
     {
       key: "handed",
-      title: "Handed in",
+      title: "Finished: review it",
+      note: "Done where it was sent. Check the evidence, then accept it or ask for changes.",
       tone: "bg-ok",
       items: props.handedIn.map(
         (h): Item => ({
@@ -74,6 +77,7 @@ const groups = computed(() =>
     {
       key: "sent",
       title: "Sent to you",
+      note: "Say whether you will do it, and later whether it worked.",
       tone: "bg-coral",
       items: props.rows.map(
         (row): Item => ({
@@ -87,7 +91,8 @@ const groups = computed(() =>
     },
     {
       key: "stuck",
-      title: "Stuck on you",
+      title: "Waiting on you",
+      note: "The agent stopped and needs an answer from you.",
       tone: "bg-danger",
       items: props.tasks
         .filter((t) => t.mine && t.state === "claimed" && stuck(t))
@@ -95,7 +100,8 @@ const groups = computed(() =>
     },
     {
       key: "quiet",
-      title: "Went quiet",
+      title: "Agent went silent",
+      note: "No update for 30 minutes. It still holds the work.",
       tone: "bg-warn",
       items: props.tasks
         .filter((t) => t.mine && t.state === "stalled")
@@ -241,6 +247,7 @@ const TONE = {
           <span class="size-1.5 shrink-0 rounded-pill" :class="grp.tone" aria-hidden="true" />
           {{ grp.title }} · {{ grp.items.length }}
         </h3>
+        <p class="-mt-1 m-0 font-ui text-xs text-muted">{{ grp.note }}</p>
         <ul class="m-0 list-none rounded-3 bg-raised p-0 shadow-edge">
           <li v-for="(it, n) in grp.items" :key="it.key" class="shadow-[inset_0_1px_0_var(--line)] first:shadow-none">
             <!-- The item you are reading: the near-white fill of a surface you act on, and the coral
@@ -413,10 +420,10 @@ const TONE = {
                 @click="act(() => onApprove(task!))"
               >Approve</button>
               <button class="btn outline danger" :disabled="busy || !reason" @click="act(() => onReject(task!, reason))">
-                Send back{{ flagged.size ? ` · ${flagged.size} line${flagged.size === 1 ? "" : "s"}` : "" }}
+                Ask for changes{{ flagged.size ? ` · ${flagged.size} line${flagged.size === 1 ? "" : "s"}` : "" }}
               </button>
               <span v-if="flagged.size || note.trim()" class="font-ui text-xs text-muted">
-                Approve is off while there is a reason to send it back.
+                Approve is off while you are asking for changes.
               </span>
             </div>
           </footer>
@@ -437,16 +444,16 @@ const TONE = {
               The agent stopped and is waiting for this. Sort it out, then run
               <code>passalong work</code> in
               <AppShorten class="font-code" :value="task.claim?.worktree || ''" :max="28" /> to
-              resume it, or take it back.
+              resume it, or stop this agent.
             </template>
             <template v-else>
               It is still locked to that agent. Resume it from
               <AppShorten class="font-code" :value="task.claim?.worktree || ''" :max="28" />, or
-              take it back so another agent can.
+              stop this agent so another one can take it.
             </template>
           </p>
           <div>
-            <button class="btn outline warn" :disabled="busy" @click="act(() => onRelease(task!))">Take it back</button>
+            <button class="btn outline warn" :disabled="busy" @click="act(() => onRelease(task!))">Stop this agent</button>
           </div>
         </template>
       </template>
@@ -490,16 +497,16 @@ const TONE = {
           </template>
           <div class="flex flex-wrap items-center gap-2">
             <template v-if="!sendingBack">
-              <button class="btn primary" :disabled="busy || !read" @click="act(() => onCloseHandedIn(handed!))">Close it</button>
-              <button class="btn outline danger" :disabled="busy" @click="sendingBack = true">Send back</button>
-              <span v-if="!read" class="font-ui text-xs text-muted">Open what they ran to close it.</span>
+              <button class="btn primary" :disabled="busy || !read" @click="act(() => onCloseHandedIn(handed!))">Accept</button>
+              <button class="btn outline danger" :disabled="busy" @click="sendingBack = true">Ask for changes</button>
+              <span v-if="!read" class="font-ui text-xs text-muted">Open what they ran before you accept it.</span>
             </template>
             <template v-else>
               <button
                 class="btn outline danger"
                 :disabled="busy || !why.trim()"
                 @click="act(() => onSendBackHandedIn(handed!, why.trim()))"
-              >Send it back</button>
+              >Send request</button>
               <button class="btn" @click="sendingBack = false">Cancel</button>
             </template>
           </div>
@@ -529,11 +536,11 @@ const TONE = {
         <template v-if="sentKey === 'unanswered'">
           <div v-if="!passing" class="flex flex-col gap-3">
             <p class="m-0 font-ui text-sm text-muted">
-              Are you taking this? {{ fromName(sent.g) || "They" }} can't tell whether you've seen it until you answer.
+              Are you taking this? {{ fromName(sent.g) || "They" }} can't tell whether you've seen it until you answer. Not for me sends it back to them with your reason.
             </p>
             <div class="flex flex-wrap gap-2">
-              <button class="btn primary" :disabled="busy" @click="act(() => onAck(sent!.g, true))">Take it</button>
-              <button class="btn" @click="passing = true">Pass</button>
+              <button class="btn primary" :disabled="busy" @click="act(() => onAck(sent!.g, true))">I'll do this</button>
+              <button class="btn" @click="passing = true">Not for me</button>
             </div>
           </div>
           <HubAck v-else :g="sent.g" why @done="passing = false" />

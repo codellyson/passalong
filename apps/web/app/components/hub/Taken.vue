@@ -119,12 +119,12 @@ const badge = (w: Working) => kindBadge(w.kind);
         >
           <span class="size-2 rounded-pill" :class="w.state === 'stalled' ? 'bg-warn' : 'bg-ok'" aria-hidden="true" />
           <template v-if="person(w)">took it {{ rel(w.claimed_at) }}</template>
-          <template v-else>{{ w.state === "stalled" ? "went quiet" : "heard" }} {{ rel(heard(w)) }}</template>
+          <template v-else>{{ w.state === "stalled" ? "went silent" : "heard" }} {{ rel(heard(w)) }}</template>
         </span>
 
         <!-- Its own track, not a fifth thing squeezed into the timing's: without one it wrapped to
-             the next implicit row and landed in the 1.75rem avatar column, where "Take it back"
-             broke across three lines and read as "sack". An `auto` track is zero wide on the rows
+             the next implicit row and landed in the 1.75rem avatar column, where the button
+             broke across three lines. An `auto` track is zero wide on the rows
              that have no button. -->
         <button
           v-if="canTakeBack(w)"
@@ -134,7 +134,7 @@ const badge = (w: Working) => kindBadge(w.kind);
           :title="`Put ${w.title || w.id} back, and tell whoever has it`"
           @click="takeBack(w)"
         >
-          {{ taking === w.id ? "Taking back…" : "Take it back" }}
+          {{ taking === w.id ? "Stopping…" : "Stop this agent" }}
         </button>
       </li>
     </ul>

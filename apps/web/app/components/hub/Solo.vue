@@ -40,7 +40,7 @@ const onATeamSeat = computed(() => sync.value === "unlimited" && plan.value !== 
 const COPY: Record<string, { label: string; tone: string }> = {
   free: { label: "Free", tone: "bg-surface text-muted" },
   solo: { label: "Solo", tone: "bg-ok-soft text-ok" },
-  lapsed: { label: "Lapsed", tone: "bg-warn-soft text-warn" },
+  lapsed: { label: "Payment lapsed", tone: "bg-warn-soft text-warn" },
 };
 const badge = computed(() => COPY[plan.value] ?? COPY.free);
 /** The provider as its own brand writes it, not the id this app stores it under. */

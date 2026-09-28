@@ -21,6 +21,28 @@ export const LEASE_MS = 30 * 60 * 1000;
  */
 export const PERSON_LEASE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * The claim-holder a person is when they take something in the browser, rather than an agent.
+ *
+ * A person and their own agent are one party to a handoff. Saying "I'll do this" in the hub holds
+ * it as the person; their agent then taking it in a repo is the same work arriving somewhere, so
+ * that hold gives way to the agent's rather than standing beside it — two holds for one worker
+ * showed a guide as handed in and still being worked on, by the same name, at once.
+ */
+export const personAgent = (account: string) =>
+  `person-${account.toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
+const isPerson = (agent: string) => agent.startsWith("person-");
+
+/** Let go of this account's browser hold on a guide, now that its own agent has it somewhere. */
+function dropPersonHold(db: D1Database, id: string, account: string) {
+  return db
+    .prepare(
+      "DELETE FROM claim WHERE guide_id = ? AND place = '' AND account_id = ? AND agent_id = ? AND state = 'claimed'",
+    )
+    .bind(id, account, personAgent(account))
+    .run();
+}
+
 /** The longest progress line kept. It is a status, not a log. */
 export const NOTE_MAX = 280;
 
@@ -496,6 +518,18 @@ export async function take(
       };
   }
 
+  // A person saying they will do it, when their own agent already has it somewhere, is already
+  // true: answer with that hold rather than adding a second one in the browser.
+  if (!task && isPerson(who.agent)) {
+    const own = await db
+      .prepare(
+        "SELECT * FROM claim WHERE guide_id = ? AND account_id = ? AND place <> '' ORDER BY updated DESC LIMIT 1",
+      )
+      .bind(id, who.account)
+      .first<ClaimRow>();
+    if (own) return { task: g, claim: own, resumed: true };
+  }
+
   const place = task ? "" : repo;
   const fence = await nextFence(db, id, place);
   const res = await db
@@ -520,6 +554,7 @@ export async function take(
     )
     .run();
   if (res.meta.changes === 1) {
+    if (!task && place && !isPerson(who.agent)) await dropPersonHold(db, id, who.account);
     const claim = await claimFor(db, id, who);
     if (claim) return { task: g, claim, resumed: false };
   }
@@ -1237,6 +1272,9 @@ export async function handIn(
     )
     .run();
   const claim = res.meta.changes === 1 ? await claimFor(db, id, who) : null;
+  // Handed in by the person's own agent: any browser hold of theirs is done with too. A hold taken
+  // before the rule in take() existed is cleared here, the next time that work comes back.
+  if (claim && claim.place && !isPerson(who.agent)) await dropPersonHold(db, id, who.account);
   if (claim) return { claim };
   const now = await claimFor(db, id, who);
   return {
