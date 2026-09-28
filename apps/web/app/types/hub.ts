@@ -288,6 +288,8 @@ export interface ContextClaim {
   place: string;
   state: "claimed" | "stalled" | "review";
   by: { handle: string; name: string };
+  /** Held or handed in by the account looking at the page. */
+  mine?: boolean;
   agent: string;
   host: string;
   repo: string;

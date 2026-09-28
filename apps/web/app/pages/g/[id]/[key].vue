@@ -133,7 +133,11 @@ const followUps = computed(() => guide.value?.followUps ?? []);
 /** Standing verdicts saying it does not hold, with what was run. See the server route. */
 const failing = computed(() => guide.value?.failing ?? []);
 /** What people had to change to make it work where they ran it. See the server route. */
-const adapted = computed(() => guide.value?.adapted ?? []);
+// Framed in the hub while a hand-in is waiting, the hub shows that hand-in above the frame in
+// full; the frame leaves the list out rather than saying the same run twice on one screen.
+const adapted = computed(() =>
+  embed.value && route.query.adapted === "0" ? [] : (guide.value?.adapted ?? []),
+);
 const parent = computed(() => guide.value?.parent ?? null);
 
 // ---- the dock ----------------------------------------------------------------------------------

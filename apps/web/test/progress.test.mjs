@@ -109,7 +109,9 @@ test("a person's browser hand-in and their verdict show the screenshots once, on
     }),
   );
   assert.equal(beats.filter((b) => b.proof === proof).length, 1);
-  assert.equal(beats.find((b) => b.what === "says it works")?.proof, proof);
+  // One act: the hand-in and the verdict are one line, and it carries the screenshots.
+  assert.equal(beats.find((b) => b.what === "handed it in: it works")?.proof, proof);
+  assert.equal(beats.filter((b) => b.what === "says it works").length, 0);
 });
 
 test("a follow-up links to itself", () => {
@@ -180,4 +182,65 @@ test("a hand-in whose evidence opens with its note says the note once", () => {
   const handed = beats.find((b) => b.what === "handed it in");
   assert.equal(handed.said, undefined);
   assert.ok(handed.proof.startsWith("Refunded in Stripe"));
+});
+
+test("one person taking it is one line: the agent's hold says where, the ack and browser hold fold in", () => {
+  const lukman = { handle: "lukman", name: "Lukman Isiaka" };
+  const hold = (over) => ({
+    place: "",
+    repo: "",
+    host: "",
+    by: lukman,
+    state: "claimed",
+    note: "",
+    evidence: "",
+    claimed_at: T(2),
+    updated: T(2),
+    report: null,
+    ...over,
+  });
+  const beats = progressOf(
+    ctx({
+      owner: false,
+      guide: { mine: false, from_name: "Ibrahim Adekunle", kind: "transfer" },
+      acks: [{ taken: true, by: lukman, note: "", at: T(1) }],
+      claims: [
+        hold({}),
+        hold({ place: "o/api", repo: "o/api", host: "mac", claimed_at: T(3), updated: T(3) }),
+      ],
+    }),
+  );
+  assert.deepEqual(say(beats), [
+    "Ibrahim Adekunle sent it to Ibrahim Adekunle",
+    "Lukman Isiaka took it in o/api on mac",
+  ]);
+});
+
+test("a hand-in and a verdict from the same person minutes apart are one line", () => {
+  const lukman = { handle: "lukman", name: "Lukman Isiaka" };
+  const beats = progressOf(
+    ctx({
+      owner: false,
+      guide: { mine: false, from_name: "Ibrahim Adekunle", kind: "transfer" },
+      claims: [
+        {
+          place: "o/api",
+          repo: "o/api",
+          host: "",
+          by: lukman,
+          state: "review",
+          note: "done",
+          evidence: "npm test → 41 pass",
+          claimed_at: T(1),
+          updated: T(10),
+          report: null,
+        },
+      ],
+      verdicts: [{ ok: true, by: lukman, note: "works", detail: "", at: T(11) }],
+    }),
+  );
+  assert.deepEqual(say(beats).slice(1), [
+    "Lukman Isiaka took it in o/api",
+    "Lukman Isiaka handed it in: it works",
+  ]);
 });
