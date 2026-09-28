@@ -1,7 +1,7 @@
 /**
  * What an answer does to the cached lists, before the server has confirmed it.
  *
- * Pressing Take it used to wait for the round trip and then reload six endpoints, so the row sat
+ * Pressing I'll do this used to wait for the round trip and then reload six endpoints, so the row sat
  * unchanged for a second or two and read as a button that did nothing. These write the answer into
  * the cache at once; the hub rolls them back if the server refuses, and refetches either way.
  *

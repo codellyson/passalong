@@ -420,6 +420,11 @@ change. Its README says how.
   CLI: `take`/`pass` for the ack, `works`/`broken` for the verdict, `done` to archive. A signal that
   exists in only two of them is one a third of the product's users cannot send, and the mail that
   tells someone what to do next can only name commands that exist.
+  The hub says each in plain words rather than the command's name, and says them the same way on
+  every surface of the hub: `take` is **I'll do this**, `pass` is **Not for me**, `release` is
+  **Stop this agent**, archiving is **Archive** and **Unarchive**, a hand-in is answered with
+  **Accept** (or **Approve** for a task) and **Ask for changes**. A button whose name cannot say
+  what it does gets a line of visible text beside it, never a `title` tooltip.
 - **Google Chat gets a card; nothing else does.** Chat cannot unfurl a link — previews there come
   from a Chat app registering URL patterns, and a team connects an incoming webhook — so `chatCard()`
   in `notify.ts` builds the preview from what we already know. It must stay built rather than

@@ -78,7 +78,7 @@ test("an agent's hold says where, then its last word, then its hand-in with the 
   assert.equal(held[2].said, "mapping admin routes");
 
   const quiet = progressOf(ctx({ claims: [claim("stalled", "halfway")] }));
-  assert.equal(quiet[2].what, "went quiet after saying");
+  assert.equal(quiet[2].what, "went silent after saying");
 
   const [, , handed] = progressOf(
     ctx({ claims: [claim("review", "done", "$ pnpm test\n# pass 12")] }),

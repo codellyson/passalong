@@ -119,8 +119,8 @@ const who = computed(() => {
 
     <div class="flex shrink-0 items-center gap-2">
       <template v-if="key === 'unanswered'">
-        <button class="btn primary sm" @click="onAck(g, true)">Take it</button>
-        <button class="btn sm" :aria-expanded="open === 'pass'" @click="toggle('pass')">Pass</button>
+        <button class="btn primary sm" @click="onAck(g, true)">I'll do this</button>
+        <button class="btn sm" :aria-expanded="open === 'pass'" @click="toggle('pass')">Not for me</button>
       </template>
       <button
         v-else-if="key === 'waiting' || key === 'unjudged'"
@@ -134,7 +134,7 @@ const who = computed(() => {
            was sent to to open it and say it worked; when they never do, the author is the one who
            knows the work is finished and had no verb for it but Archive, sitting under a "Terminals
            and agents" heading next to Delete. `consumed` is reversible and the menu still says
-           "Put it back". -->
+           "Unarchive". -->
       <button
         v-else-if="closable(g)"
         class="btn sm whitespace-nowrap"
@@ -143,7 +143,7 @@ const who = computed(() => {
         :title="`Take ${g.title || g.id} off the board. Whoever it went to is told, and you can put it back.`"
         @click="close"
       >
-        {{ closing ? "Closing…" : "Close it" }}
+        {{ closing ? "Archiving…" : "Archive" }}
       </button>
       <HubRowMenu :g="g" @ack="open = 'ack'" @verdict="open = 'verdict'" />
     </div>

@@ -148,7 +148,7 @@ const OPEN: { state: Task["state"]; title: string; note: string }[] = [
   },
   {
     state: "ready",
-    title: "Ready",
+    title: "Ready for an agent",
     note: "The next agent in the right repo takes these, oldest first.",
   },
   {
@@ -156,7 +156,11 @@ const OPEN: { state: Task["state"]; title: string; note: string }[] = [
     title: "Blocked",
     note: "Waiting until the tasks they depend on are approved.",
   },
-  { state: "draft", title: "Draft", note: "Not in the queue until you make them ready." },
+  {
+    state: "draft",
+    title: "Draft",
+    note: "No agent can pick these up until you mark them ready for agents.",
+  },
 ];
 const openTasks = computed(() => {
   const out = new Map<Task["state"], Task[]>();
@@ -213,7 +217,7 @@ const tabs = computed(() => [
   },
   // The id stays `working`: it is the `?tab=` in a link somebody may have sent. Only the label
   // changed, because the label was wrong — a stalled card is on this list and is not working.
-  { id: "working" as const, label: "Taken", count: workingCount.value, tone: "" },
+  { id: "working" as const, label: "Being worked on", count: workingCount.value, tone: "" },
   { id: "open" as const, label: "Open", count: openCount.value, tone: "" },
   { id: "done" as const, label: "Done", count: doneCount.value, tone: "" },
 ]);
@@ -383,7 +387,7 @@ const list =
               {{ searching ? "Nothing open matches." : "Nothing is open." }}
               <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
               <button v-else class="linkish" type="button" @click="copy(ASKS.task, $event.currentTarget)">
-                <span data-label>Copy a task ask for your agent</span>
+                <span data-label>Copy a prompt for your agent</span>
               </button>
             </p>
           </template>

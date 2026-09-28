@@ -92,7 +92,7 @@ export function progressOf(ctx: GuideContext): Beat[] {
       beats.push({
         at: k.updated,
         who: nameOf(k.by),
-        what: k.state === "stalled" ? "went quiet after saying" : "said",
+        what: k.state === "stalled" ? "went silent after saying" : "said",
         said: k.note,
         tone: k.state === "stalled" ? "warn" : "plain",
       });

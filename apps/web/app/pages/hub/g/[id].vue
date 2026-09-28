@@ -99,7 +99,7 @@ const standing = computed(() => {
   const review = c.claims.filter((k) => k.state === "review").length;
   const held = c.claims.filter((k) => k.state !== "review").length;
   if (review)
-    return `Handed in${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting on ${c.owner ? "you" : "its author"}.`;
+    return `Finished${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting on ${c.owner ? "you" : "its author"}.`;
   if (held) return `Being worked on${held > 1 ? ` in ${held} places` : ""}.`;
   if (g.value.failing) return "Someone ran it and it didn't work.";
   if (g.value.verdict?.ok) return "Someone ran it and it works.";
@@ -150,6 +150,22 @@ const close = () => run("close", async () => g.value && (await onCloseGuide(g.va
 const reopen = () =>
   run("reopen", async () => g.value && (await onArchive(g.value as Guide, false)));
 
+/** One line for each button whose name alone does not say what it does. */
+const hints = computed(() => {
+  const c = ctx.value;
+  if (!c || !g.value) return [];
+  const out: string[] = [];
+  if (!g.value.mine)
+    out.push("Respond: say whether you are taking it, and later whether it worked.");
+  if (c.owner && holding.value)
+    out.push(
+      "Stop this agent: it goes back to waiting and the agent is told to stop. Nothing is deleted.",
+    );
+  if (c.owner && g.value.status !== "consumed" && !reviewing.value)
+    out.push("Archive: moves it off your board. You can unarchive it.");
+  return out;
+});
+
 const holding = computed(() => (ctx.value?.claims ?? []).some((k) => k.state !== "review"));
 const reviewing = computed(() => (ctx.value?.claims ?? []).some((k) => k.state === "review"));
 
@@ -183,7 +199,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <h1 class="m-0">{{ g.title || "Untitled guide" }}</h1>
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
         <div class="mt-2 flex flex-wrap items-center gap-2">
-          <NuxtLink v-if="!g.mine" class="btn primary" :to="`/hub/answer/${g.id}`">Answer it</NuxtLink>
+          <NuxtLink v-if="!g.mine" class="btn primary" :to="`/hub/answer/${g.id}`">Respond</NuxtLink>
           <button
             v-if="ctx.owner && holding"
             class="btn outline warn"
@@ -197,14 +213,14 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             type="button"
             :disabled="Boolean(busy)"
             @click="close"
-          >{{ busy === "close" ? "Closing…" : "Close it" }}</button>
+          >{{ busy === "close" ? "Archiving…" : "Archive" }}</button>
           <button
             v-if="ctx.owner && g.status === 'consumed'"
             class="btn"
             type="button"
             :disabled="Boolean(busy)"
             @click="reopen"
-          >{{ busy === "reopen" ? "Putting back…" : "Put it back" }}</button>
+          >{{ busy === "reopen" ? "Unarchiving…" : "Unarchive" }}</button>
           <button class="btn" type="button" @click="copy(g.url, $event.currentTarget)">
             <AppIcon name="copy" /><span data-label>Copy share link</span>
           </button>
@@ -212,6 +228,11 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <AppIcon name="open" />Open share page
           </a>
         </div>
+        <!-- What the less obvious buttons do, said beside them rather than in a tooltip: a title
+             attribute is delayed, unstyled and never shown on a phone. -->
+        <ul v-if="hints.length" class="m-0 flex list-none flex-col gap-1 p-0 font-ui text-xs text-muted">
+          <li v-for="h in hints" :key="h">{{ h }}</li>
+        </ul>
       </header>
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -307,7 +328,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                       type="button"
                       :aria-expanded="sendingBack === k.place"
                       @click="sendingBack = sendingBack === k.place ? null : k.place"
-                    >Send back</button>
+                    >Ask for changes</button>
                   </div>
                   <p v-if="!read.has(k.place)" class="m-0 font-ui text-xs text-muted">
                     Open what it ran before you accept it.
@@ -315,7 +336,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                   <form v-if="sendingBack === k.place" class="flex flex-col gap-2" @submit.prevent="sendBack(k, $event)">
                     <textarea name="why" required placeholder="What is still wrong — the next agent reads this first" />
                     <button class="btn danger outline sm self-start" :disabled="Boolean(busy)">
-                      {{ busy === `back:${k.place}` ? "Sending…" : "Send it back" }}
+                      {{ busy === `back:${k.place}` ? "Sending…" : "Send request" }}
                     </button>
                   </form>
                 </div>

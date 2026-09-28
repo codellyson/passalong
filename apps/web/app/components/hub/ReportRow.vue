@@ -120,7 +120,7 @@ async function closeAll() {
       </button>
       <!-- The batch off the board in one move. A report of eleven is eleven guides, and closing
            them one at a time was not possible from here at all: this row draws its own markup, so
-           it inherited neither the row menu nor a row's Close it. -->
+           it inherited neither the row menu nor a row's Archive. -->
       <button
         v-if="stillOpen.length"
         class="btn sm whitespace-nowrap"
@@ -129,7 +129,7 @@ async function closeAll() {
         :title="`Take ${stillOpen.length === 1 ? 'this bug' : `all ${stillOpen.length} bugs`} off the board. Whoever they went to is told, and you can put them back.`"
         @click="closeAll"
       >
-        {{ closing === "all" ? "Closing…" : stillOpen.length === rows.length ? "Close all" : `Close ${stillOpen.length}` }}
+        {{ closing === "all" ? "Archiving…" : stillOpen.length === rows.length ? "Archive all" : `Archive ${stillOpen.length}` }}
       </button>
       <NuxtLink :to="`/hub/report/${group.report}`" class="btn sm">
         <AppIcon name="open" />Open report
@@ -164,7 +164,7 @@ async function closeAll() {
           :disabled="Boolean(closing)"
           @click="closeOne(r)"
         >
-          {{ closing === r.g.id ? "Closing…" : "Close" }}
+          {{ closing === r.g.id ? "Archiving…" : "Archive" }}
         </button>
       </li>
     </ul>

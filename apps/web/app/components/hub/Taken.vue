@@ -119,7 +119,7 @@ const badge = (w: Working) => kindBadge(w.kind);
         >
           <span class="size-2 rounded-pill" :class="w.state === 'stalled' ? 'bg-warn' : 'bg-ok'" aria-hidden="true" />
           <template v-if="person(w)">took it {{ rel(w.claimed_at) }}</template>
-          <template v-else>{{ w.state === "stalled" ? "went quiet" : "heard" }} {{ rel(heard(w)) }}</template>
+          <template v-else>{{ w.state === "stalled" ? "went silent" : "heard" }} {{ rel(heard(w)) }}</template>
         </span>
 
         <!-- Its own track, not a fifth thing squeezed into the timing's: without one it wrapped to
