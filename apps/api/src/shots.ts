@@ -97,6 +97,22 @@ export async function evidenceOn(db: D1Database, guide: string): Promise<string[
 }
 
 /**
+ * What was said in a guide's conversation that points at a screenshot: a person's reply with a
+ * picture or a file on it. Same reason as the evidence above — it is a document somebody wrote, it is not the
+ * guide's markdown, and without it the author's next edit would release the picture and the sweep
+ * would delete it a day later.
+ */
+export async function conversationOn(db: D1Database, guide: string): Promise<string[]> {
+  const { results } = await db
+    .prepare(
+      "SELECT body FROM task_event WHERE guide_id = ? AND (body LIKE '%/v1/shots/%' OR body LIKE '%/v1/attachments/%')",
+    )
+    .bind(guide)
+    .all<{ body: string }>();
+  return results.map((r) => r.body);
+}
+
+/**
  * Delete uploads no guide ever claimed.
  *
  * The age is the whole safety of it. A shot is claimed when the guide naming it is written, which

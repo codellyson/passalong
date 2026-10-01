@@ -104,6 +104,49 @@ public one, for agents *using* Passalong rather than changing it.
     has one per repo, and taking it back means from whoever has it. `POST /v1/guides/:id/release`
     is the path; `/v1/tasks/:id/release` is the same handler under its old name, because an
     installed CLI still calls it.
+  - `task_event` (migration 0032) is the thread: an append-only line per `take`, `progress` note,
+    hand-in, pass, release, approval and send-back, written by `event()` in `claims.ts` *after* the
+    transition it describes and never throwing. `claim` is only the present — `note` is overwritten
+    by every progress call and the row is deleted on release, pass and approval — so without this
+    nothing says an agent ever held the work. `thread()` merges it with `verdict` and `ack` (the
+    reader's side) and drops the claim event a person's browser answer also caused, so one act is
+    one line; `GET /v1/guides/:id/thread` serves it and `HubThread` renders it as chat. A missing
+    row costs a bubble, never a lock. Tasks worked before 0032 have no history to show.
+    **`ask` and `reply` (migration 0033, `docs/CONVERSATION.md`) make it two-way.** `ask` keeps the
+    claim, extends the lease to a day and tells the agent to stop; `reply` is a person writing to
+    whoever holds it, refused when nobody does and from anyone but the author, the assignee or the
+    holder — that is what keeps it from being a comment box, which the PRD rules out. Waiting is
+    derived (`ASKING` in claims.ts: the latest `asked` no `replied` has followed), never a claim
+    state. Nothing wakes an agent: `deliver()` hands it what was said on its next `progress`/`take`,
+    and a `take` resume re-sends everything since the question. The Stop hook lets an agent that
+    asked stop, or the instruction and the hook would contradict each other.
+    `asked` and `replied` are notification kinds. `asked` is the one kind exempt from the self-drop in
+    `notify()`: your own agent asking you is the commonest case, and the drop would have made it
+    silent. Both are unread again on every repeat (the row coalesces; read_at is cleared), and mailed
+    only the first time per guide.
+    A reply may carry up to three pictures, as `![name](…/v1/shots/<id>)` lines in its body: uploaded
+    to `POST /v1/shots` first, claimed by the guide through `claimEvidenceShots`, and carried by
+    `conversationOn()` beside evidence so the author's next edit does not release them. Only our own
+    screenshots are drawn (`evidenceParts`); a stranger's image address is text. The composer refuses
+    a reply that would be cut at 1000 characters, because a picture's address cut in half is a broken
+    image nobody can fix.
+    **Files that are not pictures are `attachment` (migration 0034, `src/attachments.ts`), not a wider
+    `shot`.** The risk runs the other way — a shot is served to be drawn, a file to be saved — so the
+    type is decided by the bytes (`sniffAttachment`), HTML and SVG are filed as plain text, and
+    `GET /v1/attachments/:id` always answers `content-disposition: attachment`, `nosniff` and a
+    sandbox policy, behind a credential and the right to read the guide, with 404 and never 403 so a
+    refusal does not confirm an id. Claimed, carried and swept exactly as shots are (`claimFiles`,
+    `carriedFiles`, `sweepAttachments` beside `sweepOrphans`); the hub downloads with `fetch` and the
+    token because a link carries neither.
+    `reply` on a guide nobody holds is a **note** (`noted`): the author or assignee only, handed to
+    every taker, which is how a file reaches a task before it is taken. An upload link has a `kind`
+    (image or file) and checks the bytes against it; a refused file does not spend the link.
+    The Taken tab is cards, not rows (`Taken.vue`, `utils/taken.ts`): the latest thing said, a short
+    trail from the thread route, a line to answer in place, and the counts on top as the filter.
+    Health is derived like `stalled` — a question outranks the silence, a person's hold is never
+    measured against an agent's half hour. Three layouts were prototyped on `prototype/taken-views`.
+    `conversationOn()` must match every pattern a body can carry a stored thing by (`/v1/shots/` and
+    `/v1/attachments/`), or the author's next edit releases whatever the missing one named.
   - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running
     local server (`npm run test:e2e`, skipped by `npm test`). It puts its accounts on a plan in the
     *local* D1 with `wrangler d1 execute --local`, so it refuses any API that is not localhost.

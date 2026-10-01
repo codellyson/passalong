@@ -198,6 +198,8 @@ export interface Task {
     repo: string;
     worktree: string;
     note: string;
+    /** What it is waiting on you to answer, or empty. Derived on the server, never stored. */
+    asking?: string;
     /** What it ran and what came back, sent with the hand-in. Empty until it hands in. */
     evidence?: string;
     /** The same evidence against the Acceptance line each piece answers, when the agent sorted it. */
@@ -229,6 +231,10 @@ export interface Working {
   repo: string;
   worktree: string;
   note: string;
+  /** What it is waiting on you to answer, or empty. */
+  asking?: string;
+  /** What a person wrote that this agent has not been told yet. */
+  replies?: number;
   claimed_at: string;
   lease_until: string;
 }
@@ -268,4 +274,28 @@ export interface HubData {
   tasks: Task[];
   working: Working[];
   handedIn: HandedIn[];
+}
+
+/** One line of a guide's thread. See GET /v1/guides/:id/thread and claims.thread(). */
+export interface ThreadItem {
+  id: string;
+  kind:
+    | "taken"
+    | "progress"
+    | "handed_in"
+    | "passed"
+    | "released"
+    | "approved"
+    | "sent_back"
+    | "closed"
+    | "asked"
+    | "replied"
+    | "noted"
+    | "verdict"
+    | "ack";
+  at: string;
+  body: string;
+  /** A verdict or an ack only: it worked, or they took it. */
+  ok?: boolean;
+  by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
 }

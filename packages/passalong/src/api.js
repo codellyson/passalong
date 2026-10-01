@@ -205,6 +205,10 @@ export const progress = (id, body) =>
   call(`/v1/guides/${encodeURIComponent(id)}/progress`, { method: "PUT", body });
 export const handIn = (id, body) =>
   call(`/v1/guides/${encodeURIComponent(id)}/hand_in`, { method: "POST", body });
+export const ask = (id, body) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/ask`, { method: "POST", body });
+export const reply = (id, body) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/reply`, { method: "POST", body: { body } });
 export const pass = (id, body) =>
   call(`/v1/guides/${encodeURIComponent(id)}/pass`, { method: "POST", body });
 export const ack = (id, taken, note = "") =>
@@ -217,6 +221,36 @@ export const ack = (id, taken, note = "") =>
  * the content type as the declaration of what they are. `name` is the label, and it travels in a
  * header rather than the body for the same reason.
  */
+/**
+ * Upload a file that is not a picture, and get back what the server made of it. The server decides
+ * what the bytes are and refuses what it does not keep; `type` and `name` are hints. The name travels
+ * percent-encoded because a header cannot hold what a filename can.
+ */
+export async function uploadFile(bytes, type, name = "") {
+  const t = token();
+  if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
+  const headers = {
+    authorization: `Bearer ${t}`,
+    "content-type": type || "application/octet-stream",
+  };
+  if (name) headers["x-file-name"] = encodeURIComponent(String(name));
+  let res;
+  try {
+    res = await fetch(`${baseUrl()}/v1/attachments`, { method: "POST", headers, body: bytes });
+  } catch (err) {
+    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    let message = body;
+    try {
+      message = JSON.parse(body).message || body;
+    } catch {}
+    throw new ApiError(res.status, message || res.statusText);
+  }
+  return (await res.json()).attachment;
+}
+
 export async function uploadShot(bytes, type, name = "") {
   const t = token();
   if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");

@@ -8,6 +8,8 @@
 // is handled where it happens — claimed when the guide naming it is written, deleted with that
 // guide — and the leftover case is the upload nobody ever referenced, which nothing else is in a
 // position to notice.
+
+import { sweepAttachments } from "#api/attachments";
 import { closeGuide, STALE_SENT_MS, staleSent, stalled } from "#api/claims";
 import { notify } from "#api/notify";
 import { DYNAMIC_TTL_MS } from "#api/oauth";
@@ -33,6 +35,12 @@ export default defineNitroPlugin((nitro) => {
       if (swept) console.log(`swept ${swept} unclaimed screenshot${swept === 1 ? "" : "s"}`);
     } catch (err) {
       console.error("shot sweep failed", err);
+    }
+    try {
+      const { swept } = await sweepAttachments(env as Parameters<typeof sweepAttachments>[0]);
+      if (swept) console.log(`swept ${swept} unclaimed file${swept === 1 ? "" : "s"}`);
+    } catch (err) {
+      console.error("file sweep failed", err);
     }
     // OAuth clients that registered themselves and were never approved. Also swept lazily on each
     // registration; this catches the quiet days when nothing registers.

@@ -85,6 +85,59 @@ export function doneCopy(o: { byName: string; title: string; url: string; hub: s
   };
 }
 
+/**
+ * An agent is waiting on a person. The question is the whole message: it is what the reader has to
+ * answer, and the inbox is where they are standing when they decide whether to.
+ */
+export function askedCopy(o: {
+  byName: string;
+  title: string;
+  url: string;
+  question: string;
+  hub: string;
+}): Copy {
+  return {
+    subject: `${o.byName}'s agent has a question about "${o.title}"`,
+    preview: o.question,
+    eyebrow: "An agent is waiting on you",
+    text: [
+      `${o.byName}'s agent is working on "${o.title}" and needs an answer before it can go on.`,
+      "",
+      `  "${o.question}"`,
+      "",
+      `Answer it in the hub: ${o.hub}`,
+      "",
+      `Open the guide: ${o.url}`,
+    ],
+  };
+}
+
+/** A person wrote to the agent working on something of theirs. */
+export function repliedCopy(o: {
+  byName: string;
+  title: string;
+  url: string;
+  body: string;
+  hub: string;
+}): Copy {
+  return {
+    subject: `${o.byName} replied to your agent on "${o.title}"`,
+    preview: o.body,
+    eyebrow: `${o.byName} replied`,
+    text: [
+      `${o.byName} wrote to your agent working on "${o.title}".`,
+      "",
+      `  "${o.body}"`,
+      "",
+      "Your agent reads it the next time it checks in.",
+      "",
+      `Open the guide: ${o.url}`,
+      "",
+      `See everything in one place: ${o.hub}`,
+    ],
+  };
+}
+
 export function verdictCopy(o: {
   byName: string;
   title: string;

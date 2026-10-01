@@ -24,6 +24,24 @@ export const PERSON_LEASE_MS = 7 * 24 * 60 * 60 * 1000;
 /** The longest progress line kept. It is a status, not a log. */
 export const NOTE_MAX = 280;
 
+/**
+ * The longest question or reply kept. A note is a line on a board; a question that has to carry its
+ * own context, and the answer to it, are allowed a few sentences. Plain text: nothing renders it as
+ * anything else.
+ */
+export const MESSAGE_MAX = 1000;
+
+/**
+ * How long a claim holds while its agent is waiting on a person. A person can take hours to answer,
+ * and an agent that stopped because it was told to is not "went quiet". It is still a lease and not a
+ * release: nobody else can take the work, and a question nobody answers for a day reads as stalled
+ * like anything else, which is true.
+ */
+export const ASK_LEASE_MS = 24 * 60 * 60 * 1000;
+
+/** Most events one guide keeps. One runaway agent must not be able to fill a thread. */
+export const EVENTS_MAX = 200;
+
 /** The longest evidence kept. A note is a line; this is a paste of output, so it gets room. */
 export const EVIDENCE_MAX = 4000;
 
@@ -190,6 +208,12 @@ export interface ClaimRow {
   writeup: string;
   /** The claim's generation. 0 on a claim taken before 0029_claim_fence.sql existed. */
   fence: number;
+  /** The last reply this agent was given, by event id. See migrations/0033_conversation.sql. */
+  replied_through: number;
+  /** Set by `list()` and `working()`, not stored: the question this claim is waiting on, or ''. */
+  asking?: string;
+  /** Set by `working()`, not stored: what a person wrote that this agent has not been told yet. */
+  waiting_replies?: number;
   report_id: string;
   pr: string;
   claimed_at: string;
@@ -302,6 +326,15 @@ const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
 const FOR_ME = `(g.to_account_id = '' OR g.to_account_id = ?1) AND (g.to_group_id = '' OR
   g.to_group_id IN (SELECT group_id FROM group_member WHERE account_id = ?1))`;
 
+// The question this claim's agent is waiting on a person to answer, or null. Derived, as `stalled`
+// is: the latest `asked` since the claim was taken that no `replied` has followed. Nothing moves a
+// card to "waiting" and nothing has to move it back. See docs/CONVERSATION.md §4.2.
+const ASKING = `(SELECT e.body FROM task_event e
+   WHERE e.guide_id = c.guide_id AND e.kind = 'asked' AND e.at >= c.claimed_at
+     AND NOT EXISTS (SELECT 1 FROM task_event r
+                      WHERE r.guide_id = e.guide_id AND r.kind = 'replied' AND r.id > e.id)
+   ORDER BY e.id DESC LIMIT 1)`;
+
 // Waiting on a task a person has not approved yet. See migrations/0022_blocks.sql.
 const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN guide x ON x.id = b.blocker_id
   WHERE b.guide_id = g.id AND x.status <> 'consumed')`;
@@ -378,7 +411,15 @@ export async function next(
       .run();
     if (res.meta.changes === 1) {
       const claim = await claimFor(db, task.id, who);
-      if (claim) return { task, claim, resumed: false };
+      if (claim) {
+        await event(db, task.id, "taken", {
+          account: who.account,
+          agent: who.agent,
+          host: who.host,
+          at,
+        });
+        return { task, claim, resumed: false };
+      }
     }
   }
   return null;
@@ -398,6 +439,70 @@ function claimFor(db: D1Database, id: string, who: Agent): Promise<ClaimRow | nu
     .prepare("SELECT * FROM claim WHERE guide_id = ? AND agent_id = ? AND account_id = ?")
     .bind(id, who.agent, who.account)
     .first<ClaimRow>();
+}
+
+/** What happened, as `task_event` records it. See migrations/0032_task_event.sql. */
+export type EventKind =
+  | "taken"
+  | "progress"
+  | "handed_in"
+  | "passed"
+  | "released"
+  | "approved"
+  | "sent_back"
+  | "closed"
+  | "asked"
+  | "replied"
+  | "noted";
+
+/**
+ * Add one line to a guide's thread. Written after the transition it describes has succeeded, never
+ * before and never in its place, and it never throws: a thread that loses a bubble is a smaller
+ * harm than a hand-in refused because the history could not be written.
+ */
+async function event(
+  db: D1Database,
+  id: string,
+  kind: EventKind,
+  {
+    account,
+    agent = "",
+    host = "",
+    body = "",
+    at,
+  }: {
+    account: string;
+    agent?: string;
+    host?: string;
+    body?: string;
+    at: string;
+  },
+): Promise<void> {
+  // A progress note is the one thing an agent can write without limit, so it stops being recorded
+  // first, and what a person is waiting for — a question, a reply, a hand-in — has room of its own.
+  const cap = kind === "progress" ? EVENTS_MAX : EVENTS_MAX * 2;
+  try {
+    await db
+      .prepare(
+        `INSERT INTO task_event (guide_id, kind, account_id, agent_id, host, body, at)
+         SELECT ?, ?, ?, ?, ?, ?, ?
+          WHERE (SELECT COUNT(*) FROM task_event WHERE guide_id = ?) < ?`,
+      )
+      .bind(
+        id,
+        kind,
+        account,
+        agent,
+        String(host || "").slice(0, 120),
+        String(body ?? "")
+          .trim()
+          .slice(0, EVIDENCE_MAX),
+        at,
+        id,
+        cap,
+      )
+      .run();
+  } catch {}
 }
 
 type Refusal = { error: string; status: 400 | 404 | 409; holder?: ClaimRow };
@@ -519,7 +624,10 @@ export async function take(
     .run();
   if (res.meta.changes === 1) {
     const claim = await claimFor(db, id, who);
-    if (claim) return { task: g, claim, resumed: false };
+    if (claim) {
+      await event(db, id, "taken", { account: who.account, agent: who.agent, host: who.host, at });
+      return { task: g, claim, resumed: false };
+    }
   }
   const holder = await db
     .prepare("SELECT * FROM claim WHERE guide_id = ? AND place = ?")
@@ -563,7 +671,11 @@ export async function working(
   const { results } = await db
     .prepare(
       `SELECT c.*, g.title AS g_title, g.kind AS g_kind, g.target AS g_target,
-              g.share_key AS g_share_key, g.account_id AS g_account,
+              g.share_key AS g_share_key, g.account_id AS g_account, COALESCE(${ASKING}, '') AS asking,
+              (SELECT COUNT(*) FROM task_event r
+                WHERE r.guide_id = c.guide_id AND r.kind IN ('replied', 'noted')
+                  AND r.id > c.replied_through
+                  AND (r.kind = 'noted' OR r.at >= c.claimed_at)) AS waiting_replies,
               COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
          FROM claim c
          JOIN guide g ON g.id = c.guide_id
@@ -629,7 +741,211 @@ export async function renew(
       ...(typeof fence === "number" ? [fence] : []),
     )
     .run();
-  return res.meta.changes === 1 ? claimFor(db, id, who) : null;
+  if (res.meta.changes !== 1) return null;
+  const said = note === null ? "" : note.trim();
+  if (said)
+    await event(db, id, "progress", {
+      account: who.account,
+      agent: who.agent,
+      host: who.host,
+      body: said.slice(0, NOTE_MAX),
+      at,
+    });
+  return claimFor(db, id, who);
+}
+
+/**
+ * The agent asks a person something and waits, keeping what it holds.
+ *
+ * It is not `pass`, which gives the work back, and not `progress`, which says "carry on" — an
+ * agent that is told to stop and an agent that is told to continue need different endings, so they
+ * are different calls. The claim stays, nobody else can take the work, and the lease is extended to
+ * ASK_LEASE_MS because a person's answer takes longer than half an hour. `note` is set to the
+ * question's first line, so every surface that shows what an agent last said still shows it.
+ *
+ * Whether a claim is waiting is derived from the events (ASKING), not stored here.
+ */
+export async function ask(
+  db: D1Database,
+  id: string,
+  who: Agent,
+  { at, question, fence }: { at: string; question: string; fence?: number },
+): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
+  const q = String(question ?? "")
+    .trim()
+    .slice(0, MESSAGE_MAX);
+  if (!q) return { status: 400, error: "say what you need to know: send `question`" };
+  const res = await db
+    .prepare(
+      `UPDATE claim SET lease_until = ?, updated = ?, note = ?
+        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
+    )
+    .bind(
+      leaseFrom(at, ASK_LEASE_MS),
+      at,
+      (q.split(/\r?\n/)[0] ?? q).slice(0, NOTE_MAX),
+      id,
+      who.agent,
+      who.account,
+      ...(typeof fence === "number" ? [fence] : []),
+    )
+    .run();
+  if (res.meta.changes !== 1) {
+    const now = await claimFor(db, id, who);
+    return {
+      status: 409,
+      error:
+        typeof fence === "number" && now && now.fence !== fence
+          ? STALE
+          : "this agent does not hold that — there is nobody waiting on it to ask",
+    };
+  }
+  await event(db, id, "asked", {
+    account: who.account,
+    agent: who.agent,
+    host: who.host,
+    body: q,
+    at,
+  });
+  const claim = await claimFor(db, id, who);
+  return claim ? { claim } : { status: 409, error: "the claim went away while asking" };
+}
+
+/**
+ * A person writes to whoever holds a guide.
+ *
+ * Not a comment box, and these are the rules that keep it from becoming one: there has to be a
+ * holder, because a message with nobody to hear it is a comment; only the people on the asking side
+ * may write — the author, whoever it is assigned to, and the holder's own account, which is the
+ * common case of somebody replying to their own agent — and not anyone who can read the guide; and
+ * it is plain text with no edit and no delete. See docs/CONVERSATION.md §2.
+ *
+ * Does not extend the lease: only the agent speaking does. Returns who holds it, to tell them.
+ * Whether the caller can read the guide at all is the route's to settle first.
+ */
+export async function reply(
+  db: D1Database,
+  id: string,
+  { account, at, body }: { account: string; at: string; body: string },
+): Promise<
+  { holders: string[]; noted: boolean } | { error: string; status: 400 | 403 | 404 | 409 }
+> {
+  const text = String(body ?? "")
+    .trim()
+    .slice(0, MESSAGE_MAX);
+  if (!text) return { status: 400, error: "write the message: send `body`" };
+  const g = await db
+    .prepare("SELECT account_id, to_account_id, to_group_id, status FROM guide WHERE id = ?")
+    .bind(id)
+    .first<{ account_id: string; to_account_id: string; to_group_id: string; status: string }>();
+  if (!g) return { status: 404, error: "no such guide" };
+  const { results: held } = await db
+    .prepare("SELECT account_id FROM claim WHERE guide_id = ? AND state = 'claimed'")
+    .bind(id)
+    .all<{ account_id: string }>();
+  const inGroup =
+    g.to_group_id !== "" &&
+    Boolean(
+      await db
+        .prepare("SELECT 1 FROM group_member WHERE group_id = ? AND account_id = ?")
+        .bind(g.to_group_id, account)
+        .first(),
+    );
+  const party = g.account_id === account || g.to_account_id === account || inGroup;
+  const allowed = party || held.some((h) => h.account_id === account);
+  if (!allowed)
+    return {
+      status: 403,
+      error: "only its author, whoever it is assigned to, or whoever holds it can write here",
+    };
+  // Nobody holds it. Its author may still leave a note, and it is waiting for whoever takes it: a
+  // file the task needs, a thing they thought of after writing it. It is the task's own, not a message
+  // to anybody, so it is its own kind and every taker is handed all of it. Done work takes no more.
+  const noted = !held.length;
+  if (noted && g.status === "consumed")
+    return { status: 409, error: "this is done, so there is nobody to leave a note for" };
+  const full = await db
+    .prepare("SELECT COUNT(*) AS n FROM task_event WHERE guide_id = ?")
+    .bind(id)
+    .first<{ n: number }>();
+  if ((full?.n ?? 0) >= EVENTS_MAX * 2)
+    return {
+      status: 409,
+      error: "this conversation is full: hand it in, or pass it and start again",
+    };
+  await event(db, id, noted ? "noted" : "replied", { account, body: text, at });
+  return { holders: [...new Set(held.map((h) => h.account_id))], noted };
+}
+
+/** What a person said to an agent, as the agent is told it. */
+export interface Reply {
+  id: number;
+  at: string;
+  by: { name: string; handle: string; you: boolean };
+  body: string;
+}
+
+/**
+ * The replies this agent has not been told yet, oldest first, moving its cursor past them.
+ *
+ * There is no way to push into a worktree, so this is how a reply arrives: asked for on the agent's
+ * next `progress` or `take`. `resume` is for a `take` that picks a hold back up, and re-sends
+ * everything since the last question even past the cursor — a response lost on the wire, or a
+ * session restarted after the agent stopped to wait, would otherwise lose a reply for good, and a
+ * resume is rare and replies are short.
+ */
+export async function deliver(
+  db: D1Database,
+  id: string,
+  who: Agent,
+  { resume = false }: { resume?: boolean } = {},
+): Promise<Reply[]> {
+  const c = await claimFor(db, id, who);
+  if (!c) return [];
+  let from = c.replied_through;
+  if (resume) {
+    const q = await db
+      .prepare(
+        "SELECT COALESCE(MAX(id), 0) AS id FROM task_event WHERE guide_id = ? AND kind = 'asked' AND at >= ?",
+      )
+      .bind(id, c.claimed_at)
+      .first<{ id: number }>();
+    // One below the question, so a reply that came straight after it is still in range.
+    if (q?.id) from = Math.min(from, q.id - 1);
+  }
+  const { results } = await db
+    .prepare(
+      `SELECT e.id, e.at, e.body, e.account_id, COALESCE(a.name, '') AS name,
+              COALESCE(a.handle, '') AS handle
+         FROM task_event e LEFT JOIN account a ON a.id = e.account_id
+        WHERE e.guide_id = ? AND e.kind IN ('replied', 'noted') AND e.id > ?
+          AND (e.kind = 'noted' OR e.at >= ?)
+        ORDER BY e.id LIMIT 50`,
+    )
+    .bind(id, from, c.claimed_at)
+    .all<{
+      id: number;
+      at: string;
+      body: string;
+      account_id: string;
+      name: string;
+      handle: string;
+    }>();
+  const last = results[results.length - 1];
+  if (last)
+    await db
+      .prepare(
+        `UPDATE claim SET replied_through = MAX(replied_through, ?)
+          WHERE guide_id = ? AND agent_id = ? AND account_id = ?`,
+      )
+      .bind(last.id, id, who.agent, who.account)
+      .run();
+  return results.map((r) => ({
+    id: r.id,
+    at: r.at,
+    by: { name: r.name, handle: r.handle, you: r.account_id === who.account },
+    body: r.body,
+  }));
 }
 
 /**
@@ -729,6 +1045,14 @@ export async function finish(
     };
   }
   const claim = await claimFor(db, id, who);
+  if (claim)
+    await event(db, id, "handed_in", {
+      account: who.account,
+      agent: who.agent,
+      host: who.host,
+      body: note,
+      at,
+    });
   return claim ? { claim } : { status: 409, error: "the claim went away while finishing" };
 }
 
@@ -855,6 +1179,7 @@ export async function list(
         // The write-up's title rides along, so a reviewer scanning the board sees what came back
         // without opening it. Only a guide the same account can see is named.
         `SELECT c.*, COALESCE(r.title, '') AS report_title, COALESCE(r.share_key, '') AS report_key,
+                COALESCE(${ASKING}, '') AS asking,
                 COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
            FROM claim c
            JOIN guide g ON g.id = c.guide_id
@@ -939,6 +1264,7 @@ export async function approve(
     .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
     .bind(withStatus(t.markdown, "consumed"), at, id)
     .run();
+  await event(db, id, "approved", { account, at });
   return { state: "done", claimant: t.claim.account_id };
 }
 
@@ -985,6 +1311,7 @@ export async function reject(
     db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
     db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
   ]);
+  await event(db, id, "sent_back", { account, body: reason, at });
   return { state: "ready", claimant: t.claim.account_id };
 }
 
@@ -1045,6 +1372,12 @@ export async function release(
     );
   }
   await db.batch(writes);
+  await event(db, id, "released", {
+    account,
+    host: (held[0] as ClaimRow).host,
+    body: (held[0] as ClaimRow).note,
+    at,
+  });
   // Two counts, because they are two different things: `claimants` is who to tell, deduped because
   // one person told twice is one person told twice; `places` is how many claims went, which is
   // what "taken back from three repos" means and is not the same number.
@@ -1127,6 +1460,13 @@ export async function pass(
       db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
     ]);
   } else await drop.run();
+  await event(db, id, "passed", {
+    account: who.account,
+    agent: who.agent,
+    host: c.host,
+    body: reason,
+    at,
+  });
   return { kind: g.kind, author: g.account_id };
 }
 
@@ -1152,6 +1492,7 @@ export async function handIn(
     writeup = "",
     person = false,
     fence,
+    verdict,
   }: {
     at: string;
     note: string;
@@ -1180,13 +1521,20 @@ export async function handIn(
     writeup?: string;
     person?: boolean;
     fence?: number;
+    /** Store an agent's answer only if this claim can move to review. */
+    verdict?: { ok: boolean };
   },
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
   // Checks are evidence, so a hand-in that brings them has brought it — as in finish().
   const said = checks.length ? flatten(checks) : evidence;
   const bad = person ? null : checks.length ? checksProblem(checks) : evidenceProblem(evidence);
   if (bad) return { status: 400, error: bad };
-  const res = await db
+  const detail = String(evidence ?? "").slice(0, EVIDENCE_MAX);
+  const storedChecks = checks.length ? JSON.stringify(checks).slice(0, EVIDENCE_MAX * 2) : "";
+  const storedWriteup = String(writeup ?? "")
+    .trim()
+    .slice(0, WRITEUP_MAX);
+  const transition = db
     .prepare(
       `UPDATE claim SET state = 'review', evidence = ?, checks = ?, writeup = ?,
               note = COALESCE(NULLIF(?, ''), note), updated = ?
@@ -1209,9 +1557,7 @@ export async function handIn(
             })),
           ).slice(0, EVIDENCE_MAX * 2)
         : "",
-      String(writeup ?? "")
-        .trim()
-        .slice(0, WRITEUP_MAX),
+      storedWriteup,
       String(note ?? "")
         .trim()
         .slice(0, NOTE_MAX),
@@ -1220,10 +1566,51 @@ export async function handIn(
       who.agent,
       who.account,
       ...(typeof fence === "number" ? [fence] : []),
-    )
-    .run();
-  const claim = res.meta.changes === 1 ? await claimFor(db, id, who) : null;
-  if (claim) return { claim };
+    );
+  // D1 batches execute in one transaction. The verdict SELECT and the transition use the same
+  // claim predicate, so a refused or stale hand-in cannot leave a verdict on the guide.
+  const writes = verdict
+    ? [
+        db
+          .prepare(
+            `INSERT INTO verdict (guide_id, account_id, ok, note, detail, checks, writeup, at)
+             SELECT guide_id, account_id, ?, ?, ?, ?, ?, ? FROM claim
+              WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}
+             ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok,
+               note = excluded.note, detail = excluded.detail, checks = excluded.checks,
+               writeup = CASE WHEN excluded.writeup <> '' THEN excluded.writeup ELSE verdict.writeup END,
+               at = excluded.at`,
+          )
+          .bind(
+            verdict.ok ? 1 : 0,
+            String(note ?? "")
+              .trim()
+              .slice(0, NOTE_MAX),
+            detail,
+            storedChecks,
+            storedWriteup,
+            at,
+            id,
+            who.agent,
+            who.account,
+            ...(typeof fence === "number" ? [fence] : []),
+          ),
+        transition,
+      ]
+    : [transition];
+  const results = await db.batch(writes);
+  const res = results[results.length - 1];
+  const claim = res?.meta.changes === 1 ? await claimFor(db, id, who) : null;
+  if (claim) {
+    await event(db, id, "handed_in", {
+      account: who.account,
+      agent: who.agent,
+      host: who.host,
+      body: note,
+      at,
+    });
+    return { claim };
+  }
   const now = await claimFor(db, id, who);
   return {
     status: 409,
@@ -1244,7 +1631,14 @@ export interface Step {
 }
 
 /** What just happened, from the agent's side. */
-export type StepEvent = "taken" | "progress" | "handed_in" | "passed" | "nothing" | "not_held";
+export type StepEvent =
+  | "taken"
+  | "progress"
+  | "asked"
+  | "handed_in"
+  | "passed"
+  | "nothing"
+  | "not_held";
 
 /**
  * What an agent should do next, attached to every answer it gets. See docs/V2.md §11.
@@ -1254,7 +1648,7 @@ export type StepEvent = "taken" | "progress" | "handed_in" | "passed" | "nothing
  * worked out here because only the server knows the state. `say` is set when the right move is to
  * make no call at all: stop, or tell the person.
  */
-export function steps(kind: string, event: StepEvent): { next: Step[]; say?: string } {
+export function steps(kind: string, event: StepEvent, replies = 0): { next: Step[]; say?: string } {
   const done =
     kind === "task"
       ? "every line of Acceptance holds"
@@ -1282,7 +1676,9 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
       // second guide titled "Hand-in evidence: …", or `pass` with a note. The list it is answering
       // is already written down; this points at it.
       with:
-        kind === "task"
+        "note: one plain sentence, first person — what you did and how it went. It is the first " +
+        "thing the person reads; everything below is behind it. " +
+        (kind === "task"
           ? "checks: one entry per Acceptance line — that line, and what you ran for it. Its " +
             "author reads them line against line, so evidence filed under the check it answers is " +
             "worth more than the same output in one block. Keep it as you go."
@@ -1291,7 +1687,7 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
             "line has one. Keep them as you go; `evidence` as one block is the older shape and " +
             "still accepted. Anything you had to adapt to make it work here goes in `writeup`, " +
             "and the next person to open the guide is shown it — that is its home, not a new " +
-            "guide.",
+            "guide."),
     },
     {
       tool: "pass",
@@ -1305,7 +1701,26 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
   switch (event) {
     case "taken":
     case "progress":
-      return { next: working };
+      return replies
+        ? {
+            next: working,
+            say:
+              replies === 1
+                ? "The person left you a message (below). Read it first and carry on from what they said."
+                : `The person wrote ${replies} messages (below). Read them first and carry on from what they said.`,
+          }
+        : { next: working };
+    case "asked":
+      return {
+        next: [
+          {
+            tool: "take",
+            when: "once the person has answered, with this id",
+            why: "it hands you their reply and picks the work back up",
+          },
+        ],
+        say: "Your question is sent. Stop here and tell the user you are waiting for their answer.",
+      };
     case "handed_in":
     case "passed":
       return { next: again };
@@ -1317,6 +1732,126 @@ export function steps(kind: string, event: StepEvent): { next: Step[]; say?: str
     case "not_held":
       return { next: [], say: "You no longer hold this. Stop working on it, and tell the person." };
   }
+}
+
+/** One line of a guide's thread: something an agent or a person did to it, oldest first. */
+export interface ThreadItem {
+  /** `e<n>` for a recorded event, `v:<account>` / `a:<account>` for a verdict or an ack. */
+  id: string;
+  kind: EventKind | "verdict" | "ack";
+  at: string;
+  /** One line, in the voice of whoever did it. Empty for acts that say everything by themselves. */
+  body: string;
+  /** Only a verdict or an ack: whether it worked, or whether they took it. */
+  ok?: boolean;
+  by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
+}
+
+/**
+ * A guide's thread: what happened to it, in order, as the conversation a person would read.
+ *
+ * Merges `task_event` with the verdicts and acks already on the guide, which are the reader's side
+ * of the same conversation and live in their own tables for their own reasons (migrations 0004 and
+ * 0013). Nothing here is stored twice: when a person answers in the browser the route also writes
+ * the claim transition their answer causes, and that event is dropped here in favour of the answer
+ * itself, so one act is one line.
+ *
+ * Who may read it is the caller's to settle — this is a query, and the route asks `readableGuide`.
+ */
+export async function thread(db: D1Database, id: string, viewer: string): Promise<ThreadItem[]> {
+  const { results: events } = await db
+    .prepare(
+      `SELECT e.id, e.kind, e.at, e.body, e.account_id, e.agent_id, e.host,
+              COALESCE(a.name, '') AS name, COALESCE(a.handle, '') AS handle
+         FROM task_event e LEFT JOIN account a ON a.id = e.account_id
+        WHERE e.guide_id = ? ORDER BY e.id LIMIT 500`,
+    )
+    .bind(id)
+    .all<{
+      id: number;
+      kind: EventKind;
+      at: string;
+      body: string;
+      account_id: string;
+      agent_id: string;
+      host: string;
+      name: string;
+      handle: string;
+    }>();
+  const { results: verdicts } = await db
+    .prepare(
+      `SELECT v.account_id, v.ok, v.note, v.at, COALESCE(a.name, '') AS name,
+              COALESCE(a.handle, '') AS handle
+         FROM verdict v LEFT JOIN account a ON a.id = v.account_id WHERE v.guide_id = ?`,
+    )
+    .bind(id)
+    .all<{
+      account_id: string;
+      ok: number;
+      note: string;
+      at: string;
+      name: string;
+      handle: string;
+    }>();
+  const { results: acks } = await db
+    .prepare(
+      `SELECT k.account_id, k.taken, k.note, k.at, COALESCE(a.name, '') AS name,
+              COALESCE(a.handle, '') AS handle
+         FROM ack k LEFT JOIN account a ON a.id = k.account_id WHERE k.guide_id = ?`,
+    )
+    .bind(id)
+    .all<{
+      account_id: string;
+      taken: number;
+      note: string;
+      at: string;
+      name: string;
+      handle: string;
+    }>();
+
+  const answered = new Set([
+    ...verdicts.map((v) => `handed_in:${v.account_id}`),
+    ...acks.map((k) => `${k.taken ? "taken" : "passed"}:${k.account_id}`),
+  ]);
+  const person = (agent: string) => agent.startsWith("person-");
+  const items: ThreadItem[] = [];
+  for (const e of events) {
+    // A person's own hold and hand-in made in the browser are the ack and the verdict they just gave.
+    if (person(e.agent_id) && answered.has(`${e.kind}:${e.account_id}`)) continue;
+    items.push({
+      id: `e${e.id}`,
+      kind: e.kind,
+      at: e.at,
+      body: e.body,
+      by: {
+        name: e.name,
+        handle: e.handle,
+        agent: Boolean(e.agent_id) && !person(e.agent_id),
+        host: e.host,
+        you: e.account_id === viewer,
+      },
+    });
+  }
+  const you = (account: string) => account === viewer;
+  for (const v of verdicts)
+    items.push({
+      id: `v:${v.account_id}`,
+      kind: "verdict",
+      at: v.at,
+      body: v.note,
+      ok: v.ok === 1,
+      by: { name: v.name, handle: v.handle, agent: false, host: "", you: you(v.account_id) },
+    });
+  for (const k of acks)
+    items.push({
+      id: `a:${k.account_id}`,
+      kind: "ack",
+      at: k.at,
+      body: k.note,
+      ok: k.taken === 1,
+      by: { name: k.name, handle: k.handle, agent: false, host: "", you: you(k.account_id) },
+    });
+  return items.sort((x, y) => (x.at === y.at ? 0 : x.at < y.at ? -1 : 1));
 }
 
 /**
@@ -1401,6 +1936,7 @@ export async function closeGuide(
       .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
       .bind(withStatus(g.markdown, "consumed"), at, id),
   ]);
+  await event(db, id, "closed", { account, at });
   return { claimants: results.map((r) => r.account_id) };
 }
 
@@ -1466,7 +2002,7 @@ export async function staleSent(
 export async function sendBackHandedIn(
   db: D1Database,
   id: string,
-  { account, place, why }: { account: string; at: string; place: string; why: string },
+  { account, at, place, why }: { account: string; at: string; place: string; why: string },
 ): Promise<{ claimant: string } | { error: string; status: 400 | 404 | 409 }> {
   if (!String(why ?? "").trim())
     return { status: 400, error: "say why: whoever takes it next should know what was missing" };
@@ -1478,6 +2014,7 @@ export async function sendBackHandedIn(
     .first<{ account_id: string }>();
   if (!c) return { status: 409, error: "nothing handed in there to send back" };
   await db.prepare("DELETE FROM claim WHERE guide_id = ? AND place = ?").bind(id, place).run();
+  await event(db, id, "sent_back", { account, body: String(why).trim(), at });
   return { claimant: c.account_id };
 }
 
@@ -1501,9 +2038,9 @@ export async function dropOutside(
   const out = results.filter((c) => !accounts.includes(c.account_id));
   if (!out.length) return [];
   const g = await db
-    .prepare("SELECT kind, markdown FROM guide WHERE id = ?")
+    .prepare("SELECT kind, markdown, account_id FROM guide WHERE id = ?")
     .bind(id)
-    .first<{ kind: string; markdown: string }>();
+    .first<{ kind: string; markdown: string; account_id: string }>();
   const drops = out.map((c) =>
     db.prepare("DELETE FROM claim WHERE guide_id = ? AND place = ?").bind(id, c.place),
   );
@@ -1516,5 +2053,7 @@ export async function dropOutside(
     );
   }
   await db.batch(drops);
+  if (g)
+    await event(db, id, "released", { account: g.account_id, host: out[0]!.host, body: why, at });
   return [...new Set(out.map((c) => c.account_id))];
 }

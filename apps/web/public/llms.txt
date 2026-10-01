@@ -103,6 +103,8 @@ passalong login                 # optional: sync across machines
 - `passalong export [dir]` — every guide as plain markdown
 - `passalong team create|invite|join|use` — teams
 - `passalong me [--handle H]` — how teammates address you
+- `passalong reply <id> <message> [--file PATH ...]` — write to whoever holds it, or leave a note
+  for whoever takes it; the agent reads it the next time it checks in
 - `passalong take <id>` / `passalong pass <id> <why>` — whether you are doing what you were handed
 - `passalong task "<what needs doing>"` / `passalong ready <id>` — write a task; it waits in Draft
   until it is ready for an agent
@@ -126,10 +128,11 @@ passalong login                 # optional: sync across machines
 ## MCP tools
 
 `passalong setup` registers a stdio MCP server exposing: `take`, `progress`, `hand_in`, `pass`,
-`assign` (give a guide or task you wrote to @handle, #group or the whole team),
+`ask`, `assign` (give a guide or task you wrote to @handle, #group or the whole team),
 `publish_guide`, `file_bugs`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`,
-`attach_screenshot`, `inbox`, `board`, `activity` (reads), `clear_activity` (marks it seen),
-`log`, `plan_tasks`.
+`attach_screenshot`, `attach_file` (a log, PDF, CSV or zip, privately), `reply` (a person writing to
+the agent that holds their work, or leaving a note on one nobody holds yet), `inbox`, `board`,
+`activity` (reads), `clear_activity` (marks it seen), `log`, `plan_tasks`.
 
 Every guide, whatever its kind, is worked with four calls:
 
@@ -144,6 +147,15 @@ Every guide, whatever its kind, is worked with four calls:
   the hosted server, `publish_guide` it first and pass its id as `report`). A handoff or a bug
   hands in `ok` — did its `Verification` hold — and a `note` when it did not.
 - `pass` — not yours, or stuck: give it back with the reason, which goes to whoever is next.
+
+A fifth call, for a question: `ask` — you need the person's answer before you can go on. You keep
+what you hold and nobody else can take it, then you stop and tell the user you are waiting. Once
+they have replied in the hub, `take` it again by id and the reply comes back with it; `progress`
+carries any further message they write while you work. It is not `pass`: `pass` gives the work back.
+
+A reply can carry pictures (`![name](…/v1/shots/<id>)`, public) and files
+(`[name](…/v1/attachments/<id>)`, private). Fetch a file with your own token, e.g.
+`curl -H "authorization: Bearer $PASSALONG_TOKEN" -o name <url>`; it is only ever a download.
 
 Every answer ends with `next`: the calls that make sense from here, with when and why. When the
 move is to make no call — you no longer hold it, or nothing is waiting — it says so in `say`:
@@ -224,7 +236,9 @@ refreshed to see these fields.
 Only ChatGPT fills a file input. An agent that holds the image as a file instead — Claude's code
 sandbox, or anything that can run a command — calls `create_upload` on the hosted server. It returns
 a one-time link, good for 10 minutes, and the command that sends the file to it:
-`curl -sS --fail-with-body -X PUT --data-binary @IMAGE_PATH '<link>'`. Run it where the file is;
+`curl -sS --fail-with-body -X PUT --data-binary @IMAGE_PATH '<link>'`. Pass `kind: "file"` for a log,
+PDF, CSV or zip (up to 10MB; people download it, and only people who can read the guide can) and the
+command says `FILE_PATH`. Run it where the file is;
 the JSON it prints has `markdown`, the line to put in the guide body or pass as `evidence`. The
 bytes go straight to Passalong and never through the conversation, so never base64 an image into a
 tool call. If the command cannot reach `passalong.dev`, the sandbox's network settings are blocking

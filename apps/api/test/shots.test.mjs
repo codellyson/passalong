@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { evidenceOn, holdShots, sweepOrphans } from "../src/shots.ts";
+import { conversationOn, evidenceOn, holdShots, sweepOrphans } from "../src/shots.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 const T0 = "2026-09-21T10:00:00.000Z";
@@ -112,4 +112,62 @@ test("the evidence a guide's hand-ins carry is read back from its claims", async
     .run("g1", "", "ran it: https://passalong.dev/v1/shots/eee555", T0, T0, T0);
   assert.deepEqual(await evidenceOn(db, "g1"), ["ran it: https://passalong.dev/v1/shots/eee555"]);
   assert.deepEqual(await evidenceOn(db, "nothing"), []);
+});
+
+test("a picture on a reply is carried by the conversation, so the author's next edit does not let it go", async () => {
+  const db = d1();
+  seed(db);
+  const body = "see ![the bug](https://passalong.dev/v1/shots/fff666)";
+  db.raw
+    .prepare(
+      "INSERT INTO task_event (guide_id, kind, account_id, body, at) VALUES ('g1', 'replied', 'me', ?, ?)",
+    )
+    .run(body, T0);
+  db.raw
+    .prepare(
+      "INSERT INTO task_event (guide_id, kind, account_id, body, at) VALUES ('g1', 'progress', 'me', 'nothing here', ?)",
+    )
+    .run(T0);
+  assert.deepEqual(await conversationOn(db, "g1"), [body], "only what points at a picture");
+  assert.deepEqual(await conversationOn(db, "nothing"), []);
+
+  // The replier claims it; an edit of the guide's own markdown that does not mention it must not
+  // release it while the conversation still does — which is what `carried` is for.
+  db.raw
+    .prepare(
+      "INSERT INTO shot (id, account_id, guide_id, type, created) VALUES ('fff666', 'me', '', 'image/png', ?)",
+    )
+    .run("2026-09-20T10:00:00.000Z");
+  await holdShots(db, { account: "me", guide: "g1", mine: ["fff666"], carried: ["fff666"] });
+  await holdShots(db, { account: "me", guide: "g1", mine: [], carried: ["fff666"] });
+  assert.equal(
+    db.raw.prepare("SELECT guide_id FROM shot WHERE id = 'fff666'").get().guide_id,
+    "g1",
+  );
+  // Somebody else's upload is not claimed by naming its id in a reply: the account is in the WHERE.
+  db.raw
+    .prepare(
+      "INSERT INTO shot (id, account_id, guide_id, type, created) VALUES ('ggg777', 'them', '', 'image/png', ?)",
+    )
+    .run(T0);
+  await holdShots(db, { account: "me", guide: "g1", mine: ["ggg777"], carried: ["ggg777"] });
+  assert.equal(db.raw.prepare("SELECT guide_id FROM shot WHERE id = 'ggg777'").get().guide_id, "");
+});
+
+test("the author's own writes read the conversation as well as the evidence", async () => {
+  const src = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("async function carriedShots");
+  assert.match(src.slice(at, at + 500), /conversationOn\(/);
+});
+
+test("a file on a reply is carried by the conversation as a picture is", async () => {
+  const db = d1();
+  seed(db);
+  const body = "the input\n[orders.csv](https://passalong.dev/v1/attachments/hhh888)";
+  db.raw
+    .prepare(
+      "INSERT INTO task_event (guide_id, kind, account_id, body, at) VALUES ('g1', 'replied', 'me', ?, ?)",
+    )
+    .run(body, T0);
+  assert.deepEqual(await conversationOn(db, "g1"), [body]);
 });

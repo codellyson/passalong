@@ -320,6 +320,7 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
   const { id, dir } = await readyTask(env, "Evidence per line");
   await p.take(id, { cwd: dir });
   await p.handIn(id, {
+    note: "Done, and it holds.",
     markdown:
       "---\ntitle: Per line, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     // A real command, run here by the CLI's own runner before the hand-in leaves this process:
@@ -438,6 +439,7 @@ test("a screenshot handed in as evidence belongs to the guide, so the nightly sw
 
   await p.take(id, { cwd: dir });
   await p.handIn(id, {
+    note: "Done, and it holds.",
     markdown: "---\ntitle: Picture, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     evidence: `$ npm test\n> 3 pass, 0 fail\n\n![the refusal](${shot.url})`,
     cwd: dir,
@@ -706,6 +708,7 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
     "a hand-in with no evidence is refused",
   );
   const handed = await p.handIn(id, {
+    note: "Done, and it holds.",
     markdown: md,
     evidence: "npm test -w apps/api → 285 pass, 0 fail",
     cwd: dir,
@@ -851,6 +854,55 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
   const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
   assert.match(heard, /accepted your work on "Stream the invoice PDF"/);
   as(owner);
+});
+
+test("an agent cannot hand in a handoff it does not hold or send its author a false verdict", {
+  skip,
+}, async () => {
+  const { p } = await setup();
+  const api = await import("../src/api.js");
+  const owner = process.env.PASSALONG_TOKEN;
+  const team = await api.createTeam(`agent hand-in ${Date.now()}`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  const { code } = await api.invite(team.slug);
+  const mate = await secondAccount();
+  process.env.PASSALONG_TOKEN = mate.token;
+  await api.join(code);
+  process.env.PASSALONG_TOKEN = owner;
+  const id = (
+    await p.share(
+      "---\ntitle: Check the invoice PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      { to: team.slug },
+    )
+  ).guide.meta.id;
+  const call = async (path, body) => {
+    const res = await fetch(`${API}${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${mate.token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, ...(await res.json()) };
+  };
+  const agent = { agent: "e2e-hand-in-agent", repo: "e2e/hand-in" };
+  const answer = (who) => call(`/v1/guides/${id}/hand_in`, { ...who, ok: true, evidence: PROOF });
+  const verdicts = () => rows(`SELECT ok FROM verdict WHERE guide_id = '${id}'`);
+
+  assert.equal((await answer(agent)).status, 409);
+  assert.deepEqual(await verdicts(), []);
+  assert.deepEqual(
+    await rows(`SELECT id FROM notification WHERE guide_id = '${id}' AND kind = 'verified'`),
+    [],
+    "the author hears no verdict from a refused hand-in",
+  );
+
+  assert.equal((await call("/v1/take", { ...agent, id })).status, 200);
+  assert.equal((await answer({ ...agent, agent: "e2e-other-agent" })).status, 409);
+  assert.deepEqual(await verdicts(), []);
+
+  assert.equal((await answer(agent)).status, 200);
+  assert.deepEqual(await verdicts(), [{ ok: 1 }]);
+  assert.equal((await answer(agent)).status, 409);
+  assert.deepEqual(await verdicts(), [{ ok: 1 }]);
 });
 
 test("the status line shows what this worktree holds, from a cache it refreshes itself", {
@@ -1107,6 +1159,7 @@ test("an image held as bytes attaches, and answers the check it was taken for", 
   // paragraph a moment ago.
   await p.take(id, { cwd: dir });
   await p.handIn(id, {
+    note: "Done, and it holds.",
     markdown: "---\ntitle: Shown, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     checks: [{ check: "the header renders in the brand colour", ran: `here it is: ${shot.url}` }],
     cwd: dir,

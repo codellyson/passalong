@@ -32,6 +32,9 @@ const READ_ONLY = [
   "activity",
 ];
 const WRITES = [
+  "ask",
+  "attach_file",
+  "reply",
   "assign",
   "plan_tasks",
   "take",
@@ -79,13 +82,13 @@ test("nothing claims to be destructive except the one call that replaces a docum
   assert.deepEqual(destructive, ["publish_guide"]);
 });
 
-test("only the tool that reaches outside Passalong says it does", async () => {
+test("only the tools that reach outside Passalong say so", async () => {
   const all = await tools();
   const outside = [...all]
     .filter(([, t]) => t.annotations.openWorldHint === true)
     .map(([name]) => name);
   // A file on this machine that Passalong did not put there.
-  assert.deepEqual(outside, ["attach_screenshot"]);
+  assert.deepEqual(outside.sort(), ["attach_file", "attach_screenshot"]);
 });
 
 test("a tool promises a shape only where this server decides the shape", async () => {
@@ -94,7 +97,7 @@ test("a tool promises a shape only where this server decides the shape", async (
   // `outputSchema` puts the MUST on the server, so it is declared only for the calls that answer
   // with a record this server writes. `take` answers with the guide's markdown to read, which is
   // why it is not here.
-  assert.deepEqual(promised.sort(), ["hand_in", "pass", "progress"]);
+  assert.deepEqual(promised.sort(), ["ask", "hand_in", "pass", "progress"]);
   for (const name of promised) {
     const schema = all.get(name).outputSchema;
     assert.equal(schema.type, "object", `${name} must describe an object`);

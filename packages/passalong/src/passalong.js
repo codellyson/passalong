@@ -515,6 +515,23 @@ export async function pass(id, why, { cwd = process.cwd() } = {}) {
 }
 
 /**
+ * Ask the person a question and wait, keeping what you hold. Not `pass`, which gives the work back,
+ * and not `progress`, which says carry on: the answer to this one is "stop, and take it again when
+ * they have replied", and the reply comes back with that `take`.
+ */
+export async function ask(id, question, { cwd = process.cwd() } = {}) {
+  needsSync("asking");
+  if (!String(question || "").trim())
+    throw new PassalongError("say what you need to know, so the person can answer it");
+  const fence = fenceFor(id, cwd);
+  return api.ask(id, {
+    agent: agent(cwd).agent,
+    question,
+    ...(fence === undefined ? {} : { fence }),
+  });
+}
+
+/**
  * What this worktree's agent holds right now, and what is waiting for it: what the session-start
  * and stop hooks read (src/hooks.js). `held` is null when it holds nothing. Counts are best effort
  * — a hook must never fail a session over a count.
@@ -545,7 +562,7 @@ export async function now({ cwd = process.cwd() } = {}) {
       x.mine &&
       (x.state === "review" ||
         x.state === "stalled" ||
-        (x.state === "claimed" && /^BLOCKED:/i.test(x.claim?.note || ""))),
+        (x.state === "claimed" && (x.claim?.asking || /^BLOCKED:/i.test(x.claim?.note || "")))),
   ).length;
   const handed = h.status === "fulfilled" ? h.value.handed_in.length : 0;
   return { held, waiting, needs: review + handed + waiting.inbox, agent: who.agent };
@@ -719,6 +736,64 @@ export async function attach(file, { name = "" } = {}) {
     );
   const shot = await api.uploadShot(readFileSync(file), type, name || basename(file));
   return { ...shot, markdown: `![${name || basename(file)}](${shot.url})` };
+}
+
+/**
+ * What a file's extension suggests it is. A hint only: the server reads the bytes and decides, and
+ * refuses what it does not keep. It exists so a `.csv` is filed as CSV and not as generic text.
+ */
+const FILE_HINTS = {
+  ".pdf": "application/pdf",
+  ".zip": "application/zip",
+  ".txt": "text/plain",
+  ".log": "text/plain",
+  ".csv": "text/csv",
+  ".json": "application/json",
+  ".md": "text/markdown",
+};
+
+/** The most the server keeps of one file. Mirrors ATTACH_MAX in apps/api/src/attachments.ts. */
+const FILE_MAX = 10 * 1024 * 1024;
+
+/**
+ * Attach a file that is not a picture — a log, a PDF, a CSV, a zip — and return the markdown line that
+ * points at it. For a guide body or a bug report, where an agent has the file and nothing else to
+ * show it with. It is private: whoever can read the guide can download it, and nobody else can, so
+ * it is not evidence on a page that travels by link.
+ */
+export async function attachFile(file, { name = "" } = {}) {
+  if (!api.loggedIn())
+    throw new PassalongError("attaching a file needs sync — run `passalong login` first");
+  if (!existsSync(file)) throw new PassalongError(`no file at ${file}`);
+  const bytes = readFileSync(file);
+  if (!bytes.length) throw new PassalongError(`${file} is empty`);
+  if (bytes.length > FILE_MAX)
+    throw new PassalongError(
+      `${file} is ${Math.round(bytes.length / 1024 / 1024)}MB and the limit is 10MB — send a link instead`,
+    );
+  const ext = file.includes(".") ? file.slice(file.lastIndexOf(".")).toLowerCase() : "";
+  const label = (name || basename(file)).replace(/[[\]()]/g, "");
+  const attachment = await api.uploadFile(bytes, FILE_HINTS[ext] || "", name || basename(file));
+  return { ...attachment, markdown: `[${label}](${attachment.url})` };
+}
+
+/**
+ * Write to whoever holds a guide, or leave a note on one nobody holds yet: an answer to a question,
+ * or something thought of since. `files` are paths — a picture is uploaded as one and drawn in the
+ * thread, anything else as a file to download — and each becomes a line of the message. The server
+ * decides who may write and whether anyone is listening, and says so in words.
+ */
+export async function reply(ref, text, { files = [] } = {}) {
+  needsSync("replying");
+  const lines = [];
+  for (const file of files) {
+    const ext = file.includes(".") ? file.slice(file.lastIndexOf(".")).toLowerCase() : "";
+    const got = SHOT_TYPES[ext] ? await attach(file) : await attachFile(file);
+    lines.push(got.markdown);
+  }
+  const body = [String(text || "").trim(), ...lines].filter(Boolean).join("\n");
+  if (!body) throw new PassalongError("say something, or attach a file");
+  return api.reply(await resolveId(ref), body);
 }
 
 /**

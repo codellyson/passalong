@@ -27,6 +27,11 @@
 //   sent_back      the author turned it down in your repo, with why
 //   reassigned     the author gave work you were on to someone else, and took it back from you
 //
+// And the conversation between whoever asked for work and whoever holds it (docs/CONVERSATION.md):
+//
+//   asked    an agent has a question and is waiting — the one that needs you before it can go on
+//   replied  a person wrote to the agent holding your work
+//
 // Rows first, delivery second. `line()` renders the one sentence every surface shows (CLI, MCP,
 // hub), so the wording is decided once here rather than three times.
 
@@ -55,6 +60,10 @@ export const KINDS = [
   "stalled",
   // The other one. A guide sent to somebody sat untouched long enough that the clock shelved it.
   "shelved",
+  // The conversation. `asked` is the one kind that reaches its own actor: your own agent asking you
+  // is the commonest case there is, and the self-drop in notify() would have made it silent.
+  "asked",
+  "replied",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -116,18 +125,41 @@ export interface Row {
 }
 
 /** Record one event and, if it is new, deliver it. Never throws; callers are on the write path. */
+/**
+ * Kinds whose actor may also be the one told. An agent acts for an account, so "somebody else did
+ * this" is not true of it: the account that owns the agent is the person it is waiting on.
+ */
+const TELLS_ITS_OWN_ACTOR = new Set<Kind>(["asked"]);
+
+/**
+ * Kinds that are new news every time, so a fresh one is unread again even when the last was read.
+ * The row coalesces on (account, kind, guide, actor) like the rest, and without this a second
+ * question would arrive already marked seen. Mail is still only for the first.
+ */
+const ALWAYS_UNREAD = new Set<Kind>(["asked", "replied"]);
+
 export async function notify(env: NotifyEnv, e: Event): Promise<void> {
-  if (!e.to || e.to === e.actor_id) return;
+  if (!e.to || (e.to === e.actor_id && !TELLS_ITS_OWN_ACTOR.has(e.kind))) return;
   const at = new Date().toISOString();
   try {
     const row = await env.DB.prepare(
       `INSERT INTO notification (account_id, kind, guide_id, actor_id, team_id, at, note)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(account_id, kind, guide_id, actor_id)
-         DO UPDATE SET at = excluded.at, times = notification.times + 1, note = excluded.note
+         DO UPDATE SET at = excluded.at, times = notification.times + 1, note = excluded.note,
+           read_at = CASE WHEN ? = 1 THEN '' ELSE notification.read_at END
        RETURNING id, times, emailed_at`,
     )
-      .bind(e.to, e.kind, e.guide_id || "", e.actor_id || "", e.team_id || "", at, e.note || "")
+      .bind(
+        e.to,
+        e.kind,
+        e.guide_id || "",
+        e.actor_id || "",
+        e.team_id || "",
+        at,
+        e.note || "",
+        ALWAYS_UNREAD.has(e.kind) ? 1 : 0,
+      )
       .first<{ id: number; times: number; emailed_at: string }>();
     if (!row || !e.mail || row.times !== 1 || row.emailed_at) return;
     if (await e.mail()) {
@@ -626,6 +658,10 @@ export function line(r: LineFacts): string {
       return `${who} sent ${title} back${note}`;
     case "reassigned":
       return `${who} gave ${title} to someone else${note}`;
+    case "asked":
+      return `${who}'s agent has a question about ${title}${note}`;
+    case "replied":
+      return `${who} replied to your agent on ${title}${note}`;
     default:
       return `${who} did something with ${title}`;
   }

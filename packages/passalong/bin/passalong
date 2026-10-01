@@ -13,7 +13,8 @@
 //   passalong approve <id>        the work in review is done
 //   passalong reject <id> <why>   not done: back to Ready, and the next agent reads why
 //   passalong release <id>        take work back from whoever holds it, of any kind
-//   passalong attach <image>      upload evidence and print the markdown that points at it
+//   passalong attach <file>       upload a picture or a file and print the markdown that points at it
+//   passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
 //   passalong pull <id|link>      fetch a guide into ./.passalong/ and print it
 //   passalong start <id|link>     pull it and take it — one command for "I am doing this"
 //   passalong inbox               guides handed to you that you have not pulled yet
@@ -69,8 +70,11 @@ function flags(argv) {
     const t = argv[i];
     if (t.startsWith("--")) {
       const next = argv[i + 1];
-      if (next === undefined || next.startsWith("-")) out[t.slice(2)] = true;
-      else out[t.slice(2)] = argv[++i];
+      const key = t.slice(2);
+      const value = next === undefined || next.startsWith("-") ? true : argv[++i];
+      // A flag given twice keeps both, so `--file a.pdf --file b.csv` is two files. Nothing else
+      // repeats a flag, so nothing else sees an array.
+      out[key] = key in out && value !== true ? [out[key], value].flat() : value;
     } else out._.push(t);
   }
   return out;
@@ -386,10 +390,31 @@ const commands = {
    * a guide travels as markdown to whoever holds its link, so a file beside it does not travel.
    */
   async attach(f) {
-    const file = f._[0] || die("usage: passalong attach <image> [--name LABEL]");
-    const shot = await passalong.attach(file, { name: f.name || "" }).catch((e) => die(e.message));
+    const file = f._[0] || die("usage: passalong attach <file> [--name LABEL]");
+    // A picture is evidence a page draws; anything else is a file somebody downloads.
+    const isImage = Object.keys(passalong.SHOT_TYPES).some((x) => file.toLowerCase().endsWith(x));
+    const shot = await (isImage ? passalong.attach : passalong.attachFile)(file, {
+      name: f.name || "",
+    }).catch((e) => die(e.message));
     process.stdout.write(`${shot.markdown}\n`);
     console.error(`uploaded ${shot.bytes} bytes → ${shot.url}`);
+  },
+
+  /**
+   * Write to whoever holds a guide, or leave a note on one nobody holds yet. The person's side of
+   * `ask`: an agent that stopped to wait hears this when it takes the guide again.
+   */
+  async reply(f) {
+    const id = f._[0] || die("usage: passalong reply <id> <message> [--file PATH ...]");
+    const files = [f.file].flat().filter((x) => typeof x === "string");
+    const said = f._.slice(1).join(" ");
+    if (!said && !files.length) die("say something, or attach a file: passalong reply <id> <message>");
+    const r = await passalong.reply(id, said, { files }).catch((e) => die(e.message));
+    console.error(
+      r?.noted
+        ? `${id} — nobody holds it yet, so this is a note: whoever takes it is handed it first`
+        : `${id} — sent. Whoever holds it reads it the next time it checks in`,
+    );
   },
 
   async inbox() {

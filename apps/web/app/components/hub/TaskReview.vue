@@ -25,7 +25,11 @@ const props = defineProps<{ tasks: Task[] }>();
 const { onApprove, onReject, onRelease } = useHub();
 const { docsOf, token } = useTaskDocs();
 
-const stuck = (t: Task) => /^BLOCKED:/i.test(t.claim?.note || "");
+/**
+ * An agent waiting on you: a question it asked and nobody has answered. A note starting BLOCKED: is
+ * the same thing from before there was a way to ask, and old agents will keep sending it.
+ */
+const stuck = (t: Task) => Boolean(t.claim?.asking) || /^BLOCKED:/i.test(t.claim?.note || "");
 const groups = computed(() =>
   [
     {
@@ -36,7 +40,7 @@ const groups = computed(() =>
     },
     {
       key: "stuck",
-      title: "Stuck on you",
+      title: "Asking you",
       tone: "bg-danger",
       items: props.tasks.filter((t) => t.mine && t.state === "claimed" && stuck(t)),
     },
@@ -89,6 +93,19 @@ const loading = computed(
     selected.value?.state === "review" &&
     (docs.value?.id !== selected.value.id || !docs.value?.task),
 );
+
+/** What the fold's summary says: how many of the lines asked for have something filed against them. */
+const coverage = computed(() => {
+  const asking = asked.value.length;
+  if (!asking) return { text: "no lines were asked for", gap: false };
+  const answered = perLine.value
+    ? paired.value.rows.filter((r) => r.ran).length
+    : Math.min(claimed.value.length, asking);
+  return {
+    text: `${answered} of ${asking} have evidence`,
+    gap: answered < asking,
+  };
+});
 
 const flagged = ref<Set<number>>(new Set());
 const note = ref("");
@@ -219,9 +236,33 @@ const press =
         </p>
       </header>
 
+      <!-- The story first, in the words it was said in. What it ran, line against line, is below
+           for the one decision that needs it; nothing there is replaced by this. -->
+      <div class="mb-6 border-b border-line pb-6">
+        <HubThread
+          :id="selected.id"
+          :stamp="`${selected.state}|${selected.claim?.note}|${selected.claim?.lease_until}`"
+          :reply="selected.state === 'claimed' || selected.state === 'stalled'"
+        />
+      </div>
+
       <template v-if="selected.state === 'review'">
         <p v-if="loading" class="m-0 font-ui text-sm text-muted">Loading the task and its write-up…</p>
-        <template v-else>
+        <!-- Folded: the thread above is the short version, and this is the proof behind it. The
+             summary carries the one thing worth knowing before opening it — whether every line
+             asked for has something against it — so a gap shows without a click. -->
+        <details v-else class="group">
+          <summary
+            class="flex cursor-pointer list-none items-center gap-2 font-ui text-sm font-semibold text-fg [&::-webkit-details-marker]:hidden"
+          >
+            <AppIcon name="reveal" :size="14" class="transition-transform duration-150 group-open:rotate-180" />
+            What it ran, line by line
+            <span
+              class="font-normal"
+              :class="coverage.gap ? 'text-warn' : 'text-muted'"
+            >· {{ coverage.text }}</span>
+          </summary>
+          <div class="mt-4">
           <!-- Line against line: what was asked, and what ran for it. One row per Acceptance
                line, the evidence under the line it answers, so the reviewer's eye never has to
                carry `429` from one column to a block of output at the bottom of the page. -->
@@ -378,7 +419,8 @@ const press =
               </section>
             </div>
           </details>
-        </template>
+          </div>
+        </details>
 
         <footer class="mt-6 border-t border-line pt-5">
           <label class="sr-only" :for="`why-${selected.id}`">Why it goes back</label>
@@ -415,21 +457,24 @@ const press =
       </template>
 
       <template v-else>
+        <!-- The question is in the thread above, in the agent's words, with the box to answer it.
+             What is left to say here is what a person cannot see from the thread: that nothing
+             wakes the agent, and where to go if it has stopped. -->
         <p
-          class="m-0 rounded-1 px-3 py-2 font-ui text-sm"
-          :class="stuck(selected) ? 'bg-danger-soft text-danger' : 'bg-warn-soft text-warn'"
+          v-if="stuck(selected)"
+          class="m-0 rounded-1 bg-danger-soft px-3 py-2 font-ui text-sm text-danger"
         >
-          <template v-if="stuck(selected)">{{ selected.claim?.note?.replace(/^BLOCKED:\s*/i, "") }}</template>
-          <template v-else>
-            Last heard {{ heard(selected.claim?.lease_until) }}: “{{ selected.claim?.note || "nothing said" }}”
-          </template>
+          The agent is waiting for your answer.
+        </p>
+        <p v-else class="m-0 rounded-1 bg-warn-soft px-3 py-2 font-ui text-sm text-warn">
+          Last heard {{ heard(selected.claim?.lease_until) }}.
         </p>
         <p class="mt-3 mb-0 font-ui text-sm text-muted">
           <template v-if="stuck(selected)">
-            The agent stopped and is waiting for this. Sort it out, then run
+            It reads your answer the next time it checks in. If it has stopped, run
             <code>passalong work</code> in
             <AppShorten class="font-code" :value="selected.claim?.worktree || ''" :max="28" /> to
-            resume it, or take it back.
+            pick it back up, or take it back.
           </template>
           <template v-else>
             It is still locked to that agent. Resume it from

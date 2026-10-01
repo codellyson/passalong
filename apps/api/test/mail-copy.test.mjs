@@ -5,11 +5,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  askedCopy,
   doneCopy,
   FIX_AND_RESEND,
   handoffCopy,
   hubUrl,
   openedCopy,
+  repliedCopy,
   verdictCopy,
 } from "../src/mail-copy.ts";
 
@@ -86,4 +88,28 @@ test("no mail mentions a retired verb or calls a real person someone", async () 
     assert.doesNotMatch(src, /"someone"|someone with the link/, `${file} names someone`);
     assert.doesNotMatch(src, /handed off|passed you/, `${file} uses the old words`);
   }
+});
+
+test("a question mail quotes the question and sends the reader to answer it, not to read a guide", () => {
+  const c = askedCopy({
+    byName: "Ada",
+    title: TITLE,
+    url: URL_,
+    question: "Settings or the header?",
+    hub: HUB,
+  });
+  assert.equal(c.subject, `Ada's agent has a question about "${TITLE}"`);
+  assert.equal(
+    c.preview,
+    "Settings or the header?",
+    "the inbox is where they decide whether to answer",
+  );
+  assert.match(c.text.join("\n"), /Answer it in the hub:/);
+  assert.ok(!c.subject.includes(ID), "never an id");
+});
+
+test("a reply mail says it is waiting for the agent's next check-in, not for the reader", () => {
+  const c = repliedCopy({ byName: "Bob", title: TITLE, url: URL_, body: "Settings.", hub: HUB });
+  assert.equal(c.subject, `Bob replied to your agent on "${TITLE}"`);
+  assert.match(c.text.join("\n"), /next time it checks in/);
 });

@@ -72,6 +72,30 @@ function onDocument(e: MouseEvent) {
 onMounted(() => document.addEventListener("click", onDocument));
 onBeforeUnmount(() => document.removeEventListener("click", onDocument));
 
+/**
+ * Held, so a message is to the agent; or yours and waiting for somebody to take it, so what you write
+ * is a note for them. A task that is done takes no more, and neither does one handed in.
+ */
+const held = computed(() => props.t.state === "claimed" || props.t.state === "stalled");
+const canNote = computed(
+  () =>
+    (props.t.mine || Boolean(props.t.for_me)) &&
+    ["ready", "blocked", "draft"].includes(props.t.state),
+);
+
+// The conversation opens in a panel of its own, not in the row: a control that goes somewhere else is
+// an `open`.
+const { open } = useThread();
+const openThread = () =>
+  open({
+    id: props.t.id,
+    title: props.t.title,
+    url: props.t.url,
+    stamp: `${props.t.state}|${props.t.claim?.note}|${props.t.claim?.lease_until}`,
+    reply: held.value || canNote.value,
+    noting: !held.value && canNote.value,
+  });
+
 const rejecting = ref(false);
 const why = ref("");
 const field = ref<HTMLTextAreaElement | null>(null);
@@ -101,12 +125,13 @@ function send() {
         <span v-if="t.state === 'stalled' && heard">last heard {{ rel(heard) }}</span>
         <span v-else>{{ rel(t.created) }}</span>
       </div>
-      <a
-        :href="t.url"
-        target="_blank"
-        rel="noopener"
-        class="mt-2 block text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-      >{{ t.title || t.id }}</a>
+      <!-- The title is the control that opens the conversation, as a row in a chat list is; the
+           guide's own page is one click further, in the panel's header. -->
+      <button
+        type="button"
+        class="mt-2 block w-full cursor-pointer border-0 bg-transparent p-0 text-left text-base font-semibold leading-snug text-fg hover:text-accent"
+        @click="openThread"
+      >{{ t.title || t.id }}</button>
 
       <p v-if="t.claim?.note" class="mt-2 mb-0 text-sm text-muted">“{{ t.claim.note }}”</p>
       <p v-if="t.state === 'review' && t.claim?.report" class="mt-2 mb-0 text-sm">
@@ -132,6 +157,7 @@ function send() {
         <span v-else>no repo</span>
         <span v-if="where">{{ by }} · <span class="font-code">{{ where }}</span></span>
       </div>
+
 
       <div
         v-if="rejecting"
@@ -185,5 +211,6 @@ function send() {
       >take back</button>
       <button v-else-if="t.state === 'draft'" class="btn sm" @click="onTaskReady(t)">make ready</button>
     </div>
+
   </li>
 </template>

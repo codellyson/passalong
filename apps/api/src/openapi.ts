@@ -544,6 +544,50 @@ export function openapi(origin: string) {
           },
         },
       },
+      "/v1/guides/{id}/ask": {
+        post: {
+          operationId: "ask",
+          summary: "Ask the person a question and wait, keeping what you hold.",
+          description:
+            "Not `pass` (which gives the work back) and not `progress` (which says carry on). The claim stays and nobody else can take the work; its lease is extended to a day. Stop after this, tell the user you are waiting, and call `take` with this id once they have answered: the answer comes back as `replies`.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: agentBody({ question: { type: "string", maxLength: 1000 } }, ["question"]),
+          responses: {
+            200: json200(
+              "Sent. Stop and wait.",
+              withNext({ id: { type: "string" }, lease_until: { type: "string" } }),
+            ),
+            400: { description: "No question given." },
+            409: NOT_HELD,
+          },
+        },
+      },
+      "/v1/guides/{id}/reply": {
+        post: {
+          operationId: "reply",
+          summary: "A person writes to whoever holds a guide.",
+          description:
+            "Only while it is held, and only from its author, whoever it is assigned to, or its holder. Plain text, 1000 characters. The agent is told on its next `progress` or `take`.",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["body"],
+                  properties: { body: { type: "string", maxLength: 1000 } },
+                },
+              },
+            },
+          },
+          responses: {
+            200: json200("Written.", { id: { type: "string" } }),
+            403: { description: "Not its author, assignee or holder." },
+            409: { description: "Nobody holds it, so there is nobody to tell." },
+          },
+        },
+      },
       "/v1/guides/{id}/assign": {
         post: {
           operationId: "assign",

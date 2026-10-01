@@ -226,6 +226,21 @@ export function nextNote({ next = [], say = "" } = {}, id = "") {
   return lines.length ? `<!-- passalong: next:\n${lines.join("\n")}\n-->` : "";
 }
 
+/**
+ * What the person said to this agent since it last heard, in front of everything else: a reply is
+ * the thing the agent stopped for, and burying it under the guide it already knows is how it gets
+ * missed. See claims.deliver() in apps/api/src/claims.ts.
+ */
+export function repliesNote(replies = []) {
+  if (!Array.isArray(replies) || !replies.length) return "";
+  const lines = replies.map((r) => `  - ${String(r.body).replace(/\n/g, "\n    ")}`);
+  const files = replies.some((r) => String(r.body).includes("/v1/attachments/"))
+    ? "\n  Attached files are private: fetch one with your passalong token, e.g. " +
+      'curl -H "authorization: Bearer $PASSALONG_TOKEN (or the token in ~/.passalong/config.json)" -o <name> <url>.'
+    : "";
+  return `<!-- passalong: the person replied:\n${lines.join("\n")}${files}\n-->`;
+}
+
 /** A refusal that carries the server's own next move, when it sent one. */
 const failWith = (err) => {
   const said = nextNote(err.body || {});
@@ -252,7 +267,9 @@ export function buildServer() {
         "returns it; nobody else can take it here while you hold it, and its sender sees you are " +
         "on it. progress, with a one-line note at each milestone — 30 minutes of silence marks it " +
         "stalled. hand_in when done here. pass, with the reason, when it is not yours or you are " +
-        "stuck. Every answer ends with `next`: what to call now. Follow it, and when it says to " +
+        "stuck. ask, with a question, when you need an answer from the person: you keep what you " +
+        "hold, stop and wait, and take it again once they have replied. Every answer ends with " +
+        "`next`: what to call now. Follow it, and when it says to " +
         "stop, stop. OPEN A GUIDE YOU MEAN TO ACT ON WITH take, NOT get_guide: get_guide only " +
         "reads, and the sender learns nothing. If take says somebody else has it, tell the user " +
         "instead of doing the work twice.\n" +
@@ -331,8 +348,13 @@ export function buildServer() {
     const note = nextNote({ next, say }, id);
     // The note is what the agent acts on and it is prose, so it stays in the text half only. The
     // structured half is the answer itself, which is what `outputSchema` below describes.
+    // A reply goes first, in prose: it is what the agent stopped for, and inside the JSON it reads
+    // as one more field.
+    const said = repliesNote(rest.replies);
     return {
-      ...text(`${JSON.stringify(rest, null, 2)}${note ? `\n${note}` : ""}`),
+      ...text(
+        `${said ? `${said}\n` : ""}${JSON.stringify(rest, null, 2)}${note ? `\n${note}` : ""}`,
+      ),
       structuredContent: rest,
     };
   };
@@ -359,8 +381,9 @@ export function buildServer() {
         `<!-- passalong: ${r.guide.id} is yours` +
         `${r.guide.resumed ? " (you already held it — carry on from where it was left)" : ""}; ` +
         `written to ${r.path}. -->`;
+      const said = repliesNote(r.replies);
       return text(
-        `${from}${leadFor(meta)}${r.guide.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
+        `${said ? `${said}\n\n` : ""}${from}${leadFor(meta)}${r.guide.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
           `\n\n${held}\n${nextNote(r, r.guide.id)}\n${passalong.followUpNote(meta)}`,
       );
     } catch (err) {
@@ -410,6 +433,14 @@ export function buildServer() {
         cwd: at,
       });
       return answer(r, id);
+    } catch (err) {
+      return failWith(err);
+    }
+  }
+
+  async function doAsk({ id, question, cwd }) {
+    try {
+      return answer(await passalong.ask(id, question, { cwd: cwd || process.cwd() }), id);
     } catch (err) {
       return failWith(err);
     }
@@ -681,7 +712,14 @@ export function buildServer() {
         "without one marks it stalled. If the answer says you no longer hold it, stop.",
       inputSchema: {
         id: z.string().describe("the id of what you hold"),
-        note: z.string().optional().describe('one line, e.g. "migrating schema, 2 of 5 steps"'),
+        note: z
+          .string()
+          .optional()
+          .describe(
+            'one plain sentence in the first person, as you would tell the person: "Reading ' +
+              'the settings page to find where the toggle goes." Start it with BLOCKED: when ' +
+              "you are stopped and need an answer",
+          ),
         cwd: z
           .string()
           .optional()
@@ -755,7 +793,13 @@ export function buildServer() {
               "running it and is refused",
           ),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
-        note: z.string().optional().describe("one line; required when ok is false"),
+        note: z
+          .string()
+          .describe(
+            "one plain sentence, in the first person, saying what you did and how it went: " +
+              '"Added the toggle to Settings; it survives a reload." It is the first thing the ' +
+              "person reads, and the evidence is behind it. Say what went wrong when ok is false",
+          ),
         writeup: z
           .string()
           .optional()
@@ -781,6 +825,37 @@ export function buildServer() {
       },
     },
     async (args) => doHandIn(args),
+  );
+
+  server.registerTool(
+    "ask",
+    {
+      title: "Ask the person",
+      outputSchema: openObject({ id: z.string(), lease_until: z.string() }),
+      annotations: ADDS,
+      description:
+        "You need the person's answer before you can go on. Ask one clear question, with the " +
+        "context it needs to be answered without opening your terminal. You keep what you hold " +
+        "and nobody else can take it. Then STOP and tell the user you are waiting: do not carry " +
+        "on guessing. When they have replied, call take with this id and their reply comes back " +
+        "with it. Use `pass` instead when the work is not yours; a progress note starting " +
+        "BLOCKED: is the older way of saying this, and is not heard as a question.",
+      inputSchema: {
+        id: z.string().describe("passalong id"),
+        question: z
+          .string()
+          .describe(
+            "one clear question in the first person, a few sentences at most, plain text: " +
+              '"Should the dark-mode toggle live in Settings or the header? The header is ' +
+              'crowded on mobile." What you were about to do, if they just say yes, helps',
+          ),
+        cwd: z
+          .string()
+          .optional()
+          .describe("the worktree you are working in; default is the server's cwd"),
+      },
+    },
+    async (args) => doAsk(args),
   );
 
   server.registerTool(
@@ -904,6 +979,72 @@ export function buildServer() {
         );
       } catch (err) {
         return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "attach_file",
+    {
+      title: "Attach a file",
+      annotations: { ...ADDS, openWorldHint: true },
+      description:
+        "Upload a file that is not a picture — a log, a PDF, a CSV, a zip, up to 10MB — and get " +
+        "back the markdown line that points at it. For a guide body or a bug report: put the " +
+        "line there and publishing claims the file. It is private, so only people who can read " +
+        "that guide can download it; for something a reviewer must SEE, use attach_screenshot. " +
+        "Pictures belong to attach_screenshot, not here.",
+      inputSchema: {
+        file: z.string().describe("path to the file on this machine"),
+        name: z.string().default("").describe("label for the file; defaults to its filename"),
+      },
+    },
+    async ({ file, name }) => {
+      try {
+        const got = await passalong.attachFile(file, { name: name || "" });
+        return text(
+          `${JSON.stringify({ id: got.id, url: got.url, bytes: got.bytes }, null, 2)}\n\n` +
+            `Put this in the guide body:\n${got.markdown}`,
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "reply",
+    {
+      title: "Write to the agent",
+      annotations: ADDS,
+      description:
+        "A person's tool, for someone driving their work from an assistant: write to whoever " +
+        "holds a guide — an answer to a question it asked, or something you thought of since — " +
+        "or, when nobody holds it yet and it is yours, leave a note for whoever takes it. Plain " +
+        "text, 1000 characters. `files` are paths on this machine: a picture is drawn in the " +
+        "thread and anything else is a file to download. Only its author, whoever it is " +
+        "assigned to, or whoever holds it can write; the agent reads it the next time it " +
+        "checks in. Agents answering their own questions do not use this: they use ask and take.",
+      inputSchema: {
+        id: z.string().describe("passalong id"),
+        text: z.string().default("").describe("what to say; may be empty when attaching a file"),
+        files: z
+          .array(z.string())
+          .max(3)
+          .default([])
+          .describe("paths to up to three files or pictures to attach"),
+      },
+    },
+    async ({ id, text: said, files }) => {
+      try {
+        const r = await passalong.reply(id, said, { files });
+        return text(
+          r?.noted
+            ? `Nobody holds ${id} yet, so this is a note: whoever takes it is handed it first.`
+            : `Sent to whoever holds ${id}. It reads this the next time it checks in.`,
+        );
+      } catch (err) {
+        return failWith(err);
       }
     },
   );

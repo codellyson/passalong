@@ -21,6 +21,8 @@ const props = defineProps<{
    * the bug: the guide page printed `![Sales Order PDF](https://…/v1/shots/d2eg7b2xaqx7)` as text.
    */
   prose?: boolean;
+  /** What a screen reader calls this region. It was always "What it ran", which is wrong for a chat. */
+  label?: string;
 }>();
 const parts = computed(() => evidenceParts(props.text));
 
@@ -54,7 +56,7 @@ const open = ref(false);
 </script>
 
 <template>
-  <div v-if="parts.length" class="mt-2" role="group" aria-label="What it ran">
+  <div v-if="parts.length" class="mt-2" role="group" :aria-label="label || 'What it ran'">
     <!-- No inner scrollbar: the page scrolls, and a second scroller inside it hides the end of the
          evidence behind a bar nobody looks for. A long run is folded instead, which says there is
          more and opens it where it is. -->

@@ -8,11 +8,13 @@
 // Every name passed in here is a display name (see `displayName` in notify.ts): somebody's own
 // typing, so it is escaped wherever it lands in markup.
 import {
+  askedCopy,
   doneCopy,
   FIX_AND_RESEND,
   handoffCopy,
   hubUrl,
   openedCopy,
+  repliedCopy,
   verdictCopy,
 } from "./mail-copy.js";
 import { b, button, footnote, link, p, quote, shell } from "./mail-html.js";
@@ -110,6 +112,59 @@ export function sendConsumed(
       tone: "ok",
       body: [
         p(`${b(o.byName)} is done with what you sent. Nothing is waiting on either of you.`),
+        button("Open the guide", o.url),
+      ],
+      foot: [seeEverything(env)],
+    }),
+  );
+}
+
+/** An agent is waiting on a person's answer. The question is quoted, because it is the message. */
+export function sendAsked(
+  env: MailEnv,
+  o: { to: string; byName: string; title: string; url: string; question: string },
+) {
+  const copy = askedCopy({ ...o, hub: hubUrl(env.PUBLIC_ORIGIN) });
+  return sendMail(
+    env,
+    o.to,
+    copy.subject,
+    copy.text,
+    shell({
+      origin: env.PUBLIC_ORIGIN,
+      preview: copy.preview,
+      eyebrow: copy.eyebrow,
+      heading: o.title,
+      tone: "danger",
+      body: [
+        quote(o.question, "danger"),
+        button("Answer it in the hub", hubUrl(env.PUBLIC_ORIGIN)),
+      ],
+      foot: [seeEverything(env)],
+    }),
+  );
+}
+
+/** A person wrote to an agent holding somebody else's work. */
+export function sendReplied(
+  env: MailEnv,
+  o: { to: string; byName: string; title: string; url: string; body: string },
+) {
+  const copy = repliedCopy({ ...o, hub: hubUrl(env.PUBLIC_ORIGIN) });
+  return sendMail(
+    env,
+    o.to,
+    copy.subject,
+    copy.text,
+    shell({
+      origin: env.PUBLIC_ORIGIN,
+      preview: copy.preview,
+      eyebrow: copy.eyebrow,
+      heading: o.title,
+      tone: "ok",
+      body: [
+        quote(o.body, "ok"),
+        p("Your agent reads it the next time it checks in.", MUTED),
         button("Open the guide", o.url),
       ],
       foot: [seeEverything(env)],

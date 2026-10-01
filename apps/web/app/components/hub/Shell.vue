@@ -290,4 +290,6 @@ const active = (to: string) =>
       <slot v-else-if="signedIn" />
     </section>
   </main>
+  <!-- The one conversation panel for every page of the hub. -->
+  <HubThreadDrawer v-if="signedIn" />
 </template>
