@@ -18,6 +18,10 @@ test("a transfer guide says a follow-up is more context for it, and how to write
   assert.match(note, /whoever opens this guide gets it too/);
   // Not the old rule: context is worth adding whether or not the guide worked as written.
   assert.doesNotMatch(note, /depart|exactly as written/);
+  // What the agent did and found is its hand-in. This note once listed it among the things to
+  // publish, on every take, and agents published their evidence as a second guide.
+  assert.doesNotMatch(note, /what you found doing it/);
+  assert.match(note, /not a follow-up: it goes on hand_in/);
   // A comment, so it cannot be mistaken for part of the guide by anyone who writes it back out.
   assert.match(note, /^<!-- passalong:[\s\S]*-->$/);
 });

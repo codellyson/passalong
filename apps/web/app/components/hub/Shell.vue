@@ -74,8 +74,12 @@ const route = useRoute();
  * the viewport without `100vw` — see the template — and its content has to line up with the page
  * under it, so both take their width from here.
  */
+// A guide's own page is wide for the same reason Settings is: the guide and what surrounds it sit
+// side by side.
 const measure = computed(() =>
-  route.path === "/hub/settings" || route.path === "/hub" ? "max-w-[70rem]" : "max-w-[54rem]",
+  route.path === "/hub/settings" || route.path === "/hub" || route.path.startsWith("/hub/g/")
+    ? "max-w-[70rem]"
+    : "max-w-[54rem]",
 );
 /**
  * One standing notice: a row, not a card. Shared with HubClaim so the two read as one band.
@@ -91,7 +95,10 @@ const framed = computed(() => signedIn.value || maybe.value || meFailed.value);
 
 // Nothing is fetched during SSR: neither credential is visible from the server, so the first
 // render is always the signed-out screen and the client decides from there.
+// The hub, live: events from the server refresh what they touch and arrive as toasts.
+const live = useLive();
 onMounted(() => {
+  live.start();
   adoptToken();
   // Moving between hub pages remounts this shell. That must not refetch: the queries are shared
   // and cached, and calling `load()` here invalidated all of them on every navigation, which
@@ -162,14 +169,14 @@ const active = (to: string) =>
        the page under it because both use `measure`. -->
   <div
     v-if="framed"
-    class="sticky top-0 z-30 border-b border-line bg-raised/85 py-2.5 backdrop-blur-md"
+    class="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md"
   >
-    <div class="mx-auto flex w-full items-center gap-2 px-[var(--s-5)] sm:gap-6" :class="measure">
+    <div class="mx-auto flex h-16 w-full items-center gap-2 px-[var(--s-5)] sm:gap-6" :class="measure">
       <!-- One row at every width. On a phone the brand is its mark, New is a plus, the account
            is an avatar, and the theme switch moves into the account menu. -->
       <AppBrand to="/hub" compact />
       <nav
-        class="flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1"
+        class="marked flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1"
         aria-label="Hub"
       >
         <NuxtLink
@@ -197,7 +204,7 @@ const active = (to: string) =>
 
   <!-- Less room above than the 48px every other page gets: those open on a heading with nothing
        over it, and this one opens under a navbar that is already a band of its own. -->
-  <main class="pt-6" :class="measure">
+  <main class="pt-8" :class="measure">
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->
@@ -271,7 +278,7 @@ const active = (to: string) =>
             <template v-if="full"> New guides can't be sent until you make room.</template>
             Archiving a finished guide frees a space.
           </span>
-          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub', query: { done: '1' } }">Show Done</NuxtLink>
+          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub', query: { done: '1' } }">Show finished work</NuxtLink>
           <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>
         </p>
       </div>
@@ -290,6 +297,7 @@ const active = (to: string) =>
       <slot v-else-if="signedIn" />
     </section>
   </main>
+  <HubToasts v-if="framed" />
   <!-- The one conversation panel for every page of the hub. -->
   <HubThreadDrawer v-if="signedIn" />
 </template>

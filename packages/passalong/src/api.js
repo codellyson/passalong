@@ -1,6 +1,17 @@
 // Client for the hosted sync API (apps/api). Everything here is optional: with no token the
 // CLI is a purely local tool, and every function throws an ApiError the CLI turns into a hint.
+import { readFileSync } from "node:fs";
 import { readConfig } from "./store.js";
+
+/**
+ * This build's version, sent on every authenticated call as `x-passalong-version`. The server
+ * refuses a CLI below its floor (apps/api/src/clients.ts), because the rules it enforces deploy on
+ * merge and the text telling an agent how to follow them only arrives with a reinstall.
+ */
+export const VERSION = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
+const CLIENT = { "x-passalong-version": VERSION };
 
 export const DEFAULT_API = "https://passalong.dev";
 
@@ -24,7 +35,7 @@ export function loggedIn() {
 }
 
 async function call(path, { method = "GET", body, auth = true, raw = false } = {}) {
-  const headers = {};
+  const headers = { ...CLIENT };
   if (auth) {
     const t = token();
     if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
@@ -254,7 +265,7 @@ export async function uploadFile(bytes, type, name = "") {
 export async function uploadShot(bytes, type, name = "") {
   const t = token();
   if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
-  const headers = { authorization: `Bearer ${t}`, "content-type": type };
+  const headers = { ...CLIENT, authorization: `Bearer ${t}`, "content-type": type };
   // A header is latin-1: a filename with an accent in it throws on the way out rather than at the
   // server, and the label is not worth failing an upload over.
   if (name) headers["x-shot-name"] = String(name).replace(/[^\x20-\x7e]/g, "");

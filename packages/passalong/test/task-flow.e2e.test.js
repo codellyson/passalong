@@ -9,13 +9,18 @@
 // works against a local server whose database is apps/web's — never point this at a real one.
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const API = process.env.PASSALONG_E2E_API;
+// What the CLI sends on every call. A test calling the API with Node's own fetch looks exactly like
+// a CLI from before the header existed, and the server refuses those once its floor passes 0.11.0.
+const VERSION = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "apps", "web");
 
 /** One account allowed to sync, and the CLI's operations pointed at it. Made once per file. */
@@ -33,6 +38,16 @@ function setup() {
     return { account, p, ...guide };
   })();
   return ready;
+}
+
+/**
+ * Upload a screenshot as whoever is signed in, and the markdown that shows it: "it works" is
+ * refused without a screenshot of it working. PNG is the 1×1 image declared further down.
+ */
+async function proof() {
+  const api = await import("../src/api.js");
+  const shot = await api.uploadShot(PNG, "image/png", "it-works.png");
+  return `![it works](${shot.url})`;
 }
 
 /** A fresh worktree of this account's own repo, and a ready task for it. */
@@ -404,6 +419,7 @@ test("a follow-up is never handed over alone: the guide it came out of comes wit
     method: "POST",
     headers: {
       authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+      "x-passalong-version": VERSION,
       "content-type": "application/json",
     },
     body: JSON.stringify({ ...agent, id: parent }),
@@ -426,6 +442,7 @@ test("a screenshot handed in as evidence belongs to the guide, so the nightly sw
       method: "POST",
       headers: {
         authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "x-passalong-version": VERSION,
         "content-type": "image/png",
       },
       body: PNG,
@@ -624,7 +641,14 @@ test("a task is answered with the task tools, and the guide ones say so", { skip
   // A verdict or an ack on a task would be an answer nobody reads: its author reviews it from the
   // queue. Both are refused, and the refusal names the tools that do the job.
   const task = /take[^.]*hand_in|hand_in[^.]*take/;
-  await assert.rejects(p.verdict(id, true, ""), (e) => e.status === 400 && task.test(e.message));
+  // With a screenshot, so it gets as far as the server: the CLI refuses a "works" without one
+  // before asking, and that refusal is not the one this test is about.
+  const shotFile = join(mkdtempSync(join(tmpdir(), "passalong-shot-")), "works.png");
+  writeFileSync(shotFile, PNG);
+  await assert.rejects(
+    p.verdict(id, true, "", { images: [shotFile] }),
+    (e) => e.status === 400 && task.test(e.message),
+  );
   await assert.rejects(api.ack(id, true, ""), (e) => e.status === 400 && task.test(e.message));
 });
 
@@ -637,6 +661,7 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
       method,
       headers: {
         authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "x-passalong-version": VERSION,
         "content-type": "application/json",
       },
       body: JSON.stringify(body),
@@ -802,6 +827,7 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
       method,
       headers: {
         authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "x-passalong-version": VERSION,
         "content-type": "application/json",
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -831,7 +857,7 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
 
   // "It worked" from the browser hands it in: out of working, into the author's list.
   as(mate.token);
-  await api.verdict(id, true, "streams fine now");
+  await api.verdict(id, true, "streams fine now", await proof());
   as(owner);
   assert.equal(
     (await call("GET", "/v1/working")).working.find((w) => w.id === id),
@@ -903,6 +929,109 @@ test("an agent cannot hand in a handoff it does not hold or send its author a fa
   assert.deepEqual(await verdicts(), [{ ok: 1 }]);
   assert.equal((await answer(agent)).status, 409);
   assert.deepEqual(await verdicts(), [{ ok: 1 }]);
+});
+
+test("a CLI below the server's floor is refused with what to run; the rest are served", {
+  skip,
+}, async () => {
+  await setup();
+  const me = (headers) =>
+    fetch(`${API}/v1/me`, {
+      headers: { authorization: `Bearer ${process.env.PASSALONG_TOKEN}`, ...headers },
+    });
+  const old = await me({ "x-passalong-version": "0.9.0" });
+  assert.equal(old.status, 426);
+  assert.match((await old.json()).message, /npm i -g passalong@latest/);
+  assert.equal((await me({ "x-passalong-version": VERSION })).status, 200);
+  // Node's own fetch with no version is every CLI up to 0.11.0, which is below the floor.
+  assert.equal((await me({})).status, 426);
+});
+
+test("handed in means the actor's turn is over: no new guide under it until the author answers", {
+  skip,
+}, async () => {
+  const env = await setup();
+  const { p, newId } = env;
+  const api = await import("../src/api.js");
+  const owner = process.env.PASSALONG_TOKEN;
+  const as = (token) => {
+    process.env.PASSALONG_TOKEN = token;
+  };
+  const call = async (method, path, body) => {
+    const res = await fetch(`${API}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "x-passalong-version": VERSION,
+        "content-type": "application/json",
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return { status: res.status, ...(await res.json()) };
+  };
+  // A publish answers with the guide, whose own `status` would shadow the HTTP one in `call`.
+  const followUp = async (parent, title) => {
+    const res = await fetch(`${API}/v1/guides/${newId()}`, {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "x-passalong-version": VERSION,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        markdown: `---\ntitle: ${title}\nkind: transfer\nparent: ${parent}\n---\n\nWhat I found.\n`,
+      }),
+    });
+    return { ...(await res.json()), status: res.status };
+  };
+
+  const team = await api.createTeam(`review ${Date.now()}`);
+  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
+  const { code } = await api.invite(team.slug);
+  const mate = await secondAccount();
+  as(mate.token);
+  await api.join(code);
+
+  as(owner);
+  const md =
+    "---\ntitle: Stream the receipt PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const id = (await p.share(md, { to: team.slug })).guide.meta.id;
+
+  // The teammate's agent works it, and may add context while it holds it.
+  as(mate.token);
+  const a = { agent: "e2e-agent-review", repo: "e2e/review" };
+  assert.equal((await call("POST", "/v1/take", { ...a, id })).guide.id, id);
+  assert.equal((await followUp(id, "Context while working")).status, 201);
+  const handed = await call("POST", `/v1/guides/${id}/hand_in`, {
+    ...a,
+    ok: true,
+    evidence: PROOF,
+    risk: "the receipt route is shared with invoices",
+  });
+  assert.deepEqual(
+    handed.next.map((s) => s.tool),
+    ["take"],
+  );
+
+  // Handed in: a second guide to carry what it found is refused, and the refusal is the remedy.
+  const refused = await followUp(id, "Hand-in evidence: receipt PDF");
+  assert.equal(refused.status, 409);
+  assert.match(refused.message, /handed .* in/);
+  assert.match(refused.message, /writeup/);
+  assert.match(refused.message, /stop/);
+
+  // The author is the one reviewing it, and may add to their own guide at any time. They are also
+  // told what it could break, beside the evidence.
+  as(owner);
+  const [waiting] = (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id);
+  assert.equal(waiting.risk, "the receipt route is shared with invoices");
+  assert.equal((await followUp(id, "Also check the footer")).status, 201);
+
+  // Once the author has answered, the actor's turn is not over any more — it is simply over.
+  assert.equal((await call("POST", `/v1/guides/${id}/close`)).state, "done");
+  as(mate.token);
+  assert.equal((await followUp(id, "Found later")).status, 201);
+  as(owner);
 });
 
 test("the status line shows what this worktree holds, from a cache it refreshes itself", {
@@ -1085,7 +1214,7 @@ test("a team's guide one teammate said worked stops asking the others, so nobody
     "Bo sees it before anyone answers",
   );
   as(ada.token);
-  await api.verdict(id, true, "totals match now");
+  await api.verdict(id, true, "totals match now", await proof());
 
   // Bo is no longer asked, and Bo's agent is told Ada did it rather than doing it again.
   as(bo.token);
@@ -1182,6 +1311,7 @@ test("the server refuses a guide that does not say what it is", { skip }, async 
       method: "PUT",
       headers: {
         authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "x-passalong-version": VERSION,
         "content-type": "application/json",
       },
       body: JSON.stringify({ markdown: md }),
@@ -1201,6 +1331,7 @@ test("the server refuses a guide that does not say what it is", { skip }, async 
     method: "PUT",
     headers: {
       authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+      "x-passalong-version": VERSION,
       "content-type": "application/json",
     },
     body: JSON.stringify({

@@ -6,7 +6,7 @@
   product had no signal for at all. A handoff nobody had answered looked exactly like one nobody
   had noticed.
 
-  The buttons say the same words as the row that opened this form: Take it, Pass. A form that
+  The buttons say the same words as the row that opened this form: I'll do this, Not for me. A form that
   renamed its own buttons ("I'm on it", "not me", "hand it back") made one decision read as three.
 -->
 <script setup lang="ts">
@@ -14,7 +14,7 @@ import type { Guide } from "~/types/hub";
 
 const props = defineProps<{
   g: Guide;
-  /** Open on the reason: the row's own "Pass" button has already said no. */
+  /** Open on the reason: the row's own "Not for me" button has already said no. */
   why?: boolean;
 }>();
 const emit = defineEmits<{ done: [] }>();
@@ -73,8 +73,8 @@ function pass() {
         you answer. Either answer helps.
       </p>
       <div class="flex flex-wrap gap-2">
-        <button class="btn primary" @click="take">Take it</button>
-        <button class="btn outline warn" @click="askWhy">Pass</button>
+        <button class="btn primary" @click="take">I'll do this</button>
+        <button class="btn outline warn" @click="askWhy">Not for me</button>
         <button class="btn" @click="emit('done')">Not now</button>
       </div>
     </template>
@@ -100,7 +100,7 @@ function pass() {
       />
 
       <div class="mt-2 flex flex-wrap items-center gap-2">
-        <button class="btn primary" :disabled="!ready" @click="pass">Send it back</button>
+        <button class="btn primary" :disabled="!ready" @click="pass">Hand it back</button>
         <button class="btn" @click="back">Back</button>
         <span class="ml-auto font-ui text-xs" :class="left > 40 ? 'text-muted' : 'text-danger'">
           {{ left }} characters left

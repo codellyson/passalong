@@ -46,7 +46,7 @@ export const HEALTH: Record<Health, { label: string; pill: string; dot: string; 
     text: "text-warn",
   },
   quiet: {
-    label: "Went quiet",
+    label: "Went silent",
     pill: "bg-danger-soft text-danger",
     dot: "bg-danger",
     text: "text-danger",

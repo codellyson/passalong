@@ -6,8 +6,8 @@
   is its author's call, and offering a teammate buttons the server refuses is a board that lies.
 
     review    approve, or send it back with a reason — and the write-up to read before either
-    claimed   take it back
-    stalled   take it back; the agent went quiet, and the row says since when
+    claimed   stop the agent holding it
+    stalled   stop the agent holding it; it went silent, and the row says since when
     draft     make it ready
 
   Reject opens a form on the row, like a failed verdict does: the reason is what the next agent
@@ -18,17 +18,69 @@ import type { Task } from "~/types/hub";
 
 const props = defineProps<{ t: Task }>();
 const { onApprove, onReject, onRelease, onTaskReady } = useHub();
+const { open } = useThread();
 
-const TONE: Record<Task["state"], { badge: string; stripe: string; label: string }> = {
-  review: { badge: "bg-accent-soft text-accent", stripe: "border-l-accent", label: "review" },
-  stalled: { badge: "bg-warn-soft text-warn", stripe: "border-l-warn", label: "stalled" },
-  claimed: { badge: "bg-ok-soft text-ok", stripe: "border-l-ok", label: "claimed" },
-  ready: { badge: "bg-surface text-fg", stripe: "border-l-transparent", label: "ready" },
-  blocked: { badge: "bg-surface text-muted", stripe: "border-l-transparent", label: "blocked" },
-  draft: { badge: "bg-surface text-muted", stripe: "border-l-transparent", label: "draft" },
-  done: { badge: "bg-surface text-muted", stripe: "border-l-transparent", label: "done" },
+/**
+ * Held, so a message is to the agent; or yours and waiting for somebody to take it, so what you write
+ * is a note for them. A task that is done takes no more, and neither does one handed in.
+ */
+const held = computed(() => props.t.state === "claimed" || props.t.state === "stalled");
+const canNote = computed(
+  () =>
+    (props.t.mine || Boolean(props.t.for_me)) &&
+    ["ready", "blocked", "draft"].includes(props.t.state),
+);
+// The conversation opens in a panel of its own, not in the row: a control that goes somewhere else is
+// an `open`.
+const openThread = () =>
+  open({
+    id: props.t.id,
+    title: props.t.title,
+    stamp: `${props.t.state}|${props.t.claim?.note}|${props.t.claim?.lease_until}`,
+    reply: held.value || canNote.value,
+    noting: !held.value && canNote.value,
+  });
+/** Approve waits until what they ran has been opened. See HandIn.vue. */
+const read = ref(false);
+
+/**
+ * Where the task stands, as the words on its facts line and their tone — the inbox row's way of
+ * saying it. It used to be a filled pill above the title and a coloured stripe down the row, a look
+ * no other list in the hub had.
+ */
+const STATE: Record<Task["state"], { text: string; tone: string }> = {
+  review: { text: "handed in, waiting on you", tone: "text-accent" },
+  stalled: { text: "agent went silent", tone: "text-warn" },
+  claimed: { text: "being worked on", tone: "text-ok" },
+  ready: { text: "ready for the next agent", tone: "text-muted" },
+  blocked: { text: "blocked", tone: "text-muted" },
+  draft: { text: "draft", tone: "text-muted" },
+  done: { text: "done", tone: "text-muted" },
 };
-const tone = computed(() => TONE[props.t.state]);
+const state = computed(() => STATE[props.t.state]);
+const badge = kindBadge("task");
+
+/**
+ * The facts line, as a list: who or whose agent has it, the repo and where it runs, when, where it
+ * stands, and its id. Joined with a separator between items only, so a task nobody holds does not
+ * open its line on a stray "·".
+ */
+const facts = computed(() => {
+  const t = props.t;
+  const out: { text: string; lead?: string; strong?: boolean; code?: boolean; tone?: string }[] =
+    [];
+  if (where.value) out.push({ text: by.value, strong: true });
+  else if (t.for_me && !t.mine) out.push({ text: "for you", strong: true });
+  else if (t.to) out.push({ lead: "for ", text: t.to, strong: true });
+  if (t.target) out.push({ text: shorten(t.target, 28).text, code: true });
+  if (where.value) out.push({ text: where.value, code: true });
+  out.push({
+    text: t.state === "stalled" && heard.value ? `last heard ${rel(heard.value)}` : rel(t.created),
+  });
+  out.push({ text: state.value.text, tone: state.value.tone });
+  out.push({ text: t.id, code: true });
+  return out;
+});
 
 /** Where the agent that has it is working: the host and the last part of the worktree path. */
 const where = computed(() => {
@@ -72,30 +124,6 @@ function onDocument(e: MouseEvent) {
 onMounted(() => document.addEventListener("click", onDocument));
 onBeforeUnmount(() => document.removeEventListener("click", onDocument));
 
-/**
- * Held, so a message is to the agent; or yours and waiting for somebody to take it, so what you write
- * is a note for them. A task that is done takes no more, and neither does one handed in.
- */
-const held = computed(() => props.t.state === "claimed" || props.t.state === "stalled");
-const canNote = computed(
-  () =>
-    (props.t.mine || Boolean(props.t.for_me)) &&
-    ["ready", "blocked", "draft"].includes(props.t.state),
-);
-
-// The conversation opens in a panel of its own, not in the row: a control that goes somewhere else is
-// an `open`.
-const { open } = useThread();
-const openThread = () =>
-  open({
-    id: props.t.id,
-    title: props.t.title,
-    url: props.t.url,
-    stamp: `${props.t.state}|${props.t.claim?.note}|${props.t.claim?.lease_until}`,
-    reply: held.value || canNote.value,
-    noting: !held.value && canNote.value,
-  });
-
 const rejecting = ref(false);
 const why = ref("");
 const field = ref<HTMLTextAreaElement | null>(null);
@@ -112,28 +140,39 @@ function send() {
 </script>
 
 <template>
+  <!-- The inbox row's anatomy: kind and title on one line, then the facts in muted text with where
+       it stands last, and the author's one move on the right. The list's ends round it. -->
   <li
-    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 border-t-0 border-r-0 border-b-0 border-l-[3px] bg-raised px-4 py-4 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
-    :class="tone.stripe"
+    class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 bg-raised px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
   >
-    <div class="min-w-0 flex-1 basis-64">
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+    <div class="min-w-0 flex-1 basis-72">
+      <p class="m-0 flex flex-wrap items-baseline gap-x-2">
         <span
-          class="rounded-pill px-2 py-0.5 font-ui text-xs font-semibold uppercase tracking-wide"
-          :class="tone.badge"
-        >{{ tone.label }}</span>
-        <span v-if="t.state === 'stalled' && heard">last heard {{ rel(heard) }}</span>
-        <span v-else>{{ rel(t.created) }}</span>
-      </div>
-      <!-- The title is the control that opens the conversation, as a row in a chat list is; the
-           guide's own page is one click further, in the panel's header. -->
-      <button
-        type="button"
-        class="mt-2 block w-full cursor-pointer border-0 bg-transparent p-0 text-left text-base font-semibold leading-snug text-fg hover:text-accent"
-        @click="openThread"
-      >{{ t.title || t.id }}</button>
+          v-if="badge"
+          class="shrink-0 rounded-1 border px-1.5 py-0.5 font-ui text-xs font-medium tracking-wide uppercase"
+          :class="badge.class"
+        >{{ badge.label }}</span>
+        <NuxtLink
+          :to="`/hub/g/${t.id}`"
+          class="text-base leading-snug font-semibold text-fg no-underline hover:text-accent"
+        >{{ t.title || t.id }}</NuxtLink>
+      </p>
+      <p class="mt-1 mb-0 flex flex-wrap gap-x-1.5 font-ui text-sm text-muted">
+        <span v-for="(f, i) in facts" :key="i" :class="[f.tone, f.code ? 'font-code text-xs leading-5' : '']"
+          ><template v-if="i">· </template>{{ f.lead }}<b v-if="f.strong" class="font-medium text-fg">{{ f.text }}</b
+          ><template v-else>{{ f.text }}</template></span
+        >
+      </p>
 
       <p v-if="t.claim?.note" class="mt-2 mb-0 text-sm text-muted">“{{ t.claim.note }}”</p>
+      <button
+        class="mt-2 inline-flex items-center gap-1 rounded-1 border-0 bg-transparent px-0 py-0.5 font-ui text-xs text-muted hover:text-fg"
+        type="button"
+        @click="openThread"
+      >
+        Conversation
+        <AppIcon name="open" :size="12" />
+      </button>
       <p v-if="t.state === 'review' && t.claim?.report" class="mt-2 mb-0 text-sm">
         Came back with
         <a :href="t.claim.report_url || undefined" target="_blank" rel="noopener">{{
@@ -148,16 +187,13 @@ function send() {
           · commit <code class="font-code">{{ t.claim.pr.slice(0, 7) }}</code>
         </template>
       </p>
-
-      <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-        <code class="shrink-0 font-code">{{ t.id }}</code>
-        <span v-if="t.for_me && !t.mine" class="font-medium text-fg">for you</span>
-        <span v-else-if="t.to" class="font-medium text-fg">for {{ t.to }}</span>
-        <span v-if="t.target" class="font-code"><AppShorten :value="t.target" :max="28" /></span>
-        <span v-else>no repo</span>
-        <span v-if="where">{{ by }} · <span class="font-code">{{ where }}</span></span>
-      </div>
-
+      <HubHandIn
+        v-if="t.state === 'review' && t.claim"
+        :evidence="t.claim.evidence"
+        :checks="t.claim.checks"
+        :risk="t.claim.risk"
+        @read="read = true"
+      />
 
       <div
         v-if="rejecting"
@@ -176,41 +212,44 @@ function send() {
           v-model="why"
           rows="2"
           maxlength="1000"
-          placeholder="the toggle does nothing on Safari"
-          class="block w-full resize-y rounded-1 border border-line-strong bg-raised p-2 font-ui text-sm text-fg"
+          placeholder="The toggle does nothing on Safari."
+          class="block w-full resize-y"
           @keydown.meta.enter="send"
           @keydown.ctrl.enter="send"
         />
         <div class="mt-2 flex flex-wrap gap-2">
-          <button class="btn primary" :disabled="!why.trim()" @click="send">send it back</button>
-          <button class="btn" @click="rejecting = false">back</button>
+          <button class="btn primary sm" :disabled="!why.trim()" @click="send">Send request</button>
+          <button class="btn sm" @click="rejecting = false">Cancel</button>
         </div>
       </div>
     </div>
 
-    <div v-if="(t.mine || canAssign) && !rejecting" class="flex shrink-0 items-center gap-2">
-      <div v-if="canAssign" ref="pickerRoot" class="relative" @keydown.esc="assigning = false">
-        <button class="btn sm" type="button" :aria-expanded="assigning" @click="assigning = !assigning">
-          give to…
-        </button>
-        <div v-if="assigning" class="menu w-72">
-          <HubAssignPicker :id="t.id" :team="t.team || ''" :to="t.to" @done="assigning = false" />
+    <div v-if="(t.mine || canAssign) && !rejecting" class="flex shrink-0 flex-col items-end gap-1">
+      <div class="flex items-center gap-2">
+        <div v-if="canAssign" ref="pickerRoot" class="relative" @keydown.esc="assigning = false">
+          <button class="btn sm" type="button" :aria-expanded="assigning" @click="assigning = !assigning">
+            Give to…
+          </button>
+          <div v-if="assigning" class="menu w-72">
+            <HubAssignPicker :id="t.id" :team="t.team || ''" :to="t.to" @done="assigning = false" />
+          </div>
         </div>
+        <!-- The gate and the queue moves are the author's alone; an assignee only passes it on. -->
+        <template v-if="!t.mine" />
+        <template v-else-if="t.state === 'review'">
+          <button class="btn primary sm" :disabled="!read" @click="onApprove(t)">Approve</button>
+          <button class="btn outline danger sm" @click="askWhy">Ask for changes</button>
+        </template>
+        <button
+          v-else-if="t.state === 'claimed' || t.state === 'stalled'"
+          class="btn outline warn sm"
+          @click="onRelease(t)"
+        >Stop this agent</button>
+        <button v-else-if="t.state === 'draft'" class="btn sm" @click="onTaskReady(t)">Ready for agents</button>
       </div>
-      <!-- The gate and the queue moves are the author's alone; an assignee only passes it on. -->
-      <template v-if="!t.mine" />
-      <template v-else-if="t.state === 'review'">
-        <button class="btn primary sm" @click="onApprove(t)">approve</button>
-        <button class="btn outline danger sm" @click="askWhy">send back</button>
-      </template>
-      <button
-        v-else-if="t.state === 'claimed' || t.state === 'stalled'"
-        class="btn outline warn sm"
-       
-        @click="onRelease(t)"
-      >take back</button>
-      <button v-else-if="t.state === 'draft'" class="btn sm" @click="onTaskReady(t)">make ready</button>
+      <span v-if="t.mine && t.state === 'review' && !read" class="font-ui text-xs text-muted">
+        Open what they ran to approve it
+      </span>
     </div>
-
   </li>
 </template>

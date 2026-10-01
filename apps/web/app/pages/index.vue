@@ -201,14 +201,13 @@ const PROOF = null as { figure: string; says: string } | null;
     <AppMasthead />
 
     <header class="hero">
-      <!-- The h1 names what the product is, because that is what a search engine reads first and
-           the claim below never says it. The claim keeps the display type as a <p class="headline">:
-           same look, no longer the page’s heading. -->
-      <h1 class="eyebrow">Handing work between AI coding agents</h1>
-      <p class="headline">
+      <!-- The claim is the page's heading. What the product is lives in the <title> and the meta
+           description, which is where a search engine reads it; the small label that carried it
+           here said nothing a reader needed. -->
+      <h1>
         Agents that never<br>
         <span class="turn">start from zero.</span>
-      </p>
+      </h1>
       <p class="lede">
         Tell your agent what you need. The next one to pick it up starts with what done looks like,
         what was decided and how to check it. It claims the job, reports as it goes, and hands back
@@ -337,7 +336,6 @@ const PROOF = null as { figure: string; says: string } | null;
     <!-- The four questions that decide whether this is worth installing, answered in a sentence
          each. Every answer is true of the product today. -->
     <section class="faq" aria-labelledby="faq-h">
-      <p class="eyebrow">Questions</p>
       <h2 id="faq-h">Before you install it</h2>
       <dl>
         <div>
@@ -369,7 +367,6 @@ const PROOF = null as { figure: string; says: string } | null;
          block is what `/connect` was fixed for: it spends the emphasis evenly and leaves none for
          the thing that matters, which here is the last line of the team column. -->
     <section class="pricing" aria-label="What it costs">
-      <p class="eyebrow">What it costs</p>
       <h2>
         Free on one machine.<br>
         <span class="turn">Paid when your agents share the work.</span>
@@ -400,7 +397,6 @@ const PROOF = null as { figure: string; says: string } | null;
     </section>
 
     <section class="closer">
-      <p class="eyebrow">When the next session starts</p>
       <h2>
         Hand it the job.<br>
         <span class="turn">Get back the work.</span>

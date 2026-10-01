@@ -139,9 +139,9 @@ async function close(issues: Guide[], mark: string) {
               class="shrink-0 rounded-pill px-2 py-0.5 font-ui text-xs font-semibold"
               :class="severityTone(issue.severity)"
             >{{ severityLabel(issue.severity) }}</span>
-            <a :href="issue.url" target="_blank" rel="noopener" class="min-w-0 flex-1 font-ui text-sm font-medium">
+            <NuxtLink :to="`/hub/g/${issue.id}`" class="min-w-0 flex-1 font-ui text-sm font-medium">
               {{ issue.title || "Untitled bug" }}
-            </a>
+            </NuxtLink>
             <span class="shrink-0 font-ui text-xs" :class="state(issue).tone">
               {{ state(issue).label }}
             </span>
@@ -152,7 +152,7 @@ async function close(issues: Guide[], mark: string) {
               :disabled="Boolean(closing)"
               @click="close([issue], issue.id)"
             >
-              {{ closing === issue.id ? "Closing…" : "Close" }}
+              {{ closing === issue.id ? "Archiving…" : "Archive" }}
             </button>
           </li>
         </ul>
@@ -171,10 +171,10 @@ async function close(issues: Guide[], mark: string) {
         >
           {{
             closing === "all"
-              ? "Closing…"
+              ? "Archiving…"
               : open.length === report.issues
-                ? "Close every bug"
-                : `Close the ${open.length} still open`
+                ? "Archive every bug"
+                : `Archive the ${open.length} still open`
           }}
         </button>
       </div>

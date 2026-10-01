@@ -133,19 +133,23 @@ async function submit() {
 
     <!-- The account's id, which the product otherwise never shows: the menu prints your name, or
          your @name, and falls back to the id only when you have neither — so somebody with a name
-         can use Passalong for a year without ever seeing it. It is what a deployment's
-         ADMIN_ACCOUNTS wants, and an id is an address rather than a secret (they are minted from a
-         no-lookalike alphabet for reading aloud), so it is shown rather than hidden. -->
+         can use Passalong for a year without ever seeing it. It is what support asks for (and, for
+         whoever runs Passalong, what ADMIN_ACCOUNTS wants), and an id is an address rather than a
+         secret (they are minted from a no-lookalike alphabet for reading aloud), so it is shown. -->
     <p v-if="bare && me?.account" class="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-line pt-4 font-ui text-sm text-muted">
       <span>Account id</span>
       <code class="font-code text-xs text-fg">{{ me.account }}</code>
       <button class="linkish" type="button" @click="copy(me.account, $event.currentTarget)">
         <span data-label>Copy</span>
       </button>
+      <!-- Said to the person reading it. The line used to name ADMIN_ACCOUNTS to everybody — a
+           deployment setting only someone who runs Passalong can act on — so it is kept for them. -->
       <span class="basis-full text-xs">
-        Yours to quote in a support question, and what a deployment names in
-        <code class="font-code">ADMIN_ACCOUNTS</code>. Not a secret: what guards your account is
-        your password and your tokens.
+        Quote it if you contact support. It isn't a secret — your password and tokens are what
+        protect your account.
+        <template v-if="me.role === 'super'">
+          It's also what a deployment lists in <code class="font-code">ADMIN_ACCOUNTS</code>.
+        </template>
       </span>
     </p>
 

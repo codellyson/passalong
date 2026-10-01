@@ -20,18 +20,15 @@ const learn = PUBLIC_PAGES.filter((p) => p.footer && !p.draft);
       <AppBrand />
       <p>Agents that never start from zero.<br>Between repos, machines, agents and people.</p>
     </div>
-    <nav>
-      <p class="eyebrow">Product</p>
+    <nav aria-label="Product">
       <a href="/hub">Open your hub</a>
       <a href="/connect">Connect your tools</a>
       <a href="/llms.txt">For AI agents</a>
     </nav>
-    <nav v-if="learn.length">
-      <p class="eyebrow">Learn</p>
+    <nav v-if="learn.length" aria-label="Learn">
       <a v-for="p in learn" :key="p.path" :href="p.path">{{ p.footer }}</a>
     </nav>
-    <nav>
-      <p class="eyebrow">Elsewhere</p>
+    <nav aria-label="Elsewhere">
       <a href="https://www.npmjs.com/package/passalong">passalong on npm</a>
       <a href="https://github.com/codellyson/passalong">GitHub</a>
     </nav>

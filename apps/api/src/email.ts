@@ -60,7 +60,7 @@ export function sendHandoff(
       foot: [
         footnote(
           `Using a terminal or an agent? <code>passalong pull ${o.id}</code>, then ` +
-            `<code>passalong works ${o.id}</code> once you have tried it.`,
+            `<code>passalong works ${o.id} &lt;screenshot&gt;</code> once you have seen it working.`,
         ),
       ],
     }),

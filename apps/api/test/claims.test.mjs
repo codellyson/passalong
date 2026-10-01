@@ -622,6 +622,26 @@ test("only the author takes it back, and only what somebody is holding", async (
   assert.match(held.error, /handed in and waiting on you/);
 });
 
+// The PR template's Risk: the one part of it a hand-in had no place for. Kept on the claim for the
+// reviewer, one line, and optional — never invented when it was not sent.
+test("a hand-in can say what it could break, on a handoff and a task alike", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  guide("t1");
+  guide("report", { kind: "", target: "" });
+  const ada = { account: "me", agent: "agent-ada", repo: "o/one" };
+  await take(db, "h1", ada, { at: T0 });
+  const risky = "changes the shared date helper every report uses";
+  const h = await handIn(db, "h1", ada, { at: T0, note: "", evidence: PROOF, risk: risky });
+  assert.equal(h.claim.risk, risky);
+
+  await next(db, A, { at: T0 });
+  const t = await finish(db, "t1", A, { at: T0, report: "report", evidence: PROOF });
+  assert.equal(t.claim.risk, "", "not sent is empty, not a default");
+  assert.equal((await db.prepare("SELECT risk FROM claim WHERE guide_id = 't1'").first()).risk, "");
+});
+
 test("releasing a task still writes where the work was left", async () => {
   // The task path is unchanged: `## Review notes` is a task's section, and a handoff has no place
   // for one — inventing a section inside somebody's published guide is not release's business.
@@ -1847,5 +1867,84 @@ test("the session-start hook can see that a person has written", async () => {
     (await working(db, "me", T0))[0].claim.waiting_replies,
     0,
     "told, so no longer waiting",
+  );
+});
+
+test("a person's browser hold gives way to their own agent taking it in a repo", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  teamed(db);
+  const opts = { at: T0, many: true, leaseMs: PERSON_LEASE_MS };
+  const ada = { account: "other", agent: "agent-ada1", repo: "o/r" };
+  await take(db, "h1", PERSON, opts);
+  await take(db, "h1", ada, { at: later(1000) });
+  const holds = () =>
+    db.raw
+      .prepare("SELECT place, agent_id, state FROM claim WHERE guide_id = 'h1' ORDER BY place")
+      .all();
+  assert.deepEqual(
+    holds().map((r) => [r.place, r.agent_id, r.state]),
+    [["o/r", "agent-ada1", "claimed"]],
+    "one worker, one hold: the agent's",
+  );
+
+  // Said after the agent already has it: nothing new, the agent's hold answers.
+  const again = await take(db, "h1", PERSON, opts);
+  assert.equal(again.resumed, true);
+  assert.equal(again.claim.place, "o/r");
+  assert.equal(holds().length, 1);
+});
+
+test("a hand-in by the person's own agent clears a browser hold left from before", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  teamed(db);
+  const ada = { account: "other", agent: "agent-ada1", repo: "o/r" };
+  await take(db, "h1", ada, { at: T0 });
+  // The state production was left in: a browser hold standing beside the agent's.
+  db.raw
+    .prepare(
+      `INSERT INTO claim (guide_id, place, account_id, agent_id, host, repo, worktree, state, claimed_at, lease_until, updated, fence)
+       VALUES ('h1', '', 'other', 'person-other', '', '', '', 'claimed', ?, ?, ?, 1)`,
+    )
+    .run(T0, later(PERSON_LEASE_MS), T0);
+  await handIn(db, "h1", ada, { at: later(1000), note: "done in o/r", evidence: PROOF });
+  const rows = db.raw.prepare("SELECT place, state FROM claim WHERE guide_id = 'h1'").all();
+  assert.deepEqual(
+    rows.map((r) => [r.place, r.state]),
+    [["o/r", "review"]],
+  );
+});
+
+test("migration 0036 clears browser holds already superseded, and nothing else", () => {
+  const sql = new DatabaseSync(":memory:");
+  const files = readdirSync(MIGRATIONS).sort();
+  const at = files.findIndex((f) => f.startsWith("0036_"));
+  for (const f of files.slice(0, at)) sql.exec(readFileSync(join(MIGRATIONS, f), "utf8"));
+  sql.exec(
+    `INSERT INTO account (id, token_hash, created) VALUES ('a', 'h', '${T0}'), ('b', 'h2', '${T0}')`,
+  );
+  for (const g of ["g1", "g2", "t1"])
+    sql
+      .prepare(
+        `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, kind)
+         VALUES (?, 'a', 'k', 't', 'published', '', '[]', '[]', '', ?, ?, ?)`,
+      )
+      .run(g, T0, T0, g === "t1" ? "task" : "transfer");
+  const hold = sql.prepare(
+    `INSERT INTO claim (guide_id, place, account_id, agent_id, host, repo, worktree, state, claimed_at, lease_until, updated, fence)
+     VALUES (?, ?, 'b', ?, '', '', '', ?, '${T0}', '${T0}', '${T0}', 1)`,
+  );
+  hold.run("g1", "", "person-b", "claimed"); // superseded: b's agent has g1 in a repo
+  hold.run("g1", "o/r", "agent-b", "review");
+  hold.run("g2", "", "person-b", "claimed"); // stands: nothing else of b's on g2
+  hold.run("t1", "", "agent-b", "claimed"); // a task's hold has no place, and is an agent's
+  sql.exec(readFileSync(join(MIGRATIONS, files[at]), "utf8"));
+  const left = sql.prepare("SELECT guide_id, place FROM claim ORDER BY guide_id, place").all();
+  assert.deepEqual(
+    left.map((r) => `${r.guide_id}:${r.place}`),
+    ["g1:o/r", "g2:", "t1:"],
   );
 });

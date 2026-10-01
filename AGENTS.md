@@ -9,6 +9,11 @@ Reference material lives beside it — `docs/wiki/` has the schema, the `/v1` su
 model, how the web view stays safe, and how releases work. `apps/web/public/llms.txt` is the
 public one, for agents *using* Passalong rather than changing it.
 
+`docs/llm-wiki/` is the synthesis: one page per concept, how the parts connect, the decisions behind
+them and what is still open — the fastest way to the whole picture. **Keep it true:** a change that
+alters what one of its pages says updates that page and adds a line to its `log.md`, in the same
+change. Its README says how.
+
 ## Layout
 
 - `packages/passalong` — the `passalong` CLI and the MCP server. Plain ESM JavaScript, no build step,
@@ -75,7 +80,9 @@ public one, for agents *using* Passalong rather than changing it.
     guide is evidence against what it asked for. Local only: `mcp-http.ts` is a Worker
     with no shell, so a hand-in over HTTP keeps the prose gate. It never reads a command out of a
     guide — a guide comes from somebody else's account, and running what it says would make every
-    pull remote code execution.
+    pull remote code execution. It runs under `bash -o pipefail`, so `jest | grep Tests:` or
+    `git log | head` fails when the first step does; exit 141 (a writer cut short by `head`) is
+    the one non-zero it does not count as a failure.
   - `src/update.js` — the "a newer passalong is out" line. The registry is asked, not the API, and
     **nothing waits for it**: the line is read from `~/.passalong/config.json` and a detached
     `passalong refresh-update` writes it. The first version awaited the fetch on a 1.5s timeout and
@@ -104,15 +111,15 @@ public one, for agents *using* Passalong rather than changing it.
     has one per repo, and taking it back means from whoever has it. `POST /v1/guides/:id/release`
     is the path; `/v1/tasks/:id/release` is the same handler under its old name, because an
     installed CLI still calls it.
-  - `task_event` (migration 0032) is the thread: an append-only line per `take`, `progress` note,
+  - `task_event` (migration 0037) is the thread: an append-only line per `take`, `progress` note,
     hand-in, pass, release, approval and send-back, written by `event()` in `claims.ts` *after* the
     transition it describes and never throwing. `claim` is only the present — `note` is overwritten
     by every progress call and the row is deleted on release, pass and approval — so without this
     nothing says an agent ever held the work. `thread()` merges it with `verdict` and `ack` (the
     reader's side) and drops the claim event a person's browser answer also caused, so one act is
     one line; `GET /v1/guides/:id/thread` serves it and `HubThread` renders it as chat. A missing
-    row costs a bubble, never a lock. Tasks worked before 0032 have no history to show.
-    **`ask` and `reply` (migration 0033, `docs/CONVERSATION.md`) make it two-way.** `ask` keeps the
+    row costs a bubble, never a lock. Tasks worked before 0037 have no history to show.
+    **`ask` and `reply` (migration 0038, `docs/CONVERSATION.md`) make it two-way.** `ask` keeps the
     claim, extends the lease to a day and tells the agent to stop; `reply` is a person writing to
     whoever holds it, refused when nobody does and from anyone but the author, the assignee or the
     holder — that is what keeps it from being a comment box, which the PRD rules out. Waiting is
@@ -130,7 +137,7 @@ public one, for agents *using* Passalong rather than changing it.
     screenshots are drawn (`evidenceParts`); a stranger's image address is text. The composer refuses
     a reply that would be cut at 1000 characters, because a picture's address cut in half is a broken
     image nobody can fix.
-    **Files that are not pictures are `attachment` (migration 0034, `src/attachments.ts`), not a wider
+    **Files that are not pictures are `attachment` (migration 0039, `src/attachments.ts`), not a wider
     `shot`.** The risk runs the other way — a shot is served to be drawn, a file to be saved — so the
     type is decided by the bytes (`sniffAttachment`), HTML and SVG are filed as plain text, and
     `GET /v1/attachments/:id` always answers `content-disposition: attachment`, `nosniff` and a
@@ -162,7 +169,7 @@ public one, for agents *using* Passalong rather than changing it.
     the same reason: a page request to www would never reach the mount.
   - `nitro.experimental.wasm` is required, not optional. Without it the bundler tries to parse
     `workers-og`'s `.wasm` as JavaScript and the build dies on the first byte.
-  - `public/fonts/instrument-sans-{400,600}.ttf` look unused and are not: `src/og.ts` reads them
+  - `public/fonts/onest-{400,600}.woff` look unused and are not: `src/og.ts` reads them
     through `ASSETS`. Satori cannot read woff2, and the stylesheet loads the variable woff2, so
     nothing else references the pair. Deleting them returns 500 on every unfurl card — which is
     exactly what happened once during the port.
@@ -202,6 +209,15 @@ public one, for agents *using* Passalong rather than changing it.
 
 ## Contracts
 
+- **What wrote a guide is a column, not a field (migration 0035).** `guide.client` is
+  `cli@<version>` (from `x-passalong-version`), `mcp`, `hub` or `api`, decided by `writtenBy()`
+  in `clients.ts` from the credential the middleware already checked, and replaced on every
+  `PUT /v1/guides/:id` because the last write produced the markdown stored now. Never frontmatter:
+  a field in the document travels with it and is re-published by whichever client pulls it next,
+  naming the wrong writer. `""` is every row from before it — unknown, not guessed.
+  `pnpm metrics` prints it. Frontmatter the parser cannot hold (a nested map, a `|` block, a list
+  under a field that is not a list) is refused by name through `unheldFields()` in both parsers,
+  never emptied.
 - **Guides are plain markdown.** Never introduce a field the frontmatter parser can't round-trip
   (strings and string lists only). `passalong export` must always be a complete backup.
 - **The MCP server is served two ways and implemented once.** `packages/passalong/src/mcp.js` is
@@ -228,6 +244,30 @@ public one, for agents *using* Passalong rather than changing it.
   `stack_assumptions` and `tags` and nothing else — defaulting it would write `blocked_by: []` into
   every guide anybody re-shares. A blocker counts as finished when a person approved it, never when
   an agent finished it.
+- **A CLI too old for the server's rules is refused, not warned.** Every CLI call carries
+  `x-passalong-version` (`VERSION` in `src/api.js`), and the token branch of the auth middleware
+  answers **426** below `MIN_CLIENT` (`apps/api/src/clients.ts`) with the install command and the
+  restart only a person can do. Rules deploy on merge while the text telling agents how to follow
+  them ships with a reinstall, and for two weeks agents on 0.9.0 were refused by one and misled by
+  the other. `passalong mcp` prints no update notice and an agent never reads stderr, so the
+  refusal on the call it just made is the one text it is sure to see. CLIs up to 0.11.0 send no
+  header and are known by Node's own `user-agent: node`; browsers, curl, SDKs and `/v1/mcp` are
+  never gated. The floor is 0.12.0. **Raise `MIN_CLIENT` only after that version is `latest` on npm** — a floor above
+  what npm hands out refuses every agent with nothing it can install.
+- **A hand-in answers the PR template, minus the boxes.** What changed is `writeup`, how it was
+  verified and the evidence are `checks` (run or shown, never ticked), and what it could break is
+  `risk` (migration 0032, on the claim, for the reviewer only) — one line, optional, because a
+  required risk field says "low risk" every time. Ownership is the reviewer's, not the agent's:
+  close and approve on a hub row stay disabled until the evidence has been opened
+  (`HubHandIn`'s `read`). An agent ticking "I verified it" is the self-attestation `checks`
+  exists to replace.
+- **Handed in means the actor's turn is over.** `PUT /v1/guides/:id` refuses a *new* guide whose
+  `parent:` the publisher has handed in and that is waiting on its author (409). Every follow-up
+  nobody asked for came from there: an agent handed in, then published a second guide to carry
+  what it found. What the actor did and found goes on the hand-in, in `checks` and `writeup`.
+  The note on every `take` used to say the opposite ("what you found doing it — publish that"),
+  and an agent follows the text it read last. The author is never refused, and the rule ends when
+  the author answers: send-back and close delete the claim, and an approved task is `consumed`.
 - **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
   people can take and answer for separately — one document holding six has one verdict, and "four
   of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is
@@ -244,6 +284,14 @@ public one, for agents *using* Passalong rather than changing it.
   `mt-8` between sections. Half-steps are off the scale — `-1.5`, `-2.5` and `-3.5` were all in use
   and one relationship had four different values, which is what made the interface look unfinished
   before anyone could say why. `-0.5` is the one exception: 2px inside a chip is a sub-unit.
+- **Ink decides, coral punctuates.** The look follows a warm cream system: `--bg` is a pale cream,
+  a card is `--surface-raised` (a deeper cream at `rounded-3`, 24px) with almost no edge, and
+  `--field` is the one near-white surface, for inputs, menus and command wells. The primary action
+  is an ink pill (`.btn.primary`, `bg-ink text-on-ink`) and every `.btn` is a pill. `--coral` is
+  2.6:1 on the canvas, so it is only ever a mark — the nav's diamond (`nav.marked`), an unread dot,
+  a link's underline — and `--accent` is the same hue at a readable 5:1 for any word that has to be
+  coral. Headings are 480 with negative tracking, never 600+; the serif is the editorial accent
+  (guide prose and the italic `.turn`), not the display face.
 - **A raised surface's edge is a shadow; a border is structure.** Cards, list containers, panels,
   menus and the sign-in card take `shadow-edge` (`--edge-shadow` in styles.css: a 1px ring plus a
   little depth in light, the ring alone in dark), never `border border-line`. Borders stay where
@@ -417,6 +465,11 @@ public one, for agents *using* Passalong rather than changing it.
   CLI: `take`/`pass` for the ack, `works`/`broken` for the verdict, `done` to archive. A signal that
   exists in only two of them is one a third of the product's users cannot send, and the mail that
   tells someone what to do next can only name commands that exist.
+  The hub says each in plain words rather than the command's name, and says them the same way on
+  every surface of the hub: `take` is **I'll do this**, `pass` is **Not for me**, `release` is
+  **Stop this agent**, archiving is **Archive** and **Unarchive**, a hand-in is answered with
+  **Accept** (or **Approve** for a task) and **Ask for changes**. A button whose name cannot say
+  what it does gets a line of visible text beside it, never a `title` tooltip.
 - **Google Chat gets a card; nothing else does.** Chat cannot unfurl a link — previews there come
   from a Chat app registering URL patterns, and a team connects an incoming webhook — so `chatCard()`
   in `notify.ts` builds the preview from what we already know. It must stay built rather than
@@ -482,6 +535,17 @@ public one, for agents *using* Passalong rather than changing it.
   Only the author can promote or delete. `GET /v1/inbox` = handed to me (or my teams, by others),
   not yet pulled by me. Every pull is a `pull` row; the sender sees them as `pulled_by`. Handles
   are global and unique.
+- **"It works" is shown, not said, and the proof does not outlive the review.** `PUT
+  /v1/guides/:id/verdict` with `ok: true` is refused (`NEEDS_PROOF`) unless its note or `detail`
+  names at least one `/v1/shots/<id>` **this account uploaded** — pointing at somebody else's
+  screenshot is not proof. People said guides worked that did not, and a note was only their word.
+  The shots are claimed for the guide, and `evidenceOn` reads verdict `detail` as well as claim
+  evidence so an author's edit cannot release them. `sweepProof` (hourly, `shots.ts`) deletes a
+  closed guide's proof `PROOF_DAYS` (5) after it closed — anything the guide holds that its own
+  markdown does not name — and rewrites the text that pointed at it to say it was removed rather
+  than leave a broken image. Screenshots only: video was left out for storage. Agent hand-ins keep
+  their own evidence rule (commands and output count), since a screenshot of a migration proves
+  nothing a test run does not.
 - **Receipt is not only `pull`.** A browser-only receiver never runs `pull`, so a verdict or a
   non-author `consumed` also writes a `pull` row (`via` = "verdict"/"web"), deduped per
   (guide, account) and without the "pulled" notification — the verdict is the news. Without this a
@@ -547,6 +611,30 @@ public one, for agents *using* Passalong rather than changing it.
   copy without calling the API unless the guide has a team, and the quality proxy asked for
   `consumed`, which changed meaning. A report that quietly substitutes a near-miss is worse than
   one that says so.
+- **The hub is live, and the stream owns no table.** `GET /v1/events` (`src/events.ts`) is
+  Server-Sent Events for the signed-in account: `note` for each notification addressed to it (a
+  toast in the hub, `HubToasts`) and `change` for any guide it can see whose hold, progress note,
+  verdict or ack moved (a quiet refresh — progress notes never toast). It polls D1 every 3 seconds
+  from a cursor that is a **time, not a row id**, because notifications coalesce by bumping `at` on
+  an existing row; migration 0033 indexes the three times it reads. Each connection ends after four
+  minutes and the client resumes from `Last-Event-ID`. The hub reads it with fetch
+  (`useLive`), not EventSource, because EventSource cannot send the bearer token a token sign-in
+  uses, and it disconnects while the tab is hidden and catches up — a few toasts and a count —
+  when it is shown. Durable Objects would push without polling; this needed no new infrastructure.
+- **Push reaches a device only for what needs you, and says nothing it should not.** Web Push
+  (`src/webpush.ts`: VAPID and RFC 8291 encryption on WebCrypto, no library — `web-push` needs
+  Node's crypto) goes out from `notify()` through a hook the app sets (`onPush`), for `PUSHED`
+  kinds only: sent to you, taken, handed in, works, didn't work, sent back, went quiet, stuck on
+  you. A
+  phone that buzzes for every open gets muted. Devices are `push_subscription` rows (migration
+  0034), one per browser, turned on from Settings — permission is asked on the button, never on
+  load, because a refused prompt cannot be asked again. `private` is per device, since a lock screen
+  is. A 404/410 from the push service deletes the row. `public/sw.js` has **no fetch handler**, so
+  the pages it controls, guide pages included, load exactly as without it. Two events had no way to
+  reach you and now do: `blocked` (a progress note starting `BLOCKED:`, first time only) and your
+  own agent's `task_finished`, both sent without an actor so `notify()` does not drop them as
+  self-inflicted. Keys: `node scripts/vapid-keys.mjs`; without `VAPID_*` the hub says push is not
+  set up. iOS delivers web push only to the home-screen app.
 - **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
   to whoever should hear it: `handoff`, `shared`, `pulled`, `consumed`, `joined`. Rows first,
   delivery second — mail is a channel over the row, so the feed works with no mailer configured.
@@ -565,6 +653,25 @@ public one, for agents *using* Passalong rather than changing it.
   `x-robots-tag: noindex, nofollow, noarchive` (route rule in `nuxt.config.ts`, and `VIEW_HEADERS`
   in `apps/api/src/index.ts` for the raw `.md`): a disallowed page's meta is never read, and the
   `.md` has no `<head>`. No canonical link on a noindex page either.
+- **The hub shows a guide by framing it, never by rendering it.** `/hub/g/:id` is a guide's
+  signed-in page: who holds it, the hand-in, the answers, and every guide it is tied to, from
+  `GET /v1/guides/:id/context`, which records no pull. The document itself is the share page at
+  `?embed=1` in a sandboxed same-origin iframe with no `allow-scripts`, which is why the hub's
+  policy carries `frame-src 'self'` and nothing wider. Turning a guide's markdown into the hub's
+  own HTML would put a stranger's document on the one page that runs script and holds the token.
+  Row titles open this page; the share link stays one click away on it. Its sidebar leads with
+  **Progress** (`utils/progress.ts`): what happened to the guide in order, built from that same
+  context — acks, claims, hand-ins, verdicts with their screenshots, follow-ups — and ending on
+  where it stands. It owns no table, for the reason the log owns none, so a hold that was released
+  or sent back is gone from it with its claim row; verdict and archive receipts are not "opened".
+- **The blog is markdown in the repo, bundled into the Worker.** Posts are
+  `apps/web/content/blog/<slug>.md` with `title`, `date`, `description`, `author` and `draft`.
+  A Worker has no filesystem, so they are Nitro server assets (`nitro.serverAssets` in
+  nuxt.config.ts) read through `useStorage("assets:blog")` in `server/utils/blog.ts`. `/blog` and
+  `/blog/**` are `noScripts` with `VIEW_HEADERS` like docs. A draft renders at its address, noindex,
+  and is left out of the index, `/blog/rss.xml` and the sitemap. `/blog` itself is a draft in
+  shared/pages.ts until its first post goes out: publishing is `draft: false` on the post, on
+  `/blog`, and a line in public/llms.txt (test/public-pages.test.mjs insists).
 - **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
   `application/ld+json` when deciding whether a page runs script; without that the landing would
   get the hub's nonce policy.
@@ -604,6 +711,10 @@ ships scripts and inlines styles whatever the config says.
 - `src/og.ts` renders each guide's unfurl card (`/g/:id/:key/og.png`). `workers-og` is ~1.7MB of
   JS and wasm, so it is behind a dynamic `import()`: every other route would otherwise pay for it
   on a cold start. Satori's parser does not decode HTML entities — write literal characters.
+  A drawn card is kept in the edge cache (`cached()`), keyed by a hash of its markup, because the
+  CDN never caches a Worker's own response whatever its `cache-control` says. The markup is the
+  card, so an edit is a new key and nothing needs purging; bump `DRAWN_WITH` when a change to the
+  renderer (fonts, size, format) would draw the same markup differently.
 - `/hub`, `/join/:code` and `/reset` are the only pages allowed to run script. Their header is
   written per response by `apps/web/server/plugins/csp.ts` with a nonce; `/` and `/g/**` are
   `noScripts` with no `script-src` at all (`shared/csp.ts`). Guide pages render markdown someone

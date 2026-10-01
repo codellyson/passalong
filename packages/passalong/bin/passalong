@@ -34,7 +34,7 @@
 //                                 give Solo to @handle, or Team to team/slug, until a date (operator only)
 //   passalong gifts               what has been given away, and what is still running
 //   passalong ungift <gift id>    take one back now
-//   passalong works <id>          you tried it and it holds up
+//   passalong works <id> <shot.png...>  you tried it and it holds up — with a screenshot of it working
 //   passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
 //   passalong archive <id>        off your board and out of the free tier's count (was `done`)
 //   passalong rm <id>             delete a guide locally and from sync
@@ -628,9 +628,12 @@ const commands = {
   },
 
   async works(f) {
-    const id = f._[0] || die("usage: passalong works <id>");
-    const r = await passalong.verdict(id, true, f._.slice(1).join(" ")).catch((e) => die(e.message));
-    console.error(`${r.id} verified — the author has been told`);
+    const id = f._[0] || die("usage: passalong works <id> <screenshot.png...> [what you checked]");
+    const { images, note } = passalong.proofArgs(f._.slice(1));
+    const r = await passalong.verdict(id, true, note, { images }).catch((e) => die(e.message));
+    console.error(
+      `${r.id} verified with ${images.length || "your"} screenshot${images.length === 1 ? "" : "s"} — the author has been told`,
+    );
   },
 
   async broken(f) {

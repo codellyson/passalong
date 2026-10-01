@@ -61,9 +61,11 @@ One thing to know before editing it: **it is lint-clean under `biome check`, inc
 `noDescendingSpecificity`.** Leaf overrides live in a section at the bottom. A new `.x h2`-shaped
 rule added mid-file will usually trip that rule, and the fix is ordering, not `!important`.
 
-Fonts are self-hosted in `public/fonts/`. Two variable woff2 faces, latin subset: Instrument Sans
-carries the interface, Source Serif carries guide prose (`article.prose`), where the reading is long
-enough to earn a serif. **The `.ttf` pair beside them is not dead weight** — see OG cards below.
+Fonts are self-hosted in `public/fonts/`, all OFL, latin subset. Onest (variable woff2) carries the
+interface. Newsreader (variable woff2, roman and a real italic) carries guide prose
+(`article.prose`), where the reading is long enough to earn a serif, and the italic turn in a
+landing headline. JetBrains Mono carries ids, tags and code. **The static `onest-{400,600}.woff`
+pair is not dead weight** — see OG cards below.
 
 ## What a guide page does
 
@@ -109,7 +111,7 @@ pasted into Slack or a DM, so the unfurl card is the first thing most people see
   every other route on the Worker would otherwise pay for it on a cold start. Bundling it at all
   requires `nitro.experimental.wasm`; without that the build dies trying to parse the `.wasm` as
   JavaScript.
-- Satori cannot read woff2, so the renderer loads the `.ttf` pair from `apps/web/public/fonts/`
+- Satori cannot read woff2, so the renderer loads the static `onest-{400,600}.woff` pair from `apps/web/public/fonts/`
   through the `ASSETS` binding, cached per isolate. **Nothing else references those two files**, so
   they look unused and are not — deleting them returns 500 on every unfurl card, which is exactly
   what happened once during the port.

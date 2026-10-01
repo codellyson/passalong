@@ -16,6 +16,7 @@ import {
   serialize,
   stamp,
   stripPlaceholders,
+  unheldFields,
   validate,
 } from "./guide.js";
 import * as store from "./store.js";
@@ -60,7 +61,13 @@ export async function share(markdown, { cwd = process.cwd(), to, follows } = {})
   if (follows) guide.meta.parent = await resolveId(String(follows).trim());
   if (guide.meta.to && !guide.meta.team)
     throw new PassalongError("`to:` needs a team — address a handoff as team/handle");
-  const errors = validate(guide);
+  const errors = [
+    ...unheldFields(markdown).map(
+      (k) =>
+        `frontmatter "${k}" holds more than a string or a list of strings, and it would be dropped — move it into the body (a fenced yaml block keeps it as written)`,
+    ),
+    ...validate(guide),
+  ];
   if (errors.length)
     throw new PassalongError(`guide is not ready to share:\n  - ${errors.join("\n  - ")}`);
   // A task stays a draft when it is shared. Draft is the column a task waits in until a person
@@ -422,6 +429,7 @@ export async function handIn(
     evidence = "",
     checks = [],
     writeup = "",
+    risk = "",
     markdown,
     report,
     pr = "",
@@ -482,6 +490,8 @@ export async function handIn(
     // Left out when there is nothing to say, rather than sent as "": most hand-ins have nothing
     // to adapt, and the field is for the ones that do.
     ...(writeup ? { writeup } : {}),
+    // What it could break, for the reviewer. Left out when empty, like the write-up.
+    ...(risk ? { risk } : {}),
     ...(typeof ok === "boolean" ? { ok } : {}),
   });
 }
@@ -804,6 +814,11 @@ export async function reply(ref, text, { files = [] } = {}) {
  * found doing it. Whoever opens the original, person or agent, gets its follow-ups with it, which
  * is why context belongs there rather than in a one-line verdict note.
  *
+ * What an agent did and found working on the guide is not context for it: that is the hand-in,
+ * and the note says so. It used to list "what you found doing it" among the things to publish, on
+ * every `take`, while hand_in said a follow-up was not for answering — the agent followed the one
+ * it read last, and the author got a second guide to review with the evidence inside it.
+ *
  * Trailing, like the handoff nudge, so it never sits in front of the frontmatter. It is here and
  * not only in the server's instructions because an agent reads the payload it is working from and
  * skims everything else — the same reason the bug lead is inside the document. For a bug, the
@@ -820,9 +835,10 @@ export function followUpNote(meta = {}) {
     );
   return (
     "<!-- passalong: a follow-up is more context for this guide, written as its own guide. If " +
-    "this guide needs more — a missing detail, a step that needed explaining, what changed since, " +
-    `what you found doing it — publish that with publish_guide parent=${meta.id}, and whoever ` +
-    "opens this guide gets it too. -->"
+    "this guide needs more — a missing detail, a step that needed explaining, what changed since " +
+    `— publish that with publish_guide parent=${meta.id}, and whoever opens this guide gets it ` +
+    "too. What you did and found working on it is not a follow-up: it goes on hand_in, in " +
+    "`checks` and `writeup`. -->"
   );
 }
 
@@ -974,13 +990,40 @@ export async function activity({ all = false, limit = 50 } = {}) {
  * "Correction: …" instead, because measurements, commands and commit ids do not fit in a tweet.
  * The first line is the summary a row shows; the whole thing is what the guide shows.
  */
-export async function verdict(id, ok, note = "") {
+export async function verdict(id, ok, note = "", { images = [] } = {}) {
   if (!api.loggedIn()) throw new PassalongError("verdicts need sync — run `passalong login` first");
   const said = note.trim();
   if (!ok && !said)
     throw new PassalongError("say what went wrong: passalong broken <id> <what happened>");
+  // "It works" is shown, not said: the server refuses one with no screenshot of it working, so
+  // the refusal is said here before anything is uploaded, in the words of the command that fixes it.
+  if (ok && !images.length && !/\/v1\/shots\/[a-z0-9]{6,16}/.test(said))
+    throw new PassalongError(
+      "show it working: passalong works <id> <screenshot.png> [what you checked]",
+    );
+  const guide = await resolveId(id);
+  const shots = [];
+  for (const file of images) shots.push((await attach(file)).markdown);
   const line = said.split("\n")[0].slice(0, 280);
-  return api.verdict(await resolveId(id), ok, line, said.length > line.length ? said : "");
+  const detail = [said.length > line.length || shots.length ? said : "", ...shots]
+    .filter(Boolean)
+    .join("\n");
+  return api.verdict(guide, ok, line, detail);
+}
+
+/**
+ * The words after `passalong works <id>`, split into the screenshots and the note: an argument is a
+ * screenshot when it names an image file that exists, and everything else is what was checked.
+ */
+export function proofArgs(args) {
+  const images = [];
+  const words = [];
+  for (const a of args) {
+    const ext = a.slice(a.lastIndexOf(".")).toLowerCase();
+    if (SHOT_TYPES[ext] && existsSync(a)) images.push(a);
+    else words.push(a);
+  }
+  return { images, note: words.join(" ") };
 }
 
 /**

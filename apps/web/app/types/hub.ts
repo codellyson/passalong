@@ -40,10 +40,13 @@ export interface Verdict {
   by: string | null;
   by_name?: string;
   note: string | null;
+  at?: string;
 }
 
 export interface Pull {
   handle: string | null;
+  /** How it arrived: "cli", "link", or a receipt a verdict ("verdict") or archive ("web") wrote. */
+  via?: string;
   at: string;
 }
 
@@ -97,6 +100,11 @@ export interface Guide {
   children?: number;
   /** "bug", "task" or "transfer"; absent means transfer. */
   kind?: string;
+  /**
+   * What last wrote it: `cli@<version>`, `mcp`, `hub` or `api` — see migrations/0035. Empty on a
+   * guide last written before that, which is unknown rather than any of the four.
+   */
+  client?: string;
   area?: string;
   severity?: string;
   /** Set by the board's SQL, not worked out here — see the note on `load()`. */
@@ -204,6 +212,8 @@ export interface Task {
     evidence?: string;
     /** The same evidence against the Acceptance line each piece answers, when the agent sorted it. */
     checks?: { check: string; ran: string }[];
+    /** What they think it could break. One line, often empty. See 0032_claim_risk.sql. */
+    risk?: string;
     report: string;
     report_title?: string;
     report_url?: string;
@@ -258,6 +268,8 @@ export interface HandedIn {
   evidence: string;
   /** What they had to adapt to make it work there. Prose, often empty. See 0031_writeup.sql. */
   writeup?: string;
+  /** What they think it could break. One line, often empty. See 0032_claim_risk.sql. */
+  risk?: string;
   at: string;
 }
 
@@ -298,4 +310,50 @@ export interface ThreadItem {
   /** A verdict or an ack only: it worked, or they took it. */
   ok?: boolean;
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
+}
+
+/** One place a guide is held, with what came back if it was handed in. See GET /v1/guides/:id/context. */
+export interface ContextClaim {
+  /** '' for a task; the taker's repo for a handoff or a bug, which is taken once per repo. */
+  place: string;
+  state: "claimed" | "stalled" | "review";
+  by: { handle: string; name: string };
+  /** Held or handed in by the account looking at the page. */
+  mine?: boolean;
+  agent: string;
+  host: string;
+  repo: string;
+  note: string;
+  writeup: string;
+  evidence: string;
+  checks: { check: string; ran: string }[];
+  /** The reviewer's, so only the author is sent it. */
+  risk: string;
+  pr: string;
+  /** The write-up guide it handed in, when this reader can open it. */
+  report: { id: string; title: string; url: string } | null;
+  claimed_at: string;
+  lease_until: string;
+  updated: string;
+}
+
+/** Everything around one guide, for its page in the hub. No markdown: that stays on the share page. */
+export interface GuideContext {
+  guide: Guide;
+  owner: boolean;
+  claims: ContextClaim[];
+  /** Every standing verdict, newest first, with what it showed: a "works" carries screenshots. */
+  verdicts: {
+    ok: boolean;
+    by: { handle: string; name: string };
+    note: string;
+    detail: string;
+    at: string;
+  }[];
+  /** Each person's standing answer to "are you taking this?", with when they gave it. */
+  acks: { taken: boolean; by: { handle: string; name: string }; note: string; at: string }[];
+  parent: Guide | null;
+  children: Guide[];
+  blocked_by: Guide[];
+  blocks: Guide[];
 }

@@ -20,7 +20,7 @@ const docs = published("/docs");
       <AppThemeToggle />
       <!-- One sign-in, not two. The hub *is* the sign-in, so a masthead offering both was the same
            door twice. This is for the returning visitor; the page below is for everyone else. -->
-      <a class="btn" href="/hub">Sign in</a>
+      <a class="btn primary" href="/hub">Sign in</a>
     </p>
   </nav>
 </template>

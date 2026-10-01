@@ -156,6 +156,15 @@ const QUERIES = {
            SUM(CASE WHEN p.account_id = '' THEN 1 ELSE 0 END) AS anon
       FROM pull p
       JOIN guide g ON g.id = p.guide_id`,
+
+  // Not a §14 figure: which releases are writing guides now, so a malformed one can be traced to
+  // the client that produced it. `client` is migration 0035, and "" is every row from before it.
+  clients: `
+    SELECT client, COUNT(*) AS guides, MAX(updated) AS last
+      FROM guide
+     GROUP BY client
+     ORDER BY last DESC
+     LIMIT 12`,
 };
 
 // ---- where the rows are --------------------------------------------------------------------
@@ -306,6 +315,14 @@ function report(read) {
   console.log(
     `\n  M2 asks for one external team transferring weekly. The first figure is where to look.\n`,
   );
+
+  rule("What wrote them, by last write");
+  for (const r of read(QUERIES.clients))
+    console.log(
+      `  ${(r.client || "unknown").padEnd(18)} ${plural(r.guides, "guide")} · last ${String(r.last).slice(0, 10)}`,
+    );
+  caveat('"unknown" is every guide last written before migration 0035 recorded it.');
+  console.log("");
 }
 
 // ---- go ---------------------------------------------------------------------------------------

@@ -35,6 +35,14 @@ Those guards are the whole point. `v0.2.0` was once tagged by hand at a commit w
 still pointed at the old host: that is what happens when the tag is a separate step from the bump
 it is supposed to describe.
 
+### Making agents update
+
+A release that changes what agents are told is not finished when it is on npm: installed CLIs keep
+the old text until somebody reinstalls. Once `npm view passalong version` shows the new version,
+raise `MIN_CLIENT` in `apps/api/src/clients.ts` to it and merge. From that deploy on, every older
+CLI's next call is refused with `npm i -g passalong@latest` and the restart to do. Never raise it
+first — the floor deploys on merge, and above `latest` it refuses everyone with nothing to install.
+
 It is `release`, not `publish`, because `pnpm publish` is a pnpm built-in — the same trap as
 `pnpm deploy`.
 

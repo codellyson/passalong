@@ -106,3 +106,22 @@ test("no checks at all leaves every line empty and nothing extra", () => {
   assert.deepEqual(rows, [{ asked: "Esc clears", ran: "" }]);
   assert.deepEqual(extra, []);
 });
+
+test("inlineParts reads code and bold, and leaves everything else as typed", async () => {
+  const { inlineParts } = await import("../app/utils/task-docs.ts");
+  assert.deepEqual(inlineParts("A captured order shows a green **Paid** badge"), [
+    { kind: "text", text: "A captured order shows a green " },
+    { kind: "bold", text: "Paid" },
+    { kind: "text", text: " badge" },
+  ]);
+  assert.deepEqual(inlineParts("`pnpm test` passes **fully**"), [
+    { kind: "code", text: "pnpm test" },
+    { kind: "text", text: " passes " },
+    { kind: "bold", text: "fully" },
+  ]);
+  assert.deepEqual(inlineParts("`**not bold**` in code"), [
+    { kind: "code", text: "**not bold**" },
+    { kind: "text", text: " in code" },
+  ]);
+  assert.deepEqual(inlineParts("a lone ** stays"), [{ kind: "text", text: "a lone ** stays" }]);
+});

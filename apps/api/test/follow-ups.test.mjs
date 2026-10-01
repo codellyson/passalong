@@ -58,7 +58,7 @@ test("fetching follow-ups is not opening them: no pull is recorded for the child
 
 const upward = index.slice(
   index.indexOf('app.get("/v1/guides/:id/parent"'),
-  index.indexOf('app.patch("/v1/guides/:id/status"'),
+  index.indexOf('app.get("/v1/guides/:id/context"'),
 );
 
 test("the guide a follow-up came out of travels with it, clipped the same way", () => {

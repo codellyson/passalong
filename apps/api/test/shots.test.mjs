@@ -10,7 +10,16 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { conversationOn, evidenceOn, holdShots, sweepOrphans } from "../src/shots.ts";
+import {
+  conversationOn,
+  evidenceOn,
+  holdShots,
+  PROOF_DAYS,
+  PROOF_GONE,
+  strike,
+  sweepOrphans,
+  sweepProof,
+} from "../src/shots.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 const T0 = "2026-09-21T10:00:00.000Z";
@@ -170,4 +179,93 @@ test("a file on a reply is carried by the conversation as a picture is", async (
     )
     .run(body, T0);
   assert.deepEqual(await conversationOn(db, "g1"), [body]);
+});
+
+// ---- proof: the screenshots on "it works", removed PROOF_DAYS after the guide is closed ----------
+
+const DAY = 86_400_000;
+const CLOSED = "2026-09-10T10:00:00.000Z";
+const later = (days) => Date.parse(CLOSED) + days * DAY;
+
+/** g1 closed on CLOSED, its document showing one screenshot, a "works" verdict showing another. */
+function closedWithProof(db) {
+  const shot = seed(db);
+  shot("doc111");
+  shot("prf222", "them");
+  db.raw
+    .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = 'g1'")
+    .run("## Goal\n![the design](https://passalong.dev/v1/shots/doc111)\n", CLOSED);
+  db.raw.prepare("UPDATE shot SET guide_id = 'g1'").run();
+  db.raw
+    .prepare(
+      `INSERT INTO verdict (guide_id, account_id, ok, note, detail, at)
+       VALUES ('g1', 'them', 1, 'works on staging', ?, ?)`,
+    )
+    .run("Checkout goes through:\n![paid](https://passalong.dev/v1/shots/prf222)", CLOSED);
+}
+
+test("a verdict's proof counts as something the guide carries", async () => {
+  const db = d1();
+  closedWithProof(db);
+  const said = await evidenceOn(db, "g1");
+  assert.ok(said.some((t) => t.includes("/v1/shots/prf222")));
+});
+
+test(`proof stays for ${PROOF_DAYS} days after closing, then goes`, async () => {
+  const db = d1();
+  closedWithProof(db);
+  const early = await sweepProof({ DB: db }, { at: later(PROOF_DAYS - 1) });
+  assert.deepEqual(early, { removed: 0, deferred: 0 });
+  assert.equal(owner(db, "prf222"), "g1");
+
+  const deleted = [];
+  const bucket = { delete: async (keys) => deleted.push(...keys) };
+  const done = await sweepProof({ DB: db, SHOTS: bucket }, { at: later(PROOF_DAYS + 1) });
+  assert.deepEqual(done, { removed: 1, deferred: 0 });
+  assert.deepEqual(deleted, ["prf222.png"]);
+  assert.equal(owner(db, "prf222"), undefined, "the row is gone");
+});
+
+test("what the guide's own document shows is never proof, and stays", async () => {
+  const db = d1();
+  closedWithProof(db);
+  await sweepProof({ DB: db }, { at: later(30) });
+  assert.equal(owner(db, "doc111"), "g1");
+});
+
+test("the verdict says its screenshot was removed rather than showing a broken image", async () => {
+  const db = d1();
+  closedWithProof(db);
+  await sweepProof({ DB: db }, { at: later(PROOF_DAYS + 1) });
+  const v = db.raw.prepare("SELECT detail FROM verdict WHERE guide_id = 'g1'").get();
+  assert.equal(v.detail, `Checkout goes through:\n${PROOF_GONE}`);
+});
+
+test("an open guide's proof is kept however old it is", async () => {
+  const db = d1();
+  closedWithProof(db);
+  db.raw.prepare("UPDATE guide SET status = 'published' WHERE id = 'g1'").run();
+  assert.deepEqual(await sweepProof({ DB: db }, { at: later(90) }), { removed: 0, deferred: 0 });
+});
+
+test("a bucket that refuses leaves everything for the next run", async () => {
+  const db = d1();
+  closedWithProof(db);
+  const bucket = {
+    delete: async () => {
+      throw new Error("R2 down");
+    },
+  };
+  const r = await sweepProof({ DB: db, SHOTS: bucket }, { at: later(PROOF_DAYS + 1) });
+  assert.deepEqual(r, { removed: 0, deferred: 1 });
+  assert.equal(owner(db, "prf222"), "g1");
+});
+
+test("strike replaces an image or a bare link to a removed shot, and nothing else", () => {
+  const text =
+    "see ![a](https://x.dev/v1/shots/aaa111) and https://x.dev/v1/shots/aaa111 but not /v1/shots/bbb222";
+  assert.equal(
+    strike(text, ["aaa111"]),
+    `see ${PROOF_GONE} and ${PROOF_GONE} but not /v1/shots/bbb222`,
+  );
 });

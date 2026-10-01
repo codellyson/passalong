@@ -68,7 +68,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
               <h2 class="m-0 mt-1 text-base leading-snug break-words">{{ last.title || last.id }}</h2>
               <p class="m-0 mt-1 flex items-center gap-3 text-xs text-muted">
                 <code class="font-code">{{ last.id }}</code>
-                <a v-if="last.url" :href="last.url" target="_blank" rel="noopener">The guide</a>
+                <NuxtLink :to="`/hub/g/${last.id}`" @click="close">The guide</NuxtLink>
               </p>
             </div>
             <button class="btn sm shrink-0" type="button" aria-label="Close the conversation" @click="close">

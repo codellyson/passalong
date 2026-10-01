@@ -6,15 +6,21 @@
 import { APEX } from "#api/hosts";
 import { PUBLIC_PAGES } from "#shared/pages";
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   setResponseHeader(event, "content-type", "application/xml; charset=utf-8");
   setResponseHeader(event, "cache-control", "public, max-age=3600");
   const urls = PUBLIC_PAGES.filter((p) => !p.draft)
     .map((p) => `  <url><loc>${APEX}${p.path}</loc><lastmod>${p.updated}</lastmod></url>`)
     .join("\n");
+  // Posts, once the blog itself is published: each one by its own date.
+  const blog = PUBLIC_PAGES.some((p) => p.path === "/blog" && !p.draft)
+    ? (await publishedPosts())
+        .map((p) => `  <url><loc>${APEX}/blog/${p.slug}</loc><lastmod>${p.date}</lastmod></url>`)
+        .join("\n")
+    : "";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
+${urls}${blog ? `\n${blog}` : ""}
 </urlset>
 `;
 });

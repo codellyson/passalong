@@ -93,3 +93,25 @@ test("the refusal tells the agent which check, and hands back its own output", (
   assert.match(said, /check 1 of 3, "the suite is green"/);
   assert.match(said, /still hold this/);
 });
+
+test("a failing step inside a pipeline fails the check, whatever the last step returned", () => {
+  // The shape a real hand-in used: the git command died, head exited 0, and it was recorded as met.
+  const piped = runCheck({
+    check: "log",
+    cmd: "(echo 'fatal: ambiguous argument'; exit 128) | head -5",
+  });
+  assert.equal(piped.ok, false);
+  assert.equal(piped.exit, 128);
+  const grepped = runCheck({
+    check: "tests",
+    cmd: "(echo 'Tests: 1 failed'; exit 1) 2>&1 | grep Tests:",
+  });
+  assert.equal(grepped.ok, false, "grep finding the summary does not make a failing run pass");
+});
+
+test("a writer cut short by head is not a failure", () => {
+  const r = runCheck({ check: "lines", cmd: "yes | head -3" });
+  assert.equal(r.ok, true);
+  assert.equal(r.exit, 141);
+  assert.match(r.ran, /not a failure/);
+});

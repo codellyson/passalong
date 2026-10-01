@@ -67,7 +67,7 @@ const who = computed(() => {
        corners without clipping the row menu too. The ends take the list's own radius: its edge is a
        shadow outside it now, not a 1px border inside, so there is no inset to subtract. -->
   <li
-    class="m-0 flex flex-wrap items-center gap-x-4 gap-y-2 bg-raised px-4 py-3 shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
+    class="m-0 flex flex-wrap items-center gap-x-4 gap-y-2 bg-raised px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
   >
     <div class="min-w-0 flex-1 basis-72">
       <p class="m-0 flex flex-wrap items-baseline gap-x-2">
@@ -79,12 +79,10 @@ const who = computed(() => {
           ]"
           >{{ badge.label }}</span
         >
-        <a
-          :href="g.url"
-          target="_blank"
-          rel="noopener"
+        <NuxtLink
+          :to="`/hub/g/${g.id}`"
           class="text-base font-semibold leading-snug text-fg no-underline hover:text-accent"
-          >{{ g.title || "Untitled guide" }}</a
+          >{{ g.title || "Untitled guide" }}</NuxtLink
         >
       </p>
       <p class="mt-1 mb-0 flex flex-wrap gap-x-1.5 font-ui text-sm text-muted">
@@ -121,8 +119,8 @@ const who = computed(() => {
 
     <div class="flex shrink-0 items-center gap-2">
       <template v-if="key === 'unanswered'">
-        <button class="btn primary sm" @click="onAck(g, true)">Take it</button>
-        <button class="btn sm" :aria-expanded="open === 'pass'" @click="toggle('pass')">Pass</button>
+        <button class="btn primary sm" @click="onAck(g, true)">I'll do this</button>
+        <button class="btn sm" :aria-expanded="open === 'pass'" @click="toggle('pass')">Not for me</button>
       </template>
       <button
         v-else-if="key === 'waiting' || key === 'unjudged'"
@@ -136,7 +134,7 @@ const who = computed(() => {
            was sent to to open it and say it worked; when they never do, the author is the one who
            knows the work is finished and had no verb for it but Archive, sitting under a "Terminals
            and agents" heading next to Delete. `consumed` is reversible and the menu still says
-           "Put it back". -->
+           "Unarchive". -->
       <button
         v-else-if="closable(g)"
         class="btn sm whitespace-nowrap"
@@ -145,7 +143,7 @@ const who = computed(() => {
         :title="`Take ${g.title || g.id} off the board. Whoever it went to is told, and you can put it back.`"
         @click="close"
       >
-        {{ closing ? "Closing…" : "Close it" }}
+        {{ closing ? "Archiving…" : "Archive" }}
       </button>
       <HubRowMenu :g="g" @ack="open = 'ack'" @verdict="open = 'verdict'" />
     </div>

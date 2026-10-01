@@ -4,7 +4,7 @@
   Tasks and handoffs used to be two pages, with two ideas of who has what. They are one thing — a
   guide handed from one context to another — so they are one page, in the order a person needs it:
 
-    Needs you     work handed in for you to review (HubTaskReview), agents stuck on you, and guides
+    Needs you     one list (HubNeedsYou): work handed in for you to review, agents stuck on you, and guides
                   handed to you that you have not answered
     Taken         who has what, across every kind (HubTaken, GET /v1/working)
     Open          what nobody is on yet: ready, blocked and draft tasks, a teammate's task waiting
@@ -131,7 +131,7 @@ const taskHit = (t: Task) =>
   !follows.value && hit([t.title, t.id, t.target, t.claim?.note, t.claim?.report_title]);
 const tasks = computed(() => data.value.tasks.filter(taskHit));
 
-/** Yours, and waiting on you: mirrors the groups in HubTaskReview. */
+/** Yours, and waiting on you: mirrors the task groups in HubNeedsYou. */
 const taskNeedsYou = (t: Task) =>
   t.mine &&
   (t.state === "review" ||
@@ -148,7 +148,7 @@ const OPEN: { state: Task["state"]; title: string; note: string }[] = [
   },
   {
     state: "ready",
-    title: "Ready",
+    title: "Ready for an agent",
     note: "The next agent in the right repo takes these, oldest first.",
   },
   {
@@ -156,7 +156,11 @@ const OPEN: { state: Task["state"]; title: string; note: string }[] = [
     title: "Blocked",
     note: "Waiting until the tasks they depend on are approved.",
   },
-  { state: "draft", title: "Draft", note: "Not in the queue until you make them ready." },
+  {
+    state: "draft",
+    title: "Draft",
+    note: "No agent can pick these up until you mark them ready for agents.",
+  },
 ];
 const openTasks = computed(() => {
   const out = new Map<Task["state"], Task[]>();
@@ -213,7 +217,7 @@ const tabs = computed(() => [
   },
   // The id stays `working`: it is the `?tab=` in a link somebody may have sent. Only the label
   // changed, because the label was wrong — a stalled card is on this list and is not working.
-  { id: "working" as const, label: "Taken", count: workingCount.value, tone: "" },
+  { id: "working" as const, label: "Being worked on", count: workingCount.value, tone: "" },
   { id: "open" as const, label: "Open", count: openCount.value, tone: "" },
   { id: "done" as const, label: "Done", count: doneCount.value, tone: "" },
 ]);
@@ -280,7 +284,7 @@ const list =
         <!-- Tabs and search are one band: both answer "which of my work am I looking at", and as
              two rows — search floated against the title, tabs under it — they read as two unrelated
              decisions with a gulf of empty page between them. -->
-        <div class="-mb-2 flex flex-wrap items-end gap-x-6 gap-y-3 border-b border-line">
+        <div class="flex flex-wrap items-end gap-x-6 gap-y-3 border-b border-line">
           <div
             ref="tablist"
             class="flex min-w-0 grow gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
@@ -318,30 +322,17 @@ const list =
           :id="`panel-${tab}`"
           role="tabpanel"
           :aria-labelledby="`tab-${tab}`"
-          class="flex flex-col gap-6 transition-opacity"
+          class="flex flex-col gap-8 transition-opacity"
           :class="scopeChanging ? 'opacity-60' : ''"
           :aria-busy="waiting || scopeChanging"
         >
           <!-- ---- Needs you ---- -->
           <template v-if="tab === 'needs'">
-            <HubTaskReview :tasks="tasks" />
-            <div v-if="handedIn.length">
-              <h3 :class="sub">Handed in · {{ handedIn.length }}</h3>
-              <p class="mt-1 mb-3 font-ui text-sm text-muted">
-                Handoffs you sent, done where they went. Close them, or send one back with why.
-              </p>
-              <ul :class="list">
-                <HubHandedInRow v-for="h in handedIn" :key="`${h.id}-${h.place}`" :h="h" />
-              </ul>
-            </div>
+            <!-- One list for everything that needs you, the picked item beside it. Handed in and Sent
+                 to you used to be lists of their own below a task review a screen tall, where nobody
+                 found them. -->
             <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
-            <div v-else-if="lanes.needs.length">
-              <h3 :class="sub">Sent to you · {{ lanes.needs.length }}</h3>
-              <p class="mt-1 mb-3 font-ui text-sm text-muted">Handed to you, and waiting on your answer.</p>
-              <ul :class="list">
-                <HubInboxRow v-for="r in lanes.needs" :key="r.g.id" :row="r" />
-              </ul>
-            </div>
+            <HubNeedsYou v-else :tasks="tasks" :handed-in="handedIn" :rows="lanes.needs" />
             <!-- All clear is one quiet line, not an empty section. -->
             <div
               v-if="!waiting && !needsCount"
@@ -396,7 +387,7 @@ const list =
               {{ searching ? "Nothing open matches." : "Nothing is open." }}
               <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
               <button v-else class="linkish" type="button" @click="copy(ASKS.task, $event.currentTarget)">
-                <span data-label>Copy a task ask for your agent</span>
+                <span data-label>Copy a prompt for your agent</span>
               </button>
             </p>
           </template>

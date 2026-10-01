@@ -82,7 +82,11 @@ interface Hold {
 }
 
 /**
- * The evidence of every hand-in on a guide, as it was written.
+ * The evidence of every hand-in on a guide, and the proof on every verdict, as it was written.
+ *
+ * A "works" verdict carries screenshots of it working (see PROOF_DAYS), and they live on the
+ * verdict row rather than on a claim. Leaving them out here would let the author's next edit
+ * release them, and the orphan sweep would take them a day later.
  *
  * Parsing it for shot ids is the caller's job: the parser lives in guide.ts with the markdown it
  * was written for, and this file deliberately imports no sibling so it can be tested against a
@@ -90,10 +94,116 @@ interface Hold {
  */
 export async function evidenceOn(db: D1Database, guide: string): Promise<string[]> {
   const { results } = await db
-    .prepare("SELECT evidence FROM claim WHERE guide_id = ? AND evidence <> ''")
+    .prepare(
+      `SELECT evidence AS text FROM claim WHERE guide_id = ?1 AND evidence <> ''
+       UNION ALL
+       SELECT detail FROM verdict WHERE guide_id = ?1 AND detail <> ''`,
+    )
     .bind(guide)
-    .all<{ evidence: string }>();
-  return results.map((r) => r.evidence);
+    .all<{ text: string }>();
+  return results.map((r) => r.text);
+}
+
+/**
+ * How long proof outlives the guide it proves, once that guide is closed.
+ *
+ * Proof is a screenshot of the thing working: somebody says a guide works, and shows it. It is
+ * there for the review, and the review ends when the author closes the guide or approves the task.
+ * Keeping every screenshot of every finished piece of work forever is storage nobody reads, so
+ * five days after closing it goes — long enough to reopen something that was closed too early and
+ * still see why somebody said it worked. What the guide's own document shows is never proof: it
+ * is the document, and it stays for as long as the guide does.
+ */
+export const PROOF_DAYS = 5;
+
+/** What a removed screenshot reads as, wherever the text around it pointed at it. */
+export const PROOF_GONE = `[screenshot removed ${PROOF_DAYS} days after this was closed]`;
+
+/** Text with every pointer at these shots — an image or a bare link — replaced by PROOF_GONE. */
+export function strike(text: string, ids: string[]): string {
+  let out = text;
+  for (const id of ids) {
+    out = out
+      .replace(new RegExp(`!\\[[^\\]]*\\]\\([^)\\s]*/v1/shots/${id}\\b[^)]*\\)`, "g"), PROOF_GONE)
+      .replace(new RegExp(`\\S*/v1/shots/${id}\\b\\S*`, "g"), PROOF_GONE);
+  }
+  return out;
+}
+
+/**
+ * Delete the proof on guides closed more than PROOF_DAYS ago.
+ *
+ * Proof is any shot a closed guide holds that its own markdown does not name: the screenshots on
+ * a "works" verdict, and those in a hand-in's evidence. `updated` is when the guide was closed —
+ * closing writes the status into the markdown — and a guide edited or put back since starts the
+ * clock again, which is the safe direction for it to be wrong in.
+ *
+ * The text that pointed at a removed shot says so rather than showing a broken image: a verdict
+ * that reads "works" beside an empty frame looks like proof that failed to load, not proof that
+ * was tidied away on schedule. Bucket first and stop if it refuses, as sweepOrphans does.
+ */
+export async function sweepProof(
+  env: ShotEnv,
+  { days = PROOF_DAYS, limit = 200, at = Date.now() } = {},
+) {
+  const cutoff = new Date(at - days * 86_400_000).toISOString();
+  const { results } = await env.DB.prepare(
+    `SELECT s.id, s.type, s.guide_id FROM shot s JOIN guide g ON g.id = s.guide_id
+      WHERE g.status = 'consumed' AND g.updated < ?
+        AND instr(g.markdown, '/v1/shots/' || s.id) = 0
+      ORDER BY g.updated LIMIT ?`,
+  )
+    .bind(cutoff, limit)
+    .all<{ id: string; type: string; guide_id: string }>();
+  if (!results.length) return { removed: 0, deferred: 0 };
+
+  if (env.SHOTS) {
+    try {
+      await env.SHOTS.delete(results.map((r) => shotKey(r.id, r.type)));
+    } catch {
+      return { removed: 0, deferred: results.length };
+    }
+  }
+  const ids = results.map((r) => r.id);
+  for (let i = 0; i < ids.length; i += 100) {
+    const slice = ids.slice(i, i + 100);
+    await env.DB.prepare(`DELETE FROM shot WHERE id IN (${slice.map(() => "?").join(",")})`)
+      .bind(...slice)
+      .run();
+  }
+
+  const byGuide = new Map<string, string[]>();
+  for (const r of results) byGuide.set(r.guide_id, [...(byGuide.get(r.guide_id) ?? []), r.id]);
+  for (const [guide, gone] of byGuide) {
+    const { results: said } = await env.DB.prepare(
+      "SELECT account_id, note, detail FROM verdict WHERE guide_id = ?",
+    )
+      .bind(guide)
+      .all<{ account_id: string; note: string; detail: string }>();
+    for (const v of said) {
+      const note = strike(v.note, gone);
+      const detail = strike(v.detail, gone);
+      if (note !== v.note || detail !== v.detail)
+        await env.DB.prepare(
+          "UPDATE verdict SET note = ?, detail = ? WHERE guide_id = ? AND account_id = ?",
+        )
+          .bind(note, detail, guide, v.account_id)
+          .run();
+    }
+    const { results: held } = await env.DB.prepare(
+      "SELECT place, evidence FROM claim WHERE guide_id = ? AND evidence <> ''",
+    )
+      .bind(guide)
+      .all<{ place: string; evidence: string }>();
+    for (const k of held) {
+      const evidence = strike(k.evidence, gone);
+      if (evidence !== k.evidence)
+        await env.DB.prepare("UPDATE claim SET evidence = ? WHERE guide_id = ? AND place = ?")
+          .bind(evidence, guide, k.place)
+          .run();
+    }
+  }
+  return { removed: results.length, deferred: 0 };
 }
 
 /**

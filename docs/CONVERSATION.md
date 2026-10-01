@@ -1,7 +1,7 @@
 # Conversation: asking, replying, attachments
 
 **Status:** Proposed 2026-10-01, and built locally end to end. Everything in §10 and §6 is in, plus the
-items in §13. Not deployed; production needs migrations 0032 to 0035 first.
+items in §13. Not deployed; production needs migrations 0037 to 0040 first.
 
 ## 1. Why
 
@@ -45,7 +45,7 @@ scope; the exchange between whoever asked for work and whoever holds it is part 
 
 ## 3. What exists and what this adds
 
-Already built: `task_event` (migration 0032), `claims.thread()`, `GET /v1/guides/:id/thread`,
+Already built: `task_event` (migration 0037), `claims.thread()`, `GET /v1/guides/:id/thread`,
 `HubThread`, the required `note` on `hand_in`, screenshots (`shot`, `POST /v1/shots`,
 `create_upload`, claimed by the document that names them).
 
@@ -57,7 +57,7 @@ Added by this step:
 | `ask` | The agent's question. Keeps the claim, extends the lease, says "stop and wait". |
 | `reply` | The person's message. Written while the guide is held. |
 | Delivery | A reply reaches the agent on its next `progress` or `take`. |
-| Cursor | `claim.replied_through` (migration 0033): the last reply the agent has been given. |
+| Cursor | `claim.replied_through` (migration 0038): the last reply the agent has been given. |
 | Attachments | Phase A: images, through the existing shots. Phase B: other files. |
 | Hub | A composer under the thread, and "Asking you" replacing the `BLOCKED:` group. |
 
@@ -202,7 +202,7 @@ fetch them. That is more reasonable than inlining bytes into a tool result, and 
 
 ## 7. Data
 
-Migration `0033_conversation.sql`:
+Migration `0038_conversation.sql`:
 
 ```sql
 ALTER TABLE claim ADD COLUMN replied_through INTEGER NOT NULL DEFAULT 0;
@@ -212,7 +212,7 @@ ALTER TABLE claim ADD COLUMN replied_through INTEGER NOT NULL DEFAULT 0;
 `claims.EventKind` and `ThreadItem.kind` gain the two values; `messageOf()` gains their voices ("Asking:
 …" on the agent side, the person's words verbatim on yours).
 
-Phase B adds migration `0034_attachment.sql`.
+Phase B adds migration `0039_attachment.sql`.
 
 Both are additive, as V2.md requires, and a client that has never heard of either keeps working: an old
 CLI ignores `replies`, an old agent never calls `ask`.
@@ -248,7 +248,7 @@ today and each is a distinct job; the alternative, flags on `progress`, was reje
 
 ## 10. Build order
 
-1. **Ask and reply, text only.** Migration 0033, `ask()`, the reply route, delivery on `progress`/`take`,
+1. **Ask and reply, text only.** Migration 0038, `ask()`, the reply route, delivery on `progress`/`take`,
    the derived waiting state, `steps()` events, the Stop-hook change, the composer, thread voices. Tests
    against real SQLite beside `claims.test.mjs`: a reply is delivered once, a lost response is re-sent on
    resume, a stale fence is refused, a reply to an unheld guide is refused, `waiting` clears on reply.
@@ -300,7 +300,7 @@ Differences from §6, so the section above is not read as a description of what 
   handed to the next one. Refused when the guide is done. This is how a person attaches a file to a
   task before it is taken: the composer appears on Open rows as "Add a note or a file for whoever
   takes this". The "only while held" rule in §2 becomes "while held, or as a note on the task".
-- **An agent can upload a file.** `create_upload` takes `kind: "file"` (migration 0035 puts `kind` on
+- **An agent can upload a file.** `create_upload` takes `kind: "file"` (migration 0040 puts `kind` on
   `upload`); the link then accepts only what a file is, checked by the bytes, and a refused upload
   leaves the link usable. The stdio server has `attach_file` for a path. Both return the markdown line,
   which belongs in a guide body or a bug report (claimed on publish). It is **not** accepted as

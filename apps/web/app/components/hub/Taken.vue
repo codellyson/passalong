@@ -247,7 +247,7 @@ const badge = (w: Working) => kindBadge(w.kind);
             :disabled="taking === w.id"
             :title="`Put ${w.title || w.id} back, and tell whoever has it`"
             @click="takeBack(w)"
-          >{{ taking === w.id ? "Taking back…" : "Take it back" }}</button>
+          >{{ taking === w.id ? "Stopping…" : "Stop this agent" }}</button>
         </footer>
       </article>
     </div>

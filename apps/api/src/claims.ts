@@ -21,6 +21,28 @@ export const LEASE_MS = 30 * 60 * 1000;
  */
 export const PERSON_LEASE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * The claim-holder a person is when they take something in the browser, rather than an agent.
+ *
+ * A person and their own agent are one party to a handoff. Saying "I'll do this" in the hub holds
+ * it as the person; their agent then taking it in a repo is the same work arriving somewhere, so
+ * that hold gives way to the agent's rather than standing beside it — two holds for one worker
+ * showed a guide as handed in and still being worked on, by the same name, at once.
+ */
+export const personAgent = (account: string) =>
+  `person-${account.toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
+const isPerson = (agent: string) => agent.startsWith("person-");
+
+/** Let go of this account's browser hold on a guide, now that its own agent has it somewhere. */
+function dropPersonHold(db: D1Database, id: string, account: string) {
+  return db
+    .prepare(
+      "DELETE FROM claim WHERE guide_id = ? AND place = '' AND account_id = ? AND agent_id = ? AND state = 'claimed'",
+    )
+    .bind(id, account, personAgent(account))
+    .run();
+}
+
 /** The longest progress line kept. It is a status, not a log. */
 export const NOTE_MAX = 280;
 
@@ -206,9 +228,11 @@ export interface ClaimRow {
   checks: string;
   /** What had to be adapted to make it work here. Prose, optional, and shown on the guide. */
   writeup: string;
+  /** What it could break, in the hand-in's own words. Optional, for the reviewer. See 0032. */
+  risk: string;
   /** The claim's generation. 0 on a claim taken before 0029_claim_fence.sql existed. */
   fence: number;
-  /** The last reply this agent was given, by event id. See migrations/0033_conversation.sql. */
+  /** The last reply this agent was given, by event id. See migrations/0038_conversation.sql. */
   replied_through: number;
   /** Set by `list()` and `working()`, not stored: the question this claim is waiting on, or ''. */
   asking?: string;
@@ -441,7 +465,7 @@ function claimFor(db: D1Database, id: string, who: Agent): Promise<ClaimRow | nu
     .first<ClaimRow>();
 }
 
-/** What happened, as `task_event` records it. See migrations/0032_task_event.sql. */
+/** What happened, as `task_event` records it. See migrations/0037_task_event.sql. */
 export type EventKind =
   | "taken"
   | "progress"
@@ -599,6 +623,18 @@ export async function take(
       };
   }
 
+  // A person saying they will do it, when their own agent already has it somewhere, is already
+  // true: answer with that hold rather than adding a second one in the browser.
+  if (!task && isPerson(who.agent)) {
+    const own = await db
+      .prepare(
+        "SELECT * FROM claim WHERE guide_id = ? AND account_id = ? AND place <> '' ORDER BY updated DESC LIMIT 1",
+      )
+      .bind(id, who.account)
+      .first<ClaimRow>();
+    if (own) return { task: g, claim: own, resumed: true };
+  }
+
   const place = task ? "" : repo;
   const fence = await nextFence(db, id, place);
   const res = await db
@@ -623,6 +659,7 @@ export async function take(
     )
     .run();
   if (res.meta.changes === 1) {
+    if (!task && place && !isPerson(who.agent)) await dropPersonHold(db, id, who.account);
     const claim = await claimFor(db, id, who);
     if (claim) {
       await event(db, id, "taken", { account: who.account, agent: who.agent, host: who.host, at });
@@ -970,6 +1007,7 @@ export async function finish(
     checks = [],
     pr = "",
     note = "",
+    risk = "",
     fence,
   }: {
     at: string;
@@ -979,6 +1017,8 @@ export async function finish(
     checks?: Check[];
     pr?: string;
     note?: string;
+    /** What it could break. See 0032_claim_risk.sql. */
+    risk?: string;
     /** The claim's generation, from take. Checked when it is there. See 0029_claim_fence.sql. */
     fence?: number;
   },
@@ -1004,7 +1044,7 @@ export async function finish(
   const res = await db
     .prepare(
       `UPDATE claim SET state = 'review', report_id = ?, pr = ?, evidence = ?, checks = ?,
-              note = COALESCE(NULLIF(?, ''), note), updated = ?
+              risk = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
@@ -1024,6 +1064,9 @@ export async function finish(
             })),
           ).slice(0, EVIDENCE_MAX * 2)
         : "",
+      String(risk ?? "")
+        .trim()
+        .slice(0, NOTE_MAX),
       note.trim().slice(0, NOTE_MAX),
       at,
       id,
@@ -1490,6 +1533,7 @@ export async function handIn(
     evidence,
     checks = [],
     writeup = "",
+    risk = "",
     person = false,
     fence,
     verdict,
@@ -1519,6 +1563,8 @@ export async function handIn(
      * `ok` is a boolean, `note` is 280 characters, and `evidence` is what you ran.
      */
     writeup?: string;
+    /** What it could break. See 0032_claim_risk.sql. */
+    risk?: string;
     person?: boolean;
     fence?: number;
     /** Store an agent's answer only if this claim can move to review. */
@@ -1536,7 +1582,7 @@ export async function handIn(
     .slice(0, WRITEUP_MAX);
   const transition = db
     .prepare(
-      `UPDATE claim SET state = 'review', evidence = ?, checks = ?, writeup = ?,
+      `UPDATE claim SET state = 'review', evidence = ?, checks = ?, writeup = ?, risk = ?,
               note = COALESCE(NULLIF(?, ''), note), updated = ?
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
@@ -1558,6 +1604,9 @@ export async function handIn(
           ).slice(0, EVIDENCE_MAX * 2)
         : "",
       storedWriteup,
+      String(risk ?? "")
+        .trim()
+        .slice(0, NOTE_MAX),
       String(note ?? "")
         .trim()
         .slice(0, NOTE_MAX),
@@ -1601,6 +1650,9 @@ export async function handIn(
   const results = await db.batch(writes);
   const res = results[results.length - 1];
   const claim = res?.meta.changes === 1 ? await claimFor(db, id, who) : null;
+  // Handed in by the person's own agent: any browser hold of theirs is done with too. A hold taken
+  // before the rule in take() existed is cleared here, the next time that work comes back.
+  if (claim && claim.place && !isPerson(who.agent)) await dropPersonHold(db, id, who.account);
   if (claim) {
     await event(db, id, "handed_in", {
       account: who.account,

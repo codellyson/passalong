@@ -40,3 +40,22 @@ export function canonicalRedirect(url: string, hostHeader?: string, proto?: stri
   if (proto === "http" && SERVING.has(host)) return `https://${host}${u.pathname}${u.search}`;
   return null;
 }
+
+/** A development server: loopback, or a name under `.localhost` or `.test`. Never a real host. */
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\]|::1|.+\.localhost|.+\.test)$/;
+
+/**
+ * The origin every link this server mints is written against: share links, invites, screenshots.
+ *
+ * `PUBLIC_ORIGIN` names the apex so one guide has one link whichever production host shared it.
+ * But the variable ships in wrangler.jsonc and so reaches `nuxt dev` too, where it made a local
+ * server hand out production addresses — a screenshot uploaded to localhost came back as
+ * `https://passalong.dev/v1/shots/<id>`, which production has never heard of, and it rendered as a
+ * broken image. A request that arrived at a development host gets that host back; every other
+ * request gets the apex, exactly as before.
+ */
+export function mintOrigin(publicOrigin: string | undefined, requestUrl: string): string {
+  const here = new URL(requestUrl);
+  if (LOCAL.test(here.hostname)) return here.origin;
+  return publicOrigin || here.origin;
+}

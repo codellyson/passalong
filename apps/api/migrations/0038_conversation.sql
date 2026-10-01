@@ -1,6 +1,6 @@
 -- The last reply an agent has been given. See docs/CONVERSATION.md.
 --
--- A person's reply is a `task_event` of kind `replied` (migration 0032) and nothing wakes the agent it
+-- A person's reply is a `task_event` of kind `replied` (migration 0037) and nothing wakes the agent it
 -- is for: there is no channel into a worktree. The agent hears on its next `progress` or `take`,
 -- which ask for every reply with an id above this and move it up in the same request.
 --

@@ -66,7 +66,7 @@ machine, another agent session, or a teammate without your branch.
    follow-up gets the guide it came out of, and where that guide has got to — so write it as a
    note on that work rather than as a standalone brief. A session that started from a passalong guide
    (`passalong start` or `pull` on an id, or an agent opened one) usually has context worth adding
-   this way. Whether the guide worked is still its own answer: `passalong works <id>` or
+   this way. Whether the guide worked is still its own answer: `passalong works <id> <screenshot>` or
    `passalong broken <id> <why>`.
 6. **Report** the id (and link if synced) and one line on how to use it on the other side:
    `passalong start <id>` in the target repo, or "start passalong <id>" to an agent with the

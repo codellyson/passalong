@@ -4,17 +4,17 @@
 // this hook on every cron tick, so a scheduled job needs no experimental Nitro tasks and no second
 // Worker: it is a plugin and a `triggers.crons` line in wrangler.jsonc.
 //
-// The only thing it does is delete screenshots no guide ever claimed. Everything else about a shot
-// is handled where it happens — claimed when the guide naming it is written, deleted with that
-// guide — and the leftover case is the upload nobody ever referenced, which nothing else is in a
-// position to notice.
+// Screenshots leave two ways here: the upload nobody ever referenced, which nothing else is in a
+// position to notice, and the proof on a guide closed long enough ago that nobody is reviewing it.
+// Everything else about a shot is handled where it happens — claimed when the guide naming it is
+// written, deleted with that guide.
 
 import { sweepAttachments } from "#api/attachments";
 import { closeGuide, STALE_SENT_MS, staleSent, stalled } from "#api/claims";
 import { notify } from "#api/notify";
 import { DYNAMIC_TTL_MS } from "#api/oauth";
 import { registrationCutoff, sweepRegistrations } from "#api/oauth-clients";
-import { sweepOrphans } from "#api/shots";
+import { PROOF_DAYS, sweepOrphans, sweepProof } from "#api/shots";
 
 /**
  * How far back a run looks for leases that have just lapsed. Wider than the gap between ticks in
@@ -41,6 +41,17 @@ export default defineNitroPlugin((nitro) => {
       if (swept) console.log(`swept ${swept} unclaimed file${swept === 1 ? "" : "s"}`);
     } catch (err) {
       console.error("file sweep failed", err);
+    }
+    // Proof on guides closed more than PROOF_DAYS ago: the screenshots somebody attached to say it
+    // works. They were for the review, and the review is over. See sweepProof in shots.ts.
+    try {
+      const { removed } = await sweepProof(env as Parameters<typeof sweepProof>[0]);
+      if (removed)
+        console.log(
+          `removed ${removed} proof screenshot(s) from guides closed ${PROOF_DAYS}+ days ago`,
+        );
+    } catch (err) {
+      console.error("proof sweep failed", err);
     }
     // OAuth clients that registered themselves and were never approved. Also swept lazily on each
     // registration; this catches the quiet days when nothing registers.

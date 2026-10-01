@@ -166,7 +166,6 @@ secret, so a 401 there means the secret is wrong, not that the check works.
     <AppMasthead />
 
     <header class="hero">
-      <p class="eyebrow">Docs · Guide format</p>
       <h1>
         Markdown with frontmatter,
         <span class="turn">shaped so the next agent can act on it.</span>
@@ -180,7 +179,6 @@ secret, so a 401 there means the secret is wrong, not that the check works.
 
     <div class="rails">
       <section>
-        <p class="eyebrow">Frontmatter</p>
         <h2>The fields, in order</h2>
         <div class="say">
           <p>
@@ -202,8 +200,7 @@ secret, so a 401 there means the secret is wrong, not that the check works.
       </section>
 
       <section>
-        <p class="eyebrow">kind: transfer</p>
-        <h2>Finished work to repeat</h2>
+        <h2>Finished work to repeat: <code>kind: transfer</code></h2>
         <div class="say">
           <p>
             The receiver follows Steps, adapting anything the author marked as an assumption to the
@@ -225,8 +222,7 @@ secret, so a 401 there means the secret is wrong, not that the check works.
       </section>
 
       <section>
-        <p class="eyebrow">kind: bug</p>
-        <h2>A defect to fix</h2>
+        <h2>A defect to fix: <code>kind: bug</code></h2>
         <div class="say">
           <p>
             Reproduce, not Steps, and the difference is load-bearing: Steps is the heading an agent
@@ -249,8 +245,7 @@ secret, so a 401 there means the secret is wrong, not that the check works.
       </section>
 
       <section>
-        <p class="eyebrow">kind: task</p>
-        <h2>Work for an agent</h2>
+        <h2>Work for an agent: <code>kind: task</code></h2>
         <div class="say">
           <p>
             A task is written before any work exists. It has no Steps: the agent that takes it works
@@ -282,7 +277,6 @@ secret, so a 401 there means the secret is wrong, not that the check works.
       </section>
 
       <section>
-        <p class="eyebrow">More context</p>
         <h2>Follow-ups</h2>
         <div class="say">
           <p>
@@ -295,7 +289,6 @@ secret, so a 401 there means the secret is wrong, not that the check works.
       </section>
 
       <section>
-        <p class="eyebrow">Example</p>
         <h2>A transfer guide</h2>
         <div class="say">
           <pre><code>{{ EXAMPLE }}</code></pre>
@@ -303,7 +296,6 @@ secret, so a 401 there means the secret is wrong, not that the check works.
       </section>
 
       <section>
-        <p class="eyebrow">Writing a good one</p>
         <h2>What makes a guide worth picking up</h2>
         <div class="say">
           <ul>

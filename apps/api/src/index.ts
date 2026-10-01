@@ -23,8 +23,13 @@
 //   GET    /v1/log?repo=&since=       what you did, newest first
 //   GET    /v1/notifications?unread=   what happened while you were away
 //   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
+//   GET    /v1/events                  live notifications and guide changes, as Server-Sent Events
+//   GET    /v1/push                    push set up here?, its key, and your devices
+//   POST   /v1/push/subscriptions      { endpoint, keys, label?, private? } turn push on for a device
+//   PATCH  /v1/push/subscriptions/:id  { private } · DELETE removes it · POST …/test sends a test
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
 //   GET    /v1/guides/:id              guide as markdown (owner or team member); records a pull
+//   GET    /v1/guides/:id/context      everything around a guide, for the hub; records no pull
 //   PATCH  /v1/guides/:id/status       { status }  owner: any; team member: consumed/published
 //   PUT    /v1/guides/:id/ack          { taken, note }  the reader's first word back
 //   PUT    /v1/guides/:id/verdict      { ok, note? } → does it actually work?
@@ -87,6 +92,7 @@ import {
   verifyStripe,
 } from "./billing.js";
 import * as claims from "./claims.js";
+import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
 import {
   type MailEnv,
   sendAsked,
@@ -98,6 +104,7 @@ import {
   sendReset,
   sendVerdict,
 } from "./email.js";
+import { eventStream, startAt } from "./events.js";
 import {
   findPeople,
   findSubject,
@@ -126,19 +133,24 @@ import {
   slug,
   tag,
   tagList,
+  unheldFields,
   unreachableImages,
 } from "./guide.js";
+import { mintOrigin } from "./hosts.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
 import {
   announce,
   displayName,
   feed,
+  feedSince,
   line,
   markRead,
   summary as notifSummary,
   notify,
   notifyAll,
+  onPush,
+  type PushMessage,
   post,
   unreadCount,
   webhookAllowed,
@@ -182,7 +194,7 @@ import {
   planNow,
   seatsFull,
 } from "./quota.js";
-import { conversationOn, evidenceOn, holdShots, SHOT_TYPES, shotKey } from "./shots.js";
+import { conversationOn, evidenceOn, holdShots, PROOF_DAYS, SHOT_TYPES, shotKey } from "./shots.js";
 import {
   isUploadToken,
   publicUpload,
@@ -191,6 +203,7 @@ import {
   UPLOAD_PREFIX,
   UPLOAD_TTL_MS,
 } from "./uploads.js";
+import { type Sent, sendPush, type Vapid } from "./webpush.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -201,6 +214,10 @@ type Env = MailEnv &
     /** Screenshot bytes. Optional: a deployment without the bucket refuses uploads and serves
         every other route exactly as before. */
     SHOTS?: R2Bucket;
+    /** Web Push (webpush.ts). All three or none: without them the hub says push is not set up. */
+    VAPID_PUBLIC_KEY?: string;
+    VAPID_PRIVATE_KEY?: string;
+    VAPID_SUBJECT?: string;
     ACCOUNT_LIMIT?: RateLimiter;
     /** Per-IP throttle on OAuth dynamic client registration, the other unauthenticated write. */
     OAUTH_REGISTER_LIMIT?: RateLimiter;
@@ -235,7 +252,8 @@ type Env = MailEnv &
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
   };
-type Vars = { account: string };
+/** `client` is what the credential says wrote this request — see `writtenBy` in clients.ts. */
+type Vars = { account: string; client: string };
 type Ctx = { env: Env; req: { url: string }; get: (k: "account") => string };
 
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -287,7 +305,7 @@ const NOT_AN_EMAIL = "That doesn't look like an email address. Check it and try 
 // Share links are built from the request origin. Under `wrangler dev` a custom-domain route makes
 // requests look like they came from production, so local dev overrides it via .dev.vars.
 const origin = (c: { env: Env; req: { url: string } }) =>
-  c.env.PUBLIC_ORIGIN || new URL(c.req.url).origin;
+  mintOrigin(c.env.PUBLIC_ORIGIN, c.req.url);
 
 interface AccountRow {
   id: string;
@@ -330,6 +348,8 @@ interface GuideRow {
   kind: string;
   /** The guide this one came out of. See migrations/0015_lineage.sql. */
   parent_id: string;
+  /** What last wrote it: `cli@<version>`, `mcp`, `hub`, `api`, or "" from before 0035. */
+  client: string;
 }
 interface ReportRow {
   id: string;
@@ -691,6 +711,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       // column, and every write since goes through parseMeta, which seeds it. A `|| "transfer"`
       // here would be this file restating a rule guide.js owns, and a second place to change.
       kind: r.kind,
+      // Which release wrote it, for tracing a malformed guide back. Empty from before 0035.
+      client: r.client || "",
       verdict: latest
         ? {
             ok: Boolean(latest.ok),
@@ -823,6 +845,7 @@ app.use("/v1/*", async (c, next) => {
   const internal = (c.req.raw as unknown as Marked)[INTERNAL];
   if (typeof internal === "string" && internal) {
     c.set("account", internal);
+    c.set("client", writtenBy("internal"));
     return next();
   }
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
@@ -874,7 +897,15 @@ app.use("/v1/*", async (c, next) => {
             "That token isn't recognized, or it was revoked. Make a new one in your hub.",
           );
     }
+    // A CLI too old to follow today's rules is refused here, on every call, because the refusal
+    // is the one text its agent is sure to read (clients.ts). `/v1/mcp` is the hosted server,
+    // which a token can also reach and which has no package to update.
+    if (c.req.path !== "/v1/mcp") {
+      const stale = tooOld(c.req.header(CLIENT_HEADER), c.req.header("user-agent"));
+      if (stale) return err(c, 426, stale);
+    }
     c.set("account", row.account_id);
+    c.set("client", writtenBy("token", c.req.header(CLIENT_HEADER), c.req.header("user-agent")));
     // Best effort, off the response path: knowing a token is unused is what makes it safe to
     // revoke. `executionCtx` throws where there is none, so this never speaks for itself.
     try {
@@ -894,6 +925,7 @@ app.use("/v1/*", async (c, next) => {
       .first<{ account_id: string }>();
     if (!row) return err(c, 401, "Your session has ended. Sign in again to carry on.");
     c.set("account", row.account_id);
+    c.set("client", writtenBy("session"));
     return next();
   }
   // A client with no credential at all is the ordinary first request to an MCP endpoint. Answering
@@ -3037,6 +3069,235 @@ app.get("/v1/notifications", async (c) => {
   });
 });
 
+// ---- push -----------------------------------------------------------------------------------
+
+const vapidOf = (env: Env): Vapid | null =>
+  env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
+    ? {
+        publicKey: env.VAPID_PUBLIC_KEY,
+        privateKey: env.VAPID_PRIVATE_KEY,
+        subject: env.VAPID_SUBJECT || "mailto:hello@passalong.dev",
+      }
+    : null;
+
+interface PushRow {
+  id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  private: number;
+}
+
+/**
+ * Tell every device this account turned push on for. A private device gets one line that names
+ * nothing; the rest get the feed's sentence. One guide per topic, so a phone that was off wakes to
+ * the latest word on each guide rather than a backlog. A device the push service says is gone is
+ * forgotten.
+ */
+async function deliverPush(
+  env: Env,
+  account: string,
+  m: PushMessage,
+  only?: string,
+  always = false,
+): Promise<Sent[]> {
+  const vapid = vapidOf(env);
+  if (!vapid) return [];
+  const { results } = await env.DB.prepare(
+    `SELECT id, endpoint, p256dh, auth, private FROM push_subscription WHERE account_id = ?${only ? " AND id = ?" : ""}`,
+  )
+    .bind(account, ...(only ? [only] : []))
+    .all<PushRow>();
+  const at = now();
+  return Promise.all(
+    results.map(async (d) => {
+      const out = await sendPush(
+        d,
+        {
+          title: "Passalong",
+          body: d.private ? "Something needs you in Passalong." : m.text,
+          url: m.guide ? `/hub/g/${m.guide}` : "/hub",
+          tag: m.guide || m.kind,
+          // A test is shown even to somebody looking at the hub, where a real one becomes a toast:
+          // the test is sent from Settings, inside the hub, so otherwise nobody ever sees one.
+          ...(always ? { always: true } : {}),
+        },
+        vapid,
+        {
+          topic: (m.guide || m.kind).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32),
+          urgency: m.kind === "blocked" ? "high" : "normal",
+        },
+      );
+      if (out.outcome === "gone")
+        await env.DB.prepare("DELETE FROM push_subscription WHERE id = ?").bind(d.id).run();
+      else if (out.outcome === "sent")
+        await env.DB.prepare("UPDATE push_subscription SET last_ok = ? WHERE id = ?")
+          .bind(at, d.id)
+          .run();
+      // Loud, because nothing else is: the notification row exists either way, so the hub looks
+      // right while no device is reached. The host names the push service and nothing more.
+      if (out.outcome !== "sent")
+        console.error(
+          "push",
+          out.outcome,
+          out.status,
+          new URL(d.endpoint).host,
+          out.detail || "(no detail)",
+        );
+      return out;
+    }),
+  );
+}
+onPush((env, to, m) => deliverPush(env as Env, to, m).then(() => {}));
+
+const B64URL = /^[A-Za-z0-9_-]+$/;
+const b64len = (s: string) => Math.floor((s.length * 3) / 4);
+
+/** Whether push is set up here, the key to subscribe with, and this account's devices. */
+app.get("/v1/push", async (c) => {
+  const vapid = vapidOf(c.env);
+  const { results } = await c.env.DB.prepare(
+    // The endpoint too: it is how the page knows which of these is the browser it is running in.
+    "SELECT id, endpoint, label, private, created, last_ok FROM push_subscription WHERE account_id = ? ORDER BY created",
+  )
+    .bind(c.get("account"))
+    .all<{
+      id: string;
+      endpoint: string;
+      label: string;
+      private: number;
+      created: string;
+      last_ok: string;
+    }>();
+  return c.json({
+    available: Boolean(vapid),
+    key: vapid?.publicKey || "",
+    devices: results.map((d) => ({ ...d, private: Boolean(d.private) })),
+  });
+});
+
+/**
+ * Turn push on for this device: the browser's subscription, as PushSubscription.toJSON() gives it.
+ * An endpoint already known moves to this account, since it is one browser either way.
+ */
+app.post("/v1/push/subscriptions", async (c) => {
+  if (!vapidOf(c.env)) return err(c, 501, "Notifications aren't set up on this server.");
+  const body = (await c.req.json().catch(() => ({}))) as {
+    endpoint?: unknown;
+    keys?: { p256dh?: unknown; auth?: unknown };
+    label?: unknown;
+    private?: unknown;
+  };
+  const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+  const p256dh = typeof body.keys?.p256dh === "string" ? body.keys.p256dh : "";
+  const auth = typeof body.keys?.auth === "string" ? body.keys.auth : "";
+  let https = false;
+  try {
+    https = new URL(endpoint).protocol === "https:";
+  } catch {}
+  if (!https || endpoint.length > 1000)
+    return err(c, 400, "That isn't a push subscription this server can send to.");
+  // A P-256 public key is 65 bytes and an auth secret 16; anything else is not a browser's.
+  if (!B64URL.test(p256dh) || b64len(p256dh) !== 65 || !B64URL.test(auth) || b64len(auth) !== 16)
+    return err(c, 400, "That subscription's keys are not the right shape.");
+  const label =
+    typeof body.label === "string" ? body.label.replace(/[^\x20-\x7e]/g, "").slice(0, 80) : "";
+  const id = rid(12);
+  const row = await c.env.DB.prepare(
+    `INSERT INTO push_subscription (id, account_id, endpoint, p256dh, auth, label, private, created)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(endpoint) DO UPDATE SET account_id = excluded.account_id, p256dh = excluded.p256dh,
+       auth = excluded.auth, label = excluded.label, private = excluded.private
+     RETURNING id`,
+  )
+    .bind(id, c.get("account"), endpoint, p256dh, auth, label, body.private ? 1 : 0, now())
+    .first<{ id: string }>();
+  return c.json({ id: row?.id || id }, 201);
+});
+
+app.patch("/v1/push/subscriptions/:id", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { private?: unknown };
+  const r = await c.env.DB.prepare(
+    "UPDATE push_subscription SET private = ? WHERE id = ? AND account_id = ?",
+  )
+    .bind(body.private ? 1 : 0, c.req.param("id"), c.get("account"))
+    .run();
+  if (!r.meta.changes) return err(c, 404, "That device isn't one of yours.");
+  return c.json({ id: c.req.param("id"), private: Boolean(body.private) });
+});
+
+app.delete("/v1/push/subscriptions/:id", async (c) => {
+  await c.env.DB.prepare("DELETE FROM push_subscription WHERE id = ? AND account_id = ?")
+    .bind(c.req.param("id"), c.get("account"))
+    .run();
+  return c.body(null, 204);
+});
+
+/** A test notice to one of your devices, so turning it on can be checked from Settings. */
+app.post("/v1/push/subscriptions/:id/test", async (c) => {
+  if (!vapidOf(c.env)) return err(c, 501, "Notifications aren't set up on this server.");
+  const [out] = await deliverPush(
+    c.env,
+    c.get("account"),
+    { text: "Notifications are on for this device.", guide: "", kind: "handoff" },
+    c.req.param("id"),
+    true,
+  );
+  // What the push service actually said, rather than "sent" whatever happened: a test that always
+  // succeeds is how a broken setup looked healthy from Settings.
+  if (!out)
+    return err(c, 404, "That device isn't registered any more. Turn notifications on again.");
+  if (out.outcome === "gone")
+    return err(
+      c,
+      410,
+      "This device's subscription has expired. Turn notifications off and on again.",
+    );
+  if (out.outcome === "failed")
+    return err(
+      c,
+      502,
+      `The push service refused it (${out.status || "unreachable"}${out.detail ? `: ${out.detail}` : ""}).`,
+    );
+  return c.json({ sent: true });
+});
+
+/**
+ * The live stream: notifications and changes to guides you can see, as Server-Sent Events. See
+ * events.ts for the shape and why it polls. `Last-Event-ID` (or `?since`) resumes from a cursor.
+ */
+app.get("/v1/events", (c) => {
+  const account = c.get("account");
+  const since = startAt(c.req.header("last-event-id") || c.req.query("since"));
+  const source = {
+    notes: async (after: string) =>
+      (await feedSince(c.env, account, after)).map((r) => notifSummary(r)),
+    // Anything that moved on a guide this account can read: a hold or its progress note, a verdict,
+    // an ack. The hub refreshes that guide; it is not news on its own, so it is never a toast.
+    changes: async (after: string) =>
+      (
+        await c.env.DB.prepare(
+          `SELECT x.guide_id, MAX(x.at) AS at FROM (
+             SELECT guide_id, updated AS at FROM claim WHERE updated > ?1
+             UNION ALL SELECT guide_id, at FROM verdict WHERE at > ?1
+             UNION ALL SELECT guide_id, at FROM ack WHERE at > ?1
+           ) x JOIN guide g ON g.id = x.guide_id
+           WHERE g.account_id = ?2 OR g.team_id IN (SELECT team_id FROM membership WHERE account_id = ?2)
+           GROUP BY x.guide_id ORDER BY at LIMIT 50`,
+        )
+          .bind(after, account)
+          .all<{ guide_id: string; at: string }>()
+      ).results,
+  };
+  return new Response(eventStream(source, since, { signal: c.req.raw.signal }), {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+    },
+  });
+});
+
 app.post("/v1/notifications/read", async (c) => {
   const { ids } = (await c.req.json().catch(() => ({}))) as { ids?: number[] };
   const clean = (ids || []).map(Number).filter(Number.isInteger).slice(0, 200);
@@ -3090,6 +3351,17 @@ app.put("/v1/guides/:id", async (c) => {
   }
   if (markdown.length > 512 * 1024)
     return err(c, 413, "This guide is over 512 KB. Move large logs or files out and link to them.");
+  // Before anything reads the meta: what it lacks is exactly what this is about. Refused rather
+  // than stored, because the stored copy would be the document with those fields emptied.
+  const unheld = unheldFields(markdown);
+  if (unheld.length)
+    return err(
+      c,
+      400,
+      `${unheld.map((k) => `"${k}"`).join(", ")} in the frontmatter ${unheld.length === 1 ? "holds" : "hold"} ` +
+        "more than a string or a list of strings, and would be dropped. Move it into the body — a " +
+        "fenced yaml block keeps it as written.",
+    );
   const meta: Meta = parseMeta(markdown);
   if (meta.id && meta.id !== id)
     return err(c, 400, "The id in the guide's frontmatter doesn't match the id it is saved under.");
@@ -3257,6 +3529,40 @@ app.put("/v1/guides/:id", async (c) => {
   if (existing && existing.account_id !== account)
     return err(c, 403, "That guide id is already used by another account. Choose a different id.");
 
+  // Handed in means the actor's turn is over. A new guide under work its publisher has handed in,
+  // and that is waiting on its author, is refused.
+  //
+  // Every follow-up in real use that nobody asked for came from exactly here: an agent handed in,
+  // was told something about its evidence, and published a second guide to carry what it had
+  // found — "Hand-in evidence: …", six screenshots with Problem and Steps around them. The author
+  // then had two documents to review and one of them was the agent answering itself. Instructions
+  // saying not to were already on hand_in; the note on every `take` said the opposite ("what you
+  // found doing it — publish that"), and an agent follows the text it read last.
+  //
+  // Only new guides: a write-up published before the hand-in can still be corrected. Only the
+  // hand-in's own account, and never the author of the parent, who is the one reviewing it. Only
+  // until the author answers: a send-back or a close deletes the claim, and an approved task is
+  // `consumed` while its claim stays in review, so it is excluded by status.
+  if (parentId && !existing) {
+    const handed = await c.env.DB.prepare(
+      `SELECT 1 FROM claim c JOIN guide g ON g.id = c.guide_id
+        WHERE c.guide_id = ? AND c.account_id = ? AND c.state = 'review' AND g.account_id <> ?
+          AND g.status <> 'consumed'
+        LIMIT 1`,
+    )
+      .bind(parentId, account, account)
+      .first();
+    if (handed)
+      return err(
+        c,
+        409,
+        `You handed ${parentId} in, and it is waiting on its author. What you did and found ` +
+          "belongs on that hand-in — `checks` for what you ran, `writeup` for what you had to " +
+          "adapt — not in a new guide. Nothing more is needed from you: stop, and tell the " +
+          "person it is handed in.",
+      );
+  }
+
   // Frontmatter still round-trips `promoted`, because the document is the record and a guide shared
   // a month ago must re-share today. It cannot be acquired, though: only a guide already carrying
   // the status keeps it, and that is read from the stored row rather than the markdown just sent.
@@ -3326,13 +3632,13 @@ app.put("/v1/guides/:id", async (c) => {
   const created = String(meta.created || existing?.created || t);
 
   await c.env.DB.prepare(
-    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind, parent_id, target)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind, parent_id, target, client)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status, source_context=excluded.source_context,
        tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated,
        team_id=excluded.team_id, to_account_id=excluded.to_account_id, to_group_id=excluded.to_group_id,
        report_id=excluded.report_id, area=excluded.area, severity=excluded.severity, kind=excluded.kind,
-       parent_id=excluded.parent_id, target=excluded.target`,
+       parent_id=excluded.parent_id, target=excluded.target, client=excluded.client`,
   )
     .bind(
       id,
@@ -3358,6 +3664,8 @@ app.put("/v1/guides/:id", async (c) => {
       parentId,
       // Only a task is for a repo; on anything else the field means nothing to the queue.
       said === "task" ? claims.repoKey(meta.target_context).slice(0, 200) : "",
+      // The last write is what produced the markdown stored now, so it is replaced every time.
+      c.get("client") || "",
     )
     .run();
 
@@ -3654,6 +3962,148 @@ app.get("/v1/guides/:id/parent", async (c) => {
   });
 });
 
+/**
+ * Everything around one guide, for the hub's page about it: where it is, who has it, what was
+ * handed in, and the guides it is tied to. No markdown and no pull.
+ *
+ * The hub reads a guide's content from its share page in a script-less frame, never through this,
+ * because the hub runs script and a guide is markdown somebody else wrote. And looking at your own
+ * board is not opening the guide: a pull row moves it into its author's "landed" queue and mails
+ * them, so this route answers from rows that already exist and writes none.
+ *
+ * Every related guide is filtered on its own, as /children and /parent are: being able to read
+ * this one does not hand you the title of a blocker in a team you are not in. `risk` is the
+ * reviewer's (migration 0032), so only the author sees it; the rest of a hand-in is what
+ * `GET /v1/tasks` already shows anyone who can see the task.
+ */
+app.get("/v1/guides/:id/context", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const me = c.get("account");
+  const at = now();
+  const row = found.row;
+  const readable =
+    "(g.account_id = ? OR g.team_id IN (SELECT team_id FROM membership WHERE account_id = ?))";
+  const related = async (sql: string, ...bind: unknown[]) =>
+    (
+      await c.env.DB.prepare(sql)
+        .bind(...bind, me, me)
+        .all<GuideRow>()
+    ).results;
+  const [held, parentRows, childRows, blockerRows, blocksRows, said, answered] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT c.*, COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
+         FROM claim c LEFT JOIN account a ON a.id = c.account_id
+        WHERE c.guide_id = ? ORDER BY c.updated DESC`,
+    )
+      .bind(row.id)
+      .all<claims.ClaimRow & { by_handle: string; by_name: string }>(),
+    row.parent_id
+      ? related(`SELECT g.* FROM guide g WHERE g.id = ? AND ${readable}`, row.parent_id)
+      : Promise.resolve([] as GuideRow[]),
+    related(
+      `SELECT g.* FROM guide g WHERE g.parent_id = ? AND g.status <> 'draft' AND ${readable}
+        ORDER BY g.created DESC LIMIT 100`,
+      row.id,
+    ),
+    related(
+      `SELECT g.* FROM task_block b JOIN guide g ON g.id = b.blocker_id
+        WHERE b.guide_id = ? AND ${readable} ORDER BY g.created`,
+      row.id,
+    ),
+    related(
+      `SELECT g.* FROM task_block b JOIN guide g ON g.id = b.guide_id
+        WHERE b.blocker_id = ? AND ${readable} ORDER BY g.created`,
+      row.id,
+    ),
+    // What each person who answered showed: a "works" carries screenshots of it working, a
+    // "didn't work" the whole report. The summary above has only the latest one-line note.
+    c.env.DB.prepare(
+      `SELECT v.ok, v.note, v.detail, v.at, COALESCE(a.handle, '') AS handle,
+              COALESCE(a.name, '') AS name
+         FROM verdict v LEFT JOIN account a ON a.id = v.account_id
+        WHERE v.guide_id = ? ORDER BY v.at DESC`,
+    )
+      .bind(row.id)
+      .all<{
+        ok: number;
+        note: string;
+        detail: string;
+        at: string;
+        handle: string;
+        name: string;
+      }>(),
+    // Who said they are on it or passed, and when — the page's progress is these in order.
+    c.env.DB.prepare(
+      `SELECT k.taken, k.note, k.at, COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
+         FROM ack k LEFT JOIN account a ON a.id = k.account_id
+        WHERE k.guide_id = ? ORDER BY k.at`,
+    )
+      .bind(row.id)
+      .all<{ taken: number; note: string; at: string; handle: string; name: string }>(),
+  ]);
+  const claimRows = held.results;
+  // A hand-in's write-up is a guide of its own; name it only when this caller can read it.
+  const reportIds = [...new Set(claimRows.map((k) => k.report_id).filter(Boolean))];
+  const reportRows = reportIds.length
+    ? await related(
+        `SELECT g.* FROM guide g WHERE g.id IN (${reportIds.map(() => "?").join(",")}) AND ${readable}`,
+        ...reportIds,
+      )
+    : [];
+  const base = origin(c);
+  const reports = new Map(
+    reportRows.map((r) => [r.id, { id: r.id, title: r.title, url: shareUrl(base, r) }]),
+  );
+
+  const all = [row, ...parentRows, ...childRows, ...blockerRows, ...blocksRows];
+  const views = new Map((await summaries(c, all)).map((v) => [v.id, v]));
+  const pick = (rows: GuideRow[]) => rows.map((r) => views.get(r.id)).filter(Boolean);
+
+  return c.json({
+    guide: views.get(row.id),
+    owner: found.owner,
+    claims: claimRows.map((k) => ({
+      place: k.place,
+      state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
+      by: { handle: k.by_handle, name: k.by_name },
+      // Yours: the page speaks to you about your own hand-in ("waiting on Ibrahim"), not about
+      // "its author" in the third person.
+      mine: k.account_id === c.get("account"),
+      agent: k.agent_id,
+      host: k.host,
+      repo: k.repo,
+      note: k.note,
+      writeup: k.writeup,
+      evidence: k.evidence,
+      checks: readChecks(k.checks),
+      risk: found.owner ? k.risk : "",
+      pr: k.pr,
+      report: reports.get(k.report_id) ?? null,
+      claimed_at: k.claimed_at,
+      lease_until: k.lease_until,
+      updated: k.updated,
+    })),
+    verdicts: said.results.map((v) => ({
+      ok: Boolean(v.ok),
+      by: { handle: v.handle, name: v.name },
+      note: v.note,
+      detail: v.detail,
+      at: v.at,
+    })),
+    acks: answered.results.map((k) => ({
+      taken: Boolean(k.taken),
+      by: { handle: k.handle, name: k.name },
+      note: k.note,
+      at: k.at,
+    })),
+    parent: pick(parentRows)[0] ?? null,
+    children: pick(childRows),
+    blocked_by: pick(blockerRows),
+    blocks: pick(blocksRows),
+  });
+});
+
 app.patch("/v1/guides/:id/status", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
@@ -3863,6 +4313,15 @@ async function recordAck(c: Ctx & { env: Env }, row: GuideRow, taken: boolean, n
   count(c, "guide_acked", { taken });
 }
 
+/** Said when "it works" arrives with nothing to look at. Names the one command that fixes it. */
+const NEEDS_PROOF =
+  "Show that it works: add at least one screenshot of it working. " +
+  "`passalong works <id> <image>` uploads it for you; in the hub, add it on the Works form. " +
+  // 0.12.0 and older take no image on `works`, but they have `attach`, and a note holding the
+  // link it prints is proof. Said here, because the refusal is the one text an old CLI shows.
+  "On an older CLI: `passalong attach <image>`, then `passalong works <id> <the link it printed>`. " +
+  `Screenshots are removed ${PROOF_DAYS} days after the guide is closed.`;
+
 app.put("/v1/guides/:id/verdict", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
@@ -3880,21 +4339,39 @@ app.put("/v1/guides/:id/verdict", async (c) => {
   // anything longer than this is a conversation the product deliberately does not host.
   if (!body.ok && !note)
     return err(c, 400, "Say what went wrong, so the author knows what to fix.");
+  const detail = typeof body.detail === "string" ? body.detail.trim() : "";
+
+  // "It works" is shown, not said. People said a guide worked and the author found it did not, and
+  // a note is only the sender's word for it. A screenshot of it working is the part the author can
+  // look at — and it has to be one this account uploaded, or pointing at a screenshot somebody else
+  // took would pass. Removed PROOF_DAYS after the guide is closed; see shots.ts.
+  if (body.ok) {
+    const named = [...new Set([...shotIds(detail), ...shotIds(note)])];
+    const own = named.length
+      ? (
+          await c.env.DB.prepare(
+            `SELECT id FROM shot WHERE account_id = ? AND id IN (${named.map(() => "?").join(",")})`,
+          )
+            .bind(account, ...named)
+            .all<{ id: string }>()
+        ).results
+      : [];
+    if (!own.length) return err(c, 400, NEEDS_PROOF);
+  }
 
   // What the row shows is one line; what the guide shows can be the whole report. A correction
   // that did not fit in 280 characters is exactly why people published them as guides instead.
-  await recordVerdict(c, found.row, body.ok, note, {
-    detail: typeof body.detail === "string" ? body.detail.trim() : "",
-  });
+  await recordVerdict(c, found.row, body.ok, note, { detail });
+  await claimEvidenceShots(c, account, found.row.id, `${note}\n${detail}`);
   // Said in the browser by the person holding it: that is handing it in, so the hold moves to
   // waiting on the author, who closes it or sends it back. No hold, nothing to move.
   await claims.handIn(
     c.env.DB,
     found.row.id,
     { account, agent: personAgent(account) },
-    // A person in the hub, not an agent with a terminal: their word is the evidence, and asking
-    // them to paste one would be the form this product does not have.
-    { at: now(), note, evidence: note, person: true },
+    // A person in the hub, not an agent with a terminal: what they showed is the evidence — the
+    // screenshots a "works" needs, or the reason a "didn't work" needs.
+    { at: now(), note, evidence: detail || note, person: true },
   );
   return c.json({ id: found.row.id, ok: body.ok, note });
 });
@@ -3945,9 +4422,7 @@ app.put("/v1/guides/:id/ack", async (c) => {
   return c.json({ id: found.row.id, taken: body.taken, note });
 });
 
-/** The claim-holder a person is when they take something in the browser, rather than an agent. */
-const personAgent = (account: string) =>
-  `person-${account.toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
+const personAgent = claims.personAgent;
 
 // ---- tasks -------------------------------------------------------------------------------
 
@@ -3989,11 +4464,15 @@ async function taskEvent(
     .bind(id)
     .first<{ account_id: string; team_id: string }>();
   if (!row) return;
+  const recipient = to || row.account_id;
   await notify(c.env, {
-    to: to || row.account_id,
+    to: recipient,
     kind,
     guide_id: id,
-    actor_id: c.get("account"),
+    // Your own agent finishing your task is the hand-in you most need to hear about, and with you
+    // as its actor notify() would drop it as something you did to yourself. It is sent without an
+    // actor and reads "Your agent finished …". Every other task event keeps its actor.
+    actor_id: kind === "task_finished" && c.get("account") === recipient ? "" : c.get("account"),
     team_id: row.team_id,
     note,
   });
@@ -4373,16 +4852,34 @@ app.put("/v1/guides/:id/progress", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
   const note = typeof who.note === "string" ? who.note : null;
+  // What it said last, to tell a new block from the same one repeated on every progress call.
+  const before = await c.env.DB.prepare(
+    "SELECT note FROM claim WHERE guide_id = ? AND agent_id = ? AND account_id = ?",
+  )
+    .bind(c.req.param("id"), who.agent, who.account)
+    .first<{ note: string }>();
   const claim = await claims.renew(c.env.DB, c.req.param("id"), who, {
     at: now(),
     note,
     fence: fenceIn(who.fence),
   });
   if (!claim) return stopWith(c, "this agent does not hold that — stop working on it");
-  const kind = await c.env.DB.prepare("SELECT kind FROM guide WHERE id = ?")
+  const kind = await c.env.DB.prepare("SELECT kind, account_id, team_id FROM guide WHERE id = ?")
     .bind(claim.guide_id)
-    .first<{ kind: string }>();
+    .first<{ kind: string; account_id: string; team_id: string }>();
   const replies = await claims.deliver(c.env.DB, claim.guide_id, who);
+  // An agent that stops on you says so with BLOCKED:, and the hub lists it under Stuck on you. The
+  // first such note is news for the guide's author; the same block renewed is not.
+  const blocked = /^BLOCKED:/i;
+  if (kind && blocked.test(claim.note) && !blocked.test(before?.note || ""))
+    await notify(c.env, {
+      to: kind.account_id,
+      kind: "blocked",
+      guide_id: claim.guide_id,
+      actor_id: "",
+      team_id: kind.team_id,
+      note: claim.note.replace(blocked, "").trim(),
+    });
   return c.json({
     id: claim.guide_id,
     lease_until: claim.lease_until,
@@ -4545,6 +5042,9 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   // nothing to add, and a field an agent must fill gets filled with "nothing to report".
   const writeup =
     typeof who.writeup === "string" ? who.writeup.trim().slice(0, claims.WRITEUP_MAX) : "";
+  // What it could break — the PR template's "Risk", for whoever reviews it. Optional for the same
+  // reason as the write-up: required, it is "low risk" on every hand-in and says nothing.
+  const risk = typeof who.risk === "string" ? who.risk.trim().slice(0, NOTE_MAX) : "";
 
   if (found.row.kind === "task") {
     const report = typeof who.report === "string" ? who.report.trim() : "";
@@ -4557,6 +5057,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
       fence: fenceIn(who.fence),
       pr: typeof who.pr === "string" ? who.pr : "",
       note,
+      risk,
     });
     if ("error" in done)
       return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
@@ -4592,6 +5093,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
     evidence,
     checks,
     writeup,
+    risk,
     fence: fenceIn(who.fence),
     verdict: { ok: who.ok },
   });
@@ -4808,6 +5310,8 @@ app.get("/v1/handed_in", async (c) => {
       // open the guide sees it there; both, because the author is the one who decides whether the
       // guide itself should change, and they cannot decide that from a row that hides it.
       writeup: r.claim.writeup,
+      // What they think it could break, so the author knows where to look before closing.
+      risk: r.claim.risk,
       at: r.claim.updated,
     })),
   });
@@ -4947,18 +5451,29 @@ app.get("/g/:id/:key{.+\\.md}", async (c) => {
 // The site's own unfurl card. `/` is the page most people meet first and it had no image at all,
 // so a link to the product previewed as a bare text row — the same blank card the guide pages were
 // fixed for. Static in every sense: it takes no parameters and changes only when this code does.
-app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c)));
+app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c), later(c)));
 
 app.get("/g/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
   if (!row) return c.text("no such guide", 404, VIEW_HEADERS);
   const people = await accounts(c, [row.account_id]);
-  return renderOgImage(c.env, c.req.url, {
-    id: row.id,
-    meta: parseMeta(row.markdown),
-    from: nameOf(people, row.account_id),
-  });
+  return renderOgImage(
+    c.env,
+    c.req.url,
+    { id: row.id, meta: parseMeta(row.markdown), from: nameOf(people, row.account_id) },
+    later(c),
+  );
 });
+
+/** `waitUntil`, where there is an execution context. Accessing it throws where there is none. */
+function later(c: { executionCtx: { waitUntil(p: Promise<unknown>): void } }) {
+  try {
+    const ctx = c.executionCtx;
+    return (p: Promise<unknown>) => ctx.waitUntil(p);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * The API, described for agents that only speak HTTP — a ChatGPT action, Gemini function calling,

@@ -90,7 +90,6 @@ if (!self.draft && answered) {
     <AppMasthead />
 
     <header class="hero">
-      <p class="eyebrow">Questions</p>
       <h1>
         Before you pass
         <span class="turn">the first one along.</span>

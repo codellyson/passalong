@@ -92,7 +92,7 @@ async function closeAll() {
   <li
     class="group/report m-0 bg-raised shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
   >
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
       <button
         type="button"
         class="min-w-0 flex-1 basis-72 cursor-pointer border-0 bg-transparent p-0 text-left"
@@ -120,7 +120,7 @@ async function closeAll() {
       </button>
       <!-- The batch off the board in one move. A report of eleven is eleven guides, and closing
            them one at a time was not possible from here at all: this row draws its own markup, so
-           it inherited neither the row menu nor a row's Close it. -->
+           it inherited neither the row menu nor a row's Archive. -->
       <button
         v-if="stillOpen.length"
         class="btn sm whitespace-nowrap"
@@ -129,7 +129,7 @@ async function closeAll() {
         :title="`Take ${stillOpen.length === 1 ? 'this bug' : `all ${stillOpen.length} bugs`} off the board. Whoever they went to is told, and you can put them back.`"
         @click="closeAll"
       >
-        {{ closing === "all" ? "Closing…" : stillOpen.length === rows.length ? "Close all" : `Close ${stillOpen.length}` }}
+        {{ closing === "all" ? "Archiving…" : stillOpen.length === rows.length ? "Archive all" : `Archive ${stillOpen.length}` }}
       </button>
       <NuxtLink :to="`/hub/report/${group.report}`" class="btn sm">
         <AppIcon name="open" />Open report
@@ -151,9 +151,9 @@ async function closeAll() {
             :class="DOT[r.g.severity || ''] || 'bg-line-strong'"
             :title="r.g.severity ? severityLabel(r.g.severity) : 'no severity'"
           />
-          <a :href="r.g.url" target="_blank" rel="noopener" class="text-fg no-underline hover:text-accent">
+          <NuxtLink :to="`/hub/g/${r.g.id}`" class="text-fg no-underline hover:text-accent">
             {{ r.g.title || "Untitled bug" }}
-          </a>
+          </NuxtLink>
         </span>
         <span class="font-ui text-xs" :class="TONE[statusLine(r).tone]">{{ statusLine(r).text }}</span>
         <!-- And one at a time, for a report half of which is done. -->
@@ -164,7 +164,7 @@ async function closeAll() {
           :disabled="Boolean(closing)"
           @click="closeOne(r)"
         >
-          {{ closing === r.g.id ? "Closing…" : "Close" }}
+          {{ closing === r.g.id ? "Archiving…" : "Archive" }}
         </button>
       </li>
     </ul>

@@ -125,12 +125,31 @@ list of things you are inviting a model to call.
 deliberate: a pull is the event the author needs to see, and making it a separate call would mean
 trusting clients to report it. Keep it in mind when adding caching or prefetching.
 
+`PUT /v1/guides/:id/verdict` with `ok: true` needs proof: at least one screenshot the caller
+uploaded (`POST /v1/shots`), named by its `/v1/shots/<id>` URL in `note` or `detail`. Without one
+it answers 400. Proof on a guide is deleted 5 days after the guide is closed.
+
+`GET /v1/events` is a Server-Sent Events stream for the signed-in account: `event: note` carries a
+notification (the same shape as `GET /v1/notifications`), `event: change` carries `{ guide_id, at }`
+for a guide whose hold, progress, verdict or ack moved. Each event's `id` is a cursor; send it back
+as `Last-Event-ID` to resume. A connection ends after about four minutes.
+
+`GET /v1/push` says whether push is set up and lists your devices; `POST /v1/push/subscriptions`
+takes a browser's `PushSubscription.toJSON()` (https endpoint, 65-byte `p256dh`, 16-byte `auth`)
+plus `label` and `private`; `PATCH` sets `private`, `DELETE` removes one, and
+`POST /v1/push/subscriptions/:id/test` sends a test notice to it.
+
+`GET /v1/guides/:id/context` is the hub's read of a guide and records **no** pull: the guide's
+summary, every live claim with what was handed in (`risk` to the author only), every verdict
+with what it showed, every ack with when it was given, the guide it follows, its follow-ups, and the tasks it blocks and is blocked by. Each related guide is filtered
+for the caller on its own, as `/children` and `/parent` are. It carries no markdown.
+
 ## Web routes
 
 | Route | Serves |
 | --- | --- |
 | `GET /` | The landing page |
-| `GET /g/:id/:key` | The read-only guide view. `?view=verify` leads with `Verification`. |
+| `GET /g/:id/:key` | The read-only guide view. `?view=verify` leads with `Verification`; `?embed=1` is the document alone, for the hub to frame. |
 | `GET /g/:id/:key.md` | Raw markdown. Also records a pull. |
 | `GET /g/:id/:key/og.png` | The unfurl card. Deliberately does **not** record a pull — crawlers, not people. |
 | `GET /hub` | Your transfers, teams and tokens; talks to `/v1/*` |
@@ -138,6 +157,7 @@ trusting clients to report it. Keep it in mind when adding caching or prefetchin
 | `GET /reset` | Set a new password from an emailed link |
 | `GET /hub/report` | File a set of bugs; the one authoring surface in the product |
 | `GET /hub/report/:id` | One report and its issues |
+| `GET /hub/g/:id` | One guide signed in: the share page framed beside who has it, what came back and what it is tied to |
 | `GET /health` | `{"ok":true}` — what CI smoke-tests |
 
 Guide pages are `noindex` and `/g/` is disallowed in `robots.txt`. The share key is the secret, so
