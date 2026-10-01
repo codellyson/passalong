@@ -1761,7 +1761,8 @@ form.join label {
      as a tier added later. Three columns of 14rem and their gaps need 48rem of viewport. */
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-3);
-  text-align: start;
+  /* One tier, so it is centred on the page's axis like the heading above it. */
+  text-align: center;
   /* One tier: it sits on the page's axis at a reading width, not stretched across three columns. */
   max-width: 28rem;
   margin-inline: auto;
@@ -1806,11 +1807,11 @@ form.join label {
 /* The one control in this section, and a ghost rather than a filled one: the filled button on this
    page is "Open your hub", and two of those would be the page asking for two different things at
    once and meaning neither. */
-.tiers .ask {
-  margin-top: var(--s-4);
+.tiers p.ask {
+  margin-top: var(--s-5);
 }
 /* What the button is for, under it: the cases the one tier does not cover. */
-.tiers .more {
+.tiers p.more {
   margin-top: var(--s-3);
 }
 /* The one sentence on this page that is a reason to buy rather than a description of what is
