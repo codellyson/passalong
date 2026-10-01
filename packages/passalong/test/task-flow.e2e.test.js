@@ -367,6 +367,7 @@ test("a check with nothing behind it is refused, like any other claim", { skip }
   await p.take(id, { cwd: dir });
   await assert.rejects(
     p.handIn(id, {
+      note: "Done.",
       markdown: "---\ntitle: x\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       checks: [{ check: "the hub follows the OS setting", ran: "it works" }],
       cwd: dir,
@@ -385,6 +386,7 @@ test("a check answered in words is refused, however much it says", { skip }, asy
   await p.take(id, { cwd: dir });
   await assert.rejects(
     p.handIn(id, {
+      note: "Done.",
       markdown: "---\ntitle: x\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       checks: [
         {
@@ -695,7 +697,10 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
   assert.ok(said.next.length);
 
   // Your own guide: nobody to hand it in to, and the claim is still yours to pass.
-  assert.equal((await call("POST", `/v1/guides/${h}/hand_in`, { ...a, ok: true })).status, 403);
+  assert.equal(
+    (await call("POST", `/v1/guides/${h}/hand_in`, { ...a, ok: true, note: "Done." })).status,
+    403,
+  );
   const passed = await call("POST", `/v1/guides/${h}/pass`, { ...a, why: "wrong repo after all" });
   assert.deepEqual(
     passed.next.map((s) => s.tool),
@@ -910,7 +915,13 @@ test("an agent cannot hand in a handoff it does not hold or send its author a fa
     return { status: res.status, ...(await res.json()) };
   };
   const agent = { agent: "e2e-hand-in-agent", repo: "e2e/hand-in" };
-  const answer = (who) => call(`/v1/guides/${id}/hand_in`, { ...who, ok: true, evidence: PROOF });
+  const answer = (who) =>
+    call(`/v1/guides/${id}/hand_in`, {
+      ...who,
+      ok: true,
+      evidence: PROOF,
+      note: "Done, it holds.",
+    });
   const verdicts = () => rows(`SELECT ok FROM verdict WHERE guide_id = '${id}'`);
 
   assert.equal((await answer(agent)).status, 409);
@@ -1006,6 +1017,7 @@ test("handed in means the actor's turn is over: no new guide under it until the 
     ...a,
     ok: true,
     evidence: PROOF,
+    note: "Done, it holds.",
     risk: "the receipt route is shared with invoices",
   });
   assert.deepEqual(
