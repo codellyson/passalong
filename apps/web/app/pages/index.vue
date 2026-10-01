@@ -53,7 +53,6 @@ usePage({
  * and the page does not advertise that, because nobody new can get it.
  */
 const PRICING = {
-  solo: { amount: "$5", period: "per month" },
   team: { amount: "$10", period: "for three seats", extra: "then $5 per extra seat" },
   /** Plain mailto: this page runs no script and its CSP allows none, so a form is not an option. */
   contact: "contact@passalong.dev",
@@ -108,18 +107,6 @@ const STRUCTURED = {
           description: "The CLI against a local store, with no account.",
           price: 0,
           priceCurrency: "USD",
-        },
-        {
-          "@type": "Offer",
-          name: "Solo",
-          price: perMonth(PRICING.solo.amount),
-          priceCurrency: "USD",
-          priceSpecification: {
-            "@type": "UnitPriceSpecification",
-            price: perMonth(PRICING.solo.amount),
-            priceCurrency: "USD",
-            billingDuration: "P1M",
-          },
         },
         {
           "@type": "Offer",
@@ -385,25 +372,16 @@ const PROOF = null as { figure: string; says: string } | null;
       <p class="eyebrow">What it costs</p>
       <h2>
         Free on one machine.<br>
-        <span class="turn">{{ PRICING.solo.amount }} when your agents share the work.</span>
+        <span class="turn">Paid when your agents share the work.</span>
       </h2>
       <p class="note">
         The CLI writes and keeps guides locally, with no account. The queue, the claims and your
         hub are the paid part.
       </p>
 
+      <!-- One tier, and the way to anything else. Solo is not shown: the page sells the team, and
+           anything that is not a team of three is a conversation. -->
       <div class="tiers">
-        <article>
-          <h3>Solo</h3>
-          <p class="figure">
-            {{ PRICING.solo.amount }}<span>{{ PRICING.solo.period }}</span>
-          </p>
-          <p>
-            Every piece of work, on every machine you use, with no limit: hand it to any of your
-            agents, see who has what, and connect any assistant you use.
-          </p>
-        </article>
-
         <article>
           <h3>Team</h3>
           <p class="figure">
@@ -413,21 +391,10 @@ const PROOF = null as { figure: string; says: string } | null;
             <b>One subscription covers the whole team.</b> Hand work to a person, to the group that
             does that kind of work, or to anyone’s agents, and see who’s on what.
           </p>
-        </article>
-
-        <!-- Not a tier and it does not pretend to be one: no figure, because the answer to "how
-             much" is the conversation. It sits in the same row because that is where somebody is
-             standing when they work out the per-seat number does not suit them. -->
-        <article>
-          <h3>Larger</h3>
-          <p class="figure">Talk to us</p>
-          <p>
-            More people than a seat count suits, a procurement process, or a question the two
-            columns beside this one do not answer.
-          </p>
           <p class="ask">
             <a class="btn" :href="`mailto:${PRICING.contact}`">Contact sales</a>
           </p>
+          <p class="more">A larger team, a procurement process, or a question this does not answer.</p>
         </article>
       </div>
     </section>

@@ -1690,11 +1690,9 @@ form.join label {
   text-align: start;
   border-top: 1px solid var(--line);
   padding-top: var(--s-6);
-}
-@media (min-width: 48rem) {
-  .tiers {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+  /* One tier: it sits on the page's axis at a reading width, not stretched across three columns. */
+  max-width: 28rem;
+  margin-inline: auto;
 }
 .tiers h3 {
   margin: 0 0 var(--s-2);
@@ -1732,6 +1730,10 @@ form.join label {
    once and meaning neither. */
 .tiers .ask {
   margin-top: var(--s-4);
+}
+/* What the button is for, under it: the cases the one tier does not cover. */
+.tiers .more {
+  margin-top: var(--s-3);
 }
 /* The one sentence on this page that is a reason to buy rather than a description of what is
    bought, so it is the one thing here that takes the foreground colour. */
