@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.codellyson/passalong",
+  "description": "Hand tasks, bugs and finished work to AI coding agents, and get back a write-up with evidence.",
+  "repository": {
+    "url": "https://github.com/codellyson/passalong",
+    "source": "github",
+    "subfolder": "packages/passalong"
+  },
+  "websiteUrl": "https://passalong.dev",
+  "version": "0.13.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "passalong",
+      "version": "0.13.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://passalong.dev/v1/mcp"
+    }
+  ]
+}
