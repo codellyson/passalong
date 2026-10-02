@@ -89,38 +89,38 @@ async function closeAll() {
 </script>
 
 <template>
-  <li
-    class="group/report m-0 bg-raised shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
-  >
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
+  <!-- A report in the guides table: one line saying how many and how far, opening to its bugs worst
+       first with one status each. -->
+  <tr>
+    <td />
+    <td class="min-w-52 max-w-[22rem]">
       <button
         type="button"
-        class="min-w-0 flex-1 basis-72 cursor-pointer border-0 bg-transparent p-0 text-left"
+        class="flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left font-ui text-sm font-medium text-fg"
         :aria-expanded="shown"
         @click="expanded = !expanded"
       >
-        <span class="flex items-center gap-2 text-base font-semibold leading-snug text-fg">
-          <AppIcon
-            name="reveal"
-            class="shrink-0 text-muted transition-[rotate] duration-150 ease-out"
-            :class="shown ? '' : '-rotate-90'"
-          />
-          {{ group.title || "Bug report" }}
-        </span>
-        <span class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 pl-6 font-ui text-sm text-muted">
-          <span>{{ plural(rows.length, "bug") }}</span>
-          <span
-            v-if="blockers"
-            class="rounded-pill bg-danger-soft px-2 py-0.5 text-xs font-semibold text-danger"
-          >{{ plural(blockers, "blocker") }}</span>
-          <span v-if="team">· to <b class="font-medium text-fg">{{ team }}</b></span>
-          <span>· {{ rel(group.created) }}</span>
-          <span :class="progress.tone">· {{ progress.text }}</span>
-        </span>
+        <AppIcon
+          name="reveal"
+          class="shrink-0 text-muted transition-[rotate] duration-150 ease-out"
+          :class="shown ? '' : '-rotate-90'"
+        />
+        <span class="line-clamp-2">{{ group.title || "Bug report" }}</span>
       </button>
-      <!-- The batch off the board in one move. A report of eleven is eleven guides, and closing
-           them one at a time was not possible from here at all: this row draws its own markup, so
-           it inherited neither the row menu nor a row's Archive. -->
+    </td>
+    <td class="min-w-48 text-muted">
+      {{ plural(rows.length, "bug") }}
+      <span
+        v-if="blockers"
+        class="ml-1 rounded-pill bg-danger-soft px-2 py-0.5 text-xs font-semibold text-danger"
+      >{{ plural(blockers, "blocker") }}</span>
+    </td>
+    <td class="whitespace-nowrap text-muted"><template v-if="team">to <b class="font-medium text-fg">{{ team }}</b></template><template v-else>—</template></td>
+    <td class="whitespace-nowrap" :class="progress.tone || 'text-muted'">{{ progress.text }}</td>
+    <td class="whitespace-nowrap text-muted tabular-nums">{{ rel(group.created) }}</td>
+    <td class="text-right"><span class="inline-flex flex-wrap items-center justify-end gap-2">
+      <!-- The batch off the board in one move: a report of eleven is eleven guides, and closing them
+           one at a time was not possible from here at all. -->
       <button
         v-if="stillOpen.length"
         class="btn sm whitespace-nowrap"
@@ -131,43 +131,35 @@ async function closeAll() {
       >
         {{ closing === "all" ? "Archiving…" : stillOpen.length === rows.length ? "Archive all" : `Archive ${stillOpen.length}` }}
       </button>
-      <NuxtLink :to="`/hub/report/${group.report}`" class="btn sm">
-        <AppIcon name="open" />Open report
-      </NuxtLink>
-    </div>
-
-    <ul
-      v-if="shown"
-      class="m-0 list-none border-t border-line bg-surface p-0 py-1 group-last/report:rounded-b-[var(--r-3)]"
-    >
-      <li
-        v-for="r in rows"
-        :key="r.g.id"
-        class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 py-2 pr-4 pl-10"
-      >
-        <HubSelectBox :id="r.g.id" :title="r.g.title" :archived="r.g.status === 'consumed'" :mine="r.g.mine" />
-        <span class="min-w-0 flex-1 basis-64 text-sm leading-snug">
-          <span
-            class="mr-2 inline-block size-2 rounded-full align-middle"
-            :class="DOT[r.g.severity || ''] || 'bg-line-strong'"
-            :title="r.g.severity ? severityLabel(r.g.severity) : 'no severity'"
-          />
-          <NuxtLink :to="`/hub/g/${r.g.id}`" class="text-fg no-underline hover:text-accent">
-            {{ r.g.title || "Untitled bug" }}
-          </NuxtLink>
-        </span>
-        <span class="font-ui text-xs" :class="TONE[statusLine(r).tone]">{{ statusLine(r).text }}</span>
-        <!-- And one at a time, for a report half of which is done. -->
-        <button
-          v-if="mine(r)"
-          class="linkish font-ui text-xs whitespace-nowrap"
-          type="button"
-          :disabled="Boolean(closing)"
-          @click="closeOne(r)"
-        >
-          {{ closing === r.g.id ? "Archiving…" : "Archive" }}
-        </button>
-      </li>
-    </ul>
-  </li>
+      <NuxtLink :to="`/hub/report/${group.report}`" class="btn sm whitespace-nowrap"><AppIcon name="open" />Open</NuxtLink>
+    </span></td>
+  </tr>
+  <tr v-if="shown" class="run">
+    <td />
+    <td colspan="6" class="pb-3">
+      <ul class="m-0 list-none rounded-2 bg-surface p-0 py-1">
+        <li v-for="r in rows" :key="r.g.id" class="m-0 flex flex-wrap items-center gap-x-4 gap-y-0.5 px-4 py-2 text-sm leading-snug">
+          <HubSelectBox :id="r.g.id" :title="r.g.title" :archived="r.g.status === 'consumed'" :mine="r.g.mine" />
+          <span class="min-w-0 flex-1 basis-64">
+            <span
+              class="mr-2 inline-block size-3 rounded-full align-middle"
+              :class="DOT[r.g.severity || ''] || 'bg-line-strong'"
+              :title="r.g.severity ? severityLabel(r.g.severity) : 'no severity'"
+            />
+            <NuxtLink :to="`/hub/g/${r.g.id}`" class="text-fg no-underline hover:text-accent">{{ r.g.title || "Untitled bug" }}</NuxtLink>
+          </span>
+          <span class="font-ui text-xs" :class="TONE[statusLine(r).tone]">{{ statusLine(r).text }}</span>
+          <button
+            v-if="mine(r)"
+            class="linkish font-ui text-xs whitespace-nowrap"
+            type="button"
+            :disabled="Boolean(closing)"
+            @click="closeOne(r)"
+          >
+            {{ closing === r.g.id ? "Archiving…" : "Archive" }}
+          </button>
+        </li>
+      </ul>
+    </td>
+  </tr>
 </template>

@@ -794,6 +794,15 @@ export function buildServer() {
                   "the line this answers, in the guide's own words: an Acceptance line on a task, " +
                     "a Verification line on a handoff or a bug",
                 ),
+              says: z
+                .string()
+                .optional()
+                .describe(
+                  'what happened, in one plain sentence for a PERSON: "Swagger lists all six ' +
+                    'endpoints, each with request and response schemas." It is the row they read ' +
+                    "in the review table; the evidence stays folded behind it. Strongly " +
+                    "recommended: a check without one shows only the line it answers",
+                ),
               ran: z
                 .string()
                 .optional()

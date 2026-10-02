@@ -375,21 +375,14 @@ const list =
               <div v-if="openTasks.get(col.state)?.length">
                 <h3 :class="sub">{{ col.title }} · {{ openTasks.get(col.state)?.length }}</h3>
                 <p class="mt-1 mb-3 font-ui text-sm text-muted">{{ col.note }}</p>
-                <ul :class="list">
-                  <HubTaskRow v-for="t in openTasks.get(col.state)" :key="t.id" :t="t" />
-                </ul>
+                <HubTaskTable :tasks="openTasks.get(col.state) || []" />
               </div>
             </template>
             <div v-if="waiting || lanes.sent.length">
               <h3 :class="sub">Handoffs you sent · {{ sentCount }}</h3>
               <p class="mt-1 mb-3 font-ui text-sm text-muted">Still out: nobody has said it worked yet.</p>
               <HubSkeleton v-if="waiting" :rows="2" label="Loading what you sent" />
-              <ul v-else :class="list">
-                <template v-for="e in lanes.sent" :key="'row' in e ? e.row.g.id : `report-${e.group.report}`">
-                  <HubInboxRow v-if="'row' in e" :row="e.row" />
-                  <HubReportRow v-else :group="e.group" :open="searching" />
-                </template>
-              </ul>
+              <HubGuideTable v-else :entries="lanes.sent" :open="searching" />
             </div>
             <p v-if="!waiting && !openCount" class="m-0 font-ui text-sm text-muted">
               {{ searching ? "Nothing open matches." : "Nothing is open." }}
@@ -402,12 +395,8 @@ const list =
 
           <!-- ---- Done ---- -->
           <template v-else>
-            <ul v-if="doneTasks.length" :class="list">
-              <HubTaskRow v-for="t in doneTasks" :key="t.id" :t="t" />
-            </ul>
-            <ul v-if="lanes.done.length" :class="list">
-              <HubInboxRow v-for="r in lanes.done" :key="r.g.id" :row="r" />
-            </ul>
+            <HubTaskTable v-if="doneTasks.length" :tasks="doneTasks" />
+            <HubGuideTable v-if="lanes.done.length" :entries="lanes.done" />
             <p v-if="!doneCount" class="m-0 font-ui text-sm text-muted">
               {{ searching ? "Nothing finished matches." : "Nothing finished yet." }}
             </p>

@@ -20,10 +20,28 @@ const onBoard = computed(() => {
   return new Set([...b.waiting, ...b.failing, ...b.in_flight, ...b.landed].map((g) => g.id));
 });
 
+/** Folded runs, newest first. A run of one person's eight shares is one entry, not eight lines. */
 const news = computed(() =>
-  activity.value.filter((n) => !n.guide || !onBoard.value.has(n.guide)).slice(0, 8),
+  groupNotes(activity.value.filter((n) => !n.guide || !onBoard.value.has(n.guide))),
 );
-const echoes = computed(() => activity.value.filter((n) => n.guide && onBoard.value.has(n.guide)));
+const echoes = computed(() =>
+  groupNotes(activity.value.filter((n) => n.guide && onBoard.value.has(n.guide))),
+);
+
+/** The latest few show; the rest are one click away. The count says how many, so nothing hides. */
+const SHOWN = 6;
+const all = ref(false);
+const lead = computed(() => (all.value ? news.value : news.value.slice(0, SHOWN)));
+const rest = computed(() => news.value.length - lead.value.length);
+const folds = computed(() => news.value.length > SHOWN);
+
+/** Which groups are open. */
+const opened = ref<Set<string>>(new Set());
+const flip = (id: string) => {
+  const next = new Set(opened.value);
+  next.has(id) ? next.delete(id) : next.add(id);
+  opened.value = next;
+};
 
 /** A note names a guide by id; the link is whatever that guide's share URL turned out to be. */
 const urlFor = (id: string | null) =>
@@ -46,27 +64,58 @@ const urlFor = (id: string | null) =>
     </div>
 
     <ul v-if="news.length" class="notes">
-      <li v-for="n in news" :key="n.id" :class="['note', { unread: !n.read }]">
-        <span class="when">{{ rel(n.at) }}</span>
-        <a v-if="urlFor(n.guide)" :href="urlFor(n.guide)" target="_blank" rel="noopener">
-          {{ n.text }}
-        </a>
-        <span v-else>{{ n.text }}</span>
-      </li>
+      <template v-for="e in lead" :key="e.kind === 'group' ? e.id : e.note.id">
+        <li v-if="e.kind === 'note'" :class="['note', { unread: !e.note.read }]">
+          <span class="when">{{ rel(e.note.at) }}</span>
+          <a v-if="urlFor(e.note.guide)" :href="urlFor(e.note.guide)" target="_blank" rel="noopener">
+            {{ e.note.text }}
+          </a>
+          <span v-else>{{ e.note.text }}</span>
+        </li>
+        <li v-else :class="['note', { unread: !e.read }]">
+          <span class="when">{{ rel(e.at) }}</span>
+          <button
+            type="button"
+            class="linkish cursor-pointer text-left"
+            :aria-expanded="opened.has(e.id)"
+            @click="flip(e.id)"
+          >
+            {{ e.text }} · {{ opened.has(e.id) ? "hide" : "show" }}
+          </button>
+          <ul v-if="opened.has(e.id)" class="notes">
+            <li v-for="n in e.notes" :key="n.id" :class="['note', { unread: !n.read }]">
+              <span class="when">{{ rel(n.at) }}</span>
+              <a v-if="urlFor(n.guide)" :href="urlFor(n.guide)" target="_blank" rel="noopener">
+                {{ n.title || n.text }}
+              </a>
+              <span v-else>{{ n.text }}</span>
+            </li>
+          </ul>
+        </li>
+      </template>
     </ul>
+    <button v-if="folds" type="button" class="linkish mt-2 cursor-pointer font-ui text-sm" @click="all = !all">
+      {{ all ? "Show fewer" : `Show ${rest} more` }}
+    </button>
 
     <details v-if="echoes.length" class="mt-2">
       <summary class="cursor-pointer font-ui text-sm text-muted hover:text-fg">
         {{ plural(echoes.length, "more update") }} about guides already in your list
       </summary>
       <ul class="notes">
-        <li v-for="n in echoes" :key="n.id" :class="['note', { unread: !n.read }]">
-          <span class="when">{{ rel(n.at) }}</span>
-          <a v-if="urlFor(n.guide)" :href="urlFor(n.guide)" target="_blank" rel="noopener">
-            {{ n.text }}
-          </a>
-          <span v-else>{{ n.text }}</span>
-        </li>
+        <template v-for="e in echoes" :key="e.kind === 'group' ? e.id : e.note.id">
+          <li v-if="e.kind === 'note'" :class="['note', { unread: !e.note.read }]">
+            <span class="when">{{ rel(e.note.at) }}</span>
+            <a v-if="urlFor(e.note.guide)" :href="urlFor(e.note.guide)" target="_blank" rel="noopener">
+              {{ e.note.text }}
+            </a>
+            <span v-else>{{ e.note.text }}</span>
+          </li>
+          <li v-else :class="['note', { unread: !e.read }]">
+            <span class="when">{{ rel(e.at) }}</span>
+            <span>{{ e.text }}</span>
+          </li>
+        </template>
       </ul>
     </details>
   </section>

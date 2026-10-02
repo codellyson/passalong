@@ -1,7 +1,7 @@
 <!--
-  Select, then act on what is selected: Archive, Unarchive, Delete. Each button says how many it
-  will touch, because a selection can mix archived and live guides and each act only applies to
-  one kind. Delete asks once, in place, before it does anything — it cannot be undone.
+  Act on what is ticked: Archive, Unarchive, Delete. Each button says how many it will touch,
+  because a selection can mix archived and live guides and each act only applies to one kind.
+  Delete asks once, in place, before it does anything — it cannot be undone.
 -->
 <script setup lang="ts">
 import type { QueryKey } from "@tanstack/vue-query";
@@ -35,61 +35,49 @@ async function act(action: "archive" | "unarchive" | "delete") {
   }
 }
 
-// Leaving the page leaves the mode, so a selection never outlives the list it was made on.
+// The boxes are on for as long as this is on the page, and a selection never outlives the list it
+// was made on.
+onMounted(() => {
+  on.value = true;
+});
 onBeforeUnmount(stop);
 </script>
 
 <template>
-  <!-- While selecting it stays in view under the masthead, so a tick far down a list can still be
-       acted on without scrolling back to the top. -->
-  <div class="flex flex-col gap-2" :class="on ? 'sticky top-16 z-20 -mx-2 rounded-2 bg-bg/90 px-2 py-2 backdrop-blur-md' : ''">
-    <div class="flex flex-wrap items-center gap-2">
-      <button
-        class="btn sm"
-        type="button"
-        :aria-pressed="on"
-        @click="on ? stop() : (on = true)"
-      >{{ on ? "Done selecting" : "Select" }}</button>
-      <template v-if="on">
-        <span class="font-ui text-sm text-muted">{{ list.length ? `${count(list.length)} selected` : "Nothing selected yet" }}</span>
-        <template v-if="list.length && !confirming">
-          <button
-            v-if="toArchive.length"
-            class="btn sm"
-            type="button"
-            :disabled="Boolean(busy)"
-            @click="act('archive')"
-          >{{ busy === "archive" ? "Archiving…" : `Archive ${toArchive.length}` }}</button>
-          <button
-            v-if="toUnarchive.length"
-            class="btn sm"
-            type="button"
-            :disabled="Boolean(busy)"
-            @click="act('unarchive')"
-          >{{ busy === "unarchive" ? "Unarchiving…" : `Unarchive ${toUnarchive.length}` }}</button>
-          <button
-            class="btn outline danger sm"
-            type="button"
-            :disabled="Boolean(busy)"
-            @click="confirming = true"
-          >Delete {{ list.length }}</button>
-          <button class="linkish font-ui text-sm" type="button" @click="clear">Clear</button>
-        </template>
-      </template>
-    </div>
-    <p v-if="on && !list.length" class="m-0 font-ui text-xs text-muted">
-      Tick the guides to act on. Only your own can be picked: archiving and deleting are the author's.
-    </p>
+  <!-- Floats over the bottom of the page once something is ticked, and takes no room before: the
+       list does not move when you select, and the bar is in reach however far down the tick was. -->
+  <Transition
+    enter-active-class="transition-[opacity,translate] duration-150 ease-out motion-reduce:transition-none"
+    enter-from-class="translate-y-2 opacity-0"
+    leave-active-class="transition-opacity duration-100 motion-reduce:transition-none"
+    leave-to-class="opacity-0"
+  >
     <div
-      v-if="on && confirming"
-      class="flex flex-wrap items-center gap-2 rounded-2 border border-danger px-4 py-3 font-ui text-sm"
-      role="alert"
+      v-if="list.length"
+      class="fixed bottom-6 left-1/2 z-30 flex w-[min(44rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-3 rounded-3 bg-ink px-4 py-3 text-on-ink shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
+      role="region"
+      aria-label="Selected guides"
     >
-      <span>Delete {{ count(list.length) }} for good? Nobody will be able to open {{ list.length === 1 ? "it" : "them" }} again, and this cannot be undone.</span>
-      <button class="btn danger sm" type="button" :disabled="Boolean(busy)" @click="act('delete')">
-        {{ busy === "delete" ? "Deleting…" : `Yes, delete ${list.length}` }}
-      </button>
-      <button class="btn sm" type="button" :disabled="Boolean(busy)" @click="confirming = false">Cancel</button>
+      <div class="flex flex-wrap items-center gap-2 font-ui text-sm">
+        <span class="mr-auto font-medium">{{ count(list.length) }} selected</span>
+        <template v-if="!confirming">
+          <button v-if="toArchive.length" class="btn sm !border-0 !bg-bg !text-fg" type="button" :disabled="Boolean(busy)" @click="act('archive')">
+            {{ busy === "archive" ? "Archiving…" : `Archive ${toArchive.length}` }}
+          </button>
+          <button v-if="toUnarchive.length" class="btn sm !border-0 !bg-bg !text-fg" type="button" :disabled="Boolean(busy)" @click="act('unarchive')">
+            {{ busy === "unarchive" ? "Unarchiving…" : `Unarchive ${toUnarchive.length}` }}
+          </button>
+          <button class="btn sm !border-0 !bg-danger !text-white" type="button" :disabled="Boolean(busy)" @click="confirming = true">Delete {{ list.length }}</button>
+          <button class="linkish !text-on-ink font-ui text-sm" type="button" @click="clear">Clear</button>
+        </template>
+      </div>
+      <div v-if="confirming" class="flex flex-wrap items-center gap-2 font-ui text-sm" role="alert">
+        <span class="mr-auto">Delete {{ count(list.length) }} for good? This cannot be undone.</span>
+        <button class="btn sm !border-0 !bg-danger !text-white" type="button" :disabled="Boolean(busy)" @click="act('delete')">
+          {{ busy === "delete" ? "Deleting…" : `Yes, delete ${list.length}` }}
+        </button>
+        <button class="btn sm !border-0 !bg-bg !text-fg" type="button" :disabled="Boolean(busy)" @click="confirming = false">Cancel</button>
+      </div>
     </div>
-  </div>
+  </Transition>
 </template>

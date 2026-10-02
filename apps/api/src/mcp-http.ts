@@ -1251,7 +1251,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     id: string;
     agent: string;
     evidence?: string;
-    checks?: { check: string; ran: string }[];
+    checks?: { check: string; ran: string; says?: string }[];
     ok?: boolean;
     note?: string;
     writeup?: string;
@@ -1360,6 +1360,14 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
               check: z
                 .string()
                 .describe("the Acceptance line this answers, in the task's own words"),
+              says: z
+                .string()
+                .optional()
+                .describe(
+                  'what happened, in one plain sentence for a PERSON: "Swagger lists all six ' +
+                    'endpoints, each with request and response schemas." It is the row they read; ' +
+                    "the evidence stays folded behind it",
+                ),
               ran: EVIDENCE,
             }),
           )

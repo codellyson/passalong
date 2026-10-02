@@ -75,8 +75,18 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
               <AppIcon name="x" :size="14" />
             </button>
           </header>
+          <!-- The question first, when there is one: it is why this was opened, and it used to be the
+               last small bubble under a screenful of history. -->
+          <p
+            v-if="last.asking"
+            class="m-0 border-b border-line bg-warn-soft px-5 py-3 font-ui text-sm leading-snug text-fg"
+          >
+            <span class="block text-xs font-semibold tracking-widest text-warn uppercase">Waiting on you</span>
+            {{ plain(last.asking) }}
+          </p>
           <HubThread
             :id="last.id"
+            :focus="Boolean(last.asking)"
             :stamp="last.stamp"
             :reply="last.reply"
             :noting="last.noting"

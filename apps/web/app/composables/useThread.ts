@@ -11,6 +11,8 @@ export interface ThreadTarget {
   reply: boolean;
   /** Nobody holds it: what is written is a note for whoever takes it. */
   noting: boolean;
+  /** The question it is waiting on you to answer. Shown at the top, and the box is focused. */
+  asking?: string;
 }
 
 export function useThread() {
