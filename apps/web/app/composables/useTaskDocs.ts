@@ -39,5 +39,8 @@ export function useTaskDocs() {
     return docsFor(t);
   };
 
-  return { docsFor, docsOf, loadTask, token };
+  /** One guide's sections by id, once loaded: for a view that has an id and no task row. */
+  const sectionsFor = (id: string) => cache.value[id] ?? null;
+
+  return { docsFor, docsOf, loadTask, load, sectionsFor, token };
 }

@@ -30,6 +30,13 @@ export function nowText({ held, waiting = {} }) {
       `Passalong: You hold ${held.id} (${held.kind}): ${held.title || held.id}.`,
     ];
     if (held.note) lines.push(`Last note: "${held.note}".`);
+    // The one thing here that is new information rather than a reminder: the person has written, and
+    // nothing else in the session will say so until the agent next checks in.
+    if (held.replies)
+      lines.push(
+        `${plural(held.replies, "message", "messages")} from the person ${held.replies === 1 ? "is" : "are"} ` +
+          `waiting for you: call take ${held.id} to read ${held.replies === 1 ? "it" : "them"} before anything else.`,
+      );
     if (held.state === "stalled")
       lines.push("It is marked stalled: nobody has heard from its agent in 30 minutes.");
     lines.push(
@@ -55,7 +62,9 @@ export function nowText({ held, waiting = {} }) {
  * would leave it no way to end.
  */
 export function stopVerdict({ held, input = {} }) {
-  if (!held || input.stop_hook_active) return null;
+  // An agent that asked a question was told to stop and wait, so it must be let: blocking it would
+  // make the instruction and the hook contradict each other, and the agent would pick one.
+  if (!held || held.asking || input.stop_hook_active) return null;
   return {
     decision: "block",
     reason:

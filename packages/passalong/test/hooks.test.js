@@ -99,3 +99,26 @@ test("setup adds the status line only where there is none, and never replaces on
   assert.deepEqual(withStatusLine(theirs), theirs, "someone else's status line is left alone");
   assert.deepEqual(withStatusLine(added), added, "running setup again changes nothing");
 });
+
+test("an agent that asked a question is allowed to stop and wait", () => {
+  // It was told to stop after `ask`; blocking it would make the instruction and the hook disagree.
+  assert.equal(
+    stopVerdict({ held: { ...HELD, asking: "Settings or the header?" }, input: {} }),
+    null,
+  );
+  // The older way of saying the same thing is not heard as a question, so it is still stopped once.
+  assert.ok(stopVerdict({ held: { ...HELD, note: "BLOCKED: which?" }, input: {} }));
+});
+
+test("the session-start line says when the person has written, because nothing else will", () => {
+  const base = { id: "k3mq2xa7", kind: "task", title: "T", state: "claimed" };
+  assert.doesNotMatch(nowText({ held: base }), /waiting for you/);
+  assert.match(
+    nowText({ held: { ...base, replies: 1 } }),
+    /1 message from the person is waiting for you: call take k3mq2xa7/,
+  );
+  assert.match(
+    nowText({ held: { ...base, replies: 3 } }),
+    /3 messages from the person are waiting/,
+  );
+});

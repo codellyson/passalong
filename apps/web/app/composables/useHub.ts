@@ -570,6 +570,17 @@ function build(queryClient: QueryClient) {
     if (!said) return;
     return moveTask(t, "ready", `/v1/tasks/${t.id}/reject`, json("POST", { why: said }));
   };
+  /**
+   * Write to whoever holds a guide: an answer to a question, or something thought of since. Not
+   * optimistic — the server decides who may write and whether anyone is holding it, and a message
+   * that appears and then vanishes is worse than one that takes a moment. Refetches what shows the
+   * waiting state, so a question you just answered leaves "Asking you".
+   */
+  const onReply = async (id: string, body: string) => {
+    await api(`/v1/guides/${encodeURIComponent(id)}/reply`, json("POST", { body }));
+    await refresh(hubKeys.tasks, hubKeys.working);
+  };
+
   const onRelease = (t: Task) => moveTask(t, "ready", `/v1/guides/${t.id}/release`, json("POST"));
 
   const readAll = () =>
@@ -645,6 +656,7 @@ function build(queryClient: QueryClient) {
     onSendBackHandedIn,
     onReject,
     onRelease,
+    onReply,
     onTakeBack,
     onCloseGuide,
     readAll,

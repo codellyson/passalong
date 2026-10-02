@@ -57,6 +57,15 @@
 import { Hono } from "hono";
 import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
+  ATTACH_MAX,
+  ATTACH_OPEN_MAX,
+  attachmentIds,
+  attachmentKey,
+  holdAttachments,
+  safeName,
+  sniffAttachment,
+} from "./attachments.js";
+import {
   clearCookie,
   decoyHash,
   EMAIL_RE,
@@ -86,10 +95,12 @@ import * as claims from "./claims.js";
 import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
 import {
   type MailEnv,
+  sendAsked,
   sendConsumed,
   sendHandoff,
   sendInvite,
   sendPulled,
+  sendReplied,
   sendReset,
   sendVerdict,
 } from "./email.js";
@@ -183,7 +194,7 @@ import {
   planNow,
   seatsFull,
 } from "./quota.js";
-import { evidenceOn, holdShots, PROOF_DAYS, SHOT_TYPES, shotKey } from "./shots.js";
+import { conversationOn, evidenceOn, holdShots, PROOF_DAYS, SHOT_TYPES, shotKey } from "./shots.js";
 import {
   isUploadToken,
   publicUpload,
@@ -1955,11 +1966,29 @@ const SHOT_MAX = 5 * 1024 * 1024;
  * on it. Both are documents somebody wrote, and either is reason enough to keep the file.
  */
 async function carriedShots(c: Ctx, guide: string, markdown: string) {
-  const said = await evidenceOn(c.env.DB, guide);
+  const said = [...(await evidenceOn(c.env.DB, guide)), ...(await conversationOn(c.env.DB, guide))];
   return [...new Set([...shotIds(markdown), ...said.flatMap(shotIds)])];
 }
 
-/** The screenshots a document points at, claimed for it, and any it dropped let go. */
+/**
+ * Everything a guide points a file at: the same three places as its screenshots. See carriedShots.
+ */
+async function carriedFiles(c: Ctx, guide: string, markdown: string) {
+  const said = [...(await evidenceOn(c.env.DB, guide)), ...(await conversationOn(c.env.DB, guide))];
+  return [...new Set([...attachmentIds(markdown), ...said.flatMap(attachmentIds)])];
+}
+
+/** The files a piece of writing points at, claimed for the guide, and any it let go of released. */
+async function claimFiles(c: Ctx, account: string, guide: string, text: string, markdown: string) {
+  await holdAttachments(c.env.DB, {
+    account,
+    guide,
+    mine: attachmentIds(text),
+    carried: await carriedFiles(c, guide, markdown),
+  });
+}
+
+/** The screenshots and files a document points at, claimed for it, and any it dropped let go. */
 async function claimShots(c: Ctx, account: string, guide: string, markdown: string) {
   await holdShots(c.env.DB, {
     account,
@@ -1967,6 +1996,7 @@ async function claimShots(c: Ctx, account: string, guide: string, markdown: stri
     mine: shotIds(markdown),
     carried: await carriedShots(c, guide, markdown),
   });
+  await claimFiles(c, account, guide, markdown, markdown);
 }
 
 /**
@@ -1978,16 +2008,19 @@ async function claimShots(c: Ctx, account: string, guide: string, markdown: stri
  */
 async function claimEvidenceShots(c: Ctx, account: string, guide: string, evidence: string) {
   const ids = shotIds(evidence);
-  if (!ids.length) return;
+  const files = attachmentIds(evidence);
+  if (!ids.length && !files.length) return;
   const row = await c.env.DB.prepare("SELECT markdown FROM guide WHERE id = ?")
     .bind(guide)
     .first<{ markdown: string }>();
-  await holdShots(c.env.DB, {
-    account,
-    guide,
-    mine: ids,
-    carried: await carriedShots(c, guide, row?.markdown || ""),
-  });
+  if (ids.length)
+    await holdShots(c.env.DB, {
+      account,
+      guide,
+      mine: ids,
+      carried: await carriedShots(c, guide, row?.markdown || ""),
+    });
+  if (files.length) await claimFiles(c, account, guide, evidence, row?.markdown || "");
 }
 
 /**
@@ -2010,6 +2043,17 @@ async function dropShots(c: Ctx, guide: string) {
     });
   }
   await c.env.DB.prepare("DELETE FROM shot WHERE guide_id = ?").bind(guide).run();
+}
+
+/** Take a guide's attached files with it, bucket first, for the same reason dropShots does. */
+async function dropFiles(c: Ctx, guide: string) {
+  const { results } = await c.env.DB.prepare("SELECT id, type FROM attachment WHERE guide_id = ?")
+    .bind(guide)
+    .all<{ id: string; type: string }>();
+  if (!results.length) return;
+  if (c.env.SHOTS)
+    await c.env.SHOTS.delete(results.map((r) => attachmentKey(r.id, r.type))).catch(() => {});
+  await c.env.DB.prepare("DELETE FROM attachment WHERE guide_id = ?").bind(guide).run();
 }
 
 app.post("/v1/shots", async (c) => {
@@ -2063,7 +2107,9 @@ async function storeShot(
 app.post("/v1/uploads", async (c) => {
   const account = c.get("account");
   if (!c.env.SHOTS) return err(c, 501, "Screenshots can't be uploaded here right now.");
-  const body = (await c.req.json().catch(() => ({}))) as { name?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { name?: unknown; kind?: unknown };
+  // What the link will take: a picture (the default, and what every link was before) or a file.
+  const kind = body.kind === "file" ? "file" : "image";
   const at = now();
   await c.env.DB.prepare("DELETE FROM upload WHERE account_id = ? AND (expires <= ? OR used <> '')")
     .bind(account, at)
@@ -2083,11 +2129,11 @@ app.post("/v1/uploads", async (c) => {
   const name =
     typeof body.name === "string" ? body.name.replace(/[^\x20-\x7e]/g, "").slice(0, 120) : "";
   await c.env.DB.prepare(
-    "INSERT INTO upload (hash, account_id, name, created, expires) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO upload (hash, account_id, name, created, expires, kind) VALUES (?, ?, ?, ?, ?, ?)",
   )
-    .bind(await sha256(token), account, name, at, expires)
+    .bind(await sha256(token), account, name, at, expires, kind)
     .run();
-  return c.json({ upload_url: `${origin(c)}/v1/uploads/${token}`, expires }, 201);
+  return c.json({ upload_url: `${origin(c)}/v1/uploads/${token}`, expires, kind }, 201);
 });
 
 /**
@@ -2102,23 +2148,69 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
   const token = c.req.param("token");
   if (!isUploadToken(token)) return c.notFound();
   const bucket = c.env.SHOTS;
-  if (!bucket) return err(c, 501, "Screenshots can't be uploaded here right now.");
+  if (!bucket) return err(c, 501, "Uploads aren't available here right now.");
+
+  // What the link was minted for decides what its bytes are checked against. Read, not spent: a
+  // refused file must leave the link usable, and only a stored one uses it up.
+  const hash = await sha256(token);
+  const open = await c.env.DB.prepare(
+    "SELECT kind, account_id FROM upload WHERE hash = ? AND used = '' AND expires > ?",
+  )
+    .bind(hash, now())
+    .first<{ kind: string; account_id: string }>();
+  if (!open)
+    return err(c, 410, "That upload link has expired or was already used. Ask for a new one.");
+  const file = open.kind === "file";
 
   const body = await c.req.arrayBuffer();
   if (!body.byteLength) return err(c, 400, "That file is empty. Check the path you sent.");
-  if (body.byteLength > SHOT_MAX)
-    return err(c, 413, "That image is over 5 MB. Use a smaller screenshot.");
-  const type = sniffImage(body);
-  if (!type) return err(c, 415, "That file isn't an image. Use a PNG, JPEG, WebP or GIF.");
+  if (body.byteLength > (file ? ATTACH_MAX : SHOT_MAX))
+    return err(
+      c,
+      413,
+      file
+        ? "That file is over 10 MB. Attach something smaller, or a link to it."
+        : "That image is over 5 MB. Use a smaller screenshot.",
+    );
+  let type = "";
+  if (file) {
+    // The name the link was minted with is the name it is kept under, since the sandbox's curl has
+    // no good way to send one; its extension is a hint for text, and the bytes decide the rest.
+    const named = await c.env.DB.prepare("SELECT name FROM upload WHERE hash = ?")
+      .bind(hash)
+      .first<{ name: string }>();
+    type =
+      sniffAttachment(
+        new Uint8Array(body),
+        c.req.header("content-type") || "",
+        named?.name || "",
+      ) || "";
+    if (!type)
+      return err(
+        c,
+        415,
+        "That kind of file isn't kept. Use a PDF, a zip, or a text, CSV, JSON or Markdown file.",
+      );
+    if ((await filesWaiting(c, open.account_id)) >= ATTACH_OPEN_MAX)
+      return err(c, 429, TOO_MANY_FILES);
+  } else {
+    type = sniffImage(body);
+    if (!type) return err(c, 415, "That file isn't an image. Use a PNG, JPEG, WebP or GIF.");
+  }
 
   const at = now();
   const ticket = await c.env.DB.prepare(
     "UPDATE upload SET used = ? WHERE hash = ? AND used = '' AND expires > ? RETURNING account_id, name",
   )
-    .bind(at, await sha256(token), at)
+    .bind(at, hash, at)
     .first<{ account_id: string; name: string }>();
   if (!ticket) {
     return err(c, 410, "That upload link has expired or was already used. Ask for a new one.");
+  }
+  if (file) {
+    const attachment = await storeAttachment(c, bucket, ticket.account_id, type, body, ticket.name);
+    const label = attachment.name.replace(/[[\]()]/g, "");
+    return c.json({ attachment, markdown: `[${label}](${attachment.url})` }, 201);
   }
   const shot = await storeShot(c, bucket, ticket.account_id, type, body, ticket.name);
   const label = (ticket.name || "screenshot").replace(/[[\]]/g, "");
@@ -2130,6 +2222,113 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
  * share key is the same bargain, and an image behind a login is an image that does not render in
  * the markdown the guide was pasted into.
  */
+/**
+ * A file that is not a picture, stored for a person to download. See attachments.ts for what is
+ * kept and why the bytes, never the sender's word, decide what it is.
+ *
+ * Raw bytes with the file's own type, like a screenshot: one file per request, and a multipart parse
+ * would be work in service of nothing. `x-file-name` carries the name, percent-encoded because a
+ * header cannot hold what a filename can.
+ */
+app.post("/v1/attachments", async (c) => {
+  const account = c.get("account");
+  const bucket = c.env.SHOTS;
+  if (!bucket) return err(c, 501, "Files can't be uploaded here right now.");
+  if (Number(c.req.header("content-length") || 0) > ATTACH_MAX)
+    return err(c, 413, "That file is over 10 MB. Attach something smaller, or a link to it.");
+  const body = await c.req.arrayBuffer();
+  if (!body.byteLength) return err(c, 400, "That file is empty. Choose it again.");
+  if (body.byteLength > ATTACH_MAX)
+    return err(c, 413, "That file is over 10 MB. Attach something smaller, or a link to it.");
+  let given = c.req.header("x-file-name") || "";
+  try {
+    given = decodeURIComponent(given);
+  } catch {}
+  const type = sniffAttachment(new Uint8Array(body), c.req.header("content-type") || "", given);
+  if (!type)
+    return err(
+      c,
+      415,
+      "That kind of file isn't kept. Use a PDF, a zip, or a text, CSV, JSON or Markdown file.",
+    );
+  if ((await filesWaiting(c, account)) >= ATTACH_OPEN_MAX) return err(c, 429, TOO_MANY_FILES);
+  return c.json({ attachment: await storeAttachment(c, bucket, account, type, body, given) }, 201);
+});
+
+const TOO_MANY_FILES = "You have a lot of files waiting to be sent. Send or remove some first.";
+
+/** Files an account has uploaded that nothing has claimed yet. */
+async function filesWaiting(c: Ctx, account: string): Promise<number> {
+  const row = await c.env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM attachment WHERE account_id = ? AND guide_id = ''",
+  )
+    .bind(account)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/**
+ * Write one file: the object, then the row that says whose it is. Shared by the direct upload and the
+ * upload link, so there is one place a file comes into being. The caller has already decided what it
+ * is; this only stores it.
+ */
+async function storeAttachment(
+  c: Ctx,
+  bucket: R2Bucket,
+  account: string,
+  type: string,
+  body: ArrayBuffer,
+  given: string,
+) {
+  const id = rid(12);
+  const name = safeName(given, type);
+  await bucket.put(attachmentKey(id, type), body, { httpMetadata: { contentType: type } });
+  await c.env.DB.prepare(
+    "INSERT INTO attachment (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, '', ?, ?, ?, ?)",
+  )
+    .bind(id, account, name, type, body.byteLength, now())
+    .run();
+  count(c, "attachment_uploaded", { type });
+  return { id, name, url: `${origin(c)}/v1/attachments/${id}`, type, bytes: body.byteLength };
+}
+
+/**
+ * Downloading one. Unlike a screenshot this needs a credential: a picture is evidence in a document
+ * that travels by link, and a file is somebody's PDF or CSV. It may be read by whoever uploaded it,
+ * and once a guide has claimed it by anybody who can read that guide. Anyone else is told it does not
+ * exist, not that it is forbidden — a refusal would confirm the id.
+ *
+ * Always a download, whatever it is: `content-disposition: attachment`, `nosniff`, and a policy that
+ * lets nothing in it run or load, so even a browser that was handed the URL directly would save it
+ * and never open it on this origin.
+ */
+app.get("/v1/attachments/:id", async (c) => {
+  const bucket = c.env.SHOTS;
+  const id = c.req.param("id");
+  if (!bucket || !/^[a-z0-9]{6,16}$/.test(id)) return c.notFound();
+  const row = await c.env.DB.prepare(
+    "SELECT account_id, guide_id, name, type FROM attachment WHERE id = ?",
+  )
+    .bind(id)
+    .first<{ account_id: string; guide_id: string; name: string; type: string }>();
+  if (!row) return c.notFound();
+  let allowed = row.account_id === c.get("account");
+  if (!allowed && row.guide_id) allowed = Boolean(await readableGuide(c, row.guide_id));
+  if (!allowed) return c.notFound();
+  const object = await bucket.get(attachmentKey(id, row.type));
+  if (!object) return c.notFound();
+  const name = safeName(row.name, row.type);
+  return new Response(object.body, {
+    headers: {
+      "content-type": row.type,
+      "content-disposition": `attachment; filename="${name.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+      "cache-control": "private, no-store",
+      "content-security-policy": "default-src 'none'; sandbox",
+      "x-content-type-options": "nosniff",
+    },
+  });
+});
+
 app.get("/v1/shots/:id", async (c) => {
   const bucket = c.env.SHOTS;
   const id = c.req.param("id");
@@ -4006,11 +4205,13 @@ async function recordVerdict(
     detail = "",
     checks = "",
     writeup = "",
-  }: { detail?: string; checks?: string; writeup?: string } = {},
+    stored = false,
+  }: { detail?: string; checks?: string; writeup?: string; stored?: boolean } = {},
 ) {
   const account = c.get("account");
-  await c.env.DB.prepare(
-    `INSERT INTO verdict (guide_id, account_id, ok, note, detail, checks, writeup, at)
+  if (!stored)
+    await c.env.DB.prepare(
+      `INSERT INTO verdict (guide_id, account_id, ok, note, detail, checks, writeup, at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note,
        detail = excluded.detail, checks = excluded.checks,
@@ -4019,18 +4220,18 @@ async function recordVerdict(
        -- wrote the first time by saying nothing — and silence is not a retraction.
        writeup = CASE WHEN excluded.writeup <> '' THEN excluded.writeup ELSE verdict.writeup END,
        at = excluded.at`,
-  )
-    .bind(
-      row.id,
-      account,
-      ok ? 1 : 0,
-      note,
-      String(detail ?? "").slice(0, claims.EVIDENCE_MAX),
-      String(checks ?? "").slice(0, claims.EVIDENCE_MAX * 2),
-      String(writeup ?? "").slice(0, claims.WRITEUP_MAX),
-      now(),
     )
-    .run();
+      .bind(
+        row.id,
+        account,
+        ok ? 1 : 0,
+        note,
+        String(detail ?? "").slice(0, claims.EVIDENCE_MAX),
+        String(checks ?? "").slice(0, claims.EVIDENCE_MAX * 2),
+        String(writeup ?? "").slice(0, claims.WRITEUP_MAX),
+        now(),
+      )
+      .run();
   await recordReceipt(c, row, "verdict");
 
   const people = await accounts(c, [account, row.account_id]);
@@ -4317,6 +4518,8 @@ function taskView(
           repo: claim.repo,
           worktree: claim.worktree,
           note: claim.note,
+          // What it is waiting on you to answer, or empty. Derived, never stored.
+          asking: claim.asking || "",
           evidence: claim.evidence,
           // Parsed here, once: the hub reads a list, and a screen that has to JSON.parse a column
           // is a screen that has to decide what to do when it does not parse.
@@ -4361,6 +4564,21 @@ app.get("/v1/tasks", async (c) => {
 });
 
 /**
+ * What happened to a guide, in order, as the conversation it was: taken, progress said, handed in,
+ * sent back, answered. Readable by whoever can read the guide. See claims.thread().
+ */
+app.get("/v1/guides/:id/thread", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  return c.json({
+    id: found.row.id,
+    // Who opened it, so the first bubble can sit on the right when it was you.
+    mine: found.owner,
+    thread: await claims.thread(c.env.DB, found.row.id, c.get("account")),
+  });
+});
+
+/**
  * Who is working on what: every guide someone holds right now, of every kind, that this account
  * can see. One row per taker — a handoff repeated in two repos is two rows. See claims.working().
  */
@@ -4385,6 +4603,9 @@ app.get("/v1/working", async (c) => {
       repo: r.claim.repo,
       worktree: r.claim.worktree,
       note: r.claim.note,
+      asking: r.claim.asking || "",
+      // What a person wrote that this agent has not been told: the session-start hook says so.
+      replies: r.claim.waiting_replies || 0,
       claimed_at: r.claim.claimed_at,
       lease_until: r.claim.lease_until,
     })),
@@ -4416,11 +4637,13 @@ app.put("/v1/tasks/:id/progress", async (c) => {
   const claim = await claims.renew(c.env.DB, c.req.param("id"), who, { at: now(), note });
   // The answer an agent needs to stop: somebody released it, or it was never this agent's.
   if (!claim) return stopWith(c, "this agent does not hold that task — stop work on it");
+  const replies = await claims.deliver(c.env.DB, claim.guide_id, who);
   return c.json({
     id: claim.guide_id,
     lease_until: claim.lease_until,
     note: claim.note,
-    ...claims.steps("task", "progress"),
+    ...(replies.length ? { replies } : {}),
+    ...claims.steps("task", "progress", replies.length),
   });
 });
 
@@ -4570,12 +4793,15 @@ app.post("/v1/take", async (c) => {
     // queue's invariant written down where it is relied on. Reading it off the row and falling
     // back would be a second opinion about what an absent kind means.
     const kind = "task";
+    // Notes the author left on it before anyone took it, handed to whoever does.
+    const replies = await claims.deliver(c.env.DB, got.task.id, who, { resume: got.resumed });
     return c.json({
       guide: {
         ...heldView(base, { ...got.task, kind, share_key: row?.share_key }, got.claim),
         resumed: got.resumed,
       },
-      ...claims.steps(kind, "taken"),
+      ...(replies.length ? { replies } : {}),
+      ...claims.steps(kind, "taken", replies.length),
     });
   }
 
@@ -4608,12 +4834,17 @@ app.post("/v1/take", async (c) => {
   const share = await c.env.DB.prepare("SELECT share_key FROM guide WHERE id = ?")
     .bind(id)
     .first<{ share_key: string }>();
+  // A resume is how an agent that stopped to wait for an answer picks its work back up, so it is
+  // handed everything said since it asked; a first take is handed the notes left on it before
+  // anybody took it. See claims.deliver().
+  const replies = await claims.deliver(c.env.DB, id, who, { resume: got.resumed });
   return c.json({
     guide: {
       ...heldView(base, { ...got.task, share_key: share?.share_key }, got.claim),
       resumed: got.resumed,
     },
-    ...claims.steps(got.task.kind, "taken"),
+    ...(replies.length ? { replies } : {}),
+    ...claims.steps(got.task.kind, "taken", replies.length),
   });
 });
 
@@ -4636,6 +4867,7 @@ app.put("/v1/guides/:id/progress", async (c) => {
   const kind = await c.env.DB.prepare("SELECT kind, account_id, team_id FROM guide WHERE id = ?")
     .bind(claim.guide_id)
     .first<{ kind: string; account_id: string; team_id: string }>();
+  const replies = await claims.deliver(c.env.DB, claim.guide_id, who);
   // An agent that stops on you says so with BLOCKED:, and the hub lists it under Stuck on you. The
   // first such note is news for the guide's author; the same block renewed is not.
   const blocked = /^BLOCKED:/i;
@@ -4652,7 +4884,8 @@ app.put("/v1/guides/:id/progress", async (c) => {
     id: claim.guide_id,
     lease_until: claim.lease_until,
     note: claim.note,
-    ...claims.steps(kind?.kind || "", "progress"),
+    ...(replies.length ? { replies } : {}),
+    ...claims.steps(kind?.kind || "", "progress", replies.length),
   });
 });
 
@@ -4697,6 +4930,102 @@ function checksIn(raw: unknown): claims.Check[] {
     .slice(0, 50);
 }
 
+/**
+ * The agent asks a person something and waits. See claims.ask() and docs/CONVERSATION.md.
+ *
+ * Answers like `pass` does when it is not holding: stop. What it gets on success is also a stop, but
+ * a different one — the claim is kept, and `take` with this id picks it back up with the reply.
+ */
+app.post("/v1/guides/:id/ask", async (c) => {
+  const who = agentOf(c, await c.req.json().catch(() => ({})));
+  if (!who.agent) return err(c, 400, NO_AGENT);
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const question = typeof who.question === "string" ? who.question.trim() : "";
+  const done = await claims.ask(c.env.DB, found.row.id, who, {
+    at: now(),
+    question,
+    fence: fenceIn(who.fence),
+  });
+  if ("error" in done)
+    return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
+  count(c, "guide_asked", { kind: found.row.kind });
+  // The author is who is being waited on, and that includes the author whose own agent this is: the
+  // commonest case, and the one the self-drop in notify() would silence, so `asked` is exempt.
+  const row = found.row;
+  const people = await accounts(c, [who.account, row.account_id]);
+  await notify(c.env, {
+    to: row.account_id,
+    kind: "asked",
+    guide_id: row.id,
+    actor_id: who.account,
+    team_id: row.team_id,
+    note: question.slice(0, claims.NOTE_MAX),
+    mail: () =>
+      sendAsked(c.env, {
+        to: people.get(row.account_id)?.email || "",
+        byName: nameOf(people, who.account),
+        title: row.title,
+        url: shareUrl(origin(c), row),
+        question: question.slice(0, claims.MESSAGE_MAX),
+      }),
+  });
+  return c.json({
+    id: found.row.id,
+    lease_until: done.claim.lease_until,
+    ...claims.steps(found.row.kind, "asked"),
+  });
+});
+
+/**
+ * A person writes to whoever holds a guide: an answer to a question, or something they thought of
+ * since. Only while it is held, and only from the asking side — see claims.reply().
+ */
+app.post("/v1/guides/:id/reply", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const body = (await c.req.json().catch(() => ({}))) as { body?: unknown };
+  const done = await claims.reply(c.env.DB, found.row.id, {
+    account: c.get("account"),
+    at: now(),
+    body: typeof body.body === "string" ? body.body : "",
+  });
+  if ("error" in done) return err(c, done.status, done.error);
+  count(c, "guide_replied", { kind: found.row.kind });
+  const text = (typeof body.body === "string" ? body.body : "").trim().slice(0, claims.MESSAGE_MAX);
+  // A picture on a reply is claimed by the guide it was written to, the way evidence is: nothing
+  // else names it, so without this the sweep would delete it a day later. Only what was kept, so a
+  // picture past the cap — which is not on the record — is not claimed either.
+  await claimEvidenceShots(c, c.get("account"), found.row.id, text);
+  // A feed line and a mail preview are text: a picture is said as one rather than as its markdown.
+  const spoken = text
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "[image]")
+    .replace(/\[([^\]]*)\]\([^)]*\/v1\/attachments\/[^)]*\)/g, "[file: $1]")
+    .trim();
+  const row = found.row;
+  const me = c.get("account");
+  const people = await accounts(c, [me, ...done.holders]);
+  for (const holder of done.holders)
+    await notify(c.env, {
+      to: holder,
+      kind: "replied",
+      guide_id: row.id,
+      actor_id: me,
+      team_id: row.team_id,
+      note: spoken.slice(0, claims.NOTE_MAX),
+      mail: () =>
+        sendReplied(c.env, {
+          to: people.get(holder)?.email || "",
+          byName: nameOf(people, me),
+          title: row.title,
+          url: shareUrl(origin(c), row),
+          body: spoken,
+        }),
+    });
+  // `noted` says which it was: nothing was held, so this is a note left for whoever takes it.
+  return c.json({ id: found.row.id, noted: done.noted });
+});
+
 app.post("/v1/guides/:id/hand_in", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
@@ -4704,6 +5033,8 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   if (!found) return err(c, 404, GUIDE_GONE);
   const at = now();
   const note = typeof who.note === "string" ? who.note.trim().slice(0, NOTE_MAX) : "";
+  // The line the person reads first; the evidence and write-up sit behind it.
+  if (!note) return err(c, 400, "Say in one plain sentence what you did: send `note`.");
 
   const evidence = typeof who.evidence === "string" ? who.evidence : "";
   const checks = checksIn(who.checks);
@@ -4756,12 +5087,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   if (bad) return err(c, 400, bad);
   // The evidence the agent just sent, on the verdict as well as the claim. This is the correction
   // channel: a hand-in that says it did not hold now carries what was run, and the guide shows it.
-  await recordVerdict(c, found.row, who.ok, note, {
-    detail: evidence,
-    checks: checks.length ? JSON.stringify(checks) : "",
-    writeup,
-  });
-  await claims.handIn(c.env.DB, found.row.id, who, {
+  const done = await claims.handIn(c.env.DB, found.row.id, who, {
     at,
     note,
     evidence,
@@ -4769,7 +5095,11 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
     writeup,
     risk,
     fence: fenceIn(who.fence),
+    verdict: { ok: who.ok },
   });
+  if ("error" in done)
+    return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
+  await recordVerdict(c, found.row, who.ok, note, { stored: true });
   await claimEvidenceShots(c, who.account, found.row.id, evidence);
   return c.json({
     id: found.row.id,
@@ -5079,6 +5409,7 @@ app.delete("/v1/guides/:id", async (c) => {
   // Before the guide, so a failure leaves the guide to try again rather than orphaning its
   // evidence with nothing left pointing at it.
   await dropShots(c, found.row.id);
+  await dropFiles(c, found.row.id);
   await c.env.DB.prepare("DELETE FROM guide WHERE id = ?").bind(found.row.id).run();
   return c.json({ id: found.row.id, deleted: true });
 });

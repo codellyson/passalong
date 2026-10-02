@@ -52,6 +52,7 @@ const groups = computed(() =>
   [
     {
       key: "review",
+      short: "To review",
       title: "Waiting for your review",
       note: "Tasks an agent finished. Approve them, or ask for changes.",
       tone: "bg-accent",
@@ -61,6 +62,7 @@ const groups = computed(() =>
     },
     {
       key: "handed",
+      short: "Finished",
       title: "Finished: review it",
       note: "Done where it was sent. Check the evidence, then accept it or ask for changes.",
       tone: "bg-ok",
@@ -76,6 +78,7 @@ const groups = computed(() =>
     },
     {
       key: "sent",
+      short: "Sent to you",
       title: "Sent to you",
       note: "Say whether you will do it, and later whether it worked.",
       tone: "bg-coral",
@@ -91,6 +94,7 @@ const groups = computed(() =>
     },
     {
       key: "stuck",
+      short: "Waiting on you",
       title: "Waiting on you",
       note: "The agent stopped and needs an answer from you.",
       tone: "bg-danger",
@@ -100,6 +104,7 @@ const groups = computed(() =>
     },
     {
       key: "quiet",
+      short: "Went silent",
       title: "Agent went silent",
       note: "No update for 30 minutes. It still holds the work.",
       tone: "bg-warn",
@@ -111,9 +116,25 @@ const groups = computed(() =>
 );
 const all = computed(() => groups.value.flatMap((g) => g.items as Item[]));
 
+/**
+ * The counts are the filter, as on the Being-worked-on tab: one list, with a chip per reason it needs
+ * you and how many, instead of the same list cut into stacked blocks with a heading each. Nothing
+ * chosen is everything. A reason whose last item went away cannot stay chosen.
+ */
+const only = ref<string | null>(null);
+watch(groups, (g) => {
+  if (only.value && !g.some((x) => x.key === only.value)) only.value = null;
+});
+const shown = computed(() =>
+  groups.value
+    .filter((g) => !only.value || g.key === only.value)
+    .flatMap((g) => (g.items as Item[]).map((it) => ({ it, g }))),
+);
+const onlyGroup = computed(() => groups.value.find((g) => g.key === only.value) ?? null);
+
 const selectedKey = ref("");
 const sel = computed(
-  () => all.value.find((i) => i.key === selectedKey.value) ?? all.value[0] ?? null,
+  () => shown.value.find((x) => x.it.key === selectedKey.value)?.it ?? shown.value[0]?.it ?? null,
 );
 const task = computed(() => (sel.value?.kind === "task" ? sel.value.task : null));
 const handed = computed(() => (sel.value?.kind === "handed" ? sel.value.h : null));
@@ -241,39 +262,56 @@ const TONE = {
 
 <template>
   <div v-if="all.length" class="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
-    <nav class="flex flex-col gap-6 lg:sticky lg:top-24" aria-label="Needs you">
-      <section v-for="grp in groups" :key="grp.key" class="flex flex-col gap-3">
-        <h3 :class="label" class="flex items-center gap-2">
-          <span class="size-1.5 shrink-0 rounded-pill" :class="grp.tone" aria-hidden="true" />
-          {{ grp.title }} · {{ grp.items.length }}
-        </h3>
-        <p class="-mt-1 m-0 font-ui text-xs text-muted">{{ grp.note }}</p>
-        <ul class="m-0 list-none rounded-3 bg-raised p-0 shadow-edge">
-          <li v-for="(it, n) in grp.items" :key="it.key" class="shadow-[inset_0_1px_0_var(--line)] first:shadow-none">
-            <!-- The item you are reading: the near-white fill of a surface you act on, and the coral
-                 diamond the hub marks "here" with. The first and last rows take the list's corners. -->
-            <button
-              type="button"
-              class="relative block w-full cursor-pointer border-0 py-4 pr-5 pl-8 text-left transition-colors duration-150 ease-out"
-              :class="[
-                sel?.key === it.key ? 'bg-field' : 'bg-transparent hover:bg-surface',
-                n === 0 ? 'rounded-t-3' : '',
-                n === grp.items.length - 1 ? 'rounded-b-3' : '',
-              ]"
-              :aria-current="sel?.key === it.key ? 'true' : undefined"
-              @click="pick(it.key)"
-            >
-              <span
-                v-if="sel?.key === it.key"
-                class="absolute top-[1.4rem] left-3 size-1.5 rotate-45 rounded-[1px] bg-coral"
-                aria-hidden="true"
-              />
-              <span class="line-clamp-2 block font-ui text-sm leading-snug font-medium text-fg">{{ it.title }}</span>
-              <span v-if="it.sub" class="mt-1 line-clamp-2 block font-ui text-xs leading-snug text-muted">{{ it.sub }}</span>
-            </button>
-          </li>
-        </ul>
-      </section>
+    <nav class="flex flex-col gap-4 lg:sticky lg:top-24" aria-label="Needs you">
+      <!-- The counts, and the filter: a chip per reason, none chosen is all of them. -->
+      <div class="grid grid-cols-2 gap-2 font-ui" role="group" aria-label="Filter by reason">
+        <button
+          v-for="g in groups"
+          :key="g.key"
+          type="button"
+          class="flex cursor-pointer items-center gap-3 rounded-2 border-0 bg-raised px-3 py-3 text-left shadow-edge transition-colors duration-150"
+          :class="only === g.key ? 'bg-field' : 'hover:bg-surface'"
+          :aria-pressed="only === g.key"
+          @click="only = only === g.key ? null : g.key"
+        >
+          <span class="text-xl leading-none font-semibold text-fg tabular-nums">{{ g.items.length }}</span>
+          <span class="flex min-w-0 items-center gap-2 text-xs leading-tight font-medium text-muted">
+            <span class="size-1.5 shrink-0 rounded-pill" :class="g.tone" aria-hidden="true" />
+            <span class="min-w-0">{{ g.short }}</span>
+          </span>
+        </button>
+      </div>
+      <p v-if="onlyGroup" class="m-0 font-ui text-xs text-muted">{{ onlyGroup.note }}</p>
+
+      <ul class="m-0 list-none rounded-3 bg-raised p-0 shadow-edge">
+        <li v-for="({ it, g }, n) in shown" :key="it.key" class="shadow-[inset_0_1px_0_var(--line)] first:shadow-none">
+          <!-- The item you are reading: the near-white fill of a surface you act on, and the coral
+               diamond the hub marks "here" with. The first and last rows take the list's corners. -->
+          <button
+            type="button"
+            class="relative block w-full cursor-pointer border-0 py-4 pr-5 pl-8 text-left transition-colors duration-150 ease-out"
+            :class="[
+              sel?.key === it.key ? 'bg-field' : 'bg-transparent hover:bg-surface',
+              n === 0 ? 'rounded-t-3' : '',
+              n === shown.length - 1 ? 'rounded-b-3' : '',
+            ]"
+            :aria-current="sel?.key === it.key ? 'true' : undefined"
+            @click="pick(it.key)"
+          >
+            <span
+              v-if="sel?.key === it.key"
+              class="absolute top-[1.4rem] left-3 size-1.5 rotate-45 rounded-[1px] bg-coral"
+              aria-hidden="true"
+            />
+            <span class="line-clamp-2 block font-ui text-sm leading-snug font-medium text-fg">{{ it.title }}</span>
+            <!-- Why it is here, on the row, now that the headings are gone. -->
+            <span class="mt-1 flex items-center gap-2 font-ui text-xs leading-snug text-muted">
+              <span class="size-1.5 shrink-0 rounded-pill" :class="g.tone" aria-hidden="true" />
+              <span class="line-clamp-2 min-w-0">{{ g.short }}<template v-if="it.sub"> · {{ it.sub }}</template></span>
+            </span>
+          </button>
+        </li>
+      </ul>
     </nav>
 
     <article v-if="sel" ref="pane" class="flex scroll-mt-24 flex-col gap-6 rounded-3 bg-raised px-6 py-6 shadow-edge">

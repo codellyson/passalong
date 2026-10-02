@@ -39,22 +39,10 @@ usePage({
 });
 
 /**
- * What it costs, in one place, because a price stated twice is a price that will disagree with
- * itself.
- *
- * There is no free tier here. What stays free is everything that never leaves the machine: the CLI
- * writes and reads guides against a local store with no account and no ceiling, which is §10 and is
- * not a concession — it is how the tool works. What is paid for is the crossing, which is the
- * product.
- *
- * The server agrees: `FREE_SIGNUP` is "0" in apps/web/wrangler.jsonc, so a new account may sync
- * nothing until it has a plan (`ceilingFor()` in apps/api/src/quota.ts answers "none"). Only
- * accounts from before the cutover keep the 25 synced guides they had (migrations/0016_grandfather.sql),
- * and the page does not advertise that, because nobody new can get it.
+ * How to reach sales. The page states no price: what is paid for is the crossing — the queue, the
+ * claims and the hub — and the CLI that never leaves the machine stays free, with no account.
  */
 const PRICING = {
-  solo: { amount: "$5", period: "per month" },
-  team: { amount: "$10", period: "for three seats", extra: "then $5 per extra seat" },
   /** Plain mailto: this page runs no script and its CSP allows none, so a form is not an option. */
   contact: "contact@passalong.dev",
 };
@@ -62,13 +50,11 @@ const PRICING = {
 /**
  * What a search engine is told about the product, as JSON-LD.
  *
- * Built from PRICING so the price in the markup cannot drift from the price on the page. A data
- * block rather than script: browsers never execute it, so the landing's CSP, which allows no script
+ * A data block rather than script: browsers never execute it, so the landing's CSP, which allows no script
  * at all, is untouched — and server/plugins/csp.ts knows not to count it as one.
  *
  * Only what the page itself says. No ratings or reviews: there are none to cite.
  */
-const perMonth = (amount: string) => Number(amount.replace(/[^0-9.]/g, ""));
 const STRUCTURED = {
   "@context": "https://schema.org",
   "@graph": [
@@ -108,31 +94,6 @@ const STRUCTURED = {
           description: "The CLI against a local store, with no account.",
           price: 0,
           priceCurrency: "USD",
-        },
-        {
-          "@type": "Offer",
-          name: "Solo",
-          price: perMonth(PRICING.solo.amount),
-          priceCurrency: "USD",
-          priceSpecification: {
-            "@type": "UnitPriceSpecification",
-            price: perMonth(PRICING.solo.amount),
-            priceCurrency: "USD",
-            billingDuration: "P1M",
-          },
-        },
-        {
-          "@type": "Offer",
-          name: "Team",
-          description: `Three seats, ${PRICING.team.extra}.`,
-          price: perMonth(PRICING.team.amount),
-          priceCurrency: "USD",
-          priceSpecification: {
-            "@type": "UnitPriceSpecification",
-            price: perMonth(PRICING.team.amount),
-            priceCurrency: "USD",
-            billingDuration: "P1M",
-          },
         },
       ],
     },
@@ -376,55 +337,30 @@ const PROOF = null as { figure: string; says: string } | null;
       </dl>
     </section>
 
-    <!-- Two tiers as peers under one hairline, not two bordered cards side by side. A card on every
-         block is what `/connect` was fixed for: it spends the emphasis evenly and leaves none for
-         the thing that matters, which here is the last line of the team column. -->
+    <!-- No price on the page: the team plan is a conversation. -->
     <section class="pricing" aria-label="What it costs">
       <h2>
         Free on one machine.<br>
-        <span class="turn">{{ PRICING.solo.amount }} when your agents share the work.</span>
+        <span class="turn">Paid when your agents share the work.</span>
       </h2>
       <p class="note">
         The CLI writes and keeps guides locally, with no account. The queue, the claims and your
         hub are the paid part.
       </p>
 
+      <!-- One card, and the way to it. -->
       <div class="tiers">
         <article>
-          <h3>Solo</h3>
-          <p class="figure">
-            {{ PRICING.solo.amount }}<span>{{ PRICING.solo.period }}</span>
-          </p>
-          <p>
-            Every piece of work, on every machine you use, with no limit: hand it to any of your
-            agents, see who has what, and connect any assistant you use.
-          </p>
-        </article>
-
-        <article>
           <h3>Team</h3>
-          <p class="figure">
-            {{ PRICING.team.amount }}<span>{{ PRICING.team.period }}, {{ PRICING.team.extra }}</span>
-          </p>
+          <p class="figure">Talk to us</p>
           <p>
             <b>One subscription covers the whole team.</b> Hand work to a person, to the group that
             does that kind of work, or to anyone’s agents, and see who’s on what.
           </p>
-        </article>
-
-        <!-- Not a tier and it does not pretend to be one: no figure, because the answer to "how
-             much" is the conversation. It sits in the same row because that is where somebody is
-             standing when they work out the per-seat number does not suit them. -->
-        <article>
-          <h3>Larger</h3>
-          <p class="figure">Talk to us</p>
-          <p>
-            More people than a seat count suits, a procurement process, or a question the two
-            columns beside this one do not answer.
-          </p>
           <p class="ask">
             <a class="btn" :href="`mailto:${PRICING.contact}`">Contact sales</a>
           </p>
+          <p class="more">A larger team, a procurement process, or a question this does not answer.</p>
         </article>
       </div>
     </section>

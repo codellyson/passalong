@@ -18,6 +18,28 @@ import type { Task } from "~/types/hub";
 
 const props = defineProps<{ t: Task }>();
 const { onApprove, onReject, onRelease, onTaskReady } = useHub();
+const { open } = useThread();
+
+/**
+ * Held, so a message is to the agent; or yours and waiting for somebody to take it, so what you write
+ * is a note for them. A task that is done takes no more, and neither does one handed in.
+ */
+const held = computed(() => props.t.state === "claimed" || props.t.state === "stalled");
+const canNote = computed(
+  () =>
+    (props.t.mine || Boolean(props.t.for_me)) &&
+    ["ready", "blocked", "draft"].includes(props.t.state),
+);
+// The conversation opens in a panel of its own, not in the row: a control that goes somewhere else is
+// an `open`.
+const openThread = () =>
+  open({
+    id: props.t.id,
+    title: props.t.title,
+    stamp: `${props.t.state}|${props.t.claim?.note}|${props.t.claim?.lease_until}`,
+    reply: held.value || canNote.value,
+    noting: !held.value && canNote.value,
+  });
 /** Approve waits until what they ran has been opened. See HandIn.vue. */
 const read = ref(false);
 
@@ -144,6 +166,14 @@ function send() {
       </p>
 
       <p v-if="t.claim?.note" class="mt-2 mb-0 text-sm text-muted">“{{ t.claim.note }}”</p>
+      <button
+        class="mt-2 inline-flex items-center gap-1 rounded-1 border-0 bg-transparent px-0 py-0.5 font-ui text-xs text-muted hover:text-fg"
+        type="button"
+        @click="openThread"
+      >
+        Conversation
+        <AppIcon name="open" :size="12" />
+      </button>
       <p v-if="t.state === 'review' && t.claim?.report" class="mt-2 mb-0 text-sm">
         Came back with
         <a :href="t.claim.report_url || undefined" target="_blank" rel="noopener">{{

@@ -298,4 +298,6 @@ const active = (to: string) =>
     </section>
   </main>
   <HubToasts v-if="framed" />
+  <!-- The one conversation panel for every page of the hub. -->
+  <HubThreadDrawer v-if="signedIn" />
 </template>

@@ -10,10 +10,13 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  ASK_LEASE_MS,
   approve,
+  ask,
   blockOn,
   checksProblem,
   closeGuide,
+  deliver,
   dropOutside,
   evidenceProblem,
   finish,
@@ -28,6 +31,7 @@ import {
   reject,
   release,
   renew,
+  reply,
   repoKey,
   STALE_SENT_MS,
   sendBackHandedIn,
@@ -36,8 +40,10 @@ import {
   stateOf,
   steps,
   take,
+  thread,
   working,
 } from "../src/claims.ts";
+import { line, notify } from "../src/notify.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
@@ -1173,6 +1179,76 @@ test("handing in a handoff moves its claim out of working and into waiting on it
   assert.equal((await take(db, "h2", A, { at: T0 })).claim.guide_id, "h2");
 });
 
+test("an agent hand-in stores a verdict only when its own claim moves to review", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  const verdicts = () =>
+    db.raw
+      .prepare("SELECT ok, note FROM verdict WHERE guide_id = 'h1'")
+      .all()
+      .map((row) => ({ ok: row.ok, note: row.note }));
+  const answer = (agent, ok, note = "") =>
+    handIn(db, "h1", agent, { at: T0, note, evidence: PROOF, verdict: { ok } });
+
+  assert.equal((await answer(A, true)).status, 409, "an untaken guide is not handed in");
+  assert.deepEqual(verdicts(), [], "a refused hand-in leaves no verdict");
+
+  await take(db, "h1", A, { at: T0 });
+  assert.equal((await answer(B, true)).status, 409, "another agent cannot answer the claim");
+  assert.deepEqual(verdicts(), []);
+
+  const done = await answer(A, false, "the check failed");
+  assert.equal(done.claim.state, "review");
+  assert.deepEqual(verdicts(), [{ ok: 0, note: "the check failed" }]);
+  assert.equal((await answer(A, true)).status, 409, "the same claim cannot be handed in twice");
+  assert.deepEqual(verdicts(), [{ ok: 0, note: "the check failed" }]);
+
+  guide("h2", { kind: "bug", target: "" });
+  await take(db, "h2", A, { at: T0 });
+  await pass(db, "h2", A, { at: T0, why: "someone else owns the fix" });
+  assert.equal(
+    (await handIn(db, "h2", A, { at: T0, note: "", evidence: PROOF, verdict: { ok: true } }))
+      .status,
+    409,
+    "a released claim cannot publish a verdict",
+  );
+  assert.deepEqual(db.raw.prepare("SELECT * FROM verdict WHERE guide_id = 'h2'").all(), []);
+});
+
+test("a fenced hand-in stores its evidence and rejects an older claim generation", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  const first = await take(db, "h1", A, { at: T0 });
+  await pass(db, "h1", A, { at: T0, why: "try again", fence: first.claim.fence });
+  const second = await take(db, "h1", A, { at: T0 });
+  const fields = {
+    at: T0,
+    note: "applied",
+    evidence: PROOF,
+    writeup: "needed a local setting",
+    verdict: { ok: true },
+  };
+  assert.equal((await handIn(db, "h1", A, { ...fields, fence: first.claim.fence })).status, 409);
+  assert.deepEqual(db.raw.prepare("SELECT * FROM verdict WHERE guide_id = 'h1'").all(), []);
+
+  const done = await handIn(db, "h1", A, { ...fields, fence: second.claim.fence });
+  assert.equal(done.claim.state, "review");
+  const saved = db.raw
+    .prepare("SELECT ok, note, detail, writeup FROM verdict WHERE guide_id = 'h1'")
+    .get();
+  assert.deepEqual(
+    { ...saved },
+    {
+      ok: 1,
+      note: "applied",
+      detail: PROOF,
+      writeup: "needed a local setting",
+    },
+  );
+});
+
 test("every answer says what to do next, and an answer to stop says to stop", () => {
   const tools = (s) => s.next.map((x) => x.tool);
   assert.deepEqual(tools(steps("task", "taken")), ["progress", "hand_in", "pass"]);
@@ -1440,6 +1516,358 @@ test("claims.ts and guide.ts agree on what a screenshot url looks like", async (
     assert.ok(claims.includes(piece), `claims.ts is missing ${piece}`);
     assert.ok(guide.includes(piece), `guide.ts is missing ${piece}`);
   }
+});
+
+test("a thread keeps what progress overwrote and what a release deleted, in order", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("r1", { kind: "transfer" });
+  await take(db, "t1", A, { at: T0 });
+  await renew(db, "t1", A, { at: later(1000), note: "reading the claims code" });
+  // No note is a heartbeat, not a thing said: it renews the lease and writes nothing.
+  await renew(db, "t1", A, { at: later(2000), note: null });
+  await renew(db, "t1", A, { at: later(3000), note: "migration written" });
+  await release(db, "t1", { account: "me", at: later(4000) });
+  await take(db, "t1", B, { at: later(5000) });
+  await finish(db, "t1", B, { at: later(6000), report: "r1", evidence: PROOF, note: "done" });
+  await reject(db, "t1", { account: "me", at: later(7000), why: "Acceptance 2 not met" });
+
+  const t = await thread(db, "t1", "me");
+  assert.deepEqual(
+    t.map((i) => [i.kind, i.body]),
+    [
+      ["taken", ""],
+      ["progress", "reading the claims code"],
+      ["progress", "migration written"],
+      ["released", "migration written"],
+      ["taken", ""],
+      ["handed_in", "done"],
+      ["sent_back", "Acceptance 2 not met"],
+    ],
+  );
+  assert.equal(t[0].by.agent, true, "a worktree's act is an agent's");
+  assert.equal(t[3].by.agent, false, "the author's own act is not");
+  assert.equal(t[3].by.you, true);
+  assert.equal((await thread(db, "t1", "other"))[3].by.you, false);
+});
+
+test("a person's answer in the browser is one line, not the answer and the hold it caused", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", account: "other" });
+  const me = { account: "me", agent: "person-me", repo: "" };
+  await take(db, "h1", me, { at: T0, many: true });
+  db.raw
+    .prepare(
+      "INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES ('h1', 'me', 1, '', ?)",
+    )
+    .run(T0);
+  await handIn(db, "h1", me, { at: later(1000), note: "works", evidence: "works", person: true });
+  db.raw
+    .prepare(
+      "INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES ('h1', 'me', 1, 'works', ?)",
+    )
+    .run(later(1000));
+  assert.deepEqual(
+    (await thread(db, "h1", "me")).map((i) => i.kind),
+    ["ack", "verdict"],
+  );
+});
+
+test("a thread dies with its guide", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await take(db, "t1", A, { at: T0 });
+  db.raw.exec("PRAGMA foreign_keys = ON");
+  db.raw.prepare("DELETE FROM guide WHERE id = 't1'").run();
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM task_event").get().n, 0);
+});
+
+test("an agent that asks keeps what it holds, and the card says it is waiting on you", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await take(db, "t1", A, { at: T0 });
+  const res = await ask(db, "t1", A, {
+    at: later(1000),
+    question: "Settings or the header?\nMore context.",
+  });
+  assert.equal(res.claim.agent_id, "agent-a", "the claim is still its own");
+  assert.equal(
+    res.claim.note,
+    "Settings or the header?",
+    "the board's line is the question's first",
+  );
+  assert.equal(
+    res.claim.lease_until,
+    later(1000 + ASK_LEASE_MS),
+    "a person's answer takes longer than 30 minutes",
+  );
+  assert.equal(
+    (await list(db, "me", later(1000)))[0].claim.asking,
+    "Settings or the header?\nMore context.",
+  );
+  assert.equal(
+    (await working(db, "me", later(1000)))[0].claim.asking,
+    "Settings or the header?\nMore context.",
+  );
+  // Nobody else can take it while it waits.
+  assert.ok("error" in (await take(db, "t1", B, { at: later(2000) })));
+  assert.equal(stateOf({ status: "published" }, res.claim, later(2000)), "claimed");
+  // Answering it clears the waiting, and nothing had to move the card.
+  await reply(db, "t1", { account: "me", at: later(3000), body: "Settings." });
+  assert.equal((await list(db, "me", later(3000)))[0].claim.asking, "");
+});
+
+test("a question is refused when the agent no longer holds it, or holds a newer generation", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const first = await take(db, "t1", A, { at: T0 });
+  assert.equal(
+    (await ask(db, "t1", A, { at: T0, question: " " })).status,
+    400,
+    "an empty question",
+  );
+  assert.equal((await ask(db, "t1", B, { at: T0, question: "q" })).status, 409, "not its holder");
+  await release(db, "t1", { account: "me", at: later(1) });
+  const again = await take(db, "t1", A, { at: later(2) });
+  assert.ok(again.claim.fence > first.claim.fence);
+  const stale = await ask(db, "t1", A, { at: later(3), question: "q", fence: first.claim.fence });
+  assert.equal(stale.status, 409);
+  assert.match(stale.error, /released and taken again/);
+});
+
+test("only the asking side may write, only while somebody holds it, and it is plain text", async () => {
+  const db = d1();
+  const guide = seed(db);
+  db.raw
+    .prepare("INSERT INTO account (id, token_hash, created) VALUES ('stranger', 'h-s', ?)")
+    .run(T0);
+  guide("t1");
+  // Nobody holds it: only its author or whoever it is assigned to may leave a note for whoever takes
+  // it, and the rest are told that, not that nobody is listening.
+  assert.equal((await reply(db, "t1", { account: "stranger", at: T0, body: "hello" })).status, 403);
+  const note = await reply(db, "t1", { account: "me", at: T0, body: "The input is attached." });
+  assert.equal(note.noted, true);
+  assert.deepEqual(note.holders, [], "there is nobody to tell");
+  assert.equal(db.raw.prepare("SELECT kind FROM task_event WHERE kind = 'noted'").all().length, 1);
+  await take(db, "t1", A, { at: T0 });
+  assert.equal(
+    (await reply(db, "t1", { account: "stranger", at: T0, body: "hi" })).status,
+    403,
+    "not a party",
+  );
+  assert.equal(
+    (await reply(db, "t1", { account: "other", at: T0, body: "hi" })).status,
+    403,
+    "not a party",
+  );
+  assert.equal((await reply(db, "t1", { account: "me", at: T0, body: "  " })).status, 400);
+  const ok = await reply(db, "t1", {
+    account: "me",
+    at: later(1),
+    body: "<b>use Settings</b>".repeat(100),
+  });
+  assert.deepEqual(ok.holders, ["me"], "told who holds it");
+  const stored = db.raw.prepare("SELECT body FROM task_event WHERE kind = 'replied'").get().body;
+  assert.equal(stored.length, 1000, "capped on the server whatever was sent");
+  assert.ok(stored.startsWith("<b>"), "kept as text, never turned into anything");
+
+  // Whoever holds it may write to it even when they did not author it: a person replying to the
+  // agent they sent, or a teammate who took somebody's handoff.
+  guide("t2", { account: "other" });
+  db.raw
+    .prepare(
+      `INSERT INTO claim (guide_id, place, account_id, agent_id, host, repo, worktree, state,
+                          claimed_at, lease_until, updated, fence)
+       VALUES ('t2', '', 'me', 'agent-a', '', 'o/r', '', 'claimed', ?, ?, ?, 1)`,
+    )
+    .run(T0, later(1000), T0);
+  assert.ok(
+    !("error" in (await reply(db, "t2", { account: "me", at: later(2), body: "ok" }))),
+    "the holder",
+  );
+  assert.ok(
+    !("error" in (await reply(db, "t2", { account: "other", at: later(2), body: "ok" }))),
+    "the author",
+  );
+  assert.equal(
+    (await reply(db, "t2", { account: "stranger", at: later(2), body: "ok" })).status,
+    403,
+  );
+});
+
+test("a reply reaches the agent once, and a resume hands back what it may have lost", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await take(db, "t1", A, { at: T0 });
+  assert.deepEqual(await deliver(db, "t1", A), [], "nothing said yet");
+  await ask(db, "t1", A, { at: later(1), question: "which?" });
+  await reply(db, "t1", { account: "me", at: later(2), body: "Settings." });
+  const got = await deliver(db, "t1", A);
+  assert.deepEqual(
+    got.map((r) => r.body),
+    ["Settings."],
+  );
+  assert.equal(got[0].by.you, true, "from the same account as the agent");
+  assert.deepEqual(await deliver(db, "t1", A), [], "told once");
+  // A message with no question before it reaches it too: the composer is not only for answers.
+  await reply(db, "t1", { account: "me", at: later(3), body: "Also add a test." });
+  assert.deepEqual(
+    (await deliver(db, "t1", A)).map((r) => r.body),
+    ["Also add a test."],
+  );
+  // The response was lost, or the session restarted: resuming re-sends everything since the question.
+  assert.deepEqual(
+    (await deliver(db, "t1", A, { resume: true })).map((r) => r.body),
+    ["Settings.", "Also add a test."],
+  );
+  // Only its own claim moves its cursor.
+  assert.deepEqual(await deliver(db, "t1", B), [], "not the holder");
+});
+
+test("progress stops being recorded long before a question or a reply is refused room", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await take(db, "t1", A, { at: T0 });
+  for (let i = 0; i < 260; i++) await renew(db, "t1", A, { at: later(i), note: `step ${i}` });
+  const n = () => db.raw.prepare("SELECT COUNT(*) AS n FROM task_event").get().n;
+  assert.equal(n(), 200, "a runaway agent cannot fill a thread");
+  await ask(db, "t1", A, { at: later(300), question: "still room for a question?" });
+  assert.equal(n(), 201);
+  assert.ok(!("error" in (await reply(db, "t1", { account: "me", at: later(301), body: "yes" }))));
+});
+
+test("asking is its own ending: stop, and take with the id to carry on", () => {
+  const s = steps("task", "asked");
+  assert.match(s.say, /Stop here/);
+  assert.deepEqual(
+    s.next.map((n) => n.tool),
+    ["take"],
+  );
+  assert.match(steps("task", "progress", 2).say, /2 messages/);
+  assert.equal(steps("task", "progress").say, undefined);
+});
+
+test("your own agent asking you is heard, and nothing else you do to yourself is", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const env = { DB: db };
+  const feed = () =>
+    db.raw.prepare("SELECT kind, times, read_at, note FROM notification ORDER BY id").all();
+
+  await notify(env, {
+    to: "me",
+    kind: "asked",
+    guide_id: "t1",
+    actor_id: "me",
+    note: "Settings or header?",
+  });
+  assert.deepEqual(
+    feed().map((r) => r.kind),
+    ["asked"],
+    "the account that owns the agent is who it is waiting on",
+  );
+  // The self-drop still holds for everything else: nobody needs telling what they just did.
+  await notify(env, { to: "me", kind: "replied", guide_id: "t1", actor_id: "me", note: "x" });
+  await notify(env, { to: "me", kind: "failed", guide_id: "t1", actor_id: "me" });
+  assert.equal(feed().length, 1);
+  assert.equal(
+    line({ kind: "asked", title: "T", times: 1, actor_name: "Ada", note: "Settings?" }),
+    'Ada\'s agent has a question about "T": Settings?',
+  );
+});
+
+test("a second question is unread again, and is mailed only the first time", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const env = { DB: db };
+  let mails = 0;
+  const ask1 = (note) =>
+    notify(env, {
+      to: "me",
+      kind: "asked",
+      guide_id: "t1",
+      actor_id: "other",
+      note,
+      mail: async () => {
+        mails++;
+        return true;
+      },
+    });
+  await ask1("first");
+  db.raw.prepare("UPDATE notification SET read_at = ?").run(T0);
+  await ask1("second");
+  const [row] = db.raw.prepare("SELECT times, read_at, note FROM notification").all();
+  assert.equal(row.times, 2, "coalesced into the one row");
+  assert.equal(row.read_at, "", "but new news: it is not marked seen");
+  assert.equal(row.note, "second");
+  assert.equal(mails, 1, "an inbox is the easiest thing to ruin");
+  // Every other kind keeps what it had: a read pull stays read.
+  await notify(env, { to: "me", kind: "pulled", guide_id: "t1", actor_id: "other" });
+  db.raw.prepare("UPDATE notification SET read_at = ? WHERE kind = 'pulled'").run(T0);
+  await notify(env, { to: "me", kind: "pulled", guide_id: "t1", actor_id: "other" });
+  assert.equal(
+    db.raw.prepare("SELECT read_at FROM notification WHERE kind = 'pulled'").get().read_at,
+    T0,
+  );
+});
+
+test("a note left before anyone takes it is handed to whoever does, and to the next one too", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await reply(db, "t1", { account: "me", at: T0, body: "Use the staging key." });
+  await reply(db, "t1", {
+    account: "me",
+    at: later(1),
+    body: "[spec.pdf](https://p.dev/v1/attachments/abc123xyz)",
+  });
+  const first = await take(db, "t1", A, { at: later(2) });
+  assert.ok(!("error" in first));
+  const told = await deliver(db, "t1", A);
+  assert.deepEqual(
+    told.map((r) => r.body),
+    ["Use the staging key.", "[spec.pdf](https://p.dev/v1/attachments/abc123xyz)"],
+  );
+  assert.deepEqual(await deliver(db, "t1", A), [], "told once");
+  // A message to that first agent is not the next agent's to be handed: it was written to somebody.
+  await reply(db, "t1", { account: "me", at: later(3), body: "Skip the migration." });
+  await release(db, "t1", { account: "me", at: later(4) });
+  await take(db, "t1", B, { at: later(5) });
+  assert.deepEqual(
+    (await deliver(db, "t1", B)).map((r) => r.body),
+    ["Use the staging key.", "[spec.pdf](https://p.dev/v1/attachments/abc123xyz)"],
+    "the task's own notes travel with it; a reply to the last agent does not",
+  );
+  // Done work takes no more notes.
+  db.raw.prepare("DELETE FROM claim").run();
+  db.raw.prepare("UPDATE guide SET status = 'consumed' WHERE id = 't1'").run();
+  assert.equal((await reply(db, "t1", { account: "me", at: later(7), body: "more" })).status, 409);
+});
+
+test("the session-start hook can see that a person has written", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await take(db, "t1", A, { at: T0 });
+  assert.equal((await working(db, "me", T0))[0].claim.waiting_replies, 0);
+  await reply(db, "t1", { account: "me", at: later(1), body: "one" });
+  await reply(db, "t1", { account: "me", at: later(2), body: "two" });
+  assert.equal((await working(db, "me", T0))[0].claim.waiting_replies, 2);
+  await deliver(db, "t1", A);
+  assert.equal(
+    (await working(db, "me", T0))[0].claim.waiting_replies,
+    0,
+    "told, so no longer waiting",
+  );
 });
 
 test("a person's browser hold gives way to their own agent taking it in a repo", async () => {

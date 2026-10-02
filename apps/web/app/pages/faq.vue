@@ -40,7 +40,7 @@ const QUESTIONS = [
   },
   {
     q: "What does it cost?",
-    a: "The CLI is free and works with no account at all: guides are markdown files on your machine, with no ceiling. Syncing them is Solo at $5 per month. A team is $10 for three seats, then $5 per extra seat, and a seat lifts whoever sits in it — a free member of a paid team syncs without a limit.",
+    a: "The CLI is free and works with no account at all: guides are markdown files on your machine, with no ceiling. What is paid for is syncing: the queue, the claims and your hub, on a team plan. For pricing, write to contact@passalong.dev.",
   },
   {
     q: "Are share links private?",

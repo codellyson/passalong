@@ -74,6 +74,7 @@ test("every tool it lists is one an agent could act on", async () => {
   const body = await read(res);
   const names = body.result.tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
+    "ask",
     "assign",
     "attach_screenshot",
     "board",
@@ -87,6 +88,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "pass",
     "progress",
     "publish_guide",
+    "reply",
     "search_guides",
     "take",
     "work",
@@ -124,7 +126,11 @@ test("create_upload mints a link and hands back the command that uses it", async
     seen.map((s) => `${s.method} ${s.path}`),
     ["POST /v1/uploads"],
   );
-  assert.deepEqual(seen[0].body, { name: "shot.png" });
+  assert.deepEqual(
+    seen[0].body,
+    { name: "shot.png", kind: "image" },
+    "a picture unless it says otherwise",
+  );
   const { upload_url, command } = body.result.structuredContent;
   assert.equal(upload_url, link);
   // PUT and the file's bytes, to that link. No content-type in it: the route reads the bytes.
@@ -1329,4 +1335,32 @@ test("a vague ask to 'update passalong' is answered by checking what you hold, n
   assert.match(said, /has not crossed|crossed no boundary|never left/i);
   const publish = body.result.instructions;
   assert.match(publish, /before publishing/i);
+});
+
+test("create_upload can mint a link for a file, and says so in the command it hands back", async () => {
+  const link = `https://passalong.dev/v1/uploads/pa_up_${"b".repeat(32)}`;
+  const { call, seen } = recorder({
+    "POST /v1/uploads": {
+      status: 201,
+      text: JSON.stringify({ upload_url: link, expires: "2026-09-15T12:10:00.000Z", kind: "file" }),
+    },
+  });
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 13,
+        method: "tools/call",
+        params: { name: "create_upload", arguments: { name: "run.log", kind: "file" } },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.deepEqual(seen[0].body, { name: "run.log", kind: "file" });
+  assert.equal(
+    body.result.structuredContent.command,
+    `curl -sS --fail-with-body -X PUT --data-binary @FILE_PATH '${link}'`,
+  );
+  assert.match(body.result.content[0].text, /FILE_PATH/);
 });

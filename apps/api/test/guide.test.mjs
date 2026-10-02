@@ -272,7 +272,9 @@ test("a correction is a verdict with room, shown on the guide", async () => {
   // claim, which is what makes the guide able to show it.
   const handIn = src.slice(src.indexOf('app.post("/v1/guides/:id/hand_in"'));
   const route = handIn.slice(0, handIn.indexOf("\napp."));
-  assert.match(route, /recordVerdict\([\s\S]*detail: evidence/, "the hand-in feeds the verdict");
+  assert.match(route, /claims\.handIn\([\s\S]*evidence,[\s\S]*verdict: \{ ok: who\.ok \}/);
+  const claims = await readFile(new URL("../src/claims.ts", import.meta.url), "utf8");
+  assert.match(claims, /INSERT INTO verdict[\s\S]*detail, checks, writeup/);
 
   // And the page asks for them. Without this the rest is a column nobody reads.
   const page = await readFile(
@@ -314,7 +316,7 @@ test("nothing a stranger does to your guide happens in silence", async () => {
     ["/v1/guides/:id/hand_in", /recordVerdict\(/],
     ["/v1/guides/:id/pass", /recordAck\(/],
   ])
-    assert.match(block(`"${route}"`, 3000), calls, `${route} must tell the author`);
+    assert.match(block(`"${route}"`, 4000), calls, `${route} must tell the author`);
   for (const kind of [/kind: "reopened"/, /kind: "consumed"/]) {
     const body = block('"/v1/guides/:id/status"');
     assert.match(body, /await notify\(c\.env/);
@@ -418,6 +420,8 @@ test("the API description covers what an agent does with a task, and not the rev
     ["/v1/guides/{id}/progress", "put"],
     ["/v1/guides/{id}/hand_in", "post"],
     ["/v1/guides/{id}/pass", "post"],
+    ["/v1/guides/{id}/ask", "post"],
+    ["/v1/guides/{id}/reply", "post"],
     ["/v1/working", "get"],
     ["/v1/guides/{id}/assign", "post"],
   ])
@@ -459,7 +463,7 @@ test("a guide that worked with changes says so, on itself", async () => {
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   const handIn = src.slice(src.indexOf('app.post("/v1/guides/:id/hand_in"'));
   const route = handIn.slice(0, handIn.indexOf("\napp."));
-  assert.match(route, /recordVerdict\([\s\S]*writeup,/, "the hand-in feeds the verdict");
+  assert.match(route, /claims\.handIn\([\s\S]*writeup,[\s\S]*verdict: \{ ok: who\.ok \}/);
   assert.match(route, /claims\.handIn\([\s\S]*writeup,/, "and the claim, for the author's row");
 
   // A later hand-in with nothing to add must not erase what an earlier one wrote: a verdict is one
@@ -516,4 +520,33 @@ test("what ran outranks what was said about it, on the guide", async () => {
   assert.ok(at("a.ran") < at("a.said"), "executed commands before the agent's account of them");
   assert.ok(at("a.said") < at("a.writeup"), "and both before prose");
   assert.match(view, /What they said they changed/, "prose is labelled as what it is");
+});
+
+test("a hand-in says what it did in a sentence, before anything behind it is read", async () => {
+  // The route is not importable from a test (see hosts.ts), so the rule is pinned in the source:
+  // `note` is refused when empty and the refusal comes before either kind's branch runs.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf('app.post("/v1/guides/:id/hand_in"');
+  const route = src.slice(at, src.indexOf("\napp.", at));
+  const refusal = route.indexOf("if (!note) return err(c, 400");
+  assert.ok(refusal > 0, "an empty note is refused");
+  assert.ok(refusal < route.indexOf('found.row.kind === "task"'), "for a task and a handoff alike");
+  // The legacy finish route stays lenient: an installed CLI still calls it and sends none, and the
+  // thread has a plain sentence for a hand-in with no words of its own.
+  const finish = src.slice(src.indexOf('app.post("/v1/tasks/:id/finish"'));
+  assert.doesNotMatch(finish.slice(0, finish.indexOf("\napp.")), /if \(!note\)/);
+});
+
+test("a question and a reply each tell the person waiting on them", async () => {
+  // Pinned in the source for the reason the test above is: the Hono app is not importable here. An
+  // agent that asks and a person who answers are each waiting on the other, and neither can see
+  // that the other has spoken unless something says so.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const block = (needle) => {
+    const at = src.indexOf(needle);
+    assert.ok(at > 0, `${needle} should still exist`);
+    return src.slice(at, src.indexOf("\napp.", at + 10));
+  };
+  assert.match(block('"/v1/guides/:id/ask"'), /kind: "asked"[\s\S]*sendAsked\(/);
+  assert.match(block('"/v1/guides/:id/reply"'), /kind: "replied"[\s\S]*sendReplied\(/);
 });

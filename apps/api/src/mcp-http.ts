@@ -104,7 +104,28 @@ async function answer(call: Call, method: string, path: string, id: string, body
     return failed(`unexpected response from ${path}: ${res.text.slice(0, 200)}`);
   }
   const note = nextNote(parsed, id);
-  return { ...text(`${res.text}${note ? `\n${note}` : ""}`), structuredContent: parsed };
+  // A reply goes first, in prose: it is what the agent stopped for, and inside the JSON it reads as
+  // one more field. Mirrors repliesNote() in packages/passalong/src/mcp.js.
+  const said = repliesNote(parsed.replies);
+  return {
+    ...text(`${said ? `${said}\n` : ""}${res.text}${note ? `\n${note}` : ""}`),
+    structuredContent: parsed,
+  };
+}
+
+/** What the person said to this agent since it last heard. See claims.deliver(). */
+function repliesNote(replies: unknown): string {
+  if (!Array.isArray(replies) || !replies.length) return "";
+  const lines = replies.map(
+    (r: { body?: unknown }) => `  - ${String(r?.body ?? "").replace(/\n/g, "\n    ")}`,
+  );
+  const files = replies.some((r: { body?: unknown }) =>
+    String(r?.body ?? "").includes("/v1/attachments/"),
+  )
+    ? "\n  Attached files are private: fetch one with your passalong token, e.g. " +
+      'curl -H "authorization: Bearer $PASSALONG_TOKEN (or the token in ~/.passalong/config.json)" -o <name> <url>.'
+    : "";
+  return `<!-- passalong: the person replied:\n${lines.join("\n")}${files}\n-->`;
 }
 
 /**
@@ -663,7 +684,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "for `repo`) says you are doing it and returns it — nobody else can take it there while " +
         "you hold it. progress with a one-line note at each milestone; 30 minutes of silence " +
         "marks it stalled. hand_in when done. pass, with the reason, when it is not yours or you " +
-        "are stuck. Every answer ends with `next`: what to call now. Follow it, and when it says " +
+        "are stuck. ask, with a question, when you need an answer from the person: you keep what " +
+        "you hold, stop and wait, and take it again once they have replied. Every answer ends " +
+        "with `next`: what to call now. Follow it, and when it says " +
         "to stop, stop. If take says somebody else has it, tell the user instead of doing the " +
         "work twice.\n" +
         "EVERY HAND-IN CARRIES EVIDENCE: what you ran and what came back — the command and the " +
@@ -1177,6 +1200,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     if (res.status >= 400) return refused(res.text);
     const parsed = JSON.parse(res.text) as Answer & {
       guide: { id: string; kind?: string; markdown?: string; resumed?: boolean } | null;
+      replies?: unknown;
     };
     const g = parsed.guide;
     if (!g)
@@ -1188,8 +1212,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     // and the follow-ups written under it. An agent handed a follow-up on its own reads a document
     // that assumes work it has never seen.
     const [from, context] = await Promise.all([parentOf(call, g.id), followUps(call, g.id)]);
+    const said = repliesNote(parsed.replies);
     return {
       content: [
+        ...(said ? [{ type: "text" as const, text: said }] : []),
         ...(from.text ? [{ type: "text" as const, text: from.text }] : []),
         {
           type: "text" as const,
@@ -1208,6 +1234,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     answer(call, "PUT", `/v1/guides/${encodeURIComponent(args.id)}/progress`, args.id, {
       agent: args.agent,
       ...(args.note ? { note: args.note } : {}),
+    });
+
+  const doAsk = (args: { id: string; agent: string; question: string }) =>
+    answer(call, "POST", `/v1/guides/${encodeURIComponent(args.id)}/ask`, args.id, {
+      agent: args.agent,
+      question: args.question,
     });
 
   const doHandIn = (args: {
@@ -1265,7 +1297,14 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
   const progressIn = {
     id: z.string(),
     agent: AGENT,
-    note: z.string().optional().describe("one line, 280 chars"),
+    note: z
+      .string()
+      .optional()
+      .describe(
+        'one plain sentence in the first person, as you would tell the person: "Reading the ' +
+          'settings page to find where the toggle goes." Start it with BLOCKED: when you are ' +
+          "stopped and need an answer",
+      ),
   };
 
   server.registerTool(
@@ -1322,7 +1361,13 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           .optional()
           .describe("task: one entry per Acceptance line, in the order you worked them"),
         ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
-        note: z.string().optional().describe("one line; required when ok is false"),
+        note: z
+          .string()
+          .describe(
+            "one plain sentence, in the first person, saying what you did and how it went: " +
+              '"Added the toggle to Settings; it survives a reload." It is the first thing the ' +
+              "person reads, and the evidence is behind it. Say what went wrong when ok is false",
+          ),
         writeup: z
           .string()
           .optional()
@@ -1348,6 +1393,34 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
   );
 
   server.registerTool(
+    "ask",
+    {
+      title: "Ask the person",
+      annotations: ADDS,
+      outputSchema: z.object({ id: z.string(), lease_until: z.string().optional() }).passthrough(),
+      description:
+        "You need the person's answer before you can go on. Ask one clear question, with the " +
+        "context it needs to be answered without opening your terminal. You keep what you hold " +
+        "and nobody else can take it. Then STOP and tell the user you are waiting: do not carry " +
+        "on guessing. When they have replied, call take with this id and their reply comes back " +
+        "with it. Use `pass` instead when the work is not yours; a progress note starting " +
+        "BLOCKED: is the older way of saying this, and is not heard as a question.",
+      inputSchema: {
+        id: z.string(),
+        agent: AGENT,
+        question: z
+          .string()
+          .describe(
+            "one clear question in the first person, a few sentences at most, plain text: " +
+              '"Should the dark-mode toggle live in Settings or the header? The header is ' +
+              'crowded on mobile." What you were about to do, if they just say yes, helps',
+          ),
+      },
+    },
+    async (args) => doAsk(args),
+  );
+
+  server.registerTool(
     "pass",
     {
       title: "Pass it",
@@ -1364,6 +1437,30 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     },
     async ({ id, agent, why }) =>
       answer(call, "POST", `/v1/guides/${encodeURIComponent(id)}/pass`, id, { agent, why }),
+  );
+
+  server.registerTool(
+    "reply",
+    {
+      title: "Write to the agent",
+      annotations: ADDS,
+      outputSchema: z.object({ id: z.string() }).passthrough(),
+      description:
+        "A person's tool, for someone driving their work from an assistant: write to whoever " +
+        "holds a guide — an answer to a question it asked, or something you thought of since — " +
+        "or, when nobody holds it yet and it is yours, leave a note for whoever takes it. Plain " +
+        "text, 1000 characters. To attach a picture or a file, upload it first (create_upload, " +
+        "kind `file` for anything that is not a picture) and put the markdown line it returns " +
+        "in `body`. Only its author, whoever it is assigned to, or whoever holds it can write; " +
+        "the agent reads it the next time it checks in. Agents answering their own questions " +
+        "do not use this: they use ask and take.",
+      inputSchema: {
+        id: z.string(),
+        body: z.string().describe("what to say, plus any markdown lines for attachments"),
+      },
+    },
+    async ({ id, body }) =>
+      answer(call, "POST", `/v1/guides/${encodeURIComponent(id)}/reply`, id, { body }),
   );
 
   server.registerTool(
@@ -1554,8 +1651,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       title: "Get an upload link",
       annotations: ADDS,
       description:
-        "For an image you hold as a file — in a code sandbox, or on disk — that you cannot pass " +
-        "as a file input. Returns a one-time link and the curl command that sends the file to " +
+        "For an image — or, with kind `file`, a log, PDF, CSV or zip — you hold as a file, in a " +
+        "code sandbox or on disk, that you cannot pass as a file input. Returns a one-time link and the curl command that sends the file to " +
         "it. Run the command where the file is, with IMAGE_PATH replaced by the file's path; its " +
         "JSON response has `markdown`, the line to put in the guide body or pass as file_bugs " +
         "`evidence`. The link works once and expires in 10 minutes, so ask for one per image, " +
@@ -1564,12 +1661,26 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "reach passalong.dev, the sandbox's network settings block it: tell the user to allow " +
         "that domain for code execution.",
       inputSchema: {
-        name: z.string().optional().describe("label for the image, e.g. its filename"),
+        name: z
+          .string()
+          .optional()
+          .describe(
+            "label for the image, e.g. its filename; for a file, its filename with the extension, " +
+              "which is how a CSV is told from plain text",
+          ),
+        kind: z
+          .enum(["image", "file"])
+          .optional()
+          .describe(
+            "`image` (the default) for a screenshot, drawn where it is mentioned; `file` for a " +
+              "log, PDF, CSV or zip up to 10MB, which people download and only people who can " +
+              "read the guide can. The link takes only what it was made for",
+          ),
       },
       outputSchema: uploadOut,
     },
-    async ({ name }) => {
-      const res = await call("POST", "/v1/uploads", { name: name ?? "" });
+    async ({ name, kind }) => {
+      const res = await call("POST", "/v1/uploads", { name: name ?? "", kind: kind ?? "image" });
       if (res.status >= 400) return failed(res.text);
       const { upload_url, expires } = JSON.parse(res.text) as {
         upload_url: string;
@@ -1577,11 +1688,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       };
       // PUT spelled out, and no content-type: the route reads the type from the bytes, so the one
       // thing an agent could get wrong in this command is not in it.
-      const command = `curl -sS --fail-with-body -X PUT --data-binary @IMAGE_PATH '${upload_url}'`;
+      const slot = kind === "file" ? "FILE_PATH" : "IMAGE_PATH";
+      const command = `curl -sS --fail-with-body -X PUT --data-binary @${slot} '${upload_url}'`;
       return {
         ...text(
           `Upload link (one use, expires ${expires}):\n${upload_url}\n\n` +
-            `Run this where the file is, with IMAGE_PATH replaced by its path:\n${command}\n\n` +
+            `Run this where the file is, with ${slot} replaced by its path:\n${command}\n\n` +
             "The response's `markdown` is the line to put in the guide body.",
         ),
         structuredContent: { upload_url, expires, command },
