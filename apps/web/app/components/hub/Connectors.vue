@@ -2,7 +2,7 @@
   Connected apps: what uses Passalong as you, and how to add one.
 
   Connecting starts from the app, not from a form. Every app's requirements are known — Claude
-  signs itself in, ChatGPT wants a client ID and no secret, Claude Code and Cursor run locally — so
+  signs itself in, ChatGPT wants a client ID and no secret, Claude Code and Codex run locally — so
   they are stated up front from utils/connect-apps.ts, and only the steps that are yours are left.
   The old form asked every app the same two questions, a callback address and whether it "keeps a
   secret", and the reasonable-looking answer to the second made a ChatGPT connector that was

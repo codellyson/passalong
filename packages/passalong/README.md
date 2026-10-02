@@ -12,6 +12,7 @@ speaks MCP or HTTP. See [passalong.dev](https://passalong.dev).
 npm i -g passalong
 passalong setup      # installs the Claude Code capture skill + registers the MCP server
 passalong login      # optional: sync guides across machines and get share links
+codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 ```
 
 ## The loop

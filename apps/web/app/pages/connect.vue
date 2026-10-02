@@ -53,8 +53,9 @@ const WAYS = [
     name: "Run it locally",
     text:
       "Install the CLI with npm i -g passalong and run passalong setup. It registers the MCP " +
-      "server over stdio, the capture skill and the Claude Code hooks. This is the best of the " +
-      "three: it knows which repo you are in, and it works offline.",
+      "server over stdio, the capture skill and the Claude Code hooks. For Codex, run codex mcp " +
+      "add passalong -- passalong mcp. This is the best of the three: it knows which repo you " +
+      "are in, and it works offline.",
   },
   {
     name: "Point it at a URL",
@@ -121,12 +122,14 @@ useHead({
             For Claude Code, Codex and other coding agents, and worth doing where you can: a local
             server works offline, reads and writes
             <code>.passalong/</code> in the repo you are standing in, and knows which repo that is.
-            <code>passalong setup</code> wires Claude Code for you; elsewhere, point your editor at
-            the command <code>passalong</code> with the argument <code>mcp</code>.
+            <code>passalong setup</code> wires Claude Code for you, and Codex takes one command.
+            Anything else runs the command <code>passalong</code> with the argument
+            <code>mcp</code>.
           </p>
           <pre><code>npm i -g passalong
 passalong login
-passalong setup     # Claude Code: skill, MCP server and hooks</code></pre>
+passalong setup                           # Claude Code: skill, MCP server and hooks
+codex mcp add passalong -- passalong mcp  # Codex</code></pre>
         </div>
       </section>
 

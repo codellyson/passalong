@@ -92,6 +92,7 @@ are addresses, not secrets. The key in a share link is the secret.
 npm i -g passalong
 passalong setup                 # Claude Code capture skill, MCP server and hooks
 passalong login                 # optional: sync across machines
+codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 ```
 
 - `passalong share [file] [--to team[/handle]]` — publish a guide, get an id and a link
