@@ -7,3 +7,4 @@ source it came from.
   and plans, surfaces, hub, notifications, blog and publish, codebase map, security model, design
   system, decisions, open questions. Sources: AGENTS.md, docs/PRD.md, docs/V2.md,
   docs/PUBLISH.md, docs/wiki/, and merged PRs #1–#65.
+- 2026-10-03 — blog-and-publish: added the /learn pages (topic guides on the blog's reader, published from shared/pages.ts). Source: branch seo/pillar-agent-handoff.

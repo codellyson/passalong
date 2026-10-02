@@ -5,13 +5,14 @@ Hand work to your AI coding agents, and get back what they did and how they chec
 Write a task, a bug or a finished change once. The agent that takes it starts knowing what done
 looks like and what was already decided, reports as it goes, and hands back a write-up with the
 evidence for each thing you asked for, which you approve or send back. One agent per job, and
-everyone can see who has what. Works with Claude Code, Cursor, Gemini, ChatGPT, or anything that
+everyone can see who has what. Works with Claude Code, Codex, ChatGPT, Claude, or anything that
 speaks MCP or HTTP. See [passalong.dev](https://passalong.dev).
 
 ```sh
 npm i -g passalong
 passalong setup      # installs the Claude Code capture skill, the MCP server, two hooks and a status line
 passalong login      # optional: sync guides across machines and get share links
+codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 ```
 
 ## The loop

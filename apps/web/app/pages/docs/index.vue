@@ -29,6 +29,15 @@ usePage({
  */
 const TOPICS = [
   {
+    h: "Handing work to agents",
+    p:
+      "What a task, a bug or a transfer needs before an agent takes it, how to write acceptance " +
+      "it can check, and how to review what comes back. Written for any agent, with or without " +
+      "Passalong.",
+    href: "/learn/ai-agent-handoff",
+    link: "Read the guide",
+  },
+  {
     h: "Install and connect",
     p:
       "`npm i -g passalong` installs it, `passalong setup` registers the MCP server, the capture " +

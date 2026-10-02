@@ -249,6 +249,7 @@ main {
 /* The landing runs wider than a reading column: it holds a hero and side-by-side panels. */
 main.wide {
   max-width: 67.5rem;
+  padding-top: var(--s-2);
 }
 
 /* ---- type ---------------------------------------------------------------------------------- */
@@ -2071,6 +2072,13 @@ article.prose ul {
 }
 article.prose li {
   margin: var(--s-2) 0;
+}
+/* A markdown checklist (`- [ ]`): the checkbox is the marker, so the bullet goes. */
+article.prose li:has(> input[type="checkbox"]) {
+  list-style: none;
+}
+article.prose li > input[type="checkbox"] {
+  margin: 0 var(--s-2) 0 0;
 }
 article.prose blockquote {
   font-style: italic;

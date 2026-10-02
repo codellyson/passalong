@@ -92,6 +92,7 @@ are addresses, not secrets. The key in a share link is the secret.
 npm i -g passalong
 passalong setup                 # Claude Code capture skill, MCP server and hooks
 passalong login                 # optional: sync across machines
+codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 ```
 
 - `passalong share [file] [--to team[/handle]]` — publish a guide, get an id and a link
@@ -254,7 +255,7 @@ tool call. If the command cannot reach `passalong.dev`, the sandbox's network se
 it, and the user has to allow that domain for code execution. A local server is
 still better where you can run one: it works offline and knows which repo you are in.
 
-Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for Gemini
+Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for
 function calling or a script, and a share link's `.md` needs no account at all.
 
 ## Writing a good guide
@@ -271,6 +272,7 @@ function calling or a script, and a share link's `.md` needs no account at all.
 - Docs: https://passalong.dev/docs
 - Guide format: https://passalong.dev/docs/guide-format
 - FAQ: https://passalong.dev/faq
+- Handing work to AI coding agents: https://passalong.dev/learn/ai-agent-handoff
 - Connect an assistant: https://passalong.dev/connect
 - Hub (your synced guides): https://passalong.dev/hub
 - npm: https://www.npmjs.com/package/passalong

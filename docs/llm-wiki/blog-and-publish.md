@@ -18,6 +18,19 @@ because a Worker has no filesystem.
 
 The first post, *Hand work to your agents, and see it come back*, is a draft awaiting edits.
 
+## Learn pages — long-lived guides on the same reader
+
+`/learn/:slug` is the blog's machinery for pages that are not dated posts: topic guides written
+for search, the first being `/learn/ai-agent-handoff`. Markdown in `apps/web/content/learn/`,
+read by the same `server/utils/blog.ts` with the collection named (`"learn"`), served at
+`/api/learn/:slug`, no script and the strict policy.
+
+- **Publishing is one switch:** the page's entry in `shared/pages.ts`. Not listed as published, it
+  renders noindex with no canonical and no JSON-LD; published, it gets a canonical, `TechArticle`
+  and `BreadcrumbList` JSON-LD, the sitemap and the edge page cache. The frontmatter `draft` is not
+  read for this.
+- No index page at `/learn` yet: each guide is linked from where it is relevant.
+
 ## Publish — planned, nothing built
 
 A product feature: an approved task's write-up becomes a public post — a changelog entry — for the
@@ -33,6 +46,6 @@ people the work was for. The pitch: *your changelog writes itself from work you 
 Five decisions are open; see [open-questions.md](open-questions.md).
 
 ## Sources
-- `apps/web/server/utils/blog.ts`, `apps/web/app/pages/blog/`, `apps/web/content/blog/`, `apps/web/test/blog.test.mjs`
+- `apps/web/server/utils/blog.ts`, `apps/web/app/pages/blog/`, `apps/web/app/pages/learn/`, `apps/web/content/learn/`, `apps/web/content/blog/`, `apps/web/test/blog.test.mjs`
 - [docs/PUBLISH.md](../PUBLISH.md)
 - [AGENTS.md](../../AGENTS.md): "The blog is markdown in the repo…"

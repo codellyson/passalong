@@ -33,6 +33,6 @@ const learn = PUBLIC_PAGES.filter((p) => p.footer && !p.draft);
       <a href="https://github.com/codellyson/passalong">GitHub</a>
     </nav>
     <AppTheme />
-    <p class="rule">© 2026 Passalong · a KreativeKorna product</p>
+    <p class="rule">© 2026 Passalong</p>
   </footer>
 </template>

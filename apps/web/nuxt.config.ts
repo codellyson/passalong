@@ -27,6 +27,8 @@ export default defineNuxtConfig({
     // through useStorage("assets:blog") — see server/utils/blog.ts.
     serverAssets: [
       { baseName: "blog", dir: fileURLToPath(new URL("./content/blog", import.meta.url)) },
+      // The /learn pages: long-lived guides, read the same way as the blog.
+      { baseName: "learn", dir: fileURLToPath(new URL("./content/learn", import.meta.url)) },
     ],
   },
 
@@ -132,6 +134,8 @@ export default defineNuxtConfig({
     // strict policy. Both spellings, as for docs.
     "/blog": { noScripts: true, headers: VIEW_HEADERS },
     "/blog/**": { noScripts: true, headers: VIEW_HEADERS },
+    // The /learn guides are prose we wrote, like the blog.
+    "/learn/**": { noScripts: true, headers: VIEW_HEADERS },
 
     // The hub, the invite page and the password reset run script, so their header is written per
     // response by server/plugins/csp.ts — it carries a nonce, which a route rule cannot.

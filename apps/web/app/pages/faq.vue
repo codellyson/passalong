@@ -48,7 +48,7 @@ const QUESTIONS = [
   },
   {
     q: "Which assistants and editors does it work with?",
-    a: "Claude Code, Cursor, Zed and the Gemini CLI run the MCP server locally, where it knows which repo you are in. Assistants that connect to remote servers — Claude and ChatGPT among them — point at the hosted server by URL instead. Anything else can use the HTTP API, which is described at /v1/openapi.json, and a share link's .md needs no client at all. Setup for each one is on the connect page.",
+    a: "Claude Code, Codex and other coding agents run the MCP server locally, where it knows which repo you are in. Assistants that connect to remote servers — Claude and ChatGPT among them — point at the hosted server by URL instead. Anything else can use the HTTP API, which is described at /v1/openapi.json, and a share link's .md needs no client at all. Setup for each one is on the connect page.",
   },
   {
     q: "Can an assistant attach the screenshot I gave it to a bug report?",

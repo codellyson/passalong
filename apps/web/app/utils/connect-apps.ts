@@ -34,7 +34,7 @@ export interface ConnectApp {
   id: string;
   group: "Assistants" | "On your machine" | "Anything else";
   /** Which mark AppMark.vue draws. Each vendor's own logo; a plug and braces for the two that have none. */
-  mark: "chatgpt" | "claude" | "claude-code" | "cursor" | "mcp" | "script";
+  mark: "chatgpt" | "claude" | "claude-code" | "codex" | "mcp" | "script";
   name: string;
   lede: string;
   /** "oauth" apps sign themselves in and can be followed live; the others use a token. */
@@ -152,25 +152,21 @@ export const APPS: ConnectApp[] = [
     notes: [],
   },
   {
-    id: "cursor",
+    id: "codex",
     group: "On your machine",
-    mark: "cursor",
-    name: "Cursor",
-    lede: "The same local server, added to Cursor's MCP settings.",
+    mark: "codex",
+    name: "Codex",
+    lede: "The same local server, added to Codex, so it knows which repo you're in and works offline.",
     kind: "local",
     requirements: [
       { label: "Install", value: "npm", need: "done" },
       { label: "Sign in", value: "Once, in the terminal", need: "you" },
-      { label: "Config", value: "Written for you", need: "done" },
+      { label: "Config", value: "One command", need: "you" },
     ],
     steps: [
       { text: "Install and sign in.", copy: "npm i -g passalong && passalong login" },
-      {
-        text: "Add this to {path}.",
-        path: ".cursor/mcp.json",
-        copy: '{\n  "mcpServers": {\n    "passalong": { "command": "passalong", "args": ["mcp"] }\n  }\n}',
-      },
-      { text: "Reload Cursor." },
+      { text: "Add the MCP server to Codex.", copy: "codex mcp add passalong -- passalong mcp" },
+      { text: "Start a new Codex session." },
     ],
     notes: [],
   },

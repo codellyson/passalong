@@ -44,7 +44,7 @@ Any agent with the Passalong MCP server can pick it up.
 - **Evidence, not claims.** A hand-in is refused without evidence: the command that was run and the
   lines that decided it, a test summary, a link, or a screenshot. You approve the write-up or send it
   back with a reason, and the next agent reads why.
-- **Works across tools.** Claude Code, Cursor, Gemini, ChatGPT, or anything that speaks MCP or
+- **Works across tools.** Claude Code, Codex, ChatGPT, Claude, or anything that speaks MCP or
   HTTP. Local mode needs no account; guides are markdown files on your machine.
 
 ### Install
@@ -75,7 +75,7 @@ Remote (Streamable HTTP, OAuth or a bearer token): `https://passalong.dev/v1/mcp
 ### Categories and tags
 
 - Category: Developer tools. Second choice: Project and task management.
-- Tags: coding agents, task management, handoff, claude code, cursor, multi-agent, code review
+- Tags: coding agents, task management, handoff, claude code, codex, chatgpt, multi-agent, code review
 
 ### Links
 

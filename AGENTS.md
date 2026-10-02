@@ -685,6 +685,9 @@ change. Its README says how.
   and is left out of the index, `/blog/rss.xml` and the sitemap. `/blog` itself is a draft in
   shared/pages.ts until its first post goes out: publishing is `draft: false` on the post, on
   `/blog`, and a line in public/llms.txt (test/public-pages.test.mjs insists).
+  `/learn/:slug` is the same reader over `content/learn` (`postBySlug(slug, "learn")`) for topic
+  guides rather than dated posts. Its one publish switch is the page's entry in shared/pages.ts:
+  unlisted or draft there, it renders noindex with no canonical or JSON-LD, whatever its frontmatter says.
 - **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
   `application/ld+json` when deciding whether a page runs script; without that the landing would
   get the hub's nonce policy.

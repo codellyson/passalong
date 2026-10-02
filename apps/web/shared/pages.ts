@@ -28,13 +28,16 @@ export interface PublicPage {
 
 export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/", draft: false, updated: "2026-10-01" },
-  { path: "/connect", draft: false, updated: "2026-09-27" },
-  { path: "/docs", draft: false, footer: "Docs", updated: "2026-09-27" },
+  { path: "/connect", draft: false, updated: "2026-10-03" },
+  { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-03" },
   { path: "/docs/guide-format", draft: false, footer: "Guide format", updated: "2026-09-27" },
-  { path: "/faq", draft: false, footer: "FAQ", updated: "2026-10-01" },
+  { path: "/faq", draft: false, footer: "FAQ", updated: "2026-10-03" },
   // A draft until its first post is published. The posts themselves are content/blog/*.md, each
   // with its own `draft`, and the sitemap lists the published ones once /blog is.
   { path: "/blog", draft: true, footer: "Blog", updated: "2026-09-27" },
+  // The /learn guides, one entry each: content/learn/<slug>.md renders at its address either way,
+  // and this flag is what indexes it.
+  { path: "/learn/ai-agent-handoff", draft: false, updated: "2026-10-03" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */
