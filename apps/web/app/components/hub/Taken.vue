@@ -185,6 +185,7 @@ const badge = (w: Working) => kindBadge(w.kind);
               >{{ badge(w)?.label }}</span>
               <span class="truncate">{{ w.title || w.id }}</span>
             </h3>
+            <p v-if="w.summary" class="m-0 mt-1 line-clamp-2 text-sm leading-snug text-muted">{{ w.summary }}</p>
             <p class="m-0 mt-1 truncate font-code text-xs text-muted">
               {{ where(w) }}{{ w.by.you ? "" : ` · ${who(w)}'s` }} · taken {{ span(now - Date.parse(w.claimed_at)) }} ago
             </p>

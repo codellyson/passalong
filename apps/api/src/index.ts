@@ -127,10 +127,12 @@ import {
   SETTABLE,
   SEVERITIES,
   STATUSES,
+  SUMMARY_MAX,
   setField,
   setList,
   shotIds,
   slug,
+  summaryProblem,
   tag,
   tagList,
   unheldFields,
@@ -350,6 +352,8 @@ interface GuideRow {
   parent_id: string;
   /** What last wrote it: `cli@<version>`, `mcp`, `hub`, `api`, or "" from before 0035. */
   client: string;
+  /** What it says to a person. See migrations/0041_summary.sql. Empty on a guide from before it. */
+  summary: string;
 }
 interface ReportRow {
   id: string;
@@ -711,6 +715,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       // column, and every write since goes through parseMeta, which seeds it. A `|| "transfer"`
       // here would be this file restating a rule guide.js owns, and a second place to change.
       kind: r.kind,
+      // What it says to a person: the line a list shows in place of the document.
+      summary: r.summary || "",
       // Which release wrote it, for tracing a malformed guide back. Empty from before 0035.
       client: r.client || "",
       verdict: latest
@@ -3510,7 +3516,7 @@ app.put("/v1/guides/:id", async (c) => {
     );
 
   const existing = await c.env.DB.prepare(
-    "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id FROM guide WHERE id = ?",
+    "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id, summary FROM guide WHERE id = ?",
   )
     .bind(id)
     .first<
@@ -3524,6 +3530,7 @@ app.put("/v1/guides/:id", async (c) => {
         | "team_id"
         | "to_account_id"
         | "to_group_id"
+        | "summary"
       >
     >();
   if (existing && existing.account_id !== account)
@@ -3616,6 +3623,17 @@ app.put("/v1/guides/:id", async (c) => {
   if (!["task", "bug", "transfer"].includes(said))
     return err(c, 400, `"${said}" is not a kind. Use \`task\`, \`bug\` or \`transfer\`.`);
 
+  /**
+   * What it says to a person. Required of every new guide, and refused by name when absent, like the
+   * kind above, and here for the same reason: this runs for every client whatever version it is on.
+   *
+   * The one exception is a guide stored before summaries existed, written again by a client that has
+   * not heard of them. That is let through as it came, or every old CLI's re-share of work in flight
+   * would be refused for a field it cannot know about.
+   */
+  const summaryRefusal = summaryProblem(meta.summary, Boolean(existing && !existing.summary));
+  if (summaryRefusal) return err(c, 400, summaryRefusal);
+
   const base = origin(c);
   const share_key = existing?.share_key ?? rid(22);
   const url = shareUrl(base, { id, share_key });
@@ -3632,13 +3650,14 @@ app.put("/v1/guides/:id", async (c) => {
   const created = String(meta.created || existing?.created || t);
 
   await c.env.DB.prepare(
-    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind, parent_id, target, client)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, report_id, area, severity, kind, parent_id, target, client, summary)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status, source_context=excluded.source_context,
        tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated,
        team_id=excluded.team_id, to_account_id=excluded.to_account_id, to_group_id=excluded.to_group_id,
        report_id=excluded.report_id, area=excluded.area, severity=excluded.severity, kind=excluded.kind,
-       parent_id=excluded.parent_id, target=excluded.target, client=excluded.client`,
+       parent_id=excluded.parent_id, target=excluded.target, client=excluded.client,
+       summary=excluded.summary`,
   )
     .bind(
       id,
@@ -3666,6 +3685,9 @@ app.put("/v1/guides/:id", async (c) => {
       said === "task" ? claims.repoKey(meta.target_context).slice(0, 200) : "",
       // The last write is what produced the markdown stored now, so it is replaced every time.
       c.get("client") || "",
+      String(meta.summary ?? "")
+        .trim()
+        .slice(0, SUMMARY_MAX),
     )
     .run();
 
@@ -4501,13 +4523,22 @@ function readChecks(raw: string): { check: string; ran: string }[] {
 }
 
 function taskView(
-  task: { id: string; title: string; target: string; status: string; created: string },
+  task: {
+    id: string;
+    title: string;
+    summary?: string;
+    target: string;
+    status: string;
+    created: string;
+  },
   claim: claims.ClaimRow | null,
   state: claims.TaskState,
 ) {
   return {
     id: task.id,
     title: task.title,
+    // What it says to a person: the line a row shows under the title.
+    summary: task.summary ?? "",
     target: task.target,
     state,
     created: task.created,
@@ -4574,6 +4605,8 @@ app.get("/v1/guides/:id/thread", async (c) => {
     id: found.row.id,
     // Who opened it, so the first bubble can sit on the right when it was you.
     mine: found.owner,
+    // What it says to a person: the first bubble, with the document behind "Show details".
+    summary: found.row.summary || "",
     thread: await claims.thread(c.env.DB, found.row.id, c.get("account")),
   });
 });
@@ -4589,6 +4622,7 @@ app.get("/v1/working", async (c) => {
     working: rows.map((r) => ({
       id: r.guide.id,
       title: r.guide.title,
+      summary: r.guide.summary || "",
       kind: r.guide.kind,
       target: r.guide.target,
       url: shareUrl(base, r.guide),

@@ -1,6 +1,7 @@
 ---
 id: tr4nsf3r
 title: Mount the API inside the web Worker
+summary: "How the API was moved inside the web Worker, so one deploy serves both. Done and working; this is for repeating it."
 kind: transfer
 created: "2026-04-02T09:14:00.000Z"
 author: rae

@@ -6,6 +6,7 @@ import {
   ID_RE,
   newId,
   parse,
+  SUMMARY_MAX,
   sections,
   serialize,
   stamp,
@@ -18,6 +19,7 @@ import {
 const SAMPLE = `---
 id: k3mq2xa7
 title: "Add Paystack webhook: verify signature"
+summary: Webhook signatures are now checked before anything is stored. Done and working.
 kind: transfer
 created: 2026-09-03T10:00:00.000Z
 author: Lukman
@@ -51,7 +53,10 @@ test("parse round-trips frontmatter and body", () => {
 });
 
 test("serialize quotes values YAML would misread", () => {
-  const out = serialize({ meta: { title: "a: b", tags: [] }, body: "x" });
+  const out = serialize({
+    meta: { title: "a: b", summary: "Said to a person for the test.", tags: [] },
+    body: "x",
+  });
   assert.match(out, /title: "a: b"/);
   assert.match(out, /tags: \[\]/);
 });
@@ -81,14 +86,14 @@ test("sections keys on ## headings", () => {
 });
 
 test("validate rejects an untouched template and accepts a filled one", () => {
-  const t = parse(template({ kind: "transfer", title: "x" }));
+  const t = parse(template({ kind: "transfer", title: "x", summary: "A summary." }));
   assert.ok(validate(t).some((e) => /placeholders/.test(e)));
   const stripped = { meta: t.meta, body: stripPlaceholders(t.body) };
   // A transfer with nothing under its headings is accepted: context exchange has no required
   // shape, and demanding one is what padded 599-word follow-ups nobody opened.
   assert.deepEqual(validate(stripped), []);
   // A task still has to carry the list its hand-in answers line by line.
-  const bare = parse(template({ kind: "task", title: "x" }));
+  const bare = parse(template({ kind: "task", title: "x", summary: "A summary." }));
   assert.ok(validate({ meta: bare.meta, body: "## Goal\ng\n" }).some((e) => /Acceptance/.test(e)));
   assert.deepEqual(validate(parse(SAMPLE)), []);
   assert.deepEqual(validate(parse(SAMPLE.replace("title:", "x_title:"))), [
@@ -97,7 +102,12 @@ test("validate rejects an untouched template and accepts a filled one", () => {
 });
 
 test("stamp fills id, created, status, and defaults without overwriting", () => {
-  const g = stamp(parse("---\ntitle: t\n---\n## Problem\np\n## Steps\ns"), { author: "me" });
+  const g = stamp(
+    parse(
+      "---\ntitle: t\nsummary: Said to a person for the test.\n---\n## Problem\np\n## Steps\ns",
+    ),
+    { author: "me" },
+  );
   assert.match(g.meta.id, ID_RE);
   assert.ok(g.meta.created);
   assert.equal(g.meta.status, "draft");
@@ -116,13 +126,25 @@ test("a new guide is a task unless it says otherwise", () => {
   // Most guides assign work. Every template writes its kind out, because a guide with no kind:
   // line means a transfer to every client already installed.
   assert.equal(parse(template({ title: "x" })).meta.kind, "task");
-  assert.equal(parse(template({ kind: "transfer", title: "x" })).meta.kind, "transfer");
-  assert.match(template({ kind: "transfer", title: "x" }), /^kind: transfer$/m);
+  assert.equal(
+    parse(template({ kind: "transfer", title: "x", summary: "A summary." })).meta.kind,
+    "transfer",
+  );
+  assert.match(
+    template({ kind: "transfer", title: "x", summary: "A summary." }),
+    /^kind: transfer$/m,
+  );
   assert.match(scaffold(), /^kind: transfer$/m, "capturing finished work is a transfer");
 });
 
 test("a bug keeps its repro out of Steps", () => {
-  const bug = parse(template({ kind: "bug", title: "Undo kills the drag handle" }));
+  const bug = parse(
+    template({
+      kind: "bug",
+      title: "Undo kills the drag handle",
+      summary: "Undo breaks dragging.",
+    }),
+  );
   assert.equal(bug.meta.kind, "bug");
   // `Steps` is what the MCP server tells an agent to follow. A repro under that heading is an
   // agent reproducing the defect and then reporting the guide as broken.
@@ -130,13 +152,13 @@ test("a bug keeps its repro out of Steps", () => {
   assert.match(bug.body, /^## Reproduce/m);
 
   const filed = {
-    meta: { title: "t", kind: "bug" },
+    meta: { title: "t", summary: "A summary.", kind: "bug" },
     body: "## Problem\np\n## Reproduce\n1. do the thing",
   };
   assert.deepEqual(validate(filed), []);
 
   const mislabelled = {
-    meta: { title: "t", kind: "bug" },
+    meta: { title: "t", summary: "A summary.", kind: "bug" },
     body: "## Problem\np\n## Reproduce\n1. x\n## Steps\n1. x",
   };
   assert.ok(validate(mislabelled).some((e) => /Reproduce", not "## Steps/.test(e)));
@@ -151,14 +173,17 @@ test("a task is a brief with Acceptance and no Steps", () => {
   assert.equal(task.meta.target_context, "");
 
   const written = {
-    meta: { title: "t", kind: "task", target_context: "owner/repo" },
+    meta: { title: "t", summary: "A summary.", kind: "task", target_context: "owner/repo" },
     body: "## Goal\ng\n## Acceptance\n- it works",
   };
   assert.deepEqual(validate(written), []);
   assert.equal(parse(serialize(written)).meta.target_context, "owner/repo");
 
   // Acceptance is what the work is approved against, so a task cannot go out without one.
-  const open = { meta: { title: "t", kind: "task" }, body: "## Goal\ng" };
+  const open = {
+    meta: { title: "t", summary: "Said to a person for the test.", kind: "task" },
+    body: "## Goal\ng",
+  };
   assert.ok(validate(open).some((e) => /## Acceptance/.test(e)));
 });
 
@@ -178,9 +203,10 @@ test("a guide with no kind is refused, not read as a transfer guide", () => {
   // A bug still has to say how to see it. That requirement is kept where the section is read
   // mechanically; a transfer's was dropped, because context has no fixed shape.
   assert.ok(
-    validate({ meta: { title: "t", kind: "bug" }, body: "## Problem\np\n" }).some((e) =>
-      /## Reproduce/.test(e),
-    ),
+    validate({
+      meta: { title: "t", summary: "A summary.", kind: "bug" },
+      body: "## Problem\np\n",
+    }).some((e) => /## Reproduce/.test(e)),
   );
 });
 
@@ -286,7 +312,7 @@ test("a parent is optional, and a malformed one is caught before publish", () =>
   const guide = {
     // Built by hand rather than parsed, so it says its kind: nothing reaches validate() without
     // one unless code left it out, and that is what the rule is for.
-    meta: { id: "k3mq2xa7", title: "One", kind: "transfer", tags: [] },
+    meta: { id: "k3mq2xa7", title: "One", summary: "One thing.", kind: "transfer", tags: [] },
     body: "## Problem\nx\n\n## Steps\ny",
   };
   assert.deepEqual(validate(guide), [], "no parent at all is the ordinary case");
@@ -304,10 +330,12 @@ test("a parent is optional, and a malformed one is caught before publish", () =>
 });
 
 test("a guide that never named blockers does not grow a blocked_by line", () => {
-  const out = serialize(parse("---\ntitle: t\n---\n\n## Problem\np"));
+  const out = serialize(
+    parse("---\ntitle: t\nsummary: Said to a person for the test.\n---\n\n## Problem\np"),
+  );
   assert.ok(!/blocked_by/.test(out), out);
   const task = parse(
-    "---\ntitle: t\nkind: task\nblocked_by: [abc12345, def67890]\n---\n\n## Goal\ng",
+    "---\ntitle: t\nsummary: Said to a person for the test.\nkind: task\nblocked_by: [abc12345, def67890]\n---\n\n## Goal\ng",
   );
   assert.deepEqual(task.meta.blocked_by, ["abc12345", "def67890"]);
 });
@@ -339,4 +367,36 @@ test("no evidence leaves a bug byte-for-byte what it was", () => {
   assert.equal(bugGuide(args), bugGuide({ ...args, evidence: [] }));
   assert.equal(bugGuide(args), bugGuide({ ...args, evidence: ["", "  "] }));
   assert.doesNotMatch(bugGuide(args), /!\[/);
+});
+
+test("every guide says what it is to a person, and is refused when it does not", () => {
+  const guide = (summary) => ({
+    meta: { title: "t", summary, kind: "transfer" },
+    body: "## Problem\np",
+  });
+  assert.deepEqual(validate(guide("What this is, for a person.")), []);
+  for (const bare of [undefined, "", "   "])
+    assert.ok(
+      validate(guide(bare)).some((e) => /summary/.test(e)),
+      `no summary is refused: ${JSON.stringify(bare)}`,
+    );
+  assert.ok(validate(guide("x".repeat(SUMMARY_MAX + 1))).some((e) => /400 at most/.test(e)));
+  assert.deepEqual(validate(guide("x".repeat(SUMMARY_MAX))), [], "the limit itself is allowed");
+  // It is the document's first fact after the title, and it round-trips like any string.
+  const md = serialize(guide("A colon: and a comma, kept."));
+  assert.match(md, /^title: t\nsummary: "A colon: and a comma, kept\."\nkind: transfer$/m);
+  assert.equal(parse(md).meta.summary, "A colon: and a comma, kept.");
+});
+
+test("a bug filed with no summary says its title, which is the author's own words", () => {
+  const md = bugGuide({ title: "Undo kills the drag handle", problem: "p", reproduce: "r" });
+  assert.equal(parse(md).meta.summary, "Undo kills the drag handle");
+  const said = bugGuide({
+    title: "Undo kills the drag handle",
+    summary: "Dragging stops working after you undo.",
+    problem: "p",
+    reproduce: "r",
+  });
+  assert.equal(parse(said).meta.summary, "Dragging stops working after you undo.");
+  assert.deepEqual(validate(parse(md)), []);
 });

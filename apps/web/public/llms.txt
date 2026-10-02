@@ -29,6 +29,10 @@ or `?view=verify` for the view that leads with what to check and folds the imple
 
 ## Three kinds of guide
 
+Every guide also carries a `summary:` in its frontmatter: one or two plain sentences, 400 characters
+at most, with no ids or paths, saying what it is and whether anybody has to act. The document is for
+agents; the summary is what a person reads first in their hub. A guide with no summary is refused.
+
 `kind:` in the frontmatter says what a guide is for. Each asks for different behaviour, so read it
 before acting on anything.
 

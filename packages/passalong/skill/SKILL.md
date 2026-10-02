@@ -98,11 +98,24 @@ pulls a guide, and steps that reproduce a defect are the one list that must neve
 remedy — an agent that follows them reproduces the bug, checks the Verification, finds it false
 because the bug is real, and reports that the guide does not work.
 
+## Say it to a person
+
+Everything below is written for another agent: exact, dense, full of ids and paths. A person reading
+their hub wants two sentences. So every guide carries a `summary:` in its frontmatter — plain
+language, 400 characters at most, no ids, paths or jargon, saying what this is and whether anybody
+has to do anything. It is what they see first; your document is behind it. A guide with no summary is
+refused.
+
+Write it the way you would tell a colleague in the corridor: "Webhook signatures are now checked
+before anything is stored. Done and working; nothing to do." Not: "Implemented HMAC-SHA512 verify in
+billing.ts per the Paystack spec, see PR 412."
+
 ## Guide structure
 
 ```markdown
 ---
 title: <what this accomplishes, as a verb phrase: "Add Paystack webhook verification">
+summary: <one or two plain sentences for a PERSON, 400 characters at most, no ids or paths: what this is and whether anyone has to act>
 author: <git user.name, if known>
 source_context: <repo or product this came from>
 status: published
@@ -135,6 +148,7 @@ Commands to run and what they should print. Test cases. What "done" looks like.
 ```markdown
 ---
 title: <what is broken, in one line: "Undo leaves section drag handles dead">
+summary: <one or two plain sentences for a PERSON: what is broken and whether anyone has to act>
 kind: bug
 severity: <s1 blocker | s2 major | s3 minor | s4 cosmetic>
 area: <which surface it is on>

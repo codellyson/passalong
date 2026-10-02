@@ -50,6 +50,19 @@ export const SETTABLE = ["draft", "published", "consumed"];
  * exactly as ambiguous as it was and adds a second state — a guide that exists and cannot be
  * shared — where the point was to have fewer.
  */
+/**
+ * What a guide says to a person, in a sentence or two, and the longest that may be.
+ *
+ * Everything an agent writes is written for another agent: exact, dense, full of ids and paths. A
+ * person scanning their work wants "what is this, and do I need to do anything", so every guide
+ * carries both — the document is the agent's form, and `summary:` is the human one, shown by default
+ * in the hub with the document behind "Show details".
+ *
+ * Said by the author and refused when absent, like `kind`, for the same reason: a summary written
+ * afterwards by something that was not there is a second voice that can say what nobody claimed.
+ */
+export const SUMMARY_MAX = 400;
+
 export const KINDS = ["transfer", "bug", "task"];
 
 // Body sections in the order a guide should present them. The heading text is what the
@@ -330,6 +343,9 @@ function quote(v) {
 const META_ORDER = [
   "id",
   "title",
+  // Right under the title: it is what a person reads first about it, so it is what the document
+  // opens with.
+  "summary",
   "kind",
   "created",
   "author",
@@ -447,6 +463,14 @@ export function validate({ meta, body }) {
   // a kind — `parseFrontmatter` seeds it — so what reaches this without one was built field by
   // field in code, and code is exactly what should have to say what it is making.
   const kind = meta.kind;
+  const said = String(meta.summary ?? "").trim();
+  if (!said)
+    errors.push(
+      "say it to a person: add `summary:` — one or two plain sentences, no ids or paths, saying what " +
+        `this is and whether anybody needs to act (${SUMMARY_MAX} characters at most)`,
+    );
+  else if (said.length > SUMMARY_MAX)
+    errors.push(`summary is ${said.length} characters; ${SUMMARY_MAX} at most`);
   if (!kind) errors.push(`say what this is: kind must be one of ${KINDS.join(", ")}`);
   else if (!KINDS.includes(kind)) errors.push(`kind must be one of ${KINDS.join(", ")}`);
   const have = sections(body);
@@ -489,6 +513,10 @@ export function stamp(guide, defaults = {}) {
  */
 export function bugGuide({
   title = "",
+  // What a person reads about it. A bug's own title is that when nothing else was said, and it is
+  // the author's own words, stated here by the caller that knows it is building a bug — not a
+  // default for something an author left off.
+  summary = "",
   problem = "",
   reproduce = "",
   verification = "",
@@ -544,6 +572,7 @@ export function bugGuide({
 
   const meta = {
     title,
+    summary: String(summary || "").trim() || title,
     kind: "bug",
     status,
     tags: ["bug", environment, area].filter(Boolean),
@@ -584,6 +613,7 @@ export function template(meta = {}) {
   return serialize({
     meta: {
       title: "",
+      summary: "",
       author: "",
       source_context: "",
       status: "draft",
@@ -620,6 +650,7 @@ function bugTemplate(meta = {}) {
   return serialize({
     meta: {
       title: "",
+      summary: "",
       kind: "bug",
       author: "",
       source_context: "",
@@ -660,6 +691,7 @@ function taskTemplate(meta = {}) {
   return serialize({
     meta: {
       title: "",
+      summary: "",
       kind: "task",
       author: "",
       source_context: "",

@@ -695,6 +695,8 @@ export async function working(
     guide: {
       id: string;
       title: string;
+      /** What it says to a person. */
+      summary: string;
       kind: string;
       target: string;
       share_key: string;
@@ -708,7 +710,8 @@ export async function working(
   const { results } = await db
     .prepare(
       `SELECT c.*, g.title AS g_title, g.kind AS g_kind, g.target AS g_target,
-              g.share_key AS g_share_key, g.account_id AS g_account, COALESCE(${ASKING}, '') AS asking,
+              g.share_key AS g_share_key, g.account_id AS g_account, g.summary AS g_summary,
+              COALESCE(${ASKING}, '') AS asking,
               (SELECT COUNT(*) FROM task_event r
                 WHERE r.guide_id = c.guide_id AND r.kind IN ('replied', 'noted')
                   AND r.id > c.replied_through
@@ -728,15 +731,27 @@ export async function working(
         g_target: string;
         g_share_key: string;
         g_account: string;
+        g_summary: string;
         by_handle: string;
         by_name: string;
       }
     >();
   return results.map(
-    ({ g_title, g_kind, g_target, g_share_key, g_account, by_handle, by_name, ...claim }) => ({
+    ({
+      g_title,
+      g_kind,
+      g_target,
+      g_share_key,
+      g_account,
+      g_summary,
+      by_handle,
+      by_name,
+      ...claim
+    }) => ({
       guide: {
         id: claim.guide_id,
         title: g_title,
+        summary: g_summary,
         kind: g_kind,
         target: g_target,
         share_key: g_share_key,
@@ -1179,6 +1194,8 @@ export async function list(
   {
     task: Omit<TaskRow, "markdown"> & {
       share_key: string;
+      /** What it says to a person. Empty on a task from before summaries. */
+      summary: string;
       for_me: number;
       team_slug: string;
       to_handle: string;
@@ -1195,7 +1212,7 @@ export async function list(
   const [tasks, claims] = await Promise.all([
     db
       .prepare(
-        `SELECT g.id, g.account_id, g.title, g.status, g.target, g.created, g.share_key,
+        `SELECT g.id, g.account_id, g.title, g.summary, g.status, g.target, g.created, g.share_key,
                 ${BLOCKED} AS blocked, COALESCE(t.slug, '') AS team_slug,
                 (g.to_account_id = ?1 OR (g.to_group_id <> '' AND g.to_group_id IN
                   (SELECT group_id FROM group_member WHERE account_id = ?1))) AS for_me,
@@ -1210,6 +1227,7 @@ export async function list(
       .all<
         Omit<TaskRow, "markdown"> & {
           share_key: string;
+          summary: string;
           blocked: number;
           for_me: number;
           team_slug: string;
