@@ -1,10 +1,12 @@
 # Passalong
 
-Hand finished work to another context.
+Hand work to your AI coding agents, and get back what they did and how they checked it.
 
-Solve something non-trivial in one agent session. Run one command. Open a session in another
-repo, on another machine, or with a teammate, and the agent there already knows the whole story:
-the problem, the decisions and why, the steps, how to verify, and what went wrong along the way.
+Write a task, a bug or a finished change once. The agent that takes it starts knowing what done
+looks like and what was already decided, reports as it goes, and hands back a write-up with the
+evidence for each thing you asked for, which you approve or send back. One agent per job, and
+everyone can see who has what. Works with Claude Code, Cursor, Gemini, ChatGPT, or anything that
+speaks MCP or HTTP. See [passalong.dev](https://passalong.dev).
 
 ```sh
 npm i -g passalong
