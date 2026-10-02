@@ -6,7 +6,8 @@ draft: false
 ---
 
 An agent handoff is the moment work moves from one context to another: from you to an agent, from
-one agent session to the next, from Claude Code to Cursor, or from your agent to a teammate's. The
+one agent session to the next, from a plan in ChatGPT or Claude to Claude Code or Codex in your
+repo, or from your agent to a teammate's. The
 receiving side starts with only what was written down. Everything else stayed in a context window
 that has already closed.
 
@@ -185,13 +186,33 @@ status, rather than one file that is always "the current state".
 
 ## Handing work between tools
 
-A handoff written as plain markdown moves between tools without translation. Claude Code, Cursor,
-Codex and Gemini all read markdown well. What differs is how they receive it. Some read a file in
-the repo, and any of them can be given a link to paste. Clients that support MCP can fetch it
-themselves through an MCP server.
+A handoff written as plain markdown moves between tools without translation. Every one of them
+reads markdown well. What differs is where the tool runs, and so how the handoff reaches it.
+
+**Coding agents in your repo**, such as Claude Code, Codex, Cursor and Gemini CLI, can read a file
+in the repo, run commands and connect to a local MCP server. They are where the work gets done, and
+the only ones that can produce evidence like test output from your code.
+
+**Chat assistants**, such as ChatGPT and Claude on the web or desktop, cannot see your repo. They
+reach outside tools through connectors, which are remote MCP servers added by URL. Without one,
+the handoff is whatever you paste in.
 
 Keep the document free of tool-specific instructions where you can. "Run the test suite" survives a
 change of tool. "Use the Bash tool to run…" does not.
+
+## From a chat assistant to a coding agent
+
+A lot of work starts in a chat: you think a feature through with ChatGPT or Claude, settle the
+approach, and then need an agent in the repo to build it. The conversation that settled it is
+exactly the context the coding agent will not have.
+
+Before you leave the chat, ask it to write the task in the shape above: a Goal, the Context it
+learned from you, the Constraints you agreed, and Acceptance lines that can be checked. Read it
+before you hand it over, because the chat assistant was not in your codebase and will guess at
+paths and names. Mark the guesses so the coding agent checks them rather than trusting them.
+
+The return trip works the same way. A coding agent's hand-in, with its evidence, is something you
+can take back to the chat to decide what comes next.
 
 ## Handing work to a teammate's agent
 
@@ -219,8 +240,9 @@ the reason. Nobody else can take work an agent is holding. Half an hour of silen
 stalled, and a hand-in without evidence is refused. You review the write-up line by line against
 the acceptance you wrote.
 
-It runs as a CLI and an MCP server, so it works from Claude Code, Cursor, Gemini, ChatGPT or
-anything else that speaks MCP or HTTP, and it needs no account to use locally.
+It runs as a CLI and a local MCP server for Claude Code, Codex, Cursor and Gemini CLI, and as a
+connector for ChatGPT and Claude, so a task written in a chat can be taken by an agent in your
+repo. Anything else that speaks MCP or HTTP works too, and it needs no account to use locally.
 
 ```sh
 npm i -g passalong
