@@ -28,6 +28,8 @@ const props = defineProps<{
    * it flows with the page, which is how the review pane uses it.
    */
   fill?: boolean;
+  /** Put the cursor in the box once the conversation has loaded: it was opened to answer. */
+  focus?: boolean;
 }>();
 const { api, onReply, token } = useHub();
 const { load: loadDoc, sectionsFor } = useTaskDocs();
@@ -90,10 +92,12 @@ onMounted(() => watch(() => [props.id, props.stamp], load, { immediate: true }))
 // In a panel it is a chat: it opens on the latest message, and a person who leaves it open hears
 // the agent without reloading. Quiet, and only while it is on screen.
 const scroller = ref<HTMLElement | null>(null);
-watch(items, async () => {
+const box = ref<HTMLTextAreaElement | null>(null);
+watch(items, async (now, before) => {
   if (!props.fill) return;
   await nextTick();
   scroller.value?.scrollTo({ top: scroller.value.scrollHeight });
+  if (props.focus && before === null && now) box.value?.focus();
 });
 let poll: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
@@ -306,6 +310,7 @@ async function send() {
       <label class="sr-only" :for="`reply-${id}`">{{ noting ? "Leave a note on the task" : "Write to the agent" }}</label>
       <textarea
         :id="`reply-${id}`"
+        ref="box"
         v-model="draft"
         rows="2"
         :placeholder="noting ? 'Add a note or a file for whoever takes this' : 'Answer, or add something for the agent'"

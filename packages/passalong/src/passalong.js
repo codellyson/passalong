@@ -481,6 +481,9 @@ export async function handIn(
           checks: checks.map((c) => ({
             check: c.check,
             ran: c.ran,
+            // What the agent says happened, in plain words, for the person's table. Left out when
+            // not said: the row then shows the line that was asked and keeps its run folded.
+            ...(c.says ? { says: c.says } : {}),
             // Only present on a check that was run. The server keeps them apart the same way.
             ...(verified(c) ? { cmd: c.cmd, exit: c.exit, ok: c.ok } : {}),
           })),

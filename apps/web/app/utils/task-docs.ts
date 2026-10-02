@@ -71,13 +71,19 @@ export function inlineParts(text: string): { kind: "code" | "bold" | "text"; tex
 export interface CheckedLine {
   asked: string;
   ran: string;
+  /** The agent's one plain sentence for a person. Empty when it wrote none: show `asked` instead. */
+  says: string;
+  /** False only when a runner executed the check and it failed; otherwise not known to be bad. */
+  ok: boolean;
 }
 
 /** Evidence the agent filed that answers no line the task asked for. */
 export interface Matched {
   rows: CheckedLine[];
-  extra: { check: string; ran: string }[];
+  extra: { check: string; ran: string; says?: string; ok?: boolean }[];
 }
+
+type Filed = { check: string; ran: string; says?: string; ok?: boolean };
 
 /** Two lines are the same check when they read the same: case, code ticks and punctuation aside. */
 const same = (text: string) =>
@@ -100,7 +106,7 @@ const same = (text: string) =>
  * reviewer would be reading a pairing the agent never claimed. Anything unmatched is shown on its
  * own, and a line with no evidence stays visibly empty — that gap is the point of the screen.
  */
-export function matchChecks(asked: string[], checks: { check: string; ran: string }[]): Matched {
+export function matchChecks(asked: string[], checks: Filed[]): Matched {
   const left = checks.map((c) => ({ ...c, used: false }));
   const rows = asked.map((line) => {
     const key = same(line);
@@ -110,7 +116,10 @@ export function matchChecks(asked: string[], checks: { check: string; ran: strin
         (c) => !c.used && key && (same(c.check).includes(key) || key.includes(same(c.check))),
       );
     if (hit) hit.used = true;
-    return { asked: line, ran: hit?.ran ?? "" };
+    return { asked: line, ran: hit?.ran ?? "", says: hit?.says ?? "", ok: hit?.ok !== false };
   });
-  return { rows, extra: left.filter((c) => !c.used).map(({ check, ran }) => ({ check, ran })) };
+  return {
+    rows,
+    extra: left.filter((c) => !c.used).map(({ used, ...c }) => c),
+  };
 }

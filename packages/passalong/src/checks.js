@@ -76,7 +76,10 @@ function tail(out, max = OUTPUT_MAX) {
  */
 export function runCheck(check, { cwd = process.cwd(), timeoutMs = CHECK_TIMEOUT_MS } = {}) {
   const cmd = String(check?.cmd ?? "").trim();
-  if (!cmd) return { check: check.check, ran: check.ran };
+  // What the agent says happened, in plain words: the person's line of the table. It is the agent's
+  // account and a run never touches it, so it rides along on every shape this returns.
+  const says = check?.says ? { says: check.says } : {};
+  if (!cmd) return { check: check.check, ran: check.ran, ...says };
 
   const opts = {
     cwd,
@@ -99,6 +102,7 @@ export function runCheck(check, { cwd = process.cwd(), timeoutMs = CHECK_TIMEOUT
           : `could not run: ${r.error?.message ?? "unknown error"}`;
     return {
       check: check.check,
+      ...says,
       cmd,
       exit: null,
       ok: false,
@@ -109,6 +113,7 @@ export function runCheck(check, { cwd = process.cwd(), timeoutMs = CHECK_TIMEOUT
   const cutShort = Boolean(BASH) && r.status === SIGPIPE;
   return {
     check: check.check,
+    ...says,
     cmd,
     exit: r.status,
     ok: r.status === 0 || cutShort,

@@ -1,10 +1,12 @@
 /**
  * Picking several guides to act on at once: archive, unarchive or delete them together.
  *
- * A mode, switched on from the list, not a checkbox that lives on every row. Rows share one
- * anatomy — titles on one left edge — and a box on only the rows you can act on would push those
- * titles in and leave the rest out of line. In the mode, every row has the box; the ones that are
- * not yours have it switched off, because only a guide's author can archive or delete it.
+ * Every row on a shelf (Open, Done) carries the box, always, and a table has a select-all in its
+ * header. It used to be a mode behind a Select button, which pushed every title in when it was
+ * switched on and added a bar above the list: the page moved twice for one tick. The box is there
+ * from the start, so nothing moves, and the bar that acts on a selection floats over the page once
+ * there is one. Rows that are not yours have the box switched off, because only a guide's author can
+ * archive or delete it.
  *
  * State is shared through useState so the rows and the bar that acts on them agree without
  * threading a prop through each list.
@@ -31,9 +33,18 @@ export function useSelection() {
   const clear = () => {
     picked.value = {};
   };
+  /** Select or clear a whole table's worth at once: the header box. */
+  function setAll(items: Picked[], yes: boolean) {
+    const next = { ...picked.value };
+    for (const p of items) {
+      if (yes) next[p.id] = p;
+      else delete next[p.id];
+    }
+    picked.value = next;
+  }
   function stop() {
     on.value = false;
     clear();
   }
-  return { on, picked, list, has, toggle, clear, stop };
+  return { on, picked, list, has, toggle, setAll, clear, stop };
 }

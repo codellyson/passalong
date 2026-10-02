@@ -29,10 +29,11 @@ const props = defineProps<{ tasks: Task[]; handedIn: HandedIn[]; rows: LaneRow[]
 const { onApprove, onReject, onRelease, onAck, onCloseHandedIn, onSendBackHandedIn } = useHub();
 const { docsOf, token } = useTaskDocs();
 
-type Item =
-  | { key: string; kind: "task"; title: string; sub: string; task: Task }
-  | { key: string; kind: "handed"; title: string; sub: string; h: HandedIn }
-  | { key: string; kind: "sent"; title: string; sub: string; row: LaneRow };
+type Item = { key: string; title: string; sub: string; at: string } & (
+  | { kind: "task"; task: Task }
+  | { kind: "handed"; h: HandedIn }
+  | { kind: "sent"; row: LaneRow }
+);
 
 const stuck = (t: Task) => /^BLOCKED:/i.test(t.claim?.note || "");
 /** The lease runs 30 minutes from the agent's last call (LEASE_MS in apps/api/src/claims.ts). */
@@ -47,6 +48,10 @@ const task$ = (t: Task, sub: string): Item => ({
   kind: "task",
   title: t.title || t.id,
   sub: t.summary || sub,
+  // The agent's last call is the hand-in, the question or the silence; the lease runs 30 minutes from it.
+  at: t.claim?.lease_until
+    ? new Date(Date.parse(t.claim.lease_until) - 30 * 60 * 1000).toISOString()
+    : t.created,
   task: t,
 });
 
@@ -58,9 +63,7 @@ const groups = computed(() =>
       title: "Waiting for your review",
       note: "Tasks an agent finished. Approve them, or ask for changes.",
       tone: "bg-accent",
-      items: props.tasks
-        .filter((t) => t.mine && t.state === "review")
-        .map((t) => task$(t, t.claim?.report_title || "Finished")),
+      items: props.tasks.filter((t) => t.mine && t.state === "review").map((t) => task$(t, "")),
     },
     {
       key: "handed",
@@ -74,6 +77,7 @@ const groups = computed(() =>
           kind: "handed",
           title: h.title || h.id,
           sub: `${person(h.by)} handed it in · ${rel(h.at)}`,
+          at: h.at,
           h,
         }),
       ),
@@ -90,6 +94,7 @@ const groups = computed(() =>
           kind: "sent",
           title: row.g.title || "Untitled guide",
           sub: `from ${fromName(row.g) || "someone"} · ${statusLine(row).text || rel(row.g.created)}`,
+          at: row.g.created,
           row,
         }),
       ),
@@ -112,7 +117,7 @@ const groups = computed(() =>
       tone: "bg-warn",
       items: props.tasks
         .filter((t) => t.mine && t.state === "stalled")
-        .map((t) => task$(t, `last heard ${heard(t.claim?.lease_until)}`)),
+        .map((t) => task$(t, plain(t.claim?.note || ""))),
     },
   ].filter((g) => g.items.length),
 );
@@ -135,9 +140,14 @@ const shown = computed(() =>
 const onlyGroup = computed(() => groups.value.find((g) => g.key === only.value) ?? null);
 
 const selectedKey = ref("");
-const sel = computed(
-  () => shown.value.find((x) => x.it.key === selectedKey.value)?.it ?? shown.value[0]?.it ?? null,
-);
+/** Nothing chosen is the glance table; a chosen item opens its pane beside the list. */
+const sel = computed(() => shown.value.find((x) => x.it.key === selectedKey.value)?.it ?? null);
+const at = computed(() => shown.value.findIndex((x) => x.it.key === selectedKey.value));
+/** Previous and next in the list as filtered. The item changes, the pane stays where it is. */
+const step = (by: number) => {
+  const next = shown.value[at.value + by];
+  if (next) pick(next.it.key);
+};
 const task = computed(() => (sel.value?.kind === "task" ? sel.value.task : null));
 const handed = computed(() => (sel.value?.kind === "handed" ? sel.value.h : null));
 const sent = computed(() => (sel.value?.kind === "sent" ? sel.value.row : null));
@@ -173,6 +183,13 @@ const perLine = computed(() => (task.value?.claim?.checks?.length ?? 0) > 0);
 const loading = computed(
   () => task.value?.state === "review" && (docs.value?.id !== task.value.id || !docs.value?.task),
 );
+
+/** Which rows have their run open. A failed row is open until the reader closes it. */
+const runs = ref<Record<number, boolean>>({});
+const runOpen = (i: number, row: { ok: boolean }) => runs.value[i] ?? !row.ok;
+const toggleRun = (i: number, row: { ok: boolean }) => {
+  runs.value = { ...runs.value, [i]: !runOpen(i, row) };
+};
 
 const flagged = ref<Set<number>>(new Set());
 const note = ref("");
@@ -218,6 +235,7 @@ watch(
   () => sel.value?.key,
   () => {
     flagged.value = new Set();
+    runs.value = {};
     note.value = "";
     read.value = false;
     sendingBack.value = false;
@@ -245,6 +263,51 @@ async function pick(key: string) {
   pane.value?.scrollIntoView({ block: "start" });
 }
 
+/**
+ * A task that can be approved from its row without opening it: nothing it says could break, every
+ * Acceptance line has a run filed against it, and no run failed. Anything less opens the review —
+ * the table is where a skipped line shows, and a row cannot show it. Needs the documents, so a
+ * review row is not offered it until they have loaded.
+ */
+const loadedDocs = useTaskDocs();
+onMounted(() => {
+  watch(
+    () => props.tasks.filter((t) => t.mine && t.state === "review"),
+    (ts) => {
+      for (const t of ts) loadedDocs.loadTask(t);
+    },
+    { immediate: true },
+  );
+});
+function quick(it: Item): it is Item & { kind: "task"; task: Task } {
+  if (it.kind !== "task" || it.task.state !== "review" || it.task.claim?.risk) return false;
+  const docs = loadedDocs.docsFor(it.task);
+  const lines = checkLines(docs.task?.Acceptance);
+  if (!lines.length) return false;
+  return matchChecks(lines, it.task.claim?.checks ?? []).rows.every((r) => r.ran && r.ok);
+}
+/** What a review row says about its evidence, and its risk line: for the glance table. */
+function glance(it: Item): { text: string; risk: string } | null {
+  if (it.kind !== "task" || it.task.state !== "review" || !it.task.claim) return null;
+  const checks = it.task.claim.checks ?? [];
+  const lines = checkLines(loadedDocs.docsFor(it.task).task?.Acceptance);
+  const text = lines.length
+    ? `${matchChecks(lines, checks).rows.filter((r) => r.ran).length} of ${lines.length} ${lines.length === 1 ? "line has" : "lines have"} a run`
+    : checks.length
+      ? plural(checks.length, "check")
+      : "no checks filed";
+  return { text, risk: it.task.claim.risk || "" };
+}
+const approving = ref("");
+async function approveFromRow(t: Task) {
+  approving.value = t.id;
+  try {
+    await onApprove(t);
+  } finally {
+    approving.value = "";
+  }
+}
+
 const press =
   "transition-[scale,background-color,border-color,color,box-shadow] duration-150 ease-out active:not-disabled:scale-[0.96]";
 /** The hub's section label, the same words-in-small-capitals every lane heading uses. */
@@ -263,15 +326,15 @@ const TONE = {
 </script>
 
 <template>
-  <div v-if="all.length" class="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
-    <nav class="flex flex-col gap-4 lg:sticky lg:top-24" aria-label="Needs you">
+  <div v-if="all.length" class="flex flex-col gap-6">
+    <div class="flex flex-col gap-4">
       <!-- The counts, and the filter: a chip per reason, none chosen is all of them. -->
-      <div class="grid grid-cols-2 gap-2 font-ui" role="group" aria-label="Filter by reason">
+      <div v-if="!sel" class="flex flex-wrap gap-2 font-ui" role="group" aria-label="Filter by reason">
         <button
           v-for="g in groups"
           :key="g.key"
           type="button"
-          class="flex cursor-pointer items-center gap-3 rounded-2 border-0 bg-raised px-3 py-3 text-left shadow-edge transition-colors duration-150"
+          class="flex cursor-pointer items-center gap-3 rounded-2 border-0 bg-raised px-4 py-3 text-left shadow-edge transition-colors duration-150"
           :class="only === g.key ? 'bg-field' : 'hover:bg-surface'"
           :aria-pressed="only === g.key"
           @click="only = only === g.key ? null : g.key"
@@ -285,36 +348,62 @@ const TONE = {
       </div>
       <p v-if="onlyGroup" class="m-0 font-ui text-xs text-muted">{{ onlyGroup.note }}</p>
 
-      <ul class="m-0 list-none rounded-3 bg-raised p-0 shadow-edge">
-        <li v-for="({ it, g }, n) in shown" :key="it.key" class="shadow-[inset_0_1px_0_var(--line)] first:shadow-none">
-          <!-- The item you are reading: the near-white fill of a surface you act on, and the coral
-               diamond the hub marks "here" with. The first and last rows take the list's corners. -->
-          <button
-            type="button"
-            class="relative block w-full cursor-pointer border-0 py-4 pr-5 pl-8 text-left transition-colors duration-150 ease-out"
-            :class="[
-              sel?.key === it.key ? 'bg-field' : 'bg-transparent hover:bg-surface',
-              n === 0 ? 'rounded-t-3' : '',
-              n === shown.length - 1 ? 'rounded-b-3' : '',
-            ]"
-            :aria-current="sel?.key === it.key ? 'true' : undefined"
-            @click="pick(it.key)"
-          >
-            <span
-              v-if="sel?.key === it.key"
-              class="absolute top-[1.4rem] left-3 size-1.5 rotate-45 rounded-[1px] bg-coral"
-              aria-hidden="true"
-            />
-            <span class="line-clamp-2 block font-ui text-sm leading-snug font-medium text-fg">{{ it.title }}</span>
-            <!-- Why it is here, on the row, now that the headings are gone. -->
-            <span class="mt-1 flex items-center gap-2 font-ui text-xs leading-snug text-muted">
-              <span class="size-1.5 shrink-0 rounded-pill" :class="g.tone" aria-hidden="true" />
-              <span class="line-clamp-2 min-w-0">{{ g.short }}<template v-if="it.sub"> · {{ it.sub }}</template></span>
-            </span>
-          </button>
-        </li>
-      </ul>
-    </nav>
+    </div>
+
+    <!-- The glance: every item on one line, wide enough to read what it says and why it is here
+         without opening it. Opening is the row's one link; a task with nothing to look at can be
+         approved from it. -->
+    <div v-if="!sel" class="overflow-x-auto rounded-3 bg-raised shadow-edge">
+      <table class="rows m-0 w-full font-ui text-sm">
+        <thead>
+          <tr class="text-xs text-muted">
+            <th>Title</th>
+            <th>What it says</th>
+            <th>Why it is here</th>
+            <th>Age</th>
+            <th><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="{ it, g } in shown" :key="it.key">
+            <td class="min-w-60 max-w-[24rem] font-medium text-fg">
+              <button type="button" class="linkish line-clamp-2 text-left font-medium !text-fg hover:!text-accent" @click="pick(it.key)">{{ it.title }}</button>
+              <!-- Whether to trust it, before opening: how much of the Acceptance has a run, and what
+                   the agent says could break. -->
+              <span v-if="glance(it)" class="mt-1 block text-xs font-normal text-muted">{{ glance(it)?.text }}</span>
+              <span v-if="glance(it)?.risk" class="mt-1 line-clamp-1 block text-xs font-normal text-warn">Risk: {{ glance(it)?.risk }}</span>
+            </td>
+            <td class="max-w-[28rem] text-muted"><span class="line-clamp-2">{{ it.sub || "—" }}</span></td>
+            <td class="whitespace-nowrap text-muted">
+              <span class="mr-2 inline-block size-3 rounded-pill align-middle" :class="g.tone" aria-hidden="true" />{{ g.short }}
+            </td>
+            <td class="whitespace-nowrap text-muted tabular-nums">{{ rel(it.at) }}</td>
+            <td class="text-right whitespace-nowrap">
+              <button
+                v-if="quick(it)"
+                type="button"
+                class="btn sm primary mr-3"
+                :disabled="approving === it.task.id"
+                @click="approveFromRow(it.task)"
+              >Approve</button>
+              <button type="button" class="btn sm" @click="pick(it.key)"><AppIcon name="open" />Open</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div v-else class="flex flex-col gap-4">
+      <!-- One item at full width. The list it came from is the glance table, one click back; the
+           arrows step through the same filtered list without going there. -->
+      <nav class="flex flex-wrap items-center justify-between gap-3 font-ui text-sm" aria-label="Needs you">
+        <button type="button" class="linkish cursor-pointer" @click="selectedKey = ''">← All of them</button>
+        <span class="flex items-center gap-2">
+          <span class="text-muted tabular-nums">{{ at + 1 }} of {{ shown.length }}</span>
+          <button type="button" class="btn sm" :disabled="at <= 0" aria-label="Previous" @click="step(-1)">Previous</button>
+          <button type="button" class="btn sm" :disabled="at >= shown.length - 1" aria-label="Next" @click="step(1)">Next</button>
+        </span>
+      </nav>
 
     <article v-if="sel" ref="pane" class="flex scroll-mt-24 flex-col gap-6 rounded-3 bg-raised px-6 py-6 shadow-edge">
       <!-- ---- a task ---- -->
@@ -330,6 +419,8 @@ const TONE = {
           <h2 class="m-0 text-h2">
             <NuxtLink :to="`/hub/g/${task.id}`" class="text-fg no-underline hover:text-accent">{{ task.title }}</NuxtLink>
           </h2>
+          <!-- What it says to a person, before anything else about it. -->
+          <p v-if="task.summary" class="m-0 font-ui text-base leading-snug text-fg">{{ task.summary }}</p>
           <p class="m-0 flex flex-wrap gap-x-4 gap-y-1 font-ui text-sm">
             <a v-if="task.claim?.report_url" :href="task.claim.report_url" target="_blank" rel="noopener">The write-up</a>
             <template v-if="task.claim?.pr">
@@ -349,30 +440,71 @@ const TONE = {
               <span class="whitespace-pre-wrap">{{ task.claim.risk }}</span>
             </p>
 
-            <!-- Line against line: what was asked, and what ran for it, the evidence under the line it
-                 answers. -->
+            <!-- A table: what was asked, what happened in the agent's own plain sentence, and the run
+                 behind it folded. A failed row opens itself; a row with no sentence falls back to the
+                 line it answers. -->
             <section v-if="perLine" class="flex flex-col gap-3">
               <h3 :class="label">You asked for · {{ asked.length }}</h3>
-              <ol class="m-0 list-none p-0">
-                <li v-for="(row, i) in paired.rows" :key="row.asked" class="border-b border-line py-3 first:pt-0 last:border-b-0">
-                  <div class="flex items-start gap-2">
-                    <AppIcon :name="row.ran ? 'check' : 'x'" class="mt-0.5 shrink-0" :class="row.ran ? 'text-ok' : 'text-muted'" />
-                    <AppInline class="grow font-ui text-sm" :class="flagged.has(i) ? 'text-danger' : 'text-fg'" :text="row.asked" />
-                    <button
-                      class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-pill border-0 px-2 py-0.5 font-ui text-xs"
-                      :class="[press, flagged.has(i) ? 'bg-danger-soft text-danger' : 'bg-transparent text-muted hover:bg-surface hover:text-fg']"
-                      :aria-pressed="flagged.has(i)"
-                      :aria-label="flagged.has(i) ? 'Marked not met. Undo' : 'Mark this line not met'"
-                      @click="flag(i)"
-                    >
-                      <template v-if="flagged.has(i)">not met<AppIcon name="x" :size="12" /></template>
-                      <template v-else>not met?</template>
-                    </button>
-                  </div>
-                  <HubEvidence v-if="row.ran" :text="row.ran" />
-                  <p v-else class="mt-2 mb-0 font-ui text-xs text-warn">Nothing was handed in for this line.</p>
-                </li>
-              </ol>
+              <div class="overflow-x-auto rounded-2 shadow-edge">
+                <table class="rows m-0 w-full font-ui text-sm">
+                  <thead>
+                    <tr class="text-xs text-muted">
+                      <th><span class="sr-only">Result</span></th>
+                      <th>You asked for</th>
+                      <th>What happened</th>
+                      <th>Evidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template v-for="(row, i) in paired.rows" :key="row.asked">
+                      <tr class="group/row">
+                        <td>
+                          <AppIcon
+                            :name="row.ran && row.ok ? 'check' : 'x'"
+                            :class="row.ran && row.ok ? 'text-ok' : row.ran ? 'text-danger' : 'text-muted'"
+                          />
+                        </td>
+                        <td :class="flagged.has(i) ? 'text-danger' : 'text-fg'">
+                          <AppInline :text="row.asked" />
+                          <button
+                            class="mt-1 ml-0 inline-flex cursor-pointer items-center gap-1 rounded-pill border-0 py-0.5 text-xs"
+                            :class="[press, flagged.has(i) ? 'bg-danger-soft text-danger' : 'bg-transparent text-muted opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:bg-surface hover:text-fg [@media(hover:none)]:opacity-100']"
+                            :aria-pressed="flagged.has(i)"
+                            :aria-label="flagged.has(i) ? 'Marked not met. Undo' : 'Mark this line not met'"
+                            @click="flag(i)"
+                          >
+                            <template v-if="flagged.has(i)">not met<AppIcon name="x" :size="12" /></template>
+                            <template v-else>not met?</template>
+                          </button>
+                        </td>
+                        <td :class="row.ran ? 'text-fg' : 'text-warn'">
+                          <template v-if="!row.ran">Nothing was handed in for this line.</template>
+                          <AppInline v-else-if="row.says" :text="row.says" />
+                          <span v-else class="text-muted">No summary from the agent</span>
+                        </td>
+                        <td>
+                          <button
+                            v-if="row.ran"
+                            type="button"
+                            class="linkish cursor-pointer text-xs whitespace-nowrap"
+                            :aria-expanded="runOpen(i, row)"
+                            @click="toggleRun(i, row)"
+                          >
+                            {{ runOpen(i, row) ? "Hide run" : "Show run" }}
+                          </button>
+                        </td>
+                      </tr>
+                      <tr v-if="row.ran && runOpen(i, row)" class="run">
+                        <td />
+                        <td colspan="3"><HubEvidence :text="row.ran" /></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+              <p class="m-0 font-ui text-xs text-muted">
+                {{ asked.length }} asked for, {{ paired.rows.filter((r) => r.ran).length }} with a run
+              </p>
             </section>
 
             <section v-if="perLine && paired.extra.length" class="flex flex-col gap-3">
@@ -443,7 +575,7 @@ const TONE = {
             </details>
           </template>
 
-          <footer class="flex flex-col gap-3 border-t border-line pt-6">
+          <footer class="flex flex-col gap-3 border-t border-line pt-4">
             <label class="sr-only" :for="`why-${task.id}`">Why it goes back</label>
             <textarea
               :id="`why-${task.id}`"
@@ -487,9 +619,7 @@ const TONE = {
               resume it, or stop this agent.
             </template>
             <template v-else>
-              It is still locked to that agent. Resume it from
-              <AppShorten class="font-code" :value="task.claim?.worktree || ''" :max="28" />, or
-              stop this agent so another one can take it.
+              It is still locked to that agent. Resume it{{ task.claim?.worktree ? " from " : "" }}<AppShorten v-if="task.claim?.worktree" class="font-code" :value="task.claim.worktree" :max="28" />, or stop this agent so another one can take it.
             </template>
           </p>
           <div>
@@ -569,6 +699,7 @@ const TONE = {
           <h2 class="m-0 text-h2">
             <NuxtLink :to="`/hub/g/${sent.g.id}`" class="text-fg no-underline hover:text-accent">{{ sent.g.title || "Untitled guide" }}</NuxtLink>
           </h2>
+          <p v-if="sent.g.summary" class="m-0 font-ui text-base leading-snug text-fg">{{ sent.g.summary }}</p>
           <p class="m-0 font-ui text-sm"><NuxtLink :to="`/hub/g/${sent.g.id}`">Read the guide</NuxtLink></p>
         </header>
         <!-- One question at a time, as the row asked it: are you taking it, and once you are, how it
@@ -588,5 +719,6 @@ const TONE = {
         <HubVerdict v-else :g="sent.g" />
       </template>
     </article>
+  </div>
   </div>
 </template>

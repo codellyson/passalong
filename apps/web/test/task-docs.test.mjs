@@ -103,7 +103,7 @@ test("a line with no evidence stays empty, and evidence for no line is kept apar
 
 test("no checks at all leaves every line empty and nothing extra", () => {
   const { rows, extra } = matchChecks(["Esc clears"], []);
-  assert.deepEqual(rows, [{ asked: "Esc clears", ran: "" }]);
+  assert.deepEqual(rows, [{ asked: "Esc clears", ran: "", says: "", ok: true }]);
   assert.deepEqual(extra, []);
 });
 
@@ -124,4 +124,23 @@ test("inlineParts reads code and bold, and leaves everything else as typed", asy
     { kind: "text", text: " in code" },
   ]);
   assert.deepEqual(inlineParts("a lone ** stays"), [{ kind: "text", text: "a lone ** stays" }]);
+});
+
+test("matchChecks carries the agent's sentence and whether a run failed", () => {
+  const { rows } = matchChecks(
+    ["Esc clears", "Typing filters"],
+    [
+      { check: "Esc clears", ran: "ok", says: "Esc empties the box.", ok: true },
+      { check: "Typing filters", ran: "boom", ok: false },
+    ],
+  );
+  assert.equal(rows[0].says, "Esc empties the box.");
+  assert.equal(rows[0].ok, true);
+  assert.equal(rows[1].says, "");
+  assert.equal(rows[1].ok, false);
+});
+
+test("matchChecks treats a check with no runner verdict as not failed", () => {
+  const { rows } = matchChecks(["a"], [{ check: "a", ran: "x" }]);
+  assert.equal(rows[0].ok, true);
 });

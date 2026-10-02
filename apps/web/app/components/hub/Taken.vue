@@ -20,9 +20,10 @@
   the claim. This is the only view that knows, so the author's one action lives here, on their own
   work only.
 
-  Cards, not rows. A hold is something that is happening, and a row of facts did not say what: so
-  each card leads with the latest thing the agent said, big, with a pulse while it is live; then a
-  short trail of what came before; then a line to answer without leaving the page. Above them, the
+  A table, one line per hold, after three layouts were prototyped and cards won — and then lost to
+  this, because the cards showed one thing each at the cost of a screen for four, and the same table
+  already answers Needs you. The latest thing said leads, then the state, who holds it and when it was
+  last heard from; the trail and the line to answer in live in the conversation drawer. Above it, the
   counts — waiting on you, gone quiet, working — which are also the filter, because the first
   question about a list of work in progress is "does any of it need me".
 -->
@@ -33,9 +34,8 @@ import { HEALTH, HEALTH_ORDER, type Health, healthOf, heardAt, plain, span } fro
 /** `bare` drops the heading, for a page that already names the section (the hub's tab). */
 const props = defineProps<{ rows: Working[]; bare?: boolean }>();
 
-const { onTakeBack, onReply } = useHub();
+const { onTakeBack } = useHub();
 const { open } = useThread();
-const { trails } = useTrails(() => props.rows);
 
 /**
  * You wrote it, so you can have it back — from anyone's agent, including your own.
@@ -97,35 +97,13 @@ const shown = computed(() =>
     ),
 );
 
-// ---- a card ------------------------------------------------------------------------------------
+/** "just now", or "3h 20m ago": span() already says "just now", which cannot take an "ago". */
+const ago = (w: Working) => {
+  const t = span(now.value - heardAt(w));
+  return t === "just now" ? t : `${t} ago`;
+};
 
-/** What came before the latest thing, newest first: the trail under the headline. */
-const before = (w: Working) =>
-  (trails.value[w.id] ?? [])
-    .filter((i) => ["progress", "asked", "replied", "handed_in"].includes(i.kind))
-    .slice(-4, -1)
-    .reverse();
-
-const draft = ref<Record<string, string>>({});
-const sending = ref<string | null>(null);
-const trouble = ref<Record<string, string>>({});
-async function quick(w: Working) {
-  const body = (draft.value[w.id] || "").trim();
-  if (!body || sending.value) return;
-  sending.value = w.id;
-  trouble.value = { ...trouble.value, [w.id]: "" };
-  try {
-    await onReply(w.id, body);
-    draft.value = { ...draft.value, [w.id]: "" };
-  } catch (e) {
-    trouble.value = {
-      ...trouble.value,
-      [w.id]: e instanceof Error ? e.message : "That didn't send. Try again.",
-    };
-  } finally {
-    sending.value = null;
-  }
-}
+// ---- a row -------------------------------------------------------------------------------------
 
 const talk = (w: Working) =>
   open({
@@ -135,10 +113,8 @@ const talk = (w: Working) =>
     stamp: `${w.state}|${w.note}|${w.lease_until}`,
     reply: w.mine || w.by.you,
     noting: false,
+    asking: w.asking || undefined,
   });
-
-/** The kind, only when it is not the default: most of what is held is a task. */
-const badge = (w: Working) => kindBadge(w.kind);
 </script>
 
 <template>
@@ -165,92 +141,65 @@ const badge = (w: Working) => kindBadge(w.kind);
         @click="only = only === h ? null : h"
       >
         <span class="text-2xl leading-none font-semibold text-fg tabular-nums">{{ count(h) }}</span>
-        <span class="text-xs leading-tight font-medium" :class="HEALTH[h].text">{{ HEALTH[h].label }}</span>
+        <span class="flex min-w-0 items-center gap-2 text-xs leading-tight font-medium text-muted">
+          <span class="size-3 shrink-0 rounded-pill" :class="HEALTH[h].dot" aria-hidden="true" />
+          {{ HEALTH[h].label }}
+        </span>
       </button>
     </div>
 
-    <div class="mt-4 grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
-      <article
-        v-for="w in shown"
-        :key="rowKey(w)"
-        class="flex min-w-0 flex-col gap-4 rounded-3 bg-raised p-5 shadow-edge"
-      >
-        <header class="flex items-start gap-3 font-ui">
-          <div class="min-w-0 flex-1">
-            <h3 class="m-0 flex items-center gap-2 text-base leading-snug font-semibold text-fg">
-              <span
-                v-if="badge(w)"
-                class="shrink-0 rounded-1 border px-1.5 py-0.5 text-xs font-medium tracking-wide uppercase"
-                :class="badge(w)?.class"
-              >{{ badge(w)?.label }}</span>
-              <span class="truncate">{{ w.title || w.id }}</span>
-            </h3>
-            <p v-if="w.summary" class="m-0 mt-1 line-clamp-2 text-sm leading-snug text-muted">{{ w.summary }}</p>
-            <p class="m-0 mt-1 truncate font-code text-xs text-muted">
-              {{ where(w) }}{{ w.by.you ? "" : ` · ${who(w)}'s` }} · taken {{ span(now - Date.parse(w.claimed_at)) }} ago
-            </p>
-          </div>
-          <span class="shrink-0 rounded-pill px-3 py-1 text-xs font-semibold" :class="HEALTH[healthOf(w)].pill">
-            {{ HEALTH[healthOf(w)].label }}
-          </span>
-        </header>
-
-        <!-- Now: the one line that answers "what is it doing". -->
-        <div class="flex items-start gap-3 rounded-2 bg-surface px-4 py-3 font-ui">
-          <span class="relative mt-1.5 size-3 shrink-0">
-            <span
-              v-if="healthOf(w) === 'working'"
-              class="absolute inset-0 animate-ping rounded-pill opacity-60 motion-reduce:animate-none"
-              :class="HEALTH.working.dot"
-            />
-            <span class="absolute inset-0 rounded-pill" :class="HEALTH[healthOf(w)].dot" />
-          </span>
-          <p class="m-0 min-w-0 text-base leading-snug break-words text-fg">
-            {{ plain(w.asking || w.note) || "Taken. No word yet." }}
-          </p>
-        </div>
-
-        <ol
-          v-if="before(w).length"
-          class="m-0 flex list-none flex-col gap-2 border-l border-line p-0 pl-4 font-ui text-sm text-muted"
-        >
-          <li v-for="i in before(w)" :key="i.id" class="flex gap-3">
-            <span class="w-14 shrink-0 text-xs leading-5 tabular-nums">{{ span(now - Date.parse(i.at)) }}</span>
-            <span class="min-w-0 truncate">{{ plain(i.body) || i.kind.replace("_", " ") }}</span>
-          </li>
-        </ol>
-
-        <form
-          v-if="(w.mine || w.by.you) && !person(w)"
-          class="flex flex-col gap-2"
-          @submit.prevent="quick(w)"
-        >
-          <div class="flex gap-2">
-            <label class="sr-only" :for="`quick-${rowKey(w)}`">Message the agent</label>
-            <input
-              :id="`quick-${rowKey(w)}`"
-              v-model="draft[w.id]"
-              :placeholder="w.asking ? 'Answer it' : 'Message the agent'"
-              maxlength="1000"
-              class="min-w-0 flex-1 rounded-1 border border-line-strong bg-raised px-3 py-2 font-ui text-sm text-fg"
-            />
-            <button class="btn primary sm" type="submit" :disabled="sending === w.id || !(draft[w.id] || '').trim()">send</button>
-          </div>
-          <p v-if="trouble[w.id]" class="m-0 font-ui text-xs text-danger" role="alert">{{ trouble[w.id] }}</p>
-        </form>
-
-        <footer class="mt-auto flex items-center gap-4 border-t border-line pt-4 font-ui text-sm">
-          <button class="linkish" type="button" @click="talk(w)">Open the conversation</button>
-          <button
-            v-if="w.mine"
-            class="linkish ml-auto"
-            type="button"
-            :disabled="taking === w.id"
-            :title="`Put ${w.title || w.id} back, and tell whoever has it`"
-            @click="takeBack(w)"
-          >{{ taking === w.id ? "Stopping…" : "Stop this agent" }}</button>
-        </footer>
-      </article>
+    <!-- One line per hold: what it is, what it last said, how it is, who has it, and when it was
+         last heard from. The conversation, with its trail and the line to answer in, is one click
+         away in the drawer; a question waiting on you makes that click the main button. -->
+    <div class="mt-4 overflow-x-auto rounded-3 bg-raised shadow-edge">
+      <table class="rows m-0 w-full font-ui text-sm">
+        <thead>
+          <tr class="text-xs text-muted">
+            <th >Task</th>
+            <th>What it last said</th>
+            <th>State</th>
+            <th>Held by</th>
+            <th>Heard</th>
+            <th><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="w in shown" :key="rowKey(w)">
+            <td class="min-w-60 max-w-[24rem] font-medium text-fg">
+              <button type="button" class="linkish line-clamp-2 text-left font-medium !text-fg hover:!text-accent" @click="talk(w)">{{ w.title || w.id }}</button>
+            </td>
+            <td class="max-w-[26rem] text-fg">
+              <span class="line-clamp-2 break-words">{{ plain(w.asking || w.note) || "Taken. No word yet." }}</span>
+            </td>
+            <td class="whitespace-nowrap">
+              <span class="rounded-pill px-3 py-1 text-xs font-semibold" :class="HEALTH[healthOf(w)].pill">
+                {{ HEALTH[healthOf(w)].label }}
+              </span>
+            </td>
+            <td class="whitespace-nowrap text-muted">
+              <span class="font-code text-xs">{{ where(w) }}</span><template v-if="!w.by.you"> · {{ who(w) }}'s</template>
+            </td>
+            <td class="whitespace-nowrap text-muted tabular-nums">{{ ago(w) }}</td>
+            <td class="text-right whitespace-nowrap">
+              <button
+                v-if="w.asking"
+                type="button"
+                class="btn sm primary mr-3"
+                @click="talk(w)"
+              >Answer</button>
+              <button v-else type="button" class="btn sm mr-3" @click="talk(w)">Open</button>
+              <button
+                v-if="w.mine"
+                class="linkish"
+                type="button"
+                :disabled="taking === w.id"
+                :title="`Put ${w.title || w.id} back, and tell whoever has it`"
+                @click="takeBack(w)"
+              >{{ taking === w.id ? "Stopping…" : "Stop this agent" }}</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </section>
 </template>

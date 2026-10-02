@@ -117,6 +117,8 @@ export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | 
 export interface Check {
   check: string;
   ran: string;
+  /** What happened, in plain words, for the person: one sentence. Optional; the run is the proof. */
+  says?: string;
   cmd?: string;
   exit?: number | null;
   ok?: boolean;
@@ -1073,6 +1075,7 @@ export async function finish(
               ran: String(c.ran ?? "")
                 .trim()
                 .slice(0, EVIDENCE_MAX),
+              ...(c.says?.trim() ? { says: c.says.trim().slice(0, NOTE_MAX) } : {}),
               ...(verified(c)
                 ? { cmd: String(c.cmd).slice(0, NOTE_MAX), exit: c.exit, ok: c.ok === true }
                 : {}),
@@ -1615,6 +1618,7 @@ export async function handIn(
               ran: String(c.ran ?? "")
                 .trim()
                 .slice(0, EVIDENCE_MAX),
+              ...(c.says?.trim() ? { says: c.says.trim().slice(0, NOTE_MAX) } : {}),
               ...(c.cmd && (typeof c.exit === "number" || c.exit === null)
                 ? { cmd: String(c.cmd).slice(0, NOTE_MAX), exit: c.exit, ok: c.ok === true }
                 : {}),

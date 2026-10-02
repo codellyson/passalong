@@ -138,6 +138,13 @@ export interface Note {
   text: string;
   guide: string | null;
   read: boolean;
+  /** What happened, as the server names it: "shared", "pulled", "verified"… */
+  kind?: string;
+  /** Who did it, as a person reads them. Empty for a clock or an anonymous reader. */
+  actor_name?: string;
+  team_name?: string;
+  /** The guide's title. */
+  title?: string;
 }
 
 /**
@@ -215,7 +222,7 @@ export interface Task {
     /** What it ran and what came back, sent with the hand-in. Empty until it hands in. */
     evidence?: string;
     /** The same evidence against the Acceptance line each piece answers, when the agent sorted it. */
-    checks?: { check: string; ran: string }[];
+    checks?: { check: string; ran: string; says?: string; ok?: boolean }[];
     /** What they think it could break. One line, often empty. See 0032_claim_risk.sql. */
     risk?: string;
     report: string;
@@ -332,7 +339,7 @@ export interface ContextClaim {
   note: string;
   writeup: string;
   evidence: string;
-  checks: { check: string; ran: string }[];
+  checks: { check: string; ran: string; says?: string; ok?: boolean }[];
   /** The reviewer's, so only the author is sent it. */
   risk: string;
   pr: string;

@@ -610,12 +610,16 @@ button.primary[disabled],
    The overflow behind a row, and the one behind a team. Both were the same twelve utilities
    written twice. */
 .menu {
+  /* Opened from a table cell it would inherit that cell's alignment and its refusal to wrap: text
+     right-aligned and running out past the menu's own edge. */
+  white-space: normal;
+  text-align: left;
   position: absolute;
   top: 100%;
   right: 0;
   z-index: 20;
   margin-top: var(--s-1);
-  width: 14rem;
+  width: 18rem;
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
@@ -2511,4 +2515,44 @@ nav.marked [aria-current="page"]::after {
   background: var(--coral);
   transform: translateX(-50%) rotate(45deg);
   border-radius: 1px;
+}
+
+/* ---- a list as a table -----------------------------------------------------------------------
+   The hub's work lists (Needs you, Taken, a review's checks): rules between rows and nothing
+   between columns, a heading row that is a label and not a filled bar, and a link that is only
+   underlined when it is under the pointer. The bare `table` rules above are for prose. */
+table.rows th,
+table.rows td {
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: var(--s-3) var(--s-3);
+  vertical-align: middle;
+}
+table.rows thead th {
+  background: none;
+  border-top: 0;
+  font-weight: 500;
+  padding-block: var(--s-3);
+}
+table.rows th:first-child,
+table.rows td:first-child {
+  padding-left: var(--s-5);
+}
+table.rows th:last-child,
+table.rows td:last-child {
+  padding-right: var(--s-5);
+}
+table.rows .linkish {
+  text-decoration: none;
+}
+table.rows .linkish:hover {
+  text-decoration: underline;
+}
+/* A row's folded run sits under it without a rule of its own. */
+table.rows tr.run td {
+  border-top: 0;
+  padding-top: 0;
+}
+table.rows thead th {
+  white-space: nowrap;
 }

@@ -4507,13 +4507,13 @@ const NO_AGENT =
 
 /** One task as the API answers it: where it is, and who has it. */
 /** A claim's `checks` column as a list. Anything unreadable is nothing, never half a list. */
-function readChecks(raw: string): { check: string; ran: string }[] {
+function readChecks(raw: string): { check: string; ran: string; says?: string; ok?: boolean }[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
-      (c): c is { check: string; ran: string } =>
+      (c): c is { check: string; ran: string; says?: string; ok?: boolean } =>
         typeof (c as { check?: unknown })?.check === "string" &&
         typeof (c as { ran?: unknown })?.ran === "string",
     );
@@ -4950,12 +4950,18 @@ function checksIn(raw: unknown): claims.Check[] {
       return typeof o?.check === "string" && typeof o?.ran === "string";
     })
     .map((c) => {
-      const o = c as { cmd?: unknown; exit?: unknown; ok?: unknown };
+      const o = c as { cmd?: unknown; exit?: unknown; ok?: unknown; says?: unknown };
+      // What the agent says happened, in plain words. Kept when it is a sentence, dropped otherwise.
+      const says =
+        typeof o.says === "string" && o.says.trim()
+          ? { says: o.says.trim().slice(0, claims.NOTE_MAX) }
+          : {};
       const ran = typeof o.cmd === "string" && (typeof o.exit === "number" || o.exit === null);
-      if (!ran) return { check: c.check, ran: c.ran };
+      if (!ran) return { check: c.check, ran: c.ran, ...says };
       return {
         check: c.check,
         ran: c.ran,
+        ...says,
         cmd: o.cmd as string,
         exit: o.exit as number | null,
         ok: o.ok === true,
