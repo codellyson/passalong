@@ -31,9 +31,9 @@ import { published } from "#shared/pages";
 const formatPublished = published("/docs/guide-format");
 
 usePage({
-  title: "Set up Passalong in Claude Code, Cursor or any MCP app",
+  title: "Set up Passalong in Claude Code, Codex, ChatGPT or Claude",
   description:
-    "Use Passalong from Claude Code, Cursor, Gemini or any HTTP client — what each one can do, and how to set it up.",
+    "Use Passalong from Claude Code, Codex, ChatGPT, Claude or any HTTP client — what each one can do, and how to set it up.",
   url: `${APEX}/connect`,
   image: `${APEX}/og.png`,
 });
@@ -67,7 +67,7 @@ const WAYS = [
     name: "Call the API",
     text:
       "Anything that speaks HTTP can use the API directly. GET https://passalong.dev/v1/openapi.json " +
-      "describes it, which is what a Gemini function-calling setup or a shell script needs. A " +
+      "describes it, which is what a function-calling setup or a shell script needs. A " +
       "share link's .md needs no account at all.",
   },
 ];
@@ -118,7 +118,7 @@ useHead({
         <h2>Run it locally</h2>
         <div class="say">
           <p>
-            For Claude Code, Cursor, Zed and Gemini CLI, and worth doing where you can: a local
+            For Claude Code, Codex and other coding agents, and worth doing where you can: a local
             server works offline, reads and writes
             <code>.passalong/</code> in the repo you are standing in, and knows which repo that is.
             <code>passalong setup</code> wires Claude Code for you; elsewhere, point your editor at
@@ -134,7 +134,7 @@ passalong setup     # Claude Code: skill, MCP server and hooks</code></pre>
         <h2>Point it at a URL</h2>
         <div class="say">
           <p>
-            Claude, ChatGPT, Cursor and any assistant with MCP connectors add outside tools as MCP
+            Claude, ChatGPT and any assistant with MCP connectors add outside tools as MCP
             servers reached over a URL. Paste
             this as the server URL. You get every tool that does not need a working directory: take
             work, report progress, hand it in or pass it, see your work as a live board where the app
@@ -196,7 +196,7 @@ passalong setup     # Claude Code: skill, MCP server and hooks</code></pre>
             sandbox cannot reach it and the upload fails.
           </p>
           <p>
-            <b>Claude Code, Cursor and other local setups</b> read the image from disk: give the
+            <b>Claude Code, Codex and other local setups</b> read the image from disk: give the
             agent the file's path.
           </p>
           <p>
@@ -217,7 +217,7 @@ passalong setup     # Claude Code: skill, MCP server and hooks</code></pre>
         <h2>Call the API</h2>
         <div class="say">
           <p>
-            <code>/v1/openapi.json</code> describes the API for Gemini function calling, an
+            <code>/v1/openapi.json</code> describes the API for function calling, an
             internal script, or anything that speaks HTTP and a bearer token. Mint one in
             <a href="/hub/settings">your hub</a>; they are named and revocable.
           </p>

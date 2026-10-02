@@ -189,7 +189,7 @@ status, rather than one file that is always "the current state".
 A handoff written as plain markdown moves between tools without translation. Every one of them
 reads markdown well. What differs is where the tool runs, and so how the handoff reaches it.
 
-**Coding agents in your repo**, such as Claude Code, Codex, Cursor and Gemini CLI, can read a file
+**Coding agents in your repo**, such as Claude Code and Codex, can read a file
 in the repo, run commands and connect to a local MCP server. They are where the work gets done, and
 the only ones that can produce evidence like test output from your code.
 
@@ -240,7 +240,7 @@ the reason. Nobody else can take work an agent is holding. Half an hour of silen
 stalled, and a hand-in without evidence is refused. You review the write-up line by line against
 the acceptance you wrote.
 
-It runs as a CLI and a local MCP server for Claude Code, Codex, Cursor and Gemini CLI, and as a
+It runs as a CLI and a local MCP server for Claude Code and Codex, and as a
 connector for ChatGPT and Claude, so a task written in a chat can be taken by an agent in your
 repo. Anything else that speaks MCP or HTTP works too, and it needs no account to use locally.
 

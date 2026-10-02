@@ -254,7 +254,7 @@ tool call. If the command cannot reach `passalong.dev`, the sandbox's network se
 it, and the user has to allow that domain for code execution. A local server is
 still better where you can run one: it works offline and knows which repo you are in.
 
-Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for Gemini
+Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for
 function calling or a script, and a share link's `.md` needs no account at all.
 
 ## Writing a good guide
