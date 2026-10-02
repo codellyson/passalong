@@ -909,7 +909,11 @@ test("an agent cannot hand in a handoff it does not hold or send its author a fa
   const call = async (path, body) => {
     const res = await fetch(`${API}${path}`, {
       method: "POST",
-      headers: { authorization: `Bearer ${mate.token}`, "content-type": "application/json" },
+      headers: {
+        authorization: `Bearer ${mate.token}`,
+        "x-passalong-version": VERSION,
+        "content-type": "application/json",
+      },
       body: JSON.stringify(body),
     });
     return { status: res.status, ...(await res.json()) };
