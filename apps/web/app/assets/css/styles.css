@@ -249,6 +249,9 @@ main {
 /* The landing runs wider than a reading column: it holds a hero and side-by-side panels. */
 main.wide {
   max-width: 67.5rem;
+  /* The masthead is the first thing on these pages and carries its own padding; a reading
+     column's 48px above it left a band of empty page over the nav. */
+  padding-top: var(--s-2);
 }
 
 /* ---- type ---------------------------------------------------------------------------------- */
