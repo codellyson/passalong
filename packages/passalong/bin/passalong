@@ -889,10 +889,16 @@ const commands = {
         input = JSON.parse(raw || "{}");
       }
       if (!api.loggedIn()) return;
+      // The timeout is cleared as soon as the answer is in. Left running it holds the process open
+      // for the full five seconds after the hook has printed, and a session start or a stop that
+      // waits five seconds for nothing is the hook getting in the way, which it must never do.
+      let timer;
       const r = await Promise.race([
         passalong.now(),
-        new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 5000)),
-      ]);
+        new Promise((_, no) => {
+          timer = setTimeout(() => no(new Error("timeout")), 5000);
+        }),
+      ]).finally(() => clearTimeout(timer));
       if (f.hook === "session") {
         const text = nowText(r);
         if (text)
