@@ -128,8 +128,12 @@ useHead({
           </p>
           <pre><code>npm i -g passalong
 passalong login
-passalong setup                           # Claude Code: skill, MCP server and hooks
-codex mcp add passalong -- passalong mcp  # Codex</code></pre>
+
+# Claude Code: skill, MCP server, hooks
+passalong setup
+
+# Codex
+codex mcp add passalong -- passalong mcp</code></pre>
         </div>
       </section>
 
