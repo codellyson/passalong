@@ -1,7 +1,8 @@
 {
   "name": "passalong",
   "version": "0.13.0",
-  "description": "Hand a finished implementation from one context to another, in a form an AI agent can act on.",
+  "description": "Hand tasks, bugs and finished work to AI coding agents, and get back a write-up with evidence.",
+  "mcpName": "io.github.codellyson/passalong",
   "keywords": [
     "mcp",
     "claude-code",
@@ -9,7 +10,11 @@
     "handoff",
     "knowledge-transfer",
     "cli",
-    "markdown"
+    "markdown",
+    "mcp-server",
+    "coding-agents",
+    "task-management",
+    "cursor"
   ],
   "homepage": "https://passalong.dev",
   "repository": {
