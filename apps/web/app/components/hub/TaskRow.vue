@@ -158,6 +158,8 @@ function send() {
           class="text-base leading-snug font-semibold text-fg no-underline hover:text-accent"
         >{{ t.title || t.id }}</NuxtLink>
       </p>
+      <!-- What it says to a person. The document is the agent's; this is what is read first. -->
+      <p v-if="t.summary" class="mt-1 mb-0 line-clamp-2 font-ui text-sm leading-snug text-fg">{{ t.summary }}</p>
       <p class="mt-1 mb-0 flex flex-wrap gap-x-1.5 font-ui text-sm text-muted">
         <span v-for="(f, i) in facts" :key="i" :class="[f.tone, f.code ? 'font-code text-xs leading-5' : '']"
           ><template v-if="i">· </template>{{ f.lead }}<b v-if="f.strong" class="font-medium text-fg">{{ f.text }}</b

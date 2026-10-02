@@ -65,6 +65,8 @@ export function taskScaffold(sentence, cwd = process.cwd()) {
   const md = template({
     kind: "task",
     title: sentence,
+    // The person typed this sentence, so it is theirs to say to a person as well as to name the task.
+    summary: String(sentence).slice(0, 400),
     author: c.author,
     source_context: c.branch && c.branch !== "HEAD" ? `${c.name}@${c.branch}` : c.name,
     target_context: c.repo,

@@ -40,11 +40,13 @@ const heard = (iso?: string) =>
   iso ? rel(new Date(Date.parse(iso) - 30 * 60 * 1000).toISOString()) : "";
 const person = (by: { handle: string; name: string }) =>
   personName(by.name, by.handle) || "A teammate";
+// What a row says under the title: the task's own summary, said to a person, when it has one, and
+// otherwise what the row has always said.
 const task$ = (t: Task, sub: string): Item => ({
   key: `task:${t.id}`,
   kind: "task",
   title: t.title || t.id,
-  sub,
+  sub: t.summary || sub,
   task: t,
 });
 

@@ -1,7 +1,7 @@
 # The guide corpus
 
 One file per shape the format has to keep working: a transfer guide, a task, a bug report, the
-quoting edges, and a guide written before `kind:` existed. They are read by
+quoting edges, and the smallest guide there is. They are read by
 `packages/passalong/test/corpus.test.js` and by `apps/api/test/corpus.test.mjs`, which is the
 point — `packages/passalong/src/guide.js` defines the format and `apps/api/src/guide.ts` mirrors
 it, and until this existed nothing checked that the two agreed on anything.

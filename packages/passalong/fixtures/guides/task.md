@@ -1,6 +1,7 @@
 ---
 id: t4skg1de
 title: Show who is holding a card
+summary: "The board should say which agent holds each claimed card. A small display change, ready for an agent to take."
 kind: task
 created: "2026-05-11T16:40:00.000Z"
 author: rae

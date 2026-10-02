@@ -30,9 +30,17 @@ export type Status = (typeof STATUSES)[number];
 export const SETTABLE = ["draft", "published", "consumed"] as const;
 export type Settable = (typeof SETTABLE)[number];
 
+/**
+ * The longest `summary:` a guide may carry. Mirrors SUMMARY_MAX in packages/passalong/src/guide.js,
+ * which says why a guide has one: it is what a person reads, and the document is the agent's form.
+ */
+export const SUMMARY_MAX = 400;
+
 export interface Meta {
   id?: string;
   title?: string;
+  /** What this says to a person, in a sentence or two. Required of every new guide. */
+  summary?: string;
   status?: string;
   source_context?: string;
   url?: string;
@@ -456,4 +464,25 @@ export function clipFollowUp(id: string, markdown: string, max = FOLLOW_UP_BYTES
     `${head}\n\n[passalong: follow-up truncated at ${Math.round(max / 1024)} KB of ` +
     `${Math.round(bytes.length / 1024)} KB — pull ${id} for the whole guide]\n`
   );
+}
+
+/**
+ * Why a guide's `summary:` is refused, or null when it is fine.
+ *
+ * `legacy` is a guide stored before summaries existed, written again by a client that has not heard
+ * of them: it is let through as it came, because refusing every old CLI's re-share of work already
+ * in flight would make the rule a wall rather than a request. A guide that has never had one is
+ * not that — a new guide must say it, whatever client wrote it.
+ */
+export function summaryProblem(summary: unknown, legacy = false): string | null {
+  const said = String(summary ?? "").trim();
+  if (!said)
+    return legacy
+      ? null
+      : "say it to a person: add `summary:` to the frontmatter — one or two plain sentences, no ids " +
+          `or paths, saying what this is and whether anybody needs to act (${SUMMARY_MAX} characters ` +
+          "at most). The document is for agents; this is what a person reads first.";
+  if (said.length > SUMMARY_MAX)
+    return `summary is ${said.length} characters; ${SUMMARY_MAX} at most.`;
+  return null;
 }

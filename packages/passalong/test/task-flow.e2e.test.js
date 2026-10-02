@@ -56,7 +56,12 @@ async function readyTask({ account, p, serialize }, title) {
   execFileSync("git", ["init", "-q", dir]);
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:e2e/${account}.git`]);
   const task = serialize({
-    meta: { title, kind: "task", target_context: `e2e/${account}` },
+    meta: {
+      title,
+      summary: "Said to a person for the test.",
+      kind: "task",
+      target_context: `e2e/${account}`,
+    },
     body: "## Goal\nDark mode.\n\n## Acceptance\n- the hub follows the OS setting",
   });
   const id = (await p.share(task, { cwd: dir })).guide.meta.id;
@@ -74,7 +79,8 @@ test("finishing with the write-up publishes it as the task's report", { skip }, 
   const { p, parse } = env;
   const { id, dir } = await readyTask(env, "Report on finish");
   assert.equal((await p.nextTask({ cwd: dir })).id, id);
-  const md = "---\ntitle: Dark mode, done\n---\n\n## Problem\np\n\n## Steps\n1. tokens\n";
+  const md =
+    "---\ntitle: Dark mode, done\nsummary: Said to a person for the test.\n---\n\n## Problem\np\n\n## Steps\n1. tokens\n";
   const done = await p.finishTask(id, {
     markdown: md,
     evidence: PROOF,
@@ -113,13 +119,18 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
   const report = async (cwd) =>
     (
       await p.share(
-        `---\ntitle: what I did\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n`,
+        `---\ntitle: what I did\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n`,
         { cwd },
       )
     ).guide.meta.id;
 
   const task = serialize({
-    meta: { title: "Add dark mode", kind: "task", target_context: `e2e/${account}` },
+    meta: {
+      title: "Add dark mode",
+      summary: "Said to a person for the test.",
+      kind: "task",
+      target_context: `e2e/${account}`,
+    },
     body: "## Goal\nDark mode.\n\n## Acceptance\n- the hub follows the OS setting",
   });
   const id = (await p.share(task, { cwd: a })).guide.meta.id;
@@ -160,6 +171,7 @@ test("blocked_by in a task's frontmatter holds it until its blocker is approved"
   const waits = serialize({
     meta: {
       title: "API on the schema",
+      summary: "Said to a person for the test.",
       kind: "task",
       target_context: `e2e/${account}`,
       blocked_by: [first.id],
@@ -173,7 +185,8 @@ test("blocked_by in a task's frontmatter holds it until its blocker is approved"
 
   assert.equal((await p.nextTask({ cwd: first.dir })).id, first.id);
   await p.finishTask(first.id, {
-    markdown: "---\ntitle: schema\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    markdown:
+      "---\ntitle: schema\nsummary: Said to a person for the test.\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     evidence: PROOF,
     cwd: first.dir,
   });
@@ -189,7 +202,12 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
     (
       await p.share(
         serialize({
-          meta: { title, kind: "task", target_context: `e2e/${account}` },
+          meta: {
+            title,
+            summary: "Said to a person for the test.",
+            kind: "task",
+            target_context: `e2e/${account}`,
+          },
           body: "## Goal\ng\n\n## Acceptance\n- a",
         }),
       )
@@ -337,7 +355,7 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
   await p.handIn(id, {
     note: "Done, and it holds.",
     markdown:
-      "---\ntitle: Per line, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      "---\ntitle: Per line, done\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     // A real command, run here by the CLI's own runner before the hand-in leaves this process:
     // its exit code decides the check and what it printed is recorded. It used to be a command
     // pasted into `ran`, which is the agent typing a string that looks like a run — indistinguishable
@@ -368,7 +386,8 @@ test("a check with nothing behind it is refused, like any other claim", { skip }
   await assert.rejects(
     p.handIn(id, {
       note: "Done.",
-      markdown: "---\ntitle: x\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      markdown:
+        "---\ntitle: x\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       checks: [{ check: "the hub follows the OS setting", ran: "it works" }],
       cwd: dir,
     }),
@@ -387,7 +406,8 @@ test("a check answered in words is refused, however much it says", { skip }, asy
   await assert.rejects(
     p.handIn(id, {
       note: "Done.",
-      markdown: "---\ntitle: x\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      markdown:
+        "---\ntitle: x\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       checks: [
         {
           check: "the PDF renders with the store's brand colour",
@@ -406,7 +426,7 @@ test("a follow-up is never handed over alone: the guide it came out of comes wit
   const { p } = await setup();
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
   const doc = (title) =>
-    `---\ntitle: ${title}\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. open/close per day\n`;
+    `---\ntitle: ${title}\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. open/close per day\n`;
   const parent = (await p.share(doc("Store Hours UI"), { cwd: dir })).guide.meta.id;
   const child = (await p.share(doc("Confirmation email"), { cwd: dir, follows: parent })).guide.meta
     .id;
@@ -459,7 +479,8 @@ test("a screenshot handed in as evidence belongs to the guide, so the nightly sw
   await p.take(id, { cwd: dir });
   await p.handIn(id, {
     note: "Done, and it holds.",
-    markdown: "---\ntitle: Picture, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    markdown:
+      "---\ntitle: Picture, done\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     evidence: `$ npm test\n> 3 pass, 0 fail\n\n![the refusal](${shot.url})`,
     cwd: dir,
   });
@@ -494,7 +515,12 @@ test("in a team, each side hears what the other did to a task — and only the a
   as(owner);
   const task = (body) =>
     serialize({
-      meta: { title: body, kind: "task", target_context: `e2e/${account}` },
+      meta: {
+        title: body,
+        summary: "Said to a person for the test.",
+        kind: "task",
+        target_context: `e2e/${account}`,
+      },
       body: `## Goal\n${body}\n\n## Acceptance\n- a`,
     });
   const id = (await p.share(task("Team task"), { to: team.slug })).guide.meta.id;
@@ -511,7 +537,8 @@ test("in a team, each side hears what the other did to a task — and only the a
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:e2e/${account}.git`]);
   assert.equal((await p.nextTask({ cwd: dir })).id, id);
   await p.finishTask(id, {
-    markdown: "---\ntitle: team done\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    markdown:
+      "---\ntitle: team done\nsummary: Said to a person for the test.\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     evidence: PROOF,
     cwd: dir,
   });
@@ -535,12 +562,14 @@ test("a plan becomes draft tasks, each waiting on the steps it names", { skip },
   const ids = await p.planTasks([
     {
       title: "Plan: schema",
+      summary: "Said to a person for the test.",
       goal: "A theme table.",
       acceptance: "- migration applies",
       target_context: target,
     },
     {
       title: "Plan: API",
+      summary: "Said to a person for the test.",
       goal: "Read the theme.",
       acceptance: "- GET /theme answers",
       target_context: target,
@@ -548,6 +577,7 @@ test("a plan becomes draft tasks, each waiting on the steps it names", { skip },
     },
     {
       title: "Plan: UI",
+      summary: "Said to a person for the test.",
       goal: "Use it.",
       acceptance: "- the hub switches",
       target_context: target,
@@ -571,7 +601,15 @@ test("a plan becomes draft tasks, each waiting on the steps it names", { skip },
   );
 
   await assert.rejects(
-    p.planTasks([{ title: "x", goal: "g", acceptance: "- a", after: [0] }]),
+    p.planTasks([
+      {
+        title: "x",
+        summary: "Said to a person for the test.",
+        goal: "g",
+        acceptance: "- a",
+        after: [0],
+      },
+    ]),
     /earlier step/,
     "a step can only wait on one before it, so a plan cannot loop",
   );
@@ -586,8 +624,21 @@ test("work takes tasks one after another until the queue is empty", { skip }, as
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:${repo}.git`]);
   const ids = await p.planTasks(
     [
-      { title: "Work: one", goal: "g", acceptance: "- a", target_context: repo },
-      { title: "Work: two", goal: "g", acceptance: "- a", target_context: repo, after: [] },
+      {
+        title: "Work: one",
+        summary: "Said to a person for the test.",
+        goal: "g",
+        acceptance: "- a",
+        target_context: repo,
+      },
+      {
+        title: "Work: two",
+        summary: "Said to a person for the test.",
+        goal: "g",
+        acceptance: "- a",
+        target_context: repo,
+        after: [],
+      },
     ],
     { cwd: dir },
   );
@@ -614,7 +665,15 @@ test("work stops when an agent exits without finishing, instead of looping on it
   execFileSync("git", ["init", "-q", dir]);
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:${repo}.git`]);
   const [id] = await p.planTasks(
-    [{ title: "Work: quits", goal: "g", acceptance: "- a", target_context: repo }],
+    [
+      {
+        title: "Work: quits",
+        summary: "Said to a person for the test.",
+        goal: "g",
+        acceptance: "- a",
+        target_context: repo,
+      },
+    ],
     { cwd: dir },
   );
   await p.ready(id);
@@ -672,7 +731,7 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
   };
   const h = (
     await p.share(
-      "---\ntitle: Stream the PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      "---\ntitle: Stream the PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     )
   ).guide.meta.id;
   const a = { agent: "e2e-agent-aaaa", repo: "e2e/one", host: "mac", worktree: "/w/a" };
@@ -731,7 +790,8 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
   );
 
   assert.equal((await p.progress(id, "halfway", { cwd: dir })).note, "halfway");
-  const md = "---\ntitle: Verbs, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+  const md =
+    "---\ntitle: Verbs, done\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
   await assert.rejects(
     p.handIn(id, { markdown: md, cwd: dir }),
     /what you ran and what came back/,
@@ -752,7 +812,7 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
   // A handoff by id: taken, then passed with the reason, and free for the next agent.
   const h = (
     await p.share(
-      "---\ntitle: A handoff\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      "---\ntitle: A handoff\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       { cwd: dir },
     )
   ).guide.meta.id;
@@ -849,7 +909,7 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
 
   as(owner);
   const md =
-    "---\ntitle: Stream the invoice PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+    "---\ntitle: Stream the invoice PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
   const id = (await p.share(md, { to: team.slug })).guide.meta.id;
 
   // The teammate takes it the way the browser does, and shows in Working now as a person.
@@ -902,7 +962,7 @@ test("an agent cannot hand in a handoff it does not hold or send its author a fa
   process.env.PASSALONG_TOKEN = owner;
   const id = (
     await p.share(
-      "---\ntitle: Check the invoice PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+      "---\ntitle: Check the invoice PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       { to: team.slug },
     )
   ).guide.meta.id;
@@ -994,7 +1054,7 @@ test("handed in means the actor's turn is over: no new guide under it until the 
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        markdown: `---\ntitle: ${title}\nkind: transfer\nparent: ${parent}\n---\n\nWhat I found.\n`,
+        markdown: `---\ntitle: ${title}\nsummary: Said to a person for the test.\nkind: transfer\nparent: ${parent}\n---\n\nWhat I found.\n`,
       }),
     });
     return { ...(await res.json()), status: res.status };
@@ -1009,7 +1069,7 @@ test("handed in means the actor's turn is over: no new guide under it until the 
 
   as(owner);
   const md =
-    "---\ntitle: Stream the receipt PDF\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+    "---\ntitle: Stream the receipt PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
   const id = (await p.share(md, { to: team.slug })).guide.meta.id;
 
   // The teammate's agent works it, and may add context while it holds it.
@@ -1105,7 +1165,12 @@ test("reassigning a task: only the assignee's agents get it, and whoever is left
 
   as(owner);
   const task = serialize({
-    meta: { title: "Assigned work", kind: "task", target_context: `e2e/${account}` },
+    meta: {
+      title: "Assigned work",
+      summary: "Said to a person for the test.",
+      kind: "task",
+      target_context: `e2e/${account}`,
+    },
     body: "## Goal\nx\n\n## Acceptance\n- a",
   });
   const id = (await p.share(task, { to: team.slug })).guide.meta.id;
@@ -1169,7 +1234,12 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
 
   as(owner);
   const task = serialize({
-    meta: { title: "Delegated work", kind: "task", target_context: `e2e/${account}` },
+    meta: {
+      title: "Delegated work",
+      summary: "Said to a person for the test.",
+      kind: "task",
+      target_context: `e2e/${account}`,
+    },
     body: "## Goal\nx\n\n## Acceptance\n- a",
   });
   const id = (await p.share(task, { to: team.slug })).guide.meta.id;
@@ -1220,7 +1290,7 @@ test("a team's guide one teammate said worked stops asking the others, so nobody
 
   as(owner);
   const md =
-    "---\ntitle: Fix the invoice total\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+    "---\ntitle: Fix the invoice total\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
   const id = (await p.share(md, { to: team.slug })).guide.meta.id;
 
   // Both see it waiting. Ada does it and says it worked — without saying "on it" first.
@@ -1266,7 +1336,7 @@ test("taken, then given to someone else: it stops being yours", { skip }, async 
 
   as(owner);
   const md =
-    "---\ntitle: Ship-to address\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
+    "---\ntitle: Ship-to address\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
   const id = (await p.share(md, { to: `${team.slug}/@me${stamp}` })).guide.meta.id;
 
   // I take it, then give it to Bami.
@@ -1305,7 +1375,8 @@ test("an image held as bytes attaches, and answers the check it was taken for", 
   await p.take(id, { cwd: dir });
   await p.handIn(id, {
     note: "Done, and it holds.",
-    markdown: "---\ntitle: Shown, done\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
+    markdown:
+      "---\ntitle: Shown, done\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     checks: [{ check: "the header renders in the brand colour", ran: `here it is: ${shot.url}` }],
     cwd: dir,
   });
@@ -1333,11 +1404,15 @@ test("the server refuses a guide that does not say what it is", { skip }, async 
       body: JSON.stringify({ markdown: md }),
     });
 
-  const absent = await put(`---\ntitle: Never says\n---${body}`);
+  const absent = await put(
+    `---\ntitle: Never says\nsummary: Said to a person for the test.\n---${body}`,
+  );
   assert.equal(absent.status, 400, "an unstated kind is refused");
   assert.match((await absent.json()).message, /say what this is/);
 
-  const wrong = await put(`---\ntitle: Says wrongly\nkind: buggy\n---${body}`);
+  const wrong = await put(
+    `---\ntitle: Says wrongly\nsummary: Said to a person for the test.\nkind: buggy\n---${body}`,
+  );
   assert.equal(wrong.status, 400, "and so is a spelling that is not a kind");
   assert.match((await wrong.json()).message, /is not a kind/);
 
@@ -1351,7 +1426,7 @@ test("the server refuses a guide that does not say what it is", { skip }, async 
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      markdown: `---\ntitle: Says so\nkind: task\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
+      markdown: `---\ntitle: Says so\nsummary: Said to a person for the test.\nkind: task\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
     }),
   });
   assert.equal(ok.status, 201);

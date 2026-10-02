@@ -550,3 +550,32 @@ test("a question and a reply each tell the person waiting on them", async () => 
   assert.match(block('"/v1/guides/:id/ask"'), /kind: "asked"[\s\S]*sendAsked\(/);
   assert.match(block('"/v1/guides/:id/reply"'), /kind: "replied"[\s\S]*sendReplied\(/);
 });
+
+test("a new guide says what it is to a person, and an old one is let through as it came", async () => {
+  const { summaryProblem, SUMMARY_MAX, parseMeta } = await import("../src/guide.ts");
+  assert.equal(summaryProblem("What this is, for a person."), null);
+  assert.match(summaryProblem(""), /say it to a person/, "refused by name");
+  assert.match(summaryProblem(undefined), /summary/);
+  assert.match(summaryProblem("x".repeat(SUMMARY_MAX + 1)), /400 at most/);
+  assert.equal(summaryProblem("x".repeat(SUMMARY_MAX)), null);
+  // A guide stored before summaries existed, written again by a client that has not heard of them,
+  // is not refused for a field it cannot know about. A guide that never had one is.
+  assert.equal(summaryProblem("", true), null);
+  assert.match(summaryProblem("", false), /summary/);
+  // And a summary is held to the limit even where an absent one is forgiven.
+  assert.match(summaryProblem("x".repeat(SUMMARY_MAX + 1), true), /400 at most/);
+  assert.equal(
+    parseMeta("---\ntitle: t\nsummary: Said plainly.\nkind: task\n---\n").summary,
+    "Said plainly.",
+  );
+
+  // The route refuses before it stores, and stores what it kept.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("summaryProblem(meta.summary");
+  assert.ok(at > 0, "the publish refuses a guide with no summary");
+  assert.ok(
+    at < src.indexOf("INSERT INTO guide (id, account_id, share_key"),
+    "before anything is written",
+  );
+  assert.match(src, /summary=excluded\.summary/);
+});

@@ -14,6 +14,7 @@ const { share } = await import("../src/passalong.js");
 // The shape that found this: a design.md, whose tokens are nested maps in its frontmatter.
 const DESIGN = `---
 title: Supabase design system
+summary: Said to a person for the test.
 kind: transfer
 colors:
   primary: "#3ECF8E"
@@ -40,7 +41,7 @@ test("share refuses frontmatter it would empty, naming each field, and stores no
 });
 
 test("the same content moved into the body shares, and keeps every line", async () => {
-  const md = `---\ntitle: Supabase design system\nkind: transfer\n---\n\n\`\`\`yaml\ncolors:\n  primary: "#3ECF8E"\n\`\`\`\n`;
+  const md = `---\ntitle: Supabase design system\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n\`\`\`yaml\ncolors:\n  primary: "#3ECF8E"\n\`\`\`\n`;
   const { guide } = await share(md);
   assert.match(guide.body, /primary: "#3ECF8E"/);
 });

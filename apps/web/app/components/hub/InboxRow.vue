@@ -86,6 +86,8 @@ const who = computed(() => {
           >{{ g.title || "Untitled guide" }}</NuxtLink
         >
       </p>
+      <!-- What it says to a person. The document is the agent's; this is what is read first. -->
+      <p v-if="g.summary" class="mt-1 mb-0 line-clamp-2 font-ui text-sm leading-snug text-fg">{{ g.summary }}</p>
       <p class="mt-1 mb-0 flex flex-wrap gap-x-1.5 font-ui text-sm text-muted">
         <span v-if="who">
           {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b>

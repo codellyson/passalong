@@ -13,7 +13,9 @@ const { taskScaffold } = await import("../src/capture.js");
 const passalong = await import("../src/passalong.js");
 
 function task(extra = {}) {
-  const g = parse(template({ kind: "task", title: "Add dark mode" }));
+  const g = parse(
+    template({ kind: "task", title: "Add dark mode", summary: "Add a dark mode to the hub." }),
+  );
   const body = "## Goal\nDark mode in the hub.\n\n## Acceptance\n- the hub follows the OS setting";
   return serialize({ meta: { ...g.meta, ...extra }, body });
 }
@@ -59,7 +61,10 @@ test("sharing a task leaves it in Draft, and ready moves it on", async () => {
 
 test("ready refuses anything that is not a task", async () => {
   const { guide } = await passalong.share(
-    serialize({ meta: { title: "t", kind: "transfer" }, body: "## Problem\np\n\n## Steps\n1. x" }),
+    serialize({
+      meta: { title: "t", summary: "A summary.", kind: "transfer" },
+      body: "## Problem\np\n\n## Steps\n1. x",
+    }),
   );
   assert.equal(guide.meta.status, "published");
   await assert.rejects(passalong.ready(guide.meta.id), /not a task/);

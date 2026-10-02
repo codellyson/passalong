@@ -14,7 +14,10 @@ test("an id resolves to itself with no network", async () => {
 
 test("a local .md file resolves through its own frontmatter", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "passalong-")), "guide.md");
-  writeFileSync(path, "---\nid: zx9y8w\ntitle: A guide\n---\n\n# A guide\n");
+  writeFileSync(
+    path,
+    "---\nid: zx9y8w\ntitle: A guide\nsummary: Said to a person for the test.\n---\n\n# A guide\n",
+  );
   assert.equal(await resolveId(path), "zx9y8w");
 });
 

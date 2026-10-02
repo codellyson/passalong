@@ -278,6 +278,11 @@ export function buildServer() {
         "Collect it as you work rather than writing it from memory at the end. hand_in without " +
         "it is refused, because the write-up and the verdict are both your word for your own " +
         "work and evidence is the part the person reviewing it can check.\n" +
+        "EVERY GUIDE SAYS WHAT IT IS TO A PERSON. The document is for agents: exact, dense, full of " +
+        "ids and paths. Put `summary:` in its frontmatter — one or two plain sentences, 400 " +
+        "characters at most, no ids, paths or jargon, saying what this is and whether anybody has " +
+        "to act. It is what the person sees first in their hub; the document is behind it. A guide " +
+        "with no summary is refused.\n" +
         "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
         "is a spelling that is not one of the three. " +
         `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
@@ -654,6 +659,12 @@ export function buildServer() {
           .array(
             z.object({
               title: z.string(),
+              summary: z
+                .string()
+                .describe(
+                  "one or two plain sentences for a PERSON, no ids or paths: what this task is and " +
+                    "why it matters. The goal below is for the agent; this is what a person reads",
+                ),
               goal: z.string().describe("what is true when this step is done"),
               acceptance: z.string().describe("checks a person can run, one per line"),
               context: z.string().optional(),
@@ -1177,6 +1188,13 @@ export function buildServer() {
                     "they go under Problem, where a reader looks first",
                 ),
               title: z.string().describe("what is broken, in one line"),
+              summary: z
+                .string()
+                .optional()
+                .describe(
+                  "one or two plain sentences for a PERSON, no ids or paths: what is broken and " +
+                    "whether anyone needs to act. Defaults to the title",
+                ),
               problem: z
                 .string()
                 .describe(

@@ -53,6 +53,8 @@ export interface Pull {
 export interface Guide {
   id: string;
   title: string | null;
+  /** What it says to a person, a sentence or two. Empty on a guide from before summaries. */
+  summary?: string;
   status: string;
   url: string;
   created: string;
@@ -187,6 +189,8 @@ export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | 
 export interface Task {
   id: string;
   title: string;
+  /** What it says to a person. Empty on a task from before summaries. */
+  summary?: string;
   /** The repo an agent has to be in to take it; empty for a task for no repo. */
   target: string;
   state: TaskState;
@@ -229,6 +233,8 @@ export interface Task {
 export interface Working {
   id: string;
   title: string;
+  /** What it says to a person. Empty on a guide from before summaries. */
+  summary?: string;
   kind: string;
   target: string;
   url: string;

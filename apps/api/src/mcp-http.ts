@@ -694,6 +694,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "Collect it as you work rather than writing it from memory at the end. hand_in without " +
         "it is refused, because the write-up and the verdict are both your word for your own " +
         "work and evidence is the part the person reviewing it can check.\n" +
+        "EVERY GUIDE SAYS WHAT IT IS TO A PERSON. The document is for agents: exact, dense, full of " +
+        "ids and paths. Put `summary:` in its frontmatter — one or two plain sentences, 400 " +
+        "characters at most, no ids, paths or jargon, saying what this is and whether anybody has " +
+        "to act. It is what the person sees first in their hub; the document is behind it. A guide " +
+        "with no summary is refused.\n" +
         "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
         "is a spelling that is not one of the three. " +
         "kind: task is work nobody has done yet. It has no Steps: work out how to " +
@@ -1507,6 +1512,13 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
                 .default([])
                 .describe("positions in the top-level `attachments` that show this issue, from 0"),
               title: z.string().describe("what is broken, in one line"),
+              summary: z
+                .string()
+                .optional()
+                .describe(
+                  "one or two plain sentences for a PERSON, no ids or paths: what is broken and " +
+                    "whether anyone needs to act. Defaults to the title",
+                ),
               problem: z.string().describe("what is broken and what it stops someone doing"),
               reproduce: z
                 .string()
@@ -1731,6 +1743,8 @@ const quote = (value: string) =>
 /** Mirrors `bugGuide()` in packages/passalong/src/guide.js — same sections, same lead line. */
 function bugDocument(issue: {
   title: string;
+  /** What a person reads about it. The title when nothing else was said: the author's own words. */
+  summary?: string;
   problem: string;
   reproduce: string;
   verification?: string;
@@ -1745,6 +1759,7 @@ function bugDocument(issue: {
 }) {
   const front = [
     `title: ${quote(issue.title)}`,
+    `summary: ${quote((issue.summary || "").trim() || issue.title)}`,
     "kind: bug",
     "status: published",
     `report: ${issue.report}`,

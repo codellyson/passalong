@@ -235,6 +235,8 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <span v-if="writer">· via {{ writer }}</span>
         </p>
         <h1 class="m-0">{{ g.title || "Untitled guide" }}</h1>
+        <!-- What it says to a person, first: the document below is the agent's form of it. -->
+        <p v-if="g.summary" class="m-0 font-ui text-lg leading-snug text-fg">{{ g.summary }}</p>
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <NuxtLink v-if="!g.mine && !handedInByMe" class="btn primary" :to="`/hub/answer/${g.id}`">Respond</NuxtLink>

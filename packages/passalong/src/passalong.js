@@ -1119,7 +1119,14 @@ export async function planTasks(steps, { cwd = process.cwd() } = {}) {
       ...section("Acceptance", step.acceptance),
       ...section("Out of scope", step.out_of_scope),
     ].join("\n");
-    const meta = { title: step.title, kind: "task", target_context: step.target_context ?? repo };
+    // The summary is the step's own, said by whoever planned it: it is what a person reads about the
+    // task, and this builds the document without guessing one (the server refuses a task without).
+    const meta = {
+      title: step.title,
+      summary: step.summary,
+      kind: "task",
+      target_context: step.target_context ?? repo,
+    };
     const after = (step.after || []).map((j) => ids[j]);
     if (after.length) meta.blocked_by = after;
     ids.push((await share(serialize({ meta, body }), { cwd })).guide.meta.id);

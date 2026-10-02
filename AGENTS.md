@@ -46,6 +46,19 @@ change. Its README says how.
     test's `GUARDED` list the day absence starts speaking for it.
     **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both,
     and `fixtures/guides/` is what now checks you did.
+    **Every guide has two forms, and `summary:` is the human one** (migration 0041, a column beside
+    `kind`). The document is the agent's: exact, dense, full of ids and paths. The summary is a
+    sentence or two a person can read in the hub, 400 characters at most (`SUMMARY_MAX`), said by the
+    author and refused when absent — `validate()` locally, `summaryProblem()` in `apps/api/src/guide.ts`
+    at `PUT /v1/guides/:id` — for the reason `kind` is: a summary written afterwards by something that
+    was not there is a second voice that can say what nobody claimed. One exception, on purpose: a
+    guide stored before summaries existed, written again by a client that has not heard of them, is
+    let through as it came, or every old CLI's re-share of work in flight would be refused for a field
+    it cannot know about. A new guide is never let through. Code that builds a guide states it
+    (`bugGuide` says the bug's title, the author's own words; `plan_tasks` takes `summary` per step;
+    `taskScaffold` says the sentence the person typed). The hub shows it by default — first bubble of
+    a thread, under the title on rows, leading the guide page — and the document sits behind "Show
+    details".
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
   - `src/mcp.js` — MCP tools. `buildServer()` builds the surface and `serve()` connects it over

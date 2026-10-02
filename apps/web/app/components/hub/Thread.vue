@@ -34,6 +34,8 @@ const { load: loadDoc, sectionsFor } = useTaskDocs();
 
 /** Whether you wrote it, from the same answer: it decides which side the first bubble sits on. */
 const mine = ref(false);
+/** What the guide says to a person: the first bubble, with the document behind "Show details". */
+const summary = ref("");
 onMounted(() => watch(() => props.id, loadDoc, { immediate: true }));
 /**
  * The first message: what was asked, in one bubble. A task leads with its Goal and a handoff with its
@@ -42,6 +44,16 @@ onMounted(() => watch(() => props.id, loadDoc, { immediate: true }));
 const LEAD = ["Goal", "Problem"];
 const brief = computed(() => {
   const doc = sectionsFor(props.id);
+  const said = summary.value.trim();
+  // The summary leads when there is one, and then every section is behind the fold, the Goal with
+  // the rest. A guide from before summaries leads with its Goal or Problem as it always did.
+  if (said)
+    return {
+      lead: said,
+      rest: Object.entries(doc ?? {})
+        .filter(([, v]) => v.trim())
+        .map(([k, v]) => ({ k, v: v.trim() })),
+    };
   if (!doc) return null;
   const lead = LEAD.find((k) => doc[k]?.trim());
   if (!lead) return null;
@@ -59,13 +71,14 @@ let latest = 0;
 async function load() {
   const ask = ++latest;
   try {
-    const got = await api<{ thread: ThreadItem[]; mine?: boolean }>(
+    const got = await api<{ thread: ThreadItem[]; mine?: boolean; summary?: string }>(
       `/v1/guides/${encodeURIComponent(props.id)}/thread`,
     );
     // A slow answer for a guide you have since left is dropped, not shown.
     if (ask === latest) {
       items.value = got?.thread ?? [];
       mine.value = Boolean(got?.mine);
+      summary.value = got?.summary ?? "";
       failed.value = false;
     }
   } catch {

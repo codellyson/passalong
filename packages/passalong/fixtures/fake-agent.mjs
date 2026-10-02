@@ -8,7 +8,7 @@ if (!id || !process.argv.at(-1).includes(id)) throw new Error("no task in the pr
 if (!process.env.FAKE_AGENT_GIVES_UP) {
   await p.taskProgress(id, "working", { cwd: process.cwd() });
   await p.finishTask(id, {
-    markdown: `---\ntitle: did ${id}\n---\n\n## Problem\np\n\n## Steps\n1. x\n`,
+    markdown: `---\ntitle: did ${id}\nsummary: Did the task, and it holds.\n---\n\n## Problem\np\n\n## Steps\n1. x\n`,
     evidence: `node --test → 3 pass, 0 fail (${id})`,
     cwd: process.cwd(),
   });
