@@ -35,6 +35,9 @@ export const PUBLIC_PAGES: PublicPage[] = [
   // A draft until its first post is published. The posts themselves are content/blog/*.md, each
   // with its own `draft`, and the sitemap lists the published ones once /blog is.
   { path: "/blog", draft: true, footer: "Blog", updated: "2026-09-27" },
+  // The /learn guides, one entry each: content/learn/<slug>.md renders at its address either way,
+  // and this flag is what indexes it.
+  { path: "/learn/ai-agent-handoff", draft: true, updated: "2026-10-03" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */

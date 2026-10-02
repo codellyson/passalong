@@ -2072,6 +2072,13 @@ article.prose ul {
 article.prose li {
   margin: var(--s-2) 0;
 }
+/* A markdown checklist (`- [ ]`): the checkbox is the marker, so the bullet goes. */
+article.prose li:has(> input[type="checkbox"]) {
+  list-style: none;
+}
+article.prose li > input[type="checkbox"] {
+  margin: 0 var(--s-2) 0 0;
+}
 article.prose blockquote {
   font-style: italic;
   margin: var(--s-4) 0;

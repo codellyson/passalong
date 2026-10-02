@@ -1,4 +1,6 @@
 // The blog: markdown files in content/blog, bundled as server assets (nuxt.config.ts), read here.
+// The /learn pages are the same thing from content/learn — long-lived guides rather than dated
+// posts — so every reader here takes the collection, and the blog is the default.
 //
 // Each file is one post. Frontmatter is a few `key: value` lines — title, date (YYYY-MM-DD),
 // description, author, draft — and the rest is the body. A draft renders at its address, so it can
@@ -50,9 +52,12 @@ function parse(slug: string, raw: string): { post: Post; body: string } | null {
   };
 }
 
+/** The markdown collections bundled as server assets in nuxt.config.ts. */
+export type Collection = "blog" | "learn";
+
 /** Every post, newest first, drafts included. */
-export async function allPosts(): Promise<Post[]> {
-  const store = useStorage("assets:blog");
+export async function allPosts(collection: Collection = "blog"): Promise<Post[]> {
+  const store = useStorage(`assets:${collection}`);
   const keys = (await store.getKeys()).filter((k) => k.endsWith(".md"));
   const out: Post[] = [];
   for (const key of keys) {
@@ -64,12 +69,16 @@ export async function allPosts(): Promise<Post[]> {
   return out.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export const publishedPosts = async () => (await allPosts()).filter((p) => !p.draft);
+export const publishedPosts = async (collection: Collection = "blog") =>
+  (await allPosts(collection)).filter((p) => !p.draft);
 
 /** One post with its body rendered, or null when there is no such post. */
-export async function postBySlug(slug: string): Promise<(Post & { html: string }) | null> {
+export async function postBySlug(
+  slug: string,
+  collection: Collection = "blog",
+): Promise<(Post & { html: string }) | null> {
   if (!SLUG.test(slug)) return null;
-  const raw = await useStorage("assets:blog").getItem(`${slug}.md`);
+  const raw = await useStorage(`assets:${collection}`).getItem(`${slug}.md`);
   if (raw === null || raw === undefined) return null;
   const parsed = parse(slug, String(raw));
   if (!parsed) return null;
