@@ -110,24 +110,26 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
             <b v-if="holder(t)" class="font-medium text-fg">{{ holder(t) }}</b>
             <span v-if="t.target" class="ml-1 font-code text-xs">{{ shorten(t.target, 24).text }}</span>
           </td>
-          <td class="whitespace-nowrap text-muted tabular-nums">{{ rel(t.created) }}</td>
-          <td class="relative text-right whitespace-nowrap">
-            <button type="button" class="btn sm mr-2" @click="talk(t)"><AppIcon name="open" />Conversation</button>
-            <button
-              v-if="canAssign(t)"
-              type="button"
-              class="btn sm"
-              :aria-expanded="assigning === t.id"
-              @click.stop="assigning = assigning === t.id ? '' : t.id"
-              @keydown.esc="assigning = ''"
-            >Give to…</button>
-            <button v-if="t.mine && t.state === 'draft'" type="button" class="btn sm ml-2" @click="onTaskReady(t)">Ready for agents</button>
-            <button
-              v-if="t.mine && held(t)"
-              type="button"
-              class="btn outline warn sm ml-2"
-              @click="onRelease(t)"
-            >Stop this agent</button>
+          <td class="whitespace-nowrap text-muted">{{ rel(t.created) }}</td>
+          <td class="relative">
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <button type="button" class="btn sm" @click="talk(t)"><AppIcon name="open" />Conversation</button>
+              <button
+                v-if="canAssign(t)"
+                type="button"
+                class="btn sm"
+                :aria-expanded="assigning === t.id"
+                @click.stop="assigning = assigning === t.id ? '' : t.id"
+                @keydown.esc="assigning = ''"
+              >Give to…</button>
+              <button v-if="t.mine && t.state === 'draft'" type="button" class="btn sm" @click="onTaskReady(t)">Ready for agents</button>
+              <button
+                v-if="t.mine && held(t)"
+                type="button"
+                class="btn outline warn sm"
+                @click="onRelease(t)"
+              >Stop this agent</button>
+            </div>
             <div v-if="assigning === t.id" class="menu absolute right-5 z-10 w-72 text-left" @click.stop>
               <HubAssignPicker :id="t.id" :team="t.team || ''" :to="t.to" @done="assigning = ''" />
             </div>
