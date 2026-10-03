@@ -134,6 +134,7 @@ the copy is out of date the moment either side changes.
 
 If you run one agent at a time on your own work, keep using HANDOFF.md. It is the right size for
 that, and no tool beats a file you control.
+[Passalong or a HANDOFF.md file?](/learn/passalong-vs-handoff-md) sets the two side by side.
 
 If you recognise two or more of the failures above, the problem has changed. You are no longer
 handing work to your future self; you are handing it between agents, and sometimes people. That
