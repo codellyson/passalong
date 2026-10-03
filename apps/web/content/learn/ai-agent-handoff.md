@@ -103,20 +103,26 @@ title: Backfill order totals without locking the table
 ---
 
 ## Goal
-Every row in `orders` has `total_cents` set, computed from its line items.
+Every row in `orders` has `total_cents` set,
+computed from its line items.
 
 ## Context
-`total_cents` was added in migration 0142 and is null for orders before 2026-06-01
-(about 2.4M rows). Line items are in `order_lines`. Production is Postgres 16.
+`total_cents` was added in migration 0142 and is null
+for orders before 2026-06-01 (about 2.4M rows).
+Line items are in `order_lines`. Production is Postgres 16.
 
 ## Constraints
-- No long-running transaction on `orders`: it takes writes all day.
-- Use the existing job runner in `src/jobs/`, not a one-off script.
+- No long-running transaction on `orders`:
+  it takes writes all day.
+- Use the job runner in `src/jobs/`, not a one-off script.
 
 ## Acceptance
-- `SELECT count(*) FROM orders WHERE total_cents IS NULL` returns 0 on staging.
-- The job works in batches of at most 1,000 rows and can be stopped and resumed.
-- A test covers an order with no line items (total is 0, not null).
+- On staging, this returns 0:
+  `SELECT count(*) FROM orders WHERE total_cents IS NULL`
+- The job works in batches of at most 1,000 rows,
+  and can be stopped and resumed.
+- A test covers an order with no line items
+  (total is 0, not null).
 
 ## Out of scope
 Changing how new orders compute their total.
