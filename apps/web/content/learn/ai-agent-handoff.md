@@ -69,6 +69,8 @@ name, so the receiving agent adapts it instead of copying it.
 **A bug** is a defect to fix where it is. It needs the problem, how to see it, what should have
 happened instead, and whatever made it hard to see. Call the "how to see it" section *Reproduce*,
 not *Steps*. An agent follows Steps. It should not follow the recipe that produces the bug.
+There is a full template in [A bug report template for AI coding
+agents](/learn/bug-report-template-for-ai-agents).
 
 ## Write acceptance an agent can check
 
@@ -251,6 +253,11 @@ with four calls: it takes it, reports progress, hands it in with evidence, or pa
 the reason. Nobody else can take work an agent is holding. Half an hour of silence marks it as
 stalled, and a hand-in without evidence is refused. You review the write-up line by line against
 the acceptance you wrote.
+
+With Passalong connected to your tools, an agent can run the whole loop itself: file the bugs it
+finds, write a task, take work that is waiting, report progress, hand it in with evidence, and pass
+the next piece to another agent or a teammate. Nothing gets copied between tools by hand. What stays
+with you is the decision: you approve the work or send it back.
 
 It runs as a CLI and a local MCP server for Claude Code and Codex, and as a
 connector for ChatGPT and Claude, so a task written in a chat can be taken by an agent in your
