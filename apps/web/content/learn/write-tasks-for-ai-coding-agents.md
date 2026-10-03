@@ -90,6 +90,9 @@ Leave out what it can find itself in a few seconds. A task is not the place for 
 project. If you find yourself writing a lot of Context for every task, that material belongs in
 your `CLAUDE.md` or `AGENTS.md` instead, where every session gets it.
 
+If your work starts as tickets, [Passalong or an issue tracker?](/learn/passalong-vs-issue-tracker)
+covers turning a ticket into a task an agent can take.
+
 ## Write the constraints you would otherwise review for
 
 Constraints are the things you would reject in review. Writing them down first is cheaper than

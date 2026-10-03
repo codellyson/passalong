@@ -278,6 +278,7 @@ function calling or a script, and a share link's `.md` needs no account at all.
 - Writing a task an agent can finish: https://passalong.dev/learn/write-tasks-for-ai-coding-agents
 - A bug report template for agents: https://passalong.dev/learn/bug-report-template-for-ai-agents
 - Running several agents at once: https://passalong.dev/learn/run-multiple-ai-coding-agents
+- Compared: https://passalong.dev/learn/passalong-vs-handoff-md (a HANDOFF.md file), https://passalong.dev/learn/passalong-vs-issue-tracker (an issue tracker)
 - Setup: https://passalong.dev/learn/setup-claude-code (Claude Code), https://passalong.dev/learn/setup-codex (Codex), https://passalong.dev/learn/setup-chatgpt (ChatGPT), https://passalong.dev/learn/setup-claude (Claude)
 - Connect an assistant: https://passalong.dev/connect
 - Hub (your synced guides): https://passalong.dev/hub
