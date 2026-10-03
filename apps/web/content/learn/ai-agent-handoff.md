@@ -94,6 +94,9 @@ Each one names the observable thing and, where it can, the command that shows it
 agent a target it can check itself against before it says it is done. It also gives you something
 to review that takes minutes instead of a re-read of the whole change.
 
+[How to write a task an AI coding agent can finish](/learn/write-tasks-for-ai-coding-agents) goes
+further: acceptance for each kind of work, how much context to give, and how to size a task.
+
 Here is a full task in that shape:
 
 ```markdown
