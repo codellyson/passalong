@@ -28,7 +28,7 @@ export interface PublicPage {
 
 export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/", draft: false, updated: "2026-10-01" },
-  { path: "/mcp-server", draft: true, updated: "2026-10-03" },
+  { path: "/mcp-server", draft: false, updated: "2026-10-03" },
   { path: "/connect", draft: false, updated: "2026-10-03" },
   { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-03" },
   { path: "/docs/guide-format", draft: false, footer: "Guide format", updated: "2026-09-27" },
