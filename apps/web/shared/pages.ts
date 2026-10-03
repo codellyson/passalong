@@ -57,6 +57,8 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/learn/setup-codex", draft: false, updated: "2026-10-03" },
   { path: "/learn/setup-chatgpt", draft: false, updated: "2026-10-03" },
   { path: "/learn/setup-claude", draft: false, updated: "2026-10-03" },
+  { path: "/learn/passalong-vs-handoff-md", draft: true, updated: "2026-10-03" },
+  { path: "/learn/passalong-vs-issue-tracker", draft: true, updated: "2026-10-03" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */
