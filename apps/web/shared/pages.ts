@@ -53,6 +53,10 @@ export const PUBLIC_PAGES: PublicPage[] = [
     footer: "Running several agents",
     updated: "2026-10-03",
   },
+  { path: "/learn/setup-claude-code", draft: false, updated: "2026-10-03" },
+  { path: "/learn/setup-codex", draft: false, updated: "2026-10-03" },
+  { path: "/learn/setup-chatgpt", draft: false, updated: "2026-10-03" },
+  { path: "/learn/setup-claude", draft: false, updated: "2026-10-03" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */
