@@ -39,6 +39,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
   // and this flag is what indexes it.
   { path: "/learn/ai-agent-handoff", draft: false, updated: "2026-10-03" },
   { path: "/learn/handoff-md", draft: false, updated: "2026-10-03" },
+  { path: "/learn/write-tasks-for-ai-coding-agents", draft: false, updated: "2026-10-03" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */
