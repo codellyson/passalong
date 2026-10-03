@@ -134,6 +134,10 @@ passalong setup
 
 # Codex
 codex mcp add passalong -- passalong mcp</code></pre>
+          <p>
+            Step by step: <a href="/learn/setup-claude-code">Claude Code</a>,
+            <a href="/learn/setup-codex">Codex</a>.
+          </p>
         </div>
       </section>
 
@@ -158,6 +162,10 @@ codex mcp add passalong -- passalong mcp</code></pre>
             to approve, and that is the whole setup — unless the app asks for a client ID, as
             ChatGPT does. Make that in <a href="/hub/settings#apps">your hub</a>, without a secret,
             and paste it back.
+          </p>
+          <p>
+            Step by step: <a href="/learn/setup-chatgpt">ChatGPT</a>,
+            <a href="/learn/setup-claude">Claude</a>.
           </p>
           <p>
             You can see every app you have approved, and disconnect it, under Connectors in
