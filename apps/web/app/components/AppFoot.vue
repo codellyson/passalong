@@ -9,7 +9,7 @@
   half-written page is reachable by its address for review but not linked from anywhere.
 -->
 <script setup lang="ts">
-import { PUBLIC_PAGES } from "#shared/pages";
+import { PUBLIC_PAGES, published } from "#shared/pages";
 
 const learn = PUBLIC_PAGES.filter((p) => p.footer && !p.draft);
 </script>
@@ -22,6 +22,7 @@ const learn = PUBLIC_PAGES.filter((p) => p.footer && !p.draft);
     </div>
     <nav aria-label="Product">
       <a href="/hub">Open your hub</a>
+      <a v-if="published('/mcp-server')" href="/mcp-server">The MCP server</a>
       <a href="/connect">Connect your tools</a>
       <a href="/llms.txt">For AI agents</a>
     </nav>
