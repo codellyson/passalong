@@ -195,8 +195,8 @@ const PROOF = null as { figure: string; says: string } | null;
         <a class="quiet" href="/hub">or open your hub</a>
       </p>
       <p class="works">
-        Works with Claude Code and any MCP client. Hosted for assistants that connect to remote
-        servers. <a href="/connect">How to connect</a>
+        Works with Claude Code and Codex on your machine, and with ChatGPT and Claude
+        as a connector. Any other MCP client works too. <a href="/connect">How to connect</a>
       </p>
     </header>
 

@@ -60,7 +60,7 @@ The practical setup for a team with a tracker:
 2. When a ticket is going to an agent, turn it into a Passalong task. Your agent can do this: with
    your tracker's MCP server and Passalong both connected, ask it to "read the ticket and write it
    up as a Passalong task with acceptance we can check".
-3. The agent takes the task, works it, and hands it in with evidence.
+3. The agent takes the task, works it and hands it in with evidence.
 4. You approve it, and close the ticket.
 
 The tracker stays the record of what the team decided. Passalong is where the agent's part of the

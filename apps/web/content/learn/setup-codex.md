@@ -1,7 +1,7 @@
 ---
 title: Set up Passalong in Codex
 date: 2026-10-03
-description: Connect the Codex CLI to Passalong with one command, so it can take tasks and bugs, report progress, and hand in its work with evidence for you to approve.
+description: Connect the Codex CLI to Passalong with one command, so it can take tasks and bugs, report progress and hand in its work with evidence for you to approve.
 draft: false
 ---
 
