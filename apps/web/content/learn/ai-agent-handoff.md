@@ -145,6 +145,10 @@ Whatever you use, the claim should be:
 - **Releasable.** An agent that is stuck, or that finds the work is not its to do, gives it back
   with the reason, so the next one starts from that reason.
 
+Running several agents at once raises more than claims: workspaces, splitting the work, and keeping
+up with review. [Running several AI coding agents at once](/learn/run-multiple-ai-coding-agents)
+covers the rest.
+
 ## Make progress visible
 
 A one-line note at each milestone is enough: "reproduced it", "tests written, failing as expected",

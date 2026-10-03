@@ -103,7 +103,8 @@ at the end. Whichever finishes last wins, and the other session's state is gone 
 
 A workaround is one file per piece of work instead of one per repo: `handoffs/backfill-totals.md`,
 `handoffs/login-redirect.md`. That stops the overwriting, but now you have to remember which file
-belongs to which session.
+belongs to which session. [Running several AI coding agents at
+once](/learn/run-multiple-ai-coding-agents) covers parallel sessions properly.
 
 ### History disappears
 
