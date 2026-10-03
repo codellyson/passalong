@@ -41,7 +41,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/learn/handoff-md", draft: false, updated: "2026-10-03" },
   { path: "/learn/write-tasks-for-ai-coding-agents", draft: false, updated: "2026-10-03" },
   { path: "/learn/bug-report-template-for-ai-agents", draft: false, updated: "2026-10-03" },
-  { path: "/learn/run-multiple-ai-coding-agents", draft: true, updated: "2026-10-03" },
+  { path: "/learn/run-multiple-ai-coding-agents", draft: false, updated: "2026-10-03" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */

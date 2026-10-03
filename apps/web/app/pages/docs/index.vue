@@ -38,6 +38,14 @@ const TOPICS = [
     link: "Read the guide",
   },
   {
+    h: "Running several agents",
+    p:
+      "A workspace for each agent, one claimed job per agent, work split so it does not overlap, " +
+      "and a review queue you can keep up with. Written for any mix of agents.",
+    href: "/learn/run-multiple-ai-coding-agents",
+    link: "Read the guide",
+  },
+  {
     h: "Install and connect",
     p:
       "`npm i -g passalong` installs it, `passalong setup` registers the MCP server, the capture " +

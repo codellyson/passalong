@@ -276,6 +276,7 @@ function calling or a script, and a share link's `.md` needs no account at all.
 - The HANDOFF.md pattern: https://passalong.dev/learn/handoff-md
 - Writing a task an agent can finish: https://passalong.dev/learn/write-tasks-for-ai-coding-agents
 - A bug report template for agents: https://passalong.dev/learn/bug-report-template-for-ai-agents
+- Running several agents at once: https://passalong.dev/learn/run-multiple-ai-coding-agents
 - Connect an assistant: https://passalong.dev/connect
 - Hub (your synced guides): https://passalong.dev/hub
 - npm: https://www.npmjs.com/package/passalong
