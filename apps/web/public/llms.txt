@@ -269,6 +269,7 @@ function calling or a script, and a share link's `.md` needs no account at all.
 ## Links
 
 - Homepage: https://passalong.dev
+- The MCP server: https://passalong.dev/mcp-server
 - Docs: https://passalong.dev/docs
 - Guide format: https://passalong.dev/docs/guide-format
 - FAQ: https://passalong.dev/faq

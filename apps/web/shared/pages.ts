@@ -28,6 +28,7 @@ export interface PublicPage {
 
 export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/", draft: false, updated: "2026-10-01" },
+  { path: "/mcp-server", draft: false, updated: "2026-10-03" },
   { path: "/connect", draft: false, updated: "2026-10-03" },
   { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-03" },
   { path: "/docs/guide-format", draft: false, footer: "Guide format", updated: "2026-09-27" },
@@ -37,11 +38,21 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/blog", draft: true, footer: "Blog", updated: "2026-09-27" },
   // The /learn guides, one entry each: content/learn/<slug>.md renders at its address either way,
   // and this flag is what indexes it.
-  { path: "/learn/ai-agent-handoff", draft: false, updated: "2026-10-03" },
+  {
+    path: "/learn/ai-agent-handoff",
+    draft: false,
+    footer: "Handing work to agents",
+    updated: "2026-10-03",
+  },
   { path: "/learn/handoff-md", draft: false, updated: "2026-10-03" },
   { path: "/learn/write-tasks-for-ai-coding-agents", draft: false, updated: "2026-10-03" },
   { path: "/learn/bug-report-template-for-ai-agents", draft: false, updated: "2026-10-03" },
-  { path: "/learn/run-multiple-ai-coding-agents", draft: false, updated: "2026-10-03" },
+  {
+    path: "/learn/run-multiple-ai-coding-agents",
+    draft: false,
+    footer: "Running several agents",
+    updated: "2026-10-03",
+  },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */

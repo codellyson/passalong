@@ -125,6 +125,7 @@ export default defineNuxtConfig({
     // treatment as the landing rather than the hub's nonce, because a page that needs no script
     // should not ship a policy that allows one.
     "/connect": { noScripts: true, headers: VIEW_HEADERS },
+    "/mcp-server": { noScripts: true, headers: VIEW_HEADERS },
     // Docs and the FAQ are prose like /connect, and get the same treatment. Both spellings of the
     // docs rule, because `/docs/**` is not guaranteed to match `/docs` itself.
     "/docs": { noScripts: true, headers: VIEW_HEADERS },
