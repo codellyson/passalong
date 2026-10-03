@@ -38,6 +38,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
   // The /learn guides, one entry each: content/learn/<slug>.md renders at its address either way,
   // and this flag is what indexes it.
   { path: "/learn/ai-agent-handoff", draft: false, updated: "2026-10-03" },
+  { path: "/learn/handoff-md", draft: false, updated: "2026-10-03" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */
