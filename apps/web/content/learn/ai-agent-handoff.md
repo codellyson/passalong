@@ -190,6 +190,9 @@ It works well for one person working one thread at a time. It starts to break wh
 If you hit those, the fix is to treat each handoff as its own document with a kind, an owner and a
 status, rather than one file that is always "the current state".
 
+[The HANDOFF.md pattern, and when it stops working](/learn/handoff-md) has a template, a prompt to
+have the agent write it, and workarounds for each of these.
+
 ## Handing work between tools
 
 A handoff written as plain markdown moves between tools without translation. Every one of them
