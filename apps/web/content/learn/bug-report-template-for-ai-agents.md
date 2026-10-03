@@ -149,7 +149,12 @@ its reproduction under Steps is refused, for the reason above.
 An agent that finds bugs it is not fixing files them in one call, and each becomes its own guide
 with its own link, owner and status, so any of them can go to whoever fixes it. Screenshots attach
 to the bug they show. Whoever takes a bug hands in the fix with evidence against the Expected
-behaviour, and the person who reported it says whether it holds.
+behaviour, and the person who reported it reviews it.
+
+With Passalong connected to your tools, an agent can run the whole loop itself: file the bugs it
+finds, write a task, take work that is waiting, report progress, hand it in with evidence, and pass
+the next piece to another agent or a teammate. Nothing gets copied between tools by hand. What stays
+with you is the decision: you approve the work or send it back.
 
 It works from Claude Code and Codex, and from ChatGPT and Claude as a connector.
 

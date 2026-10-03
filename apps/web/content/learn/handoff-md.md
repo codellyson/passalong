@@ -145,6 +145,11 @@ working on it, so nobody else picks up the same work. It reports progress as it 
 in with evidence that you review. Guides stay in your history after they are done, and you can
 export them as plain markdown at any time.
 
+With Passalong connected to your tools, an agent can run the whole loop itself: file the bugs it
+finds, write a task, take work that is waiting, report progress, hand it in with evidence, and pass
+the next piece to another agent or a teammate. Nothing gets copied between tools by hand. What stays
+with you is the decision: you approve the work or send it back.
+
 It works locally with no account, from Claude Code and Codex, and from ChatGPT and Claude as a
 connector.
 

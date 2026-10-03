@@ -111,7 +111,8 @@ you will review against, so it is worth getting right.
 Good acceptance names the observable result and, where it can, the command that shows it. What that
 looks like depends on the kind of work:
 
-**A bug fix**: a test that fails before and passes after.
+**A bug fix**: a test that fails before and passes after. (For reporting the bug itself, see
+[A bug report template for AI coding agents](/learn/bug-report-template-for-ai-agents).)
 
 ```markdown
 - A test reproduces the bug and passes after the fix.
@@ -204,6 +205,11 @@ Read the task once as if you had never seen the project:
 Acceptance and Out of scope ([the format](/docs/guide-format)), and Acceptance is required: a task
 without it is refused. When an agent hands the work in, it attaches evidence against each
 Acceptance line, and you review line by line, sending back only the lines that are not met.
+
+With Passalong connected to your tools, an agent can run the whole loop itself: file the bugs it
+finds, write a task, take work that is waiting, report progress, hand it in with evidence, and pass
+the next piece to another agent or a teammate. Nothing gets copied between tools by hand. What stays
+with you is the decision: you approve the work or send it back.
 
 Bigger work can be split into a plan of tasks, each waiting on the ones it depends on, so an agent
 only picks up a step when the steps before it are approved.
