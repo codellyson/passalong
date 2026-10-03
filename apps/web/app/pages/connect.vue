@@ -240,7 +240,7 @@ codex mcp add passalong -- passalong mcp</code></pre>
   https://passalong.dev/v1/inbox</code></pre>
           <p>
             Reading a guide someone shared needs no account at all — the key in the share link is
-            the authorization, and appending <code>.md</code> gives you the document.
+            the authorisation, and appending <code>.md</code> gives you the document.
           </p>
           <pre><code>curl https://passalong.dev/g/&lt;id&gt;/&lt;key&gt;.md</code></pre>
         </div>

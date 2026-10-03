@@ -78,7 +78,7 @@ If you only improve one part of how you hand work to agents, make it this. Accep
 definition of done, written before the work starts. A good acceptance line is something a person or
 a script can check, with an answer that cannot be argued with.
 
-Lines that don't work:
+Lines that do not work:
 
 - "Login works correctly."
 - "Code is clean and well tested."

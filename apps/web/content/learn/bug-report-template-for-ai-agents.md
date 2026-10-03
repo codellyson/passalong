@@ -71,7 +71,7 @@ Write the reproduction so an agent can run it without asking anything:
 
 If you cannot reproduce it reliably, say so, and say how often it happens and under what
 conditions. An agent that knows the bug is intermittent looks for races and timing. One that does
-not will run the reproduction once, see nothing, and report that it cannot find a bug.
+not will run the reproduction once, see nothing and report that it cannot find a bug.
 
 ## Paste the evidence, do not describe it
 
@@ -137,7 +137,7 @@ them in passing. You get a report you can hand to the right person, and the chan
 stays the size you asked for.
 
 > You noticed bugs you are not fixing. File each one as a bug report: Problem, Reproduce (not
-> Steps), Evidence with the exact error, Expected, Gotchas, and Severity. One report per bug.
+> Steps), Evidence with the exact error, Expected, Gotchas and Severity. One report per bug.
 
 ## Bug reports in Passalong
 

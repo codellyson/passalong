@@ -24,7 +24,7 @@ Most failures with parallel agents fall into a few kinds:
 - **They edit the same files.** Two changes that each work alone conflict when merged.
 - **One waits on the other without knowing.** The UI agent builds against an API the other agent
   has not finished, and guesses at its shape.
-- **You lose track.** Five agents, five terminals, and no single place that says which is done,
+- **You lose track.** Five agents, five terminals and no single place that says which is done,
   which is stuck and which is waiting on you.
 - **Review piles up.** Agents produce changes faster than you can read them, and unreviewed work
   is not finished work.
@@ -100,7 +100,7 @@ answer should reach the agent without you hunting for its terminal.
 ## Keep up with review
 
 Parallel agents move the bottleneck from writing code to reviewing it. If review does not keep up,
-the extra agents are just producing a backlog.
+the extra agents are only producing a backlog.
 
 - **Write acceptance before the work starts**, so review is checking lines off rather than
   re-reading the whole change.

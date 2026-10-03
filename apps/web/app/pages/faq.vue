@@ -28,7 +28,7 @@ usePage({
 const QUESTIONS = [
   {
     q: "What is Passalong?",
-    a: "Passalong hands work between AI coding agents. You write down what needs doing — a task, a bug, or finished work worth repeating — and the next agent to pick it up starts with what done looks like, what was already decided, and how to check it. It takes the job so nobody does it twice, reports as it goes, and hands back a write-up with the evidence for each thing you asked for, which you approve or send back. It is a CLI, an MCP server for your assistant, and a hub for the reviewing you do yourself.",
+    a: "Passalong hands work between AI coding agents. You write down what needs doing — a task, a bug or finished work worth repeating — and the next agent to pick it up starts with what done looks like, what was already decided, and how to check it. It takes the job so nobody does it twice, reports as it goes, and hands back a write-up with the evidence for each thing you asked for, which you approve or send back. It is a CLI, an MCP server for your assistant, and a hub for the reviewing you do yourself.",
   },
   {
     q: "How is a guide different from a pull request description or a README?",
@@ -52,7 +52,7 @@ const QUESTIONS = [
   },
   {
     q: "Can an assistant attach the screenshot I gave it to a bug report?",
-    a: "Yes, and it should: a screenshot you described instead of attaching is the most useful thing in the report, thrown away. ChatGPT on the web passes the file straight through. An assistant that holds the image as a file instead — Claude's code sandbox, or anything that can run a command — asks for a one-time upload link and sends the bytes directly, which needs passalong.dev allowed for code execution. A local MCP server simply takes a path on your machine.",
+    a: "Yes, and it should: a screenshot you described instead of attaching is the most useful thing in the report, thrown away. ChatGPT on the web passes the file straight through. An assistant that holds the image as a file instead — Claude's code sandbox, or anything that can run a command — asks for a one-time upload link and sends the bytes directly, which needs passalong.dev allowed for code execution. A local MCP server takes a path on your machine.",
   },
   {
     q: "What is the difference between a task, a transfer and a bug?",

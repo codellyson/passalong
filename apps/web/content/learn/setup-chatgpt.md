@@ -28,7 +28,7 @@ client ID in Passalong and paste it back. It needs no secret.
 3. Copy the callback address ChatGPT shows.
 4. In [your Passalong hub's settings](/hub/settings), open **Set up a connector manually**, give it
    that callback address, and make a client ID. Leave the secret off.
-5. Back in ChatGPT, fill in only the server URL, OAuth, and the client ID. Leave the client secret
+5. Back in ChatGPT, fill in only the server URL, OAuth and the client ID. Leave the client secret
    empty.
 6. Save, and approve Passalong in the window that opens.
 
