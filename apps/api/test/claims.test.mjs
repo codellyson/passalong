@@ -1332,6 +1332,19 @@ test("a browser hold under any person- id gives way to the account's own agent o
   assert.equal((await take(db, "t1", A, { at: later(1) })).claim.agent_id, "agent-a");
 });
 
+test("a holder who is not the author can release their own hold, and only theirs", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  teamed(db);
+  const t = await take(db, "t1", { ...PERSON, any: true }, { at: T0, many: true });
+  assert.ok(t.claim, JSON.stringify(t));
+  assert.equal((await release(db, "t1", { account: "stranger", at: later(1) })).status, 404);
+  const r = await release(db, "t1", { account: "other", at: later(2) });
+  assert.equal(r.state, "ready", JSON.stringify(r));
+  assert.equal((await take(db, "t1", A, { at: later(3) })).claim.agent_id, "agent-a");
+});
+
 test("the author sees what was handed in on a handoff, and can close it", async () => {
   const db = d1();
   const guide = seed(db);

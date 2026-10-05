@@ -1396,16 +1396,31 @@ export async function release(
 ): Promise<
   { state: "ready"; claimants: string[]; places: number } | { error: string; status: 404 | 409 }
 > {
-  const g = await authoredAnyKind(db, id, account);
-  if ("error" in g) return g;
+  const authored = await authoredAnyKind(db, id, account);
+  // Not the author: whoever holds it can still let go of their own hold. Without that, a hold the
+  // account could not shed — a stale browser one, say — stood until the author came to remove it.
+  const g =
+    "error" in authored
+      ? await db
+          .prepare(
+            `SELECT markdown, kind FROM guide g WHERE id = ?
+                AND EXISTS (SELECT 1 FROM claim WHERE guide_id = g.id AND account_id = ? AND state = 'claimed')`,
+          )
+          .bind(id, account)
+          .first<{ markdown: string; kind: string }>()
+      : authored;
+  if (!g) return authored as { error: string; status: 404 };
+  const own = "error" in authored;
 
   // Every live claim, because a handoff has one per repo: three people in three checkouts can each
   // hold the same guide legitimately, and "take it back" means from whoever has it, not from
   // whichever of them the query happened to return first. A task has one place, so this is the
   // same single row it always was.
   const { results: held } = await db
-    .prepare("SELECT * FROM claim WHERE guide_id = ? AND state = 'claimed'")
-    .bind(id)
+    .prepare(
+      `SELECT * FROM claim WHERE guide_id = ? AND state = 'claimed'${own ? " AND account_id = ?" : ""}`,
+    )
+    .bind(...(own ? [id, account] : [id]))
     .all<ClaimRow>();
   if (!held.length) {
     const waiting = await db
@@ -1421,7 +1436,11 @@ export async function release(
   }
 
   const writes = [
-    db.prepare("DELETE FROM claim WHERE guide_id = ? AND state = 'claimed'").bind(id),
+    db
+      .prepare(
+        `DELETE FROM claim WHERE guide_id = ? AND state = 'claimed'${own ? " AND account_id = ?" : ""}`,
+      )
+      .bind(...(own ? [id, account] : [id])),
   ];
   // Where the work was left, written into the document so the next person picks it up rather than
   // starting over. `## Review notes` is a task's section; a handoff has no place for it, and

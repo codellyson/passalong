@@ -189,13 +189,13 @@ const talk = (w: Working) =>
               >Answer</button>
               <button v-else type="button" class="btn sm mr-3" @click="talk(w)">Open</button>
               <button
-                v-if="w.mine"
+                v-if="w.mine || w.by.you"
                 class="linkish"
                 type="button"
                 :disabled="taking === w.id"
                 :title="`Put ${w.title || w.id} back, and tell whoever has it`"
                 @click="takeBack(w)"
-              >{{ taking === w.id ? "Stopping…" : "Stop this agent" }}</button>
+              >{{ taking === w.id ? "Releasing…" : person(w) ? "Release hold" : "Stop this agent" }}</button>
             </td>
           </tr>
         </tbody>
