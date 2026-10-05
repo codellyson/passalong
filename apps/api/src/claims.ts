@@ -638,6 +638,7 @@ export async function take(
   }
 
   const place = task ? "" : repo;
+  if (task && !isPerson(who.agent)) await dropPersonHold(db, id, who.account);
   const fence = await nextFence(db, id, place);
   const res = await db
     .prepare(
