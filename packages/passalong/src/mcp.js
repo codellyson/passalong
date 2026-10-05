@@ -396,7 +396,7 @@ export function buildServer() {
       if (h)
         return fail({
           message:
-            `${err.message}. Somebody else is on it here${h.note ? ` (last said: "${h.note}")` : ""}. ` +
+            `${err.message}. Somebody else is on it here${h.agent ? ` (agent ${h.agent}${h.host ? ` on ${h.host}` : ""})` : ""}${h.note ? ` (last said: "${h.note}")` : ""}. ` +
             "Tell the user before doing this work too; get_guide reads it without taking it.",
         });
       return failWith(err);

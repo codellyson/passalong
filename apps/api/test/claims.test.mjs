@@ -1323,6 +1323,15 @@ test("an agent takes a task from its own account's browser hold, and can hand it
   assert.equal(done.claim.state, "review");
 });
 
+test("a browser hold under any person- id gives way to the account's own agent on a task", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const mine = { account: "me", agent: "person-someone-else", repo: "", any: true };
+  await take(db, "t1", mine, { at: T0, many: true });
+  assert.equal((await take(db, "t1", A, { at: later(1) })).claim.agent_id, "agent-a");
+});
+
 test("the author sees what was handed in on a handoff, and can close it", async () => {
   const db = d1();
   const guide = seed(db);
