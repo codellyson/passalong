@@ -1306,6 +1306,23 @@ test("a person taking handoffs in the browser can hold several, and is not stall
   );
 });
 
+test("an agent takes a task from its own account's browser hold, and can hand it in", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  const mine = { account: "me", agent: "person-me", repo: "", any: true };
+  assert.equal((await take(db, "t1", mine, { at: T0, many: true })).claim.agent_id, "person-me");
+  const got = await take(db, "t1", A, { at: later(1) });
+  assert.equal(got.claim.agent_id, "agent-a", "the browser hold gives way to the agent");
+  const done = await handIn(db, "t1", A, {
+    at: later(2),
+    note: "done",
+    evidence: "ran `pnpm test`: 12 passed, 0 failed",
+  });
+  assert.ok(done.claim, "hand_in is no longer refused");
+  assert.equal(done.claim.state, "review");
+});
+
 test("the author sees what was handed in on a handoff, and can close it", async () => {
   const db = d1();
   const guide = seed(db);
