@@ -37,9 +37,9 @@ const isPerson = (agent: string) => agent.startsWith("person-");
 function dropPersonHold(db: D1Database, id: string, account: string) {
   return db
     .prepare(
-      "DELETE FROM claim WHERE guide_id = ? AND place = '' AND account_id = ? AND agent_id = ? AND state = 'claimed'",
+      "DELETE FROM claim WHERE guide_id = ? AND place = '' AND account_id = ? AND agent_id LIKE 'person-%' AND state = 'claimed'",
     )
-    .bind(id, account, personAgent(account))
+    .bind(id, account)
     .run();
 }
 
