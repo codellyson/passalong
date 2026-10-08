@@ -132,6 +132,7 @@ async function keepLogin(token, base = api.baseUrl()) {
     { token, api: base, account: who.account, handle: who.handle || "", email: who.email || "" },
     { activate: before === 0 },
   );
+  if (!api.currentTeam() && who.teams?.length === 1) store.saveTeam(name, who.teams[0].slug);
   const now = store.readConfig();
   const count = Object.keys(store.readAccounts(now)).length;
   console.error(`signed in as ${name} (account ${who.account}) on ${base}. Sync is on.`);
@@ -391,6 +392,7 @@ const commands = {
     console.log(id);
     const target = guide.meta.target_context;
     console.error(`task "${guide.meta.title}" is in Draft${target ? ` for ${target}` : " (no repo)"}`);
+    if (guide.meta.team) console.error(`handed to ${guide.meta.team} (team inbox)`);
     console.error(`when an agent may take it: passalong ready ${id}`);
     if (!synced) console.error("not synced (run `passalong login` — agents elsewhere cannot see it)");
   },

@@ -55,6 +55,14 @@ export async function share(markdown, { cwd = process.cwd(), to, follows } = {})
   const target = parseTarget(to);
   if (target.team) guide.meta.team = target.team;
   if (target.to) guide.meta.to = target.to;
+  if (
+    !guide.meta.team &&
+    (guide.meta.kind === "bug" || guide.meta.kind === "task") &&
+    api.loggedIn()
+  ) {
+    const team = api.currentTeam();
+    if (team) guide.meta.team = team;
+  }
   // `follows` names the guide this one came out of: an id, a share link, or a pulled .md file. An id
   // is used as it is; a link or a file is read for the id in its own frontmatter. `validate()` below
   // is what refuses a guide that names itself.
@@ -111,10 +119,11 @@ export async function fileBugs(
   if (!api.loggedIn())
     throw new PassalongError("filing a report needs sync — run `passalong login` first");
   const target = parseTarget(to);
+  const team = target.team || api.currentTeam();
   const { report } = await api.createReport({
     title,
     environment,
-    team: target.team || "",
+    team,
     to: target.to || "",
   });
 
@@ -139,7 +148,7 @@ export async function fileBugs(
         .join(", ")}) before failing: ${err.message}`,
     );
   }
-  return { report: { id: report.id, title, environment }, issues: filed };
+  return { report: { id: report.id, title, environment, team }, issues: filed };
 }
 
 /** Resolve a reference (id, share URL, or local file path) to a guide. */
