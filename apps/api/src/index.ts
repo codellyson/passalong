@@ -768,6 +768,10 @@ const PUBLIC = new Set([
   // grants nothing until a signed-in person approves it; see the route.
   "POST /v1/oauth/register",
   "POST /v1/accounts",
+  // A CLI asking to be signed in from the browser. It cannot hold a credential yet, and what it
+  // is given is checked against a secret only it knows; see the routes.
+  "POST /v1/device/start",
+  "POST /v1/device/poll",
   "POST /v1/auth/signup",
   "POST /v1/auth/login",
   "POST /v1/auth/forgot",
@@ -1203,6 +1207,113 @@ app.post("/v1/tokens", async (c) => {
     .run();
   // The only time the plaintext exists outside the caller's machine.
   return c.json({ id, name: label, token }, 201);
+});
+
+// ---- signing the CLI in from the browser (migrations/0043_device_login.sql) ---------------------
+//
+// start: the CLI says who it is and sends the sha256 of a secret it keeps. approve: a signed-in
+// person, shown the same short code the terminal shows, says yes. poll: the CLI proves it holds the
+// secret and is handed a token, once. Nothing here stores a credential: the token is made at poll.
+
+/** No vowels and nothing that looks like another character, because a person reads this aloud. */
+const DEVICE_CODE_ALPHABET = "BCDFGHJKMNPQRSTVWXZ23456789";
+const DEVICE_MINUTES = 10;
+const DEVICE_INTERVAL = 2;
+
+const deviceCode = (raw: unknown) =>
+  String(raw ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8);
+
+app.post("/v1/device/start", async (c) => {
+  if (c.env.ACCOUNT_LIMIT) {
+    const ip = c.req.header("cf-connecting-ip") || "unknown";
+    const { success } = await c.env.ACCOUNT_LIMIT.limit({ key: `device:${ip}` });
+    if (!success)
+      return err(c, 429, "Too many sign-in attempts from this address. Try again in a minute.");
+  }
+  const body = (await c.req.json().catch(() => ({}))) as { challenge?: unknown; label?: unknown };
+  const challenge = typeof body.challenge === "string" ? body.challenge.toLowerCase() : "";
+  if (!/^[0-9a-f]{64}$/.test(challenge))
+    return err(c, 400, "send `challenge`: the sha256, in hex, of a secret you keep");
+  const label =
+    (typeof body.label === "string" ? body.label.trim() : "").slice(0, 60) || "a terminal";
+  const created = now();
+  const expires = new Date(Date.parse(created) + DEVICE_MINUTES * 60_000).toISOString();
+  // Anything past its time is dead weight; clearing it here means no job has to.
+  await c.env.DB.prepare("DELETE FROM device_login WHERE expires < ?").bind(created).run();
+  const id = rid(24);
+  const code = rand(8, DEVICE_CODE_ALPHABET);
+  await c.env.DB.prepare(
+    "INSERT INTO device_login (id, code, challenge, label, created, expires) VALUES (?, ?, ?, ?, ?, ?)",
+  )
+    .bind(id, code, challenge, label, created, expires)
+    .run();
+  const shown = `${code.slice(0, 4)}-${code.slice(4)}`;
+  return c.json(
+    {
+      id,
+      code: shown,
+      url: `${origin(c)}/device?code=${shown}`,
+      interval: DEVICE_INTERVAL,
+      expires_in: DEVICE_MINUTES * 60,
+    },
+    201,
+  );
+});
+
+/** What the approval page shows: who is asking, so a person can tell it from somebody else's. */
+app.get("/v1/device/:code", async (c) => {
+  const row = await c.env.DB.prepare(
+    "SELECT label, expires, account_id FROM device_login WHERE code = ? AND expires > ?",
+  )
+    .bind(deviceCode(c.req.param("code")), now())
+    .first<{ label: string; expires: string; account_id: string }>();
+  if (!row) return err(c, 404, "This sign-in link has expired. Run `passalong login` again.");
+  return c.json({ label: row.label, expires: row.expires, approved: Boolean(row.account_id) });
+});
+
+app.post("/v1/device/approve", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { code?: unknown };
+  const res = await c.env.DB.prepare(
+    "UPDATE device_login SET account_id = ? WHERE code = ? AND expires > ? AND account_id = ''",
+  )
+    .bind(c.get("account"), deviceCode(body.code), now())
+    .run();
+  if (!res.meta.changes)
+    return err(
+      c,
+      404,
+      "This sign-in link has expired or was already used. Run `passalong login` again.",
+    );
+  return c.json({ approved: true });
+});
+
+app.post("/v1/device/poll", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { id?: unknown; verifier?: unknown };
+  const row = await c.env.DB.prepare(
+    "SELECT challenge, label, expires, account_id FROM device_login WHERE id = ?",
+  )
+    .bind(typeof body.id === "string" ? body.id : "")
+    .first<{ challenge: string; label: string; expires: string; account_id: string }>();
+  const verifier = typeof body.verifier === "string" ? body.verifier : "";
+  if (!row || row.expires <= now() || (await sha256(verifier)) !== row.challenge)
+    return err(c, 410, "This sign-in expired. Run `passalong login` again.");
+  if (!row.account_id) return c.json({ pending: true }, 202);
+  // Deleted first and made only if that won: two polls cannot both be handed a token.
+  const won = await c.env.DB.prepare("DELETE FROM device_login WHERE id = ?")
+    .bind(String(body.id))
+    .run();
+  if (!won.meta.changes) return err(c, 410, "This sign-in was already collected.");
+  const token = `pa_${rand(32)}`;
+  await c.env.DB.prepare(
+    "INSERT INTO token (id, account_id, name, hash, created) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(rid(10), row.account_id, row.label, await sha256(token), now())
+    .run();
+  count(c, "device_login", {});
+  return c.json({ account: row.account_id, token });
 });
 
 app.delete("/v1/tokens/:id", async (c) => {
