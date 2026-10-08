@@ -3986,6 +3986,16 @@ app.put("/v1/guides/:id", async (c) => {
   );
 });
 
+/** Whether the caller owns the team a handoff or bug belongs to, and so may close it for its author. */
+async function ownsTeam(c: Ctx, row: GuideRow): Promise<boolean> {
+  if (!row.team_id || row.kind === "task") return false;
+  const m = await db(c)
+    .prepare("SELECT 1 FROM membership WHERE team_id = ? AND account_id = ? AND role = 'owner'")
+    .bind(row.team_id, c.get("account"))
+    .first();
+  return Boolean(m);
+}
+
 /** A guide the caller may read: their own, or one in a team they belong to. */
 async function readableGuide(
   c: Ctx,
@@ -4270,6 +4280,7 @@ app.get("/v1/guides/:id/context", async (c) => {
   return c.json({
     guide: views.get(row.id),
     owner: found.owner,
+    can_close: found.owner ? row.kind !== "task" : await ownsTeam(c, row),
     claims: claimRows.map((k) => ({
       place: k.place,
       state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
@@ -5611,6 +5622,16 @@ app.post("/v1/guides/:id/close", async (c) => {
   const team_id = found?.row.team_id || "";
   for (const to of r.claimants)
     await notify(c.env, { to, kind: "closed", guide_id: id, actor_id: c.get("account"), team_id });
+  // A team owner closing somebody else's guide is not something its author should find out by
+  // looking: they hear it as "<owner> is done with it".
+  if (r.byOwner && !r.claimants.includes(r.author))
+    await notify(c.env, {
+      to: r.author,
+      kind: "consumed",
+      guide_id: id,
+      actor_id: c.get("account"),
+      team_id,
+    });
   // And whoever it was addressed to, who is usually nobody in `claimants` — that is the whole
   // case this exists for: a guide the receiver never opened. `closed` reads as "accepted your
   // work", which is wrong for somebody who did none, so they hear `consumed`: it is done with.
