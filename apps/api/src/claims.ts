@@ -181,21 +181,16 @@ export function checksProblem(checks: Check[]): string | null {
     // The asymmetry this removes: an image the USER showed the agent has been mandatory before
     // publish_guide and file_bugs for as long as those have existed, while an image that is the
     // only possible proof of the agent's OWN claim was never asked for once.
-    if (!shown(c))
+    if (!shown(c)) {
+      const line = String(c.check).trim().slice(0, 60);
       return (
-        `"${String(c.check).trim().slice(0, 60)}" was answered in words. Run it or show it: put ` +
-        "the command in `cmd` and it is executed here, before this hand-in lands, and what it " +
-        "prints is recorded instead of your account of it — pasting a command into `ran` is still " +
-        "you typing. If no command can settle it, attach_screenshot and put the line it gives " +
-        "you in `ran`: it takes a path in `file`, or the image itself in `data` as base64, so a " +
-        "screenshot your browser handed back inline and never wrote to disk still goes in. If " +
-        "you cannot get at the bytes either, capture it to a file — a headless browser\'s " +
-        "page.screenshot({ path }) — rather than describing what you saw. A check that can be " +
-        "neither run nor shown is not a check: say it in `writeup`, where it reads as your " +
-        "account. Shoot the running thing: a scratch page built so there was something to " +
-        "photograph is a picture of your own scaffolding, and deleting it afterwards leaves a " +
-        "shot nobody can take again."
+        `"${line}" was answered in words. Run it or show it. Run it: send ` +
+        `{"check": "${line}", "cmd": "<the command that settles it>"} — it runs here and its ` +
+        "output is recorded as the evidence. Show it, when no command can settle it: attach_screenshot, then " +
+        `{"check": "${line}", "ran": "<the line it returns>"}. Typing a command into \`ran\` is ` +
+        "still you typing, and a check that can be neither run nor shown goes in `writeup`."
       );
+    }
   }
   return null;
 }

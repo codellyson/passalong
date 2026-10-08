@@ -214,3 +214,19 @@ test("attach_screenshot sends hand-in evidence to the hand-in, not to a guide", 
   assert.match(shot.description, /part of a DOCUMENT goes in a guide body/, "and the other case");
   assert.match(shot.description, /DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS/);
 });
+
+test("hand_in takes a bare string as a check line, so the refusal is ours and not a schema error", async () => {
+  const [left, right] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test", version: "0" });
+  await Promise.all([buildServer().connect(right), client.connect(left)]);
+  const res = await client.callTool({
+    name: "hand_in",
+    arguments: { id: "abcd1234", note: "did it", checks: ["tsc --noEmit -p ."] },
+  });
+  await client.close();
+  const said = JSON.stringify(res.content);
+  assert.doesNotMatch(said, /Expected object, received string/);
+  assert.doesNotMatch(said, /Invalid arguments/i);
+  const t = (await tools()).get("hand_in");
+  assert.equal(t.inputSchema.properties.checks.items.type, "object", "listed as an object still");
+});
