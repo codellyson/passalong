@@ -1,6 +1,6 @@
 {
   "name": "passalong",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Hand tasks, bugs and finished work to AI coding agents, and get back a write-up with evidence.",
   "mcpName": "io.github.codellyson/passalong",
   "keywords": [
