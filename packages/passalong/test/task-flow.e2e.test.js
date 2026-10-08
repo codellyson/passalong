@@ -256,7 +256,8 @@ async function newAccount() {
       headers: { ...headers, cookie },
       body: JSON.stringify({ name: "e2e" }),
     });
-    if (!minted.ok) throw new Error(`could not make a token: ${minted.status} ${await minted.text()}`);
+    if (!minted.ok)
+      throw new Error(`could not make a token: ${minted.status} ${await minted.text()}`);
     return { account, token: (await minted.json()).token };
   }
   throw new Error("could not make an account: still rate-limited after two minutes");
