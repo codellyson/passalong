@@ -220,6 +220,73 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
   assert.deepEqual(await p.readyDrafts(), [], "nothing left in Draft");
 });
 
+test("signing in from the browser: the CLI shows a code, a person approves it, the CLI is handed a token", {
+  skip,
+}, async () => {
+  const headers = { "content-type": "application/json", "x-passalong-version": VERSION };
+  const email = `device-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.test`;
+  const password = `pw-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+  const signup = await fetch(`${API}/v1/auth/signup`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ email, password }),
+  });
+  assert.equal(signup.status, 201);
+  const cookie = (signup.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+
+  const bad = await fetch(`${API}/v1/device/start`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ challenge: "not a hash" }),
+  });
+  assert.equal(bad.status, 400, "a challenge that is not a sha256 is refused");
+
+  const home = mkdtempSync(join(tmpdir(), "passalong-device-"));
+  const env = { ...process.env, PASSALONG_API: API, PASSALONG_HOME: home };
+  delete env.PASSALONG_TOKEN;
+  const cli = new URL("../bin/passalong", import.meta.url).pathname;
+  const child = spawn(process.execPath, [cli, "login"], {
+    env,
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let said = "";
+  const code = await new Promise((resolve, reject) => {
+    child.stderr.on("data", (d) => {
+      said += d;
+      const m = /code ([A-Z0-9]{4}-[A-Z0-9]{4})/.exec(said);
+      if (m) resolve(m[1]);
+    });
+    child.on("exit", () => reject(new Error(`the CLI ended before showing a code: ${said}`)));
+  });
+  assert.match(said, /Open http/);
+
+  const shown = await fetch(`${API}/v1/device/${code}`, { headers: { ...headers, cookie } });
+  assert.equal(shown.status, 200);
+  assert.match((await shown.json()).label, / cli$/, "the page can say what is asking");
+  const done = await fetch(`${API}/v1/device/approve`, {
+    method: "POST",
+    headers: { ...headers, cookie },
+    body: JSON.stringify({ code }),
+  });
+  assert.equal(done.status, 200);
+
+  const exit = await new Promise((resolve) => child.on("exit", resolve));
+  assert.equal(exit, 0, said);
+  const { token } = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
+  assert.match(token, /^pa_/);
+  const me = await fetch(`${API}/v1/me`, {
+    headers: { ...headers, authorization: `Bearer ${token}` },
+  });
+  assert.equal(me.status, 200, "the token the CLI was handed works");
+
+  const again = await fetch(`${API}/v1/device/approve`, {
+    method: "POST",
+    headers: { ...headers, cookie },
+    body: JSON.stringify({ code }),
+  });
+  assert.equal(again.status, 404, "a code that was used cannot be approved again");
+});
+
 /** Another account on the same local server, allowed to sync. Returns its token. */
 /**
  * A fresh account. Sign-up is rate-limited per address (ACCOUNT_LIMIT: 5 a minute), and this suite

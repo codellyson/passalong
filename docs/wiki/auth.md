@@ -31,9 +31,14 @@ sign up when a third party is down is worse than accepting one weak password.
 Used by the CLI and by MCP servers. Named and revocable from the hub — `last_used` is recorded so a
 stale one is identifiable.
 
-`passalong login` asks for an email and a password, signs in, mints a token named for the machine,
-and drops the session: the password is typed once and never stored, and the thing kept on disk is a
-credential that can be revoked from the hub without changing it. It used to mint an anonymous
+`passalong login` signs in from the browser (migrations/0043_device_login.sql): the CLI shows a short
+code and opens `/device`, a signed-in person compares the page's code with the terminal's and
+approves, and the CLI, polling, is handed a token named for the machine. The token is made at that
+last step and never stored: the row holds only the sha256 of a secret the CLI keeps, so what is in
+the table for ten minutes can recognise the right caller and cannot be one. It needs no terminal to
+ask on, so an agent can start it and tell the person which page to open. `passalong login --email`
+keeps the old way: an email and a password typed once and never stored. Either way the thing kept on
+disk is a credential that can be revoked from the hub without changing it. It used to mint an anonymous
 account instead — no email, no password — which meant the CLI quietly made accounts that could only
 ever be reached from the one file they were written to. `POST /v1/accounts` still makes those, for
 the invite page, which mints before it claims.

@@ -8,3 +8,4 @@ source it came from.
   system, decisions, open questions. Sources: AGENTS.md, docs/PRD.md, docs/V2.md,
   docs/PUBLISH.md, docs/wiki/, and merged PRs #1–#65.
 - 2026-10-03 — blog-and-publish: added the /learn pages (topic guides on the blog's reader, published from shared/pages.ts). Source: branch seo/pillar-agent-handoff.
+- 2026-10-08 — auth: `passalong login` signs in from the browser (device flow: /v1/device/*, /device page); `--email` keeps the password prompts. Source: branch feat/browser-login.

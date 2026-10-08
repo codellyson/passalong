@@ -39,7 +39,7 @@
 //   passalong archive <id>        off your board and out of the free tier's count (was `done`)
 //   passalong rm <id>             delete a guide locally and from sync
 //   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
-//   passalong login [token]       sign in with your email and password, or attach this machine with a token
+//   passalong login [token]       sign in from the browser, or attach this machine with a token
 //   passalong me [--handle H] [--name N] [--email E]   who you are to teammates
 //   passalong team                current team and its members
 //   passalong team create <name>  start a team (you become its owner)
@@ -51,7 +51,7 @@
 //   passalong mcp                 run the MCP server over stdio
 //   passalong version             print the installed version (also -v, --version)
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -94,6 +94,86 @@ const tty = process.stdout.isTTY && process.stdin.isTTY;
  * Written against readline rather than a dependency because this package has none beyond the MCP
  * SDK and zod, and asking for a line of text is not where that changes.
  */
+/** Open a page in the default browser, and say nothing if there is none to open. */
+function openPage(url) {
+  const [cmd, args] =
+    process.platform === "darwin"
+      ? ["open", [url]]
+      : process.platform === "win32"
+        ? ["cmd", ["/c", "start", "", url]]
+        : ["xdg-open", [url]];
+  try {
+    spawn(cmd, args, { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
+  } catch {}
+}
+
+/**
+ * Sign in by approving in the browser: show a code, wait, and be handed a token. No password is
+ * typed here and no token is pasted between windows. Needs no terminal to ask on, so an agent can
+ * run it and tell the person which page to open.
+ */
+async function browserLogin() {
+  const verifier = randomBytes(32).toString("hex");
+  const challenge = createHash("sha256").update(verifier).digest("hex");
+  const start = await api.deviceStart(challenge, `${hostname()} cli`).catch((e) => die(e.message));
+  console.error(`Open ${start.url}`);
+  console.error(`and check the page shows the code ${start.code}, then press Approve.`);
+  if (tty) openPage(start.url);
+  console.error("Waiting for you to approve it here… (Ctrl-C to stop)");
+  const until = Date.now() + start.expires_in * 1000;
+  while (Date.now() < until) {
+    await new Promise((r) => setTimeout(r, start.interval * 1000));
+    const got = await api.devicePoll(start.id, verifier).catch((e) => die(e.message));
+    if (!got) continue;
+    store.writeConfig({ token: got.token, api: api.baseUrl() });
+    console.error(`signed in (account ${got.account}) on ${api.baseUrl()}. Sync is on.`);
+    console.error("Attach other machines with:");
+    console.error(`  passalong login ${got.token}`);
+    console.error("(keep it private — it is a credential, not a password)");
+    console.error("Give teammates a name to address you by: passalong me --handle <you>");
+    return;
+  }
+  die("nobody approved it in time. Run `passalong login` again.");
+}
+
+/** The old way, kept for anyone who asks for it with `--email`: an email and a password, typed here. */
+async function passwordLogin(f) {
+// An account you cannot sign in to is one that dies with this file. This used to mint one
+  // silently and then suggest adding a password afterwards; it asks up front instead.
+  if (!tty)
+    die(
+      "no terminal to ask on. Sign in at " +
+        `${api.baseUrl()}/hub, then attach this machine with \`passalong login <token>\``,
+    );
+
+  const email = f.email || (await ask("Email: "));
+  if (!email) die("an email is needed to sign in");
+  const password = await ask("Password: ", { hidden: true });
+  if (!password) die("a password is needed to sign in");
+
+  const label = `${hostname()} cli`;
+  let who = await api.signIn(email, password, { label }).catch((e) => e);
+  if (who instanceof Error) {
+    // 401 is "no such account, or the wrong password", said the same way on purpose so the API
+    // does not confirm which addresses exist. The CLI has to ask rather than guess, because
+    // creating an account for a mistyped address is worse than being told to try again.
+    if (who.status !== 401) die(who.message);
+    const yes = (await ask(`No account signed in as ${email}. Create one? [y/N] `)).toLowerCase();
+    if (yes !== "y" && yes !== "yes")
+      die("not signed in. If the password was wrong, try again, or reset it at " + `${api.baseUrl()}/hub`);
+    const again = await ask("Choose a password: ", { hidden: true });
+    if (again !== password) die("those did not match");
+    who = await api.signIn(email, password, { make: true, label }).catch((e) => die(e.message));
+  }
+
+  store.writeConfig({ token: who.token, api: api.baseUrl() });
+  console.error(`signed in as ${email} (account ${who.account}) on ${api.baseUrl()}. Sync is on.`);
+  console.error("Attach other machines with:");
+  console.error(`  passalong login ${who.token}`);
+  console.error("(keep it private — it is a credential, not a password)");
+  console.error("Give teammates a name to address you by: passalong me --handle <you>");
+}
+
 async function ask(question, { hidden = false } = {}) {
   const { createInterface } = await import("node:readline");
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
@@ -698,40 +778,11 @@ const commands = {
         return;
       }
     }
-    // An account you cannot sign in to is one that dies with this file. This used to mint one
-    // silently and then suggest adding a password afterwards; it asks up front instead.
-    if (!tty)
-      die(
-        "no terminal to ask on. Sign in at " +
-          `${api.baseUrl()}/hub, then attach this machine with \`passalong login <token>\``,
-      );
-
-    const email = f.email || (await ask("Email: "));
-    if (!email) die("an email is needed to sign in");
-    const password = await ask("Password: ", { hidden: true });
-    if (!password) die("a password is needed to sign in");
-
-    const label = `${hostname()} cli`;
-    let who = await api.signIn(email, password, { label }).catch((e) => e);
-    if (who instanceof Error) {
-      // 401 is "no such account, or the wrong password", said the same way on purpose so the API
-      // does not confirm which addresses exist. The CLI has to ask rather than guess, because
-      // creating an account for a mistyped address is worse than being told to try again.
-      if (who.status !== 401) die(who.message);
-      const yes = (await ask(`No account signed in as ${email}. Create one? [y/N] `)).toLowerCase();
-      if (yes !== "y" && yes !== "yes")
-        die("not signed in. If the password was wrong, try again, or reset it at " + `${api.baseUrl()}/hub`);
-      const again = await ask("Choose a password: ", { hidden: true });
-      if (again !== password) die("those did not match");
-      who = await api.signIn(email, password, { make: true, label }).catch((e) => die(e.message));
-    }
-
-    store.writeConfig({ token: who.token, api: api.baseUrl() });
-    console.error(`signed in as ${email} (account ${who.account}) on ${api.baseUrl()}. Sync is on.`);
-    console.error("Attach other machines with:");
-    console.error(`  passalong login ${who.token}`);
-    console.error("(keep it private — it is a credential, not a password)");
-    console.error("Give teammates a name to address you by: passalong me --handle <you>");
+    // Passwords are for someone who asks: `--email` keeps the prompts. Everyone else is sent to the
+    // browser, which works with no terminal at all — an agent can start it, and the person it is
+    // working for clicks once.
+    if (f.email || f.password) return passwordLogin(f);
+    return browserLogin();
   },
 
   async me(f) {

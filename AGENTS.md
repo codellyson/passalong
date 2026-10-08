@@ -701,7 +701,7 @@ pnpm -C apps/api lint                   # tsc over the mounted app
 pnpm -C apps/web lint                   # vue-tsc over the pages, and apps/api through the mount
 pnpm -C apps/api db:migrate             # local D1 (re-run if wrangler.jsonc's database_id changes)
 pnpm dev                                # the whole thing on :3000 — pages and API
-PASSALONG_API=http://localhost:3000 PASSALONG_HOME=/tmp/rh packages/passalong/bin/passalong login
+PASSALONG_API=http://localhost:3000 PASSALONG_HOME=/tmp/rh packages/passalong/bin/passalong login   # opens /device: approve it in the signed-in hub
 pnpm -C apps/api db:migrate:remote && pnpm -C apps/web run deploy
 pnpm metrics --dev                      # PRD §14, read straight from D1 (--remote for production)
 ```

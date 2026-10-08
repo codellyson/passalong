@@ -126,6 +126,32 @@ export async function signIn(email, password, { make = false, label = "" } = {})
  * still live and still right for the invite page, which mints before it claims, and because
  * removing a published export is a breaking change for anyone who imported it.
  */
+/**
+ * Sign this machine in from the browser. `challenge` is the sha256, in hex, of a secret kept here;
+ * what comes back is a short code to show, the page to open, and how often to ask whether it was
+ * approved. Nothing in the answer is a credential.
+ */
+export const deviceStart = (challenge, label) =>
+  call("/v1/device/start", { method: "POST", auth: false, body: { challenge, label } });
+
+/** `null` while nobody has said yes; the account and its token once somebody has. */
+export async function devicePoll(id, verifier) {
+  let res;
+  try {
+    res = await fetch(`${baseUrl()}/v1/device/poll`, {
+      method: "POST",
+      headers: { ...CLIENT, "content-type": "application/json" },
+      body: JSON.stringify({ id, verifier }),
+    });
+  } catch (err) {
+    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
+  }
+  if (res.status === 202) return null;
+  const said = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, said.message || res.statusText);
+  return said;
+}
+
 export const createAccount = () => call("/v1/accounts", { method: "POST", auth: false });
 export const me = () => call("/v1/me");
 export const updateMe = (patch) => call("/v1/me", { method: "PATCH", body: patch });

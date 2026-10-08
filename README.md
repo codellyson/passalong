@@ -50,7 +50,7 @@ passalong broken <id> <why>   you tried it and it does not — the author is tol
 passalong archive <id>        off your board and out of the free tier's count (was `done`)
 passalong rm <id>             delete a guide locally and from sync
 passalong export [dir]        dump every guide as plain markdown
-passalong login [token]       sign in with your email and password, or attach this machine with a token
+passalong login [token]       sign in from the browser, or attach this machine with a token
 passalong me [--handle H] [--name N] [--email E]   who you are to teammates
 passalong team                current team and its members
 passalong team create <name>  start a team (you become its owner)
