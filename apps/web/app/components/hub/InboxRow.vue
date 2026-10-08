@@ -99,7 +99,7 @@ const who = computed(() => {
         v-if="expiry"
         class="block max-w-44 font-ui text-xs whitespace-normal"
         :class="expiry.soon ? 'text-warn' : 'text-muted'"
-        :title="expiry.text"
+        :title="expiry.why"
       >{{ expiry.text }}</span>
     </td>
     <td class="text-right whitespace-nowrap">
