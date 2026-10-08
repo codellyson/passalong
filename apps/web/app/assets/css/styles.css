@@ -2564,3 +2564,87 @@ table.rows tr.run td {
 table.rows thead th {
   white-space: nowrap;
 }
+
+/* ---- the same list, on a phone, as cards --------------------------------------------------------
+   A table of six columns cannot be read at 400px however its columns are trimmed, and shrinking them
+   only made the page scroll sideways or the text wrap to a word a line. A tablet at 768px is no
+   better off than a phone: the guides table measured 1055px wide against a 961px card at a 1024px
+   screen, so the cut-over is xl (80rem) and not md or lg. So below the xl breakpoint a table
+   marked `stack` stops being a table: each row is a card with its checkbox at the
+   left, its title across the top, the state and the age under it, and its buttons under that. The
+   cells a desktop shows as columns and a phone moves under the title carry `hidden xl:table-cell`,
+   which is kept here by name because a class selector cannot out-rank the rules below.
+   Opt in with `stack` on the table; the first cell is the checkbox and the second is the title. */
+@media (max-width: 79.99rem) {
+  table.rows.stack,
+  table.rows.stack tbody {
+    display: block;
+  }
+  table.rows.stack thead,
+  table.rows.stack th,
+  table.rows.stack td.hidden {
+    display: none;
+  }
+  table.rows.stack tr {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s-1) var(--s-4);
+    border-top: 1px solid var(--line);
+    padding: var(--s-3) var(--s-4) var(--s-3) calc(var(--s-4) + 2rem);
+  }
+  table.rows.stack tbody tr:first-child {
+    border-top: 0;
+  }
+  table.rows.stack td {
+    display: block;
+    border: 0;
+    padding: 0;
+    min-width: 0;
+  }
+  /* The checkbox hangs in the card's left margin, level with the title. */
+  table.rows.stack td:first-child {
+    position: absolute;
+    left: var(--s-4);
+    top: var(--s-3);
+    padding: 0;
+  }
+  /* The title takes the whole first line. */
+  table.rows.stack td:nth-child(2) {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  /* The answer a row asks for, beneath it, is one wide cell. */
+  table.rows.stack td[colspan] {
+    flex: 1 1 100%;
+  }
+  /* State and age sit side by side under the title; the age is the quieter of the two. */
+  table.rows.stack td:nth-child(n + 3) {
+    flex: 0 1 auto;
+    white-space: normal;
+  }
+  /* The buttons start at the left under the title. `!important` because the cells carry utility
+     classes (`text-right`, `justify-end`) that come later in the cascade and would win. */
+  table.rows.stack td:last-child {
+    flex: 1 1 100%;
+    text-align: left !important;
+    padding-top: var(--s-1);
+  }
+  table.rows.stack td:last-child > * {
+    justify-content: flex-start !important;
+    flex-wrap: wrap;
+  }
+  /* A row's menu opens from a button at the card's left, not from a column at the table's right, so
+     anchored to the button it ran off the screen's edge. Anchored to the card instead, it fills the
+     card's width just under the button. */
+  table.rows.stack td:last-child .relative,
+  table.rows.stack td:last-child.relative {
+    position: static !important;
+  }
+  table.rows.stack .menu {
+    left: var(--s-3) !important;
+    right: var(--s-3) !important;
+    width: auto !important;
+  }
+}

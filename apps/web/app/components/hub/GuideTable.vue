@@ -15,13 +15,13 @@ defineProps<{
 
 <template>
   <div class="rounded-3 bg-raised shadow-edge">
-    <table class="rows m-0 w-full font-ui text-sm">
+    <table class="rows stack m-0 w-full font-ui text-sm">
       <thead>
         <tr class="text-xs text-muted">
           <th class="w-8"><span class="sr-only">Select</span></th>
           <th>Guide</th>
-          <th>What it says</th>
-          <th>Who</th>
+          <th class="hidden md:table-cell">What it says</th>
+          <th class="hidden md:table-cell">Who</th>
           <th>State</th>
           <th>Age</th>
           <th><span class="sr-only">Actions</span></th>

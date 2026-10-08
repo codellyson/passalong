@@ -107,15 +107,18 @@ async function closeAll() {
         />
         <span class="line-clamp-2">{{ group.title || "Bug report" }}</span>
       </button>
+      <span class="mt-1 block pl-6 text-xs text-muted md:hidden">
+        {{ plural(rows.length, "bug") }}<template v-if="blockers">, {{ plural(blockers, "blocker") }}</template><template v-if="team"> · to {{ team }}</template>
+      </span>
     </td>
-    <td class="min-w-48 text-muted">
+    <td class="hidden min-w-48 text-muted md:table-cell">
       {{ plural(rows.length, "bug") }}
       <span
         v-if="blockers"
         class="ml-1 rounded-pill bg-danger-soft px-2 py-0.5 text-xs font-semibold text-danger"
       >{{ plural(blockers, "blocker") }}</span>
     </td>
-    <td class="whitespace-nowrap text-muted"><template v-if="team">to <b class="font-medium text-fg">{{ team }}</b></template><template v-else>—</template></td>
+    <td class="hidden whitespace-nowrap text-muted md:table-cell"><template v-if="team">to <b class="font-medium text-fg">{{ team }}</b></template><template v-else>—</template></td>
     <td class="whitespace-nowrap" :class="progress.tone || 'text-muted'">{{ progress.text }}</td>
     <td class="whitespace-nowrap text-muted tabular-nums">{{ rel(group.created) }}</td>
     <td class="text-right"><span class="inline-flex flex-wrap items-center justify-end gap-2">

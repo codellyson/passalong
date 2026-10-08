@@ -24,7 +24,7 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
    agent with the Passalong MCP server. The guide lands in its context; it implements, adapting the
    parts marked `ASSUMES:`.
 4. **Close.** Say whether it worked: `passalong works <id>`, or `passalong broken <id> <why>`.
-   `passalong done <id>` shelves it when you are finished with it.
+   `passalong done <id>` archives it when you are finished with it.
 
 ## Commands
 
