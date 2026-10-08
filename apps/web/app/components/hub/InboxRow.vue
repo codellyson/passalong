@@ -84,9 +84,15 @@ const who = computed(() => {
           {{ g.children }} {{ g.children === 1 ? "follow-up" : "follow-ups" }}
         </a>
       </span>
+      <!-- The two columns that do not fit a narrow screen (What it says, Who) move under the title,
+           so a phone shows what a desktop does without a table wider than the page. -->
+      <span v-if="g.summary" class="mt-1 line-clamp-2 block text-xs text-muted md:hidden">{{ g.summary }}</span>
+      <span v-if="who" class="mt-0.5 block text-xs text-muted md:hidden">
+        {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> in {{ who.team }}</template>
+      </span>
     </td>
-    <td class="min-w-48 max-w-[26rem] text-muted"><span class="line-clamp-2">{{ g.summary || "—" }}</span></td>
-    <td class="whitespace-nowrap text-muted">
+    <td class="hidden min-w-48 max-w-[26rem] text-muted md:table-cell"><span class="line-clamp-2">{{ g.summary || "—" }}</span></td>
+    <td class="hidden whitespace-nowrap text-muted md:table-cell">
       <template v-if="who">
         {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> in {{ who.team }}</template>
       </template>

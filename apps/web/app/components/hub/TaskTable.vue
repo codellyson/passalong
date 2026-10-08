@@ -90,9 +90,9 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
             </label>
           </th>
           <th>Task</th>
-          <th>What it says</th>
+          <th class="hidden md:table-cell">What it says</th>
           <th>State</th>
-          <th>Held by</th>
+          <th class="hidden md:table-cell">Held by</th>
           <th>Age</th>
           <th><span class="sr-only">Actions</span></th>
         </tr>
@@ -100,13 +100,19 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
       <tbody>
         <tr v-for="t in tasks" :key="t.id">
           <td><HubSelectBox :id="t.id" :title="t.title" :archived="t.state === 'done'" :mine="t.mine" /></td>
-          <td class="min-w-60 max-w-[22rem] font-medium">
+          <td class="min-w-40 max-w-[22rem] font-medium md:min-w-60">
             <NuxtLink :to="`/hub/g/${t.id}`" class="line-clamp-2 text-fg no-underline hover:text-accent">{{ t.title || t.id }}</NuxtLink>
             <span class="font-code text-xs font-normal text-muted">{{ t.id }}</span>
+            <!-- What it says and Held by do not fit a narrow screen as columns; they sit under the
+                 title there instead, so a phone shows what a desktop does. -->
+            <span v-if="t.summary" class="mt-1 line-clamp-2 block text-xs font-normal text-muted md:hidden">{{ t.summary }}</span>
+            <span v-if="holder(t)" class="mt-0.5 block text-xs font-normal text-muted md:hidden">
+              held by <b class="font-medium text-fg">{{ holder(t) }}</b>
+            </span>
           </td>
-          <td class="max-w-[24rem] text-muted"><span class="line-clamp-2">{{ t.summary || "—" }}</span></td>
-          <td class="whitespace-nowrap" :class="STATE[t.state].tone">{{ STATE[t.state].text }}</td>
-          <td class="whitespace-nowrap text-muted">
+          <td class="hidden max-w-[24rem] text-muted md:table-cell"><span class="line-clamp-2">{{ t.summary || "—" }}</span></td>
+          <td class="md:whitespace-nowrap" :class="STATE[t.state].tone">{{ STATE[t.state].text }}</td>
+          <td class="hidden whitespace-nowrap text-muted md:table-cell">
             <b v-if="holder(t)" class="font-medium text-fg">{{ holder(t) }}</b>
             <span v-if="t.target" class="ml-1 font-code text-xs">{{ shorten(t.target, 24).text }}</span>
           </td>
