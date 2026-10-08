@@ -1,7 +1,7 @@
-// The lists turn into cards below one width, and four components and one stylesheet each have to
-// agree on it. They disagreed once: the stylesheet said 1280px and the components still said md
-// (768px), because a rename done with BSD sed's `\b` changed nothing and said nothing. A table of
-// seven columns then showed its hidden cells inside a card between 768px and 1279px.
+// The lists are cards below md, a compact table from md, and the whole table from xl. Four
+// components and one stylesheet each have to agree on where. They disagreed once: the stylesheet
+// said 1280px and the components still said md (768px), because a rename done with BSD sed's `\b`
+// changed nothing and said nothing, so a card showed the table's extra cells.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -13,29 +13,34 @@ const COMPONENTS = ["GuideTable", "InboxRow", "ReportRow", "TaskTable"].map((n) 
 ]);
 const CSS = at("../app/assets/css/styles.css");
 
-/** Tailwind's own breakpoints, in rem, so the test says which one the stylesheet is matching. */
+/** Tailwind's own breakpoints, in rem, so the test says which ones the layouts are matching. */
 const BREAKPOINT = { sm: 40, md: 48, lg: 64, xl: 80, "2xl": 96 };
-const CUT_OVER = "xl";
+const CARDS_BELOW = "md";
+const FULL_TABLE_FROM = "xl";
 
-test("the stylesheet's card layout stops where the component classes say the table starts", () => {
+test("the card layout stops where the compact table starts", () => {
   const queries = [...CSS.matchAll(/@media \(max-width: ([\d.]+)rem\)\s*\{\s*table\.rows\.stack/g)];
   assert.equal(queries.length, 1, "one media query holds the card layout");
   assert.equal(
     Number(queries[0][1]),
-    BREAKPOINT[CUT_OVER] - 0.01,
-    `the cards stop just under ${CUT_OVER} (${BREAKPOINT[CUT_OVER]}rem)`,
+    BREAKPOINT[CARDS_BELOW] - 0.01,
+    `the cards stop just under ${CARDS_BELOW} (${BREAKPOINT[CARDS_BELOW]}rem)`,
   );
 });
 
-test("every responsive class in the lists uses that same breakpoint", () => {
+test("the lists switch at those two widths only, and keep their extra columns until the second", () => {
   for (const [name, src] of COMPONENTS) {
     const used = new Set(
       [...src.matchAll(/(?<![\w-])(sm|md|lg|xl|2xl):[\w[\]-]+/g)].map((m) => m[1]),
     );
-    assert.deepEqual(
-      [...used],
-      [CUT_OVER],
-      `${name} uses only ${CUT_OVER}: variants, found ${[...used]}`,
+    for (const v of used)
+      assert.ok(
+        [CARDS_BELOW, FULL_TABLE_FROM].includes(v),
+        `${name} uses ${v}:, which no layout here switches at`,
+      );
+    assert.ok(
+      /class="[^"]*(?<![\w-])hidden(?![\w-])[^"]*(?<![\w-])xl:table-cell/.test(src),
+      `${name} hides its extra columns until ${FULL_TABLE_FROM}`,
     );
   }
 });
