@@ -20,8 +20,8 @@ defineProps<{
         <tr class="text-xs text-muted">
           <th class="w-8"><span class="sr-only">Select</span></th>
           <th>Guide</th>
-          <th class="hidden md:table-cell">What it says</th>
-          <th class="hidden md:table-cell">Who</th>
+          <th class="hidden xl:table-cell">What it says</th>
+          <th class="hidden xl:table-cell">Who</th>
           <th>State</th>
           <th>Age</th>
           <th><span class="sr-only">Actions</span></th>
