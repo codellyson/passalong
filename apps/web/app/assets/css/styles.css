@@ -2633,4 +2633,16 @@ table.rows thead th {
     justify-content: flex-start !important;
     flex-wrap: wrap;
   }
+  /* A row's menu opens from a button at the card's left, not from a column at the table's right, so
+     anchored to the button it ran off the screen's edge. Anchored to the card instead, it fills the
+     card's width just under the button. */
+  table.rows.stack td:last-child .relative,
+  table.rows.stack td:last-child.relative {
+    position: static !important;
+  }
+  table.rows.stack .menu {
+    left: var(--s-3) !important;
+    right: var(--s-3) !important;
+    width: auto !important;
+  }
 }
