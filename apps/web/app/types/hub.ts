@@ -291,6 +291,8 @@ export interface HandedIn {
   writeup?: string;
   /** What they think it could break. One line, often empty. See 0032_claim_risk.sql. */
   risk?: string;
+  /** Their verdict was that it worked. */
+  worked?: boolean;
   at: string;
 }
 

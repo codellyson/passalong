@@ -2092,11 +2092,14 @@ export async function handedIn(
     guide: { id: string; title: string; kind: string; share_key: string };
     claim: ClaimRow;
     by: { handle: string; name: string };
+    worked: boolean;
   }[]
 > {
   const { results } = await db
     .prepare(
-      `SELECT c.*, g.title AS g_title, g.kind AS g_kind, g.share_key AS g_share_key,
+      `SELECT c.*, g.title AS g_title,
+              EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = c.guide_id
+                       AND v.account_id = c.account_id AND v.ok = 1) AS g_worked, g.kind AS g_kind, g.share_key AS g_share_key,
               COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
          FROM claim c
          JOIN guide g ON g.id = c.guide_id
@@ -2110,15 +2113,19 @@ export async function handedIn(
         g_title: string;
         g_kind: string;
         g_share_key: string;
+        g_worked: number;
         by_handle: string;
         by_name: string;
       }
     >();
-  return results.map(({ g_title, g_kind, g_share_key, by_handle, by_name, ...claim }) => ({
-    guide: { id: claim.guide_id, title: g_title, kind: g_kind, share_key: g_share_key },
-    claim,
-    by: { handle: by_handle, name: by_name },
-  }));
+  return results.map(
+    ({ g_title, g_kind, g_share_key, g_worked, by_handle, by_name, ...claim }) => ({
+      guide: { id: claim.guide_id, title: g_title, kind: g_kind, share_key: g_share_key },
+      claim,
+      by: { handle: by_handle, name: by_name },
+      worked: g_worked === 1,
+    }),
+  );
 }
 
 /** A handoff or bug this account wrote, with its markdown, or a refusal. */
