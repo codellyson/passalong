@@ -34,7 +34,7 @@ import { HEALTH, HEALTH_ORDER, type Health, healthOf, heardAt, plain, span } fro
 /** `bare` drops the heading, for a page that already names the section (the hub's tab). */
 const props = defineProps<{ rows: Working[]; bare?: boolean }>();
 
-const { onTakeBack } = useHub();
+const { onTakeBack, onMarkDone } = useHub();
 const { open } = useThread();
 
 /**
@@ -57,6 +57,20 @@ async function takeBack(w: Working) {
   }
 }
 
+/** Marking done is the one step here that is not an undo, so it asks once, on the row. */
+const finishing = ref<string | null>(null);
+async function markDone(w: Working) {
+  if (taking.value) return;
+  taking.value = w.id;
+  try {
+    await onMarkDone(w);
+  } finally {
+    taking.value = null;
+    finishing.value = null;
+  }
+}
+const canFinish = (w: Working) => w.kind === "task" && (w.mine || w.by.you);
+
 const rowKey = (w: Working) => `${w.id}-${w.agent}`;
 const person = (w: Working) => w.agent.startsWith("person-");
 const who = (w: Working) => (w.by.you ? "You" : personName(w.by.name, w.by.handle) || "A teammate");
@@ -64,7 +78,7 @@ const who = (w: Working) => (w.by.you ? "You" : personName(w.by.name, w.by.handl
 /** Where it is held: the host and the last part of the worktree path, or the browser for a person. */
 const where = (w: Working) => {
   if (person(w)) return "in the browser";
-  const tree = w.worktree.split("/").filter(Boolean).pop() || "";
+  const tree = w.worktree.split(/[\\/]/).filter(Boolean).pop() || "";
   return [w.host, tree].filter(Boolean).join(":") || w.agent;
 };
 
@@ -188,6 +202,22 @@ const talk = (w: Working) =>
                 @click="talk(w)"
               >Answer</button>
               <button v-else type="button" class="btn sm mr-3" @click="talk(w)">Open</button>
+              <span v-if="canFinish(w) && finishing === w.id" class="mr-3 inline-flex items-center gap-2">
+                <button
+                  type="button"
+                  class="btn sm primary"
+                  :disabled="taking === w.id"
+                  @click="markDone(w)"
+                >{{ w.mine ? "Yes, it is done" : "Send for review" }}</button>
+                <button type="button" class="linkish" @click="finishing = null">Cancel</button>
+              </span>
+              <button
+                v-else-if="canFinish(w)"
+                type="button"
+                class="linkish mr-3"
+                :title="w.mine ? 'Approve it now, without waiting for the agent' : 'Say it is finished and send it to its author for review'"
+                @click="finishing = w.id"
+              >Mark done</button>
               <button
                 v-if="w.mine || w.by.you"
                 class="linkish"

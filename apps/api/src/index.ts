@@ -196,6 +196,7 @@ import {
   planNow,
   seatsFull,
 } from "./quota.js";
+import { sizeProblem } from "./sections.js";
 import { conversationOn, evidenceOn, holdShots, PROOF_DAYS, SHOT_TYPES, shotKey } from "./shots.js";
 import {
   isUploadToken,
@@ -959,6 +960,19 @@ app.post("/v1/accounts", async (c) => {
     if (!success)
       return err(c, 429, "Too many accounts were made from this address. Try again in a minute.");
   }
+  // Only an invite page mints an account without an email. Anything else posting here made accounts
+  // nobody could reach and nobody could write to: 96 of them in two days, none ever used.
+  const { invite } = (await c.req.json().catch(() => ({}))) as { invite?: unknown };
+  const open = await c.env.DB.prepare("SELECT 1 FROM invite WHERE code = ? AND used_by = ''")
+    .bind(typeof invite === "string" ? invite : "")
+    .first();
+  if (!open)
+    return err(
+      c,
+      400,
+      "Accounts are made with an email and a password: run `passalong login`, or sign up at " +
+        `${origin(c)}/hub. This route is only for an invite link that has not been used.`,
+    );
   const id = rid(10);
   const token = `pa_${rand(32)}`;
   await c.env.DB.batch([
@@ -3355,6 +3369,8 @@ app.put("/v1/guides/:id", async (c) => {
         : 'The guide is empty. Send it as text/markdown, or as JSON: {"markdown": "..."}.',
     );
   }
+  // A hard ceiling before anything is read; the working limit is checked below, once the guide's
+  // current size is known, because a guide stored before it existed may keep the size it has.
   if (markdown.length > 512 * 1024)
     return err(c, 413, "This guide is over 512 KB. Move large logs or files out and link to them.");
   // Before anything reads the meta: what it lacks is exactly what this is about. Refused rather
@@ -3516,7 +3532,7 @@ app.put("/v1/guides/:id", async (c) => {
     );
 
   const existing = await c.env.DB.prepare(
-    "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id, summary FROM guide WHERE id = ?",
+    "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id, summary, length(markdown) AS size FROM guide WHERE id = ?",
   )
     .bind(id)
     .first<
@@ -3531,10 +3547,12 @@ app.put("/v1/guides/:id", async (c) => {
         | "to_account_id"
         | "to_group_id"
         | "summary"
-      >
+      > & { size: number }
     >();
   if (existing && existing.account_id !== account)
     return err(c, 403, "That guide id is already used by another account. Choose a different id.");
+  const tooBig = sizeProblem(markdown.length, existing?.size ?? 0);
+  if (tooBig) return err(c, 413, tooBig);
 
   // Handed in means the actor's turn is over. A new guide under work its publisher has handed in,
   // and that is waiting on its author, is refused.
@@ -4465,7 +4483,7 @@ function agentOf(c: Ctx, raw: unknown): claims.Agent & Record<string, unknown> {
     agent: AGENT_RE.test(String(body.agent ?? "")) ? String(body.agent) : "",
     host: str(body.host, 120),
     repo: str(body.repo, 400),
-    worktree: str(body.worktree, 400),
+    worktree: claims.leaf(str(body.worktree, 400)),
   };
 }
 
@@ -4722,6 +4740,29 @@ app.post("/v1/tasks/:id/approve", async (c) => {
   count(c, "task_approved", {});
   await taskEvent(c, c.req.param("id"), "task_approved", r.claimant);
   return c.json({ id: c.req.param("id"), state: r.state });
+});
+
+/**
+ * A held task is finished and its agent has not said so. See claims.markDone: the author approves
+ * it on the spot, and whoever's agent holds it sends it to review for the author.
+ */
+app.post("/v1/guides/:id/mark_done", async (c) => {
+  const id = c.req.param("id");
+  const body = (await c.req.json().catch(() => ({}))) as { note?: unknown };
+  const r = await claims.markDone(c.env.DB, id, {
+    account: c.get("account"),
+    at: now(),
+    note: typeof body.note === "string" ? body.note : "",
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  if (r.state === "done") {
+    count(c, "task_approved", {});
+    await taskEvent(c, id, "task_approved", r.claimant);
+  } else {
+    count(c, "task_finished", {});
+    await taskEvent(c, id, "task_finished", "");
+  }
+  return c.json({ id, state: r.state });
 });
 
 app.post("/v1/tasks/:id/reject", async (c) => {

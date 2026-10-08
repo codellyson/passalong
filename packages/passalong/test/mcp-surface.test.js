@@ -214,3 +214,71 @@ test("attach_screenshot sends hand-in evidence to the hand-in, not to a guide", 
   assert.match(shot.description, /part of a DOCUMENT goes in a guide body/, "and the other case");
   assert.match(shot.description, /DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS/);
 });
+
+test("get_guide reads a large guide by outline, by section, or whole", async () => {
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "passalong-sections-"));
+  const filler = "x".repeat(25_000);
+  const file = join(dir, "big.md");
+  writeFileSync(
+    file,
+    [
+      "---",
+      "id: bigguide",
+      "title: A big one",
+      "summary: A guide with a lot in it.",
+      "kind: transfer",
+      "status: published",
+      "---",
+      "",
+      "## Problem",
+      filler,
+      "",
+      "## Steps",
+      "1. do the one thing",
+      "",
+    ].join("\n"),
+  );
+  const [left, right] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test", version: "0" });
+  await Promise.all([buildServer().connect(right), client.connect(left)]);
+  const read = async (args) =>
+    (await client.callTool({ name: "get_guide", arguments: { ref: file, cwd: dir, ...args } }))
+      .content[0].text;
+
+  const first = await read({});
+  assert.match(first, /Sections:/);
+  assert.match(first, /- Problem \(/);
+  assert.match(first, /A guide with a lot in it\./, "the summary comes first");
+  assert.ok(first.length < 1500, "a large guide comes back as an outline");
+
+  const part = await read({ section: "steps" });
+  assert.match(part, /do the one thing/);
+  assert.ok(!part.includes(filler), "only the part asked for");
+
+  const missing = await read({ section: "nothing like it" });
+  assert.match(missing, /No heading matching/);
+  assert.match(missing, /- Steps \(/, "and it says what there is instead");
+
+  const whole = await read({ full: true });
+  assert.ok(whole.includes(filler), "full gives all of it");
+  await client.close();
+});
+
+test("hand_in takes a bare string as a check line, so the refusal is ours and not a schema error", async () => {
+  const [left, right] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test", version: "0" });
+  await Promise.all([buildServer().connect(right), client.connect(left)]);
+  const res = await client.callTool({
+    name: "hand_in",
+    arguments: { id: "abcd1234", note: "did it", checks: ["tsc --noEmit -p ."] },
+  });
+  await client.close();
+  const said = JSON.stringify(res.content);
+  assert.doesNotMatch(said, /Expected object, received string/);
+  assert.doesNotMatch(said, /Invalid arguments/i);
+  const t = (await tools()).get("hand_in");
+  assert.equal(t.inputSchema.properties.checks.items.type, "object", "listed as an object still");
+});
