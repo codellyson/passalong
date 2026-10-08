@@ -299,11 +299,98 @@ const logOut = z
   })
   .passthrough();
 
+// ---- reading a guide in parts ------------------------------------------------------------------
+// A copy of apps/api/src/sections.ts and packages/passalong/src/guide.js, because this file takes no
+// sibling import (it is loaded straight by node's test runner). test/sections.test.mjs holds the
+// three to the same answers.
+
+/** Over this a guide is read by its outline first: six of 123 held 72% of the stored text. */
+const GUIDE_WARN = 20_000;
+
+interface Heading {
+  heading: string;
+  level: number;
+  /** Characters from this heading to the next of the same or a higher level, nested ones included. */
+  chars: number;
+}
+
+interface Line {
+  heading: string;
+  level: number;
+  start: number;
+}
+
+/** Where each heading starts, outside the frontmatter and outside code fences. */
+function headings(markdown: string): { lines: Line[]; bodyStart: number } {
+  const fm = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(markdown);
+  const bodyStart = fm ? fm[0].length : 0;
+  const lines: Line[] = [];
+  let fence = "";
+  let at = bodyStart;
+  for (const raw of markdown.slice(bodyStart).split("\n")) {
+    const mark = /^\s*(```|~~~)/.exec(raw)?.[1];
+    if (mark) fence = fence ? (fence === mark ? "" : fence) : mark;
+    const m = !fence && !mark ? /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(raw) : null;
+    if (m) lines.push({ heading: (m[2] ?? "").trim(), level: (m[1] ?? "").length, start: at });
+    at += raw.length + 1;
+  }
+  return { lines, bodyStart };
+}
+
+/** The end of the section that begins at lines[i]: the next heading at its level or above. */
+function endOf(lines: Line[], i: number, total: number): number {
+  const here = lines[i];
+  if (!here) return total;
+  for (let j = i + 1; j < lines.length; j++) {
+    const next = lines[j];
+    if (next && next.level <= here.level) return next.start;
+  }
+  return total;
+}
+
+export function outlineOf(markdown: string): Heading[] {
+  const { lines } = headings(markdown);
+  return lines.map((l, i) => ({
+    heading: l.heading,
+    level: l.level,
+    chars: endOf(lines, i, markdown.length) - l.start,
+  }));
+}
+
+/** One section by its heading — exact, then by its start, then by what it contains. */
+export function sectionOf(
+  markdown: string,
+  name: string,
+): { heading: string; text: string } | null {
+  const { lines } = headings(markdown);
+  const want = String(name ?? "")
+    .trim()
+    .toLowerCase();
+  if (!want) return null;
+  const at = (test: (h: string) => boolean) =>
+    lines.findIndex((l) => test(l.heading.toLowerCase()));
+  const i = [
+    at((h) => h === want),
+    at((h) => h.startsWith(want)),
+    at((h) => h.includes(want)),
+  ].find((n) => n >= 0);
+  const hit = i === undefined ? undefined : lines[i];
+  if (i === undefined || !hit) return null;
+  return {
+    heading: hit.heading,
+    text: markdown.slice(hit.start, endOf(lines, i, markdown.length)).trimEnd(),
+  };
+}
+
 const getGuideOut = z
   .object({
     id: z.string(),
     kind: z.string().describe("transfer, bug or task"),
-    markdown: z.string().describe("the document as published, frontmatter first"),
+    markdown: z
+      .string()
+      .describe(
+        "the document as published, frontmatter first; or the outline or section asked for, when `partial`",
+      ),
     follow_ups: z
       .array(z.object({ id: z.string(), title: z.string(), markdown: z.string() }).passthrough())
       .describe("more context published under this guide, oldest first"),
@@ -1002,12 +1089,61 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "Fetch one guide's full markdown by id. Read `kind` in its frontmatter before acting: a " +
         "bug is a defect to fix, and its Reproduce section produces the problem rather than " +
         "solving it; a task is work nobody has done yet, done when its Acceptance holds. Fetching a teammate's guide tells them the transfer landed.",
-      inputSchema: { id: z.string().describe("passalong id, e.g. k3mq2xa7") },
+      inputSchema: {
+        id: z.string().describe("passalong id, e.g. k3mq2xa7"),
+        section: z
+          .string()
+          .optional()
+          .describe("read only the part under this heading, e.g. Acceptance; see the outline"),
+        outline: z
+          .boolean()
+          .optional()
+          .describe("just the headings and their sizes, whatever the guide's length"),
+        full: z
+          .boolean()
+          .optional()
+          .describe("the whole document, even one over 20,000 characters"),
+      },
       outputSchema: getGuideOut,
     },
-    async ({ id }) => {
+    async ({ id, section, outline: wantOutline, full }) => {
       const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}`);
       if (res.status >= 400) return failed(res.text);
+      // A guide over 20,000 characters is read by its outline first, and one part at a time: six
+      // of 123 guides held 72% of the stored text. Mirrors get_guide in packages/passalong/src/mcp.js.
+      if (section || wantOutline || (!full && res.text.length > GUIDE_WARN)) {
+        const part = section ? sectionOf(res.text, section) : null;
+        const rows = outlineOf(res.text)
+          .filter((h) => h.level <= 3)
+          .map(
+            (h) =>
+              `${"  ".repeat(h.level - 1)}- ${h.heading} (${h.chars.toLocaleString("en")} chars)`,
+          );
+        const shown = part
+          ? part.text
+          : [
+              section ? `No heading matching "${section}".` : "",
+              `${id}: ${res.text.length.toLocaleString("en")} characters. Sections:`,
+              ...rows,
+              `Read one with get_guide id=${id} section="<heading>", or all of it with full=true.`,
+            ]
+              .filter(Boolean)
+              .join("\n");
+        return {
+          content: [{ type: "text" as const, text: shown }],
+          structuredContent: {
+            id,
+            kind: /^kind:\s*bug\s*$/m.test(res.text)
+              ? "bug"
+              : /^kind:\s*task\s*$/m.test(res.text)
+                ? "task"
+                : "transfer",
+            markdown: shown,
+            partial: true,
+            follow_ups: [],
+          },
+        };
+      }
       // Said in front of the document, because an agent keys on headings and a bug's or a task's
       // headings look enough like a transfer guide's to be followed by one that never opened the
       // frontmatter. Mirrors `leadFor()` in packages/passalong/src/mcp.js.

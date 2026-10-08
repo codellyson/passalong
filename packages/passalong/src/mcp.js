@@ -9,7 +9,18 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import * as api from "./api.js";
 import { refusal, runChecks } from "./checks.js";
-import { AREAS, BUG_SECTIONS, parse, SECTIONS, TASK_SECTIONS, template } from "./guide.js";
+import {
+  AREAS,
+  BUG_SECTIONS,
+  GUIDE_WARN,
+  outlineText,
+  parse,
+  SECTIONS,
+  section as sectionOf,
+  sizeWarning,
+  TASK_SECTIONS,
+  template,
+} from "./guide.js";
 import * as passalong from "./passalong.js";
 
 /**
@@ -936,7 +947,9 @@ export function buildServer() {
       title: "Get guide",
       annotations: READS,
       description:
-        "READ a transfer guide by passalong id or share link and return its full markdown. Also " +
+        "READ a transfer guide by passalong id or share link and return its markdown. A guide over " +
+        "20,000 characters comes back as an outline (its headings and their sizes) unless you ask " +
+        "for `section`, for one part, or `full`, for all of it. Also " +
         "writes it to .passalong/<id>.md in the working directory so it survives the session. " +
         "Pulling a teammate's guide tells them the transfer landed. Use this to look at a guide " +
         "you have not committed to. If you are about to DO the work, call take instead: " +
@@ -948,12 +961,38 @@ export function buildServer() {
           .string()
           .optional()
           .describe("directory to write .passalong/<id>.md into; default is the server's cwd"),
+        section: z
+          .string()
+          .optional()
+          .describe("read only the part under this heading, e.g. Acceptance; see the outline"),
+        outline: z
+          .boolean()
+          .optional()
+          .describe("just the headings and their sizes, whatever the guide's length"),
+        full: z
+          .boolean()
+          .optional()
+          .describe("the whole document, even one over 20,000 characters"),
       },
     },
-    async ({ ref, cwd }) => {
+    async ({ ref, cwd, section, outline, full }) => {
       try {
         const { markdown, path, from } = await passalong.pull(ref, { cwd: cwd || process.cwd() });
         const meta = parse(markdown).meta;
+        if (section) {
+          const part = sectionOf(markdown, section);
+          if (!part)
+            return text(
+              `No heading matching "${section}".\n\n${outlineText(markdown, { id: meta.id || ref, path })}`,
+            );
+          return text(
+            `${part.text}\n\n<!-- passalong: ${meta.id || ref}, "${part.heading}" only; the whole guide is at ${path} -->`,
+          );
+        }
+        if (outline || (!full && markdown.length > GUIDE_WARN))
+          return text(
+            `${outlineText(markdown, { id: meta.id || ref, path })}\n\n<!-- passalong: ${from}; written to ${path} -->`,
+          );
         const lead = leadFor(meta);
         const siblings = await related(meta);
         // Follow-ups are more context for this guide, so they come with it — after the document,
@@ -1152,6 +1191,7 @@ export function buildServer() {
           parent: guide.meta.parent || "",
           notified,
           path,
+          ...(sizeWarning(markdown.length) ? { warning: sizeWarning(markdown.length) } : {}),
           // A task does not go live on publish, and an agent that reports "queued it" has told
           // the user something untrue. Said in the result so it is said to them.
           ...(guide.meta.kind === "task" && guide.meta.status === "draft"
