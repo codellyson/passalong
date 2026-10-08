@@ -331,7 +331,7 @@ function headings(markdown: string): { lines: Line[]; bodyStart: number } {
     const mark = /^\s*(```|~~~)/.exec(raw)?.[1];
     if (mark) fence = fence ? (fence === mark ? "" : fence) : mark;
     const m = !fence && !mark ? /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(raw) : null;
-    if (m) lines.push({ heading: m[2].trim(), level: m[1].length, start: at });
+    if (m) lines.push({ heading: (m[2] ?? "").trim(), level: (m[1] ?? "").length, start: at });
     at += raw.length + 1;
   }
   return { lines, bodyStart };
@@ -339,8 +339,12 @@ function headings(markdown: string): { lines: Line[]; bodyStart: number } {
 
 /** The end of the section that begins at lines[i]: the next heading at its level or above. */
 function endOf(lines: Line[], i: number, total: number): number {
-  for (let j = i + 1; j < lines.length; j++)
-    if (lines[j].level <= lines[i].level) return lines[j].start;
+  const here = lines[i];
+  if (!here) return total;
+  for (let j = i + 1; j < lines.length; j++) {
+    const next = lines[j];
+    if (next && next.level <= here.level) return next.start;
+  }
   return total;
 }
 
@@ -370,10 +374,11 @@ export function sectionOf(
     at((h) => h.startsWith(want)),
     at((h) => h.includes(want)),
   ].find((n) => n >= 0);
-  if (i === undefined) return null;
+  const hit = i === undefined ? undefined : lines[i];
+  if (i === undefined || !hit) return null;
   return {
-    heading: lines[i].heading,
-    text: markdown.slice(lines[i].start, endOf(lines, i, markdown.length)).trimEnd(),
+    heading: hit.heading,
+    text: markdown.slice(hit.start, endOf(lines, i, markdown.length)).trimEnd(),
   };
 }
 
