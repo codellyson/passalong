@@ -70,18 +70,17 @@
     // anything new.
     "PUBLIC_ORIGIN": "https://passalong.dev",
     "ENVIRONMENT": "production",
-    // The free tier, closed. New accounts get no synced guides until they are on a plan; everything
-    // local still works, with no account and no ceiling, which is `docs/PRD.md` §10 and is what the
-    // landing page means by "nothing to pay until a guide leaves your machine".
+    // The free tier, open again (2026-10-08). New accounts may keep FREE_SYNC_LIMIT guides synced
+    // without a plan; archived ones do not count. It was closed on 2026-09-11 to make Solo the way
+    // in, and what that bought was a wall: a new account's first task was refused with "Syncing
+    // guides needs a plan" while Settings said paid plans were not available, so nobody got as far
+    // as seeing a task move. See docs/PRD.md §10.
     //
-    // Accounts that existed when migration 0016 ran carry `grandfathered` and are unaffected —
-    // withdrawing the free tier is a decision about people who have not arrived yet, not something
-    // to do to somebody who has been syncing for months under a different promise.
-    //
-    // Set to "1" to reopen it. That is the whole of the switch; see `ceilingFor` in quota.ts.
-    "FREE_SIGNUP": "0",
-    // What a grandfathered account may keep synced. Still read for exactly those accounts, and for
-    // nobody else once the line above is "0". Local guides are unlimited; this gates the hosted copy.
+    // Set to "0" to close it again. That is the whole of the switch; see `ceilingFor` in quota.ts.
+    // Accounts carrying `grandfathered` (migration 0016) were never affected either way.
+    "FREE_SIGNUP": "1",
+    // What a free account may keep synced: grandfathered ones always, and everyone else while the
+    // line above is "1". Local guides are unlimited; this gates the hosted copy.
     "FREE_SYNC_LIMIT": "25",
     // Sender for handoff/invite mail. Must be on a domain onboarded to Email Service.
     "EMAIL_FROM": "no-reply@passalong.dev",

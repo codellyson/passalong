@@ -9,3 +9,4 @@ source it came from.
   docs/PUBLISH.md, docs/wiki/, and merged PRs #1–#65.
 - 2026-10-03 — blog-and-publish: added the /learn pages (topic guides on the blog's reader, published from shared/pages.ts). Source: branch seo/pillar-agent-handoff.
 - 2026-10-08 — guides: size limits and reading in parts (get_guide outline/section/full; 60,000-character ceiling on new guides). Source: branch feat/guide-size-and-sections.
+- 2026-10-08 — teams-and-plans: free tier reopened (`FREE_SIGNUP` "1"); the closed tier refused a new account's first task. Source: branch feat/free-signup.
