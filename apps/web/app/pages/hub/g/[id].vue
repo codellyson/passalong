@@ -14,6 +14,7 @@
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import type { ContextClaim, Guide, GuideContext, HandedIn, Task, Working } from "~/types/hub";
+import { expiryLine } from "~/utils/expiry";
 
 const route = useRoute();
 const id = computed(() => String(route.params.id));
@@ -37,6 +38,7 @@ const { data, isPending, error } = useQuery({
 });
 const ctx = computed(() => data.value ?? null);
 const g = computed(() => ctx.value?.guide ?? null);
+const expiry = computed(() => (g.value ? expiryLine(g.value) : null));
 const trouble = computed(() => (error.value ? error.value.message : ""));
 
 usePage({
@@ -237,6 +239,11 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <h1 class="m-0">{{ g.title || "Untitled guide" }}</h1>
         <!-- What it says to a person, first: the document below is the agent's form of it. -->
         <p v-if="g.summary" class="m-0 font-ui text-lg leading-snug text-fg">{{ g.summary }}</p>
+        <p
+          v-if="expiry"
+          class="m-0 font-ui text-sm"
+          :class="expiry.soon ? 'text-warn' : 'text-muted'"
+        >{{ expiry.text }}</p>
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <NuxtLink v-if="!g.mine && !handedInByMe" class="btn primary" :to="`/hub/answer/${g.id}`">Respond</NuxtLink>

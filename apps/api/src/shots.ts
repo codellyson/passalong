@@ -141,6 +141,9 @@ export function strike(text: string, ids: string[]): string {
  * The text that pointed at a removed shot says so rather than showing a broken image: a verdict
  * that reads "works" beside an empty frame looks like proof that failed to load, not proof that
  * was tidied away on schedule. Bucket first and stop if it refuses, as sweepOrphans does.
+ *
+ * Not for an account that has asked to keep everything (`account.keep_forever`): its guides' proof
+ * stays, whoever closed them.
  */
 export async function sweepProof(
   env: ShotEnv,
@@ -149,7 +152,8 @@ export async function sweepProof(
   const cutoff = new Date(at - days * 86_400_000).toISOString();
   const { results } = await env.DB.prepare(
     `SELECT s.id, s.type, s.guide_id FROM shot s JOIN guide g ON g.id = s.guide_id
-      WHERE g.status = 'consumed' AND g.updated < ?
+        JOIN account a ON a.id = g.account_id
+      WHERE g.status = 'consumed' AND g.updated < ? AND a.keep_forever = 0
         AND instr(g.markdown, '/v1/shots/' || s.id) = 0
       ORDER BY g.updated LIMIT ?`,
   )
@@ -264,4 +268,33 @@ export async function sweepOrphans(env: ShotEnv, { hours = 24, limit = 500 } = {
       .run();
   }
   return { swept: results.length, deferred: 0 };
+}
+
+/**
+ * When each of these closed guides loses its proof screenshots, for the ones that will: closed,
+ * holding a shot its own markdown does not name, and written by somebody who has not asked to keep
+ * everything. The same three conditions sweepProof deletes on, so a date shown here is a date that
+ * happens. At most one slice of bound ids per call (D1 takes 100).
+ */
+export async function proofExpiry(
+  db: D1Database,
+  ids: string[],
+  days = PROOF_DAYS,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!ids.length) return out;
+  const { results } = await db
+    .prepare(
+      `SELECT g.id, MIN(g.updated) AS updated FROM guide g
+         JOIN account a ON a.id = g.account_id
+         JOIN shot s ON s.guide_id = g.id
+        WHERE g.id IN (${ids.map(() => "?").join(",")}) AND g.status = 'consumed'
+          AND a.keep_forever = 0 AND instr(g.markdown, '/v1/shots/' || s.id) = 0
+        GROUP BY g.id`,
+    )
+    .bind(...ids)
+    .all<{ id: string; updated: string }>();
+  for (const r of results)
+    out.set(r.id, new Date(Date.parse(r.updated) + days * 86_400_000).toISOString());
+  return out;
 }

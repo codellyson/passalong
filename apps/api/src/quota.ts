@@ -139,3 +139,16 @@ export function seatsFull(plan: string, seats: unknown, members: unknown): boole
   const paidFor = Math.trunc(Number(seats)) || 0;
   return paidFor > 0 && Number(members) >= paidFor;
 }
+
+/**
+ * Whether an account may turn the automatic clean-up off: keep every guide, and the proof on it,
+ * for as long as it likes (`account.keep_forever`).
+ *
+ * Everybody may today. This is the one place a plan gets checked on the day keeping things stops
+ * being free, and `/v1/me` reports it as `may_keep` so the hub can say so beside the switch. An
+ * account that already has the column set when this starts returning false keeps what it has: the
+ * sweeps read the column, not this.
+ */
+export function mayKeep(_ownPlan: unknown = "free", _paidTeams: unknown = 0): boolean {
+  return true;
+}

@@ -16,6 +16,10 @@ export interface Me {
   email: string | null;
   /** False for an account minted by `passalong login` or an invite: a token, and no way to sign in. */
   has_password: boolean;
+  /** Guides are kept for good rather than tidied away on a clock. */
+  keep_forever?: boolean;
+  /** Whether this account may choose that. Everybody today; a plan will decide. */
+  may_keep?: boolean;
   guides: number;
   /** Only meaningful when `sync` is "free". See apps/api/src/quota.ts. */
   limit: number;
@@ -55,6 +59,10 @@ export interface Guide {
   title: string | null;
   /** What it says to a person, a sentence or two. Empty on a guide from before summaries. */
   summary?: string;
+  /** When its proof screenshots are deleted, or "". Only on a closed guide that has some. */
+  proof_expires?: string;
+  /** When it is archived for want of anybody touching it, or "". Only on a sent guide nobody has. */
+  archives_at?: string;
   status: string;
   url: string;
   created: string;

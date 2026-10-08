@@ -2192,8 +2192,9 @@ export async function staleSent(
   const { results } = await db
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.team_id, g.to_account_id AS to_id, g.to_group_id
-         FROM guide g
+         FROM guide g JOIN account au ON au.id = g.account_id
         WHERE g.kind <> 'task' AND g.status = 'published' AND g.updated <= ?
+          AND au.keep_forever = 0
           AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
           AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
           AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
@@ -2218,6 +2219,34 @@ export async function staleSent(
     team_id: r.team_id,
     to: r.to_id,
   }));
+}
+
+/**
+ * When each of these guides will be archived for want of anybody touching it, for the ones that
+ * will. The same conditions staleSent archives on, minus the clock, so a date shown here is a date
+ * that happens: `updated` plus STALE_SENT_MS, any pull, answer, hold or verdict restarts it by
+ * taking the guide out of this list, and an author who has asked to keep everything is never on it.
+ * At most one slice of bound ids per call (D1 takes 100).
+ */
+export async function archivesAt(db: D1Database, ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!ids.length) return out;
+  const { results } = await db
+    .prepare(
+      `SELECT g.id, g.updated FROM guide g JOIN account au ON au.id = g.account_id
+        WHERE g.id IN (${ids.map(() => "?").join(",")})
+          AND g.kind <> 'task' AND g.status = 'published' AND au.keep_forever = 0
+          AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
+          AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
+          AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id)`,
+    )
+    .bind(...ids)
+    .all<{ id: string; updated: string }>();
+  for (const r of results)
+    out.set(r.id, new Date(Date.parse(r.updated) + STALE_SENT_MS).toISOString());
+  return out;
 }
 
 /**
