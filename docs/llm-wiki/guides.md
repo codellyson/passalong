@@ -37,6 +37,16 @@ Twice, on purpose kept in step: `packages/passalong/src/guide.js` defines it; `a
 mirrors its parsing. `packages/passalong/fixtures/guides/` is the corpus that holds the two parsers
 to each other — edit it deliberately, never to make a test pass.
 
+## How big, and read in parts
+
+Six of 123 guides held 72% of the stored text, so the lever is size, not prose. Over 20,000 characters
+(`GUIDE_WARN`) a guide's author is warned and `get_guide` returns an outline (headings and their
+sizes) unless asked for a `section` or `full`; `take` still returns the whole document, because that
+is the one an agent acts on. A new guide over 60,000 (`GUIDE_MAX`) is refused with 413; one stored
+larger before keeps its size. The outline and section logic is in `guide.js`, `apps/api/src/sections.ts`
+and a copy in `mcp-http.ts` (which takes no sibling import); `apps/api/test/sections.test.mjs` holds
+the three to the same answers.
+
 ## Sources
 - [AGENTS.md](../../AGENTS.md): "src/guide.js", "A guide has a kind…", "Status lifecycle", "Tags are a controlled vocabulary"
 - `packages/passalong/src/guide.js`, `apps/api/src/guide.ts`, `packages/passalong/test/one-place.test.js`
