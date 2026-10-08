@@ -71,10 +71,14 @@ const who = computed(() => {
     <td><HubSelectBox :id="g.id" :title="g.title" :archived="g.status === 'consumed'" :mine="g.mine" /></td>
     <td class="min-w-52 max-w-[22rem]">
       <NuxtLink :to="`/hub/g/${g.id}`" class="line-clamp-2 font-medium text-fg no-underline hover:text-accent">{{ g.title || "Untitled guide" }}</NuxtLink>
-      <!-- What kind it is, as a word under the title: a badge on every row took more room than the
-           title it sat beside. Lineage, both ways, is the only sign on the page that follow-ups exist. -->
-      <span class="mt-1 flex flex-wrap gap-x-2 text-xs text-muted">
-        <span v-if="badge">{{ badge.label.toLowerCase() }}</span>
+      <!-- A word under the title only where it tells rows apart: a bug or a task among handoffs, a
+           guide that follows another, one that has follow-ups. "transfer" was on nearly every row and
+           said nothing there. -->
+      <span
+        v-if="(badge && g.kind !== 'transfer') || (g.parent && g.parent_title) || g.children"
+        class="mt-1 flex flex-wrap gap-x-2 text-xs text-muted"
+      >
+        <span v-if="badge && g.kind !== 'transfer'">{{ badge.label.toLowerCase() }}</span>
         <span v-if="g.parent && g.parent_title">
           follows
           <a v-if="g.parent_url" :href="g.parent_url" target="_blank" rel="noopener">{{ shorten(g.parent_title, 32).text }}</a>
@@ -84,20 +88,21 @@ const who = computed(() => {
           {{ g.children }} {{ g.children === 1 ? "follow-up" : "follow-ups" }}
         </a>
       </span>
-      <!-- The two columns that do not fit a narrow screen (What it says, Who) move under the title,
-           so a phone shows what a desktop does without a table wider than the page. -->
-      <span v-if="g.summary" class="mt-1 line-clamp-2 block text-xs text-muted xl:hidden">{{ g.summary }}</span>
-      <span v-if="who" class="mt-0.5 block text-xs text-muted xl:hidden">
-        {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> in {{ who.team }}</template>
+      <!-- What it says is one line, and below xl (where it is not its own column) who it went to and
+           the countdown share one muted line under it, instead of a line each. -->
+      <span v-if="g.summary" class="mt-1 line-clamp-1 block text-xs text-muted xl:hidden">{{ g.summary }}</span>
+      <span v-if="who || expiry" class="mt-0.5 block text-xs text-muted">
+        <span v-if="who" class="xl:hidden">
+          {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> · {{ who.team }}</template>
+        </span>
+        <span v-if="who && expiry" class="xl:hidden"> · </span>
+        <span
+          v-if="expiry"
+          class="whitespace-nowrap"
+          :class="expiry.soon ? 'text-warn' : 'text-muted'"
+          :title="expiry.why"
+        >{{ expiry.text }}</span>
       </span>
-      <!-- One place at every width, under the title. In the Age column it was squeezed into four
-           lines on a table and needed a second copy for a card. -->
-      <span
-        v-if="expiry"
-        class="mt-0.5 block text-xs"
-        :class="expiry.soon ? 'text-warn' : 'text-muted'"
-        :title="expiry.why"
-      >{{ expiry.text }}</span>
     </td>
     <td class="hidden min-w-48 max-w-[26rem] text-muted xl:table-cell"><span class="line-clamp-2">{{ g.summary || "—" }}</span></td>
     <td class="hidden whitespace-nowrap text-muted xl:table-cell">
