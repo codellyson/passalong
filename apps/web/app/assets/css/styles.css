@@ -2567,13 +2567,15 @@ table.rows thead th {
 
 /* ---- the same list, on a phone, as cards --------------------------------------------------------
    A table of six columns cannot be read at 400px however its columns are trimmed, and shrinking them
-   only made the page scroll sideways or the text wrap to a word a line. So below the md breakpoint
-   (48rem) a table marked `stack` stops being a table: each row is a card with its checkbox at the
+   only made the page scroll sideways or the text wrap to a word a line. A tablet at 768px is no
+   better off than a phone: the guides table measured 1055px wide against a 961px card at a 1024px
+   screen, so the cut-over is xl (80rem) and not md or lg. So below the xl breakpoint a table
+   marked `stack` stops being a table: each row is a card with its checkbox at the
    left, its title across the top, the state and the age under it, and its buttons under that. The
-   cells a desktop shows as columns and a phone moves under the title carry `hidden md:table-cell`,
+   cells a desktop shows as columns and a phone moves under the title carry `hidden xl:table-cell`,
    which is kept here by name because a class selector cannot out-rank the rules below.
    Opt in with `stack` on the table; the first cell is the checkbox and the second is the title. */
-@media (max-width: 47.99rem) {
+@media (max-width: 79.99rem) {
   table.rows.stack,
   table.rows.stack tbody {
     display: block;
