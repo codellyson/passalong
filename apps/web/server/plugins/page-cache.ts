@@ -15,12 +15,18 @@
 //   - the path. Requests with a query string are not cached: AppThemeToggle writes the full path,
 //     query and all, into the page, and one visitor's query has no business in another's page.
 //
+// A request carrying a session cookie never touches the cache, in either direction. The masthead
+// says "Open hub" to somebody signed in (AppMasthead), so that render is not the page everyone
+// else should be handed, and keying on it would only split the cache for the few visitors who
+// have one. Without this the first signed-in visit to a path stored its masthead for everybody.
+//
 // Only pages listed as published in shared/pages.ts, and blog posts once the blog is. The hub, the
 // share links and every flow with a session never reach the cache.
 //
 // Route-rule headers (the CSP) are not stored: they are applied to the event on every request,
 // hit or miss, before the renderer runs. What is stored is what the renderer itself returned.
 import { published } from "#shared/pages";
+import { hasSession } from "../../app/utils/session";
 
 /** How long a colo keeps a page. The build id in the key is what retires it on a deploy. */
 const EDGE_TTL = 60 * 60 * 24;
@@ -35,6 +41,7 @@ function keyFor(event: Parameters<typeof getRequestURL>[0]): string | undefined 
   if (event.method !== "GET") return undefined;
   const url = getRequestURL(event);
   if (url.search || !cacheable(url.pathname)) return undefined;
+  if (hasSession(getHeader(event, "cookie"))) return undefined;
   const cookie = getCookie(event, "theme");
   const theme = cookie === "light" || cookie === "dark" ? cookie : "system";
   const build = useRuntimeConfig().app.buildId || "dev";
