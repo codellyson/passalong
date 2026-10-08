@@ -772,7 +772,11 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
 
   const clash = await call("POST", "/v1/take", { ...b, id: h });
   assert.equal(clash.status, 409);
-  assert.equal(clash.holder.worktree, "/w/a", "the refusal says who has it");
+  assert.equal(
+    clash.holder.worktree,
+    "a",
+    "the refusal says who has it, by its folder's name and not its whole path",
+  );
   assert.equal((await call("POST", "/v1/take", { ...c, id: h })).guide.repo, "e2e/two");
 
   const said = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "halfway" });
