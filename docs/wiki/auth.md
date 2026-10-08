@@ -36,7 +36,9 @@ and drops the session: the password is typed once and never stored, and the thin
 credential that can be revoked from the hub without changing it. It used to mint an anonymous
 account instead — no email, no password — which meant the CLI quietly made accounts that could only
 ever be reached from the one file they were written to. `POST /v1/accounts` still makes those, for
-the invite page, which mints before it claims.
+the invite page, which mints before it claims — and only when the body names an invite that has
+not been used. Open, it made 96 accounts in two days from callers that were not people, none with
+an email or a published guide.
 
 ## Sessions
 
