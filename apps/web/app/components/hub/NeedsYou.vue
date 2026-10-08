@@ -354,7 +354,7 @@ const TONE = {
          without opening it. Opening is the row's one link; a task with nothing to look at can be
          approved from it. -->
     <div v-if="!sel" class="overflow-x-auto rounded-3 bg-raised shadow-edge">
-      <table class="rows m-0 w-full font-ui text-sm">
+      <table class="rows stack flat m-0 w-full font-ui text-sm">
         <thead>
           <tr class="text-xs text-muted">
             <th>Title</th>
