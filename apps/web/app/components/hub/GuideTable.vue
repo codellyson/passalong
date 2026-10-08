@@ -15,7 +15,7 @@ defineProps<{
 
 <template>
   <div class="rounded-3 bg-raised shadow-edge">
-    <table class="rows m-0 w-full font-ui text-sm">
+    <table class="rows stack m-0 w-full font-ui text-sm">
       <thead>
         <tr class="text-xs text-muted">
           <th class="w-8"><span class="sr-only">Select</span></th>

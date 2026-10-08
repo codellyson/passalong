@@ -90,6 +90,14 @@ const who = computed(() => {
       <span v-if="who" class="mt-0.5 block text-xs text-muted md:hidden">
         {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> in {{ who.team }}</template>
       </span>
+      <!-- On a desktop this sits under the age; on a phone, with the rest of what is said about the
+           guide, because a card has no column to put it in. -->
+      <span
+        v-if="expiry"
+        class="mt-0.5 block text-xs md:hidden"
+        :class="expiry.soon ? 'text-warn' : 'text-muted'"
+        :title="expiry.why"
+      >{{ expiry.text }}</span>
     </td>
     <td class="hidden min-w-48 max-w-[26rem] text-muted md:table-cell"><span class="line-clamp-2">{{ g.summary || "—" }}</span></td>
     <td class="hidden whitespace-nowrap text-muted md:table-cell">
@@ -103,7 +111,7 @@ const who = computed(() => {
       {{ rel(g.created) }}
       <span
         v-if="expiry"
-        class="block max-w-44 font-ui text-xs whitespace-normal"
+        class="hidden max-w-44 font-ui text-xs whitespace-normal md:block"
         :class="expiry.soon ? 'text-warn' : 'text-muted'"
         :title="expiry.why"
       >{{ expiry.text }}</span>
