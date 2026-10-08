@@ -2647,4 +2647,23 @@ table.rows thead th {
     right: var(--s-3) !important;
     width: auto !important;
   }
+  /* A table with no checkbox column (Needs you): the title is the first cell, so nothing hangs in
+     the margin, the title takes the first line, and what it says takes the second. */
+  table.rows.stack.flat tr {
+    padding-left: var(--s-4);
+  }
+  table.rows.stack.flat td:first-child {
+    position: static;
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  table.rows.stack.flat td:nth-child(2) {
+    flex: 1 1 100%;
+  }
+  table.rows.stack.flat td:nth-child(n + 3) {
+    flex: 0 1 auto;
+  }
+  table.rows.stack.flat td:last-child {
+    flex: 1 1 100%;
+  }
 }

@@ -175,6 +175,10 @@ async function submit() {
         When someone on the team finishes a piece of work you need to pick up, they send it to you
         as a guide: what the problem was, how they solved it, and how to check it worked.
       </p>
+      <p>
+        It works the other way too: from your own Claude Code you can record an issue or a task for
+        {{ team }}, and the team sees it here.
+      </p>
 
       <form class="join" @submit.prevent="submit">
         <label>

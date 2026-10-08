@@ -8,12 +8,14 @@
 -->
 <script setup lang="ts">
 import type { Me } from "~/types/hub";
-import { ASKS } from "~/utils/asks";
+import { ASKS, bugAsk, CONNECT, teamTaskAsk } from "~/utils/asks";
 
 const { data, api, json, setMe } = useHub();
 
 const me = computed(() => data.value.me);
 const claimed = computed(() => Boolean(me.value?.handle));
+/** The team they belong to, if any: what arrives from an invite, and where their issues should go. */
+const team = computed(() => me.value?.teams?.[0] ?? null);
 
 const name = ref(me.value?.name || "");
 const handle = ref("");
@@ -114,32 +116,74 @@ const step =
         </template>
       </li>
 
-      <li class="relative pl-10" :class="claimed ? '' : 'opacity-60'">
+      <!-- Connecting comes before asking an agent for anything, and it was a grey line under the
+           task prompt. Everybody needs it, so it is a step. -->
+      <li class="relative pb-8 pl-10" :class="claimed ? '' : 'opacity-60'">
         <span
           :class="[step, 'border', claimed ? 'border-accent bg-accent text-accent-fg' : 'border-line-strong text-muted']"
         >2</span>
+        <span class="absolute top-8 bottom-0 left-[13px] w-px bg-line" />
 
         <h2 class="m-0 font-ui text-base font-semibold" :class="claimed ? 'text-fg' : 'text-muted'">
-          Give an agent its first task
+          Connect your Claude Code
         </h2>
         <p class="mt-1 mb-0 font-ui text-sm text-muted">
-          Your agent writes it, in the repo it is for. Say this in Claude Code, or any agent with the
-          Passalong tools. It waits here as a draft until you have read it.
+          Run these in a terminal, once. <code>passalong login</code> opens a page here to approve;
+          nothing to type or paste.
         </p>
-
         <div class="mt-3 flex flex-col gap-2">
-          <HubAsk :text="ASKS.task" />
+          <HubAsk v-for="c in CONNECT" :key="c" :text="c" />
           <p class="m-0 font-ui text-xs text-muted">
-            Finished something someone else should repeat? Say <b class="font-medium text-fg">“{{ ASKS.handoff }}”</b>
-            at the end of the session. No agent to hand? <code>passalong setup</code> connects Claude Code.
+            Using Codex, ChatGPT or Claude instead?
+            <NuxtLink to="/connect">How to connect them</NuxtLink>
           </p>
         </div>
+      </li>
+
+      <li class="relative pl-10" :class="claimed ? '' : 'opacity-60'">
+        <span
+          :class="[step, 'border', claimed ? 'border-accent bg-accent text-accent-fg' : 'border-line-strong text-muted']"
+        >3</span>
+
+        <template v-if="team">
+          <h2 class="m-0 font-ui text-base font-semibold" :class="claimed ? 'text-fg' : 'text-muted'">
+            Record your first issue for {{ team.name }}
+          </h2>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">
+            Say this in Claude Code. Name the team: an issue filed without one is private to you, and
+            {{ team.name }} will not see it.
+          </p>
+          <div class="mt-3 flex flex-col gap-2">
+            <HubAsk :text="bugAsk(team.slug)" />
+            <p class="m-0 font-ui text-xs text-muted">
+              For work to be done rather than something broken:
+              <code>{{ teamTaskAsk(team.slug) }}</code>
+            </p>
+          </div>
+        </template>
+
+        <template v-else>
+          <h2 class="m-0 font-ui text-base font-semibold" :class="claimed ? 'text-fg' : 'text-muted'">
+            Give an agent its first task
+          </h2>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">
+            Your agent writes it, in the repo it is for. Say this in Claude Code, or any agent with the
+            Passalong tools. It waits here as a draft until you have read it.
+          </p>
+          <div class="mt-3 flex flex-col gap-2">
+            <HubAsk :text="ASKS.task" />
+            <p class="m-0 font-ui text-xs text-muted">
+              Finished something someone else should repeat? Say <b class="font-medium text-fg">“{{ ASKS.handoff }}”</b>
+              at the end of the session.
+            </p>
+          </div>
+        </template>
       </li>
     </ol>
 
     <!-- The one path that leads somewhere immediately: an invite is how most people who never
          open a terminal arrive. -->
-    <div class="mt-8 flex flex-wrap items-end justify-between gap-4 border-t border-line pt-6">
+    <div v-if="!team" class="mt-8 flex flex-wrap items-end justify-between gap-4 border-t border-line pt-6">
       <div class="min-w-0 grow basis-72">
         <h2 class="m-0 font-ui text-base font-semibold text-fg">Someone sent you an invite?</h2>
         <p class="mt-1 mb-0 font-ui text-sm text-muted">
