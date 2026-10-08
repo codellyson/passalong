@@ -8,7 +8,7 @@
 // so it is put on the solo plan in the *local* D1 with `wrangler d1 execute --local`. That only
 // works against a local server whose database is apps/web's — never point this at a real one.
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -293,6 +293,51 @@ test("signing in from the browser: the CLI shows a code, a person approves it, t
     body: JSON.stringify({ code }),
   });
   assert.equal(again.status, 404, "a code that was used cannot be approved again");
+});
+
+test("two accounts on one machine: an agent is refused until told which, and --as says", {
+  skip,
+}, async () => {
+  const a = await newAccount();
+  const b = await newAccount();
+  const home = mkdtempSync(join(tmpdir(), "passalong-two-"));
+  const login = (x, handle) => ({
+    token: x.token,
+    api: API,
+    account: x.account,
+    handle,
+    email: "",
+  });
+  writeFileSync(
+    join(home, "config.json"),
+    JSON.stringify({
+      api: API,
+      token: a.token,
+      active: "first",
+      accounts: { first: login(a, "first"), second: login(b, "second") },
+    }),
+  );
+  const env = { ...process.env, PASSALONG_HOME: home, PASSALONG_API: API };
+  delete env.PASSALONG_TOKEN;
+  delete env.PASSALONG_ACCOUNT;
+  const cli = new URL("../bin/passalong", import.meta.url).pathname;
+  const run = (...args) => spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8" });
+
+  const refused = run("me");
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /More than one Passalong account.*first.*second/s);
+
+  const asSecond = run("me", "--as", "second");
+  assert.equal(asSecond.status, 0, asSecond.stderr);
+  assert.match(asSecond.stdout, new RegExp(`account +${b.account}`));
+  const asFirst = run("me", "--as", "first");
+  assert.match(asFirst.stdout, new RegExp(`account +${a.account}`));
+
+  const viaEnv = spawnSync(process.execPath, [cli, "me"], {
+    env: { ...env, PASSALONG_ACCOUNT: "second" },
+    encoding: "utf8",
+  });
+  assert.match(viaEnv.stdout, new RegExp(`account +${b.account}`), "PASSALONG_ACCOUNT says it too");
 });
 
 /** Another account on the same local server, allowed to sync. Returns its token. */

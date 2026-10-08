@@ -30,6 +30,7 @@ const READ_ONLY = [
   "get_guide",
   "guide_template",
   "activity",
+  "accounts",
 ];
 const WRITES = [
   "ask",
@@ -45,6 +46,7 @@ const WRITES = [
   "set_guide_status",
   "publish_guide",
   "attach_screenshot",
+  "use_account",
   // Was `activity` with a `mark_read` flag, which made one tool read on one call and write on the
   // next — so its annotation had to claim it writes, on every call, to be honest about one of them.
   "clear_activity",

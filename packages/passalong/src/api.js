@@ -1,7 +1,7 @@
 // Client for the hosted sync API (apps/api). Everything here is optional: with no token the
 // CLI is a purely local tool, and every function throws an ApiError the CLI turns into a hint.
 import { readFileSync } from "node:fs";
-import { readConfig } from "./store.js";
+import { nameFor, readAccounts, readConfig, saveTeam } from "./store.js";
 
 /**
  * This build's version, sent on every authenticated call as `x-passalong-version`. The server
@@ -22,21 +22,133 @@ export class ApiError extends Error {
   }
 }
 
+// ---- which account -----------------------------------------------------------------------------
+//
+// A machine may be signed in to several (store.js). Who a call is made as comes from, in order:
+// PASSALONG_TOKEN, an account named by PASSALONG_ACCOUNT, `--as` or `use_account` (this process
+// only), then the machine's default. With two or more logins and nobody having said which, a
+// person at a terminal gets the default and an agent — a process with no terminal to ask on — is
+// refused with the names, so it asks the person rather than choosing. That refusal is the prompt:
+// an agent cannot be asked a question, but it can be told to put one to somebody.
+
+let chosen = "";
+
+const interactive = () => Boolean(process.stdin.isTTY && process.stdout.isTTY);
+
+/** Names of the logins on this machine, each with what tells them apart. */
+export function accountList() {
+  return Object.entries(readAccounts()).map(([name, a]) => ({
+    name,
+    handle: a.handle || "",
+    email: a.email || "",
+    api: a.api || "",
+  }));
+}
+
+/** Name an account for this process only, the way a person confirming one for a session does. */
+export function chooseAccount(name) {
+  const all = readAccounts();
+  if (!all[name]) {
+    const names = Object.keys(all).join(", ");
+    throw new ApiError(
+      0,
+      `no account called "${name}" on this machine${names ? `. Signed in: ${names}` : ""}`,
+    );
+  }
+  chosen = name;
+  return { name, ...all[name] };
+}
+
+/** Take back a choice made with chooseAccount: the session is undecided again. */
+export function forgetChoice() {
+  chosen = "";
+}
+
+/** The account this process was told to use, or null when nobody said. */
+function picked() {
+  const want = chosen || process.env.PASSALONG_ACCOUNT || "";
+  if (!want) return null;
+  const a = readAccounts()[want];
+  if (!a) {
+    const names = Object.keys(readAccounts()).join(", ");
+    throw new ApiError(0, `no account called "${want}" on this machine. Signed in: ${names}`);
+  }
+  return { name: want, ...a };
+}
+
+/** The name of the account in use, if there is one: for saying who a command is about to act as. */
+export function accountInUse() {
+  if (process.env.PASSALONG_TOKEN) return "";
+  const p = picked();
+  if (p) return p.name;
+  return readConfig().active || "";
+}
+
+/** True when a call would have to guess which of several accounts is meant. */
+export function needsChoice() {
+  if (process.env.PASSALONG_TOKEN || chosen || process.env.PASSALONG_ACCOUNT) return false;
+  return Object.keys(readAccounts()).length >= 2 && !interactive();
+}
+
+/** What an agent is told when it would have to guess. It is written to be passed on to a person. */
+export function choiceMessage() {
+  const list = accountList()
+    .map((a) => {
+      const who = a.email || (a.handle ? `@${a.handle}` : "");
+      return who && who !== a.name ? `${a.name} (${who})` : a.name;
+    })
+    .join(", ");
+  return (
+    `More than one Passalong account is signed in on this machine (${list}) and nothing says which ` +
+    "this session is for. Ask the person which one to use, then call use_account with its name " +
+    "(or run the command with --as <name>). Do not choose one yourself."
+  );
+}
+
 export function baseUrl() {
-  return (process.env.PASSALONG_API || readConfig().api || DEFAULT_API).replace(/\/$/, "");
+  const base = process.env.PASSALONG_API || picked()?.api || readConfig().api || DEFAULT_API;
+  return base.replace(/\/$/, "");
 }
 
 export function token() {
-  return process.env.PASSALONG_TOKEN || readConfig().token || null;
+  return process.env.PASSALONG_TOKEN || picked()?.token || readConfig().token || null;
 }
 
 export function loggedIn() {
   return Boolean(token());
 }
 
+/** The team this account works in. It belongs to the account, not the machine. */
+export function currentTeam() {
+  const p = picked();
+  return (p ? p.team : readConfig().team) || "";
+}
+
+export function setTeam(slug) {
+  saveTeam(picked()?.name || readConfig().active || "", slug);
+}
+
+/** Who a token is, without it being the one this process uses: how a login is named before it is kept. */
+export async function meWith(tokenValue, base = baseUrl()) {
+  let res;
+  try {
+    res = await fetch(`${base}/v1/me`, {
+      headers: { ...CLIENT, authorization: `Bearer ${tokenValue}` },
+    });
+  } catch (err) {
+    throw new ApiError(0, `could not reach ${base} (${err.message})`);
+  }
+  const said = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, said.message || res.statusText);
+  return said;
+}
+
+export { nameFor };
+
 async function call(path, { method = "GET", body, auth = true, raw = false } = {}) {
   const headers = { ...CLIENT };
   if (auth) {
+    if (needsChoice()) throw new ApiError(409, choiceMessage());
     const t = token();
     if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
     headers.authorization = `Bearer ${t}`;
@@ -264,6 +376,7 @@ export const ack = (id, taken, note = "") =>
  * percent-encoded because a header cannot hold what a filename can.
  */
 export async function uploadFile(bytes, type, name = "") {
+  if (needsChoice()) throw new ApiError(409, choiceMessage());
   const t = token();
   if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
   const headers = {
