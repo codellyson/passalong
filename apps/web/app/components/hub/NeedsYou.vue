@@ -298,6 +298,28 @@ function glance(it: Item): { text: string; risk: string } | null {
       : "no checks filed";
   return { text, risk: it.task.claim.risk || "" };
 }
+/** Handed-in handoffs whose taker says it worked: the pile nobody has had a reason to open. */
+const workedHandoffs = computed(() =>
+  props.handedIn.filter((h) => h.worked && h.kind === "transfer"),
+);
+const bulk = ref<"" | "ask" | "busy">("");
+const bulkDone = ref(0);
+const bulkFailed = ref(false);
+async function acceptAllWorked() {
+  const list = [...workedHandoffs.value];
+  bulk.value = "busy";
+  bulkDone.value = 0;
+  bulkFailed.value = false;
+  for (const h of list) {
+    if (!(await onCloseHandedIn(h))) {
+      bulkFailed.value = true;
+      break;
+    }
+    bulkDone.value++;
+  }
+  bulk.value = "";
+}
+
 const approving = ref("");
 async function approveFromRow(t: Task) {
   approving.value = t.id;
@@ -353,6 +375,32 @@ const TONE = {
     <!-- The glance: every item on one line, wide enough to read what it says and why it is here
          without opening it. Opening is the row's one link; a task with nothing to look at can be
          approved from it. -->
+    <div
+      v-if="!sel && (workedHandoffs.length || bulkFailed)"
+      class="flex flex-wrap items-center gap-3 rounded-3 bg-raised px-4 py-3 font-ui text-sm shadow-edge"
+    >
+      <template v-if="bulk === 'busy'">
+        <span class="text-muted">Closing {{ bulkDone }} of {{ bulkDone + workedHandoffs.length }}…</span>
+      </template>
+      <template v-else-if="bulk === 'ask'">
+        <span>
+          Close {{ workedHandoffs.length }} handoff{{ workedHandoffs.length === 1 ? "" : "s" }} without opening
+          them? Each taker is told it was accepted.
+        </span>
+        <button type="button" class="btn sm primary" @click="acceptAllWorked">Close {{ workedHandoffs.length }}</button>
+        <button type="button" class="btn sm" @click="bulk = ''">Cancel</button>
+      </template>
+      <template v-else>
+        <span v-if="bulkFailed" class="text-warn">Stopped on an error. {{ workedHandoffs.length }} left.</span>
+        <span v-else class="text-muted">
+          {{ workedHandoffs.length }} handoff{{ workedHandoffs.length === 1 ? "" : "s" }} where the taker says it worked.
+        </span>
+        <button v-if="workedHandoffs.length" type="button" class="btn sm" @click="bulk = 'ask'">
+          Close all that worked
+        </button>
+      </template>
+    </div>
+
     <div v-if="!sel" class="overflow-x-auto rounded-3 bg-raised shadow-edge">
       <table class="rows stack flat m-0 w-full font-ui text-sm">
         <thead>

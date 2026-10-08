@@ -5579,6 +5579,7 @@ app.get("/v1/handed_in", async (c) => {
       writeup: r.claim.writeup,
       // What they think it could break, so the author knows where to look before closing.
       risk: r.claim.risk,
+      worked: r.worked,
       at: r.claim.updated,
     })),
   });

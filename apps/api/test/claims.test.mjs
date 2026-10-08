@@ -1369,6 +1369,21 @@ test("the author sees what was handed in on a handoff, and can close it", async 
   assert.deepEqual(await handedIn(db, "me"), []);
 });
 
+test("a hand-in says whether its taker found it worked", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("w1", { kind: "transfer", target: "" });
+  guide("w2", { kind: "transfer", target: "" });
+  teamed(db);
+  const ada = { account: "other", agent: "agent-ada1", repo: "o/r" };
+  await take(db, "w1", ada, { at: T0 });
+  await handIn(db, "w1", ada, { at: T0, note: "ok", evidence: PROOF, verdict: { ok: true } });
+  await take(db, "w2", ada, { at: T0 });
+  await handIn(db, "w2", ada, { at: T0, note: "no", evidence: PROOF, verdict: { ok: false } });
+  const byId = Object.fromEntries((await handedIn(db, "me")).map((r) => [r.guide.id, r.worked]));
+  assert.deepEqual(byId, { w1: true, w2: false });
+});
+
 test("the author can send one repo's hand-in back with a reason, and it is open there again", async () => {
   const db = d1();
   const guide = seed(db);
