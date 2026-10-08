@@ -1334,6 +1334,74 @@ export async function approve(
 }
 
 /**
+ * Somebody says a held task is finished, without the agent saying so.
+ *
+ * The agent that did the work often cannot hand it in: the session ended, the evidence was refused
+ * in a shape it kept getting wrong, or it is simply gone. Until somebody said so the task stayed
+ * held, and an agent holds one thing at a time, so the next task waited on it too.
+ *
+ * Two people may say it. The author, who is the gate anyway, so it is approved on the spot. The
+ * account whose agent holds it, who cannot approve their own work, so it goes to review with a line
+ * saying nobody handed it in, for the author to approve or send back.
+ */
+export async function markDone(
+  db: D1Database,
+  id: string,
+  { account, at, note }: { account: string; at: string; note: string },
+): Promise<
+  | { state: "done" | "review"; claimant: string; author: string }
+  | { error: string; status: 404 | 409 }
+> {
+  const g = await db
+    .prepare("SELECT account_id, markdown FROM guide WHERE id = ? AND kind = 'task'")
+    .bind(id)
+    .first<{ account_id: string; markdown: string }>();
+  const claim = g ? await claimOf(db, id) : null;
+  const isAuthor = g?.account_id === account;
+  if (!g || (!isAuthor && claim?.account_id !== account))
+    return { status: 404, error: "no such task of yours, or none held by your agent" };
+  if (!claim || claim.state !== "claimed")
+    return {
+      status: 409,
+      error: claim ? "it is already handed in — it is waiting on its author" : "nobody holds this",
+    };
+
+  const said = String(note ?? "")
+    .trim()
+    .slice(0, NOTE_MAX);
+  const where = [claim.host, claim.worktree].filter(Boolean).join(":") || `agent ${claim.agent_id}`;
+  const evidence = "Marked done in the hub; the agent did not hand it in.";
+  const toReview = db
+    .prepare(
+      `UPDATE claim SET state = 'review', evidence = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
+        WHERE guide_id = ? AND place = '' AND state = 'claimed'`,
+    )
+    .bind(evidence, said, at, id);
+
+  if (isAuthor) {
+    const line = `${at.slice(0, 10)} marked done by its author while held by ${where}${said ? `: ${said}` : ""}`;
+    await db.batch([
+      toReview,
+      db
+        .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
+        .bind(withStatus(withNote(g.markdown, line), "consumed"), at, id),
+    ]);
+    await event(db, id, "approved", { account, at, body: said });
+    return { state: "done", claimant: claim.account_id, author: g.account_id };
+  }
+
+  await toReview.run();
+  await event(db, id, "handed_in", {
+    account,
+    agent: claim.agent_id,
+    host: claim.host,
+    body: said || "marked done in the hub",
+    at,
+  });
+  return { state: "review", claimant: claim.account_id, author: g.account_id };
+}
+
+/**
  * A line added to the end of a task, under `## Review notes`, which the next agent reads with the
  * rest of it. The section is made the first time and kept last, so each note goes on its end.
  */

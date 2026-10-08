@@ -4724,6 +4724,29 @@ app.post("/v1/tasks/:id/approve", async (c) => {
   return c.json({ id: c.req.param("id"), state: r.state });
 });
 
+/**
+ * A held task is finished and its agent has not said so. See claims.markDone: the author approves
+ * it on the spot, and whoever's agent holds it sends it to review for the author.
+ */
+app.post("/v1/guides/:id/mark_done", async (c) => {
+  const id = c.req.param("id");
+  const body = (await c.req.json().catch(() => ({}))) as { note?: unknown };
+  const r = await claims.markDone(c.env.DB, id, {
+    account: c.get("account"),
+    at: now(),
+    note: typeof body.note === "string" ? body.note : "",
+  });
+  if ("error" in r) return err(c, r.status, r.error);
+  if (r.state === "done") {
+    count(c, "task_approved", {});
+    await taskEvent(c, id, "task_approved", r.claimant);
+  } else {
+    count(c, "task_finished", {});
+    await taskEvent(c, id, "task_finished", "");
+  }
+  return c.json({ id, state: r.state });
+});
+
 app.post("/v1/tasks/:id/reject", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { why?: unknown };
   const r = await claims.reject(c.env.DB, c.req.param("id"), {
