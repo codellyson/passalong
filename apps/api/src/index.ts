@@ -993,10 +993,13 @@ app.post("/v1/accounts", async (c) => {
     if (!success)
       return err(c, 429, "Too many accounts were made from this address. Try again in a minute.");
   }
-  // Only an invite page mints an account without an email. Anything else posting here made accounts
+  // Only an invite page mints an account without an email. An invite link is not used up by the
+  // first person through it — accepting never checked, so one link in a group chat brings in the
+  // whole group — so the gate is that the code is a real one, not that nobody has used it yet.
+  // Anything else posting here made accounts
   // nobody could reach and nobody could write to: 96 of them in two days, none ever used.
   const { invite } = (await c.req.json().catch(() => ({}))) as { invite?: unknown };
-  const open = await c.env.DB.prepare("SELECT 1 FROM invite WHERE code = ? AND used_by = ''")
+  const open = await c.env.DB.prepare("SELECT 1 FROM invite WHERE code = ?")
     .bind(typeof invite === "string" ? invite : "")
     .first();
   if (!open)
@@ -1004,7 +1007,7 @@ app.post("/v1/accounts", async (c) => {
       c,
       400,
       "Accounts are made with an email and a password: run `passalong login`, or sign up at " +
-        `${origin(c)}/hub. This route is only for an invite link that has not been used.`,
+        `${origin(c)}/hub. This route is only for a valid team invite link.`,
     );
   const id = rid(10);
   const token = `pa_${rand(32)}`;

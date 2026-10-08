@@ -220,7 +220,7 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
   assert.deepEqual(await p.readyDrafts(), [], "nothing left in Draft");
 });
 
-test("an account with no email cannot be minted without an unused invite", { skip }, async () => {
+test("an account with no email cannot be minted without a real invite code", { skip }, async () => {
   const res = await fetch(`${API}/v1/accounts`, {
     method: "POST",
     headers: { "x-passalong-version": VERSION },
@@ -293,6 +293,52 @@ test("signing in from the browser: the CLI shows a code, a person approves it, t
     body: JSON.stringify({ code }),
   });
   assert.equal(again.status, 404, "a code that was used cannot be approved again");
+});
+
+test("one invite link brings in a whole group: each new person mints through it, and all join", {
+  skip,
+}, async () => {
+  const headers = { "content-type": "application/json", "x-passalong-version": VERSION };
+  const owner = await newAccount();
+  const asOwner = { ...headers, authorization: `Bearer ${owner.token}` };
+  await sql(`UPDATE account SET plan = 'solo' WHERE id = '${owner.account}'`);
+  const made = await fetch(`${API}/v1/teams`, {
+    method: "POST",
+    headers: asOwner,
+    body: JSON.stringify({ name: `Group ${Date.now()}` }),
+  });
+  assert.equal(made.status, 201, await made.clone().text());
+  const { slug } = await made.json();
+  const inv = await fetch(`${API}/v1/teams/${slug}/invites`, {
+    method: "POST",
+    headers: asOwner,
+    body: "{}",
+  });
+  assert.equal(inv.status, 201);
+  const { code } = await inv.json();
+
+  // Three people open the same link, one after another, none of them signed in.
+  for (let i = 0; i < 3; i++) {
+    let mint;
+    for (let tries = 0; tries < 12; tries++) {
+      mint = await fetch(`${API}/v1/accounts`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ invite: code }),
+      });
+      if (mint.status !== 429) break;
+      await new Promise((r) => setTimeout(r, 10_000));
+    }
+    assert.equal(mint.status, 201, `person ${i + 1} can mint through a link the others used`);
+    const { token } = await mint.json();
+    const joined = await fetch(`${API}/v1/invites/${code}/accept`, {
+      method: "POST",
+      headers: { ...headers, authorization: `Bearer ${token}` },
+    });
+    assert.equal(joined.status, 200, `person ${i + 1} joins`);
+  }
+  const team = await fetch(`${API}/v1/teams/${slug}`, { headers: asOwner });
+  assert.equal((await team.json()).members.length, 4, "the owner and the three who joined");
 });
 
 test("two accounts on one machine: an agent is refused until told which, and --as says", {
