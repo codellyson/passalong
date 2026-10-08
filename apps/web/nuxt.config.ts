@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import { VIEW_HEADERS } from "./shared/csp";
 
+// The public pages' masthead offers "Open hub" to a visitor with a session cookie, so what they
+// return depends on it, and nothing in between may serve one visitor's copy to another.
+const PUBLIC_HEADERS = { ...VIEW_HEADERS, vary: "Cookie" };
+
 export default defineNuxtConfig({
   compatibilityDate: "2026-08-16",
 
@@ -109,7 +113,7 @@ export default defineNuxtConfig({
     //
     // The headers are `VIEW_HEADERS` from apps/api/src/index.ts, verbatim. They move here from
     // being a hand-spread object literal on every `c.html()` call.
-    "/": { noScripts: true, headers: VIEW_HEADERS },
+    "/": { noScripts: true, headers: PUBLIC_HEADERS },
     // A guide page renders markdown a stranger wrote. There is no sanitiser behind this — the CSP
     // is what makes it safe, and `noScripts` is what lets the CSP name no `script-src` at all.
     //
@@ -124,19 +128,19 @@ export default defineNuxtConfig({
     // Setup instructions: prose, a few code blocks, nothing interactive. It gets the same
     // treatment as the landing rather than the hub's nonce, because a page that needs no script
     // should not ship a policy that allows one.
-    "/connect": { noScripts: true, headers: VIEW_HEADERS },
-    "/mcp-server": { noScripts: true, headers: VIEW_HEADERS },
+    "/connect": { noScripts: true, headers: PUBLIC_HEADERS },
+    "/mcp-server": { noScripts: true, headers: PUBLIC_HEADERS },
     // Docs and the FAQ are prose like /connect, and get the same treatment. Both spellings of the
     // docs rule, because `/docs/**` is not guaranteed to match `/docs` itself.
-    "/docs": { noScripts: true, headers: VIEW_HEADERS },
-    "/docs/**": { noScripts: true, headers: VIEW_HEADERS },
-    "/faq": { noScripts: true, headers: VIEW_HEADERS },
+    "/docs": { noScripts: true, headers: PUBLIC_HEADERS },
+    "/docs/**": { noScripts: true, headers: PUBLIC_HEADERS },
+    "/faq": { noScripts: true, headers: PUBLIC_HEADERS },
     // The blog is prose we wrote, and it gets the landing's treatment anyway: no script, and the
     // strict policy. Both spellings, as for docs.
-    "/blog": { noScripts: true, headers: VIEW_HEADERS },
-    "/blog/**": { noScripts: true, headers: VIEW_HEADERS },
+    "/blog": { noScripts: true, headers: PUBLIC_HEADERS },
+    "/blog/**": { noScripts: true, headers: PUBLIC_HEADERS },
     // The /learn guides are prose we wrote, like the blog.
-    "/learn/**": { noScripts: true, headers: VIEW_HEADERS },
+    "/learn/**": { noScripts: true, headers: PUBLIC_HEADERS },
 
     // The hub, the invite page and the password reset run script, so their header is written per
     // response by server/plugins/csp.ts — it carries a nonce, which a route rule cannot.

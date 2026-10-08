@@ -709,3 +709,101 @@ function taskTemplate(meta = {}) {
 export function stripPlaceholders(body) {
   return body.replace(/^<!-- passalong:.*?-->\n?/gm, "").trim();
 }
+
+// ---- reading a guide in parts, and how big one may be -----------------------------------------
+// Mirrors apps/api/src/sections.ts — apps/api/test/sections.test.mjs holds the two to the same
+// answers. Most of what is stored is a few very large guides (six of 123 held 72% of the text), and
+// an agent that wants only the Acceptance of a long task should not read the rest first.
+
+/** Over this a guide is large: its readers are offered the outline first, and its author a warning. */
+export const GUIDE_WARN = 20_000;
+/** Over this a new guide is refused by the server. A guide stored before it existed may keep its size. */
+export const GUIDE_MAX = 60_000;
+
+/** Where each heading starts, outside the frontmatter and outside code fences. */
+function headingLines(markdown) {
+  const fm = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(markdown);
+  const bodyStart = fm ? fm[0].length : 0;
+  const lines = [];
+  let fence = "";
+  let at = bodyStart;
+  for (const raw of markdown.slice(bodyStart).split("\n")) {
+    const mark = /^\s*(```|~~~)/.exec(raw)?.[1];
+    if (mark) fence = fence ? (fence === mark ? "" : fence) : mark;
+    const m = !fence && !mark ? /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(raw) : null;
+    if (m) lines.push({ heading: m[2].trim(), level: m[1].length, start: at });
+    at += raw.length + 1;
+  }
+  return lines;
+}
+
+/** The end of the section that begins at lines[i]: the next heading at its level or above. */
+function sectionEnd(lines, i, total) {
+  for (let j = i + 1; j < lines.length; j++)
+    if (lines[j].level <= lines[i].level) return lines[j].start;
+  return total;
+}
+
+/** Every heading, with the characters in its section (nested ones included). */
+export function outline(markdown) {
+  const lines = headingLines(markdown);
+  return lines.map((l, i) => ({
+    heading: l.heading,
+    level: l.level,
+    chars: sectionEnd(lines, i, markdown.length) - l.start,
+  }));
+}
+
+/** One section by its heading — exact, then by its start, then by what it contains. */
+export function section(markdown, name) {
+  const lines = headingLines(markdown);
+  const want = String(name ?? "")
+    .trim()
+    .toLowerCase();
+  if (!want) return null;
+  const at = (test) => lines.findIndex((l) => test(l.heading.toLowerCase()));
+  const i = [
+    at((h) => h === want),
+    at((h) => h.startsWith(want)),
+    at((h) => h.includes(want)),
+  ].find((n) => n >= 0);
+  if (i === undefined) return null;
+  return {
+    heading: lines[i].heading,
+    text: markdown.slice(lines[i].start, sectionEnd(lines, i, markdown.length)).trimEnd(),
+  };
+}
+
+/** What a guide's author is told when it is on the large side. */
+export function sizeWarning(chars) {
+  return chars > GUIDE_WARN
+    ? `this guide is ${chars.toLocaleString("en")} characters, and over ${GUIDE_WARN.toLocaleString("en")} ` +
+        "it is read by outline first. Put logs, dumps and long output in a file (attach_file) and " +
+        "link it; keep the guide to what the next agent has to act on."
+    : null;
+}
+
+/**
+ * What an agent is shown instead of a large guide: who it is, what it is, and where its parts are.
+ * `path` is where the whole of it was written, for a search rather than a read.
+ */
+export function outlineText(markdown, { id = "", path = "" } = {}) {
+  const { meta } = parse(markdown);
+  const rows = outline(markdown)
+    .filter((h) => h.level <= 3)
+    .map(
+      (h) => `${"  ".repeat(h.level - 1)}- ${h.heading} (${h.chars.toLocaleString("en")} chars)`,
+    );
+  return [
+    `${meta.title || id} — ${meta.kind || "guide"}, ${markdown.length.toLocaleString("en")} characters`,
+    meta.summary ? `Summary: ${meta.summary}` : "",
+    "",
+    "Sections:",
+    ...rows,
+    "",
+    `Read one with get_guide ref=${id} section="<heading>", or the whole thing with full=true.` +
+      (path ? ` The full text is also on disk at ${path}, if you only need to search it.` : ""),
+  ]
+    .filter((l, i, a) => l !== "" || a[i - 1] !== "")
+    .join("\n");
+}

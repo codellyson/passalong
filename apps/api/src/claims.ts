@@ -181,21 +181,16 @@ export function checksProblem(checks: Check[]): string | null {
     // The asymmetry this removes: an image the USER showed the agent has been mandatory before
     // publish_guide and file_bugs for as long as those have existed, while an image that is the
     // only possible proof of the agent's OWN claim was never asked for once.
-    if (!shown(c))
+    if (!shown(c)) {
+      const line = String(c.check).trim().slice(0, 60);
       return (
-        `"${String(c.check).trim().slice(0, 60)}" was answered in words. Run it or show it: put ` +
-        "the command in `cmd` and it is executed here, before this hand-in lands, and what it " +
-        "prints is recorded instead of your account of it — pasting a command into `ran` is still " +
-        "you typing. If no command can settle it, attach_screenshot and put the line it gives " +
-        "you in `ran`: it takes a path in `file`, or the image itself in `data` as base64, so a " +
-        "screenshot your browser handed back inline and never wrote to disk still goes in. If " +
-        "you cannot get at the bytes either, capture it to a file — a headless browser\'s " +
-        "page.screenshot({ path }) — rather than describing what you saw. A check that can be " +
-        "neither run nor shown is not a check: say it in `writeup`, where it reads as your " +
-        "account. Shoot the running thing: a scratch page built so there was something to " +
-        "photograph is a picture of your own scaffolding, and deleting it afterwards leaves a " +
-        "shot nobody can take again."
+        `"${line}" was answered in words. Run it or show it. Run it: send ` +
+        `{"check": "${line}", "cmd": "<the command that settles it>"} — it runs here and its ` +
+        "output is recorded as the evidence. Show it, when no command can settle it: attach_screenshot, then " +
+        `{"check": "${line}", "ran": "<the line it returns>"}. Typing a command into \`ran\` is ` +
+        "still you typing, and a check that can be neither run nor shown goes in `writeup`."
       );
+    }
   }
   return null;
 }
@@ -256,6 +251,21 @@ interface TaskRow {
   markdown: string;
   created: string;
 }
+
+/**
+ * The last part of a path, for either kind of separator.
+ *
+ * A worktree was stored and shown whole, so a claim read "/Users/<login>/Desktop/work/shop" or
+ * "C:\\laragon\\www\\khaime": the person's login name and their folder layout, in a hub their
+ * whole team reads. What tells two checkouts apart is the folder's own name.
+ */
+export const leaf = (path: string) =>
+  String(path ?? "")
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "")
+    .split("/")
+    .pop()!
+    .trim();
 
 /** Who is asking, and from where. `agent` is the worktree's stable id. */
 export interface Agent {
@@ -534,6 +544,43 @@ async function event(
 type Refusal = { error: string; status: 400 | 404 | 409; holder?: ClaimRow };
 
 /**
+ * An agent's silent hold, given up because it asked for something else. What it left is described
+ * the way release() describes it, so the next one to take it knows where to look.
+ */
+async function letGo(
+  db: D1Database,
+  held: { guide_id: string; place: string; host: string; worktree: string; note: string },
+  who: Agent,
+  at: string,
+) {
+  const g = await db
+    .prepare("SELECT kind, markdown FROM guide WHERE id = ?")
+    .bind(held.guide_id)
+    .first<{ kind: string; markdown: string }>();
+  const drop = db
+    .prepare("DELETE FROM claim WHERE guide_id = ? AND place = ? AND agent_id = ?")
+    .bind(held.guide_id, held.place, who.agent);
+  if (g?.kind === "task") {
+    const where = [held.host, held.worktree].filter(Boolean).join(":") || `agent ${who.agent}`;
+    const said = held.note ? `; last progress: "${held.note}"` : "";
+    const line = `${at.slice(0, 10)} released from ${where}: its agent went quiet and took another task${said}`;
+    await db.batch([
+      drop,
+      db
+        .prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?")
+        .bind(withNote(g.markdown, line), at, held.guide_id),
+    ]);
+  } else await drop.run();
+  await event(db, held.guide_id, "released", {
+    account: who.account,
+    agent: who.agent,
+    host: held.host,
+    body: "its agent took another task after going quiet",
+    at,
+  });
+}
+
+/**
  * This agent takes one guide, of any kind, by id: "I am doing this". The same lock as `next`.
  *
  * A task is taken once, wherever the agent is, and only from the repo it is for unless `any`. A
@@ -569,22 +616,38 @@ export async function take(
     .first<TaskRow & { kind: string; to_account_id: string; blocked: number; for_me: number }>();
   if (!g) return { status: 404, error: "no such guide that you can see" };
 
-  const held = await db
+  let held = await db
     .prepare(
       many
-        ? "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' AND guide_id = ?"
-        : "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' ORDER BY guide_id = ? DESC LIMIT 1",
+        ? "SELECT guide_id, place, lease_until, host, worktree, note FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' AND guide_id = ?"
+        : "SELECT guide_id, place, lease_until, host, worktree, note FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' ORDER BY guide_id = ? DESC LIMIT 1",
     )
     .bind(who.agent, who.account, id)
-    .first<{ guide_id: string }>();
+    .first<{
+      guide_id: string;
+      place: string;
+      lease_until: string;
+      host: string;
+      worktree: string;
+      note: string;
+    }>();
   if (held?.guide_id === id) {
     const claim = await renew(db, id, who, { at, note: null });
     if (claim) return { task: g, claim, resumed: true };
   }
+  // Asking for something else by name, while the last hold has been silent past its lease, is
+  // moving on: the old one goes back to whoever is next, with where it was left. Held live, it is
+  // still refused, because that agent is working on it.
+  if (held && held.lease_until <= at) {
+    await letGo(db, held, who, at);
+    held = null;
+  }
   if (held)
     return {
       status: 409,
-      error: `this agent already holds ${held.guide_id}: hand it in or pass it before taking another`,
+      error:
+        `this agent already holds ${held.guide_id}: hand it in or pass it before taking another. ` +
+        "If that work is finished, its author or whoever runs this agent can mark it done in the hub.",
     };
 
   if (g.status !== "published")
@@ -1331,6 +1394,74 @@ export async function approve(
     .run();
   await event(db, id, "approved", { account, at });
   return { state: "done", claimant: t.claim.account_id };
+}
+
+/**
+ * Somebody says a held task is finished, without the agent saying so.
+ *
+ * The agent that did the work often cannot hand it in: the session ended, the evidence was refused
+ * in a shape it kept getting wrong, or it is simply gone. Until somebody said so the task stayed
+ * held, and an agent holds one thing at a time, so the next task waited on it too.
+ *
+ * Two people may say it. The author, who is the gate anyway, so it is approved on the spot. The
+ * account whose agent holds it, who cannot approve their own work, so it goes to review with a line
+ * saying nobody handed it in, for the author to approve or send back.
+ */
+export async function markDone(
+  db: D1Database,
+  id: string,
+  { account, at, note }: { account: string; at: string; note: string },
+): Promise<
+  | { state: "done" | "review"; claimant: string; author: string }
+  | { error: string; status: 404 | 409 }
+> {
+  const g = await db
+    .prepare("SELECT account_id, markdown FROM guide WHERE id = ? AND kind = 'task'")
+    .bind(id)
+    .first<{ account_id: string; markdown: string }>();
+  const claim = g ? await claimOf(db, id) : null;
+  const isAuthor = g?.account_id === account;
+  if (!g || (!isAuthor && claim?.account_id !== account))
+    return { status: 404, error: "no such task of yours, or none held by your agent" };
+  if (!claim || claim.state !== "claimed")
+    return {
+      status: 409,
+      error: claim ? "it is already handed in — it is waiting on its author" : "nobody holds this",
+    };
+
+  const said = String(note ?? "")
+    .trim()
+    .slice(0, NOTE_MAX);
+  const where = [claim.host, claim.worktree].filter(Boolean).join(":") || `agent ${claim.agent_id}`;
+  const evidence = "Marked done in the hub; the agent did not hand it in.";
+  const toReview = db
+    .prepare(
+      `UPDATE claim SET state = 'review', evidence = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
+        WHERE guide_id = ? AND place = '' AND state = 'claimed'`,
+    )
+    .bind(evidence, said, at, id);
+
+  if (isAuthor) {
+    const line = `${at.slice(0, 10)} marked done by its author while held by ${where}${said ? `: ${said}` : ""}`;
+    await db.batch([
+      toReview,
+      db
+        .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
+        .bind(withStatus(withNote(g.markdown, line), "consumed"), at, id),
+    ]);
+    await event(db, id, "approved", { account, at, body: said });
+    return { state: "done", claimant: claim.account_id, author: g.account_id };
+  }
+
+  await toReview.run();
+  await event(db, id, "handed_in", {
+    account,
+    agent: claim.agent_id,
+    host: claim.host,
+    body: said || "marked done in the hub",
+    at,
+  });
+  return { state: "review", claimant: claim.account_id, author: g.account_id };
 }
 
 /**

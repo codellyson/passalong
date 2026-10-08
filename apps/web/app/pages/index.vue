@@ -340,12 +340,12 @@ const PROOF = null as { figure: string; says: string } | null;
     <!-- No price on the page: the team plan is a conversation. -->
     <section class="pricing" aria-label="What it costs">
       <h2>
-        Free on one machine.<br>
+        Free to start.<br>
         <span class="turn">Paid when your agents share the work.</span>
       </h2>
       <p class="note">
-        The CLI writes and keeps guides locally, with no account. The queue, the claims and your
-        hub are the paid part.
+        The CLI writes and keeps guides locally, with no account. A free account syncs up to 25 of
+        them to your hub, so you can watch a task move before you decide anything.
       </p>
 
       <!-- One card, and the way to it. -->

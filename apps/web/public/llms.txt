@@ -179,6 +179,11 @@ Open a guide you mean to act on with `take`, not `get_guide`. `get_guide` is the
 saying you are on it — for reading a guide you have not committed to. You have to be able to read
 something to decide it is not yours.
 
+A guide over 20,000 characters comes back from `get_guide` as an outline: its headings and their
+sizes. Ask for one part with `section` (a heading, or the start of one), or all of it with
+`full: true`. A guide over 60,000 characters is refused when it is published: put logs and dumps in a
+file with `attach_file`, link it, and keep the guide to what the next agent has to act on.
+
 `log` is this user's own acts, newest first — what they published, what they took delivery of, and
 every verdict and ack they gave, each with a ready-made `text` line and the guide's repo. It answers
 "what have I been working on", and it is the opposite of `activity`, which is what other people did.

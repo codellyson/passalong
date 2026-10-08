@@ -16,8 +16,8 @@ first, because the package's default API URL points at it.
 
 Accounts are email + password, with an HttpOnly session cookie for the hub and named, revocable
 bearer tokens for the CLI and MCP servers. Only SHA-256 hashes are stored — of tokens, session ids
-and reset codes alike. `POST /v1/accounts` still mints an anonymous, unclaimed account for
-`passalong login` and invite links.
+and reset codes alike. `POST /v1/accounts` mints an account with no email, and only for an invite link
+that has not been used: it answers 400 to anything else.
 
 **Mail.** Handoff, pull, consumed and invite emails go through Cloudflare Email Service via the
 `send_email` binding (`EMAIL` in `wrangler.jsonc`). There is no API key — the binding is the
@@ -57,12 +57,11 @@ PBKDF2 iteration cap was found this way — but anything it writes is real. Clea
 straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no browser involvement,
 deliberately. See the rule about what may go in a prop in AGENTS.md before adding an event.
 
-**The free tier is closed.** `FREE_SIGNUP` is `"0"` in `apps/web/wrangler.jsonc`, so a new account
-syncs nothing until it is on a plan. Two things keep that from being a cliff: accounts carrying
-`grandfathered` (migration 0016, set on everyone who existed when it ran) keep `FREE_SYNC_LIMIT`,
-and the local store is untouched — `passalong share` writes to the machine with no account and no
-ceiling. Set it to `"1"` to reopen. It defaults to open in code, so a deployment that forgets the
-var keeps the old behaviour rather than locking people out by omission.
+**The free tier is open.** `FREE_SIGNUP` is `"1"` in `apps/web/wrangler.jsonc` (reopened 2026-10-08), so a new
+account may keep `FREE_SYNC_LIMIT` guides synced without a plan; archived guides do not count. It had
+been `"0"`, which refused a new account's first task. Set it to `"0"` to close it again: accounts
+carrying `grandfathered` (migration 0016) keep their ceiling either way, and the local store is
+untouched — `passalong share` writes to the machine with no account and no ceiling.
 
 **Billing.** Five Worker secrets, all optional: without them the paid tier is simply unavailable
 and every webhook is refused rather than trusted.
@@ -136,7 +135,7 @@ Verify:
 curl -s https://passalong.dev/health                 # {"ok":true}
 curl -s https://passalong.kreativekorna.com/health   # {"ok":true} — the old host still answers
 curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/g/abcdefgh/wrongkey0000000000000000   # 404
-curl -s -X POST https://passalong.dev/v1/accounts    # 201 with a token
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://passalong.dev/v1/accounts   # 400: needs an unused invite
 curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/v1/tokens   # 401 unauthenticated
 curl -sI https://www.passalong.dev/ | head -1        # 308 to the apex
 ```

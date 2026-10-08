@@ -519,6 +519,17 @@ function build(queryClient: QueryClient) {
       [hubKeys.working, hubKeys.tasks, hubKeys.allGuides, hubKeys.board],
     );
 
+  /** A held task is finished and its agent never said so. Gone from the Taken list either way. */
+  const onMarkDone = (w: Working) =>
+    change(
+      () => api(`/v1/guides/${w.id}/mark_done`, json("POST")),
+      () =>
+        queryClient.setQueryData<{ working: Working[] }>(hubKeys.working, (old) =>
+          old ? { working: old.working.filter((x) => x.id !== w.id) } : old,
+        ),
+      [hubKeys.working, hubKeys.tasks, hubKeys.allGuides, hubKeys.board],
+    );
+
   /**
    * The author closes a guide of theirs, from its own row.
    *
@@ -658,6 +669,7 @@ function build(queryClient: QueryClient) {
     onRelease,
     onReply,
     onTakeBack,
+    onMarkDone,
     onCloseGuide,
     readAll,
     createTeam,

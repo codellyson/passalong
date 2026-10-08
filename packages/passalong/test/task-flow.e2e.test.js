@@ -220,6 +220,14 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
   assert.deepEqual(await p.readyDrafts(), [], "nothing left in Draft");
 });
 
+test("an account with no email cannot be minted without an unused invite", { skip }, async () => {
+  const res = await fetch(`${API}/v1/accounts`, {
+    method: "POST",
+    headers: { "x-passalong-version": VERSION },
+  });
+  assert.equal(res.status, 400);
+});
+
 test("signing in from the browser: the CLI shows a code, a person approves it, the CLI is handed a token", {
   skip,
 }, async () => {
@@ -294,14 +302,30 @@ test("signing in from the browser: the CLI shows a code, a person approves it, t
  * token — which the server then reports as "That token isn't recognized", far from the cause.
  */
 async function newAccount() {
+  const email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+  const password = `pw-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+  const headers = { "content-type": "application/json", "x-passalong-version": VERSION };
   for (let i = 0; i < 12; i++) {
-    const res = await fetch(`${API}/v1/accounts`, { method: "POST" });
+    const res = await fetch(`${API}/v1/auth/signup`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ email, password }),
+    });
     if (res.status === 429) {
       await new Promise((r) => setTimeout(r, 10_000));
       continue;
     }
     if (!res.ok) throw new Error(`could not make an account: ${res.status} ${await res.text()}`);
-    return res.json();
+    const { account } = await res.json();
+    const cookie = (res.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+    const minted = await fetch(`${API}/v1/tokens`, {
+      method: "POST",
+      headers: { ...headers, cookie },
+      body: JSON.stringify({ name: "e2e" }),
+    });
+    if (!minted.ok)
+      throw new Error(`could not make a token: ${minted.status} ${await minted.text()}`);
+    return { account, token: (await minted.json()).token };
   }
   throw new Error("could not make an account: still rate-limited after two minutes");
 }
@@ -815,7 +839,11 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
 
   const clash = await call("POST", "/v1/take", { ...b, id: h });
   assert.equal(clash.status, 409);
-  assert.equal(clash.holder.worktree, "/w/a", "the refusal says who has it");
+  assert.equal(
+    clash.holder.worktree,
+    "a",
+    "the refusal says who has it, by its folder's name and not its whole path",
+  );
   assert.equal((await call("POST", "/v1/take", { ...c, id: h })).guide.repo, "e2e/two");
 
   const said = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "halfway" });
