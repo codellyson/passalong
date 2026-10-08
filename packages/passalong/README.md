@@ -42,7 +42,11 @@ passalong archive <id>        off your board and out of the free tier's count (w
 passalong promote <id>        deprecated: mark promoted
 passalong rm <id>             delete a guide locally and from sync
 passalong export [dir]        dump every guide as plain markdown
-passalong login [token]       sign in with your email and password, or attach this machine with a token
+passalong login [token]       sign in from the browser, or attach this machine with a token
+passalong login --new         add another account to this machine
+passalong accounts            the accounts signed in here, and which is the default
+passalong use <name>          make one of them the default
+passalong logout <name>       forget one of them
 passalong me [--handle H] [--name N] [--email E]   who you are to teammates
 passalong team                current team and its members
 passalong team create <name>  start a team (you become its owner)
@@ -104,3 +108,15 @@ Plain markdown with frontmatter in `~/.passalong/guides`. Yours to edit, grep, a
 `passalong export` dumps everything. Works with no account; `passalong login` adds sync and share links.
 
 Point at a self-hosted server with `PASSALONG_API=https://your-host` before `passalong login`.
+
+## More than one account
+
+A machine can be signed in to several accounts, say a work one and a personal one.
+`passalong login --new` adds another beside the first, `passalong accounts` lists them, and
+`passalong use <name>` picks the default a person at a terminal gets.
+
+An agent has no terminal to be asked at, so with two or more accounts and nothing saying which, it
+is refused and told to ask you. It puts the question to you in plain words, you answer, and it calls
+`use_account` with the name. That lasts for the session and moves nothing on disk. From a shell,
+`--as <name>` or `PASSALONG_ACCOUNT=<name>` says the same for one command. The team you work in
+(`passalong team use`) belongs to the account, not the machine.

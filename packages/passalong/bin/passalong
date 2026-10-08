@@ -40,6 +40,10 @@
 //   passalong rm <id>             delete a guide locally and from sync
 //   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
 //   passalong login [token]       sign in from the browser, or attach this machine with a token
+//   passalong login --new         add another account to this machine
+//   passalong accounts            the accounts signed in here, and which is the default
+//   passalong use <name>          make one of them the default
+//   passalong logout <name>       forget one of them
 //   passalong me [--handle H] [--name N] [--email E]   who you are to teammates
 //   passalong team                current team and its members
 //   passalong team create <name>  start a team (you become its owner)
@@ -108,6 +112,39 @@ function openPage(url) {
 }
 
 /**
+ * Keep a login under a name, and say what that did. The first one on a machine is the default; one
+ * added beside it is not, because a default that changes by itself is how an agent ends up acting
+ * as the wrong person. A machine that has only the older single login gets that one named first,
+ * so adding a second does not lose it.
+ */
+async function keepLogin(token, base = api.baseUrl()) {
+  const who = await api.meWith(token, base).catch((e) => die(`token rejected: ${e.message}`));
+  const cfg = store.readConfig();
+  if (cfg.token && !cfg.accounts && cfg.token !== token) {
+    const old = await api.meWith(cfg.token, cfg.api || base).catch(() => null);
+    store.saveAccount(
+      { token: cfg.token, api: cfg.api || base, account: old?.account || "", handle: old?.handle || "", email: old?.email || "", team: cfg.team || "" },
+      { activate: true },
+    );
+  }
+  const before = Object.keys(store.readAccounts()).length;
+  const name = store.saveAccount(
+    { token, api: base, account: who.account, handle: who.handle || "", email: who.email || "" },
+    { activate: before === 0 },
+  );
+  const now = store.readConfig();
+  const count = Object.keys(store.readAccounts(now)).length;
+  console.error(`signed in as ${name} (account ${who.account}) on ${base}. Sync is on.`);
+  if (count > 1)
+    console.error(
+      `${count} accounts are signed in here; the default is ${now.active}. ` +
+        (now.active === name ? "" : `Switch it with \`passalong use ${name}\`. `) +
+        "Agents are asked which to use each session.",
+    );
+  return { name, who };
+}
+
+/**
  * Sign in by approving in the browser: show a code, wait, and be handed a token. No password is
  * typed here and no token is pasted between windows. Needs no terminal to ask on, so an agent can
  * run it and tell the person which page to open.
@@ -125,8 +162,7 @@ async function browserLogin() {
     await new Promise((r) => setTimeout(r, start.interval * 1000));
     const got = await api.devicePoll(start.id, verifier).catch((e) => die(e.message));
     if (!got) continue;
-    store.writeConfig({ token: got.token, api: api.baseUrl() });
-    console.error(`signed in (account ${got.account}) on ${api.baseUrl()}. Sync is on.`);
+    await keepLogin(got.token);
     console.error("Attach other machines with:");
     console.error(`  passalong login ${got.token}`);
     console.error("(keep it private — it is a credential, not a password)");
@@ -166,8 +202,7 @@ async function passwordLogin(f) {
     who = await api.signIn(email, password, { make: true, label }).catch((e) => die(e.message));
   }
 
-  store.writeConfig({ token: who.token, api: api.baseUrl() });
-  console.error(`signed in as ${email} (account ${who.account}) on ${api.baseUrl()}. Sync is on.`);
+  await keepLogin(who.token);
   console.error("Attach other machines with:");
   console.error(`  passalong login ${who.token}`);
   console.error("(keep it private — it is a credential, not a password)");
@@ -765,9 +800,7 @@ const commands = {
   async login(f) {
     const given = f._[0];
     if (given) {
-      store.writeConfig({ token: given, api: api.baseUrl() });
-      const who = await api.me().catch((e) => die(`token rejected: ${e.message}`));
-      console.error(`logged in (account ${who.account}) — ${api.baseUrl()}`);
+      await keepLogin(given);
       return;
     }
     if (api.loggedIn() && !f.new) {
@@ -775,6 +808,7 @@ const commands = {
       if (who) {
         console.error(`already logged in (account ${who.account}). Attach another machine with:`);
         console.error(`  passalong login ${api.token()}`);
+        console.error("Add another account to this machine with `passalong login --new`.");
         return;
       }
     }
@@ -783,6 +817,49 @@ const commands = {
     // working for clicks once.
     if (f.email || f.password) return passwordLogin(f);
     return browserLogin();
+  },
+
+  /** The accounts signed in here, with the default marked. */
+  async accounts() {
+    const cfg = store.readConfig();
+    const all = store.readAccounts(cfg);
+    const names = Object.keys(all);
+    if (!names.length) {
+      console.log(
+        cfg.token
+          ? "one account is signed in here (a login from before accounts had names). `passalong login --new` adds another."
+          : "no account is signed in here — passalong login",
+      );
+      return;
+    }
+    for (const n of names) {
+      const a = all[n];
+      const who = [a.handle ? `@${a.handle}` : "", a.email].filter(Boolean).join("  ");
+      console.log(`${n === cfg.active ? "*" : " "} ${n}${who ? `  ${who}` : ""}  ${a.api}`);
+    }
+    if (names.length > 1)
+      console.log("\n* is the default for a person at a terminal. Agents are asked which to use each session.");
+  },
+
+  /** Make one of them the default. This changes what a terminal gets, never what a session of an agent is told. */
+  async use(f) {
+    const name = f._[0] || die("usage: passalong use <name> (see `passalong accounts`)");
+    if (!store.readAccounts()[name])
+      die(`no account called "${name}" here. Signed in: ${Object.keys(store.readAccounts()).join(", ") || "none"}`);
+    store.setActive(name);
+    console.error(`the default account is now ${name}`);
+  },
+
+  /** Forget one of them on this machine. The account itself is untouched: only its token here goes. */
+  async logout(f) {
+    const name = f._[0] || die("usage: passalong logout <name> (see `passalong accounts`)");
+    const r = store.removeAccount(name);
+    if (!r.removed) die(`no account called "${name}" here`);
+    console.error(
+      r.active
+        ? `signed out of ${name}; the default is now ${r.active}`
+        : `signed out of ${name}; no account is signed in here now`,
+    );
   },
 
   async me(f) {
@@ -804,7 +881,7 @@ const commands = {
           ? " (no plan — nothing is syncing)"
           : " (no limit on your plan)";
     console.log(`guides   ${who.guides} synced${ceiling}`);
-    const current = store.readConfig().team;
+    const current = api.currentTeam();
     console.log(
       `teams    ${who.teams.length ? who.teams.map((t) => `${t.slug}${t.slug === current ? "*" : ""} (${t.role})`).join(", ") : "(none — passalong team create <name>)"}`,
     );
@@ -812,7 +889,7 @@ const commands = {
 
   async team(f) {
     const [sub, ...rest] = f._;
-    const cfg = store.readConfig();
+    const cfg = { team: api.currentTeam() };
     if (!sub) {
       if (!cfg.team) {
         const { teams } = await api.teams().catch((e) => die(e.message));
@@ -828,7 +905,7 @@ const commands = {
     if (sub === "create") {
       const name = rest.join(" ") || die("usage: passalong team create <name>");
       const t = await api.createTeam(name).catch((e) => die(e.message));
-      store.writeConfig({ team: t.slug });
+      api.setTeam(t.slug);
       console.error(`team ${t.name} created as "${t.slug}" — now current. Invite people: passalong team invite [email]`);
       return;
     }
@@ -849,7 +926,7 @@ const commands = {
       const ref = rest[0] || die("usage: passalong team join <link|code>");
       const code = ref.includes("/") ? ref.split("/").filter(Boolean).pop() : ref;
       const r = await api.join(code).catch((e) => die(e.message));
-      store.writeConfig({ team: r.slug });
+      api.setTeam(r.slug);
       console.error(`${r.joined ? "joined" : "already in"} ${r.name} (${r.slug}) — now current`);
       const who = await api.me().catch(() => null);
       if (who && !who.handle) console.error("teammates address you by handle: passalong me --handle <you>");
@@ -858,7 +935,7 @@ const commands = {
     if (sub === "use") {
       const slug = rest[0] || die("usage: passalong team use <slug>");
       await api.team(slug).catch((e) => die(e.message));
-      store.writeConfig({ team: slug });
+      api.setTeam(slug);
       console.error(`current team: ${slug}`);
       return;
     }
@@ -940,6 +1017,19 @@ const commands = {
         input = JSON.parse(raw || "{}");
       }
       if (!api.loggedIn()) return;
+      // Two or more accounts and nothing saying which: the one thing worth telling the agent at the
+      // start of a session, because every call after it would be refused until somebody chooses.
+      if (f.hook === "session" && api.needsChoice()) {
+        console.log(
+          JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: "SessionStart",
+              additionalContext: `Passalong: ${api.choiceMessage()}`,
+            },
+          }),
+        );
+        return;
+      }
       // The timeout is cleared as soon as the answer is in. Left running it holds the process open
       // for the full five seconds after the hook has printed, and a session start or a stop that
       // waits five seconds for nothing is the hook getting in the way, which it must never do.
@@ -989,6 +1079,15 @@ const commands = {
 
 const argv = flags(process.argv.slice(2));
 const cmd = argv._.shift() || "help";
+// `--as <name>` says which of the accounts on this machine this one command is for. It exists for an
+// agent that was told which by the person, since it has no terminal to be asked at.
+if (typeof argv.as === "string") {
+  try {
+    api.chooseAccount(argv.as);
+  } catch (e) {
+    die(e.message);
+  }
+}
 // The first thing anyone runs when something is off, and until now it printed the help page. The
 // parser only knows `--x`, so `--version` arrives as a flag on an empty command and `-v` as a word;
 // both are caught here, with `version`, before dispatch. Only the number goes to stdout, so

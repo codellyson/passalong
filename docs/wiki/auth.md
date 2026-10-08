@@ -45,6 +45,18 @@ the invite page, which mints before it claims — and only when the body names a
 not been used. Open, it made 96 accounts in two days from callers that were not people, none with
 an email or a published guide.
 
+## Several accounts on one machine
+
+The CLI's config keeps logins by name under `accounts`, with `active` naming the default;
+`token`, `api` and `team` at the top of the file stay a copy of the active one, so older readers
+and older CLIs sharing the directory keep working. A call is made as, in order: `PASSALONG_TOKEN`,
+`PASSALONG_ACCOUNT` or `--as` or `use_account` (this process only), then the default. With two or
+more logins and nobody having said which, a person at a terminal gets the default; a process with
+no terminal (an agent, the MCP server) is refused with the names and told to ask the person. The
+refusal is the prompt, because an agent cannot be asked a question but can be told to put one. The
+SessionStart hook says it at the start of a session. The server knows nothing of this: they are
+separate accounts, and the CLI chooses which token to send. `team` is kept per account.
+
 ## Sessions
 
 `pa_session` cookie: `HttpOnly; SameSite=Lax; Path=/`, 30 days, and `Secure` **except** on plain

@@ -179,6 +179,12 @@ Open a guide you mean to act on with `take`, not `get_guide`. `get_guide` is the
 saying you are on it — for reading a guide you have not committed to. You have to be able to read
 something to decide it is not yours.
 
+A machine may be signed in to several accounts. With two or more and nothing saying which, every
+call that needs an account is refused with their names. Do not choose one: ask the person which, in
+plain words, then call `use_account` with the name they gave. `accounts` lists them. It lasts for
+the session and changes nothing on disk. From a shell, `--as <name>` or `PASSALONG_ACCOUNT` does the
+same for one command.
+
 A guide over 20,000 characters comes back from `get_guide` as an outline: its headings and their
 sizes. Ask for one part with `section` (a heading, or the start of one), or all of it with
 `full: true`. A guide over 60,000 characters is refused when it is published: put logs and dumps in a

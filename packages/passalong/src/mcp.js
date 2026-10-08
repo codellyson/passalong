@@ -1323,6 +1323,59 @@ export function buildServer() {
   );
 
   server.registerTool(
+    "accounts",
+    {
+      title: "Accounts on this machine",
+      annotations: READS,
+      description:
+        "The Passalong accounts signed in on this machine, which one this session is using, and " +
+        "whether it still has to be chosen. With two or more and nothing chosen, every call that " +
+        "needs an account is refused until use_account says which. Read-only.",
+      inputSchema: {},
+    },
+    async () => {
+      const list = api.accountList();
+      return json({
+        accounts: list,
+        in_use: api.accountInUse(),
+        must_choose: api.needsChoice(),
+        ...(api.needsChoice() ? { next: api.choiceMessage() } : {}),
+      });
+    },
+  );
+
+  server.registerTool(
+    "use_account",
+    {
+      title: "Use an account for this session",
+      annotations: { ...ADDS, idempotentHint: true },
+      description:
+        "Say which signed-in account this session acts as. Call it only with a name the PERSON " +
+        "gave you: when a machine has more than one account and none is chosen, ask them which, " +
+        "in plain words, then pass their answer. It lasts until this session ends and changes " +
+        "nothing on disk, so it never moves the machine's default.",
+      inputSchema: {
+        name: z.string().describe("an account name from the accounts tool, as the person said it"),
+      },
+    },
+    async ({ name }) => {
+      try {
+        api.chooseAccount(name);
+        const who = await api.me();
+        return json({
+          using: name,
+          account: who.account,
+          handle: who.handle || "",
+          email: who.email || "",
+          teams: (who.teams || []).map((t) => t.slug),
+        });
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "set_guide_status",
     {
       title: "Set guide status",
