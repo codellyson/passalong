@@ -2037,3 +2037,19 @@ test("marking done is refused for anyone else, and for work nobody holds or alre
   assert.equal((await markDone(db, "t1", { account: "me", at: later(1), note: "" })).state, "done");
   assert.equal((await markDone(db, "t1", { account: "me", at: later(2), note: "" })).status, 409);
 });
+
+test("an agent that went quiet lets its old task go when it asks for another by name", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("t2", { created: later(1) });
+  await take(db, "t1", { ...A, host: "mac", worktree: "shop" }, { at: T0 });
+  const live = await take(db, "t2", A, { at: later(LEASE_MS - 1) });
+  assert.equal(live.status, 409, "held live, it is still refused");
+  assert.match(live.error, /mark it done in the hub/);
+  const moved = await take(db, "t2", A, { at: later(LEASE_MS + 1) });
+  assert.equal(moved.claim.guide_id, "t2");
+  assert.equal(await stateIn(db, "t1", later(LEASE_MS + 2)), "ready");
+  const md = db.raw.prepare("SELECT markdown FROM guide WHERE id = 't1'").get().markdown;
+  assert.match(md, /released from mac:shop: its agent went quiet and took another task/);
+});

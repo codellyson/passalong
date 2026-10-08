@@ -534,6 +534,43 @@ async function event(
 type Refusal = { error: string; status: 400 | 404 | 409; holder?: ClaimRow };
 
 /**
+ * An agent's silent hold, given up because it asked for something else. What it left is described
+ * the way release() describes it, so the next one to take it knows where to look.
+ */
+async function letGo(
+  db: D1Database,
+  held: { guide_id: string; place: string; host: string; worktree: string; note: string },
+  who: Agent,
+  at: string,
+) {
+  const g = await db
+    .prepare("SELECT kind, markdown FROM guide WHERE id = ?")
+    .bind(held.guide_id)
+    .first<{ kind: string; markdown: string }>();
+  const drop = db
+    .prepare("DELETE FROM claim WHERE guide_id = ? AND place = ? AND agent_id = ?")
+    .bind(held.guide_id, held.place, who.agent);
+  if (g?.kind === "task") {
+    const where = [held.host, held.worktree].filter(Boolean).join(":") || `agent ${who.agent}`;
+    const said = held.note ? `; last progress: "${held.note}"` : "";
+    const line = `${at.slice(0, 10)} released from ${where}: its agent went quiet and took another task${said}`;
+    await db.batch([
+      drop,
+      db
+        .prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?")
+        .bind(withNote(g.markdown, line), at, held.guide_id),
+    ]);
+  } else await drop.run();
+  await event(db, held.guide_id, "released", {
+    account: who.account,
+    agent: who.agent,
+    host: held.host,
+    body: "its agent took another task after going quiet",
+    at,
+  });
+}
+
+/**
  * This agent takes one guide, of any kind, by id: "I am doing this". The same lock as `next`.
  *
  * A task is taken once, wherever the agent is, and only from the repo it is for unless `any`. A
@@ -569,22 +606,38 @@ export async function take(
     .first<TaskRow & { kind: string; to_account_id: string; blocked: number; for_me: number }>();
   if (!g) return { status: 404, error: "no such guide that you can see" };
 
-  const held = await db
+  let held = await db
     .prepare(
       many
-        ? "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' AND guide_id = ?"
-        : "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' ORDER BY guide_id = ? DESC LIMIT 1",
+        ? "SELECT guide_id, place, lease_until, host, worktree, note FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' AND guide_id = ?"
+        : "SELECT guide_id, place, lease_until, host, worktree, note FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' ORDER BY guide_id = ? DESC LIMIT 1",
     )
     .bind(who.agent, who.account, id)
-    .first<{ guide_id: string }>();
+    .first<{
+      guide_id: string;
+      place: string;
+      lease_until: string;
+      host: string;
+      worktree: string;
+      note: string;
+    }>();
   if (held?.guide_id === id) {
     const claim = await renew(db, id, who, { at, note: null });
     if (claim) return { task: g, claim, resumed: true };
   }
+  // Asking for something else by name, while the last hold has been silent past its lease, is
+  // moving on: the old one goes back to whoever is next, with where it was left. Held live, it is
+  // still refused, because that agent is working on it.
+  if (held && held.lease_until <= at) {
+    await letGo(db, held, who, at);
+    held = null;
+  }
   if (held)
     return {
       status: 409,
-      error: `this agent already holds ${held.guide_id}: hand it in or pass it before taking another`,
+      error:
+        `this agent already holds ${held.guide_id}: hand it in or pass it before taking another. ` +
+        "If that work is finished, its author or whoever runs this agent can mark it done in the hub.",
     };
 
   if (g.status !== "published")
