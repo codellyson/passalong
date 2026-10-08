@@ -86,36 +86,28 @@ const who = computed(() => {
       </span>
       <!-- The two columns that do not fit a narrow screen (What it says, Who) move under the title,
            so a phone shows what a desktop does without a table wider than the page. -->
-      <span v-if="g.summary" class="mt-1 line-clamp-2 block text-xs text-muted md:hidden">{{ g.summary }}</span>
-      <span v-if="who" class="mt-0.5 block text-xs text-muted md:hidden">
+      <span v-if="g.summary" class="mt-1 line-clamp-2 block text-xs text-muted xl:hidden">{{ g.summary }}</span>
+      <span v-if="who" class="mt-0.5 block text-xs text-muted xl:hidden">
         {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> in {{ who.team }}</template>
       </span>
-      <!-- On a desktop this sits under the age; on a phone, with the rest of what is said about the
-           guide, because a card has no column to put it in. -->
+      <!-- One place at every width, under the title. In the Age column it was squeezed into four
+           lines on a table and needed a second copy for a card. -->
       <span
         v-if="expiry"
-        class="mt-0.5 block text-xs md:hidden"
+        class="mt-0.5 block text-xs"
         :class="expiry.soon ? 'text-warn' : 'text-muted'"
         :title="expiry.why"
       >{{ expiry.text }}</span>
     </td>
-    <td class="hidden min-w-48 max-w-[26rem] text-muted md:table-cell"><span class="line-clamp-2">{{ g.summary || "—" }}</span></td>
-    <td class="hidden whitespace-nowrap text-muted md:table-cell">
+    <td class="hidden min-w-48 max-w-[26rem] text-muted xl:table-cell"><span class="line-clamp-2">{{ g.summary || "—" }}</span></td>
+    <td class="hidden whitespace-nowrap text-muted xl:table-cell">
       <template v-if="who">
         {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> in {{ who.team }}</template>
       </template>
       <template v-else>—</template>
     </td>
     <td class="whitespace-nowrap" :class="TONE[status.tone] || 'text-muted'">{{ status.text || "—" }}</td>
-    <td class="whitespace-nowrap text-muted tabular-nums">
-      {{ rel(g.created) }}
-      <span
-        v-if="expiry"
-        class="hidden max-w-44 font-ui text-xs whitespace-normal md:block"
-        :class="expiry.soon ? 'text-warn' : 'text-muted'"
-        :title="expiry.why"
-      >{{ expiry.text }}</span>
-    </td>
+    <td class="whitespace-nowrap text-muted tabular-nums">{{ rel(g.created) }}</td>
     <td class="text-right whitespace-nowrap">
       <span class="inline-flex items-center gap-2">
         <template v-if="key === 'unanswered'">
