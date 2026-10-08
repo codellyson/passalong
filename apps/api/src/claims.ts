@@ -2148,9 +2148,29 @@ export async function closeGuide(
   db: D1Database,
   id: string,
   { account, at }: { account: string; at: string },
-): Promise<{ claimants: string[] } | { error: string; status: 404 }> {
-  const g = await authoredGuide(db, id, account);
-  if ("error" in g) return g;
+): Promise<
+  { claimants: string[]; author: string; byOwner: boolean } | { error: string; status: 404 }
+> {
+  const g = await db
+    .prepare("SELECT markdown, account_id, team_id FROM guide WHERE id = ? AND kind <> 'task'")
+    .bind(id)
+    .first<{ markdown: string; account_id: string; team_id: string }>();
+  const byOwner = Boolean(g) && g!.account_id !== account;
+  const allowed =
+    g &&
+    (!byOwner ||
+      (g.team_id &&
+        (await db
+          .prepare(
+            "SELECT 1 FROM membership WHERE team_id = ? AND account_id = ? AND role = 'owner'",
+          )
+          .bind(g.team_id, account)
+          .first())));
+  if (!g || !allowed)
+    return {
+      status: 404,
+      error: "no such guide of yours — only its author, or its team's owner, closes it",
+    };
   const { results } = await db
     .prepare("SELECT DISTINCT account_id FROM claim WHERE guide_id = ?")
     .bind(id)
@@ -2161,8 +2181,8 @@ export async function closeGuide(
       .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
       .bind(withStatus(g.markdown, "consumed"), at, id),
   ]);
-  await event(db, id, "closed", { account, at });
-  return { claimants: results.map((r) => r.account_id) };
+  await event(db, id, "closed", { account, at, body: byOwner ? "closed by the team owner" : "" });
+  return { claimants: results.map((r) => r.account_id), author: g.account_id, byOwner };
 }
 
 /**

@@ -262,6 +262,14 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             @click="close"
           >{{ busy === "close" ? "Archiving…" : "Archive" }}</button>
           <button
+            v-if="!ctx.owner && ctx.can_close && g.status !== 'consumed'"
+            class="btn"
+            type="button"
+            :disabled="Boolean(busy)"
+            title="You own this team, so you can close it for its author. They are told."
+            @click="close"
+          >{{ busy === "close" ? "Closing…" : "Close for the team" }}</button>
+          <button
             v-if="ctx.owner && g.status === 'consumed'"
             class="btn"
             type="button"
