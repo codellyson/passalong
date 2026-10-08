@@ -2,7 +2,7 @@
 // refused rather than left to guess. Each test file runs in its own process, so setting
 // PASSALONG_HOME before the modules load is what points them at a scratch directory.
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -197,4 +197,29 @@ test("over MCP, an agent sees it must choose, is refused until it does, and cann
   assert.equal(nobody.isError, true);
   assert.match(text(nobody), /no account called "nobody"/);
   await client.close();
+});
+
+test("a command never reads the config half-written by another process", async () => {
+  reset();
+  for (const n of ["a1", "a2", "a3"]) store.saveAccount(entry(n, n));
+  const writer = spawn(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `const s = await import(${JSON.stringify(new URL("../src/store.js", import.meta.url).href)});
+       for (let i = 0; i < 6000; i++) s.writeConfig({ update_checked: i });`,
+    ],
+    { env: { ...process.env, PASSALONG_HOME: HOME }, stdio: "ignore" },
+  );
+  let empty = 0;
+  let reads = 0;
+  const until = Date.now() + 1500;
+  while (Date.now() < until) {
+    reads++;
+    if (!Object.keys(store.readAccounts()).length) empty++;
+  }
+  writer.kill();
+  assert.ok(reads > 1000, "the reader ran");
+  assert.equal(empty, 0, "an update check rewriting the file must not show a reader no accounts");
 });
