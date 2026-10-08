@@ -23,7 +23,11 @@ export const CLIENT_HEADER = "x-passalong-version";
  * deploys on merge, and a floor above what npm hands out refuses every agent with nothing it can
  * install to get past it.
  *
- * 0.13.1 since 0.14.0 went `latest` on 2026-10-08. 0.13.0 and older cannot file a bug against this
+ * 0.15.0 since it went `latest` on 2026-10-08. Older CLIs file a bug or task for nobody when no
+ * `--to` is given, so a member of a team records issues the team never sees; 0.15.0 sends them to
+ * the current team.
+ *
+ * Before that, 0.13.1 since 0.14.0 went `latest` on 2026-10-08. 0.13.0 and older cannot file a bug against this
  * server: they write no `summary:`, a new guide without one is refused, and `file_bugs` has no field
  * to give one — agents on them were publishing a bug by hand to get past it. 0.13.1 is the first
  * that says it. 0.14.0 adds nothing the server depends on, so it is not forced.
@@ -32,7 +36,7 @@ export const CLIENT_HEADER = "x-passalong-version";
  * version, and the first whose follow-up note stopped telling agents to publish what they found as
  * a new guide.
  */
-export const MIN_CLIENT = "0.13.1";
+export const MIN_CLIENT = "0.15.0";
 
 /**
  * What a CLI that sends no version is counted as: the last release that did not send one.

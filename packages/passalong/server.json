@@ -8,12 +8,12 @@
     "subfolder": "packages/passalong"
   },
   "websiteUrl": "https://passalong.dev",
-  "version": "0.13.1",
+  "version": "0.15.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "passalong",
-      "version": "0.13.1",
+      "version": "0.15.0",
       "transport": {
         "type": "stdio"
       },
