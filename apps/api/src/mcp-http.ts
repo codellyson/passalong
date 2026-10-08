@@ -1356,20 +1356,26 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         evidence: EVIDENCE.optional(),
         checks: z
           .array(
-            z.object({
-              check: z
-                .string()
-                .describe("the Acceptance line this answers, in the task's own words"),
-              says: z
-                .string()
-                .optional()
-                .describe(
-                  'what happened, in one plain sentence for a PERSON: "Swagger lists all six ' +
-                    'endpoints, each with request and response schemas." It is the row they read; ' +
-                    "the evidence stays folded behind it",
-                ),
-              ran: EVIDENCE,
-            }),
+            // A bare string is a check line with nothing behind it. Let it through to the server's
+            // refusal, which says what to send, rather than a schema error that says only "expected
+            // object".
+            z.preprocess(
+              (v) => (typeof v === "string" ? { check: v } : v),
+              z.object({
+                check: z
+                  .string()
+                  .describe("the Acceptance line this answers, in the task's own words"),
+                says: z
+                  .string()
+                  .optional()
+                  .describe(
+                    'what happened, in one plain sentence for a PERSON: "Swagger lists all six ' +
+                      'endpoints, each with request and response schemas." It is the row they read; ' +
+                      "the evidence stays folded behind it",
+                  ),
+                ran: EVIDENCE,
+              }),
+            ),
           )
           .optional()
           .describe("task: one entry per Acceptance line, in the order you worked them"),

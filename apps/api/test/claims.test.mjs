@@ -26,6 +26,7 @@ import {
   LEASE_MS,
   leaf,
   list,
+  markDone,
   next,
   PERSON_LEASE_MS,
   pass,
@@ -1987,6 +1988,71 @@ test("migration 0036 clears browser holds already superseded, and nothing else",
     left.map((r) => `${r.guide_id}:${r.place}`),
     ["g1:o/r", "g2:", "t1:"],
   );
+});
+
+test("the author marks a held task done: approved on the spot, and its agent is free for the next", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("t2", { created: later(1) });
+  await take(db, "t1", { ...A, host: "mac", worktree: "shop" }, { at: T0 });
+  const r = await markDone(db, "t1", { account: "me", at: later(2), note: "pushed, merged" });
+  assert.equal(r.state, "done");
+  const row = db.raw.prepare("SELECT status, markdown FROM guide WHERE id = 't1'").get();
+  assert.equal(row.status, "consumed");
+  assert.match(row.markdown, /marked done by its author while held by mac:shop: pushed, merged/);
+  assert.equal(
+    (await take(db, "t2", A, { at: later(3) })).claim.agent_id,
+    "agent-a",
+    "the agent that held it is no longer blocked",
+  );
+});
+
+test("whoever's agent holds a task can mark it done, and it goes to its author for review", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  teamed(db);
+  await take(db, "t1", { account: "other", agent: "agent-o", repo: "o/r", any: true }, { at: T0 });
+  const r = await markDone(db, "t1", { account: "other", at: later(1), note: "" });
+  assert.equal(r.state, "review");
+  assert.equal(
+    db.raw.prepare("SELECT status FROM guide WHERE id = 't1'").get().status,
+    "published",
+  );
+  assert.equal(
+    db.raw.prepare("SELECT state FROM claim WHERE guide_id = 't1'").get().state,
+    "review",
+  );
+  assert.equal((await approve(db, "t1", { account: "me", at: later(2) })).state, "done");
+});
+
+test("marking done is refused for anyone else, and for work nobody holds or already handed in", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  teamed(db);
+  assert.equal((await markDone(db, "t1", { account: "me", at: T0, note: "" })).status, 409);
+  await take(db, "t1", A, { at: T0 });
+  assert.equal((await markDone(db, "t1", { account: "other", at: T0, note: "" })).status, 404);
+  assert.equal((await markDone(db, "t1", { account: "me", at: later(1), note: "" })).state, "done");
+  assert.equal((await markDone(db, "t1", { account: "me", at: later(2), note: "" })).status, 409);
+});
+
+test("an agent that went quiet lets its old task go when it asks for another by name", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  guide("t2", { created: later(1) });
+  await take(db, "t1", { ...A, host: "mac", worktree: "shop" }, { at: T0 });
+  const live = await take(db, "t2", A, { at: later(LEASE_MS - 1) });
+  assert.equal(live.status, 409, "held live, it is still refused");
+  assert.match(live.error, /mark it done in the hub/);
+  const moved = await take(db, "t2", A, { at: later(LEASE_MS + 1) });
+  assert.equal(moved.claim.guide_id, "t2");
+  assert.equal(await stateIn(db, "t1", later(LEASE_MS + 2)), "ready");
+  const md = db.raw.prepare("SELECT markdown FROM guide WHERE id = 't1'").get().markdown;
+  assert.match(md, /released from mac:shop: its agent went quiet and took another task/);
 });
 
 test("a worktree is shown by its folder's name alone, whichever way the path is written", () => {
