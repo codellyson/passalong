@@ -102,10 +102,9 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
           <td><HubSelectBox :id="t.id" :title="t.title" :archived="t.state === 'done'" :mine="t.mine" /></td>
           <td class="min-w-40 max-w-[22rem] font-medium md:min-w-60">
             <NuxtLink :to="`/hub/g/${t.id}`" class="line-clamp-2 text-fg no-underline hover:text-accent">{{ t.title || t.id }}</NuxtLink>
-            <span class="font-code text-xs font-normal text-muted">{{ t.id }}</span>
             <!-- What it says and Held by do not fit a narrow screen as columns; they sit under the
                  title there instead, so a phone shows what a desktop does. -->
-            <span v-if="t.summary" class="mt-1 line-clamp-2 block text-xs font-normal text-muted xl:hidden">{{ t.summary }}</span>
+            <span v-if="t.summary" class="mt-1 line-clamp-1 block text-xs font-normal text-muted xl:hidden">{{ t.summary }}</span>
             <span v-if="holder(t)" class="mt-0.5 block text-xs font-normal text-muted xl:hidden">
               held by <b class="font-medium text-fg">{{ holder(t) }}</b>
             </span>
