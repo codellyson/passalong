@@ -265,6 +265,7 @@ test("get_guide reads a large guide by outline, by section, or whole", async () 
   const whole = await read({ full: true });
   assert.ok(whole.includes(filler), "full gives all of it");
   await client.close();
+});
 
 test("hand_in takes a bare string as a check line, so the refusal is ours and not a schema error", async () => {
   const [left, right] = InMemoryTransport.createLinkedPair();
