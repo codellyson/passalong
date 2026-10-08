@@ -10,6 +10,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -40,7 +41,12 @@ export function readConfig() {
 export function writeConfig(patch) {
   ensure();
   const next = { ...readConfig(), ...patch };
-  writeFileSync(CONFIG, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  // Written beside it and renamed over it, so a reader never meets a half-written file: the update
+  // check rewrites this from a background process, and a command that read it mid-write saw no
+  // accounts at all.
+  const tmp = `${CONFIG}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  renameSync(tmp, CONFIG);
   return next;
 }
 
