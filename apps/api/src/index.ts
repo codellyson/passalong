@@ -4465,7 +4465,7 @@ function agentOf(c: Ctx, raw: unknown): claims.Agent & Record<string, unknown> {
     agent: AGENT_RE.test(String(body.agent ?? "")) ? String(body.agent) : "",
     host: str(body.host, 120),
     repo: str(body.repo, 400),
-    worktree: str(body.worktree, 400),
+    worktree: claims.leaf(str(body.worktree, 400)),
   };
 }
 

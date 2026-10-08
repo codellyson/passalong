@@ -64,7 +64,7 @@ const who = (w: Working) => (w.by.you ? "You" : personName(w.by.name, w.by.handl
 /** Where it is held: the host and the last part of the worktree path, or the browser for a person. */
 const where = (w: Working) => {
   if (person(w)) return "in the browser";
-  const tree = w.worktree.split("/").filter(Boolean).pop() || "";
+  const tree = w.worktree.split(/[\\/]/).filter(Boolean).pop() || "";
   return [w.host, tree].filter(Boolean).join(":") || w.agent;
 };
 
