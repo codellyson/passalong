@@ -121,7 +121,11 @@ async function account(): Promise<Me> {
       // Stale or foreign token: start fresh rather than dead-end the invite.
     }
   }
-  const minted = await call<{ token: string }>("/v1/accounts", { method: "POST", auth: false });
+  const minted = await call<{ token: string }>("/v1/accounts", {
+    method: "POST",
+    auth: false,
+    body: { invite: code.value },
+  });
   token.set(minted.token);
   return call<Me>("/v1/me");
 }

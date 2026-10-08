@@ -959,6 +959,19 @@ app.post("/v1/accounts", async (c) => {
     if (!success)
       return err(c, 429, "Too many accounts were made from this address. Try again in a minute.");
   }
+  // Only an invite page mints an account without an email. Anything else posting here made accounts
+  // nobody could reach and nobody could write to: 96 of them in two days, none ever used.
+  const { invite } = (await c.req.json().catch(() => ({}))) as { invite?: unknown };
+  const open = await c.env.DB.prepare("SELECT 1 FROM invite WHERE code = ? AND used_by = ''")
+    .bind(typeof invite === "string" ? invite : "")
+    .first();
+  if (!open)
+    return err(
+      c,
+      400,
+      "Accounts are made with an email and a password: run `passalong login`, or sign up at " +
+        `${origin(c)}/hub. This route is only for an invite link that has not been used.`,
+    );
   const id = rid(10);
   const token = `pa_${rand(32)}`;
   await c.env.DB.batch([
@@ -4465,7 +4478,7 @@ function agentOf(c: Ctx, raw: unknown): claims.Agent & Record<string, unknown> {
     agent: AGENT_RE.test(String(body.agent ?? "")) ? String(body.agent) : "",
     host: str(body.host, 120),
     repo: str(body.repo, 400),
-    worktree: str(body.worktree, 400),
+    worktree: claims.leaf(str(body.worktree, 400)),
   };
 }
 

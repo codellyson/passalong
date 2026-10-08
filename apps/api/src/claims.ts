@@ -252,6 +252,21 @@ interface TaskRow {
   created: string;
 }
 
+/**
+ * The last part of a path, for either kind of separator.
+ *
+ * A worktree was stored and shown whole, so a claim read "/Users/<login>/Desktop/work/shop" or
+ * "C:\\laragon\\www\\khaime": the person's login name and their folder layout, in a hub their
+ * whole team reads. What tells two checkouts apart is the folder's own name.
+ */
+export const leaf = (path: string) =>
+  String(path ?? "")
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "")
+    .split("/")
+    .pop()!
+    .trim();
+
 /** Who is asking, and from where. `agent` is the worktree's stable id. */
 export interface Agent {
   account: string;

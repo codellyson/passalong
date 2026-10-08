@@ -24,6 +24,7 @@ import {
   handedIn,
   handIn,
   LEASE_MS,
+  leaf,
   list,
   markDone,
   next,
@@ -2052,4 +2053,53 @@ test("an agent that went quiet lets its old task go when it asks for another by 
   assert.equal(await stateIn(db, "t1", later(LEASE_MS + 2)), "ready");
   const md = db.raw.prepare("SELECT markdown FROM guide WHERE id = 't1'").get().markdown;
   assert.match(md, /released from mac:shop: its agent went quiet and took another task/);
+});
+
+test("a worktree is shown by its folder's name alone, whichever way the path is written", () => {
+  assert.equal(leaf("/Users/ada/Desktop/work/shop"), "shop");
+  assert.equal(leaf("/home/ada/shop/"), "shop");
+  assert.equal(leaf("C:\\laragon\\www\\khaime"), "khaime");
+  assert.equal(leaf("shop"), "shop");
+  assert.equal(leaf(""), "");
+});
+
+test("migration 0042 cuts stored worktrees to the folder's name, and leaves the rest", () => {
+  const sql = new DatabaseSync(":memory:");
+  for (const f of readdirSync(MIGRATIONS)
+    .sort()
+    .filter((f) => f < "0042_"))
+    sql.exec(readFileSync(join(MIGRATIONS, f), "utf8"));
+  sql.exec(`INSERT INTO account (id, token_hash, created) VALUES ('a', 'h', '${T0}')`);
+  const g = (id) =>
+    sql
+      .prepare(
+        `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, kind)
+         VALUES (?, 'a', 'k', 't', 'published', '', '[]', '[]', '', ?, ?, 'transfer')`,
+      )
+      .run(id, T0, T0);
+  const claim = sql.prepare(
+    `INSERT INTO claim (guide_id, place, account_id, agent_id, host, repo, worktree, state, claimed_at, lease_until, updated, fence)
+     VALUES (?, ?, 'a', ?, 'pc', '', ?, 'claimed', '${T0}', '${T0}', '${T0}', 1)`,
+  );
+  const rows = [
+    ["/Users/ada/Desktop/work/shop", "shop"],
+    ["C:\\laragon\\www\\khaime", "khaime"],
+    ["/home/ada/shop/", "shop"],
+    ["shop", "shop"],
+    ["", ""],
+  ];
+  rows.forEach(([w], i) => {
+    g(`g${i}`);
+    claim.run(`g${i}`, "", `agent-${i}`, w);
+  });
+  const file = readdirSync(MIGRATIONS).find((f) => f.startsWith("0042_"));
+  sql.exec(readFileSync(join(MIGRATIONS, file), "utf8"));
+  const got = sql
+    .prepare("SELECT worktree FROM claim ORDER BY guide_id")
+    .all()
+    .map((r) => r.worktree);
+  assert.deepEqual(
+    got,
+    rows.map(([, want]) => want),
+  );
 });
