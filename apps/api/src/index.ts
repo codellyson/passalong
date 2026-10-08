@@ -193,11 +193,20 @@ import {
   COUNTED,
   ceilingFor,
   isFull,
+  mayKeep,
   planNow,
   seatsFull,
 } from "./quota.js";
 import { sizeProblem } from "./sections.js";
-import { conversationOn, evidenceOn, holdShots, PROOF_DAYS, SHOT_TYPES, shotKey } from "./shots.js";
+import {
+  conversationOn,
+  evidenceOn,
+  holdShots,
+  PROOF_DAYS,
+  proofExpiry,
+  SHOT_TYPES,
+  shotKey,
+} from "./shots.js";
 import {
   isUploadToken,
   publicUpload,
@@ -673,6 +682,22 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       ).results,
   );
   for (const row of childRows) childCounts.set(row.parent_id, Number(row.n));
+  // When a guide will be tidied away by itself, for the ones that will: its proof screenshots, or
+  // the guide itself being shelved. Both come from the conditions the sweeps delete on.
+  const proofEnds = new Map<string, string>(
+    await inSlices(
+      rows.map((r) => r.id),
+      0,
+      async (slice) => [...(await proofExpiry(c.env.DB, slice))],
+    ),
+  );
+  const shelveAt = new Map<string, string>(
+    await inSlices(
+      rows.map((r) => r.id),
+      0,
+      async (slice) => [...(await claims.shelvesAt(c.env.DB, slice))],
+    ),
+  );
   return rows.map((r) => {
     const heard = said.get(r.id) || [];
     // The latest word, plus whether anyone's standing verdict is still negative.
@@ -718,6 +743,10 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       kind: r.kind,
       // What it says to a person: the line a list shows in place of the document.
       summary: r.summary || "",
+      // When it is tidied away by itself, or "": its proof screenshots are deleted at
+      // `proof_expires`, and a sent guide nobody touches is shelved at `shelves_at`.
+      proof_expires: proofEnds.get(r.id) || "",
+      shelves_at: shelveAt.get(r.id) || "",
       // Which release wrote it, for tracing a malformed guide back. Empty from before 0035.
       client: r.client || "",
       verdict: latest
@@ -1524,11 +1553,17 @@ app.delete("/v1/admin/gifts/:id", async (c) => {
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, password_hash, plan, plan_until, role FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, password_hash, plan, plan_until, role, keep_forever FROM account WHERE id = ?",
   )
     .bind(account)
     .first<
-      AccountRow & { password_hash: string; plan: string; plan_until: string; role: string }
+      AccountRow & {
+        password_hash: string;
+        plan: string;
+        plan_until: string;
+        role: string;
+        keep_forever: number;
+      }
     >();
   // A gift that has run out is `lapsed` here too, so the hub says what the ceiling already does.
   const ownPlan = planNow(me?.plan || "free", me?.plan_until, now());
@@ -1571,6 +1606,10 @@ app.get("/v1/me", async (c) => {
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.
     has_password: Boolean(me?.password_hash),
+    // Whether its guides are kept for good rather than tidied away on a clock, and whether it may
+    // choose that. See migrations/0044_keep_forever.sql and quota.ts.
+    keep_forever: Boolean(me?.keep_forever),
+    may_keep: mayKeep(ownPlan),
   });
 });
 
@@ -1627,9 +1666,19 @@ app.patch("/v1/me", async (c) => {
     handle?: string;
     name?: string;
     email?: string;
+    keep_forever?: boolean;
   };
   const sets: string[] = [];
   const binds: unknown[] = [];
+  if (patch.keep_forever !== undefined) {
+    if (typeof patch.keep_forever !== "boolean")
+      return err(c, 400, "keep_forever is true or false.");
+    // Turning the clean-up back on is always allowed; turning it off is what a plan will buy.
+    if (patch.keep_forever && !mayKeep(undefined))
+      return err(c, 402, "Keeping every guide for good is part of a paid plan.");
+    sets.push("keep_forever = ?");
+    binds.push(patch.keep_forever ? 1 : 0);
+  }
   if (patch.handle !== undefined) {
     const h = patch.handle.trim().toLowerCase().replace(/^@/, "");
     if (!HANDLE_RE.test(h))
@@ -1656,7 +1705,11 @@ app.patch("/v1/me", async (c) => {
     binds.push(e);
   }
   if (!sets.length)
-    return err(c, 400, "There was nothing to save. Change your handle, name or email first.");
+    return err(
+      c,
+      400,
+      "There was nothing to save. Change your handle, name, email or clean-up first.",
+    );
   await c.env.DB.prepare(`UPDATE account SET ${sets.join(", ")} WHERE id = ?`)
     .bind(...binds, account)
     .run();

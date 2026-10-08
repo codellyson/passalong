@@ -8,6 +8,7 @@
   worked the moment you said yes.
 -->
 <script setup lang="ts">
+import { expiryLine } from "~/utils/expiry";
 import type { LaneRow } from "~/utils/lanes";
 
 const props = defineProps<{ row: LaneRow }>();
@@ -17,6 +18,7 @@ const { data, onAck, onCloseGuide } = useHub();
 const g = computed(() => props.row.g);
 const key = computed(() => props.row.state?.key);
 const status = computed(() => statusLine(props.row));
+const expiry = computed(() => expiryLine(g.value));
 
 const TONE = { danger: "text-danger", accent: "text-accent", ok: "text-ok", "": "" } as const;
 
@@ -91,7 +93,15 @@ const who = computed(() => {
       <template v-else>—</template>
     </td>
     <td class="whitespace-nowrap" :class="TONE[status.tone] || 'text-muted'">{{ status.text || "—" }}</td>
-    <td class="whitespace-nowrap text-muted tabular-nums">{{ rel(g.created) }}</td>
+    <td class="whitespace-nowrap text-muted tabular-nums">
+      {{ rel(g.created) }}
+      <span
+        v-if="expiry"
+        class="block max-w-44 font-ui text-xs whitespace-normal"
+        :class="expiry.soon ? 'text-warn' : 'text-muted'"
+        :title="expiry.text"
+      >{{ expiry.text }}</span>
+    </td>
     <td class="text-right whitespace-nowrap">
       <span class="inline-flex items-center gap-2">
         <template v-if="key === 'unanswered'">

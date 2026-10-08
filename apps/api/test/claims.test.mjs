@@ -37,6 +37,7 @@ import {
   repoKey,
   STALE_SENT_MS,
   sendBackHandedIn,
+  shelvesAt,
   staleSent,
   stalled,
   stateOf,
@@ -2102,4 +2103,34 @@ test("migration 0042 cuts stored worktrees to the folder's name, and leaves the 
     got,
     rows.map(([, want]) => want),
   );
+});
+
+test("a sent guide shows when it will be shelved, and an author who keeps everything is left alone", async () => {
+  const db = d1();
+  const guide = seed(db);
+  const old = new Date(Date.parse(T0) - 60_000).toISOString();
+  const sent = (id) => {
+    guide(id, { kind: "transfer", target: "", created: old });
+    db.raw
+      .prepare("UPDATE guide SET updated = ?, to_account_id = 'other' WHERE id = ?")
+      .run(old, id);
+  };
+  sent("quiet");
+  sent("pulled");
+  db.raw
+    .prepare(
+      "INSERT INTO pull (guide_id, account_id, via, at) VALUES ('pulled', 'other', 'cli', ?)",
+    )
+    .run(T0);
+
+  const due = await shelvesAt(db, ["quiet", "pulled"]);
+  assert.deepEqual([...due.keys()], ["quiet"], "a guide somebody opened is not on the clock");
+  assert.equal(due.get("quiet"), new Date(Date.parse(old) + STALE_SENT_MS).toISOString());
+
+  db.raw.prepare("UPDATE account SET keep_forever = 1 WHERE id = 'me'").run();
+  assert.equal((await shelvesAt(db, ["quiet"])).size, 0, "keep_forever takes it off the clock");
+  const cutoff = new Date(Date.parse(old) + STALE_SENT_MS + 1000).toISOString();
+  assert.deepEqual(await staleSent(db, cutoff), [], "and the sweep leaves it where it is");
+  db.raw.prepare("UPDATE account SET keep_forever = 0 WHERE id = 'me'").run();
+  assert.equal((await staleSent(db, cutoff)).length, 1, "put back, it is shelved as before");
 });

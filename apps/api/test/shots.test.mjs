@@ -16,6 +16,7 @@ import {
   holdShots,
   PROOF_DAYS,
   PROOF_GONE,
+  proofExpiry,
   strike,
   sweepOrphans,
   sweepProof,
@@ -268,4 +269,20 @@ test("strike replaces an image or a bare link to a removed shot, and nothing els
     strike(text, ["aaa111"]),
     `see ${PROOF_GONE} and ${PROOF_GONE} but not /v1/shots/bbb222`,
   );
+});
+
+test("a closed guide says when its proof goes, and an author who keeps everything keeps it", async () => {
+  const db = d1();
+  closedWithProof(db);
+  const due = await proofExpiry(db, ["g1"]);
+  assert.equal(due.get("g1"), new Date(later(PROOF_DAYS)).toISOString());
+
+  db.raw.prepare("UPDATE guide SET status = 'published' WHERE id = 'g1'").run();
+  assert.equal((await proofExpiry(db, ["g1"])).size, 0, "an open guide's proof is not on a clock");
+  db.raw.prepare("UPDATE guide SET status = 'consumed' WHERE id = 'g1'").run();
+
+  db.raw.prepare("UPDATE account SET keep_forever = 1").run();
+  assert.equal((await proofExpiry(db, ["g1"])).size, 0, "nor is a keeper's");
+  assert.deepEqual(await sweepProof({ DB: db }, { at: later(90) }), { removed: 0, deferred: 0 });
+  assert.equal(owner(db, "prf222"), "g1", "and the sweep leaves it");
 });

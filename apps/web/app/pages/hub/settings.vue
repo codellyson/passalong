@@ -92,6 +92,12 @@ const nav = computed(() => {
           tone: me.value?.handle ? "" : "warn",
         },
         { href: "#notifications", label: "Notifications", note: "", tone: "" },
+        {
+          href: "#cleanup",
+          label: "Clean-up",
+          note: me.value?.keep_forever ? "off" : "",
+          tone: "",
+        },
       ],
     },
     {
@@ -246,6 +252,14 @@ const noteTone: Record<string, string> = {
               </p>
             </div>
             <HubPushSettings />
+          </section>
+
+          <section id="cleanup" :class="sec" aria-labelledby="cleanup-h">
+            <div :class="secHead">
+              <h3 id="cleanup-h" :class="title">Clean-up</h3>
+              <p :class="blurb">What Passalong removes by itself, and when.</p>
+            </div>
+            <HubRetention />
           </section>
         </div>
 
