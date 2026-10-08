@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import {
   ASK_LEASE_MS,
   approve,
+  archivesAt,
   ask,
   blockOn,
   checksProblem,
@@ -37,7 +38,6 @@ import {
   repoKey,
   STALE_SENT_MS,
   sendBackHandedIn,
-  shelvesAt,
   staleSent,
   stalled,
   stateOf,
@@ -2105,7 +2105,7 @@ test("migration 0042 cuts stored worktrees to the folder's name, and leaves the 
   );
 });
 
-test("a sent guide shows when it will be shelved, and an author who keeps everything is left alone", async () => {
+test("a sent guide shows when it will be archived, and an author who keeps everything is left alone", async () => {
   const db = d1();
   const guide = seed(db);
   const old = new Date(Date.parse(T0) - 60_000).toISOString();
@@ -2123,14 +2123,14 @@ test("a sent guide shows when it will be shelved, and an author who keeps everyt
     )
     .run(T0);
 
-  const due = await shelvesAt(db, ["quiet", "pulled"]);
+  const due = await archivesAt(db, ["quiet", "pulled"]);
   assert.deepEqual([...due.keys()], ["quiet"], "a guide somebody opened is not on the clock");
   assert.equal(due.get("quiet"), new Date(Date.parse(old) + STALE_SENT_MS).toISOString());
 
   db.raw.prepare("UPDATE account SET keep_forever = 1 WHERE id = 'me'").run();
-  assert.equal((await shelvesAt(db, ["quiet"])).size, 0, "keep_forever takes it off the clock");
+  assert.equal((await archivesAt(db, ["quiet"])).size, 0, "keep_forever takes it off the clock");
   const cutoff = new Date(Date.parse(old) + STALE_SENT_MS + 1000).toISOString();
   assert.deepEqual(await staleSent(db, cutoff), [], "and the sweep leaves it where it is");
   db.raw.prepare("UPDATE account SET keep_forever = 0 WHERE id = 'me'").run();
-  assert.equal((await staleSent(db, cutoff)).length, 1, "put back, it is shelved as before");
+  assert.equal((await staleSent(db, cutoff)).length, 1, "put back, it is archived as before");
 });

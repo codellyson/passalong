@@ -61,8 +61,8 @@ export interface Guide {
   summary?: string;
   /** When its proof screenshots are deleted, or "". Only on a closed guide that has some. */
   proof_expires?: string;
-  /** When it is shelved for want of anybody touching it, or "". Only on a sent guide nobody has. */
-  shelves_at?: string;
+  /** When it is archived for want of anybody touching it, or "". Only on a sent guide nobody has. */
+  archives_at?: string;
   status: string;
   url: string;
   created: string;

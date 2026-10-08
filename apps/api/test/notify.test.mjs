@@ -68,7 +68,7 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob sent "Add Paystack webhook verification" back',
     '@bob gave "Add Paystack webhook verification" to someone else',
     '"Add Paystack webhook verification" has gone quiet — nobody has heard from whoever holds it',
-    '"Add Paystack webhook verification" was closed — nobody opened it',
+    '"Add Paystack webhook verification" was archived — nobody opened it',
     '@bob\'s agent has a question about "Add Paystack webhook verification"',
     '@bob replied to your agent on "Add Paystack webhook verification"',
     'The agent holding "Add Paystack webhook verification" is stuck on you',

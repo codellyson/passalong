@@ -3,7 +3,7 @@
 
   On by default, and it is the setting most people should leave alone: a closed guide's proof
   screenshots are deleted five days after it is closed, and a guide you sent that nobody has opened
-  is shelved after fourteen days. Turning it off keeps both for good. Saved the moment it is
+  is archived after fourteen days. Turning it off keeps both for good. Saved the moment it is
   flipped, because a switch that waits for a Save button is a switch people leave half done.
 -->
 <script setup lang="ts">
@@ -44,9 +44,10 @@ async function flip(next: boolean) {
       <span>
         <b>Clean up automatically</b>
         <span class="mt-1 block text-muted">
-          Proof screenshots are deleted 5 days after a guide is closed, and a guide you sent that
-          nobody has opened is shelved after 14 days. Shelving is reversible; deleting a screenshot
-          is not. Turn this off to keep both for good.
+          Screenshots that proved a finished guide are deleted 5 days after it is closed, and a
+          guide you sent that nobody has opened is archived after 14 days. Archiving is reversible:
+          unarchive it from its ⋯ menu. Deleting a screenshot is not. Turn this off to keep both
+          for good.
         </span>
       </span>
     </label>

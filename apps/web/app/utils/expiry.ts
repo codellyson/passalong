@@ -11,11 +11,11 @@ export function timeLeft(iso: string, at = Date.now()): string {
  * The line a guide shows when it is about to be tidied away by itself, or null.
  *
  * Two clocks exist. Proof screenshots on a closed guide are deleted for good, and a sent guide
- * nobody touched is shelved, which is reversible: the first is the one worth a warning, so it wins
+ * nobody touched is archived, which is reversible: the first is the one worth a warning, so it wins
  * when a guide is on both. `soon` is the last two days, for a louder colour.
  */
 export function expiryLine(
-  g: { proof_expires?: string; shelves_at?: string },
+  g: { proof_expires?: string; archives_at?: string },
   at = Date.now(),
 ): { text: string; why: string; soon: boolean } | null {
   const pick = g.proof_expires
@@ -24,11 +24,11 @@ export function expiryLine(
         text: (t: string) => `Screenshots deleted in ${t}`,
         why: "The screenshots that proved this work are deleted 5 days after it was closed, and can't be brought back. The guide itself stays. Turn off Clean-up in Settings to keep them.",
       }
-    : g.shelves_at
+    : g.archives_at
       ? {
-          iso: g.shelves_at,
-          text: (t: string) => `Shelved in ${t}`,
-          why: "Nobody has opened this guide. After 14 days with nothing happening to it, it is shelved: out of the way, and you can put it back. Turn off Clean-up in Settings to stop that.",
+          iso: g.archives_at,
+          text: (t: string) => `Archived in ${t}`,
+          why: "Nobody has opened this guide. If nothing happens to it for 14 days it is archived automatically: it moves to Done, and you can unarchive it from its ⋯ menu. Turn off Clean-up in Settings to stop that.",
         }
       : null;
   if (!pick) return null;

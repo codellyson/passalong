@@ -58,7 +58,9 @@ export const KINDS = [
   "reassigned",
   // The one event with no actor: a lease ran out and nobody did anything, which is the news.
   "stalled",
-  // The other one. A guide sent to somebody sat untouched long enough that the clock shelved it.
+  // The other one. A guide sent to somebody sat untouched long enough that the clock archived it.
+  // The id says "shelved" because rows are stored under it; every sentence a person reads says
+  // "archived", which is what the hub calls the same thing.
   "shelved",
   // The conversation. `asked` is the one kind that reaches its own actor: your own agent asking you
   // is the commonest case there is, and the self-drop in notify() would have made it silent.
@@ -698,7 +700,7 @@ export function line(r: LineFacts): string {
     case "shelved":
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
-      return `${title} was closed — nobody opened it${note}`;
+      return `${title} was archived — nobody opened it${note}`;
     case "stalled":
       // No actor: nothing happened, time passed. Every other sentence here starts with who did it,
       // and "Someone" — what `who` falls back to — would read as a person having done something to

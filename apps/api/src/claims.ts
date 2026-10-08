@@ -2222,13 +2222,13 @@ export async function staleSent(
 }
 
 /**
- * When each of these guides will be shelved for want of anybody touching it, for the ones that
- * will. The same conditions staleSent shelves on, minus the clock, so a date shown here is a date
+ * When each of these guides will be archived for want of anybody touching it, for the ones that
+ * will. The same conditions staleSent archives on, minus the clock, so a date shown here is a date
  * that happens: `updated` plus STALE_SENT_MS, any pull, answer, hold or verdict restarts it by
  * taking the guide out of this list, and an author who has asked to keep everything is never on it.
  * At most one slice of bound ids per call (D1 takes 100).
  */
-export async function shelvesAt(db: D1Database, ids: string[]): Promise<Map<string, string>> {
+export async function archivesAt(db: D1Database, ids: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (!ids.length) return out;
   const { results } = await db
