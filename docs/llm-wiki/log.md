@@ -8,3 +8,4 @@ source it came from.
   system, decisions, open questions. Sources: AGENTS.md, docs/PRD.md, docs/V2.md,
   docs/PUBLISH.md, docs/wiki/, and merged PRs #1–#65.
 - 2026-10-03 — blog-and-publish: added the /learn pages (topic guides on the blog's reader, published from shared/pages.ts). Source: branch seo/pillar-agent-handoff.
+- 2026-10-08 — teams-and-plans: free tier reopened (`FREE_SIGNUP` "1"); the closed tier refused a new account's first task. Source: branch feat/free-signup.

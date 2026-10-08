@@ -423,7 +423,7 @@ change. Its README says how.
   arrived yet, and applying it to accounts that have been syncing for months under a different
   promise is §10 with extra steps. A column rather than a created-before date, because a magic
   timestamp is wrong everywhere at once the day the cutover moves. **`FREE_SIGNUP` defaults to
-  open in code and is `"0"` in production** — it is the cutover switch: it defaults open so a deployment that forgets the var keeps the old
+  open in code and is `"1"` in production again (reopened 2026-10-08; it was `"0"` from 2026-09-11)** — it is the cutover switch: it defaults open so a deployment that forgets the var keeps the old
   behaviour rather than locking people out by omission. The publish
   refusal is two messages, because the two states are fixed in different places — over a ceiling is
   solved by archiving, no plan is solved by buying one, and "archive some" to somebody with nothing

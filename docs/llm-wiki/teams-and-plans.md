@@ -26,7 +26,7 @@ unlimited.
   checkout. A plan belongs to the team; an account's ceiling is derived from it on every read, never
   copied onto the account.
 - **Solo** is one person's plan (`account.plan`), for someone who would otherwise invent a team of one.
-- **Free** is closed to new accounts in production (`FREE_SIGNUP`); accounts that existed keep it.
+- **Free** is open to new accounts in production (`FREE_SIGNUP` is `"1"`, reopened 2026-10-08; it was closed from 2026-09-11 and the wall it made is why). It is a ceiling of `FREE_SYNC_LIMIT` synced guides; accounts that existed before the cutover keep theirs either way.
 - **Lapsed is read-only, not dark.** New work stops flowing in; nothing already there is withheld,
   and verdicts and acks keep working — they belong to the reader, not the person who missed a payment.
 - **Checkout is hosted** (Stripe, Paystack); the webhook, verified over the raw body, is what writes a
