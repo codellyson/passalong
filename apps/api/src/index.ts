@@ -141,6 +141,7 @@ import {
 import { mintOrigin } from "./hosts.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
+import { newsFor } from "./news.js";
 import {
   announce,
   displayName,
@@ -5031,10 +5032,13 @@ app.post("/v1/take", async (c) => {
   const at = now();
   const id = typeof who.id === "string" ? who.id.trim() : "";
   const base = origin(c);
+  const news = await newsFor(c.env.DB, c.get("account"));
+  const told = <T extends { say?: string }>(body: T): T =>
+    news ? { ...body, say: body.say ? `${news}\n${body.say}` : news } : body;
 
   if (!id) {
     const got = await claims.next(c.env.DB, who, { at, any: who.any === true });
-    if (!got) return c.json({ guide: null, ...claims.steps("", "nothing") });
+    if (!got) return c.json(told({ guide: null, ...claims.steps("", "nothing") }));
     count(c, "task_claimed", { resumed: got.resumed });
     if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
     // The queue hands out tasks and nothing else — next()'s SQL says `g.kind = 'task'` — so the
@@ -5048,14 +5052,16 @@ app.post("/v1/take", async (c) => {
     const kind = "task";
     // Notes the author left on it before anyone took it, handed to whoever does.
     const replies = await claims.deliver(c.env.DB, got.task.id, who, { resume: got.resumed });
-    return c.json({
-      guide: {
-        ...heldView(base, { ...got.task, kind, share_key: row?.share_key }, got.claim),
-        resumed: got.resumed,
-      },
-      ...(replies.length ? { replies } : {}),
-      ...claims.steps(kind, "taken", replies.length),
-    });
+    return c.json(
+      told({
+        guide: {
+          ...heldView(base, { ...got.task, kind, share_key: row?.share_key }, got.claim),
+          resumed: got.resumed,
+        },
+        ...(replies.length ? { replies } : {}),
+        ...claims.steps(kind, "taken", replies.length),
+      }),
+    );
   }
 
   const got = await claims.take(c.env.DB, id, who, { at });
@@ -5091,14 +5097,16 @@ app.post("/v1/take", async (c) => {
   // handed everything said since it asked; a first take is handed the notes left on it before
   // anybody took it. See claims.deliver().
   const replies = await claims.deliver(c.env.DB, id, who, { resume: got.resumed });
-  return c.json({
-    guide: {
-      ...heldView(base, { ...got.task, share_key: share?.share_key }, got.claim),
-      resumed: got.resumed,
-    },
-    ...(replies.length ? { replies } : {}),
-    ...claims.steps(got.task.kind, "taken", replies.length),
-  });
+  return c.json(
+    told({
+      guide: {
+        ...heldView(base, { ...got.task, share_key: share?.share_key }, got.claim),
+        resumed: got.resumed,
+      },
+      ...(replies.length ? { replies } : {}),
+      ...claims.steps(got.task.kind, "taken", replies.length),
+    }),
+  );
 });
 
 app.put("/v1/guides/:id/progress", async (c) => {
