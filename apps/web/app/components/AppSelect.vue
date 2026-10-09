@@ -18,7 +18,10 @@ const root = ref<HTMLElement | null>(null);
 const trigger = ref<HTMLButtonElement | null>(null);
 const menu = ref<HTMLElement | null>(null);
 const current = computed(
-  () => props.options.find((option) => option.value === props.modelValue)?.label || props.placeholder || "Choose",
+  () =>
+    props.options.find((option) => option.value === props.modelValue)?.label ||
+    props.placeholder ||
+    "Choose",
 );
 
 function close() {
@@ -45,17 +48,29 @@ function onKeydown(event: KeyboardEvent) {
     close();
     return;
   }
-  if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
+  if (
+    event.key !== "ArrowDown" &&
+    event.key !== "ArrowUp" &&
+    event.key !== "Home" &&
+    event.key !== "End"
+  )
+    return;
   event.preventDefault();
   if (!open.value) {
     void show();
     return;
   }
-  const items = Array.from(menu.value?.querySelectorAll<HTMLButtonElement>("[role=menuitemradio]") || []);
+  const items = Array.from(
+    menu.value?.querySelectorAll<HTMLButtonElement>("[role=menuitemradio]") || [],
+  );
   if (!items.length) return;
   const index = items.indexOf(document.activeElement as HTMLButtonElement);
-  const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 :
-    (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+  const next =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? items.length - 1
+        : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
   items[next]?.focus();
 }
 

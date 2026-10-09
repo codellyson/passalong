@@ -12,7 +12,10 @@ const folders = ref<Folder[]>([]);
 const scopeOptions = computed(() => [
   { value: "all", label: "All folders" },
   { value: "mine", label: "Only me" },
-  ...(data.value.me?.teams || []).map((team) => ({ value: team.slug, label: team.name || team.slug })),
+  ...(data.value.me?.teams || []).map((team) => ({
+    value: team.slug,
+    label: team.name || team.slug,
+  })),
 ]);
 const busy = ref(false);
 const trouble = ref("");
