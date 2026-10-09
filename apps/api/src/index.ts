@@ -719,6 +719,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       pulls: r.pulls,
       url: shareUrl(base, r),
       mine: r.account_id === me,
+      // Its author, or the owner of its team: may archive, reassign or delete it.
+      manage: r.account_id === me || teams.get(r.team_id)?.role === "owner",
       from: people.get(r.account_id)?.handle || "",
       from_name: nameOf(people, r.account_id),
       team: teams.get(r.team_id)?.slug || "",
@@ -5436,11 +5438,11 @@ app.post("/v1/guides/:id/assign", async (c) => {
           .bind(row.to_group_id, me)
           .first(),
       ));
-  if (!found.owner && !assignee)
+  if (!found.owner && !assignee && !(await ownsTeam(c, row)))
     return err(
       c,
       403,
-      "Only its author, or whoever it is assigned to, can give it to someone else.",
+      "Only its author, the team's owner, or whoever it is assigned to, can give it to someone else.",
     );
   if (!row.team_id)
     return err(
@@ -5690,7 +5692,8 @@ app.post("/v1/guides/:id/send_back", async (c) => {
 app.delete("/v1/guides/:id", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
-  if (!found.owner) return err(c, 403, "Only the author can delete a guide.");
+  if (!found.owner && !(await ownsTeam(c, found.row)))
+    return err(c, 403, "Only the author, or the owner of its team, can delete a guide.");
   // Before the guide, so a failure leaves the guide to try again rather than orphaning its
   // evidence with nothing left pointing at it.
   await dropShots(c, found.row.id);

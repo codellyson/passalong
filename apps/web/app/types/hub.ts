@@ -69,6 +69,8 @@ export interface Guide {
   pulls: number;
   /** Yours to promote or delete; someone else's to verify. */
   mine: boolean;
+  /** Its author, or the owner of its team: may archive, reassign or delete it. */
+  manage?: boolean;
   team: string | null;
   to: string | null;
   from: string | null;
