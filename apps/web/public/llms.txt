@@ -17,15 +17,16 @@ A share link looks like `https://passalong.dev/g/<id>/<key>`. Append `.md` for t
 or `?view=verify` for the view that leads with what to check and folds the implementation away.
 
 0. Check `kind` in the frontmatter first. `transfer`, `bug` and `task` each ask for something
-   different — see "Three kinds of guide" below. Absent means `transfer`.
-1. Read the guide. `Verification` is what "done" means; `Gotchas` is what already went wrong.
+   different — see "Three kinds of guide" below. A new guide without `kind` is refused.
+1. Read the guide and any follow-ups. A transfer may be a short note without fixed sections;
+   a task's `Acceptance` is what its hand-in must answer.
 2. Anything under `stack_assumptions` in the frontmatter is what the author's environment was.
    Adapt those to the current codebase rather than copying them.
-3. Run the `Verification` steps before reporting success.
-4. Report back: `passalong works <id> <screenshot.png>` if it holds up — a "works" needs at least
-   one screenshot of it working, and is refused without one — or `passalong broken <id> "<why>"` if
-   it does not. The reason reaches the author the same day. This is the part that makes the next guide
-   better, so do not skip it.
+3. Check any `Verification` or `Acceptance` the guide gives before reporting success.
+4. Use `take` when you mean to do the work, then `hand_in` with what changed and the evidence,
+   or `pass` with the reason it is not yours. A person trying a transfer can answer with
+   `passalong works <id> <screenshot.png>` or `passalong broken <id> "<why>"`; "works" needs a
+   screenshot of it working.
 
 ## Three kinds of guide
 
@@ -58,8 +59,8 @@ Bugs are often filed in sets. `report:` names the parent a set was filed under; 
 
 ## Guide format
 
-Frontmatter fields, in order: `id`, `title`, `kind`, `created`, `author`, `source_context`,
-`status`, `team`, `to`, `stack_assumptions` (list), `tags` (list). Bugs also carry `report`,
+Common frontmatter fields include `id`, `title`, `summary`, `kind`, `created`, `author`,
+`source_context`, `status`, `team`, `to`, `stack_assumptions` (list), `tags` (list). Bugs also carry `report`,
 `area` and `severity` (`s1` blocker to `s4` cosmetic). Tasks may carry `target_context` and `blocked_by` (a list of task ids it waits for).
 
 `to:` is who is being asked, inside the `team:` it names. `@handle` asks one person and outranks
@@ -67,14 +68,14 @@ everything else in their inbox; `#group` asks the people who do a thing, reaches
 and the first to say they are on it takes it off the others' boards; leaving `to:` off shares with
 the whole team, which asks nobody in particular.
 
-Body sections, in this order — the headings are what a receiving agent keys on, so they are
-stable:
+A transfer has no required body sections. When a longer handoff benefits from structure, these
+headings are available:
 
-- `## Problem` — what was actually wrong. Required.
+- `## Problem` — what was actually wrong.
 - `## Solution shape` — the approach, not a diff.
 - `## Decisions and rationale` — what was chosen over what, and why.
-- `## Steps` — what to do. Required.
-- `## Verification` — how to know it worked. A guide without this is flagged to the reader.
+- `## Steps` — what to do, when there are steps worth preserving.
+- `## Verification` — how to know it worked.
 - `## Gotchas` — what failed on the way. The highest-value section; record what wasted time.
 
 A bug uses `## Problem`, `## Reproduce`, `## Verification` and `## Gotchas` instead. `Reproduce`
@@ -106,7 +107,7 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 - `passalong open <id> [--print]` — view in the browser, or the terminal
 - `passalong works <id> <screenshot.png...>` / `passalong broken <id> <why>` — the verdict, after
   trying it. "Works" needs a screenshot of it working; it is removed 5 days after the guide closes
-- `passalong done <id>` — implemented on the receiving side
+- `passalong archive <id>` — move a guide off your board and out of the free tier's count
 - `passalong export [dir]` — every guide as plain markdown
 - `passalong team create|invite|join|use` — teams
 - `passalong me [--handle H]` — how teammates address you
@@ -139,7 +140,8 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 `publish_guide`, `file_bugs`, `get_guide`, `search_guides`, `guide_template`, `set_guide_status`,
 `attach_screenshot`, `attach_file` (a log, PDF, CSV or zip, privately), `reply` (a person writing to
 the agent that holds their work, or leaving a note on one nobody holds yet), `inbox`, `board`,
-`activity` (reads), `clear_activity` (marks it seen), `log`, `plan_tasks`.
+`activity` (reads), `clear_activity` (marks it seen), `log`, `plan_tasks`, and folder tools for
+listing, creating and editing project documents and assets.
 
 Project folders hold reusable context for work spanning several guides. When asked to start a
 folder for a script, brief or project, call `list_folders` first and reuse a fitting folder. If

@@ -14,7 +14,7 @@ session's history. Write for execution, not for permanence.
 **Check what is already open, and whether a guide is wanted at all.** Run `passalong now` (or
 `take` with no id over MCP) to see what this worktree holds and what was handed to you.
 
-- **The session answers something you hold** — hand it in (`passalong hand_in <id> …`) instead.
+- **The session answers something you hold** — use the MCP `hand_in` tool instead.
   Publishing a second guide about it leaves two records of one piece of work. Every hand-in carries
   what you ran and what came back — the command and the lines that decided it, a test summary, a
   link to the change, or a screenshot url. Copy each one out of the session as you go; at the end
@@ -44,7 +44,8 @@ machine, another agent session, or a teammate without your branch.
    what was decided and why, what finally worked, and how it was verified. Read the diff
    (`git diff`, `git log`) only to confirm details; the reasoning is in the transcript.
 3. **Write the guide** with the structure below. Be concrete: file paths, commands, exact error
-   strings, version numbers. Prefer a short guide with every section filled over a long one.
+   strings, version numbers. A transfer has no required body sections; keep only the context the
+   next agent needs.
 4. **Mark context-specific parts** so the receiver can adapt rather than copy. Put
    `ASSUMES: <thing>. If <alternative>, <what changes>.` at the start of any step that depends on
    this repo's stack, layout, or conventions.
@@ -60,14 +61,13 @@ machine, another agent session, or a teammate without your branch.
    who it was handed to) on stderr.
 
    **If what you are capturing is more context for an existing guide** — a missing detail, a step
-   that needed explaining, what changed since, what you found doing it — add `--follows <that id>`.
+   that needed explaining, or what changed since — add `--follows <that id>`.
    That publishes it as a follow-up: its own guide, listed under the original, and handed to
    whoever opens the original, person or agent. It travels the other way too — whoever opens the
    follow-up gets the guide it came out of, and where that guide has got to — so write it as a
-   note on that work rather than as a standalone brief. A session that started from a passalong guide
-   (`passalong start` or `pull` on an id, or an agent opened one) usually has context worth adding
-   this way. Whether the guide worked is still its own answer: `passalong works <id> <screenshot>` or
-   `passalong broken <id> <why>`.
+   note on that work rather than as a standalone brief. What you did or found while working on a
+   guide belongs in its `hand_in`, not a follow-up. Whether a guide worked is its own answer:
+   `passalong works <id> <screenshot>` or `passalong broken <id> <why>`.
 6. **Report** the id (and link if synced) and one line on how to use it on the other side:
    `passalong start <id>` in the target repo, or "start passalong <id>" to an agent with the
    Passalong MCP server. `start` rather than `pull` on purpose: it takes the handoff as well as
@@ -77,26 +77,25 @@ machine, another agent session, or a teammate without your branch.
 If the `passalong` command is missing, tell the user to run `npm i -g passalong && passalong setup` and
 still write the draft file so nothing is lost.
 
-## Two kinds of guide
+## Choose the right Passalong form
 
-`kind:` in the frontmatter says what a guide is for, and the receiver behaves differently for
-each. Absent means `transfer`, which is what every guide written before bug reports existed is.
+Every guide must state `kind:`. An absent kind is refused; the server never guesses one.
 
-| kind | what it is | what the receiver does |
-| --- | --- | --- |
-| `transfer` (or no `kind:` line) | finished work to repeat somewhere else | follows the **Steps** |
-| `bug` | a defect to fix where it is | fixes it — **Reproduce** shows the problem, it is not a procedure to apply |
+- `transfer` is context for a different repo, machine or agent session. It has no required
+  sections. Write only what the receiver needs to avoid starting cold.
+- `bug` is a defect to fix. Put the reproduction under `## Reproduce`, never `## Steps`, so the
+  receiver does not mistake the steps that show the defect for a remedy. Use `file_bugs` when
+  filing several independent defects.
+- `task` is work nobody has done yet. Use `plan_tasks` for a larger goal; its `## Acceptance`
+  gives the reviewer something to check. Do not write implementation steps for the taker.
 
-To file bugs you found but are not fixing, call `file_bugs` with all of them in one call — it
-opens a report and publishes each issue as its own guide, so any one of them can be handed to
-whoever fixes it. `publish_guide` is for a single guide: work you finished and want repeated, or
-one bug on its own.
-
-A bug has no `## Steps` and publishing one with a Steps section is refused. That is the whole
-reason the kinds are separate: "follow its Steps" is what the MCP server tells every agent that
-pulls a guide, and steps that reproduce a defect are the one list that must never be run as a
-remedy — an agent that follows them reproduces the bug, checks the Verification, finds it false
-because the bug is real, and reports that the guide does not work.
+**A project folder is not a guide.** When asked to keep a script, brief, screenshots or other
+assets together for continuing work, call `list_folders` first. Reuse a fitting folder, or call
+`create_folder` with a title and short description drawn from the person's request. Create the
+first Markdown document with `create_folder_document`; do not leave an empty folder or ask the
+person to fill a form. Omit `team` unless they asked to share it. Read a document and its version
+before `save_folder_document`; reread after a stale-version refusal. Add files with
+`add_folder_asset` and link an existing guide with `link_folder_guide` only when it uses the folder.
 
 ## Say it to a person
 
@@ -116,6 +115,7 @@ billing.ts per the Paystack spec, see PR 412."
 ---
 title: <what this accomplishes, as a verb phrase: "Add Paystack webhook verification">
 summary: <one or two plain sentences for a PERSON, 400 characters at most, no ids or paths: what this is and whether anyone has to act>
+kind: transfer
 author: <git user.name, if known>
 source_context: <repo or product this came from>
 status: published
@@ -123,25 +123,18 @@ stack_assumptions: [<runtime/framework/db/service versions the steps depend on>]
 tags: [<3 to 6 lowercase keywords>]
 ---
 
-## Problem
-What was broken or needed. Two or three sentences. Include the observable symptom.
+## What changed
+The information the receiving agent needs, in the shape that makes it easiest to use.
 
-## Solution shape
-The approach at a high level, before any code. One short paragraph.
+## Why
+Decisions or constraints the receiver could not infer from the final code.
 
-## Decisions and rationale
-- **Chose X over Y** because Z. (Each real decision, with what was rejected.)
-
-## Steps
-1. ASSUMES: <stack>. If <other>, <adjust>. Then the concrete step, with the file path and the code or command.
-2. ...
-
-## Verification
-Commands to run and what they should print. Test cases. What "done" looks like.
-
-## Gotchas
-- What failed along the way, the exact error, and why. What looked right but wasn't.
+## How to check
+Commands and expected results, if the receiver needs to repeat or verify the work.
 ```
+
+Those headings are examples, not a required template. A short transfer may be a paragraph.
+Include paths, assumptions, verification or gotchas only when they help the next agent act.
 
 ## Bug structure
 
@@ -174,16 +167,15 @@ The behaviour that should have happened, as something the fixer can check.
 
 ## Quality bar
 
-- **Gotchas is the highest-value section.** If nothing went wrong, say what would have gone
-  wrong without a specific decision. Never leave it empty.
-- **Verification must be runnable.** A command and an expected output, not "make sure it works".
-- **Every ASSUMES has an alternative.** The point is adaptation on the other side.
+- **Write for the crossing.** State what another agent cannot learn from the destination repo.
+- **Verification, when relevant, must be checkable.** Give the command and expected result.
+- **State assumptions where they matter.** Say how the next environment may differ.
 - **One problem per guide.** A lesson from the same session that is not part of this fix goes in
-  its own guide (write and share it separately), not in this one's Gotchas.
+  its own guide only when it is separate work worth handing over.
 - **No session narration.** "First I looked at..." is noise. State the finding.
 - **No secrets.** Redact tokens, keys, and internal hostnames that would not apply elsewhere.
-- Title, Problem, and Steps are required; the guide will not publish without them.
-- For a bug: title, Problem and **Reproduce**. Never a Steps section — see the two kinds above.
+- Every guide needs a title, summary and explicit kind. A transfer needs no fixed body section.
+- A bug needs Problem and Reproduce. Never give a bug a Steps section.
 - The line above Problem is written by `file_bugs` and the hub's form. It is in the document, not
   added by whatever served it, so an agent that fetched the share link over plain HTTP — with no
   MCP server and no knowledge of Passalong — still reads what the document is before acting on it.
