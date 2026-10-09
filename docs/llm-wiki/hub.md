@@ -19,6 +19,11 @@ One page for all work, in four tabs by what it needs from you:
 The board's buckets are defined in SQL, not the client; the hub reloads after a change rather than
 moving rows itself, so the two cannot drift.
 
+The title's scope picker applies to guides, tasks, work being held, hand-ins and activity. Team
+membership is checked at the API boundary, and each list narrows in SQL before its row limit. The
+tab counts wait for every work list; a failed list shows an error and retry instead of an empty
+queue. Marking activity read only marks the selected scope.
+
 ## The guide page — `/hub/g/:id`
 
 - **The document** is the share page at `?embed=1` in a sandboxed same-origin frame with no scripts. The

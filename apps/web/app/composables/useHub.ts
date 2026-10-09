@@ -60,13 +60,17 @@ export const hubKeys = {
   allGuides: ["guides"] as const,
   board: ["board"] as const,
   notifications: ["notifications"] as const,
+  scopedNotifications: (scope: string) => ["notifications", scope] as const,
   log: ["log"] as const,
   tokens: ["tokens"] as const,
   team: (slug: string) => ["team-detail", slug] as const,
   billing: ["billing"] as const,
   tasks: ["tasks"] as const,
+  scopedTasks: (scope: string) => ["tasks", scope] as const,
   working: ["working"] as const,
+  scopedWorking: (scope: string) => ["working", scope] as const,
   handedIn: ["handed-in"] as const,
+  scopedHandedIn: (scope: string) => ["handed-in", scope] as const,
   context: (id: string) => ["guide-context", id] as const,
 };
 
@@ -164,8 +168,9 @@ function build(queryClient: QueryClient) {
   );
   const notesQ = useQuery(
     {
-      queryKey: hubKeys.notifications,
-      queryFn: get<Notes>("/v1/notifications?limit=30"),
+      queryKey: computed(() => hubKeys.scopedNotifications(scope.value)),
+      queryFn: ({ queryKey }) =>
+        get<Notes>(`/v1/notifications?limit=30&scope=${encodeURIComponent(String(queryKey[1]))}`)(),
       enabled,
     },
     queryClient,
@@ -189,30 +194,57 @@ function build(queryClient: QueryClient) {
     queryClient,
   );
 
-  // Its own query, and one whose failure is left out of `loadError`: the task queue is newer than
-  // every other surface here, and a hub that cannot say what is in it is still worth showing.
+  // Each work list is scoped before its server-side limit, so switching teams cannot carry rows
+  // or counts from another team into the new view.
   const tasksQ = useQuery(
-    { queryKey: hubKeys.tasks, queryFn: get<{ tasks: Task[] }>("/v1/tasks"), enabled },
+    {
+      queryKey: computed(() => hubKeys.scopedTasks(scope.value)),
+      queryFn: ({ queryKey }) =>
+        get<{ tasks: Task[] }>(`/v1/tasks?scope=${encodeURIComponent(String(queryKey[1]))}`)(),
+      enabled,
+    },
     queryClient,
   );
 
-  // Who is working on what, across every kind of guide. Left out of `loadError` like the tasks.
+  // Who is working on what, across every kind of guide.
   const workingQ = useQuery(
-    { queryKey: hubKeys.working, queryFn: get<{ working: Working[] }>("/v1/working"), enabled },
+    {
+      queryKey: computed(() => hubKeys.scopedWorking(scope.value)),
+      queryFn: ({ queryKey }) =>
+        get<{ working: Working[] }>(
+          `/v1/working?scope=${encodeURIComponent(String(queryKey[1]))}`,
+        )(),
+      enabled,
+    },
     queryClient,
   );
 
-  // Handoffs you wrote that somebody handed in, waiting on you to close. Left out of `loadError`.
+  // Handoffs you wrote that somebody handed in, waiting on you to close.
   const handedInQ = useQuery(
     {
-      queryKey: hubKeys.handedIn,
-      queryFn: get<{ handed_in: HandedIn[] }>("/v1/handed_in"),
+      queryKey: computed(() => hubKeys.scopedHandedIn(scope.value)),
+      queryFn: ({ queryKey }) =>
+        get<{ handed_in: HandedIn[] }>(
+          `/v1/handed_in?scope=${encodeURIComponent(String(queryKey[1]))}`,
+        )(),
       enabled,
     },
     queryClient,
   );
 
   const signedIn = computed(() => !ended.value && Boolean(meQ.data.value));
+
+  // A team can remove a member while this tab is open. An old selection then ceases to be a
+  // readable scope; return to all work instead of showing an error under an "All teams" label.
+  watch([scope, () => meQ.data.value], ([selected, me]) => {
+    if (
+      me &&
+      selected !== "all" &&
+      selected !== "mine" &&
+      !me.teams.some((t) => t.slug === selected)
+    )
+      scope.value = "all";
+  });
 
   // Once the first answer about the session is in, stop guessing from the cookie.
   watch(
@@ -245,6 +277,8 @@ function build(queryClient: QueryClient) {
     log: logQ.isPending.value,
     tokens: tokensQ.isPending.value,
     tasks: tasksQ.isPending.value,
+    working: workingQ.isPending.value,
+    handedIn: handedInQ.isPending.value,
   }));
 
   /** A background refresh of data already on screen: worth a quiet word, never a blank page. */
@@ -259,7 +293,7 @@ function build(queryClient: QueryClient) {
 
   /** A load that failed after retrying, in the server's words. A signed-out session is not one. */
   const loadError = computed(() => {
-    const failed = [meQ, guidesQ, boardQ]
+    const failed = [meQ, guidesQ, boardQ, tasksQ, workingQ, handedInQ]
       .map((q) => q.error.value)
       .find((e) => e && !(e instanceof SignedOut));
     return failed ? (failed as Error).message : null;
@@ -293,6 +327,10 @@ function build(queryClient: QueryClient) {
   const failed = computed(() => ({
     guides: guidesQ.isError.value && !guidesQ.data.value,
     board: boardQ.isError.value && !boardQ.data.value,
+    tasks: tasksQ.isError.value && !tasksQ.data.value,
+    working: workingQ.isError.value && !workingQ.data.value,
+    handedIn: handedInQ.isError.value && !handedInQ.data.value,
+    notifications: notesQ.isError.value && !notesQ.data.value,
     log: logQ.isError.value && !logQ.data.value,
     tokens: tokensQ.isError.value && !tokensQ.data.value,
   }));
@@ -483,7 +521,7 @@ function build(queryClient: QueryClient) {
     change(
       () => api(path, init),
       () =>
-        queryClient.setQueryData<{ tasks: Task[] }>(hubKeys.tasks, (old) =>
+        queryClient.setQueryData<{ tasks: Task[] }>(hubKeys.scopedTasks(scope.value), (old) =>
           old ? { tasks: old.tasks.map((x) => (x.id === t.id ? { ...x, state } : x)) } : old,
         ),
       [hubKeys.tasks, hubKeys.working],
@@ -495,10 +533,12 @@ function build(queryClient: QueryClient) {
    * or send that repo's hand-in back with why. The row leaves the list before the server answers.
    */
   const dropHandedIn = (h: HandedIn) =>
-    queryClient.setQueryData<{ handed_in: HandedIn[] }>(hubKeys.handedIn, (old) =>
-      old
-        ? { handed_in: old.handed_in.filter((x) => !(x.id === h.id && x.place === h.place)) }
-        : old,
+    queryClient.setQueryData<{ handed_in: HandedIn[] }>(
+      hubKeys.scopedHandedIn(scope.value),
+      (old) =>
+        old
+          ? { handed_in: old.handed_in.filter((x) => !(x.id === h.id && x.place === h.place)) }
+          : old,
     );
   /**
    * Take work back from whoever holds it, from the one view that knows who does.
@@ -511,10 +551,12 @@ function build(queryClient: QueryClient) {
     change(
       () => api(`/v1/guides/${w.id}/release`, json("POST")),
       () =>
-        queryClient.setQueryData<{ working: Working[] }>(hubKeys.working, (old) =>
-          // Every row for that guide, not just this one: a handoff held in three repos is taken
-          // back from all three by one call, and leaving the others on screen would be a lie.
-          old ? { working: old.working.filter((x) => x.id !== w.id) } : old,
+        queryClient.setQueryData<{ working: Working[] }>(
+          hubKeys.scopedWorking(scope.value),
+          (old) =>
+            // Every row for that guide, not just this one: a handoff held in three repos is taken
+            // back from all three by one call, and leaving the others on screen would be a lie.
+            old ? { working: old.working.filter((x) => x.id !== w.id) } : old,
         ),
       [hubKeys.working, hubKeys.tasks, hubKeys.allGuides, hubKeys.board],
     );
@@ -524,8 +566,9 @@ function build(queryClient: QueryClient) {
     change(
       () => api(`/v1/guides/${w.id}/mark_done`, json("POST")),
       () =>
-        queryClient.setQueryData<{ working: Working[] }>(hubKeys.working, (old) =>
-          old ? { working: old.working.filter((x) => x.id !== w.id) } : old,
+        queryClient.setQueryData<{ working: Working[] }>(
+          hubKeys.scopedWorking(scope.value),
+          (old) => (old ? { working: old.working.filter((x) => x.id !== w.id) } : old),
         ),
       [hubKeys.working, hubKeys.tasks, hubKeys.allGuides, hubKeys.board],
     );
@@ -558,8 +601,9 @@ function build(queryClient: QueryClient) {
     change(
       () => api(`/v1/guides/${h.id}/close`, json("POST")),
       () =>
-        queryClient.setQueryData<{ handed_in: HandedIn[] }>(hubKeys.handedIn, (old) =>
-          old ? { handed_in: old.handed_in.filter((x) => x.id !== h.id) } : old,
+        queryClient.setQueryData<{ handed_in: HandedIn[] }>(
+          hubKeys.scopedHandedIn(scope.value),
+          (old) => (old ? { handed_in: old.handed_in.filter((x) => x.id !== h.id) } : old),
         ),
       [hubKeys.handedIn, hubKeys.allGuides, hubKeys.board, hubKeys.working],
     );
@@ -605,9 +649,9 @@ function build(queryClient: QueryClient) {
 
   const readAll = () =>
     change(
-      () => api("/v1/notifications/read", json("POST")),
+      () => api(`/v1/notifications/read?scope=${encodeURIComponent(scope.value)}`, json("POST")),
       () =>
-        queryClient.setQueryData<Notes>(hubKeys.notifications, (old) =>
+        queryClient.setQueryData<Notes>(hubKeys.scopedNotifications(scope.value), (old) =>
           old
             ? { unread: 0, notifications: old.notifications.map((n) => ({ ...n, read: true })) }
             : old,

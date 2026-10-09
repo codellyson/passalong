@@ -30,10 +30,25 @@ usePage({
 
 const { data, scope, loading, failed, updating, scopeChanging } = useHub();
 
-/** Either half of what the guide sections are built from gave up loading. The shell says so. */
-const unavailable = computed(() => failed.value.guides || failed.value.board);
-/** Either half is still on its way. */
-const waiting = computed(() => !unavailable.value && (loading.value.guides || loading.value.board));
+/** A failed work list cannot be reported as an empty queue. The shell offers Try again. */
+const unavailable = computed(
+  () =>
+    failed.value.guides ||
+    failed.value.board ||
+    failed.value.tasks ||
+    failed.value.working ||
+    failed.value.handedIn,
+);
+/** Wait for every list that contributes a tab count before showing any count. */
+const waiting = computed(
+  () =>
+    !unavailable.value &&
+    (loading.value.guides ||
+      loading.value.board ||
+      loading.value.tasks ||
+      loading.value.working ||
+      loading.value.handedIn),
+);
 
 // An account with nothing in it is not looking at a list. It gets the steps that lead somewhere,
 // but only once both lists have arrived empty, or every first load would flash onboarding.
@@ -42,7 +57,6 @@ const first = computed(
     Boolean(data.value.me) &&
     !waiting.value &&
     !unavailable.value &&
-    !loading.value.tasks &&
     data.value.guides.length === 0 &&
     data.value.tasks.length === 0,
 );
@@ -332,6 +346,8 @@ const list =
         >
           <!-- Picking several to archive or delete: on the lists that are shelves (Open, Done), not
                on Needs you or Being worked on, which are work waiting on an answer. -->
+          <HubSkeleton v-if="waiting" :rows="3" label="Loading work" />
+          <template v-else>
           <HubBulkBar v-if="(tab === 'open' && openCount) || (tab === 'done' && doneCount)" />
 
           <!-- ---- Needs you ---- -->
@@ -339,11 +355,10 @@ const list =
             <!-- One list for everything that needs you, the picked item beside it. Handed in and Sent
                  to you used to be lists of their own below a task review a screen tall, where nobody
                  found them. -->
-            <HubSkeleton v-if="waiting" :rows="3" label="Loading what needs you" />
-            <HubNeedsYou v-else :tasks="tasks" :handed-in="handedIn" :rows="lanes.needs" />
+            <HubNeedsYou :tasks="tasks" :handed-in="handedIn" :rows="lanes.needs" />
             <!-- All clear is one quiet line, not an empty section. -->
             <div
-              v-if="!waiting && !needsCount"
+              v-if="!needsCount"
               class="flex items-center gap-3 rounded-3 bg-surface px-4 py-3 font-ui text-sm"
             >
               <span class="grid size-6 shrink-0 place-items-center rounded-pill bg-ok-soft text-ok" aria-hidden="true">
@@ -378,13 +393,12 @@ const list =
                 <HubTaskTable :tasks="openTasks.get(col.state) || []" />
               </div>
             </template>
-            <div v-if="waiting || lanes.sent.length">
+            <div v-if="lanes.sent.length">
               <h3 :class="sub">Handoffs you sent · {{ sentCount }}</h3>
               <p class="mt-1 mb-3 font-ui text-sm text-muted">Still out: nobody has said it worked yet.</p>
-              <HubSkeleton v-if="waiting" :rows="2" label="Loading what you sent" />
-              <HubGuideTable v-else :entries="lanes.sent" :open="searching" />
+              <HubGuideTable :entries="lanes.sent" :open="searching" />
             </div>
-            <p v-if="!waiting && !openCount" class="m-0 font-ui text-sm text-muted">
+            <p v-if="!openCount" class="m-0 font-ui text-sm text-muted">
               {{ searching ? "Nothing open matches." : "Nothing is open." }}
               <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
               <button v-else class="linkish" type="button" @click="copy(ASKS.task, $event.currentTarget)">
@@ -400,6 +414,7 @@ const list =
             <p v-if="!doneCount" class="m-0 font-ui text-sm text-muted">
               {{ searching ? "Nothing finished matches." : "Nothing finished yet." }}
             </p>
+          </template>
           </template>
         </section>
       </template>
