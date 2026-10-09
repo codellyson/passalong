@@ -9,7 +9,7 @@
   One call per team, in parallel, under the same keys the plan block and the write form use.
 -->
 <script setup lang="ts">
-import { useQueries } from "@tanstack/vue-query";
+import { useQueries, useQueryClient } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 
 const { data, api, json, scope, createTeam, signedIn } = useHub();
@@ -18,6 +18,34 @@ const { teamTab } = useSettingsUi();
 const extras = useTeamExtras();
 
 const teams = computed(() => data.value.me?.teams || []);
+const queryClient = useQueryClient();
+const meId = computed(() => data.value.me?.account || "");
+
+type Member = TeamDetail["members"][number];
+const addressOf = (m: Member) => m.handle || m.id || "";
+/** Which row is asking "are you sure?", as team:person. */
+const sure = ref("");
+const keyOf = (t: TeamDetail, m: Member) => `${t.slug}:${addressOf(m)}`;
+const reload = () =>
+  Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["team-detail"] }),
+    queryClient.invalidateQueries({ queryKey: hubKeys.me }),
+  ]);
+
+async function setRole(t: TeamDetail, m: Member, role: "admin" | "member") {
+  await api(
+    `/v1/teams/${encodeURIComponent(t.slug)}/members/${encodeURIComponent(addressOf(m))}`,
+    json("PATCH", { role }),
+  );
+  await reload();
+}
+async function takeOut(t: TeamDetail, m: Member) {
+  await api(`/v1/teams/${encodeURIComponent(t.slug)}/members/${encodeURIComponent(addressOf(m))}`, {
+    method: "DELETE",
+  });
+  sure.value = "";
+  await reload();
+}
 
 // Same reason as the token name: a `prompt()` throws where dialogs are blocked.
 const naming = ref(false);
@@ -140,7 +168,7 @@ function guides(t: TeamDetail) {
         <div class="min-w-0">
           <h3 class="m-0 font-ui text-base font-semibold text-fg">{{ t.name || t.slug }}</h3>
           <p class="m-0 font-ui text-sm text-muted">
-            {{ t.role === "owner" ? "You own it" : "You're a member" }} · {{ plural(t.members.length, "person").replace("persons", "people") }} ·
+            {{ t.role === "owner" ? "You're an admin" : "You're a member" }} · {{ plural(t.members.length, "person").replace("persons", "people") }} ·
             {{ plural(t.guides, "guide") }}
           </p>
         </div>
@@ -188,8 +216,30 @@ function guides(t: TeamDetail) {
             <span class="min-w-0 grow font-ui text-sm text-fg">
               {{ m.display || personName(m.name, m.handle) }}
               <span class="block text-xs text-muted">
-                {{ m.handle ? `@${m.handle}` : "no @name yet" }} · {{ m.role }} · joined {{ rel(m.joined) }}
+                {{ m.handle ? `@${m.handle}` : "no @name yet" }} · {{ m.role === "owner" ? (m.creator ? "admin, made the team" : "admin") : m.role }} · joined {{ rel(m.joined) }}
               </span>
+            </span>
+            <span v-if="!m.creator && (t.role === 'owner' || m.id === meId)" class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <template v-if="sure === keyOf(t, m)">
+                <span class="font-ui text-xs text-muted">{{ m.id === meId ? "Leave the team?" : "Remove them?" }}</span>
+                <button class="btn sm outline warn" type="button" @click="takeOut(t, m)">{{ m.id === meId ? "Leave" : "Remove" }}</button>
+                <button class="btn sm" type="button" @click="sure = ''">Cancel</button>
+              </template>
+              <template v-else>
+                <button
+                  v-if="t.role === 'owner' && m.role !== 'owner'"
+                  class="btn sm"
+                  type="button"
+                  @click="setRole(t, m, 'admin')"
+                >Make admin</button>
+                <button
+                  v-if="t.role === 'owner' && m.role === 'owner' && m.id !== meId"
+                  class="btn sm"
+                  type="button"
+                  @click="setRole(t, m, 'member')"
+                >Make member</button>
+                <button class="btn sm" type="button" @click="sure = keyOf(t, m)">{{ m.id === meId ? "Leave" : "Remove" }}</button>
+              </template>
             </span>
           </li>
         </ul>

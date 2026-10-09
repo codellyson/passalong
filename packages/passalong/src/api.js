@@ -273,6 +273,15 @@ export const team = (slug) => call(`/v1/teams/${encodeURIComponent(slug)}`);
 export const createTeam = (name) => call("/v1/teams", { method: "POST", body: { name } });
 export const invite = (slug, email = "") =>
   call(`/v1/teams/${encodeURIComponent(slug)}/invites`, { method: "POST", body: { email } });
+export const setMemberRole = (slug, who, role) =>
+  call(`/v1/teams/${encodeURIComponent(slug)}/members/${encodeURIComponent(who)}`, {
+    method: "PATCH",
+    body: { role },
+  });
+export const removeMember = (slug, who) =>
+  call(`/v1/teams/${encodeURIComponent(slug)}/members/${encodeURIComponent(who)}`, {
+    method: "DELETE",
+  });
 export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 

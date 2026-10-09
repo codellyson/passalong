@@ -196,6 +196,8 @@ export interface TeamDetail extends Team {
     role: string;
     joined: string;
     display?: string;
+    /** Made the team: never demoted or removed. */
+    creator?: boolean;
   }[];
 }
 

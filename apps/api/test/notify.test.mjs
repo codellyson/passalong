@@ -59,6 +59,8 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob said "Add Paystack webhook verification" worked',
     '@bob said "Add Paystack webhook verification" didn\'t work',
     "@bob joined khaime",
+    "@bob made you an admin of khaime",
+    "@bob removed you from khaime",
     '@bob\'s agent took the task "Add Paystack webhook verification"',
     '@bob\'s agent finished "Add Paystack webhook verification", and it is waiting for your review',
     '@bob approved "Add Paystack webhook verification"',

@@ -1787,7 +1787,12 @@ app.get("/v1/teams/:slug", async (c) => {
     role: team.role,
     created: team.created,
     // `display` is what a sentence calls them; the id is already what it falls back to.
-    members: members.map((m) => ({ ...m, display: displayName(m) })),
+    members: members.map((m) => ({
+      ...m,
+      display: displayName(m),
+      // The one who made the team: never demoted or removed, so a team cannot be taken from them.
+      creator: m.id === team.created_by,
+    })),
     guides: n?.n ?? 0,
     channels: chCount?.n ?? 0,
     plan: team.plan,
@@ -1797,6 +1802,97 @@ app.get("/v1/teams/:slug", async (c) => {
     seats: team.seats,
     members_count: members.length,
   });
+});
+
+/**
+ * Who is an admin of a team. Stored as `owner`, called admin where a person reads it.
+ *
+ * Every owner may promote and demote the others and remove members — they are equal — except the
+ * person who made the team, who can be neither demoted nor removed: the team is theirs to delete,
+ * and an admin they appointed must not be able to take it away from them. A member may always leave.
+ */
+async function memberOf(c: Ctx, teamId: string, ref: string) {
+  const handle = ref.replace(/^@/, "").toLowerCase();
+  return c.env.DB.prepare(
+    `SELECT a.id, a.handle, m.role FROM membership m JOIN account a ON a.id = m.account_id
+      WHERE m.team_id = ?1 AND (a.handle = ?2 OR a.id = ?2)`,
+  )
+    .bind(teamId, handle)
+    .first<{ id: string; handle: string; role: string }>();
+}
+
+app.patch("/v1/teams/:slug/members/:who", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner") return err(c, 403, "Only an admin of the team can change roles.");
+  const body = (await c.req.json().catch(() => ({}))) as { role?: unknown };
+  const role =
+    body.role === "admin" || body.role === "owner"
+      ? "owner"
+      : body.role === "member"
+        ? "member"
+        : "";
+  if (!role) return err(c, 400, 'Say which role: "admin" or "member".');
+  const who = await memberOf(c, team.id, c.req.param("who"));
+  if (!who) return err(c, 404, `${c.req.param("who")} isn't in ${team.name}.`);
+  if (who.id === team.created_by && role !== "owner")
+    return err(c, 403, `${team.name} was made by this person, so they stay an admin.`);
+  if (who.role === role)
+    return c.json({ id: who.id, role: who.role === "owner" ? "admin" : "member" });
+  await c.env.DB.prepare("UPDATE membership SET role = ? WHERE team_id = ? AND account_id = ?")
+    .bind(role, team.id, who.id)
+    .run();
+  if (role === "owner")
+    await notify(c.env, {
+      to: who.id,
+      kind: "promoted",
+      actor_id: c.get("account"),
+      team_id: team.id,
+    });
+  count(c, role === "owner" ? "member_promoted" : "member_demoted", {});
+  return c.json({ id: who.id, role: role === "owner" ? "admin" : "member" });
+});
+
+/** Leave a team, or — for an admin — take somebody out of it. */
+app.delete("/v1/teams/:slug/members/:who", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  const me = c.get("account");
+  const who = await memberOf(c, team.id, c.req.param("who"));
+  if (!who) return err(c, 404, `${c.req.param("who")} isn't in ${team.name}.`);
+  const leaving = who.id === me;
+  if (!leaving && team.role !== "owner")
+    return err(c, 403, "Only an admin of the team can remove somebody from it.");
+  if (who.id === team.created_by)
+    return err(
+      c,
+      403,
+      `${team.name} was made by this person. They can delete the team, not leave it.`,
+    );
+  // What they were holding in this team goes back to waiting, and they leave its groups; what they
+  // wrote stays, in the team, where its readers still need it.
+  const { results: held } = await c.env.DB.prepare(
+    `SELECT c.guide_id FROM claim c JOIN guide g ON g.id = c.guide_id
+      WHERE c.account_id = ? AND g.team_id = ?`,
+  )
+    .bind(who.id, team.id)
+    .all<{ guide_id: string }>();
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      "DELETE FROM claim WHERE account_id = ? AND guide_id IN (SELECT id FROM guide WHERE team_id = ?)",
+    ).bind(who.id, team.id),
+    c.env.DB.prepare(
+      "DELETE FROM group_member WHERE account_id = ? AND group_id IN (SELECT id FROM team_group WHERE team_id = ?)",
+    ).bind(who.id, team.id),
+    c.env.DB.prepare("DELETE FROM membership WHERE team_id = ? AND account_id = ?").bind(
+      team.id,
+      who.id,
+    ),
+  ]);
+  if (!leaving)
+    await notify(c.env, { to: who.id, kind: "removed", actor_id: me, team_id: team.id });
+  count(c, leaving ? "member_left" : "member_removed", {});
+  return c.json({ id: who.id, removed: true, released: held.length });
 });
 
 /**
