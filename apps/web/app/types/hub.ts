@@ -364,8 +364,8 @@ export interface ContextClaim {
 export interface GuideContext {
   guide: Guide;
   owner: boolean;
-  /** Its author, or the owner of its team, and it is not a task: may close it. */
-  can_close?: boolean;
+  /** The owner of its team, and not its author: may act on it as if they were. */
+  admin?: boolean;
   claims: ContextClaim[];
   /** Every standing verdict, newest first, with what it showed: a "works" carries screenshots. */
   verdicts: {

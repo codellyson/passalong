@@ -3989,7 +3989,7 @@ app.put("/v1/guides/:id", async (c) => {
 
 /** Whether the caller owns the team a handoff or bug belongs to, and so may close it for its author. */
 async function ownsTeam(c: Ctx, row: GuideRow): Promise<boolean> {
-  if (!row.team_id || row.kind === "task") return false;
+  if (!row.team_id) return false;
   const m = await db(c)
     .prepare("SELECT 1 FROM membership WHERE team_id = ? AND account_id = ? AND role = 'owner'")
     .bind(row.team_id, c.get("account"))
@@ -4281,7 +4281,7 @@ app.get("/v1/guides/:id/context", async (c) => {
   return c.json({
     guide: views.get(row.id),
     owner: found.owner,
-    can_close: found.owner ? row.kind !== "task" : await ownsTeam(c, row),
+    admin: !found.owner && (await ownsTeam(c, row)),
     claims: claimRows.map((k) => ({
       place: k.place,
       state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
@@ -4327,6 +4327,7 @@ app.patch("/v1/guides/:id/status", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
   const { status } = (await c.req.json().catch(() => ({}))) as { status?: string };
+  const author = found.owner || (await ownsTeam(c, found.row));
   // `promoted` is readable and no longer settable, so it is refused by name rather than by being
   // missing from a list — an installed CLI still calls this, and "must be one of ..." would read
   // as a typo rather than as a status that was retired.
@@ -4339,7 +4340,7 @@ app.patch("/v1/guides/:id/status", async (c) => {
     );
   if (!status || !(SETTABLE as readonly string[]).includes(status))
     return err(c, 400, `A guide's status can only be ${SETTABLE.join(", ")}.`);
-  if (!found.owner && !["consumed", "published"].includes(status))
+  if (!author && !["consumed", "published"].includes(status))
     return err(
       c,
       403,
@@ -4348,8 +4349,12 @@ app.patch("/v1/guides/:id/status", async (c) => {
   // A task's status is its place in the queue: published puts it in front of agents and consumed
   // is approval. Both are its author's call, through `ready` and the gate — a teammate marking one
   // consumed would approve work with nobody reading it.
-  if (!found.owner && found.row.kind === "task")
-    return err(c, 403, "Only a task's author moves it: ready, approve, reject or release.");
+  if (!author && found.row.kind === "task")
+    return err(
+      c,
+      403,
+      "Only a task's author, or its team's owner, moves it: ready, approve, reject or release.",
+    );
   const markdown = setField(found.row.markdown, "status", status);
   await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
     .bind(status, markdown, now(), found.row.id)
@@ -4815,6 +4820,7 @@ app.get("/v1/guides/:id/thread", async (c) => {
 app.get("/v1/working", async (c) => {
   const base = origin(c);
   const rows = await claims.working(c.env.DB, c.get("account"), now());
+  const owned = await claims.ownedTeams(c.env.DB, c.get("account"));
   return c.json({
     working: rows.map((r) => ({
       id: r.guide.id,
@@ -4827,7 +4833,8 @@ app.get("/v1/working", async (c) => {
       // Whether the person reading this wrote it. Only an author takes work back, and this is the
       // one view that knows who is holding what — the guide rows know who acknowledged a handoff,
       // which is not the same as who holds the claim.
-      mine: r.guide.account_id === c.get("account"),
+      // A team's owner counts: they can take back, finish or release anyone's in their team.
+      mine: r.guide.account_id === c.get("account") || owned.has(r.guide.team_id),
       by: r.by,
       agent: r.claim.agent_id,
       host: r.claim.host,
