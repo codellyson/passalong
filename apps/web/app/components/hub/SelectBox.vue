@@ -1,9 +1,14 @@
 <!--
   The box a row carries while selecting. Present on every row in the mode so titles stay on one
-  edge; switched off on a guide that is not yours, since only its author may archive or delete it.
+  edge; switched off where the viewer cannot manage the guide.
 -->
 <script setup lang="ts">
-const props = defineProps<{ id: string; title: string | null; archived: boolean; mine: boolean }>();
+const props = defineProps<{
+  id: string;
+  title: string | null;
+  archived: boolean;
+  allowed: boolean;
+}>();
 const { on, has, toggle } = useSelection();
 </script>
 
@@ -16,8 +21,8 @@ const { on, has, toggle } = useSelection();
       type="checkbox"
       class="size-4 accent-[var(--accent)]"
       :checked="has(props.id)"
-      :disabled="!props.mine"
-      :aria-label="props.mine ? `Select ${props.title || props.id}` : `${props.title || props.id} is not yours to archive or delete`"
+      :disabled="!props.allowed"
+      :aria-label="props.allowed ? `Select ${props.title || props.id}` : `You cannot archive or delete ${props.title || props.id}`"
       @change="toggle({ id: props.id, title: props.title || '', archived: props.archived })"
     >
   </label>

@@ -23,8 +23,9 @@ use today is Slack messages, notes to self, pasted snippets and re-prompting fro
    back with what is still wrong.
 
 Everything else in the repo exists to make that loop cheap: the CLI and MCP server so an agent can
-do it without a human, the hub and share links so a person can, teams so it can be addressed, and
-notifications so nobody has to go and look.
+do it without a human, the hub and share links so a person can, teams so it can be addressed,
+folders so a longer project can supply reusable context to several guides, and notifications so
+nobody has to go and look.
 
 ## Who it is for
 
@@ -34,8 +35,9 @@ do this without a human clicking through a UI?* (PRD §10).
 
 ## What it is not
 
-A wiki, a docs site, a replacement for a repo's `docs/`, or a note-taking app (PRD §9). Guides stay
-plain markdown, exportable with `passalong export` — no lock-in (PRD §10).
+A wiki, a docs site, a replacement for a repo's `docs/`, or a general note-taking app (PRD §9).
+Folders hold the material for a specific project; guides remain plain markdown, exportable with
+`passalong export` — no lock-in (PRD §10).
 
 ## Sources
 - [docs/PRD.md](../PRD.md) §1–§11

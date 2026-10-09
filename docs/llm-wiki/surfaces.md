@@ -22,7 +22,8 @@ everything else on stderr, so `ID=$(passalong share draft.md)` works.
 - **HTTP**: `POST /v1/mcp` (`apps/api/src/mcp-http.ts`), for assistants that add remote servers.
   It owns no logic: every tool dispatches back through the app's own routes with the caller's token,
   so each rule lives in one route. Stateless.
-- Tools: `take`, `progress`, `hand_in`, `pass`, plus `search_guides`, `inbox`, `board`, `log`,
+- Tools: `take`, `progress`, `hand_in`, `pass`, plus `search_guides`, folder listing and document
+  revision tools, `inbox`, `board`, `log`,
   `get_guide` (reads only), `publish_guide`, `file_bugs`, `attach_screenshot`, `plan_tasks`…
 
 ## API — `/v1/*`

@@ -8,7 +8,7 @@
  * pointing one of them at Passalong meant hand-writing schemas.
  *
  * WHAT IS AND IS NOT IN HERE. This describes the surface the MCP server exposes — read guides,
- * file bugs, answer with a verdict, and take, report on and finish tasks — and deliberately not
+ * file bugs, edit project-folder documents, answer with a verdict, and take, report on and finish tasks — and deliberately not
  * account administration, or the task review gate (approve, reject, release), which is a person's to
  * do and has no MCP tool for the same reason. Signup, login,
  * password reset and token management are real routes and stay undescribed: an action schema is a
@@ -248,7 +248,7 @@ export function openapi(origin: string) {
         "Hand work between contexts as guides: markdown with frontmatter, in three kinds. A " +
         "transfer guide is finished work to repeat — follow its Steps. A bug is a defect to fix — " +
         "Reproduce shows you the problem and is not a procedure to apply, and Verification is the " +
-        "behaviour that should have happened. A task (the default) is work nobody has done yet. " +
+        "behaviour that should have happened. A task is work nobody has done yet. " +
         "Every kind is worked with four calls: POST /v1/take, PUT /v1/guides/{id}/progress, " +
         "POST /v1/guides/{id}/hand_in and POST /v1/guides/{id}/pass. Each answer ends with " +
         "`next`, what to call now, and `say` when the move is to stop. Read `kind` before acting " +
@@ -272,6 +272,132 @@ export function openapi(origin: string) {
           operationId: "whoami",
           summary: "Who this token belongs to, and which teams they are in.",
           responses: { 200: { description: "The account." } },
+        },
+      },
+      "/v1/folders": {
+        get: {
+          operationId: "listFolders",
+          summary: "List project folders this account can use.",
+          parameters: [SCOPE_PARAMETER],
+          responses: { 200: { description: "Visible folders." } },
+        },
+        post: {
+          operationId: "createFolder",
+          summary: "Create a private or team project folder.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["title"],
+                  properties: {
+                    title: { type: "string" },
+                    description: { type: "string" },
+                    team: { type: "string", description: "Team slug; omit for a private folder." },
+                  },
+                },
+              },
+            },
+          },
+          responses: { 201: { description: "The new folder." } },
+        },
+      },
+      "/v1/folders/{folder}": {
+        get: {
+          operationId: "getFolder",
+          summary: "List a folder's documents, assets and linked guides.",
+          parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
+          responses: {
+            200: { description: "Folder contents." },
+            404: { description: "Unavailable folder." },
+          },
+        },
+      },
+      "/v1/folders/{folder}/documents": {
+        post: {
+          operationId: "createFolderDocument",
+          summary: "Add a Markdown document to a folder.",
+          parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["name", "body"],
+                  properties: { name: { type: "string" }, body: { type: "string" } },
+                },
+              },
+            },
+          },
+          responses: { 201: { description: "The new document and its version." } },
+        },
+      },
+      "/v1/folders/{folder}/documents/{document}": {
+        get: {
+          operationId: "getFolderDocument",
+          summary: "Read a folder document and its current version.",
+          parameters: [
+            { name: "folder", in: "path", required: true, schema: { type: "string" } },
+            { name: "document", in: "path", required: true, schema: { type: "string" } },
+          ],
+          responses: { 200: { description: "Document Markdown and version." } },
+        },
+        put: {
+          operationId: "saveFolderDocument",
+          summary: "Save a new version, refusing a stale editor with 409.",
+          parameters: [
+            { name: "folder", in: "path", required: true, schema: { type: "string" } },
+            { name: "document", in: "path", required: true, schema: { type: "string" } },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["body", "version"],
+                  properties: { body: { type: "string" }, version: { type: "integer" } },
+                },
+              },
+            },
+          },
+          responses: {
+            200: { description: "The saved document." },
+            409: { description: "A newer version exists." },
+          },
+        },
+      },
+      "/v1/folders/{folder}/assets/{asset}/agent": {
+        get: {
+          operationId: "getFolderAsset",
+          summary: "Read a bounded image or text asset for agent context.",
+          parameters: [
+            { name: "folder", in: "path", required: true, schema: { type: "string" } },
+            { name: "asset", in: "path", required: true, schema: { type: "string" } },
+          ],
+          responses: { 200: { description: "Image as base64, or text." } },
+        },
+      },
+      "/v1/folders/{folder}/guides": {
+        post: {
+          operationId: "linkFolderGuide",
+          summary: "Link an existing guide to a folder without changing the guide.",
+          parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["guide"],
+                  properties: { guide: { type: "string" } },
+                },
+              },
+            },
+          },
+          responses: { 201: { description: "The linked guide id." } },
         },
       },
       "/v1/guides": {
@@ -946,15 +1072,26 @@ export function openapi(origin: string) {
       "/v1/uploads": {
         post: {
           operationId: "createUploadLink",
-          summary: "Get a one-time link that takes a screenshot's bytes without a credential.",
+          summary: "Get a one-time link that takes a screenshot, file or folder asset.",
           description:
-            "For something that holds an image as a file but cannot send your token with it, " +
-            "such as an agent's code sandbox. The link works once and expires in 10 minutes.",
+            "For an agent's code sandbox that holds a file but cannot send your token with it. " +
+            "Set folder to an accessible folder id to store an image or file there. " +
+            "The link works once and expires in 10 minutes.",
           requestBody: {
             required: false,
             content: {
               "application/json": {
-                schema: { type: "object", properties: { name: { type: "string" } } },
+                schema: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    kind: { type: "string", enum: ["image", "file"] },
+                    folder: {
+                      type: "string",
+                      description: "Store the upload in this folder instead.",
+                    },
+                  },
+                },
               },
             },
           },
@@ -967,10 +1104,10 @@ export function openapi(origin: string) {
       "/v1/uploads/{token}": {
         put: {
           operationId: "sendToUploadLink",
-          summary: "Send an image's raw bytes to an upload link. POST works too.",
+          summary: "Send raw bytes to an upload link. POST works too.",
           description:
-            "png, jpeg, webp or gif, up to 5MB, recognised from the bytes. Returns the shot and " +
-            "the markdown line to put in a guide.",
+            "The minted link decides whether to store a screenshot (5 MB), a guide file (10 MB), " +
+            "or a folder asset (10 MB). Types are checked from the bytes. Returns the stored item.",
           security: [],
           parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
           requestBody: { required: true, content: { "application/octet-stream": {} } },

@@ -107,19 +107,11 @@ async function closeAll() {
         />
         <span class="line-clamp-2">{{ group.title || "Bug report" }}</span>
       </button>
-      <span class="mt-1 block pl-6 text-xs text-muted xl:hidden">
+      <span class="mt-1 block pl-6 text-xs text-muted">
         {{ plural(rows.length, "bug") }}<template v-if="blockers">, {{ plural(blockers, "blocker") }}</template><template v-if="team"> · to {{ team }}</template>
       </span>
     </td>
-    <td class="hidden min-w-48 text-muted xl:table-cell">
-      {{ plural(rows.length, "bug") }}
-      <span
-        v-if="blockers"
-        class="ml-1 rounded-pill bg-danger-soft px-2 py-0.5 text-xs font-semibold text-danger"
-      >{{ plural(blockers, "blocker") }}</span>
-    </td>
-    <td class="hidden whitespace-nowrap text-muted xl:table-cell"><template v-if="team">to <b class="font-medium text-fg">{{ team }}</b></template><template v-else>—</template></td>
-    <td class="whitespace-nowrap" :class="progress.tone || 'text-muted'">{{ progress.text }}</td>
+    <td :class="progress.tone || 'text-muted'">{{ progress.text }}</td>
     <td class="whitespace-nowrap text-muted tabular-nums">{{ rel(group.created) }}</td>
     <td class="text-right"><span class="inline-flex flex-wrap items-center justify-end gap-2">
       <!-- The batch off the board in one move: a report of eleven is eleven guides, and closing them
@@ -139,10 +131,11 @@ async function closeAll() {
   </tr>
   <tr v-if="shown" class="run">
     <td />
-    <td colspan="6" class="pb-3">
+    <td colspan="4" class="pb-3">
       <ul class="m-0 list-none rounded-2 bg-surface p-0 py-1">
         <li v-for="r in rows" :key="r.g.id" class="m-0 flex flex-wrap items-center gap-x-4 gap-y-0.5 px-4 py-2 text-sm leading-snug">
-          <HubSelectBox :id="r.g.id" :title="r.g.title" :archived="r.g.status === 'consumed'" :mine="r.g.mine" />
+          <HubSelectBox :id="r.g.id" :title="r.g.title" :archived="r.g.status === 'consumed'" :allowed="Boolean(r.g.manage || r.g.mine)" />
+          <HubGuideThumbnail :image="r.g.preview_image" :guide="r.g.id" :title="r.g.title || 'Untitled bug'" />
           <span class="min-w-0 flex-1 basis-64">
             <span
               class="mr-2 inline-block size-3 rounded-full align-middle"

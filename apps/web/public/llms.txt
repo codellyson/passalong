@@ -141,6 +141,22 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 the agent that holds their work, or leaving a note on one nobody holds yet), `inbox`, `board`,
 `activity` (reads), `clear_activity` (marks it seen), `log`, `plan_tasks`.
 
+Project folders hold reusable context for work spanning several guides. When asked to start a
+folder for a script, brief or project, call `list_folders` first and reuse a fitting folder. If
+none fits, call `create_folder` with a title and short description drawn from the person's request,
+then draft the first Markdown document with `create_folder_document`. A short request is enough;
+do not ask the person to fill a form or leave an empty folder. Omit `team` for a private folder;
+pass a team slug only when the person asked to share it with that team. The returned folder id is
+what the other folder tools take. `get_folder` lists its documents, assets and linked guides;
+`create_folder_document` adds Markdown such as a brief or script. Read it with
+`get_folder_document` before editing, then pass its version to `save_folder_document`. If the save
+refuses an old version, reread and reconcile the other person's change. `get_folder_asset` brings
+an existing image or small text file into the agent's context. `add_folder_asset` uploads a file
+the agent can access: a local path over stdio, or an attached file over hosted MCP. If a hosted
+agent holds the file in a code sandbox, `create_folder_upload` gives it a one-time link and command
+to send the bytes directly. `link_folder_guide` connects an existing task or handoff to the folder
+without changing that guide. Folder files stay private to people who can read the folder.
+
 Every guide, whatever its kind, is worked with four calls:
 
 - `take` — say you are doing it, and get it. With an id, that guide; with none, the next thing

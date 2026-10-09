@@ -70,8 +70,11 @@ const who = computed(() => {
   <!-- A row of the guides table (GuideTable.vue). The answer a row asks for opens in a row of its
        own beneath it, as a failed verdict always has. -->
   <tr>
-    <td><HubSelectBox :id="g.id" :title="g.title" :archived="g.status === 'consumed'" :mine="g.mine" /></td>
+    <td><HubSelectBox :id="g.id" :title="g.title" :archived="g.status === 'consumed'" :allowed="Boolean(g.manage || g.mine)" /></td>
     <td class="min-w-52 max-w-[22rem]">
+      <div class="flex items-start gap-3">
+        <HubGuideThumbnail :image="g.preview_image" :guide="g.id" :title="g.title || 'Untitled guide'" />
+        <div class="min-w-0 flex-1">
       <NuxtLink :to="`/hub/g/${g.id}`" class="line-clamp-2 font-medium text-fg no-underline hover:text-accent">{{ g.title || "Untitled guide" }}</NuxtLink>
       <!-- A word under the title only where it tells rows apart: a bug or a task among handoffs, a
            guide that follows another, one that has follow-ups. "transfer" was on nearly every row and
@@ -90,14 +93,14 @@ const who = computed(() => {
           {{ g.children }} {{ g.children === 1 ? "follow-up" : "follow-ups" }}
         </a>
       </span>
-      <!-- What it says is one line, and below xl (where it is not its own column) who it went to and
-           the countdown share one muted line under it, instead of a line each. -->
-      <span v-if="g.summary" class="mt-1 line-clamp-1 block text-xs text-muted xl:hidden">{{ g.summary }}</span>
+      <!-- The hub's capped width cannot hold separate summary and recipient columns. Keep both
+           beneath the title, where they remain readable at every width. -->
+      <span v-if="g.summary" class="mt-1 line-clamp-2 block text-xs text-muted">{{ g.summary }}</span>
       <span v-if="who || expiry" class="mt-0.5 block text-xs text-muted">
-        <span v-if="who" class="xl:hidden">
+        <span v-if="who">
           {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> · {{ who.team }}</template>
         </span>
-        <span v-if="who && expiry" class="xl:hidden"> · </span>
+        <span v-if="who && expiry"> · </span>
         <span
           v-if="expiry"
           class="whitespace-nowrap"
@@ -105,15 +108,10 @@ const who = computed(() => {
           :title="expiry.why"
         >{{ expiry.text }}</span>
       </span>
+      </div>
+      </div>
     </td>
-    <td class="hidden min-w-48 max-w-[26rem] text-muted xl:table-cell"><span class="line-clamp-2">{{ g.summary || "—" }}</span></td>
-    <td class="hidden whitespace-nowrap text-muted xl:table-cell">
-      <template v-if="who">
-        {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> in {{ who.team }}</template>
-      </template>
-      <template v-else>—</template>
-    </td>
-    <td class="whitespace-nowrap" :class="TONE[status.tone] || 'text-muted'">{{ status.text || "—" }}</td>
+    <td :class="TONE[status.tone] || 'text-muted'">{{ status.text || "—" }}</td>
     <td class="whitespace-nowrap text-muted tabular-nums">{{ rel(g.created) }}</td>
     <td class="text-right whitespace-nowrap">
       <span class="inline-flex items-center gap-2">
@@ -148,7 +146,7 @@ const who = computed(() => {
   </tr>
   <tr v-if="((open === 'ack' || open === 'pass') || open === 'verdict') && !g.mine" class="run">
     <td />
-    <td colspan="6" class="pb-3">
+    <td colspan="4" class="pb-3">
       <HubAck v-if="open === 'ack' || open === 'pass'" :g="g" :why="open === 'pass'" @done="open = null" />
       <HubVerdict v-else :g="g" @done="open = null" />
     </td>

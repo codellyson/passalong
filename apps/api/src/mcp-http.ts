@@ -755,6 +755,76 @@ const passOut = z.object({ id: z.string(), passed: z.boolean().optional() }).pas
 const finishOut = z
   .object({ id: z.string(), state: z.string().optional(), report: z.string().optional() })
   .passthrough();
+const folderListOut = z
+  .object({ folders: z.array(z.object({ id: z.string() }).passthrough()) })
+  .passthrough();
+const folderOut = z.object({ folder: z.object({ id: z.string() }).passthrough() }).passthrough();
+const folderDocumentOut = z
+  .object({ document: z.object({ id: z.string() }).passthrough() })
+  .passthrough();
+const folderGuideOut = z.object({ guide: z.string() }).passthrough();
+const folderAssetOut = z
+  .object({ id: z.string(), name: z.string(), type: z.string() })
+  .passthrough();
+const addedFolderAssetOut = z
+  .object({ asset: z.object({ id: z.string(), name: z.string() }).passthrough() })
+  .passthrough();
+
+async function addFolderAsset(call: Call, folder: string, file: FileInput) {
+  const url = fetchable(file.download_url);
+  if (!url)
+    return failed(
+      "The file needs a public HTTPS download URL. Use the local MCP server for a file on your machine.",
+    );
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    return failed(`The file could not be fetched: ${(error as Error).message}`);
+  }
+  if (!response.ok)
+    return failed(`The file could not be fetched: ${response.status} ${response.statusText}`);
+  const bytes = await response.arrayBuffer();
+  if (!bytes.byteLength) return failed("That file is empty.");
+  if (bytes.byteLength > 10 * 1024 * 1024) return failed("That file is over 10 MB.");
+  const name = (file.file_name || "asset").replace(/[^\x20-\x7e]/g, "").slice(0, 120);
+  const type =
+    (response.headers.get("content-type") || file.mime_type || "application/octet-stream")
+      .split(";")[0]
+      ?.trim() || "application/octet-stream";
+  const stored = await call("POST", `/v1/folders/${encodeURIComponent(folder)}/assets`, bytes, {
+    contentType: type,
+    headers: { "x-file-name": name },
+  });
+  if (stored.status >= 400) return failed(stored.text);
+  const parsed = JSON.parse(stored.text) as { asset: { id: string } };
+  return { ...text(stored.text), structuredContent: parsed };
+}
+
+async function folderAssetAnswer(call: Call, folder: string, asset: string) {
+  const res = await call(
+    "GET",
+    `/v1/folders/${encodeURIComponent(folder)}/assets/${encodeURIComponent(asset)}/agent`,
+  );
+  if (res.status >= 400) return failed(res.text);
+  const file = JSON.parse(res.text) as {
+    id: string;
+    name: string;
+    type: string;
+    data?: string;
+    text?: string;
+  };
+  const { data, text: body, ...meta } = file;
+  return {
+    content: data
+      ? [
+          { type: "text" as const, text: file.name },
+          { type: "image" as const, data, mimeType: file.type },
+        ]
+      : [{ type: "text" as const, text: `${file.name}\n\n${body || ""}` }],
+    structuredContent: meta,
+  };
+}
 
 const READS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
 const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
@@ -820,6 +890,20 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "tool call. " +
         "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
         "the body, and publish_guide the same id — publishing claims whatever the markdown names.\n" +
+        "FOLDERS ARE REUSABLE PROJECT CONTEXT, NOT GUIDES. When the user asks for a folder for a " +
+        "script, brief, assets or work spanning several guides, call list_folders first to avoid " +
+        "making a duplicate. If none fits, call create_folder with a title and short description. " +
+        "A short request is enough: name it from the person's purpose and draft the first Markdown " +
+        "document with create_folder_document. Do not leave an empty folder or make them fill a form. " +
+        "Pass `team` only when the user wants it shared with that team; use the slug they named " +
+        "or one returned by list_folders, and omit it for a private folder. Use the returned " +
+        "folder id with create_folder_document to add Markdown, get_folder to see its contents, " +
+        "get_folder_document to read text and its version, and save_folder_document with that " +
+        "version when editing. On a stale-version refusal, reread before retrying so another " +
+        "person's work is not lost. Use add_folder_asset when the client supplies a file, or " +
+        "create_folder_upload when the file is in a code sandbox and must be sent from there. " +
+        "Use get_folder_asset to read one already there, and link_folder_guide only when an " +
+        "existing guide uses that folder.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
@@ -1055,6 +1139,178 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     },
     async ({ id, to }) =>
       relay(call, "POST", `/v1/guides/${encodeURIComponent(id)}/assign`, { to }),
+  );
+
+  server.registerTool(
+    "list_folders",
+    {
+      title: "List project folders",
+      annotations: READS,
+      outputSchema: folderListOut,
+      description: "Find folders of documents, assets and guides available to this account.",
+      inputSchema: { scope: z.string().optional().describe('"all", "mine", or a team slug') },
+    },
+    async ({ scope }) =>
+      relay(call, "GET", `/v1/folders${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`),
+  );
+
+  server.registerTool(
+    "create_folder",
+    {
+      title: "Create project folder",
+      annotations: ADDS,
+      outputSchema: folderOut,
+      description:
+        "Create a folder for project documents and assets after checking list_folders. Omit team for a private folder; pass a team slug only when sharing was requested.",
+      inputSchema: {
+        title: z.string().describe("Name of the project or body of work"),
+        description: z.string().optional().describe("Short purpose of the folder"),
+        team: z.string().optional().describe("Team slug; omit for a private folder"),
+      },
+    },
+    async ({ title, description, team }) =>
+      relay(call, "POST", "/v1/folders", { title, description, team }),
+  );
+
+  server.registerTool(
+    "get_folder",
+    {
+      title: "Open project folder",
+      annotations: READS,
+      outputSchema: folderOut,
+      description:
+        "List a folder's documents, assets and linked guides. Open a document separately to read its text.",
+      inputSchema: { folder: z.string() },
+    },
+    async ({ folder }) => relay(call, "GET", `/v1/folders/${encodeURIComponent(folder)}`),
+  );
+
+  server.registerTool(
+    "get_folder_document",
+    {
+      title: "Read folder document",
+      annotations: READS,
+      outputSchema: folderDocumentOut,
+      description: "Read the full Markdown and version of a folder document before editing it.",
+      inputSchema: { folder: z.string(), document: z.string() },
+    },
+    async ({ folder, document }) =>
+      relay(
+        call,
+        "GET",
+        `/v1/folders/${encodeURIComponent(folder)}/documents/${encodeURIComponent(document)}`,
+      ),
+  );
+
+  server.registerTool(
+    "get_folder_asset",
+    {
+      title: "Read folder asset",
+      annotations: READS,
+      outputSchema: folderAssetOut,
+      description:
+        "Read an image or small text file from a folder into this agent's context. Other file types stay private downloads.",
+      inputSchema: { folder: z.string(), asset: z.string() },
+    },
+    async ({ folder, asset }) => folderAssetAnswer(call, folder, asset),
+  );
+
+  server.registerTool(
+    "add_folder_asset",
+    {
+      title: "Add file to project folder",
+      annotations: { ...ADDS, openWorldHint: true },
+      outputSchema: addedFolderAssetOut,
+      description:
+        "Add an image, PDF, ZIP or text file that the client attached to a folder. The file is fetched and stored as a folder asset, without putting it in a guide. Up to 10 MB.",
+      inputSchema: {
+        folder: z.string().describe("folder id returned by create_folder or list_folders"),
+        file: fileInput.describe("the attached asset, filled in by the client"),
+      },
+      _meta: { "openai/fileParams": ["file"] },
+    },
+    async ({ folder, file }) => addFolderAsset(call, folder, file),
+  );
+
+  server.registerTool(
+    "create_folder_upload",
+    {
+      title: "Get a folder file upload link",
+      annotations: ADDS,
+      outputSchema: uploadOut,
+      description:
+        "For an image or file held in your code sandbox rather than a client file input: get a one-time link scoped to this folder, then run the returned curl command where the file is. The response contains the stored folder asset. The link expires in 10 minutes.",
+      inputSchema: {
+        folder: z.string().describe("folder id returned by create_folder or list_folders"),
+        name: z.string().describe("filename, including its extension"),
+      },
+    },
+    async ({ folder, name }) => {
+      const res = await call("POST", "/v1/uploads", { folder, name });
+      if (res.status >= 400) return failed(res.text);
+      const { upload_url, expires } = JSON.parse(res.text) as {
+        upload_url: string;
+        expires: string;
+      };
+      const command = `curl -sS --fail-with-body -X PUT --data-binary @FILE_PATH '${upload_url}'`;
+      return {
+        ...text(
+          `Run this where the file is, with FILE_PATH replaced by its path:\n${command}\n\nThe response contains the folder asset id.`,
+        ),
+        structuredContent: { upload_url, expires, command },
+      };
+    },
+  );
+
+  server.registerTool(
+    "create_folder_document",
+    {
+      title: "Write new folder document",
+      annotations: ADDS,
+      outputSchema: folderDocumentOut,
+      description: "Add a Markdown document such as a brief or script to a folder.",
+      inputSchema: { folder: z.string(), name: z.string(), body: z.string() },
+    },
+    async ({ folder, name, body }) =>
+      relay(call, "POST", `/v1/folders/${encodeURIComponent(folder)}/documents`, { name, body }),
+  );
+
+  server.registerTool(
+    "save_folder_document",
+    {
+      title: "Save folder document",
+      annotations: ADDS,
+      outputSchema: folderDocumentOut,
+      description:
+        "Save a new revision of a folder document. Pass the version returned when you read it; a newer edit is refused so nobody's writing is overwritten.",
+      inputSchema: {
+        folder: z.string(),
+        document: z.string(),
+        version: z.number().int().positive(),
+        body: z.string(),
+      },
+    },
+    async ({ folder, document, version, body }) =>
+      relay(
+        call,
+        "PUT",
+        `/v1/folders/${encodeURIComponent(folder)}/documents/${encodeURIComponent(document)}`,
+        { version, body },
+      ),
+  );
+
+  server.registerTool(
+    "link_folder_guide",
+    {
+      title: "Link guide to folder",
+      annotations: ADDS,
+      outputSchema: folderGuideOut,
+      description:
+        "Put an existing task or handoff guide beside the folder documents and assets it uses.",
+      inputSchema: { folder: z.string(), guide: z.string() },
+    },
+    async ({ folder, guide }) =>
+      relay(call, "POST", `/v1/folders/${encodeURIComponent(folder)}/guides`, { guide }),
   );
 
   server.registerTool(

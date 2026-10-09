@@ -105,6 +105,12 @@ import {
   sendVerdict,
 } from "./email.js";
 import { eventStream, startAt } from "./events.js";
+import folderRoutes, {
+  folderAssetType,
+  storeFolderAsset,
+  visible as visibleFolder,
+  writable as writableFolder,
+} from "./folders.js";
 import {
   findPeople,
   findSubject,
@@ -139,6 +145,7 @@ import {
   unheldFields,
   unreachableImages,
 } from "./guide.js";
+import { guidePreview } from "./guide-preview.js";
 import { mintOrigin } from "./hosts.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
@@ -617,6 +624,23 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   const pulls = await recentPulls(c, rows);
   const said = await verdicts(c, rows);
   const answered = await acks(c, rows);
+  // A row can show the first image the guide carries without sending its document to the hub.
+  // Check the shot's guide_id, so a pasted URL for somebody else's image is never a preview.
+  const ownedShots = new Map<string, { id: string; name: string }[]>();
+  const shotRows = await inSlices(
+    rows.map((r) => r.id),
+    0,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(
+          `SELECT guide_id, id, name FROM shot WHERE guide_id IN (${marks}) ORDER BY created ASC`,
+        )
+          .bind(...slice)
+          .all<{ guide_id: string; id: string; name: string }>()
+      ).results,
+  );
+  for (const shot of shotRows)
+    ownedShots.set(shot.guide_id, [...(ownedShots.get(shot.guide_id) || []), shot]);
   // One lookup for the page, not one per row. A guide handed to a group has to say which one, or
   // its row reads as a team-wide share and nobody treats it as theirs.
   const groupIds = [...new Set(rows.map((r) => r.to_group_id).filter(Boolean))];
@@ -709,6 +733,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     ),
   );
   return rows.map((r) => {
+    const shots = ownedShots.get(r.id) || [];
+    const image = guidePreview(shotIds(r.markdown), shots);
     const heard = said.get(r.id) || [];
     // The latest word, plus whether anyone's standing verdict is still negative.
     const latest = heard[0];
@@ -755,6 +781,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       kind: r.kind,
       // What it says to a person: the line a list shows in place of the document.
       summary: r.summary || "",
+      preview_image: image,
       // When it is tidied away by itself, or "": its proof screenshots are deleted at
       // `proof_expires`, and a sent guide nobody touches is archived at `archives_at`.
       proof_expires: proofEnds.get(r.id) || "",
@@ -2404,9 +2431,25 @@ async function storeShot(
 app.post("/v1/uploads", async (c) => {
   const account = c.get("account");
   if (!c.env.SHOTS) return err(c, 501, "Screenshots can't be uploaded here right now.");
-  const body = (await c.req.json().catch(() => ({}))) as { name?: unknown; kind?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as {
+    name?: unknown;
+    kind?: unknown;
+    folder?: unknown;
+  };
   // What the link will take: a picture (the default, and what every link was before) or a file.
-  const kind = body.kind === "file" ? "file" : "image";
+  let kind = body.kind === "file" ? "file" : "image";
+  if (body.folder !== undefined) {
+    if (typeof body.folder !== "string") return err(c, 400, "Send a folder id.");
+    const folder = await visibleFolder(c, body.folder);
+    if (!folder) return err(c, 404, "That folder isn't available to you.");
+    if (!(await writableFolder(c, folder)))
+      return err(
+        c,
+        402,
+        "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      );
+    kind = `folder:${folder.id}`;
+  }
   const at = now();
   await c.env.DB.prepare("DELETE FROM upload WHERE account_id = ? AND (expires <= ? OR used <> '')")
     .bind(account, at)
@@ -2458,19 +2501,48 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
   if (!open)
     return err(c, 410, "That upload link has expired or was already used. Ask for a new one.");
   const file = open.kind === "file";
+  const folderId = open.kind.startsWith("folder:") ? open.kind.slice(7) : "";
+  if (folderId) {
+    const folder = await visibleFolder({ env: c.env, get: () => open.account_id }, folderId);
+    if (!folder)
+      return err(c, 410, "This folder is no longer available. Ask for a new upload link.");
+    if (!(await writableFolder(c, folder)))
+      return err(
+        c,
+        402,
+        "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      );
+  }
 
   const body = await c.req.arrayBuffer();
   if (!body.byteLength) return err(c, 400, "That file is empty. Check the path you sent.");
-  if (body.byteLength > (file ? ATTACH_MAX : SHOT_MAX))
+  if (body.byteLength > (file || folderId ? ATTACH_MAX : SHOT_MAX))
     return err(
       c,
       413,
-      file
+      file || folderId
         ? "That file is over 10 MB. Attach something smaller, or a link to it."
         : "That image is over 5 MB. Use a smaller screenshot.",
     );
   let type = "";
-  if (file) {
+  if (folderId) {
+    const named = await c.env.DB.prepare("SELECT name FROM upload WHERE hash = ?")
+      .bind(hash)
+      .first<{ name: string }>();
+    type =
+      folderAssetType(
+        new Uint8Array(body),
+        c.req.header("content-type") || "",
+        named?.name || "",
+      ) || "";
+    if (!type) return err(c, 415, "Use an image, PDF, ZIP or text file.");
+    const count = await c.env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM folder_asset WHERE folder_id = ?",
+    )
+      .bind(folderId)
+      .first<{ n: number }>();
+    if ((count?.n || 0) >= 100) return err(c, 409, "This folder has 100 files already.");
+  } else if (file) {
     // The name the link was minted with is the name it is kept under, since the sandbox's curl has
     // no good way to send one; its extension is a hint for text, and the bytes decide the rest.
     const named = await c.env.DB.prepare("SELECT name FROM upload WHERE hash = ?")
@@ -2503,6 +2575,19 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
     .first<{ account_id: string; name: string }>();
   if (!ticket) {
     return err(c, 410, "That upload link has expired or was already used. Ask for a new one.");
+  }
+  if (folderId) {
+    const stored = await storeFolderAsset(
+      c.env,
+      folderId,
+      ticket.account_id,
+      body,
+      ticket.name,
+      type,
+    );
+    return stored.error
+      ? err(c, stored.status || 500, stored.error)
+      : c.json({ asset: stored.asset }, 201);
   }
   if (file) {
     const attachment = await storeAttachment(c, bucket, ticket.account_id, type, body, ticket.name);
@@ -4979,12 +5064,16 @@ app.get("/v1/tasks", async (c) => {
   const at = now();
   const me = c.get("account");
   const rows = await claims.list(c.env.DB, me, at, scope);
+  const adminTeams = new Set(
+    (await myTeams(c)).filter((team) => team.role === "owner").map((team) => team.slug),
+  );
   return c.json({
     tasks: rows.map((r) => {
       const base = origin(c);
       const v = {
         ...taskView(r.task, r.claim, r.state),
         mine: r.task.account_id === me,
+        manage: r.task.account_id === me || adminTeams.has(r.task.team_slug),
         url: shareUrl(base, r.task),
         // Where it sits and who it is for, so its author can give it to someone else.
         team: r.task.team_slug,
@@ -6505,5 +6594,7 @@ app.onError((e, c) => {
   console.error(e);
   return err(c, 500, "Something went wrong on our side. Try again in a moment.");
 });
+
+app.route("/v1/folders", folderRoutes);
 
 export default app;

@@ -27,7 +27,11 @@ const WEB = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "app
 let ready;
 function setup() {
   ready ??= (async () => {
-    assert.match(API, /^http:\/\/localhost[:/]/, "only ever against a local server");
+    assert.match(
+      API,
+      /^http:\/\/(?:localhost|127\.0\.0\.1)[:/]/,
+      "only ever against a local server",
+    );
     const { token, account } = await newAccount();
     await sql(`UPDATE account SET plan = 'solo' WHERE id = '${account}'`);
     process.env.PASSALONG_API = API;
@@ -73,6 +77,36 @@ const skip = !API && "PASSALONG_E2E_API not set";
 
 /** What every hand-in carries: the run, not the agent's word for it. */
 const PROOF = "npm test -w apps/api → 285 pass, 0 fail";
+
+test("an agent can create a folder and upload an asset with a scoped one-time link", {
+  skip,
+}, async () => {
+  await setup();
+  const api = await import("../src/api.js");
+  const { folder } = await api.createFolder("Tutorial video", "Script and screens");
+  const minted = await fetch(`${API}/v1/uploads`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-passalong-version": VERSION,
+      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+    },
+    body: JSON.stringify({ folder: folder.id, name: "screen.png" }),
+  });
+  if (minted.status !== 201)
+    throw new Error(`upload link: ${minted.status} ${await minted.text()}`);
+  const { upload_url, kind } = await minted.json();
+  assert.equal(kind, `folder:${folder.id}`);
+  const wrong = await fetch(upload_url, { method: "PUT", body: new Uint8Array([0, 1, 2]) });
+  assert.equal(wrong.status, 415, "invalid bytes do not spend the link");
+  const uploaded = await fetch(upload_url, { method: "PUT", body: PNG });
+  if (uploaded.status !== 201)
+    throw new Error(`asset upload: ${uploaded.status} ${await uploaded.text()}`);
+  const { asset } = await uploaded.json();
+  assert.equal(asset.name, "screen.png");
+  assert.equal((await api.folder(folder.id)).assets[0].id, asset.id);
+  assert.equal((await fetch(upload_url, { method: "PUT", body: PNG })).status, 410);
+});
 
 test("finishing with the write-up publishes it as the task's report", { skip }, async () => {
   const env = await setup();

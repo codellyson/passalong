@@ -167,6 +167,17 @@ change. Its README says how.
     measured against an agent's half hour. Three layouts were prototyped on `prototype/taken-views`.
     `conversationOn()` must match every pattern a body can carry a stored thing by (`/v1/shots/` and
     `/v1/attachments/`), or the author's next edit releases whatever the missing one named.
+  - `src/folders.ts` — one-level project folders (migration 0046): Markdown documents, private R2
+    assets, and links to guides. A folder's files belong to the folder, never to a linked guide;
+    removing a guide must not remove a tutorial's script or screens. Personal folders belong to
+    their creator; every current team member may read and edit a team folder, and its creator or
+    a team owner may delete it. Every document save carries the version read and refuses a stale
+    one, so a person's edit and an agent's edit cannot silently replace each other. Both MCP
+    servers expose the same folder document operations and a direct way to add assets: a local
+    path over stdio, a client file input over HTTP, or a one-time folder-scoped upload link for a
+    sandbox. `get_folder_asset` returns only bounded image or text content to an agent. The hub
+    leads creation with an agent prompt and keeps its editor for corrections. It fetches private images with its credential and
+    draws blob URLs, which is why the hub CSP permits `img-src blob:`.
   - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running
     local server (`npm run test:e2e`, skipped by `npm test`). It puts its accounts on a plan in the
     *local* D1 with `wrangler d1 execute --local`, so it refuses any API that is not localhost.

@@ -1,16 +1,17 @@
-// The lists are cards below md, a compact table from md, and the whole table from xl. Four
-// components and one stylesheet each have to agree on where. They disagreed once: the stylesheet
-// said 1280px and the components still said md (768px), because a rename done with BSD sed's `\b`
-// changed nothing and said nothing, so a card showed the table's extra cells.
+// The lists are cards below md. Guide lists stay compact because the hub's capped width cannot
+// hold their summary and recipient as extra columns beside long states and actions. Task lists
+// expand at xl. Components and CSS must agree: a prior breakpoint mismatch showed extra cells
+// inside cards, and a viewport breakpoint later expanded a table beyond its rounded surface.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const at = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
-const COMPONENTS = ["GuideTable", "InboxRow", "ReportRow", "TaskTable"].map((n) => [
+const GUIDE_COMPONENTS = ["GuideTable", "InboxRow", "ReportRow"].map((n) => [
   n,
   at(`../app/components/hub/${n}.vue`),
 ]);
+const TASK_TABLE = at("../app/components/hub/TaskTable.vue");
 const CSS = at("../app/assets/css/styles.css");
 
 /** Tailwind's own breakpoints, in rem, so the test says which ones the layouts are matching. */
@@ -28,19 +29,17 @@ test("the card layout stops where the compact table starts", () => {
   );
 });
 
-test("the lists switch at those two widths only, and keep their extra columns until the second", () => {
-  for (const [name, src] of COMPONENTS) {
+test("guide lists keep five columns within the hub; tasks expand at xl", () => {
+  for (const [name, src] of GUIDE_COMPONENTS) {
     const used = new Set(
       [...src.matchAll(/(?<![\w-])(sm|md|lg|xl|2xl):[\w[\]-]+/g)].map((m) => m[1]),
     );
     for (const v of used)
-      assert.ok(
-        [CARDS_BELOW, FULL_TABLE_FROM].includes(v),
-        `${name} uses ${v}:, which no layout here switches at`,
-      );
-    assert.ok(
-      /class="[^"]*(?<![\w-])hidden(?![\w-])[^"]*(?<![\w-])xl:table-cell/.test(src),
-      `${name} hides its extra columns until ${FULL_TABLE_FROM}`,
-    );
+      assert.ok([CARDS_BELOW].includes(v), `${name} uses ${v}:, which no layout here switches at`);
+    assert.doesNotMatch(src, /xl:table-cell/, `${name} must not expand outside the capped hub`);
   }
+  assert.equal([...GUIDE_COMPONENTS[0][1].matchAll(/<th(?:\s|>)/g)].length, 5);
+  for (const [name, src] of GUIDE_COMPONENTS.slice(1))
+    assert.match(src, /colspan="4"/, `${name} detail row spans the four cells after selection`);
+  assert.match(TASK_TABLE, /hidden xl:table-cell/, "task columns still expand at xl");
 });

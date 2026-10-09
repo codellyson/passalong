@@ -183,12 +183,11 @@ export function statusLine({ g, state }: LaneRow): { text: string; tone: Tone } 
 /**
  * Whether you can take this off the board yourself.
  *
- * Only its author closes a guide — that is the server's rule, and a button the reader cannot use
- * is worse than no button — and one already closed has nowhere to go. Three surfaces ask the same
+ * Its author or a team admin closes a guide, and one already closed has nowhere to go. Three surfaces ask the same
  * question: a row in the hub, a bundled report's group, and the report page. It was written out
  * three times, and a report of eleven bugs had no close at all for as long as it took to notice
  * that two of the three had never had it.
  */
-export function closable(g: { mine: boolean; status: string }) {
-  return g.mine && g.status !== "consumed";
+export function closable(g: { mine: boolean; manage?: boolean; status: string }) {
+  return (g.mine || Boolean(g.manage)) && g.status !== "consumed";
 }

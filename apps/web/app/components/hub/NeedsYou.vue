@@ -26,7 +26,8 @@ import type { LaneRow } from "~/utils/lanes";
 import { checkLines, matchChecks, type Sections } from "~/utils/task-docs";
 
 const props = defineProps<{ tasks: Task[]; handedIn: HandedIn[]; rows: LaneRow[] }>();
-const { onApprove, onReject, onRelease, onAck, onCloseHandedIn, onSendBackHandedIn } = useHub();
+const { data, onApprove, onReject, onRelease, onAck, onCloseHandedIn, onSendBackHandedIn } =
+  useHub();
 const { docsOf, token } = useTaskDocs();
 
 type Item = { key: string; title: string; sub: string; at: string } & (
@@ -63,7 +64,9 @@ const groups = computed(() =>
       title: "Waiting for your review",
       note: "Tasks an agent finished. Approve them, or ask for changes.",
       tone: "bg-accent",
-      items: props.tasks.filter((t) => t.mine && t.state === "review").map((t) => task$(t, "")),
+      items: props.tasks
+        .filter((t) => (t.mine || t.manage) && t.state === "review")
+        .map((t) => task$(t, "")),
     },
     {
       key: "handed",
@@ -106,7 +109,7 @@ const groups = computed(() =>
       note: "The agent stopped and needs an answer from you.",
       tone: "bg-danger",
       items: props.tasks
-        .filter((t) => t.mine && t.state === "claimed" && stuck(t))
+        .filter((t) => (t.mine || t.manage) && t.state === "claimed" && stuck(t))
         .map((t) => task$(t, t.claim?.note?.replace(/^BLOCKED:\s*/i, "") || "")),
     },
     {
@@ -116,12 +119,19 @@ const groups = computed(() =>
       note: "No update for 30 minutes. It still holds the work.",
       tone: "bg-warn",
       items: props.tasks
-        .filter((t) => t.mine && t.state === "stalled")
+        .filter((t) => (t.mine || t.manage) && t.state === "stalled")
         .map((t) => task$(t, plain(t.claim?.note || ""))),
     },
   ].filter((g) => g.items.length),
 );
 const all = computed(() => groups.value.flatMap((g) => g.items as Item[]));
+const previews = computed(() => new Map(data.value.guides.map((g) => [g.id, g.preview_image])));
+const imageFor = (it: Item) =>
+  it.kind === "sent"
+    ? it.row.g.preview_image
+    : previews.value.get(it.kind === "task" ? it.task.id : it.h.id);
+const guideId = (it: Item) =>
+  it.kind === "sent" ? it.row.g.id : it.kind === "task" ? it.task.id : it.h.id;
 
 /**
  * The counts are the filter, as on the Being-worked-on tab: one list, with a chip per reason it needs
@@ -272,7 +282,7 @@ async function pick(key: string) {
 const loadedDocs = useTaskDocs();
 onMounted(() => {
   watch(
-    () => props.tasks.filter((t) => t.mine && t.state === "review"),
+    () => props.tasks.filter((t) => (t.mine || t.manage) && t.state === "review"),
     (ts) => {
       for (const t of ts) loadedDocs.loadTask(t);
     },
@@ -415,11 +425,16 @@ const TONE = {
         <tbody>
           <tr v-for="{ it, g } in shown" :key="it.key">
             <td class="min-w-60 max-w-[24rem] font-medium text-fg">
+              <div class="flex items-start gap-3">
+                <HubGuideThumbnail :image="imageFor(it)" :guide="guideId(it)" :title="it.title" />
+                <div class="min-w-0 flex-1">
               <button type="button" class="linkish line-clamp-2 text-left font-medium !text-fg hover:!text-accent" @click="pick(it.key)">{{ it.title }}</button>
               <!-- Whether to trust it, before opening: how much of the Acceptance has a run, and what
                    the agent says could break. -->
               <span v-if="glance(it)" class="mt-1 block text-xs font-normal text-muted">{{ glance(it)?.text }}</span>
               <span v-if="glance(it)?.risk" class="mt-1 line-clamp-1 block text-xs font-normal text-warn">Risk: {{ glance(it)?.risk }}</span>
+              </div>
+              </div>
             </td>
             <td class="max-w-[28rem] text-muted"><span class="line-clamp-2">{{ it.sub || "—" }}</span></td>
             <td class="whitespace-nowrap text-muted">

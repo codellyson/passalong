@@ -1,6 +1,8 @@
 // Client for the hosted sync API (apps/api). Everything here is optional: with no token the
 // CLI is a purely local tool, and every function throws an ApiError the CLI turns into a hint.
 import { readFileSync } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import { basename } from "node:path";
 import { nameFor, readAccounts, readConfig, saveTeam } from "./store.js";
 
 /**
@@ -145,7 +147,10 @@ export async function meWith(tokenValue, base = baseUrl()) {
 
 export { nameFor };
 
-async function call(path, { method = "GET", body, auth = true, raw = false } = {}) {
+async function call(
+  path,
+  { method = "GET", body, auth = true, raw = false, uploadName = "" } = {},
+) {
   const headers = { ...CLIENT };
   if (auth) {
     if (needsChoice()) throw new ApiError(409, choiceMessage());
@@ -154,14 +159,24 @@ async function call(path, { method = "GET", body, auth = true, raw = false } = {
     headers.authorization = `Bearer ${t}`;
   }
   if (body !== undefined) {
-    headers["content-type"] = typeof body === "string" ? "text/markdown" : "application/json";
+    headers["content-type"] = uploadName
+      ? "application/octet-stream"
+      : typeof body === "string"
+        ? "text/markdown"
+        : "application/json";
   }
+  if (uploadName) headers["x-file-name"] = uploadName.replace(/[^\x20-\x7e]/g, "").slice(0, 120);
   let res;
   try {
     res = await fetch(`${baseUrl()}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
+      body:
+        body === undefined
+          ? undefined
+          : uploadName || typeof body === "string"
+            ? body
+            : JSON.stringify(body),
     });
   } catch (err) {
     throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
@@ -286,6 +301,36 @@ export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 
 export const board = () => call("/v1/board");
+export const folders = (scope = "all") => call(`/v1/folders${q({ scope })}`);
+export const createFolder = (title, description = "", team = "") =>
+  call("/v1/folders", { method: "POST", body: { title, description, team } });
+export const folder = (id) => call(`/v1/folders/${encodeURIComponent(id)}`);
+export const folderDocument = (folderId, documentId) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`);
+export const folderAsset = (folderId, assetId) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/assets/${encodeURIComponent(assetId)}/agent`);
+export async function addFolderAsset(folderId, path, name = "") {
+  const file = await stat(path);
+  if (!file.isFile()) throw new ApiError(400, "Choose a file to add to the folder.");
+  if (file.size > 10 * 1024 * 1024) throw new ApiError(413, "That file is over 10 MB.");
+  return call(`/v1/folders/${encodeURIComponent(folderId)}/assets`, {
+    method: "POST",
+    body: new Uint8Array(await readFile(path)),
+    uploadName: name || basename(path),
+  });
+}
+export const createFolderDocument = (folderId, name, body) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/documents`, {
+    method: "POST",
+    body: { name, body },
+  });
+export const saveFolderDocument = (folderId, documentId, version, body) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
+    method: "PUT",
+    body: { version, body },
+  });
+export const linkFolderGuide = (folderId, guide) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/guides`, { method: "POST", body: { guide } });
 /** What you did, newest first. `since` is a date prefix: 2026, 2026-09, 2026-09-11. */
 export const log = ({ repo = "", since = "", limit = 0 } = {}) =>
   call(`/v1/log${q({ repo, since, limit: limit || "" })}`);

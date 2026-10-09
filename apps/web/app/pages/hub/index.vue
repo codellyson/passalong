@@ -147,33 +147,41 @@ const tasks = computed(() => data.value.tasks.filter(taskHit));
 
 /** Yours, and waiting on you: mirrors the task groups in HubNeedsYou. */
 const taskNeedsYou = (t: Task) =>
-  t.mine &&
+  (t.mine || t.manage) &&
   (t.state === "review" ||
     t.state === "stalled" ||
     (t.state === "claimed" && /^BLOCKED:/i.test(t.claim?.note || "")));
 const reviewCount = computed(() => tasks.value.filter(taskNeedsYou).length);
 
 /** Tasks nobody is on and nobody needs to review: claimed ones are under Taken. */
-const OPEN: { state: Task["state"]; title: string; note: string }[] = [
+const OPEN: { state: Task["state"]; title: string; note: string; edge: string; badge: string }[] = [
   {
     state: "review",
     title: "Waiting for its author",
     note: "A teammate's task, handed in and waiting on them.",
+    edge: "border-accent",
+    badge: "bg-accent-soft text-accent",
   },
   {
     state: "ready",
     title: "Ready for an agent",
     note: "The next agent in the right repo takes these, oldest first.",
+    edge: "border-ok",
+    badge: "bg-ok-soft text-ok",
   },
   {
     state: "blocked",
     title: "Blocked",
     note: "Waiting until the tasks they depend on are approved.",
+    edge: "border-warn",
+    badge: "bg-warn-soft text-warn",
   },
   {
     state: "draft",
     title: "Draft",
     note: "No agent can pick these up until you mark them ready for agents.",
+    edge: "border-line-strong",
+    badge: "bg-surface text-muted",
   },
 ];
 const openTasks = computed(() => {
@@ -387,8 +395,11 @@ const list =
           <!-- ---- Open ---- -->
           <template v-else-if="tab === 'open'">
             <template v-for="col in OPEN" :key="col.state">
-              <div v-if="openTasks.get(col.state)?.length">
-                <h3 :class="sub">{{ col.title }} · {{ openTasks.get(col.state)?.length }}</h3>
+              <div v-if="openTasks.get(col.state)?.length" class="border-l-2 pl-4" :class="col.edge">
+                <h3 :class="sub" class="flex items-center gap-2">
+                  {{ col.title }}
+                  <span class="rounded-pill px-2 py-0.5 font-ui text-xs font-semibold tabular-nums" :class="col.badge">{{ openTasks.get(col.state)?.length }}</span>
+                </h3>
                 <p class="mt-1 mb-3 font-ui text-sm text-muted">{{ col.note }}</p>
                 <HubTaskTable :tasks="openTasks.get(col.state) || []" />
               </div>

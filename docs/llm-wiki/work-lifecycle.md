@@ -17,6 +17,8 @@ alike that models misread them.
 A take writes a **claim** (`apps/api/src/claims.ts`). Its primary key is the lock: a task is taken
 once; a handoff or bug is taken once **per repo**, since the same transfer can be repeated in each
 teammate's checkout.
+If an older task still has a repo-scoped claim, that claim remains its lock and its review record;
+the author can approve that hand-in without creating another claim.
 
 - **Lease.** 30 minutes from the last call. A lapsed lease is **stalled** — derived on read, still
   locked — and the cron tells the author once.

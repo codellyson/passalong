@@ -136,7 +136,8 @@ async function close(issues: Guide[], mark: string) {
             :key="issue.id"
             class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-4 py-3 first:border-t-0"
           >
-            <HubSelectBox :id="issue.id" :title="issue.title" :archived="issue.status === 'consumed'" :mine="issue.mine" />
+            <HubSelectBox :id="issue.id" :title="issue.title" :archived="issue.status === 'consumed'" :allowed="Boolean(issue.manage || issue.mine)" />
+            <HubGuideThumbnail :image="issue.preview_image" :guide="issue.id" :title="issue.title || 'Untitled bug'" />
             <span
               v-if="issue.severity"
               class="shrink-0 rounded-pill px-2 py-0.5 font-ui text-xs font-semibold"
