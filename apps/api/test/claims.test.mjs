@@ -1369,6 +1369,49 @@ test("the author sees what was handed in on a handoff, and can close it", async 
   assert.deepEqual(await handedIn(db, "me"), []);
 });
 
+test("a team's owner can release, finish, approve and send back anyone's task in it; a member cannot", async () => {
+  const db = d1();
+  const guide = seed(db);
+  db.raw.exec(
+    `INSERT INTO account (id, token_hash, created) VALUES ('boss', 'hash-boss', '${T0}')`,
+  );
+  for (const id of ["t1", "t2", "t3", "t4"]) guide(id);
+  teamed(db);
+  db.raw.exec(
+    `INSERT INTO membership (team_id, account_id, role, joined) VALUES ('tm', 'boss', 'owner', '${T0}')`,
+  );
+  const holder = { account: "other", agent: "agent-other1", repo: "o/r" };
+  const boss = { account: "boss", at: T0 };
+  const member = { account: "other", at: T0 };
+
+  // Held by a teammate's agent that never handed in: the owner lets go of it, a member who is not
+  // the holder cannot.
+  await take(db, "t1", holder, { at: T0 });
+  assert.equal((await release(db, "t1", { account: "stranger", at: T0 })).status, 404);
+  const rel = await release(db, "t1", boss);
+  assert.equal(rel.state, "ready", JSON.stringify(rel));
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM claim WHERE guide_id = 't1'").get().n, 0);
+
+  // Held and finished in fact: the owner approves it on the spot.
+  await take(db, "t2", holder, { at: T0 });
+  const done = await markDone(db, "t2", { ...boss, note: "" });
+  assert.equal(done.state, "done", JSON.stringify(done));
+  assert.equal(db.raw.prepare("SELECT status FROM guide WHERE id = 't2'").get().status, "consumed");
+  assert.match(
+    db.raw.prepare("SELECT markdown FROM guide WHERE id = 't2'").get().markdown,
+    /marked done by its team's owner/,
+  );
+
+  // Handed in, waiting on its author: the owner approves or sends it back.
+  for (const id of ["t3", "t4"]) {
+    await take(db, id, holder, { at: T0 });
+    await handIn(db, id, holder, { at: T0, note: "done", evidence: PROOF });
+  }
+  assert.equal((await approve(db, "t3", member)).status, 404, "a member is not the gate");
+  assert.equal((await approve(db, "t3", boss)).state, "done");
+  assert.equal((await reject(db, "t4", { ...boss, why: "not what was asked" })).state, "ready");
+});
+
 test("a hand-in says whether its taker found it worked", async () => {
   const db = d1();
   const guide = seed(db);

@@ -719,6 +719,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       pulls: r.pulls,
       url: shareUrl(base, r),
       mine: r.account_id === me,
+      // Its author, or the owner of its team: may archive, reassign or delete it.
+      manage: r.account_id === me || teams.get(r.team_id)?.role === "owner",
       from: people.get(r.account_id)?.handle || "",
       from_name: nameOf(people, r.account_id),
       team: teams.get(r.team_id)?.slug || "",
@@ -1785,7 +1787,12 @@ app.get("/v1/teams/:slug", async (c) => {
     role: team.role,
     created: team.created,
     // `display` is what a sentence calls them; the id is already what it falls back to.
-    members: members.map((m) => ({ ...m, display: displayName(m) })),
+    members: members.map((m) => ({
+      ...m,
+      display: displayName(m),
+      // The one who made the team: never demoted or removed, so a team cannot be taken from them.
+      creator: m.id === team.created_by,
+    })),
     guides: n?.n ?? 0,
     channels: chCount?.n ?? 0,
     plan: team.plan,
@@ -1795,6 +1802,97 @@ app.get("/v1/teams/:slug", async (c) => {
     seats: team.seats,
     members_count: members.length,
   });
+});
+
+/**
+ * Who is an admin of a team. Stored as `owner`, called admin where a person reads it.
+ *
+ * Every owner may promote and demote the others and remove members — they are equal — except the
+ * person who made the team, who can be neither demoted nor removed: the team is theirs to delete,
+ * and an admin they appointed must not be able to take it away from them. A member may always leave.
+ */
+async function memberOf(c: Ctx, teamId: string, ref: string) {
+  const handle = ref.replace(/^@/, "").toLowerCase();
+  return c.env.DB.prepare(
+    `SELECT a.id, a.handle, m.role FROM membership m JOIN account a ON a.id = m.account_id
+      WHERE m.team_id = ?1 AND (a.handle = ?2 OR a.id = ?2)`,
+  )
+    .bind(teamId, handle)
+    .first<{ id: string; handle: string; role: string }>();
+}
+
+app.patch("/v1/teams/:slug/members/:who", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner") return err(c, 403, "Only an admin of the team can change roles.");
+  const body = (await c.req.json().catch(() => ({}))) as { role?: unknown };
+  const role =
+    body.role === "admin" || body.role === "owner"
+      ? "owner"
+      : body.role === "member"
+        ? "member"
+        : "";
+  if (!role) return err(c, 400, 'Say which role: "admin" or "member".');
+  const who = await memberOf(c, team.id, c.req.param("who"));
+  if (!who) return err(c, 404, `${c.req.param("who")} isn't in ${team.name}.`);
+  if (who.id === team.created_by && role !== "owner")
+    return err(c, 403, `${team.name} was made by this person, so they stay an admin.`);
+  if (who.role === role)
+    return c.json({ id: who.id, role: who.role === "owner" ? "admin" : "member" });
+  await c.env.DB.prepare("UPDATE membership SET role = ? WHERE team_id = ? AND account_id = ?")
+    .bind(role, team.id, who.id)
+    .run();
+  if (role === "owner")
+    await notify(c.env, {
+      to: who.id,
+      kind: "promoted",
+      actor_id: c.get("account"),
+      team_id: team.id,
+    });
+  count(c, role === "owner" ? "member_promoted" : "member_demoted", {});
+  return c.json({ id: who.id, role: role === "owner" ? "admin" : "member" });
+});
+
+/** Leave a team, or — for an admin — take somebody out of it. */
+app.delete("/v1/teams/:slug/members/:who", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  const me = c.get("account");
+  const who = await memberOf(c, team.id, c.req.param("who"));
+  if (!who) return err(c, 404, `${c.req.param("who")} isn't in ${team.name}.`);
+  const leaving = who.id === me;
+  if (!leaving && team.role !== "owner")
+    return err(c, 403, "Only an admin of the team can remove somebody from it.");
+  if (who.id === team.created_by)
+    return err(
+      c,
+      403,
+      `${team.name} was made by this person. They can delete the team, not leave it.`,
+    );
+  // What they were holding in this team goes back to waiting, and they leave its groups; what they
+  // wrote stays, in the team, where its readers still need it.
+  const { results: held } = await c.env.DB.prepare(
+    `SELECT c.guide_id FROM claim c JOIN guide g ON g.id = c.guide_id
+      WHERE c.account_id = ? AND g.team_id = ?`,
+  )
+    .bind(who.id, team.id)
+    .all<{ guide_id: string }>();
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      "DELETE FROM claim WHERE account_id = ? AND guide_id IN (SELECT id FROM guide WHERE team_id = ?)",
+    ).bind(who.id, team.id),
+    c.env.DB.prepare(
+      "DELETE FROM group_member WHERE account_id = ? AND group_id IN (SELECT id FROM team_group WHERE team_id = ?)",
+    ).bind(who.id, team.id),
+    c.env.DB.prepare("DELETE FROM membership WHERE team_id = ? AND account_id = ?").bind(
+      team.id,
+      who.id,
+    ),
+  ]);
+  if (!leaving)
+    await notify(c.env, { to: who.id, kind: "removed", actor_id: me, team_id: team.id });
+  count(c, leaving ? "member_left" : "member_removed", {});
+  return c.json({ id: who.id, removed: true, released: held.length });
 });
 
 /**
@@ -4069,7 +4167,7 @@ async function adhocGroup(
 
 /** Whether the caller owns the team a handoff or bug belongs to, and so may close it for its author. */
 async function ownsTeam(c: Ctx, row: GuideRow): Promise<boolean> {
-  if (!row.team_id || row.kind === "task") return false;
+  if (!row.team_id) return false;
   const m = await db(c)
     .prepare("SELECT 1 FROM membership WHERE team_id = ? AND account_id = ? AND role = 'owner'")
     .bind(row.team_id, c.get("account"))
@@ -4361,7 +4459,7 @@ app.get("/v1/guides/:id/context", async (c) => {
   return c.json({
     guide: views.get(row.id),
     owner: found.owner,
-    can_close: found.owner ? row.kind !== "task" : await ownsTeam(c, row),
+    admin: !found.owner && (await ownsTeam(c, row)),
     claims: claimRows.map((k) => ({
       place: k.place,
       state: k.state === "review" ? "review" : k.lease_until > at ? "claimed" : "stalled",
@@ -4407,6 +4505,7 @@ app.patch("/v1/guides/:id/status", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
   const { status } = (await c.req.json().catch(() => ({}))) as { status?: string };
+  const author = found.owner || (await ownsTeam(c, found.row));
   // `promoted` is readable and no longer settable, so it is refused by name rather than by being
   // missing from a list — an installed CLI still calls this, and "must be one of ..." would read
   // as a typo rather than as a status that was retired.
@@ -4419,7 +4518,7 @@ app.patch("/v1/guides/:id/status", async (c) => {
     );
   if (!status || !(SETTABLE as readonly string[]).includes(status))
     return err(c, 400, `A guide's status can only be ${SETTABLE.join(", ")}.`);
-  if (!found.owner && !["consumed", "published"].includes(status))
+  if (!author && !["consumed", "published"].includes(status))
     return err(
       c,
       403,
@@ -4428,8 +4527,12 @@ app.patch("/v1/guides/:id/status", async (c) => {
   // A task's status is its place in the queue: published puts it in front of agents and consumed
   // is approval. Both are its author's call, through `ready` and the gate — a teammate marking one
   // consumed would approve work with nobody reading it.
-  if (!found.owner && found.row.kind === "task")
-    return err(c, 403, "Only a task's author moves it: ready, approve, reject or release.");
+  if (!author && found.row.kind === "task")
+    return err(
+      c,
+      403,
+      "Only a task's author, or its team's owner, moves it: ready, approve, reject or release.",
+    );
   const markdown = setField(found.row.markdown, "status", status);
   await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
     .bind(status, markdown, now(), found.row.id)
@@ -4895,6 +4998,7 @@ app.get("/v1/guides/:id/thread", async (c) => {
 app.get("/v1/working", async (c) => {
   const base = origin(c);
   const rows = await claims.working(c.env.DB, c.get("account"), now());
+  const owned = await claims.ownedTeams(c.env.DB, c.get("account"));
   return c.json({
     working: rows.map((r) => ({
       id: r.guide.id,
@@ -4907,7 +5011,8 @@ app.get("/v1/working", async (c) => {
       // Whether the person reading this wrote it. Only an author takes work back, and this is the
       // one view that knows who is holding what — the guide rows know who acknowledged a handoff,
       // which is not the same as who holds the claim.
-      mine: r.guide.account_id === c.get("account"),
+      // A team's owner counts: they can take back, finish or release anyone's in their team.
+      mine: r.guide.account_id === c.get("account") || owned.has(r.guide.team_id),
       by: r.by,
       agent: r.claim.agent_id,
       host: r.claim.host,
@@ -5509,11 +5614,11 @@ app.post("/v1/guides/:id/assign", async (c) => {
           .bind(row.to_group_id, me)
           .first(),
       ));
-  if (!found.owner && !assignee)
+  if (!found.owner && !assignee && !(await ownsTeam(c, row)))
     return err(
       c,
       403,
-      "Only its author, or whoever it is assigned to, can give it to someone else.",
+      "Only its author, the team's owner, or whoever it is assigned to, can give it to someone else.",
     );
   if (!row.team_id)
     return err(
@@ -5820,7 +5925,8 @@ app.post("/v1/guides/:id/send_back", async (c) => {
 app.delete("/v1/guides/:id", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
-  if (!found.owner) return err(c, 403, "Only the author can delete a guide.");
+  if (!found.owner && !(await ownsTeam(c, found.row)))
+    return err(c, 403, "Only the author, or the owner of its team, can delete a guide.");
   // Before the guide, so a failure leaves the guide to try again rather than orphaning its
   // evidence with nothing left pointing at it.
   await dropShots(c, found.row.id);

@@ -11,6 +11,8 @@
 //   verified  someone tried it and it holds up
 //   failed    someone tried it and it does not — the one people need to see today
 //   joined    someone accepted your invite
+//   promoted  a team owner made you an owner of it
+//   removed   a team owner took you out of it
 //
 // And the task queue's, between a task's author and whoever's agent has it (docs/V2.md). Each
 // goes to the other party, so a person working alone hears none of them:
@@ -48,6 +50,8 @@ export const KINDS = [
   "verified",
   "failed",
   "joined",
+  "promoted",
+  "removed",
   "task_claimed",
   "task_finished",
   "task_approved",
@@ -697,6 +701,10 @@ export function line(r: LineFacts): string {
       return `${who} said ${title} didn't work${note}`;
     case "joined":
       return `${who} joined ${team || "your team"}`;
+    case "promoted":
+      return `${who} made you an admin of ${team || "the team"}`;
+    case "removed":
+      return `${who} removed you from ${team || "the team"}`;
     case "shelved":
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
