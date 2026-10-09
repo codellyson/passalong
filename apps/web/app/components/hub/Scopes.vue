@@ -5,8 +5,8 @@
   team's slug in the code face. The slug is what the server stores; the name is what the person
   typed and what everyone calls the team, so that is what this shows.
 
-  The hub's guide list is scoped; `/v1/board` is not, so across all teams the page adds back
-  anything sent to you from outside your teams.
+  Every work list and activity are scoped. `/v1/board` itself is global, so across all teams the
+  page adds back anything sent to you from outside your teams.
 -->
 <script setup lang="ts">
 const { data, scope } = useHub();

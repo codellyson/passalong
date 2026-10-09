@@ -435,6 +435,14 @@ async function myTeams(c: Ctx): Promise<(TeamRow & { role: string })[]> {
   return results.map((t) => asItStands(t, at));
 }
 
+/** Resolve a hub filter once at the boundary, before it reaches any list query. */
+async function workScope(c: Ctx, value: string): Promise<claims.WorkScope | null> {
+  const scope = value.trim() || "all";
+  if (scope === "all" || scope === "mine") return { kind: scope };
+  const team = (await myTeams(c)).find((t) => t.slug === scope);
+  return team ? { kind: "team", id: team.id } : null;
+}
+
 async function teamBySlug(c: Ctx, slug: string): Promise<(TeamRow & { role: string }) | null> {
   const row = await db(c)
     .prepare(
@@ -3346,15 +3354,19 @@ app.get("/v1/billing", (c) =>
 
 app.get("/v1/notifications", async (c) => {
   const account = c.get("account");
+  const requested = c.req.query("scope") || "all";
+  const scope = await workScope(c, requested);
+  if (!scope) return err(c, 404, `You're not in a team called "${requested}".`);
   // `?unread` (bare, or =1) narrows to what you have not seen; absent means the whole feed.
   const flag = c.req.query("unread");
   const rows = await feed(c.env, account, {
     unread: flag !== undefined && flag !== "0" && flag !== "false",
     limit: Number(c.req.query("limit")) || 50,
+    scope,
   });
   return c.json({
     notifications: rows.map(notifSummary),
-    unread: await unreadCount(c.env, account),
+    unread: await unreadCount(c.env, account, scope),
   });
 });
 
@@ -3588,10 +3600,13 @@ app.get("/v1/events", (c) => {
 });
 
 app.post("/v1/notifications/read", async (c) => {
+  const requested = c.req.query("scope") || "all";
+  const scope = await workScope(c, requested);
+  if (!scope) return err(c, 404, `You're not in a team called "${requested}".`);
   const { ids } = (await c.req.json().catch(() => ({}))) as { ids?: number[] };
   const clean = (ids || []).map(Number).filter(Number.isInteger).slice(0, 200);
-  const read = await markRead(c.env, c.get("account"), clean);
-  return c.json({ read, unread: await unreadCount(c.env, c.get("account")) });
+  const read = await markRead(c.env, c.get("account"), clean, scope);
+  return c.json({ read, unread: await unreadCount(c.env, c.get("account"), scope) });
 });
 
 /**
@@ -4958,9 +4973,12 @@ function taskView(
 }
 
 app.get("/v1/tasks", async (c) => {
+  const requested = c.req.query("scope") || "all";
+  const scope = await workScope(c, requested);
+  if (!scope) return err(c, 404, `You're not in a team called "${requested}".`);
   const at = now();
   const me = c.get("account");
-  const rows = await claims.list(c.env.DB, me, at);
+  const rows = await claims.list(c.env.DB, me, at, scope);
   return c.json({
     tasks: rows.map((r) => {
       const base = origin(c);
@@ -5009,8 +5027,11 @@ app.get("/v1/guides/:id/thread", async (c) => {
  * can see. One row per taker — a handoff repeated in two repos is two rows. See claims.working().
  */
 app.get("/v1/working", async (c) => {
+  const requested = c.req.query("scope") || "all";
+  const scope = await workScope(c, requested);
+  if (!scope) return err(c, 404, `You're not in a team called "${requested}".`);
   const base = origin(c);
-  const rows = await claims.working(c.env.DB, c.get("account"), now());
+  const rows = await claims.working(c.env.DB, c.get("account"), now(), scope);
   const owned = await claims.ownedTeams(c.env.DB, c.get("account"));
   return c.json({
     working: rows.map((r) => ({
@@ -5763,8 +5784,11 @@ app.post("/v1/guides/:id/assign", async (c) => {
 
 /** Handoffs and bugs you wrote that somebody handed in, waiting for you to close or send back. */
 app.get("/v1/handed_in", async (c) => {
+  const requested = c.req.query("scope") || "all";
+  const scope = await workScope(c, requested);
+  if (!scope) return err(c, 404, `You're not in a team called "${requested}".`);
   const base = origin(c);
-  const rows = await claims.handedIn(c.env.DB, c.get("account"));
+  const rows = await claims.handedIn(c.env.DB, c.get("account"), scope);
   return c.json({
     handed_in: rows.map((r) => ({
       id: r.guide.id,

@@ -596,15 +596,29 @@ const FEED_SQL = `SELECT n.id, n.kind, n.guide_id, n.actor_id, n.team_id, n.at, 
   LEFT JOIN team t ON t.id = n.team_id
   WHERE n.account_id = ?`;
 
+export type FeedScope = { kind: "all" } | { kind: "mine" } | { kind: "team"; id: string };
+
+const feedScope = (scope: FeedScope, account: string) =>
+  scope.kind === "mine"
+    ? { where: " AND g.account_id = ?", binds: [account] }
+    : scope.kind === "team"
+      ? { where: " AND (n.team_id = ? OR g.team_id = ?)", binds: [scope.id, scope.id] }
+      : { where: "", binds: [] as string[] };
+
 export async function feed(
   env: NotifyEnv,
   account: string,
-  { unread = false, limit = 50 } = {},
+  {
+    unread = false,
+    limit = 50,
+    scope = { kind: "all" },
+  }: { unread?: boolean; limit?: number; scope?: FeedScope } = {},
 ): Promise<Row[]> {
+  const scoped = feedScope(scope, account);
   const { results } = await env.DB.prepare(
-    `${FEED_SQL}${unread ? " AND n.read_at = ''" : ""} ORDER BY n.at DESC LIMIT ?`,
+    `${FEED_SQL}${scoped.where}${unread ? " AND n.read_at = ''" : ""} ORDER BY n.at DESC LIMIT ?`,
   )
-    .bind(account, Math.min(Math.max(limit, 1), 200))
+    .bind(account, ...scoped.binds, Math.min(Math.max(limit, 1), 200))
     .all<Row>();
   return results;
 }
@@ -617,26 +631,43 @@ export async function feedSince(env: NotifyEnv, account: string, since: string):
   return results;
 }
 
-export async function unreadCount(env: NotifyEnv, account: string): Promise<number> {
+export async function unreadCount(
+  env: NotifyEnv,
+  account: string,
+  scope: FeedScope = { kind: "all" },
+): Promise<number> {
+  const scoped = feedScope(scope, account);
   const row = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM notification WHERE account_id = ? AND read_at = ''",
+    `SELECT COUNT(*) AS n FROM notification n LEFT JOIN guide g ON g.id = n.guide_id
+     WHERE n.account_id = ? AND n.read_at = ''${scoped.where}`,
   )
-    .bind(account)
+    .bind(account, ...scoped.binds)
     .first<{ n: number }>();
   return row?.n ?? 0;
 }
 
 /** Mark ids read, or everything unread when no ids are given. Returns how many changed. */
-export async function markRead(env: NotifyEnv, account: string, ids?: number[]): Promise<number> {
+export async function markRead(
+  env: NotifyEnv,
+  account: string,
+  ids?: number[],
+  scope: FeedScope = { kind: "all" },
+): Promise<number> {
   const at = new Date().toISOString();
+  const scoped = feedScope(scope, account);
+  const permitted =
+    scope.kind === "all"
+      ? ""
+      : ` AND id IN (SELECT n.id FROM notification n LEFT JOIN guide g ON g.id = n.guide_id
+       WHERE n.account_id = ?${scoped.where})`;
   const stmt = ids?.length
     ? env.DB.prepare(
         `UPDATE notification SET read_at = ? WHERE account_id = ? AND read_at = ''
-         AND id IN (${ids.map(() => "?").join(",")})`,
-      ).bind(at, account, ...ids)
+         AND id IN (${ids.map(() => "?").join(",")})${permitted}`,
+      ).bind(at, account, ...ids, ...(permitted ? [account, ...scoped.binds] : []))
     : env.DB.prepare(
-        "UPDATE notification SET read_at = ? WHERE account_id = ? AND read_at = ''",
-      ).bind(at, account);
+        `UPDATE notification SET read_at = ? WHERE account_id = ? AND read_at = ''${permitted}`,
+      ).bind(at, account, ...(permitted ? [account, ...scoped.binds] : []));
   const { meta } = await stmt.run();
   return meta.changes ?? 0;
 }

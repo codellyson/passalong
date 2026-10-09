@@ -20,6 +20,13 @@
  * that 404 with no explanation.
  */
 
+const SCOPE_PARAMETER = {
+  name: "scope",
+  in: "query",
+  schema: { type: "string" },
+  description: "`all` (default), `mine`, or a team slug.",
+};
+
 const GUIDE = {
   type: "object",
   description:
@@ -273,12 +280,7 @@ export function openapi(origin: string) {
           summary: "Search guides by words in the title, tags, stack, or body.",
           parameters: [
             { name: "q", in: "query", schema: { type: "string" }, description: "Search words." },
-            {
-              name: "scope",
-              in: "query",
-              schema: { type: "string" },
-              description: "`all` (default), `mine`, or a team slug.",
-            },
+            SCOPE_PARAMETER,
           ],
           responses: guideList,
         },
@@ -625,6 +627,7 @@ export function openapi(origin: string) {
         get: {
           operationId: "working",
           summary: "Who is working on what: every guide somebody holds right now that you can see.",
+          parameters: [SCOPE_PARAMETER],
           responses: {
             200: json200("Most recently heard from first. One row per taker.", {
               type: "object",
@@ -662,6 +665,7 @@ export function openapi(origin: string) {
         get: {
           operationId: "listTasks",
           summary: "Every task you can see, with where it is and who has it.",
+          parameters: [SCOPE_PARAMETER],
           responses: {
             200: {
               description: "Oldest first.",
