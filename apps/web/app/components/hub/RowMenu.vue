@@ -39,7 +39,10 @@ const canJudge = computed(
 /* The menu turns into the picker. */
 /** Yours, or handed to you: either way you may give it to someone else in its team. */
 const canAssign = computed(
-  () => (props.g.mine || Boolean(props.g.for_me)) && Boolean(props.g.team) && !archived.value,
+  () =>
+    (props.g.mine || props.g.manage || Boolean(props.g.for_me)) &&
+    Boolean(props.g.team) &&
+    !archived.value,
 );
 const assigning = ref(false);
 const assignedTo = computed(() =>
@@ -123,7 +126,7 @@ function run(work: () => void) {
         Copy follow-up command
       </button>
 
-      <template v-if="g.mine">
+      <template v-if="g.mine || g.manage">
         <div class="menu-rule" />
         <!-- Above delete, because it is what most people reaching for "remove" actually want:
              the guide out of the way, not gone. It is also how to make room on the free plan

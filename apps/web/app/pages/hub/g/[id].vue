@@ -93,6 +93,9 @@ const writer = computed(() => {
   return { mcp: "the hosted MCP server", hub: "the hub", api: "the API" }[c] || "";
 });
 
+/** Its author, or the owner of its team: either may decide what happens to it. */
+const mayAct = computed(() => Boolean(ctx.value?.owner || ctx.value?.admin));
+
 /** One line saying where the guide stands, before any detail. */
 const standing = computed(() => {
   const c = ctx.value;
@@ -102,6 +105,8 @@ const standing = computed(() => {
   const review = c.claims.filter((k) => k.state === "review").length;
   const held = c.claims.filter((k) => k.state !== "review").length;
   const author = fromName(g.value) || "its author";
+  if (!c.owner && c.admin && review)
+    return `Finished: waiting on ${author}. As the team's owner you can accept it or ask for changes.`;
   if (c.owner && review)
     return `Finished${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting on you to accept it or ask for changes.`;
   // Said to the person who handed it in, in their own terms: it is done on their side, and whose
@@ -167,11 +172,11 @@ const hints = computed(() => {
   const out: string[] = [];
   if (!g.value.mine && !handedInByMe.value)
     out.push("Respond: say whether you are taking it, and later whether it worked.");
-  if (c.owner && holding.value)
+  if ((c.owner || c.admin) && holding.value)
     out.push(
       "Stop this agent: it goes back to waiting and the agent is told to stop. Nothing is deleted.",
     );
-  if (c.owner && g.value.status !== "consumed" && !reviewing.value)
+  if ((c.owner || c.admin) && g.value.status !== "consumed" && !reviewing.value)
     out.push("Archive: moves it off your board. You can unarchive it.");
   return out;
 });
@@ -248,29 +253,21 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <NuxtLink v-if="!g.mine && !handedInByMe" class="btn primary" :to="`/hub/answer/${g.id}`">Respond</NuxtLink>
           <button
-            v-if="ctx.owner && holding"
+            v-if="mayAct && holding"
             class="btn outline warn"
             type="button"
             :disabled="Boolean(busy)"
             @click="takeBack"
           >{{ busy === "release" ? "Stopping…" : "Stop this agent" }}</button>
           <button
-            v-if="ctx.owner && g.status !== 'consumed' && !reviewing"
+            v-if="mayAct && g.status !== 'consumed' && !reviewing"
             class="btn"
             type="button"
             :disabled="Boolean(busy)"
             @click="close"
           >{{ busy === "close" ? "Archiving…" : "Archive" }}</button>
           <button
-            v-if="!ctx.owner && ctx.can_close && g.status !== 'consumed'"
-            class="btn"
-            type="button"
-            :disabled="Boolean(busy)"
-            title="You own this team, so you can close it for its author. They are told."
-            @click="close"
-          >{{ busy === "close" ? "Closing…" : "Close for the team" }}</button>
-          <button
-            v-if="ctx.owner && g.status === 'consumed'"
+            v-if="mayAct && g.status === 'consumed'"
             class="btn"
             type="button"
             :disabled="Boolean(busy)"
@@ -319,7 +316,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             :risk="k.risk"
             @read="read = new Set([...read, k.place])"
           />
-          <div v-if="ctx.owner" class="flex flex-col gap-2">
+          <div v-if="mayAct" class="flex flex-col gap-2">
             <div class="flex flex-wrap gap-2">
               <button
                 class="btn primary sm"

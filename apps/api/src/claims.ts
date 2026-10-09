@@ -354,6 +354,24 @@ const STALE =
   "what you did is still in the worktree, and nothing here was overwritten.";
 
 // A task the account may see: its own, or one shared to a team it is in.
+/** The teams this account owns: the rooms where it may act on anyone's guide. */
+export async function ownedTeams(db: D1Database, account: string): Promise<Set<string>> {
+  const { results } = await db
+    .prepare("SELECT team_id FROM membership WHERE account_id = ? AND role = 'owner'")
+    .bind(account)
+    .all<{ team_id: string }>();
+  return new Set(results.map((r) => r.team_id));
+}
+
+/**
+ * Whoever may decide what happens to a guide: its author, or the owner of its team. An owner is the
+ * one person who can see every hold and every finished task in the room, and was left unable to
+ * clear any of them — a teammate's agent that never handed in stayed on the board until its author
+ * came back. Bind the account as ?2.
+ */
+const MAY_DECIDE = `(account_id = ?2 OR (team_id <> '' AND team_id IN
+  (SELECT team_id FROM membership WHERE account_id = ?2 AND role = 'owner')))`;
+
 const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
   (SELECT team_id FROM membership WHERE account_id = ?1)))`;
 
@@ -767,6 +785,7 @@ export async function working(
       target: string;
       share_key: string;
       account_id: string;
+      team_id: string;
     };
     claim: ClaimRow;
     state: HeldState;
@@ -776,7 +795,8 @@ export async function working(
   const { results } = await db
     .prepare(
       `SELECT c.*, g.title AS g_title, g.kind AS g_kind, g.target AS g_target,
-              g.share_key AS g_share_key, g.account_id AS g_account, g.summary AS g_summary,
+              g.share_key AS g_share_key, g.account_id AS g_account, g.team_id AS g_team,
+              g.summary AS g_summary,
               COALESCE(${ASKING}, '') AS asking,
               (SELECT COUNT(*) FROM task_event r
                 WHERE r.guide_id = c.guide_id AND r.kind IN ('replied', 'noted')
@@ -797,6 +817,7 @@ export async function working(
         g_target: string;
         g_share_key: string;
         g_account: string;
+        g_team: string;
         g_summary: string;
         by_handle: string;
         by_name: string;
@@ -809,6 +830,7 @@ export async function working(
       g_target,
       g_share_key,
       g_account,
+      g_team,
       g_summary,
       by_handle,
       by_name,
@@ -822,6 +844,7 @@ export async function working(
         target: g_target,
         share_key: g_share_key,
         account_id: g_account,
+        team_id: g_team,
       },
       claim,
       state: claim.lease_until > at ? "claimed" : "stalled",
@@ -1346,13 +1369,14 @@ async function authored(
   account: string,
 ): Promise<{ markdown: string; claim: ClaimRow | null } | { error: string; status: 404 }> {
   const g = await db
-    .prepare("SELECT markdown FROM guide WHERE id = ? AND account_id = ? AND kind = 'task'")
+    .prepare(`SELECT markdown FROM guide WHERE id = ?1 AND ${MAY_DECIDE} AND kind = 'task'`)
     .bind(id, account)
     .first<{ markdown: string }>();
   if (!g)
     return {
       status: 404,
-      error: "no such task of yours — only its author decides what happens to it",
+      error:
+        "no such task of yours — only its author, or its team's owner, decides what happens to it",
     };
   return { markdown: g.markdown, claim: await claimOf(db, id) };
 }
@@ -1364,10 +1388,15 @@ async function authoredAnyKind(
   account: string,
 ): Promise<{ markdown: string; kind: string } | { error: string; status: 404 }> {
   const g = await db
-    .prepare("SELECT markdown, kind FROM guide WHERE id = ? AND account_id = ?")
+    .prepare(`SELECT markdown, kind FROM guide WHERE id = ?1 AND ${MAY_DECIDE}`)
     .bind(id, account)
     .first<{ markdown: string; kind: string }>();
-  return g || { status: 404, error: "no such guide of yours — only its author takes it back" };
+  return (
+    g || {
+      status: 404,
+      error: "no such guide of yours — only its author, or its team's owner, takes it back",
+    }
+  );
 }
 
 /** Set `status:` in a document's frontmatter, so the markdown agrees with the column. */
@@ -1416,12 +1445,21 @@ export async function markDone(
   | { error: string; status: 404 | 409 }
 > {
   const g = await db
-    .prepare("SELECT account_id, markdown FROM guide WHERE id = ? AND kind = 'task'")
-    .bind(id)
+    .prepare(
+      `SELECT account_id, markdown FROM guide WHERE id = ?1 AND ${MAY_DECIDE} AND kind = 'task'`,
+    )
+    .bind(id, account)
     .first<{ account_id: string; markdown: string }>();
-  const claim = g ? await claimOf(db, id) : null;
-  const isAuthor = g?.account_id === account;
-  if (!g || (!isAuthor && claim?.account_id !== account))
+  const own = g
+    ? null
+    : await db
+        .prepare("SELECT account_id, markdown FROM guide WHERE id = ? AND kind = 'task'")
+        .bind(id)
+        .first<{ account_id: string; markdown: string }>();
+  const task = g ?? own;
+  const claim = task ? await claimOf(db, id) : null;
+  const isAuthor = Boolean(g);
+  if (!task || (!isAuthor && claim?.account_id !== account))
     return { status: 404, error: "no such task of yours, or none held by your agent" };
   if (!claim || claim.state !== "claimed")
     return {
@@ -1442,15 +1480,16 @@ export async function markDone(
     .bind(evidence, said, at, id);
 
   if (isAuthor) {
-    const line = `${at.slice(0, 10)} marked done by its author while held by ${where}${said ? `: ${said}` : ""}`;
+    const by = task.account_id === account ? "its author" : "its team's owner";
+    const line = `${at.slice(0, 10)} marked done by ${by} while held by ${where}${said ? `: ${said}` : ""}`;
     await db.batch([
       toReview,
       db
         .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
-        .bind(withStatus(withNote(g.markdown, line), "consumed"), at, id),
+        .bind(withStatus(withNote(task.markdown, line), "consumed"), at, id),
     ]);
     await event(db, id, "approved", { account, at, body: said });
-    return { state: "done", claimant: claim.account_id, author: g.account_id };
+    return { state: "done", claimant: claim.account_id, author: task.account_id };
   }
 
   await toReview.run();
@@ -1461,7 +1500,7 @@ export async function markDone(
     body: said || "marked done in the hub",
     at,
   });
-  return { state: "review", claimant: claim.account_id, author: g.account_id };
+  return { state: "review", claimant: claim.account_id, author: task.account_id };
 }
 
 /**
@@ -2135,10 +2174,15 @@ async function authoredGuide(
   account: string,
 ): Promise<{ markdown: string } | { error: string; status: 404 }> {
   const g = await db
-    .prepare("SELECT markdown FROM guide WHERE id = ? AND account_id = ? AND kind <> 'task'")
+    .prepare(`SELECT markdown FROM guide WHERE id = ?1 AND ${MAY_DECIDE} AND kind <> 'task'`)
     .bind(id, account)
     .first<{ markdown: string }>();
-  return g || { status: 404, error: "no such guide of yours — only its author closes it" };
+  return (
+    g || {
+      status: 404,
+      error: "no such guide of yours — only its author, or its team's owner, closes it",
+    }
+  );
 }
 
 /**
