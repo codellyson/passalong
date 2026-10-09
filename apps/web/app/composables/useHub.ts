@@ -524,10 +524,12 @@ function build(queryClient: QueryClient) {
         queryClient.setQueryData<{ tasks: Task[] }>(hubKeys.scopedTasks(scope.value), (old) =>
           old ? { tasks: old.tasks.map((x) => (x.id === t.id ? { ...x, state } : x)) } : old,
         ),
-      [hubKeys.tasks, hubKeys.working],
+      [hubKeys.tasks, hubKeys.working, hubKeys.allGuides, hubKeys.board],
     );
   const onTaskReady = (t: Task) =>
     moveTask(t, "ready", `/v1/guides/${t.id}/status`, json("PATCH", { status: "published" }));
+  const onTaskDraft = (t: Task) =>
+    moveTask(t, "draft", `/v1/guides/${t.id}/status`, json("PATCH", { status: "draft" }));
   /**
    * The author's close on a handoff or bug somebody handed in: accept it, which archives the guide,
    * or send that repo's hand-in back with why. The row leaves the list before the server answers.
@@ -714,6 +716,7 @@ function build(queryClient: QueryClient) {
     onBulk,
     onVerdict,
     onTaskReady,
+    onTaskDraft,
     onApprove,
     onAssign,
     onCloseHandedIn,

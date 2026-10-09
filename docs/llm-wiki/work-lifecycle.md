@@ -29,6 +29,11 @@ teammate's checkout.
 
 Work is not done because whoever did it says so.
 
+- A new task enters **Draft**, including one published over hosted MCP. The author or team owner
+  explicitly makes it Ready after review. Updating a draft's markdown cannot make it Ready; a
+  task awaiting a team decision stays Draft. An unclaimed Ready task can be moved back to Draft
+  from its hub page, while a held task must first be taken back or reviewed.
+
 - A **task** handed in goes to *review*: the author approves it (it becomes `consumed`) or rejects it
   with a reason the next agent reads first — per Acceptance line, in the hub's review pane.
 - A **handoff or bug** handed in waits for the author to close it or send that repo's hand-in back.

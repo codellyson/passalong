@@ -790,7 +790,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "is a spelling that is not one of the three. " +
         "kind: task is work nobody has done yet. It has no Steps: work out how to " +
         "reach Goal within Constraints, leave Out of scope alone, and treat Acceptance as the " +
-        "definition of done. When Acceptance holds, publish_guide a transfer guide about what you " +
+        "definition of done. A new task must say `status: draft`; only a person makes it Ready " +
+        "after review. A proposal awaiting a team decision stays Draft. When Acceptance holds, publish_guide a transfer guide about what you " +
         "did, then hand_in with its id as `report`.\n" +
         "kind: transfer (or no kind: line) is a finished implementation to repeat here. Follow " +
         "its Steps, adapting anything marked ASSUMES to this codebase; run its Verification, then " +
@@ -1254,7 +1255,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "session answers something you hold, hand_in that instead, and if the work never left a " +
         "branch the team can see, publish what is still open as a bug or a task rather than a " +
         "write-up of the fix. A transfer guide, a single bug with " +
-        "`kind: bug`, or a task with `kind: task`. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
+        "`kind: bug`, or a task with `kind: task` and `status: draft` until a person makes it Ready. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
         "is minted and returned. To change a guide, pass the id it came back with; inventing a " +
         "fresh id to retry or to correct one publishes a second copy, and every copy counts " +
         "against the author's synced limit. Created, author and source_context are filled in. " +

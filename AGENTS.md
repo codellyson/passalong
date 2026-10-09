@@ -256,7 +256,11 @@ change. Its README says how.
   against. `blocked_by:` is the one list field only tasks have, so the parser defaults
   `stack_assumptions` and `tags` and nothing else — defaulting it would write `blocked_by: []` into
   every guide anybody re-shares. A blocker counts as finished when a person approved it, never when
-  an agent finished it.
+  an agent finished it. A new task is always `draft`: `PUT /v1/guides/:id` refuses a new task or a
+  draft edit that would put it straight into the queue. Only a person's Ready action (the status
+  route) publishes it. A proposal awaiting a team decision stays Draft; when agreed, the person
+  makes the resulting implementation tasks Ready. An unclaimed Ready task can return to Draft, but
+  one an agent holds must be taken back or reviewed first.
 - **A CLI too old for the server's rules is refused, not warned.** Every CLI call carries
   `x-passalong-version` (`VERSION` in `src/api.js`), and the token branch of the auth middleware
   answers **426** below `MIN_CLIENT` (`apps/api/src/clients.ts`) with the install command and the
