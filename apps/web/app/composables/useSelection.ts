@@ -5,8 +5,8 @@
  * header. It used to be a mode behind a Select button, which pushed every title in when it was
  * switched on and added a bar above the list: the page moved twice for one tick. The box is there
  * from the start, so nothing moves, and the bar that acts on a selection floats over the page once
- * there is one. Rows that are not yours have the box switched off, because only a guide's author can
- * archive or delete it.
+ * there is one. Rows the viewer cannot manage have the box switched off. A team admin can manage
+ * a teammate's guide, as can its author.
  *
  * State is shared through useState so the rows and the bar that acts on them agree without
  * threading a prop through each list.

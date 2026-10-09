@@ -6,17 +6,21 @@
   stop the agent holding it. Approve and send-back stay on the review pane, where the evidence is.
 -->
 <script setup lang="ts">
-import type { Task } from "~/types/hub";
+import type { Guide, Task } from "~/types/hub";
 
 const props = defineProps<{ tasks: Task[] }>();
-const { onRelease, onTaskReady } = useHub();
+const { data, onRelease, onTaskReady } = useHub();
+const previews = computed(
+  () =>
+    new Map<string, Guide["preview_image"]>(data.value.guides.map((g) => [g.id, g.preview_image])),
+);
 const { on, list, setAll } = useSelection();
 const { open } = useThread();
 
 /** The rows whose box can be ticked: only the author may archive or delete. */
 const mineRows = computed(() =>
   props.tasks
-    .filter((t) => t.mine)
+    .filter((t) => t.mine || t.manage)
     .map((t) => ({ id: t.id, title: t.title || "", archived: t.state === "done" })),
 );
 const picked = computed(() => mineRows.value.filter((p) => list.value.some((q) => q.id === p.id)));
@@ -33,8 +37,8 @@ const STATE: Record<Task["state"], { text: string; tone: string }> = {
   review: { text: "handed in, waiting on its author", tone: "text-accent" },
   stalled: { text: "agent went silent", tone: "text-warn" },
   claimed: { text: "being worked on", tone: "text-ok" },
-  ready: { text: "ready for the next agent", tone: "text-muted" },
-  blocked: { text: "blocked", tone: "text-muted" },
+  ready: { text: "ready for the next agent", tone: "text-ok" },
+  blocked: { text: "blocked", tone: "text-warn" },
   draft: { text: "draft", tone: "text-muted" },
   done: { text: "done", tone: "text-muted" },
 };
@@ -60,7 +64,7 @@ function holder(t: Task) {
 }
 
 const canAssign = (t: Task) =>
-  (t.mine || Boolean(t.for_me)) && Boolean(t.team) && t.state !== "done";
+  (t.mine || Boolean(t.manage) || Boolean(t.for_me)) && Boolean(t.team) && t.state !== "done";
 
 /** The one row whose assign picker is open. */
 const assigning = ref("");
@@ -99,8 +103,11 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
       </thead>
       <tbody>
         <tr v-for="t in tasks" :key="t.id">
-          <td><HubSelectBox :id="t.id" :title="t.title" :archived="t.state === 'done'" :mine="t.mine" /></td>
+          <td><HubSelectBox :id="t.id" :title="t.title" :archived="t.state === 'done'" :allowed="Boolean(t.mine || t.manage)" /></td>
           <td class="min-w-40 max-w-[22rem] font-medium md:min-w-60">
+            <div class="flex items-start gap-3">
+              <HubGuideThumbnail :image="previews.get(t.id)" :guide="t.id" :title="t.title || t.id" />
+              <div class="min-w-0 flex-1">
             <NuxtLink :to="`/hub/g/${t.id}`" class="line-clamp-2 text-fg no-underline hover:text-accent">{{ t.title || t.id }}</NuxtLink>
             <!-- What it says and Held by do not fit a narrow screen as columns; they sit under the
                  title there instead, so a phone shows what a desktop does. -->
@@ -108,6 +115,8 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
             <span v-if="holder(t)" class="mt-0.5 block text-xs font-normal text-muted xl:hidden">
               held by <b class="font-medium text-fg">{{ holder(t) }}</b>
             </span>
+            </div>
+            </div>
           </td>
           <td class="hidden max-w-[24rem] text-muted xl:table-cell"><span class="line-clamp-2">{{ t.summary || "—" }}</span></td>
           <td class="md:whitespace-nowrap" :class="STATE[t.state].tone">{{ STATE[t.state].text }}</td>
@@ -127,9 +136,9 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
                 @click.stop="assigning = assigning === t.id ? '' : t.id"
                 @keydown.esc="assigning = ''"
               >Give to…</button>
-              <button v-if="t.mine && t.state === 'draft'" type="button" class="btn sm" @click="onTaskReady(t)">Ready for agents</button>
+              <button v-if="(t.mine || t.manage) && t.state === 'draft'" type="button" class="btn sm" @click="onTaskReady(t)">Ready for agents</button>
               <button
-                v-if="t.mine && held(t)"
+                v-if="(t.mine || t.manage) && held(t)"
                 type="button"
                 class="btn outline warn sm"
                 @click="onRelease(t)"

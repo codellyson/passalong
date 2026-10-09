@@ -139,6 +139,11 @@ test("a guide given to someone else says who has it now", () => {
 
 test("only the author closes a guide, and only while it is on the board", () => {
   assert.equal(closable({ mine: true, status: "published" }), true);
+  assert.equal(
+    closable({ mine: false, manage: true, status: "published" }),
+    true,
+    "a team admin can close it",
+  );
   assert.equal(closable({ mine: false, status: "published" }), false, "a reader cannot close it");
   assert.equal(closable({ mine: true, status: "consumed" }), false, "already off the board");
   assert.equal(closable({ mine: true, status: "draft" }), true, "a draft is still yours to drop");

@@ -82,6 +82,13 @@ Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`wor
 
 ## 9. Positioning
 
+**Added 2026-10-09: project folders.** Some work takes more than one transfer moment. A tutorial
+video, for example, needs a script, screen captures and source material that a person may edit and
+an agent may use across several assignments. A one-level folder holds those Markdown documents and
+assets, with guides linked to the work they ask for. The folder is durable project context; each
+guide still carries one specific handoff, task or bug and keeps its plain-markdown format. Folder
+documents have revisions so a person's and an agent's edits cannot silently overwrite each other.
+
 **What Passalong is not:** a wiki, a docs site, a replacement for `docs/` in a repo, a note-taking app.
 
 **What it competes with in practice:** Slack messages to teammates, messages to self, copy-pasted snippets, and re-prompting agents from scratch.

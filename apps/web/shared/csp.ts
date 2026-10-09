@@ -41,7 +41,9 @@ export const hubHeaders = (nonce: string, dev = false) => ({
     // header doing its job. The build is what ships, and it is checked by scripts/probe.sh.
     `style-src 'self'${dev ? " 'unsafe-inline'" : ""}; ` +
     // `ws:` is the dev server's HMR socket; nothing else on the page opens one.
-    `font-src 'self'; connect-src 'self'${dev ? " ws:" : ""}; img-src 'self'; ` +
+    // Private folder images are fetched with the account's token, then shown from an in-memory
+    // blob URL. The URL never exposes the credential or gives the image a public address.
+    `font-src 'self'; connect-src 'self'${dev ? " ws:" : ""}; img-src 'self' blob:; ` +
     // A guide's page in the hub shows the guide by framing its own share page, which runs no
     // script and carries VIEW_HEADERS. That is the only frame, and it is this origin: the hub never
     // turns a stranger's markdown into its own HTML, because the hub runs script.

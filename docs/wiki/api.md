@@ -54,6 +54,25 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 The hub's `GET /v1/tasks`, `/v1/working` and `/v1/handed_in` accept the same optional `scope`.
 Each narrows in SQL before its row limit; an unknown or inaccessible team slug is a 404.
 
+## Project folders
+
+| Route | Access | Notes |
+| --- | --- | --- |
+| `GET /v1/folders?scope=`, `POST /v1/folders` | account | List visible folders or make one; `team` is optional on creation |
+| `GET /v1/folders/:id` | creator or current team member | Folder metadata, document and asset lists, linked guides |
+| `POST /v1/folders/:id/documents` | folder reader | `{ name, body }` creates a Markdown document |
+| `GET`, `PUT`, `DELETE /v1/folders/:id/documents/:document` | folder reader | Save requires `{ body, version }`; stale version returns 409 |
+| `GET /v1/folders/:id/documents/:document/revisions[/:version]` | folder reader | List and read saved versions |
+| `POST`, `GET`, `DELETE /v1/folders/:id/assets[/:asset]` | folder reader | Raw upload, private download and removal; images, PDFs, ZIPs and text up to 10 MB |
+| `POST /v1/uploads` with `{ folder, name }`, then `PUT /v1/uploads/:token` | folder writer, then one-time link | A sandbox can send a file directly to that folder; the link expires in 10 minutes and works once |
+| `GET /v1/folders/:id/assets/:asset/agent` | folder reader | Bounded image or text for MCP context |
+| `POST /v1/folders/:id/guides`, `DELETE /v1/folders/:id/guides/:guide` | folder reader | Link or unlink a guide without changing it |
+| `DELETE /v1/folders/:id` | creator or team owner | Deletes the folder's documents and assets, never linked guides |
+
+Folders have no nested folders. Their files belong to the folder and are independent of guide
+attachments. A private folder is visible only to its creator; any current member may use a team
+folder. Inaccessible ids answer 404.
+
 ## Bug reports
 
 A bug is a guide with `kind: bug` in its frontmatter, filed through the same `PUT /v1/guides/:id`

@@ -933,6 +933,35 @@ test("approving a task in review makes it done", async () => {
   assert.equal(await stateIn(db, "t1"), "done");
 });
 
+test("a task with an older repo-scoped hand-in can be approved", async () => {
+  const db = d1();
+  seed(db)("t1");
+  db.raw
+    .prepare(`INSERT INTO claim
+      (guide_id, place, account_id, agent_id, state, claimed_at, lease_until, updated)
+      VALUES ('t1', 'o/r', 'other', 'old-agent', 'review', ?, ?, ?)`)
+    .run(T0, later(LEASE_MS), T0);
+  assert.equal(await stateIn(db, "t1"), "review");
+  assert.equal((await approve(db, "t1", { account: "me", at: later(1) })).state, "done");
+  assert.equal(await stateIn(db, "t1"), "done");
+});
+
+test("a task with an older repo-scoped hold cannot be taken twice and can be marked done", async () => {
+  const db = d1();
+  seed(db)("t1");
+  db.raw
+    .prepare(`INSERT INTO claim
+      (guide_id, place, account_id, agent_id, state, claimed_at, lease_until, updated)
+      VALUES ('t1', 'o/r', 'other', 'old-agent', 'claimed', ?, ?, ?)`)
+    .run(T0, later(LEASE_MS), T0);
+  assert.equal((await take(db, "t1", A, { at: T0 })).status, 409);
+  assert.equal(
+    (await markDone(db, "t1", { account: "other", at: later(1), note: "" })).state,
+    "review",
+  );
+  assert.equal(await stateIn(db, "t1"), "review");
+});
+
 test("only the author approves, and only a task in review", async () => {
   const db = await inReview();
   assert.equal((await approve(db, "t1", { account: "other", at: T0 })).status, 404);

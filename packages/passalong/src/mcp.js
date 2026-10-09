@@ -344,6 +344,19 @@ export function buildServer() {
         "the user asks what they have been working on, or wants a standup or a summary of a " +
         "period, call log — but say that it holds what they passed along and not everything they " +
         "did. Gotchas are the highest-value section: record what failed and why.\n" +
+        "FOLDERS ARE REUSABLE PROJECT CONTEXT, NOT GUIDES. When the user asks for a folder for a " +
+        "script, brief, assets or work spanning several guides, call list_folders first to avoid " +
+        "making a duplicate. If none fits, call create_folder with a title and short description. " +
+        "A short request is enough: name it from the person's purpose and draft the first Markdown " +
+        "document with create_folder_document. Do not leave an empty folder or make them fill a form. " +
+        "Pass `team` only when the user wants it shared with that team; use the slug they named " +
+        "or one returned by list_folders, and omit it for a private folder. Use the returned " +
+        "folder id with create_folder_document to add Markdown, get_folder to see its contents, " +
+        "get_folder_document to read text and its version, and save_folder_document with that " +
+        "version when editing. On a stale-version refusal, reread before retrying so another " +
+        "person's work is not lost. Use add_folder_asset for a screenshot or file available on " +
+        "this machine, get_folder_asset to read one already there, and link_folder_guide only " +
+        "when an existing guide uses that folder.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
@@ -502,6 +515,181 @@ export function buildServer() {
     async ({ id, to }) => {
       try {
         return json(await passalong.assign(id, to));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_folders",
+    {
+      title: "List project folders",
+      annotations: READS,
+      description: "Find project folders of documents, assets and guides. Requires sync sign-in.",
+      inputSchema: { scope: z.string().optional().describe('"all", "mine", or a team slug') },
+    },
+    async ({ scope }) => {
+      try {
+        return json(await api.folders(scope || "all"));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "create_folder",
+    {
+      title: "Create project folder",
+      annotations: ADDS,
+      description:
+        "Create a folder for project documents and assets after checking list_folders. Omit team for a private folder; pass a team slug only when sharing was requested.",
+      inputSchema: {
+        title: z.string().describe("Name of the project or body of work"),
+        description: z.string().optional().describe("Short purpose of the folder"),
+        team: z.string().optional().describe("Team slug; omit for a private folder"),
+      },
+    },
+    async ({ title, description, team }) => {
+      try {
+        return json(await api.createFolder(title, description || "", team || ""));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "get_folder",
+    {
+      title: "Open project folder",
+      annotations: READS,
+      description: "List a folder's documents, assets and linked guides.",
+      inputSchema: { folder: z.string() },
+    },
+    async ({ folder }) => {
+      try {
+        return json(await api.folder(folder));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "get_folder_document",
+    {
+      title: "Read folder document",
+      annotations: READS,
+      description: "Read the full Markdown and version before editing it.",
+      inputSchema: { folder: z.string(), document: z.string() },
+    },
+    async ({ folder, document }) => {
+      try {
+        return json(await api.folderDocument(folder, document));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "get_folder_asset",
+    {
+      title: "Read folder asset",
+      annotations: READS,
+      description:
+        "Read an image or small text file from a folder into this agent's context. Other file types stay private downloads.",
+      inputSchema: { folder: z.string(), asset: z.string() },
+    },
+    async ({ folder, asset }) => {
+      try {
+        const file = await api.folderAsset(folder, asset);
+        const { data, text: body, ...meta } = file;
+        return {
+          content: data
+            ? [
+                { type: "text", text: file.name },
+                { type: "image", data, mimeType: file.type },
+              ]
+            : [{ type: "text", text: `${file.name}\n\n${body || ""}` }],
+          structuredContent: meta,
+        };
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "add_folder_asset",
+    {
+      title: "Add file to project folder",
+      annotations: { ...ADDS, openWorldHint: true },
+      description:
+        "Add a screenshot, reference file or other asset from this machine to a folder. Use a real file path you can read; the bytes are uploaded directly, not copied into a guide. Images, PDF, ZIP and text are accepted up to 10 MB.",
+      inputSchema: {
+        folder: z.string().describe("folder id returned by create_folder or list_folders"),
+        file: z.string().describe("path to the file on this machine"),
+        name: z.string().optional().describe("label in the folder; defaults to the filename"),
+      },
+    },
+    async ({ folder, file, name }) => {
+      try {
+        return json(await api.addFolderAsset(folder, file, name || ""));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "create_folder_document",
+    {
+      title: "Write new folder document",
+      annotations: ADDS,
+      description: "Add Markdown such as a brief or script to a folder.",
+      inputSchema: { folder: z.string(), name: z.string(), body: z.string() },
+    },
+    async ({ folder, name, body }) => {
+      try {
+        return json(await api.createFolderDocument(folder, name, body));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "save_folder_document",
+    {
+      title: "Save folder document",
+      annotations: ADDS,
+      description:
+        "Save a new revision. Send the version returned when you read it; a newer edit is refused.",
+      inputSchema: {
+        folder: z.string(),
+        document: z.string(),
+        version: z.number().int().positive(),
+        body: z.string(),
+      },
+    },
+    async ({ folder, document, version, body }) => {
+      try {
+        return json(await api.saveFolderDocument(folder, document, version, body));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "link_folder_guide",
+    {
+      title: "Link guide to folder",
+      annotations: ADDS,
+      description:
+        "Put an existing task or handoff beside the folder documents and assets it uses.",
+      inputSchema: { folder: z.string(), guide: z.string() },
+    },
+    async ({ folder, guide }) => {
+      try {
+        return json(await api.linkFolderGuide(folder, guide));
       } catch (err) {
         return fail(err);
       }

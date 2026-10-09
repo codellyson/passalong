@@ -2565,6 +2565,28 @@ table.rows thead th {
   white-space: nowrap;
 }
 
+/* The guide list keeps its actions and age beside the guide without letting a long value expand
+   the table beyond the hub's reading width. The remaining space belongs to the title. */
+table.rows.guide-rows {
+  table-layout: fixed;
+}
+table.rows.guide-rows th:first-child {
+  width: 3rem;
+}
+table.rows.guide-rows th:nth-child(3) {
+  width: 20%;
+}
+table.rows.guide-rows th:nth-child(4) {
+  width: 5.5rem;
+}
+table.rows.guide-rows th:last-child {
+  width: 12rem;
+}
+table.rows.guide-rows td:last-child > span {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 /* ---- the same list, on a phone, as cards --------------------------------------------------------
    Two or three widths. Below md (768px) a table marked `stack` is a stack of cards: each row has its
    checkbox at the left, its title across the top with what it says and who it went to under it, the

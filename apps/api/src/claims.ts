@@ -488,10 +488,12 @@ export async function next(
   return null;
 }
 
-/** The claim on one task, or null. A task has one place, so at most one claim. */
+/** The claim on one task, or null. Older tasks can retain a repo-scoped claim from before their kind changed. */
 export function claimOf(db: D1Database, id: string): Promise<ClaimRow | null> {
   return db
-    .prepare("SELECT * FROM claim WHERE guide_id = ? AND place = ''")
+    .prepare(
+      "SELECT * FROM claim WHERE guide_id = ? ORDER BY (place = '') DESC, updated DESC LIMIT 1",
+    )
     .bind(id)
     .first<ClaimRow>();
 }
@@ -693,6 +695,18 @@ export async function take(
       status: 400,
       error: `${id} is for ${g.target || "no repo"}, and this agent is in ${repo || "no repo"}`,
     };
+
+  // A guide that became a task while held can still have its older repo-scoped claim. Do not
+  // create a second, empty-place claim beside it; the reviewer must be able to finish the first.
+  if (task) {
+    const old = await db
+      .prepare(
+        "SELECT * FROM claim WHERE guide_id = ? AND place <> '' ORDER BY updated DESC LIMIT 1",
+      )
+      .bind(id)
+      .first<ClaimRow>();
+    if (old) return { status: 409, holder: old, error: `${id} is already taken in ${old.place}` };
+  }
 
   // A handoff sent to a team or a group asks one of them. When a teammate has already said it
   // worked, taking it again is doing the same work twice — the regression waiting to happen — so
@@ -1488,9 +1502,9 @@ export async function markDone(
   const toReview = db
     .prepare(
       `UPDATE claim SET state = 'review', evidence = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
-        WHERE guide_id = ? AND place = '' AND state = 'claimed'`,
+        WHERE guide_id = ? AND place = ? AND state = 'claimed'`,
     )
-    .bind(evidence, said, at, id);
+    .bind(evidence, said, at, id, claim.place);
 
   if (isAuthor) {
     const by = task.account_id === account ? "its author" : "its team's owner";

@@ -134,7 +134,8 @@ async function closeAll() {
     <td colspan="4" class="pb-3">
       <ul class="m-0 list-none rounded-2 bg-surface p-0 py-1">
         <li v-for="r in rows" :key="r.g.id" class="m-0 flex flex-wrap items-center gap-x-4 gap-y-0.5 px-4 py-2 text-sm leading-snug">
-          <HubSelectBox :id="r.g.id" :title="r.g.title" :archived="r.g.status === 'consumed'" :mine="r.g.mine" />
+          <HubSelectBox :id="r.g.id" :title="r.g.title" :archived="r.g.status === 'consumed'" :allowed="Boolean(r.g.manage || r.g.mine)" />
+          <HubGuideThumbnail :image="r.g.preview_image" :guide="r.g.id" :title="r.g.title || 'Untitled bug'" />
           <span class="min-w-0 flex-1 basis-64">
             <span
               class="mr-2 inline-block size-3 rounded-full align-middle"

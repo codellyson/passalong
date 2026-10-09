@@ -5,6 +5,7 @@ Every page, one line each. Start with the overview.
 ## The product
 - [Overview](overview.md) — what Passalong is, who it is for, and the one loop everything serves.
 - [Guides](guides.md) — the unit of work: markdown with frontmatter, in three kinds that each ask something different.
+- [Folders](folders.md) — reusable project context: Markdown, assets and linked guides for people and agents.
 - [Work lifecycle](work-lifecycle.md) — take, progress, hand in, pass: claims, leases, stalls, blocks, and the human gate.
 - [Evidence and proof](evidence-and-proof.md) — why a hand-in needs evidence, why "it works" needs a screenshot, and how long either is kept.
 - [Answers](answers.md) — acks, verdicts and receipts: the reader's words back to the author.

@@ -23,6 +23,10 @@ async function tools() {
 }
 
 const READ_ONLY = [
+  "list_folders",
+  "get_folder",
+  "get_folder_asset",
+  "get_folder_document",
   "search_guides",
   "inbox",
   "board",
@@ -33,6 +37,11 @@ const READ_ONLY = [
   "accounts",
 ];
 const WRITES = [
+  "add_folder_asset",
+  "create_folder",
+  "create_folder_document",
+  "save_folder_document",
+  "link_folder_guide",
   "ask",
   "attach_file",
   "reply",
@@ -90,7 +99,7 @@ test("only the tools that reach outside Passalong say so", async () => {
     .filter(([, t]) => t.annotations.openWorldHint === true)
     .map(([name]) => name);
   // A file on this machine that Passalong did not put there.
-  assert.deepEqual(outside.sort(), ["attach_file", "attach_screenshot"]);
+  assert.deepEqual(outside.sort(), ["add_folder_asset", "attach_file", "attach_screenshot"]);
 });
 
 test("a tool promises a shape only where this server decides the shape", async () => {

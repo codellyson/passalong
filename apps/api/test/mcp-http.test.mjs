@@ -74,21 +74,31 @@ test("every tool it lists is one an agent could act on", async () => {
   const body = await read(res);
   const names = body.result.tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
+    "add_folder_asset",
     "ask",
     "assign",
     "attach_screenshot",
     "board",
+    "create_folder",
+    "create_folder_document",
+    "create_folder_upload",
     "create_upload",
     "file_bugs",
+    "get_folder",
+    "get_folder_asset",
+    "get_folder_document",
     "get_guide",
     "get_report",
     "hand_in",
     "inbox",
+    "link_folder_guide",
+    "list_folders",
     "log",
     "pass",
     "progress",
     "publish_guide",
     "reply",
+    "save_folder_document",
     "search_guides",
     "take",
     "work",
@@ -156,6 +166,34 @@ test("create_upload passes the route's refusal on", async () => {
   );
   assert.equal(body.result.isError, true);
   assert.match(body.result.content[0].text, /Too many upload links/);
+});
+
+test("create_folder_upload scopes a one-time file link to the chosen folder", async () => {
+  const link = `https://passalong.dev/v1/uploads/pa_up_${"c".repeat(32)}`;
+  const { call, seen } = recorder({
+    "POST /v1/uploads": {
+      status: 201,
+      text: JSON.stringify({ upload_url: link, expires: "2026-10-09T12:10:00.000Z" }),
+    },
+  });
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 15,
+        method: "tools/call",
+        params: {
+          name: "create_folder_upload",
+          arguments: { folder: "folder123", name: "screen.png" },
+        },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.deepEqual(seen[0].body, { folder: "folder123", name: "screen.png" });
+  assert.match(body.result.structuredContent.command, /--data-binary @FILE_PATH/);
+  assert.equal(body.result.structuredContent.upload_url, link);
 });
 
 test("a local path passed as a download URL is pointed at create_upload", async () => {
@@ -371,7 +409,18 @@ test("every tool says what it does to the world, so a client does not assume the
       .sort();
   assert.deepEqual(
     by((t) => t.annotations.readOnlyHint),
-    ["board", "get_report", "inbox", "log", "search_guides", "work"],
+    [
+      "board",
+      "get_folder",
+      "get_folder_asset",
+      "get_folder_document",
+      "get_report",
+      "inbox",
+      "list_folders",
+      "log",
+      "search_guides",
+      "work",
+    ],
   );
   assert.deepEqual(
     by((t) => t.annotations.destructiveHint),
@@ -379,7 +428,7 @@ test("every tool says what it does to the world, so a client does not assume the
   );
   assert.deepEqual(
     by((t) => t.annotations.openWorldHint),
-    ["attach_screenshot", "file_bugs", "publish_guide"],
+    ["add_folder_asset", "attach_screenshot", "file_bugs", "publish_guide"],
   );
 });
 
@@ -417,6 +466,35 @@ test("a relayed answer comes back as data as well as text", async () => {
     "fields the schema does not name survive",
   );
   assert.equal(body.result.content[0].text, JSON.stringify(guides));
+});
+
+test("a folder image reaches the agent as an image without putting its bytes in structured metadata", async () => {
+  const { call, seen } = recorder({
+    "GET /v1/folders/folder123/assets/image123/agent": {
+      status: 200,
+      text: JSON.stringify({ id: "image123", name: "screen.png", type: "image/png", data: "cG5n" }),
+    },
+  });
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 77,
+        method: "tools/call",
+        params: { name: "get_folder_asset", arguments: { folder: "folder123", asset: "image123" } },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.equal(seen[0].path, "/v1/folders/folder123/assets/image123/agent");
+  assert.deepEqual(body.result.structuredContent, {
+    id: "image123",
+    name: "screen.png",
+    type: "image/png",
+  });
+  assert.equal(body.result.content[1].type, "image");
+  assert.equal(body.result.content[1].data, "cG5n");
 });
 
 test("a route that answers with something other than an object is a tool error", async () => {
@@ -485,6 +563,41 @@ const attach = (file) =>
     method: "tools/call",
     params: { name: "attach_screenshot", arguments: { file } },
   });
+
+test("add_folder_asset sends attached file bytes to the folder route", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(new Uint8Array([137, 80, 78, 71]), {
+      status: 200,
+      headers: { "content-type": "image/png" },
+    });
+  try {
+    const { call, seen } = recorder({
+      "POST /v1/folders/folder123/assets": {
+        status: 201,
+        text: JSON.stringify({ asset: { id: "asset123", name: "screen.png" } }),
+      },
+    });
+    const body = await read(
+      await handleMcp(
+        rpc({
+          jsonrpc: "2.0",
+          id: 16,
+          method: "tools/call",
+          params: { name: "add_folder_asset", arguments: { folder: "folder123", file: FILE } },
+        }),
+        call,
+        VOCAB,
+      ),
+    );
+    assert.equal(seen[0].path, "/v1/folders/folder123/assets");
+    assert.equal(seen[0].raw.headers["x-file-name"], "shot.png");
+    assert.equal(seen[0].body.byteLength, 4);
+    assert.equal(body.result.structuredContent.asset.id, "asset123");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
 
 test("attach_screenshot declares its file input the way a client looks for it", async () => {
   const { call } = recorder();

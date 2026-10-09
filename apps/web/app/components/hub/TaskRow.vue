@@ -145,7 +145,7 @@ function send() {
   <li
     class="m-0 flex flex-wrap items-start gap-x-4 gap-y-2 bg-raised px-5 py-4 shadow-[inset_0_1px_0_var(--line)] first:rounded-t-[var(--r-3)] first:shadow-none last:rounded-b-[var(--r-3)]"
   >
-    <HubSelectBox :id="t.id" :title="t.title" :archived="t.state === 'done'" :mine="t.mine" />
+    <HubSelectBox :id="t.id" :title="t.title" :archived="t.state === 'done'" :allowed="Boolean(t.mine || t.manage)" />
     <div class="min-w-0 flex-1 basis-72">
       <p class="m-0 flex flex-wrap items-baseline gap-x-2">
         <span

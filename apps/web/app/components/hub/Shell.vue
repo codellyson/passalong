@@ -142,6 +142,7 @@ const nearLimit = computed(() => {
 // One page for all work, whatever its kind (docs/V2.md §11): tasks and handoffs used to be two.
 const tabs = [
   { to: "/hub", label: "Work" },
+  { to: "/hub/folders", label: "Folders" },
   { to: "/hub/log", label: "Your log" },
   { to: "/hub/settings", label: "Settings" },
 ];
@@ -152,7 +153,9 @@ const active = (to: string) =>
     ? route.path === "/hub" ||
       route.path.startsWith("/hub/answer") ||
       route.path.startsWith("/hub/report")
-    : route.path === to;
+    : to === "/hub/folders"
+      ? route.path.startsWith("/hub/folders")
+      : route.path === to;
 </script>
 
 <template>

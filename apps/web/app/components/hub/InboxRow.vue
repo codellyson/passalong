@@ -70,8 +70,11 @@ const who = computed(() => {
   <!-- A row of the guides table (GuideTable.vue). The answer a row asks for opens in a row of its
        own beneath it, as a failed verdict always has. -->
   <tr>
-    <td><HubSelectBox :id="g.id" :title="g.title" :archived="g.status === 'consumed'" :mine="g.mine" /></td>
+    <td><HubSelectBox :id="g.id" :title="g.title" :archived="g.status === 'consumed'" :allowed="Boolean(g.manage || g.mine)" /></td>
     <td class="min-w-52 max-w-[22rem]">
+      <div class="flex items-start gap-3">
+        <HubGuideThumbnail :image="g.preview_image" :guide="g.id" :title="g.title || 'Untitled guide'" />
+        <div class="min-w-0 flex-1">
       <NuxtLink :to="`/hub/g/${g.id}`" class="line-clamp-2 font-medium text-fg no-underline hover:text-accent">{{ g.title || "Untitled guide" }}</NuxtLink>
       <!-- A word under the title only where it tells rows apart: a bug or a task among handoffs, a
            guide that follows another, one that has follow-ups. "transfer" was on nearly every row and
@@ -105,6 +108,8 @@ const who = computed(() => {
           :title="expiry.why"
         >{{ expiry.text }}</span>
       </span>
+      </div>
+      </div>
     </td>
     <td :class="TONE[status.tone] || 'text-muted'">{{ status.text || "—" }}</td>
     <td class="whitespace-nowrap text-muted tabular-nums">{{ rel(g.created) }}</td>

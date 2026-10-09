@@ -59,6 +59,8 @@ export interface Guide {
   title: string | null;
   /** What it says to a person, a sentence or two. Empty on a guide from before summaries. */
   summary?: string;
+  /** First available image in the guide, served by Passalong on this origin. */
+  preview_image?: { url: string; alt: string } | null;
   /** When its proof screenshots are deleted, or "". Only on a closed guide that has some. */
   proof_expires?: string;
   /** When it is archived for want of anybody touching it, or "". Only on a sent guide nobody has. */
@@ -216,6 +218,8 @@ export interface Task {
   created: string;
   /** You wrote it, so ready, approve, reject and release are yours. */
   mine: boolean;
+  /** You wrote it or administer its team, so you may manage it. */
+  manage?: boolean;
   /** The team it is in, by slug; empty when it is in none. */
   team?: string;
   /** Who it is for: "@handle", "#group", or empty for anyone in the team. */
