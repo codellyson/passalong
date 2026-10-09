@@ -48,8 +48,11 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `GET /v1/billing` | account — which providers are configured and in which mode. Never a key |
 | `POST /v1/billing/webhook/:provider` | **none** — the signature over the raw body is the credential. `stripe` or `paystack`; anything else is 404. 200 with `applied: false` for an event we do not act on or a subscription we do not know |
 | `GET /v1/log?repo=&since=&limit=` | account | Your own acts, newest first. `since` is a date prefix (`2026`, `2026-09`, `2026-09-11`) and anything else is a 400 |
-| `GET /v1/notifications?unread=` | account | |
-| `POST /v1/notifications/read` | account | `{ ids? }` — everything unread when `ids` is omitted |
+| `GET /v1/notifications?unread=&scope=` | account | `scope=all` (default), `mine`, or a team slug. The unread count follows the same scope. |
+| `POST /v1/notifications/read?scope=` | account | `{ ids? }` — everything unread in the selected scope when `ids` is omitted |
+
+The hub's `GET /v1/tasks`, `/v1/working` and `/v1/handed_in` accept the same optional `scope`.
+Each narrows in SQL before its row limit; an unknown or inaccessible team slug is a 404.
 
 ## Bug reports
 

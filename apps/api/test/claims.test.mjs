@@ -46,7 +46,7 @@ import {
   thread,
   working,
 } from "../src/claims.ts";
-import { line, notify } from "../src/notify.ts";
+import { feed, line, markRead, notify, unreadCount } from "../src/notify.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
@@ -106,6 +106,66 @@ function seed(db) {
 const PROOF = "npm test -w apps/api → 41 pass, 0 fail";
 const A = { account: "me", agent: "agent-a", repo: "o/r" };
 const B = { account: "me", agent: "agent-b", repo: "o/r" };
+
+test("hub scope filters tasks, holds, hand-ins and activity before counting", async () => {
+  const db = d1();
+  const guide = seed(db);
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES
+    ('ta', 'alpha', 'Alpha', 'me', '${T0}'), ('tb', 'beta', 'Beta', 'me', '${T0}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES
+    ('ta', 'me', '${T0}'), ('tb', 'me', '${T0}');`);
+  for (const id of ["personal", "alpha-task", "beta-task"]) guide(id);
+  for (const id of ["alpha-handoff", "beta-handoff"]) guide(id, { kind: "transfer" });
+  db.raw.exec(`UPDATE guide SET team_id = 'ta' WHERE id LIKE 'alpha-%';
+    UPDATE guide SET team_id = 'tb' WHERE id LIKE 'beta-%';`);
+  const claim = db.raw.prepare(`INSERT INTO claim
+    (guide_id, account_id, agent_id, state, claimed_at, lease_until, updated)
+    VALUES (?, 'other', ?, ?, ?, ?, ?)`);
+  for (const team of ["alpha", "beta"]) {
+    claim.run(`${team}-task`, `${team}-agent`, "claimed", T0, later(LEASE_MS), T0);
+    claim.run(`${team}-handoff`, `${team}-handoff-agent`, "review", T0, later(LEASE_MS), T0);
+  }
+  const alpha = { kind: "team", id: "ta" };
+  const beta = { kind: "team", id: "tb" };
+  assert.deepEqual(
+    (await list(db, "me", T0, alpha)).map((r) => r.task.id),
+    ["alpha-task"],
+  );
+  assert.deepEqual(
+    (await list(db, "me", T0, beta)).map((r) => r.task.id),
+    ["beta-task"],
+  );
+  assert.deepEqual(
+    (await list(db, "me", T0, { kind: "mine" })).map((r) => r.task.id),
+    ["alpha-task", "beta-task", "personal"],
+  );
+  assert.deepEqual(
+    (await working(db, "me", T0, alpha)).map((r) => r.guide.id),
+    ["alpha-task"],
+  );
+  assert.deepEqual(
+    (await handedIn(db, "me", alpha)).map((r) => r.guide.id),
+    ["alpha-handoff"],
+  );
+  assert.deepEqual(
+    (await handedIn(db, "me", beta)).map((r) => r.guide.id),
+    ["beta-handoff"],
+  );
+
+  const notice = db.raw.prepare(`INSERT INTO notification
+    (account_id, kind, guide_id, team_id, at) VALUES ('me', 'shared', ?, ?, ?)`);
+  notice.run("alpha-task", "ta", T0);
+  notice.run("beta-task", "tb", later(1));
+  const env = { DB: db };
+  assert.deepEqual(
+    (await feed(env, "me", { scope: alpha })).map((r) => r.guide_id),
+    ["alpha-task"],
+  );
+  assert.equal(await unreadCount(env, "me", alpha), 1);
+  await markRead(env, "me", undefined, alpha);
+  assert.equal(await unreadCount(env, "me", alpha), 0);
+  assert.equal(await unreadCount(env, "me", beta), 1, "reading Alpha leaves Beta unread");
+});
 
 test("two agents asking at once never get the same task", async () => {
   const db = d1();

@@ -13,3 +13,4 @@ source it came from.
 - 2026-10-08 — auth: `passalong login` signs in from the browser (device flow: /v1/device/*, /device page); `--email` keeps the password prompts. Source: branch feat/browser-login.
 - 2026-10-08 — guides: the two auto-clean clocks are shown on rows and the guide page, and `keep_forever` (Settings → Clean-up) turns them off. Source: branch feat/retention-countdown.\n
 - 2026-10-08 — auth: the CLI keeps several accounts (`login --new`, `accounts`, `use`, `logout`, `--as`, `use_account`); an agent is refused until the person says which. Source: branch feat/accounts.
+- 2026-10-09 — hub: the scope picker now covers every work list and activity; counts wait for those lists, and failures are shown. Source: apps/api/src/claims.ts, notify.ts and apps/web/app/composables/useHub.ts.

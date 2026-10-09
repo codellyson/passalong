@@ -9,7 +9,7 @@
   open is the part the board does not already say.
 -->
 <script setup lang="ts">
-const { data, readAll } = useHub();
+const { data, failed, readAll, load } = useHub();
 
 const activity = computed(() => data.value.activity);
 
@@ -49,6 +49,9 @@ const urlFor = (id: string | null) =>
 </script>
 
 <template>
+  <section v-if="failed.notifications" class="mb-6 border-t border-line pt-4 font-ui text-sm text-muted">
+    Activity could not load. <button type="button" class="linkish" @click="load()">Try again</button>
+  </section>
   <section v-if="activity.length" class="mb-6 border-t border-line pt-4">
     <div class="flex flex-wrap items-baseline justify-between gap-3">
       <h2 class="m-0 font-ui text-xs font-semibold uppercase tracking-widest text-muted">

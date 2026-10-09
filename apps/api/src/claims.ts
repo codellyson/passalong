@@ -104,6 +104,15 @@ export function evidenceProblem(text: string): string | null {
  */
 export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "review" | "done";
 
+/** A hub list's selected scope. The API resolves team slugs to a membership-checked id. */
+export type WorkScope = { kind: "all" } | { kind: "mine" } | { kind: "team"; id: string };
+
+function scopedGuide(scope: WorkScope, account: string): { sql: string; binds: string[] } {
+  if (scope.kind === "mine") return { sql: " AND g.account_id = ?", binds: [account] };
+  if (scope.kind === "team") return { sql: " AND g.team_id = ?", binds: [scope.id] };
+  return { sql: "", binds: [] };
+}
+
 /**
  * One Acceptance line, and what the agent ran for it. See migrations/0028_evidence_checks.sql.
  *
@@ -774,6 +783,7 @@ export async function working(
   db: D1Database,
   account: string,
   at: string,
+  scope: WorkScope = { kind: "all" },
 ): Promise<
   {
     guide: {
@@ -792,6 +802,7 @@ export async function working(
     by: { handle: string; name: string; you: boolean };
   }[]
 > {
+  const scoped = scopedGuide(scope, account);
   const { results } = await db
     .prepare(
       `SELECT c.*, g.title AS g_title, g.kind AS g_kind, g.target AS g_target,
@@ -806,10 +817,10 @@ export async function working(
          FROM claim c
          JOIN guide g ON g.id = c.guide_id
          LEFT JOIN account a ON a.id = c.account_id
-        WHERE c.state = 'claimed' AND ${VISIBLE}
+        WHERE c.state = 'claimed' AND ${VISIBLE}${scoped.sql}
         ORDER BY c.lease_until DESC LIMIT 200`,
     )
-    .bind(account)
+    .bind(account, ...scoped.binds)
     .all<
       ClaimRow & {
         g_title: string;
@@ -1280,6 +1291,7 @@ export async function list(
   db: D1Database,
   account: string,
   at: string,
+  scope: WorkScope = { kind: "all" },
 ): Promise<
   {
     task: Omit<TaskRow, "markdown"> & {
@@ -1299,6 +1311,7 @@ export async function list(
     by: { handle: string; name: string; you: boolean } | null;
   }[]
 > {
+  const scoped = scopedGuide(scope, account);
   const [tasks, claims] = await Promise.all([
     db
       .prepare(
@@ -1311,9 +1324,9 @@ export async function list(
            LEFT JOIN team t ON t.id = g.team_id
            LEFT JOIN account ta ON ta.id = g.to_account_id AND g.to_account_id <> ''
            LEFT JOIN team_group tg ON tg.id = g.to_group_id AND g.to_group_id <> ''
-          WHERE g.kind = 'task' AND ${VISIBLE} ORDER BY g.created, g.id LIMIT 200`,
+          WHERE g.kind = 'task' AND ${VISIBLE}${scoped.sql} ORDER BY g.created, g.id LIMIT 200`,
       )
-      .bind(account)
+      .bind(account, ...scoped.binds)
       .all<
         Omit<TaskRow, "markdown"> & {
           share_key: string;
@@ -2126,6 +2139,7 @@ export async function thread(db: D1Database, id: string, viewer: string): Promis
 export async function handedIn(
   db: D1Database,
   account: string,
+  scope: WorkScope = { kind: "all" },
 ): Promise<
   {
     guide: { id: string; title: string; kind: string; share_key: string };
@@ -2134,6 +2148,7 @@ export async function handedIn(
     worked: boolean;
   }[]
 > {
+  const scoped = scopedGuide(scope, account);
   const { results } = await db
     .prepare(
       `SELECT c.*, g.title AS g_title,
@@ -2143,10 +2158,10 @@ export async function handedIn(
          FROM claim c
          JOIN guide g ON g.id = c.guide_id
          LEFT JOIN account a ON a.id = c.account_id
-        WHERE c.state = 'review' AND g.kind <> 'task' AND g.account_id = ?
+        WHERE c.state = 'review' AND g.kind <> 'task' AND g.account_id = ?${scoped.sql}
         ORDER BY c.updated DESC LIMIT 100`,
     )
-    .bind(account)
+    .bind(account, ...scoped.binds)
     .all<
       ClaimRow & {
         g_title: string;
