@@ -523,6 +523,19 @@ export async function assign(ref, to) {
   return r;
 }
 
+/**
+ * Take back something you sent: it is private again and gone from every inbox it was in. Refused
+ * while somebody is on it. Whoever already opened it keeps what they pulled. The local copy is
+ * dropped so the next read shows it without the address.
+ */
+export async function recall(ref) {
+  needsSync("taking a guide back");
+  const id = await resolveId(ref);
+  const r = await api.recall(id);
+  store.remove(id);
+  return r;
+}
+
 /** Not this agent's to do: what it held is open again, and `why` goes to whoever is next. */
 export async function pass(id, why, { cwd = process.cwd() } = {}) {
   needsSync("passing work");

@@ -2008,7 +2008,7 @@ app.get("/v1/teams/:slug/groups", async (c) => {
      FROM team_group g
      LEFT JOIN group_member gm ON gm.group_id = g.id
      LEFT JOIN account a ON a.id = gm.account_id
-     WHERE g.team_id = ? ORDER BY g.slug, a.handle`,
+     WHERE g.team_id = ? AND g.slug NOT LIKE '~%' ORDER BY g.slug, a.handle`,
   )
     .bind(team.id)
     .all<{ id: string; slug: string; name: string; created: string; handle: string }>();
@@ -2043,7 +2043,9 @@ app.post("/v1/teams/:slug/groups", async (c) => {
   // spellings of one group is two addresses that look like one.
   const wanted = tag(body.slug ?? "");
   if (!wanted) return err(c, 400, "Give the group a name using letters, numbers and dashes.");
-  const { n } = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM team_group WHERE team_id = ?")
+  const { n } = (await c.env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM team_group WHERE team_id = ? AND slug NOT LIKE '~%'",
+  )
     .bind(team.id)
     .first<{ n: number }>()) ?? { n: 0 };
   if (n >= 20) return err(c, 400, "A team can have up to 20 groups. Remove one to add another.");
@@ -3689,7 +3691,11 @@ app.put("/v1/guides/:id", async (c) => {
         400,
         "To send a guide to a person or a group, also say which team it's in (team: in the frontmatter).",
       );
-    if (raw.startsWith("#")) {
+    if (/[,\s]/.test(raw)) {
+      const many = await adhocGroup(c, team, raw);
+      if ("error" in many) return err(c, 400, many.error);
+      toGroup = many.group;
+    } else if (raw.startsWith("#")) {
       const wanted = tag(raw.slice(1));
       toGroup = await c.env.DB.prepare(
         "SELECT id, slug, name FROM team_group WHERE slug = ? AND team_id = ?",
@@ -4084,6 +4090,80 @@ app.put("/v1/guides/:id", async (c) => {
     existing ? 200 : 201,
   );
 });
+
+/**
+ * `to: @ada,@bola` — several named people on one guide.
+ *
+ * Kept as a group the team never sees: its slug starts with `~`, which a person cannot type into a
+ * group name (`tag()` drops it), and is a hash of who is in it, so the same people always resolve to
+ * the same group and re-publishing an unchanged address is not a new event. Everything that reads a
+ * group — the inbox, who may answer, who is told — then works for it as it is.
+ */
+const ADHOC_MAX = 10;
+async function adhocGroup(
+  c: Ctx,
+  team: { id: string; name: string },
+  raw: string,
+): Promise<
+  { group: { id: string; slug: string; name: string }; accounts: string[] } | { error: string }
+> {
+  const handles = [
+    ...new Set(
+      raw
+        .split(/[\s,]+/)
+        .map((h) => h.replace(/^@/, "").toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+  if (handles.length < 2) return { error: "Name at least two people, like @ada,@bola." };
+  if (handles.length > ADHOC_MAX)
+    return {
+      error: `Up to ${ADHOC_MAX} people on one guide. For more, ask the team owner for a group.`,
+    };
+  const people: { id: string; handle: string }[] = [];
+  for (const handle of handles) {
+    const person = await c.env.DB.prepare(
+      `SELECT a.id, a.handle FROM account a JOIN membership m ON m.account_id = a.id
+        WHERE (a.handle = ?1 OR (a.handle = '' AND a.id = ?1)) AND m.team_id = ?2`,
+    )
+      .bind(handle, team.id)
+      .first<{ id: string; handle: string }>();
+    if (!person)
+      return { error: `@${handle} isn't in ${team.name}. Check the handle, or invite them first.` };
+    people.push(person);
+  }
+  const ids = people.map((p) => p.id).sort();
+  const slug = `~${(await sha256(`${team.id}:${ids.join(",")}`)).slice(0, 10)}`;
+  const name = people
+    .map((p) => `@${p.handle || p.id}`)
+    .sort()
+    .join(", ");
+  let group = await c.env.DB.prepare(
+    "SELECT id, slug, name FROM team_group WHERE slug = ? AND team_id = ?",
+  )
+    .bind(slug, team.id)
+    .first<{ id: string; slug: string; name: string }>();
+  if (!group) {
+    const id = rid(12);
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        "INSERT INTO team_group (id, team_id, slug, name, created) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+      ).bind(id, team.id, slug, name, now()),
+      ...ids.map((a) =>
+        c.env.DB.prepare(
+          "INSERT INTO group_member (group_id, account_id) SELECT id, ? FROM team_group WHERE slug = ? AND team_id = ? ON CONFLICT DO NOTHING",
+        ).bind(a, slug, team.id),
+      ),
+    ]);
+    group = await c.env.DB.prepare(
+      "SELECT id, slug, name FROM team_group WHERE slug = ? AND team_id = ?",
+    )
+      .bind(slug, team.id)
+      .first<{ id: string; slug: string; name: string }>();
+  }
+  if (!group) return { error: "Could not address those people. Try again." };
+  return { group, accounts: ids };
+}
 
 /** Whether the caller owns the team a handoff or bug belongs to, and so may close it for its author. */
 async function ownsTeam(c: Ctx, row: GuideRow): Promise<boolean> {
@@ -5556,7 +5636,14 @@ app.post("/v1/guides/:id/assign", async (c) => {
   let person: { id: string; handle: string } | null = null;
   let group: { id: string; slug: string } | null = null;
   let accounts: string[] | null = null;
-  if (raw.startsWith("#")) {
+  let label = "";
+  if (/[,\s]/.test(raw)) {
+    const many = await adhocGroup(c, team, raw);
+    if ("error" in many) return err(c, 400, many.error);
+    group = many.group;
+    accounts = many.accounts;
+    label = many.group.name;
+  } else if (raw.startsWith("#")) {
     group = await c.env.DB.prepare("SELECT id, slug FROM team_group WHERE slug = ? AND team_id = ?")
       .bind(tag(raw.slice(1)), team.id)
       .first<{ id: string; slug: string }>();
@@ -5582,7 +5669,7 @@ app.post("/v1/guides/:id/assign", async (c) => {
   // A teammate who never chose an @name is addressed by their account id, which is what the
   // frontmatter then says: every path that reads `to:` resolves either.
   const address = person ? `@${person.handle || person.id}` : "";
-  const label = person ? address : group ? `#${group.slug}` : `everyone in ${team.name}`;
+  label ||= person ? address : group ? `#${group.slug}` : `everyone in ${team.name}`;
   const at = now();
 
   const dropped = await claims.dropOutside(c.env.DB, row.id, {
@@ -5617,7 +5704,11 @@ app.post("/v1/guides/:id/assign", async (c) => {
   const markdown = person
     ? setField(md, "to", address)
     : group
-      ? setField(md, "to", `#${group.slug}`)
+      ? setField(
+          md,
+          "to",
+          group.slug.startsWith("~") ? label.replace(/, /g, ",") : `#${group.slug}`,
+        )
       : dropField(md, "to");
   await c.env.DB.prepare(
     "UPDATE guide SET markdown = ?, to_account_id = ?, to_group_id = ?, updated = ? WHERE id = ?",
@@ -5650,7 +5741,7 @@ app.post("/v1/guides/:id/assign", async (c) => {
   count(c, "guide_reassigned", { to: person ? "person" : group ? "group" : "team" });
   return c.json({
     id: row.id,
-    to: person ? address : group ? `#${group.slug}` : "",
+    to: person ? address : group ? (group.slug.startsWith("~") ? label : `#${group.slug}`) : "",
     taken_back: dropped.length,
   });
 });
@@ -5759,6 +5850,52 @@ app.post("/v1/guides/:id/close", async (c) => {
     });
   count(c, "handoff_closed", {});
   return c.json({ id, state: "done" });
+});
+
+/**
+ * Take back something you sent: it goes private again, and leaves every inbox it was in.
+ *
+ * Its author only, and only while nobody is on it — a hold is somebody's work in progress, and
+ * pulling the guide out from under them is what "Stop this agent" is for, with its warning. Anyone
+ * who already opened it keeps what they pulled; there is no taking that back, and the answer says so
+ * rather than promising it. Tasks are not recalled: they sit in the team's queue, and archiving one
+ * is how it leaves.
+ */
+app.post("/v1/guides/:id/recall", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const row = found.row;
+  if (!found.owner) return err(c, 403, "Only the person who sent it can take it back.");
+  if (row.kind === "task")
+    return err(c, 400, "A task is in the team's queue, not in anyone's inbox. Archive it instead.");
+  if (!row.team_id)
+    return err(c, 400, "It was never sent to anyone, so there is nothing to take back.");
+  if (row.status === "consumed") return err(c, 400, "It is archived already.");
+  const holder = await c.env.DB.prepare(
+    `SELECT COALESCE(a.handle, '') AS handle FROM claim c LEFT JOIN account a ON a.id = c.account_id
+      WHERE c.guide_id = ? LIMIT 1`,
+  )
+    .bind(row.id)
+    .first<{ handle: string }>();
+  if (holder)
+    return err(
+      c,
+      409,
+      `${holder.handle ? `@${holder.handle}` : "Somebody"} is on it. Stop them first, then take it back.`,
+    );
+  const pulled = await c.env.DB.prepare(
+    "SELECT COUNT(DISTINCT account_id) AS n FROM pull WHERE guide_id = ? AND account_id <> ?",
+  )
+    .bind(row.id, row.account_id)
+    .first<{ n: number }>();
+  const markdown = dropField(dropField(row.markdown, "to"), "team");
+  await c.env.DB.prepare(
+    "UPDATE guide SET markdown = ?, team_id = '', to_account_id = '', to_group_id = '', updated = ? WHERE id = ?",
+  )
+    .bind(markdown, now(), row.id)
+    .run();
+  count(c, "guide_recalled", {});
+  return c.json({ id: row.id, recalled: true, already_opened_by: pulled?.n ?? 0 });
 });
 
 /** Turn one repo's hand-in down, with why: it is open there again, and its taker is told. */

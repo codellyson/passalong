@@ -26,7 +26,8 @@
 //   passalong hub                 open your synced guides in the browser
 //   passalong take <id>           you are doing it — said before the work, so the sender stops guessing
 //   passalong pass <id> <why>     it is not yours — hands it back to its author with your reason
-//   passalong assign <id> <to>    give it to @handle, a #group, or "team" — yours, or assigned to you
+//   passalong assign <id> <to>    give it to @handle (or several: @ada @bola), a #group, or "team" — yours, or assigned to you
+//   passalong recall <id>         take back something you sent: private again, gone from their inboxes
 //   passalong admin create <email>   make an account that runs Passalong (owner only)
 //   passalong admin list          who runs it
 //   passalong admin grant|revoke <@handle>   make an existing account an admin, or stop it being one
@@ -668,10 +669,18 @@ const commands = {
 
   async assign(f) {
     const id = f._[0] || die('usage: passalong assign <id> <@handle | #group | team>');
-    const to = f._[1] || die('say who: @handle for one person, #group, or "team" for everyone');
+    const to = f._.slice(1).join(",") || die('say who: @handle (or several), #group, or "team" for everyone');
     const r = await passalong.assign(id, to).catch((e) => die(e.message));
     const back = r.taken_back ? ` — taken back from ${r.taken_back} who had it, and they were told` : "";
     console.error(`${r.id} is now for ${r.to || "everyone in the team"}${back}`);
+  },
+
+  async recall(f) {
+    const id = f._[0] || die("usage: passalong recall <id>");
+    const r = await passalong.recall(id).catch((e) => die(e.message));
+    console.error(`${r.id} is private again, and gone from their inboxes`);
+    if (r.already_opened_by)
+      console.error(`${r.already_opened_by} ${r.already_opened_by === 1 ? "person" : "people"} had already opened it, and keep what they pulled`);
   },
 
   // ---- who runs the product ---------------------------------------------------------------

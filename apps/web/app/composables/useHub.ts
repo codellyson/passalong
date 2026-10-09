@@ -545,6 +545,15 @@ function build(queryClient: QueryClient) {
       hubKeys.handedIn,
     ]);
 
+  /** Take back something you sent: private again, and gone from the inboxes it was in. */
+  const onRecall = (g: Guide) =>
+    change(() => api(`/v1/guides/${g.id}/recall`, json("POST")), () => {}, [
+      hubKeys.allGuides,
+      hubKeys.board,
+      hubKeys.working,
+      hubKeys.handedIn,
+    ]);
+
   const onCloseHandedIn = (h: HandedIn) =>
     change(
       () => api(`/v1/guides/${h.id}/close`, json("POST")),
@@ -664,6 +673,7 @@ function build(queryClient: QueryClient) {
     onApprove,
     onAssign,
     onCloseHandedIn,
+    onRecall,
     onSendBackHandedIn,
     onReject,
     onRelease,

@@ -1044,7 +1044,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       outputSchema: assignOut,
       description:
         "Reassign a guide or task the user wrote, or one assigned to them, to someone else in its team, when the user asks: " +
-        "`to` is @handle for one person, #group for the people who do a thing, or empty for the " +
+        '`to` is @handle for one person, "@ada,@bola" for several named people, #group for the people who do a thing, or empty for the ' +
         "whole team. Whoever held it and is left out has it taken back and is told; a task then " +
         "only goes to the new assignee's agents. Its author, or whoever it is assigned to, can do this.",
       inputSchema: {
@@ -1646,7 +1646,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         to: z
           .string()
           .optional()
-          .describe("team slug, team/@handle for one teammate, or team/#group for a set of them"),
+          .describe(
+            "team slug, team/@handle for one teammate, team/@ada,@bola for several named teammates, or team/#group for a set of them",
+          ),
         issues: z
           .array(
             z.object({
