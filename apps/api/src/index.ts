@@ -135,6 +135,7 @@ import {
   summaryProblem,
   tag,
   tagList,
+  taskPublishProblem,
   unheldFields,
   unreachableImages,
 } from "./guide.js";
@@ -3913,6 +3914,9 @@ app.put("/v1/guides/:id", async (c) => {
   if (!["task", "bug", "transfer"].includes(said))
     return err(c, 400, `"${said}" is not a kind. Use \`task\`, \`bug\` or \`transfer\`.`);
 
+  const taskGate = taskPublishProblem(said, status, existing?.status);
+  if (taskGate) return err(c, 409, taskGate);
+
   /**
    * What it says to a person. Required of every new guide, and refused by name when absent, like the
    * kind above, and here for the same reason: this runs for every client whatever version it is on.
@@ -4533,6 +4537,15 @@ app.patch("/v1/guides/:id/status", async (c) => {
       403,
       "Only a task's author, or its team's owner, moves it: ready, approve, reject or release.",
     );
+  // Moving an occupied task to Draft would hide it from the queue while its agent still held a
+  // live claim. The author has Stop this agent for that transition.
+  if (found.row.kind === "task" && status === "draft") {
+    const held = await c.env.DB.prepare("SELECT 1 FROM claim WHERE guide_id = ? LIMIT 1")
+      .bind(found.row.id)
+      .first();
+    if (held)
+      return err(c, 409, "Stop the agent or review its hand-in before moving this task to Draft.");
+  }
   const markdown = setField(found.row.markdown, "status", status);
   await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
     .bind(status, markdown, now(), found.row.id)

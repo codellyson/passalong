@@ -14,6 +14,7 @@ import {
   split,
   tag,
   tagList,
+  taskPublishProblem,
   unreachableImages,
 } from "../src/guide.ts";
 
@@ -49,6 +50,16 @@ test("parseMeta mirrors the CLI parser for strings and lists", () => {
     stack_assumptions: [],
     kind: "",
   });
+});
+
+test("a task enters the queue only after a separate Ready action", () => {
+  assert.match(taskPublishProblem("task", "published"), /must be Draft/);
+  assert.match(taskPublishProblem("task", "consumed"), /must be Draft/);
+  assert.match(taskPublishProblem("task", "published", "draft"), /separate action/);
+  assert.match(taskPublishProblem("task", "published", "consumed"), /separate action/);
+  assert.equal(taskPublishProblem("task", "draft"), "");
+  assert.equal(taskPublishProblem("task", "published", "published"), "");
+  assert.equal(taskPublishProblem("bug", "published"), "");
 });
 
 test("setField replaces an existing field in place", () => {

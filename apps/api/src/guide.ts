@@ -28,6 +28,16 @@ export type Status = (typeof STATUSES)[number];
  * the guides already carrying the status.
  */
 export const SETTABLE = ["draft", "published", "consumed"] as const;
+
+/** A task enters the agent queue only through the author's explicit Ready action. */
+export function taskPublishProblem(kind: string, status: string, previousStatus?: string): string {
+  if (kind !== "task") return "";
+  if (!previousStatus && status !== "draft")
+    return "A new task must be Draft. Publish it with `status: draft`, let the person review it, then use Ready to put it in the agent queue.";
+  if (previousStatus && status !== previousStatus)
+    return "Changing a task's status needs a separate action from the person. Keep its current status in the document, then use Ready, Move to Draft, or the review controls in the hub.";
+  return "";
+}
 export type Settable = (typeof SETTABLE)[number];
 
 /**

@@ -298,7 +298,8 @@ export function buildServer() {
         "is a spelling that is not one of the three. " +
         `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
         "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
-        "alone, and treat Acceptance as the definition of done. hand_in with `markdown`: a " +
+        "alone, and treat Acceptance as the definition of done. New tasks say `status: draft`; " +
+        "a proposal awaiting a team decision stays Draft until a person makes it Ready. hand_in with `markdown`: a " +
         "transfer guide about what you did (guide_template kind transfer shows the shape) — its " +
         "author reviews it against Acceptance.\n" +
         `kind: transfer (or no kind: line) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +

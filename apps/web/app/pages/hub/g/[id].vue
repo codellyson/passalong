@@ -30,6 +30,8 @@ const {
   onCloseGuide,
   onRecall,
   onArchive,
+  onTaskReady,
+  onTaskDraft,
 } = useHub();
 
 const { data, isPending, error } = useQuery({
@@ -175,6 +177,8 @@ const recallable = computed(
 );
 const reopen = () =>
   run("reopen", async () => g.value && (await onArchive(g.value as Guide, false)));
+const taskReady = () => run("ready", () => onTaskReady({ id: id.value } as Task));
+const taskDraft = () => run("draft", () => onTaskDraft({ id: id.value } as Task));
 
 /** One line for each button whose name alone does not say what it does. */
 const hints = computed(() => {
@@ -189,6 +193,8 @@ const hints = computed(() => {
     );
   if ((c.owner || c.admin) && g.value.status !== "consumed" && !reviewing.value)
     out.push("Archive: moves it off your board. You can unarchive it.");
+  if (mayAct.value && isTask.value && g.value.status === "published" && !c.claims.length)
+    out.push("Move to Draft: keep it visible for review, but stop agents from taking it.");
   return out;
 });
 
@@ -263,6 +269,20 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <NuxtLink v-if="!g.mine && !handedInByMe" class="btn primary" :to="`/hub/answer/${g.id}`">Respond</NuxtLink>
+          <button
+            v-if="mayAct && isTask && g.status === 'draft'"
+            class="btn primary"
+            type="button"
+            :disabled="Boolean(busy)"
+            @click="taskReady"
+          >{{ busy === "ready" ? "Making ready…" : "Ready for agents" }}</button>
+          <button
+            v-if="mayAct && isTask && g.status === 'published' && !ctx.claims.length"
+            class="btn"
+            type="button"
+            :disabled="Boolean(busy)"
+            @click="taskDraft"
+          >{{ busy === "draft" ? "Moving…" : "Move to Draft" }}</button>
           <button
             v-if="mayAct && holding"
             class="btn outline warn"
