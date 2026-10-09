@@ -14,7 +14,7 @@ everything else on stderr, so `ID=$(passalong share draft.md)` works.
 - `passalong setup` installs the Claude Code capture skill, the MCP server and hooks. The skill
   tells an agent to state a guide's kind and use a folder for continuing project material.
 - **Too old is refused, not warned.** Every call carries `x-passalong-version`; below `MIN_CLIENT`
-  (currently 0.15.0) the API answers 426 with the install command. An agent never reads stderr, so
+  (currently 0.16.0) the API answers 426 with the install command. An agent never reads stderr, so
   the refusal is the one text it is sure to see. Raise the floor only after that version is
   `latest` on npm. The package release is staged by CI and requires a maintainer's npm approval.
 
