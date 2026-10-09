@@ -28,6 +28,7 @@ const {
   onSendBackHandedIn,
   onTakeBack,
   onCloseGuide,
+  onRecall,
   onArchive,
 } = useHub();
 
@@ -157,6 +158,16 @@ function sendBack(k: ContextClaim, e: Event) {
 
 const takeBack = () => run("release", () => onTakeBack({ id: id.value } as Working));
 const close = () => run("close", async () => g.value && (await onCloseGuide(g.value as Guide)));
+const recall = () => run("recall", async () => g.value && (await onRecall(g.value as Guide)));
+/** Sent to somebody, still unanswered, with nobody on it: the one moment taking it back makes sense. */
+const recallable = computed(
+  () =>
+    Boolean(ctx.value?.owner) &&
+    Boolean(g.value?.team) &&
+    g.value?.kind !== "task" &&
+    g.value?.status !== "consumed" &&
+    !ctx.value?.claims.length,
+);
 const reopen = () =>
   run("reopen", async () => g.value && (await onArchive(g.value as Guide, false)));
 
@@ -269,6 +280,14 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             title="You own this team, so you can close it for its author. They are told."
             @click="close"
           >{{ busy === "close" ? "Closing…" : "Close for the team" }}</button>
+          <button
+            v-if="recallable"
+            class="btn"
+            type="button"
+            :disabled="Boolean(busy)"
+            title="Make it private again. It leaves everyone's inbox; anyone who already opened it keeps what they pulled."
+            @click="recall"
+          >{{ busy === "recall" ? "Taking back…" : "Take back" }}</button>
           <button
             v-if="ctx.owner && g.status === 'consumed'"
             class="btn"

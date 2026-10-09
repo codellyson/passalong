@@ -43,7 +43,13 @@ const canAssign = computed(
 );
 const assigning = ref(false);
 const assignedTo = computed(() =>
-  props.g.to ? `@${props.g.to}` : props.g.to_group ? `#${props.g.to_group}` : "",
+  props.g.to
+    ? `@${props.g.to}`
+    : props.g.to_group?.startsWith("~")
+      ? props.g.to_group_name || ""
+      : props.g.to_group
+        ? `#${props.g.to_group}`
+        : "",
 );
 
 function shut() {

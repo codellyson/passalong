@@ -58,6 +58,8 @@ const who = computed(() => {
   if (!x.mine) return { lead: "from", name: fromName(x) || "someone", team: team.value };
   if (!x.team) return null;
   if (x.to) return { lead: "to", name: toName(x), team: team.value };
+  if (x.to_group?.startsWith("~"))
+    return { lead: "to", name: x.to_group_name || "", team: team.value };
   if (x.to_group)
     return { lead: "to the", name: `${x.to_group_name || x.to_group} group`, team: team.value };
   return { lead: "to", name: team.value, team: "" };
