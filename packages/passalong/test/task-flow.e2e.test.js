@@ -1570,7 +1570,7 @@ test("an image held as bytes attaches, and answers the check it was taken for", 
   assert.equal(row.state, "review", "a shown check is evidence");
 });
 
-test("the server refuses a guide that does not say what it is", { skip }, async () => {
+test("the server requires a kind and keeps a new task in Draft until Ready", { skip }, async () => {
   // The load-bearing half. The CLI parser no longer seeds `transfer`, but a client on any older
   // version still publishes documents with no `kind:` line — and the row used to coerce whatever
   // arrived into transfer. That is how 162 of 200 real guides were stored as transfers while their
@@ -1602,7 +1602,13 @@ test("the server refuses a guide that does not say what it is", { skip }, async 
   assert.equal(wrong.status, 400, "and so is a spelling that is not a kind");
   assert.match((await wrong.json()).message, /is not a kind/);
 
-  // And a stated one is stored exactly as stated, not folded into transfer.
+  const premature = await put(
+    `---\ntitle: Not reviewed\nsummary: Said to a person for the test.\nkind: task\nstatus: published\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
+  );
+  assert.equal(premature.status, 409, "a new task cannot bypass the human Ready action");
+  assert.match((await premature.json()).message, /must be Draft/);
+
+  // And a stated task is stored exactly as stated, then a person moves it to Ready.
   const id = rid();
   const ok = await fetch(`${API}/v1/guides/${id}`, {
     method: "PUT",
@@ -1612,10 +1618,25 @@ test("the server refuses a guide that does not say what it is", { skip }, async 
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      markdown: `---\ntitle: Says so\nsummary: Said to a person for the test.\nkind: task\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
+      markdown: `---\ntitle: Says so\nsummary: Said to a person for the test.\nkind: task\nstatus: draft\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
     }),
   });
   assert.equal(ok.status, 201);
-  assert.deepEqual(await rows(`SELECT kind FROM guide WHERE id = '${id}'`), [{ kind: "task" }]);
+  assert.deepEqual(await rows(`SELECT kind, status FROM guide WHERE id = '${id}'`), [
+    { kind: "task", status: "draft" },
+  ]);
+  const ready = await fetch(`${API}/v1/guides/${id}/status`, {
+    method: "PATCH",
+    headers: {
+      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+      "x-passalong-version": VERSION,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ status: "published" }),
+  });
+  assert.equal(ready.status, 200);
+  assert.deepEqual(await rows(`SELECT kind, status FROM guide WHERE id = '${id}'`), [
+    { kind: "task", status: "published" },
+  ]);
   assert.ok(env);
 });
