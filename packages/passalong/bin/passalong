@@ -50,6 +50,8 @@
 //   passalong team invite [email] make an invite link (mailed when an email is given)
 //   passalong team join <link|code>  accept an invite
 //   passalong team use <slug>     switch the current team
+//   passalong team promote|demote <@handle>  make a teammate an admin, or a member again
+//   passalong team remove <@handle>  take a teammate out; `team leave` leaves yourself
 //   passalong setup               install the Claude Code capture skill, MCP server and hooks
 //   passalong now                 what this worktree holds and what is waiting (the hooks call --hook)
 //   passalong mcp                 run the MCP server over stdio
@@ -901,7 +903,7 @@ const commands = {
       const t = await api.team(cfg.team).catch((e) => die(e.message));
       console.log(`${t.name} (${t.slug}) — ${t.members.length} member${t.members.length === 1 ? "" : "s"}, ${t.guides} guide${t.guides === 1 ? "" : "s"}`);
       for (const m of t.members)
-        console.log(`  ${m.handle ? `@${m.handle}` : "(no handle)"}${m.name ? `  ${m.name}` : ""}  ${m.role}  joined ${relDate(m.joined)}`);
+        console.log(`  ${m.handle ? `@${m.handle}` : "(no handle)"}${m.name ? `  ${m.name}` : ""}  ${m.role === "owner" ? "admin" : m.role}  joined ${relDate(m.joined)}`);
       return;
     }
     if (sub === "create") {
@@ -934,6 +936,22 @@ const commands = {
       if (who && !who.handle) console.error("teammates address you by handle: passalong me --handle <you>");
       return;
     }
+    if (sub === "promote" || sub === "demote") {
+      const slug = cfg.team || die("no current team — passalong team use <slug>");
+      const who = rest[0] || die(`usage: passalong team ${sub} <@handle>`);
+      const r = await api.setMemberRole(slug, who, sub === "promote" ? "admin" : "member").catch((e) => die(e.message));
+      console.error(`${who.startsWith("@") ? who : `@${who}`} is ${r.role === "admin" ? "an admin" : "a member"} of ${slug}${sub === "promote" ? " — they are told" : ""}`);
+      return;
+    }
+    if (sub === "remove" || sub === "leave") {
+      const slug = cfg.team || die("no current team — passalong team use <slug>");
+      const me = sub === "leave" ? (await api.me().catch((e) => die(e.message))).account : "";
+      const who = sub === "leave" ? me : rest[0] || die("usage: passalong team remove <@handle>");
+      const r = await api.removeMember(slug, who).catch((e) => die(e.message));
+      console.error(sub === "leave" ? `you left ${slug}` : `${who.startsWith("@") ? who : `@${who}`} is out of ${slug}${r.released ? `; ${r.released} hold${r.released === 1 ? "" : "s"} of theirs went back to waiting` : ""}`);
+      if (sub === "leave") api.setTeam("");
+      return;
+    }
     if (sub === "use") {
       const slug = rest[0] || die("usage: passalong team use <slug>");
       await api.team(slug).catch((e) => die(e.message));
@@ -941,7 +959,7 @@ const commands = {
       console.error(`current team: ${slug}`);
       return;
     }
-    die("usage: passalong team [create <name> | invite [email] | join <link> | use <slug>]");
+    die("usage: passalong team [create <name> | invite [email] | join <link> | use <slug> | promote <@handle> | demote <@handle> | remove <@handle> | leave]");
   },
 
   async setup() {
