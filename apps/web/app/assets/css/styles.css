@@ -2566,13 +2566,13 @@ table.rows thead th {
 }
 
 /* ---- the same list, on a phone, as cards --------------------------------------------------------
-   Three widths. Below md (768px) a table marked `stack` is a stack of cards: each row has its
+   Two or three widths. Below md (768px) a table marked `stack` is a stack of cards: each row has its
    checkbox at the left, its title across the top with what it says and who it went to under it, the
-   state and the age under that, and its buttons last. From md to xl (1280px) it is a compact table
-   of five columns, the summary and the person sitting under the title. From xl it is the whole
-   table. A card stretched across a tablet looked half empty, and the whole table needs about
-   1100px: the guides table measured 1055px against a 961px card at a 1024px screen.
-   The cells the compact table moves under the title carry `hidden xl:table-cell`, which is kept
+   state and the age under that, and its buttons last. From md, guide lists keep five columns:
+   the summary and recipient sit under the title because the hub's 70rem cap cannot fit their
+   columns beside long states and actions. Task lists use their wider columns from xl (1280px).
+   A card stretched across a tablet looked half empty.
+   The cells a task table moves under the title carry `hidden xl:table-cell`, which is kept
    here by name because a class selector cannot out-rank the rules below. Opt in with `stack` on
    the table; the first cell is the checkbox and the second is the title. */
 @media (max-width: 47.99rem) {
