@@ -23,7 +23,11 @@ export const CLIENT_HEADER = "x-passalong-version";
  * deploys on merge, and a floor above what npm hands out refuses every agent with nothing it can
  * install to get past it.
  *
- * 0.15.0 since it went `latest` on 2026-10-08. Older CLIs file a bug or task for nobody when no
+ * 0.16.0 adds agent-first folders and updates the installed MCP and capture instructions. An
+ * older stdio server has no folder tools, and a cached instruction can lead an agent to the old
+ * guide rules. Require an install and server restart after 0.16.0 is live on npm.
+ *
+ * Before that, 0.15.0 since it went `latest` on 2026-10-08. Older CLIs file a bug or task for nobody when no
  * `--to` is given, so a member of a team records issues the team never sees; 0.15.0 sends them to
  * the current team.
  *
@@ -36,7 +40,7 @@ export const CLIENT_HEADER = "x-passalong-version";
  * version, and the first whose follow-up note stopped telling agents to publish what they found as
  * a new guide.
  */
-export const MIN_CLIENT = "0.15.0";
+export const MIN_CLIENT = "0.16.0";
 
 /**
  * What a CLI that sends no version is counted as: the last release that did not send one.
