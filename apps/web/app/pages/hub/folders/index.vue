@@ -10,7 +10,8 @@ usePage({
 const { api, data, scope, signedIn } = useHub();
 const folders = ref<Folder[]>([]);
 const selected = ref<string[]>([]);
-const movingTo = ref("root");
+const moveOpen = ref(false);
+const moveMenu = ref<HTMLElement | null>(null);
 const actionBusy = ref(false);
 const colorChoices = [
   { value: "", label: "Neutral" },
@@ -29,7 +30,13 @@ const rows = computed(() => {
     siblings.push(folder);
     children.set(parent, siblings);
   }
-  const result: { folder: Folder; depth: number; color: string }[] = [];
+  const result: {
+    folder: Folder;
+    depth: number;
+    color: string;
+    parent: string;
+    childCount: number;
+  }[] = [];
   const seen = new Set<string>();
   function add(parent: string, depth: number, inheritedColor = "") {
     for (const folder of (children.get(parent) || []).sort((a, b) =>
@@ -38,13 +45,35 @@ const rows = computed(() => {
       if (seen.has(folder.id)) continue;
       seen.add(folder.id);
       const color = folder.color || inheritedColor;
-      result.push({ folder, depth, color });
+      result.push({
+        folder,
+        depth,
+        color,
+        parent,
+        childCount: children.get(folder.id)?.length || 0,
+      });
       add(folder.id, depth + 1, color);
     }
   }
   add("", 0);
   return result;
 });
+// Collapsed by default, so a deep tree costs nothing until somebody opens it.
+const expanded = ref(new Set<string>());
+const visibleRows = computed(() => {
+  const shown = new Set([""]);
+  return rows.value.filter((row) => {
+    if (!shown.has(row.parent)) return false;
+    if (expanded.value.has(row.folder.id)) shown.add(row.folder.id);
+    return true;
+  });
+});
+function toggleOpen(id: string) {
+  const next = new Set(expanded.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  expanded.value = next;
+}
 const selectedFolders = computed(() =>
   selected.value
     .map((id) => folderById.value.get(id))
@@ -73,15 +102,24 @@ const moveOptions = computed(() => {
       parent = folderById.value.get(parent)?.parent_id || "";
     }
   }
+  // Folders only move within one space, so a selection spanning two can only go to the top.
   const scopeKey = selectedRoots.value[0]?.team_id || "";
+  const oneSpace = selectedRoots.value.every((folder) => folder.team_id === scopeKey);
+  // A destination every selected folder is already in would move nothing, so it says so.
+  const here = (parent: string) =>
+    selectedRoots.value.every((folder) => folder.parent_id === parent);
   return [
-    { value: "root", label: "Top level" },
-    ...rows.value
-      .filter(({ folder }) => folder.team_id === scopeKey && !blocked.has(folder.id))
-      .map(({ folder, depth }) => ({
-        value: folder.id,
-        label: `${"  ".repeat(depth)}${folder.title}`,
-      })),
+    { value: "", title: "Top level", depth: 0, here: here("") },
+    ...(oneSpace
+      ? rows.value
+          .filter(({ folder }) => folder.team_id === scopeKey && !blocked.has(folder.id))
+          .map(({ folder, depth }) => ({
+            value: folder.id,
+            title: folder.title,
+            depth,
+            here: here(folder.id),
+          }))
+      : []),
   ];
 });
 const scopeOptions = computed(() => [
@@ -118,8 +156,20 @@ async function load() {
 
 watch([signedIn, scope], load, { immediate: true });
 watch(selected, () => {
-  movingTo.value = "root";
+  moveOpen.value = false;
 });
+
+async function moveTo(parent: string) {
+  moveOpen.value = false;
+  await changeSelected({ parent });
+}
+
+/** A menu that stays open behind you is worse than no menu. */
+function onDocument(event: MouseEvent) {
+  if (moveOpen.value && !moveMenu.value?.contains(event.target as Node)) moveOpen.value = false;
+}
+onMounted(() => document.addEventListener("click", onDocument));
+onBeforeUnmount(() => document.removeEventListener("click", onDocument));
 
 function toggle(id: string) {
   selected.value = selected.value.includes(id)
@@ -210,14 +260,21 @@ async function deleteSelected() {
     <p v-if="trouble" role="alert" class="rounded-2 border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">{{ trouble }}</p>
     <p v-if="busy" class="empty">Loading folders…</p>
     <template v-else-if="!trouble">
-      <div v-if="folders.length" class="overflow-hidden rounded-3 bg-surface-raised shadow-edge">
-        <div v-for="({ folder, depth, color }, index) in rows" :key="folder.id" class="folder-row flex items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0, 'is-selected': selected.includes(folder.id) }" :data-color="color || 'neutral'" :style="{ '--folder-depth': Math.min(depth, 8), '--folder-hue': color ? `var(--folder-${color})` : 'var(--muted)' }">
-          <label class="flex shrink-0 items-center"><input class="size-4 accent-[var(--accent)]" type="checkbox" :checked="selected.includes(folder.id)" :aria-label="`Select ${folder.title}`" @change="toggle(folder.id)" /></label>
+      <div v-if="folders.length" class="folder-list overflow-hidden rounded-3 bg-surface-raised shadow-edge" :class="{ picking: selected.length }">
+        <div v-for="({ folder, depth, color, childCount }, index) in visibleRows" :key="folder.id" class="folder-row flex items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0, 'is-selected': selected.includes(folder.id) }" :style="{ '--folder-depth': depth, '--folder-hue': color ? `var(--folder-${color})` : 'var(--muted)' }">
+          <span v-if="depth" class="folder-rails shrink-0" aria-hidden="true" />
+          <button v-if="childCount" class="folder-toggle flex size-6 shrink-0 items-center justify-center rounded-1 text-muted hover:bg-field hover:text-fg" type="button" :aria-expanded="expanded.has(folder.id)" :aria-label="`${expanded.has(folder.id) ? 'Hide' : 'Show'} subfolders of ${folder.title}`" @click="toggleOpen(folder.id)">
+            <svg class="folder-toggle-chevron size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+          <span v-else class="size-6 shrink-0" aria-hidden="true" />
+          <span class="folder-slot relative grid size-5 shrink-0 place-items-center">
+            <svg class="folder-icon size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
+            <label class="folder-pick absolute inset-0 grid place-items-center"><input class="size-4 accent-[var(--accent)]" type="checkbox" :checked="selected.includes(folder.id)" :aria-label="`Select ${folder.title}`" @change="toggle(folder.id)" /></label>
+          </span>
           <NuxtLink :to="`/hub/folders/${folder.id}`" class="folder-row-link flex min-w-0 flex-1 items-center gap-3 text-fg no-underline">
-            <svg class="folder-icon size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
             <span class="min-w-0 flex-1"><span class="block truncate font-ui text-sm font-medium">{{ folder.title }}</span><span v-if="folder.description" class="block truncate font-ui text-xs text-muted">{{ folder.description }}</span></span>
           </NuxtLink>
-          <span class="hidden font-ui text-xs text-muted sm:block">{{ folder.documents || 0 }} docs · {{ folder.assets || 0 }} files</span>
+          <span class="hidden font-ui text-xs text-muted sm:block">{{ folder.documents || 0 }} docs · {{ folder.assets || 0 }} files<template v-if="childCount"> · {{ childCount }} {{ childCount === 1 ? "subfolder" : "subfolders" }}</template></span>
           <span class="hidden min-w-20 text-right font-ui text-xs text-muted md:block">{{ folder.team_name || "Private" }}</span>
         </div>
       </div>
@@ -231,8 +288,28 @@ async function deleteSelected() {
             <button v-for="choice in colorChoices" :key="choice.label" class="folder-color-choice size-7 rounded-full" :data-color="choice.value || 'neutral'" type="button" :disabled="actionBusy" :aria-label="`Set ${choice.label.toLowerCase()} color`" :title="choice.label" @click="colorSelected(choice.value)" />
           </div>
           <div class="ml-auto flex flex-wrap items-center gap-2">
-            <AppSelect v-model="movingTo" class="min-w-40" label="Move selected folders into" :options="moveOptions" />
-            <button class="btn sm" type="button" :disabled="actionBusy || (movingTo !== 'root' && (selectedRoots.some((folder) => folder.team_id !== selectedRoots[0]?.team_id) || !moveOptions.some((option) => option.value === movingTo)))" @click="changeSelected({ parent: movingTo === 'root' ? '' : movingTo })">Move</button>
+            <div ref="moveMenu" class="relative" @keydown.esc="moveOpen = false">
+              <button class="btn sm" type="button" :disabled="actionBusy" aria-haspopup="menu" :aria-expanded="moveOpen" @click="moveOpen = !moveOpen">
+                Move to…
+                <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              </button>
+              <div v-if="moveOpen" class="menu folder-move-menu" role="menu" aria-label="Move selected folders to">
+                <button
+                  v-for="option in moveOptions"
+                  :key="option.value || 'root'"
+                  class="menu-item justify-between"
+                  type="button"
+                  role="menuitem"
+                  :disabled="option.here"
+                  :style="{ paddingLeft: `calc(var(--s-2) + ${option.depth} * var(--s-4))` }"
+                  @click="moveTo(option.value)"
+                >
+                  <span class="truncate">{{ option.title }}</span>
+                  <span v-if="option.here" class="shrink-0 text-xs text-muted">Already here</span>
+                </button>
+                <p v-if="moveOptions.length === 1" class="menu-note">Folders from different spaces can only move to the top level together.</p>
+              </div>
+            </div>
             <button class="btn sm outline danger" type="button" :disabled="actionBusy || !selectedRoots.every((folder) => Boolean(folder.manage))" @click="deleteSelected">Delete</button>
           </div>
         </div>
@@ -258,19 +335,35 @@ async function deleteSelected() {
   --folder-blue: #669bd8;
   --folder-violet: #a585d6;
 }
-.folder-row {
-  position: relative;
-  padding-left: calc(var(--s-4) + var(--folder-depth) * var(--s-5));
+.folder-row { position: relative; }
+/* One rail per level, 16px apart, under the chevron of each ancestor: depth reads as lines, not as a slant. */
+.folder-rails {
+  align-self: stretch;
+  width: calc(var(--folder-depth) * var(--s-4));
+  margin: calc(-1 * var(--s-3)) calc(-1 * var(--s-3)) calc(-1 * var(--s-3)) 0;
+  background: repeating-linear-gradient(to right, transparent 0 11px, var(--line-strong) 11px 12px, transparent 12px var(--s-4));
 }
-.folder-row::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--folder-hue);
-  content: "";
-}
-.folder-row[data-color="neutral"]::before { background: transparent; }
+.folder-move-menu { max-height: 18rem; overflow-y: auto; }
+.folder-move-menu .menu-item:disabled { cursor: default; color: var(--muted); background: transparent; }
+.folder-toggle { border: 0; background: transparent; cursor: pointer; }
+.folder-toggle:active { scale: 0.96; }
+.folder-toggle-chevron { rotate: -90deg; transition: rotate 150ms ease; }
+.folder-toggle[aria-expanded="true"] .folder-toggle-chevron { rotate: 0deg; }
 .folder-row.is-selected { background: var(--field); }
+/* The checkbox stands in for the folder icon, so it costs no space of its own: it shows on hover,
+   on focus, while anything is selected, and always on a touch screen. */
+.folder-pick, .folder-icon { transition: opacity 120ms ease; }
+.folder-pick { opacity: 0; }
+.folder-row:hover .folder-pick,
+.folder-pick:focus-within,
+.folder-list.picking .folder-pick { opacity: 1; }
+.folder-row:hover .folder-icon,
+.folder-slot:focus-within .folder-icon,
+.folder-list.picking .folder-icon { opacity: 0; }
+@media (hover: none) {
+  .folder-pick { opacity: 1; }
+  .folder-icon { opacity: 0; }
+}
 .folder-row-link:hover { color: var(--accent); }
 .folder-icon { color: var(--folder-hue); }
 .folder-color-choice { border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--line-strong); background: var(--folder-hue); cursor: pointer; }

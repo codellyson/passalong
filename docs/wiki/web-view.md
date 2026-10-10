@@ -81,8 +81,10 @@ it would hide the fact that nobody can tell whether it worked.
 
 It is a link, not a toggle, because these pages run no script.
 
-`marked` lives in the server util rather than the page, so it never enters the client bundle of a
-page that ships no client bundle.
+The Markdown pipeline (remark with GFM and GitHub's alerts, in `server/utils/guide-html.ts`) lives in
+the server util rather than the page, so it never enters the client bundle of a page that ships no
+client bundle. Raw HTML in a guide passes through unsanitised, as it did under `marked`: the policy,
+not a sanitiser, is what keeps it inert.
 
 ## The hub
 

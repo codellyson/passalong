@@ -357,8 +357,10 @@ export function buildServer() {
         "get_folder_document to read text and its version, and save_folder_document with that " +
         "version when editing. On a stale-version refusal, reread before retrying so another " +
         "person's work is not lost. Use add_folder_asset for a screenshot or file available on " +
-        "this machine, get_folder_asset to read one already there, and link_folder_guide only " +
-        "when an existing guide uses that folder.\n" +
+        "this machine, and get_folder_asset to read one already there. " +
+        "To put a guide in a folder — a task, bug or handoff, new or already published — publish it " +
+        "as usual (for a team folder, to that folder's team, or its members cannot see it), then call " +
+        "link_folder_guide with the folder id and the guide id. Linking leaves the guide unchanged.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
@@ -727,7 +729,7 @@ export function buildServer() {
       title: "Link guide to folder",
       annotations: ADDS,
       description:
-        "Put an existing task or handoff beside the folder documents and assets it uses.",
+        "Put a task, bug or handoff guide in the folder, beside the documents and assets it uses: one just published or one that already existed.",
       inputSchema: { folder: z.string(), guide: z.string() },
     },
     async ({ folder, guide }) => {

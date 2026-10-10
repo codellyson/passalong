@@ -17,12 +17,35 @@ const documents = ref<FolderDocument[]>([]);
 const assets = ref<FolderAsset[]>([]);
 const guides = ref<FolderGuide[]>([]);
 const children = ref<Folder[]>([]);
-const hasDocuments = computed(() => documents.value.length > 0);
 const breadcrumbs = ref<{ id: string; title: string; color: string }[]>([]);
 const displayColor = computed(
   () => [...breadcrumbs.value].reverse().find((crumb) => crumb.color)?.color || "",
 );
 const current = ref<FolderDocument | null>(null);
+const treeOpen = ref(true);
+const guideMenuOpen = ref(false);
+const guideMenu = ref<HTMLElement | null>(null);
+const guideAsks = computed(() => {
+  if (!folder.value) return [];
+  const target = { id: folder.value.id, title: folder.value.title, team: folder.value.team_slug };
+  return [
+    { label: "A task", kind: "task", text: folderGuideAsk("task", target) },
+    { label: "A bug report", kind: "bug", text: folderGuideAsk("bug", target) },
+    {
+      label: "A handoff of finished work",
+      kind: "transfer",
+      text: folderGuideAsk("handoff", target),
+    },
+  ];
+});
+/** A menu that stays open behind you is worse than no menu. */
+function onDocumentClick(event: MouseEvent) {
+  if (guideMenuOpen.value && !guideMenu.value?.contains(event.target as Node))
+    guideMenuOpen.value = false;
+}
+onMounted(() => document.addEventListener("click", onDocumentClick));
+onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
+const readingPane = ref<HTMLElement | null>(null);
 const draft = ref("");
 const editing = ref(false);
 const loading = ref(false);
@@ -59,12 +82,14 @@ const guideOptions = computed(() =>
 );
 
 async function startDocument() {
+  treeOpen.value = true;
   addingDocument.value = true;
   await nextTick();
   newDocumentInput.value?.focus();
 }
 
 async function startSubfolder() {
+  treeOpen.value = true;
   addingSubfolder.value = true;
   await nextTick();
   newSubfolderInput.value?.focus();
@@ -142,6 +167,11 @@ async function openDocument(documentId: string) {
     draft.value = result?.document.body || "";
     editing.value = false;
     showingHistory.value = false;
+    // A new document starts at its title. Left where it was, the page keeps the old scroll
+    // against a different height and everything below the reading pane lurches.
+    await nextTick();
+    const top = readingPane.value?.getBoundingClientRect().top ?? 0;
+    if (top < 0) window.scrollBy({ top: top - 80, behavior: "instant" });
   } catch (error) {
     trouble.value = error instanceof Error ? error.message : "That document didn't open.";
   }
@@ -338,14 +368,6 @@ watch([signedIn, id], load, { immediate: true });
 
     <template v-else-if="folder">
       <header class="folder-page-header">
-        <nav class="folder-breadcrumbs flex min-w-0 flex-wrap items-center gap-2 font-ui text-sm" aria-label="Folder path">
-          <NuxtLink to="/hub/folders" class="text-muted no-underline hover:text-fg">Folders</NuxtLink>
-          <template v-for="crumb in breadcrumbs" :key="crumb.id">
-            <span class="text-muted" aria-hidden="true">/</span>
-            <span v-if="crumb.id === id" class="min-w-0 font-medium text-fg">{{ crumb.title }}</span>
-            <NuxtLink v-else :to="`/hub/folders/${crumb.id}`" class="text-muted no-underline hover:text-fg">{{ crumb.title }}</NuxtLink>
-          </template>
-        </nav>
         <div class="folder-heading-row flex flex-wrap items-center justify-between gap-4">
           <div class="flex min-w-0 items-start gap-3">
             <span class="folder-title-icon flex size-10 shrink-0 items-center justify-center rounded-2" :data-color="displayColor || 'neutral'">
@@ -355,6 +377,14 @@ watch([signedIn, id], load, { immediate: true });
               <h1 class="m-0 text-h1">{{ folder.title }}</h1>
               <p v-if="folder.description" class="m-0 mt-1 font-ui text-sm text-muted">{{ folder.description }}</p>
               <p class="m-0 mt-2 font-ui text-xs text-muted">{{ folder.team_name || "Private folder" }} <span aria-hidden="true">·</span> {{ children.length }} {{ children.length === 1 ? "subfolder" : "subfolders" }} <span aria-hidden="true">·</span> {{ documents.length }} documents <span aria-hidden="true">·</span> {{ assets.length }} files</p>
+              <nav class="folder-breadcrumbs mt-3 flex min-w-0 flex-wrap items-center gap-2 font-ui text-sm" aria-label="Folder path">
+                <NuxtLink to="/hub/folders" class="text-muted no-underline hover:text-fg">Folders</NuxtLink>
+                <template v-for="crumb in breadcrumbs" :key="crumb.id">
+                  <span class="text-muted" aria-hidden="true">/</span>
+                  <span v-if="crumb.id === id" class="min-w-0 font-medium text-fg">{{ crumb.title }}</span>
+                  <NuxtLink v-else :to="`/hub/folders/${crumb.id}`" class="text-muted no-underline hover:text-fg">{{ crumb.title }}</NuxtLink>
+                </template>
+              </nav>
             </div>
           </div>
           <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" @click="deleteFolder">Delete folder</button>
@@ -362,44 +392,57 @@ watch([signedIn, id], load, { immediate: true });
       </header>
       <input ref="fileInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="uploadFile" />
 
-    <div v-if="hasDocuments" class="folder-workspace">
+    <div class="folder-workspace">
       <aside class="folder-sidebar min-w-0 border-b border-line px-3 py-6 md:border-r md:border-b-0" aria-label="Folder contents">
-        <h2 class="mb-5 px-3 font-ui text-sm font-medium text-fg">Contents</h2>
-        <div class="mb-6">
-          <div class="mb-2 flex items-center justify-between gap-3 px-3">
-            <h3 class="m-0 font-ui text-xs font-medium uppercase tracking-wide text-muted">Subfolders</h3>
-            <span class="font-ui text-xs text-muted">{{ children.length }}</span>
+        <button class="folder-tree-parent flex w-full items-center gap-2 rounded-2 px-2 py-2 text-left font-ui text-sm font-medium text-fg" type="button" :aria-expanded="treeOpen" aria-controls="folder-tree" @click="treeOpen = !treeOpen">
+          <svg class="folder-tree-chevron size-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          <span class="truncate">{{ folder.title }}</span>
+        </button>
+        <div v-show="treeOpen" id="folder-tree">
+          <nav class="folder-tree ml-4 mt-1" aria-label="Documents and subfolders">
+            <button
+              v-for="doc in documents"
+              :key="doc.id"
+              class="folder-tree-item block w-full truncate py-2 pl-4 pr-2 text-left font-ui text-sm"
+              :class="{ 'is-current': current?.id === doc.id }"
+              type="button"
+              :aria-current="current?.id === doc.id ? 'page' : undefined"
+              @click="openDocument(doc.id)"
+            >{{ doc.name }}</button>
+            <NuxtLink v-for="child in children" :key="child.id" :to="`/hub/folders/${child.id}`" class="folder-tree-item flex items-center gap-2 py-2 pl-4 pr-2 font-ui text-sm no-underline">
+              <svg class="folder-heading-icon size-4 shrink-0" :data-color="child.color || displayColor || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg><span class="truncate">{{ child.title }}</span>
+            </NuxtLink>
+            <NuxtLink v-for="guide in guides" :key="guide.id" :to="`/hub/g/${guide.id}`" class="folder-tree-item flex items-center gap-2 py-2 pl-4 pr-2 font-ui text-sm no-underline">
+              <span v-if="kindBadge(guide.kind)" class="shrink-0 rounded-1 border px-1 py-0.5 text-xs leading-none font-medium tracking-wide uppercase" :class="kindBadge(guide.kind)?.class">{{ kindBadge(guide.kind)?.label }}</span>
+              <span class="truncate">{{ guide.title || "Untitled guide" }}</span>
+            </NuxtLink>
+          </nav>
+          <div class="mt-2 flex flex-col">
+            <button v-if="!addingDocument" class="folder-add rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" :aria-expanded="addingDocument" @click="startDocument">+ New document</button>
+            <form v-else class="px-2 py-2" @submit.prevent="createDocument">
+              <input ref="newDocumentInput" v-model="newName" class="w-full text-sm" maxlength="120" placeholder="Document name" aria-label="New document name" @keydown.esc="addingDocument = false" />
+              <div class="mt-2 flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving || !newName.trim()">Add</button><button class="btn sm" type="button" @click="addingDocument = false; newName = ''">Cancel</button></div>
+            </form>
+            <button v-if="!addingSubfolder" class="folder-add rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" :aria-expanded="addingSubfolder" @click="startSubfolder">+ New subfolder</button>
+            <form v-else class="px-2 py-2" @submit.prevent="createSubfolder">
+              <input ref="newSubfolderInput" v-model="newSubfolderName" class="w-full text-sm" maxlength="100" placeholder="Subfolder name" aria-label="New subfolder name" @keydown.esc="addingSubfolder = false" />
+              <div class="mt-2 flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving || !newSubfolderName.trim()">Add</button><button class="btn sm" type="button" @click="addingSubfolder = false; newSubfolderName = ''">Cancel</button></div>
+            </form>
+            <div ref="guideMenu" class="relative" @keydown.esc="guideMenuOpen = false">
+              <button class="folder-add w-full rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" aria-haspopup="menu" :aria-expanded="guideMenuOpen" @click="guideMenuOpen = !guideMenuOpen">+ New guide</button>
+              <div v-if="guideMenuOpen" class="menu folder-guide-menu" role="menu">
+                <p class="menu-note mt-0 mb-1">Ask your agent. Click one to copy what to say; it lands in this folder.</p>
+                <button v-for="item in guideAsks" :key="item.label" class="menu-item items-start" type="button" role="menuitem" @click="copy(item.text, $event.currentTarget)">
+                  <AppIcon name="copy" class="mt-0.5 shrink-0 text-muted" />
+                  <span class="flex min-w-0 flex-col">
+                    <span class="font-medium" data-label>{{ item.label }}</span>
+                    <code class="font-code text-xs break-words text-muted">{{ item.text }}</code>
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
-          <NuxtLink v-for="child in children" :key="child.id" :to="`/hub/folders/${child.id}`" class="folder-child flex items-center gap-2 rounded-1 px-3 py-2 font-ui text-sm text-fg no-underline hover:bg-field">
-            <svg class="folder-heading-icon size-4 shrink-0" :data-color="child.color || displayColor || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg><span class="truncate">{{ child.title }}</span>
-          </NuxtLink>
-          <button v-if="!addingSubfolder" class="folder-add mx-1 rounded-1 px-3 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" @click="startSubfolder">+ New subfolder</button>
-          <form v-else class="px-2" @submit.prevent="createSubfolder">
-            <input ref="newSubfolderInput" v-model="newSubfolderName" class="w-full text-sm" maxlength="100" placeholder="Subfolder name" aria-label="New subfolder name" @keydown.esc="addingSubfolder = false" />
-            <div class="mt-2 flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving || !newSubfolderName.trim()">Add</button><button class="btn sm" type="button" @click="addingSubfolder = false; newSubfolderName = ''">Cancel</button></div>
-          </form>
         </div>
-        <div class="mb-2 flex items-center justify-between gap-3 px-3">
-          <h3 class="m-0 font-ui text-xs font-medium uppercase tracking-wide text-muted">Documents</h3>
-          <span class="font-ui text-xs text-muted">{{ documents.length }}</span>
-        </div>
-        <nav v-if="documents.length" class="folder-document-list mb-3 flex gap-1 overflow-x-auto md:flex-col md:overflow-visible" aria-label="Documents">
-          <button
-            v-for="doc in documents"
-            :key="doc.id"
-            class="folder-document-link min-w-36 shrink-0 rounded-1 px-3 py-2 text-left font-ui text-sm leading-snug md:w-full md:min-w-0"
-            :class="current?.id === doc.id ? 'is-current font-medium text-fg' : 'text-muted'"
-            type="button"
-            :aria-current="current?.id === doc.id ? 'page' : undefined"
-            @click="openDocument(doc.id)"
-          >{{ doc.name }}</button>
-        </nav>
-        <p v-else class="px-3 font-ui text-sm text-muted">No documents yet.</p>
-        <button v-if="!addingDocument" class="folder-add mx-1 rounded-1 px-3 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" :aria-expanded="addingDocument" @click="startDocument">+ New document</button>
-        <form v-else class="px-2" @submit.prevent="createDocument">
-          <input ref="newDocumentInput" v-model="newName" class="w-full text-sm" maxlength="120" placeholder="Document name" aria-label="New document name" @keydown.esc="addingDocument = false" />
-          <div class="mt-2 flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving || !newName.trim()">Add</button><button class="btn sm" type="button" @click="addingDocument = false; newName = ''">Cancel</button></div>
-        </form>
         <div class="mt-6 border-t border-line pt-3">
           <a href="#folder-assets" class="folder-section-link flex items-center justify-between rounded-1 px-3 py-2 font-ui text-sm text-muted no-underline hover:bg-field hover:text-fg"><span>Assets</span><span class="text-xs">{{ assets.length }}</span></a>
           <a href="#folder-guides" class="folder-section-link flex items-center justify-between rounded-1 px-3 py-2 font-ui text-sm text-muted no-underline hover:bg-field hover:text-fg"><span>Guides</span><span class="text-xs">{{ guides.length }}</span></a>
@@ -407,9 +450,10 @@ watch([signedIn, id], load, { immediate: true });
       </aside>
 
       <div class="folder-main min-w-0">
-        <section class="folder-reading min-w-0 px-5 py-7 sm:px-8 sm:py-9 lg:px-12 lg:py-12" :class="{ 'has-document': current }" aria-label="Document">
+        <section ref="readingPane" class="folder-reading min-w-0 px-5 py-7 sm:px-8 sm:py-9 lg:px-12 lg:py-12" :class="{ 'has-document': current }" aria-label="Document">
           <template v-if="current">
-            <div class="mb-8 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+            <!-- The rule runs to both edges of the pane, so it meets the sidebar's line instead of stopping short of it. -->
+            <div class="-mx-5 mb-8 flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 pb-4 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
               <p class="m-0 font-ui text-xs text-muted">Document <span class="mx-2" aria-hidden="true">·</span> Version {{ current.version }}</p>
               <div class="flex flex-wrap gap-2">
                 <button class="btn sm" type="button" :aria-expanded="showingHistory" @click="showHistory">History</button>
@@ -443,8 +487,19 @@ watch([signedIn, id], load, { immediate: true });
           </template>
           <div v-else class="folder-reading-empty">
             <h2 class="m-0 text-h3">No documents yet</h2>
-            <p class="m-0 mt-2 font-ui text-sm text-muted">Add a brief, script or reference page to this folder.</p>
+            <p class="m-0 mt-2 max-w-md font-ui text-sm text-muted">A script, brief or reference page gives you and your agent a place to work from.</p>
             <button v-if="!addingDocument" class="btn primary mt-4" type="button" @click="startDocument">New document</button>
+            <section class="mt-8 border-t border-line pt-6" aria-labelledby="folder-guide-start">
+              <h2 id="folder-guide-start" class="m-0 text-h3">Put a guide in this folder</h2>
+              <p class="m-0 mt-2 mb-3 max-w-md font-ui text-sm text-muted">Ask your agent for a task, a bug report or a handoff. Copy what to say: it writes the guide and links it here. A guide that already exists can be linked under Guides below.</p>
+              <ul class="m-0 list-none overflow-hidden rounded-2 bg-surface-raised p-0 shadow-edge">
+                <li v-for="(item, index) in guideAsks" :key="item.kind" class="flex flex-wrap items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0 }">
+                  <span class="shrink-0 rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase" :class="kindBadge(item.kind)?.class">{{ kindBadge(item.kind)?.label }}</span>
+                  <p class="m-0 min-w-0 flex-1 font-ui text-sm text-fg">“{{ item.text }}”</p>
+                  <button class="btn sm" type="button" @click="copy(item.text, $event.currentTarget)"><span data-label>Copy</span></button>
+                </li>
+              </ul>
+            </section>
           </div>
         </section>
 
@@ -463,14 +518,14 @@ watch([signedIn, id], load, { immediate: true });
           </section>
           <section id="folder-guides" class="folder-supplement min-w-0 scroll-mt-24" aria-label="Guides">
             <h2 class="m-0 text-h3">Guides</h2>
-            <p class="m-0 font-ui text-sm text-muted">Link a task or handoff that uses this folder.</p>
+            <p class="m-0 font-ui text-sm text-muted">Link a task, bug or handoff that uses this folder.</p>
             <form class="flex w-full gap-2" @submit.prevent="linkGuide">
               <AppSelect v-model="guideId" class="min-w-0 flex-1" label="Guide to link" placeholder="Choose a guide" :options="guideOptions" :disabled="!guideOptions.length" :short-at="20" />
               <button class="btn" type="submit" :disabled="!guideId">Link</button>
             </form>
             <ul v-if="guides.length" class="m-0 w-full list-none p-0">
               <li v-for="guide in guides" :key="guide.id" class="flex items-start justify-between gap-2 border-t border-line py-3">
-                <div><NuxtLink :to="'/hub/g/' + guide.id" class="font-ui text-sm">{{ guide.title }}</NuxtLink><p class="m-0 font-ui text-xs text-muted">{{ guide.kind }} · {{ guide.status }}</p></div>
+                <div class="min-w-0"><p class="m-0 flex items-center gap-2"><span v-if="kindBadge(guide.kind)" class="shrink-0 rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase" :class="kindBadge(guide.kind)?.class">{{ kindBadge(guide.kind)?.label }}</span><NuxtLink :to="'/hub/g/' + guide.id" class="min-w-0 font-ui text-sm">{{ guide.title || "Untitled guide" }}</NuxtLink></p><p class="m-0 mt-1 font-ui text-xs text-muted">{{ guide.status }}</p></div>
                 <button class="font-ui text-xs text-muted underline hover:text-fg" type="button" :aria-label="'Unlink ' + guide.title" @click="unlinkGuide(guide)">Unlink</button>
               </li>
             </ul>
@@ -478,74 +533,16 @@ watch([signedIn, id], load, { immediate: true });
         </div>
       </div>
     </div>
-    <div v-else class="folder-start">
-      <section class="folder-start-lead">
-        <p class="m-0 font-ui text-xs font-medium uppercase tracking-wide text-muted">Get started</p>
-        <h2 class="m-0 mt-2 text-h2">Give this folder its first page</h2>
-        <p class="m-0 mt-2 max-w-xl font-ui text-sm text-muted">A script, brief or reference document gives you and your agent a place to work from.</p>
-        <button v-if="!addingDocument" class="btn primary mt-5" type="button" @click="startDocument">New document</button>
-        <form v-else class="mt-5 flex max-w-md flex-wrap gap-2" @submit.prevent="createDocument">
-          <input ref="newDocumentInput" v-model="newName" class="min-w-0 flex-1 text-sm" maxlength="120" placeholder="Document name" aria-label="New document name" @keydown.esc="addingDocument = false" />
-          <button class="btn primary" type="submit" :disabled="saving || !newName.trim()">Create</button>
-          <button class="btn" type="button" @click="addingDocument = false; newName = ''">Cancel</button>
-        </form>
-      </section>
-      <div class="folder-start-grid">
-        <section class="folder-start-option" aria-label="Subfolders">
-          <h3 class="m-0 text-h3">Subfolders <span v-if="children.length" class="font-ui text-xs text-muted">{{ children.length }}</span></h3>
-          <p v-if="!children.length" class="m-0 mt-2 font-ui text-sm text-muted">Keep related work together.</p>
-          <ul v-else class="folder-start-items m-0 mt-3 list-none p-0">
-            <li v-for="child in children" :key="child.id">
-              <NuxtLink :to="`/hub/folders/${child.id}`" class="flex items-center gap-2 py-2 font-ui text-sm text-fg no-underline hover:underline">
-                <svg class="folder-heading-icon size-4 shrink-0" :data-color="child.color || displayColor || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
-                <span>{{ child.title }}</span>
-              </NuxtLink>
-            </li>
-          </ul>
-          <button v-if="!addingSubfolder" class="folder-start-action" type="button" @click="startSubfolder">New subfolder <span aria-hidden="true">↗</span></button>
-          <form v-else class="mt-4 flex flex-wrap gap-2" @submit.prevent="createSubfolder">
-            <input ref="newSubfolderInput" v-model="newSubfolderName" class="min-w-0 flex-1 text-sm" maxlength="100" placeholder="Subfolder name" aria-label="New subfolder name" @keydown.esc="addingSubfolder = false" />
-            <button class="btn sm primary" type="submit" :disabled="saving || !newSubfolderName.trim()">Add</button>
-            <button class="btn sm" type="button" @click="addingSubfolder = false; newSubfolderName = ''">Cancel</button>
-          </form>
-        </section>
-        <section class="folder-start-option" aria-label="Assets">
-          <h3 class="m-0 text-h3">Files <span v-if="assets.length" class="font-ui text-xs text-muted">{{ assets.length }}</span></h3>
-          <p v-if="!assets.length" class="m-0 mt-2 font-ui text-sm text-muted">Add screens or source material.</p>
-          <ul v-else class="folder-start-items m-0 mt-3 list-none p-0">
-            <li v-for="asset in assets" :key="asset.id" class="flex items-center justify-between gap-2 py-2">
-              <button class="min-w-0 break-all text-left font-ui text-sm text-fg underline" type="button" @click="download(asset)">{{ asset.name }}</button>
-              <button class="shrink-0 font-ui text-xs text-muted hover:text-danger" type="button" :aria-label="'Delete ' + asset.name" @click="deleteAsset(asset)">Delete</button>
-            </li>
-          </ul>
-          <button class="folder-start-action" type="button" :disabled="uploading" @click="fileInput?.click()">{{ uploading ? "Uploading…" : "Add a file" }} <span v-if="!uploading" aria-hidden="true">↗</span></button>
-        </section>
-        <section class="folder-start-option" aria-label="Guides">
-          <h3 class="m-0 text-h3">Guides <span v-if="guides.length" class="font-ui text-xs text-muted">{{ guides.length }}</span></h3>
-          <p v-if="!guides.length" class="m-0 mt-2 font-ui text-sm text-muted">Connect a task or handoff.</p>
-          <ul v-else class="folder-start-items m-0 mt-3 list-none p-0">
-            <li v-for="guide in guides" :key="guide.id" class="flex items-start justify-between gap-2 py-2">
-              <NuxtLink :to="'/hub/g/' + guide.id" class="min-w-0 font-ui text-sm">{{ guide.title }}</NuxtLink>
-              <button class="shrink-0 font-ui text-xs text-muted hover:text-danger" type="button" :aria-label="'Unlink ' + guide.title" @click="unlinkGuide(guide)">Unlink</button>
-            </li>
-          </ul>
-          <form class="mt-4 flex w-full gap-2" @submit.prevent="linkGuide">
-            <AppSelect v-model="guideId" class="min-w-0 flex-1" label="Guide to link" placeholder="Choose a guide" :options="guideOptions" :disabled="!guideOptions.length" :short-at="20" />
-            <button class="btn" type="submit" :disabled="!guideId">Link</button>
-          </form>
-        </section>
-      </div>
-    </div>
     </template>
   </HubShell>
 </template>
 
 <style scoped>
+/* The workspace below draws the rule, so the header drops the global one rather than doubling it. */
 .folder-page-header {
   padding: var(--s-5) 0 var(--s-6);
-}
-.folder-breadcrumbs {
-  margin-bottom: var(--s-5);
+  border-bottom: 0;
+  margin-bottom: 0;
 }
 .folder-title-icon[data-color="neutral"] { color: var(--muted); background: var(--field); }
 .folder-title-icon[data-color="coral"] { color: #e87260; background: #e872601a; }
@@ -560,58 +557,12 @@ watch([signedIn, id], load, { immediate: true });
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.folder-start {
-  max-width: 64rem;
-  padding-bottom: var(--s-8);
-}
-.folder-start-lead {
-  border-radius: var(--r-3);
-  padding: var(--s-6);
-  background: var(--surface-raised);
-  box-shadow: var(--edge-shadow);
-}
-.folder-start-grid {
-  display: grid;
-  gap: var(--s-3);
-  margin-top: var(--s-4);
-}
-.folder-start-option {
-  min-width: 0;
-  border-radius: var(--r-2);
-  padding: var(--s-5);
-  background: var(--surface-raised);
-  box-shadow: var(--edge-shadow);
-}
-.folder-start-items li + li {
-  border-top: 1px solid var(--line);
-}
-.folder-start-action {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  margin-top: var(--s-4);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--fg);
-  font: 500 0.875rem var(--font-sans);
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.folder-start-action:active { scale: 0.96; }
 .folder-reading-empty { padding: var(--s-4) 0; }
-@media (min-width: 640px) {
-  .folder-start-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 .folder-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-}
-.folder-sidebar {
-  background: var(--surface-raised);
 }
 .folder-main {
   background: var(--bg);
@@ -628,23 +579,30 @@ watch([signedIn, id], load, { immediate: true });
   align-items: flex-start;
   gap: var(--s-3);
 }
-.folder-document-link {
+/* The tree follows a document outline: one parent, its contents on a single rail, the open one marked on the rail. */
+.folder-tree-parent {
   border: 0;
-  background: transparent;
+  background: var(--surface-raised);
   cursor: pointer;
-  transition-property: background-color, color;
-  transition-duration: 120ms;
 }
-.folder-document-link:hover,
-.folder-document-link.is-current {
-  background: var(--field);
+.folder-tree-chevron { transition: rotate 150ms ease; }
+.folder-tree-parent[aria-expanded="false"] .folder-tree-chevron { rotate: -90deg; }
+.folder-tree { border-left: 1px solid var(--line-strong); }
+.folder-tree-item {
+  margin-left: -1px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.folder-tree-item:hover { color: var(--fg); }
+/* Opens in place: the sidebar scrolls on its own, so a floating menu would be cut off at its edge. */
+.folder-guide-menu { position: static; width: auto; margin: var(--s-1) 0 var(--s-2); }
+.folder-tree-item.is-current {
+  border-left-color: var(--fg);
   color: var(--fg);
-}
-.folder-document-link.is-current {
-  box-shadow: inset 2px 0 var(--accent);
-}
-.folder-document-link:active {
-  scale: 0.96;
 }
 .folder-add {
   border: 0;

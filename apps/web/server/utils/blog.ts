@@ -9,7 +9,7 @@
 //
 // Posts are ours, not somebody else's markdown, but they go out under the same no-script policy as
 // every other public page, so nothing in one can run.
-import { Marked } from "marked";
+import { renderMarkdown } from "./guide-html";
 
 export interface Post {
   slug: string;
@@ -82,6 +82,6 @@ export async function postBySlug(
   if (raw === null || raw === undefined) return null;
   const parsed = parse(slug, String(raw));
   if (!parsed) return null;
-  const html = new Marked({ gfm: true }).parse(parsed.body, { async: false }) as string;
+  const html = renderMarkdown(parsed.body);
   return { ...parsed.post, html };
 }

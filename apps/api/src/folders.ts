@@ -1,22 +1,12 @@
 /** Small project folders: readable Markdown, reusable assets, and links to actionable guides. */
 import { Hono } from "hono";
 import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
+import { type Folder, findVisible, moveProblem } from "./folder-tree.js";
 import { planNow } from "./quota.js";
 
 type Env = { DB: D1Database; SHOTS?: R2Bucket };
 type Vars = { account: string };
 type Context = { Bindings: Env; Variables: Vars };
-type Folder = {
-  id: string;
-  created_by: string;
-  team_id: string;
-  title: string;
-  description: string;
-  parent_id: string;
-  color: string;
-  created: string;
-  updated: string;
-};
 type Document = {
   id: string;
   folder_id: string;
@@ -55,41 +45,8 @@ const COLORS = new Set(["", "coral", "amber", "green", "blue", "violet"]);
 const colorOf = (value: unknown) => (typeof value === "string" && COLORS.has(value) ? value : null);
 const assetKey = (folder: string, asset: string) => `folders/${folder}/${asset}`;
 
-async function parentFor(
-  c: { env: Env; get: (key: "account") => string },
-  parentId: string,
-  teamId: string,
-) {
-  const parent = await visible(c, parentId);
-  if (!parent || parent.team_id !== teamId) return null;
-  return parent;
-}
-
-async function wouldCycle(c: { env: Env }, folderId: string, parentId: string) {
-  const ancestor = await c.env.DB.prepare(
-    `WITH RECURSIVE chain(id, parent_id) AS (
-       SELECT id, parent_id FROM folder WHERE id = ?
-       UNION ALL
-       SELECT f.id, f.parent_id FROM folder f JOIN chain p ON f.id = p.parent_id
-     ) SELECT 1 FROM chain WHERE id = ? LIMIT 1`,
-  )
-    .bind(parentId, folderId)
-    .first();
-  return Boolean(ancestor);
-}
-
 export async function visible(c: { env: Env; get: (key: "account") => string }, folderId: string) {
-  const folder = await c.env.DB.prepare("SELECT * FROM folder WHERE id = ?")
-    .bind(folderId)
-    .first<Folder>();
-  if (!folder) return null;
-  if (!folder.team_id) return folder.created_by === c.get("account") ? folder : null;
-  const member = await c.env.DB.prepare(
-    "SELECT 1 FROM membership WHERE team_id = ? AND account_id = ?",
-  )
-    .bind(folder.team_id, c.get("account"))
-    .first();
-  return member ? folder : null;
+  return findVisible(c.env.DB, c.get("account"), folderId);
 }
 
 async function documentIn(c: { env: Env }, folder: string, document: string) {
@@ -251,12 +208,8 @@ routes.patch("/:folder", async (c) => {
   const color = Object.hasOwn(input, "color") ? colorOf(input.color) : folder.color;
   if (color === null) return message(c, 400, "Choose a supported folder color.");
   const parentId = Object.hasOwn(input, "parent") ? titleOf(input.parent, 32) : folder.parent_id;
-  if (parentId) {
-    if (!(await parentFor(c, parentId, folder.team_id)))
-      return message(c, 404, "That parent folder isn't available in this space.");
-    if (await wouldCycle(c, folder.id, parentId))
-      return message(c, 409, "A folder can't be moved into itself or one of its subfolders.");
-  }
+  const problem = await moveProblem(c.env.DB, c.get("account"), folder, parentId);
+  if (problem) return message(c, problem.status, problem.message);
   const updated = now();
   await c.env.DB.prepare(
     "UPDATE folder SET title = ?, description = ?, parent_id = ?, color = ?, updated = ? WHERE id = ?",

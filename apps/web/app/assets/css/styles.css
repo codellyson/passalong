@@ -1988,7 +1988,7 @@ form.join label {
 
 /* ---- guide prose -------------------------------------------------------------------------------
    The body of a guide is the only long-form reading in the product, and the only place set in the
-   serif. Everything below styles HTML that came out of `marked`, from markdown a stranger wrote —
+   serif. Everything below styles HTML that came out of remark, from markdown a stranger wrote —
    so it is written against the elements markdown can produce, not against one nice-looking guide.
 
    The six canonical sections are marked by the renderer with `data-kind`. Only two are typeset
@@ -2083,6 +2083,55 @@ article.prose li > input[type="checkbox"] {
 article.prose blockquote {
   font-style: italic;
   margin: var(--s-4) 0;
+}
+
+/* GitHub's alerts (`> [!WARNING]`), turned into these by shared/markdown-alerts.ts. A coloured
+   callout is one of the places a border states something, so the edge carries the kind and the
+   title repeats it in words; the body stays ink. */
+article.prose .markdown-alert {
+  margin: var(--s-4) 0;
+  padding: var(--s-1) 0 var(--s-1) var(--s-4);
+  border-left: 3px solid var(--alert, var(--line-strong));
+}
+article.prose .markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+article.prose .markdown-alert-title {
+  margin: 0 0 var(--s-1);
+  color: var(--alert, var(--fg));
+  font: 600 var(--t-sm) / 1.4 var(--font-sans);
+}
+article.prose .markdown-alert-note {
+  --alert: var(--fg);
+}
+article.prose .markdown-alert-tip {
+  --alert: var(--ok);
+}
+article.prose .markdown-alert-important {
+  --alert: var(--accent);
+}
+article.prose .markdown-alert-warning {
+  --alert: var(--warn);
+}
+article.prose .markdown-alert-caution {
+  --alert: var(--danger);
+}
+
+/* Footnotes (`[^1]`) collect at the end under a label only a screen reader needs to hear. */
+article.prose section[data-footnotes] {
+  margin-top: var(--s-8);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+article.prose section[data-footnotes] > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Markdown has no caption syntax, so a standalone image's alt text becomes one — see figures() in

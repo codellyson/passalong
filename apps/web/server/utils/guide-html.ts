@@ -1,12 +1,20 @@
 // Markdown to HTML for a guide page. This runs on the server only — the page it feeds is served
-// under `noScripts`, and keeping `marked` here keeps it out of the client bundle entirely.
+// under `noScripts`, and keeping the parser here keeps it out of the client bundle entirely.
+// It is the same remark + GFM pipeline folder documents use, plus GitHub's alerts, so a guide,
+// a post and a folder document read the same Markdown the same way.
 //
 // Nothing sanitises the output. That is deliberate and is the same bargain apps/api makes: the
 // route's CSP is `default-src 'none'` with no `script-src` at all, so anything script-shaped in
 // someone else's markdown is inert. A sanitiser would be a second, weaker line pretending to be
 // the first.
-import { Marked } from "marked";
+
+import rehypeStringify from "rehype-stringify";
+import remarkGfm from "remark-gfm";
+import remarkParse from "remark-parse";
+import remarkRehype from "remark-rehype";
+import { unified } from "unified";
 import { verifyLayout } from "#api/guide";
+import { remarkAlerts } from "#shared/markdown-alerts";
 
 const esc = (s: string) =>
   s.replace(
@@ -41,7 +49,18 @@ const KINDS: Record<string, string> = {
   gotchas: "gotchas",
 };
 
-const strip = (html: string) => html.replace(/<[^>]*>/g, "");
+/** The parts of a hast tree this file touches, typed locally so it needs no types package. */
+interface El {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: El[];
+}
+
+/** What a heading says, without its markup: inline HTML in a heading is markup, not words. */
+const textOf = (node: El): string =>
+  node.type === "text" ? node.value || "" : (node.children ?? []).map(textOf).join("");
 
 /** Ids have to be unique on the page: two guides in ten will have two "Steps" of some kind. */
 function slugger() {
@@ -64,41 +83,74 @@ function slugger() {
  * A standalone image becomes a figure, so its alt text can also be its caption — markdown has no
  * caption syntax, and the alt is the only sentence an author writes about a screenshot.
  *
- * Done on the rendered HTML rather than in the image renderer because marked wraps a lone image
- * in a paragraph, and a <figure> inside a <p> is invalid: the browser closes the paragraph early
- * and the structure comes apart. Matching the wrapping paragraph is what makes it a block-level
- * decision. An image sitting inside a sentence is left exactly where it is.
+ * Decided on the paragraph rather than the image: a lone image arrives wrapped in a <p>, and a
+ * <figure> inside a <p> is invalid — the browser closes the paragraph early and the structure comes
+ * apart. Replacing the paragraph is what makes it a block-level decision. An image sitting inside a
+ * sentence is left exactly where it is.
  */
-function figures(html: string): string {
-  return html.replace(/<p>(<img [^>]*>)<\/p>/g, (_, img: string) => {
-    const alt = /alt="([^"]*)"/.exec(img)?.[1] || "";
-    return `<figure>${img}${alt ? `<figcaption>${alt}</figcaption>` : ""}</figure>`;
-  });
+function figure(p: El): El | null {
+  const [img, ...rest] = p.children ?? [];
+  if (img?.tagName !== "img" || rest.length) return null;
+  const alt = String(img.properties?.alt ?? "");
+  const caption = alt
+    ? [
+        {
+          type: "element",
+          tagName: "figcaption",
+          properties: {},
+          children: [{ type: "text", value: alt }],
+        },
+      ]
+    : [];
+  return { type: "element", tagName: "figure", properties: {}, children: [img, ...caption] };
 }
 
 /**
- * One renderer per render, closing over the outline it fills. A module-level instance would be
- * shared by concurrent requests, and while `parse` is synchronous, a collector that is only safe
+ * Every heading gets a unique id and h2/h3 go into the outline the contents rail is drawn from; a
+ * canonical section's h2 is also marked with its kind. A heading that already has an id is one the
+ * pipeline wrote — the hidden "Footnotes" label — and is neither renamed nor listed.
+ */
+function shape(into: Heading[], slug: (s: string) => string) {
+  const visit = (node: El) => {
+    node.children = node.children?.map((child) => {
+      if (child.tagName === "p") return figure(child) ?? child;
+      const depth = /^h([1-6])$/.exec(child.tagName || "")?.[1];
+      if (depth && !child.properties?.id) {
+        const level = Number(depth);
+        const text = textOf(child);
+        const id = slug(text);
+        const kind = level === 2 ? KINDS[text.toLowerCase()] : undefined;
+        if (level === 2 || level === 3) into.push({ level, text, id, kind });
+        child.properties = { ...child.properties, id, ...(kind ? { dataKind: kind } : {}) };
+      }
+      visit(child);
+      return child;
+    });
+  };
+  return () => (tree: El) => visit(tree);
+}
+
+/**
+ * One processor per render, closing over the outline it fills. A module-level instance would be
+ * shared by concurrent requests, and while processing is synchronous, a collector that is only safe
  * because nothing yields inside it is a trap for whoever touches this next.
+ *
+ * Raw HTML passes through untouched, as it always has: see the note at the top of this file.
  */
 function makeRenderer(into: Heading[], slug: (s: string) => string) {
-  const marked = new Marked({ async: false, gfm: true });
-  marked.use({
-    renderer: {
-      heading(token) {
-        const html = this.parser.parseInline(token.tokens);
-        const text = strip(html);
-        const id = slug(text);
-        const kind = token.depth === 2 ? KINDS[text.toLowerCase()] : undefined;
-        if (token.depth === 2 || token.depth === 3) {
-          into.push({ level: token.depth, text, id, kind });
-        }
-        const attr = kind ? ` data-kind="${kind}"` : "";
-        return `<h${token.depth} id="${id}"${attr}>${html}</h${token.depth}>\n`;
-      },
-    },
-  });
-  return (s: string) => figures(marked.parse(s, { async: false }) as string);
+  const processor = unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkAlerts)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(shape(into, slug))
+    .use(rehypeStringify, { allowDangerousHtml: true });
+  return (s: string) => String(processor.processSync(s));
+}
+
+/** Markdown we wrote ourselves, such as a blog post, rendered the way a guide is. */
+export function renderMarkdown(body: string): string {
+  return makeRenderer([], slugger())(body);
 }
 
 /**

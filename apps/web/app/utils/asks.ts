@@ -29,6 +29,25 @@ export const bugAsk = (team: string) =>
 export const teamTaskAsk = (team: string) =>
   `Add a Passalong task for the team ${team}: <what needs doing>`;
 
+/**
+ * A new guide of one kind, made straight into a folder. The agent publishes it as it would anywhere
+ * and then links it with link_folder_guide, so the sentence names the folder by id as well as by
+ * title. A team folder's guide goes to that team, or only its author could see it in the folder.
+ */
+export const folderGuideAsk = (
+  kind: "task" | "bug" | "handoff",
+  folder: { id: string; title: string; team?: string },
+) => {
+  const team = folder.team ? ` for the team ${folder.team}` : "";
+  const first =
+    kind === "bug"
+      ? `File this as a Passalong bug${team}: <what is broken>.`
+      : kind === "task"
+        ? `Add a Passalong task${team}: <what needs doing>.`
+        : `Pass this along${team}.`;
+  return `${first} Then link it to the Passalong folder "${folder.title}" (${folder.id}).`;
+};
+
 /** Installing the tool and signing it in, in the order they have to be run. */
 export const CONNECT = ["npm i -g passalong", "passalong login", "passalong setup"] as const;
 

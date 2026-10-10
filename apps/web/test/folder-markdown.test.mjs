@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { renderFolderMarkdown } from "../app/utils/folder-markdown.ts";
+import "./aliases.mjs";
+
+const { renderFolderMarkdown } = await import("../app/utils/folder-markdown.ts");
 
 test("folder documents render GFM without executing document content", () => {
   const html = renderFolderMarkdown(`| Feature | Route |
@@ -28,4 +30,13 @@ test("folder documents render GFM without executing document content", () => {
   assert.match(html, /id="user-content-fn-1"/);
   assert.match(html, /href="https:\/\/example\.com\/diagram\.png">diagram<\/a>/);
   assert.doesNotMatch(html, /<img|<script|javascript:/i);
+});
+
+test("folder documents keep GitHub alerts through the sanitizer, and only their classes", () => {
+  const html = renderFolderMarkdown(
+    '> [!CAUTION]\n> Deletes the bucket.\n\n<div class="x">raw</div>',
+  );
+  assert.match(html, /<div class="markdown-alert markdown-alert-caution">/);
+  assert.match(html, /<p class="markdown-alert-title">Caution<\/p>/);
+  assert.doesNotMatch(html, /class="x"/);
 });

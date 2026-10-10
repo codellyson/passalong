@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
+import { remarkAlerts } from "#shared/markdown-alerts";
 
 function safeHref(href: string): string | null {
   const value = href.trim();
@@ -17,6 +18,7 @@ function safeHref(href: string): string | null {
 const markdown = unified()
   .use(remarkParse)
   .use(remarkGfm)
+  .use(remarkAlerts)
   .use(remarkRehype, {
     handlers: {
       image(_state, node) {
@@ -34,7 +36,16 @@ const markdown = unified()
     },
   })
   // remark-rehype already prefixes generated footnote ids. A second prefix would break links.
-  .use(rehypeSanitize, { ...defaultSchema, clobberPrefix: "" })
+  // An alert's classes are the only ones added to what GitHub's own schema allows.
+  .use(rehypeSanitize, {
+    ...defaultSchema,
+    clobberPrefix: "",
+    attributes: {
+      ...defaultSchema.attributes,
+      div: [...(defaultSchema.attributes?.div ?? []), ["className", /^markdown-alert(-[a-z]+)?$/]],
+      p: [...(defaultSchema.attributes?.p ?? []), ["className", "markdown-alert-title"]],
+    },
+  })
   .use(rehypeStringify);
 
 export function renderFolderMarkdown(body: string): string {

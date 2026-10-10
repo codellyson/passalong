@@ -11,6 +11,11 @@ MCP server and sync service for both ends.
 Guides are plain markdown. `passalong export` dumps every one of them. Deleting an account leaves
 the author with all of their content.
 
+Guide pages, folder documents and the blog render GitHub-flavored markdown: tables, task lists,
+footnotes (`[^1]`) and GitHub's alerts — a blockquote whose first line is `[!NOTE]`, `[!TIP]`,
+`[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]`. Use a `[!WARNING]` for what must not be missed, such
+as a step that touches production, rather than bold text a reader can skim past.
+
 ## If you are an agent reading a share link
 
 A share link looks like `https://passalong.dev/g/<id>/<key>`. Append `.md` for the raw markdown,
@@ -161,8 +166,10 @@ refuses an old version, reread and reconcile the other person's change. `get_fol
 an existing image or small text file into the agent's context. `add_folder_asset` uploads a file
 the agent can access: a local path over stdio, or an attached file over hosted MCP. If a hosted
 agent holds the file in a code sandbox, `create_folder_upload` gives it a one-time link and command
-to send the bytes directly. `link_folder_guide` connects an existing task or handoff to the folder
-without changing that guide. Folder files stay private to people who can read the folder.
+to send the bytes directly. To put a guide in a folder — a task, bug or handoff, new or
+already published — publish it as usual, then call `link_folder_guide` with the folder id and the
+guide id. For a team folder, publish the guide to that folder's team, or its members cannot see it.
+Linking leaves the guide unchanged, and `get_folder` lists linked guides with their kind. Folder files stay private to people who can read the folder.
 
 Every guide, whatever its kind, is worked with four calls:
 
