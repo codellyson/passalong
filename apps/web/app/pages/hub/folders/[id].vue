@@ -351,14 +351,18 @@ async function deleteFolder() {
   )
     return;
   try {
+    deletingFolder.value = true;
     await api(`/v1/folders/${id.value}`, { method: "DELETE" });
-    await navigateTo("/hub/folders");
+    await navigateTo({ path: "/hub/folders", query: { deleted: folder.value.title } });
   } catch (error) {
     trouble.value = error instanceof Error ? error.message : "That folder couldn't be deleted.";
+  } finally {
+    deletingFolder.value = false;
   }
 }
 
 const renamingFolder = ref(false);
+const deletingFolder = ref(false);
 const renamingDocument = ref(false);
 
 // Moving a document: only to folders in this folder's own space, the rule the route enforces.
@@ -509,7 +513,7 @@ watch([signedIn, id], load, { immediate: true });
           </div>
           <div class="flex items-center gap-4">
             <button v-if="!renamingFolder" class="folder-delete font-ui text-xs text-muted hover:text-fg" type="button" @click="renamingFolder = true">Rename</button>
-            <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" @click="deleteFolder">Delete folder</button>
+            <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" :disabled="deletingFolder" @click="deleteFolder">{{ deletingFolder ? "Deleting…" : "Delete folder" }}</button>
           </div>
         </div>
       </header>

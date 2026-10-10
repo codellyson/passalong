@@ -138,9 +138,10 @@ const prompt = computed(() => {
   return `Create a Passalong folder for my tutorial video${team ? ` and share it with ${team.name}` : ""}. Draft a script there and add the screenshots I provide.`;
 });
 
-async function load() {
+/** `quiet` refreshes in place after an action, rather than swapping the list for "Loading". */
+async function load(quiet = false) {
   if (!signedIn.value) return;
-  busy.value = true;
+  if (!quiet) busy.value = true;
   trouble.value = "";
   try {
     const result = await api<{ folders: Folder[] }>(
@@ -156,16 +157,97 @@ async function load() {
   }
 }
 
-watch([signedIn, scope], load, { immediate: true });
+watch([signedIn, scope], () => load(), { immediate: true });
+
+// A folder deleted from its own page lands here; say so, then drop the query so a reload is quiet.
+const route = useRoute();
+onMounted(() => {
+  const deleted = route.query.deleted;
+  if (typeof deleted === "string" && deleted) {
+    say(`Deleted ${deleted} and everything in it.`);
+    navigateTo({ query: {} }, { replace: true });
+  }
+});
 watch(selected, () => {
   moveOpen.value = false;
 });
 
-async function moveTo(parent: string) {
-  moveOpen.value = false;
-  await changeSelected({ parent });
+// An action on several folders is several requests, one after another. Each says where it has got
+// to while it runs and what it did when it ends: before, the buttons went grey, the list blinked to
+// "Loading folders…" and back, and nothing said whether anything had happened.
+const progress = ref("");
+const working = ref<string[]>([]);
+const notice = ref("");
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+function say(text: string) {
+  notice.value = text;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    notice.value = "";
+  }, 6000);
+}
+const folderCount = (n: number) => `${n} ${n === 1 ? "folder" : "folders"}`;
+
+async function runEach(
+  targets: Folder[],
+  verb: string,
+  act: (folder: Folder) => Promise<unknown>,
+  done: (count: number) => string,
+  fallback: string,
+) {
+  actionBusy.value = true;
+  trouble.value = "";
+  notice.value = "";
+  working.value = targets.map((folder) => folder.id);
+  let finished = 0;
+  try {
+    for (const folder of targets) {
+      progress.value = `${verb} ${finished + 1} of ${targets.length}…`;
+      await act(folder);
+      finished++;
+    }
+    await load(true);
+    say(done(finished));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : fallback;
+    await load(true);
+    // Say what did happen before what stopped it: a half-done batch is not a failed one.
+    trouble.value = finished ? `${done(finished)} Then it stopped: ${message}` : message;
+  } finally {
+    actionBusy.value = false;
+    progress.value = "";
+    working.value = [];
+  }
 }
 
+const patchFolder = (folder: Folder, body: Record<string, string>) =>
+  api(`/v1/folders/${folder.id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+async function moveTo(parent: string, title: string) {
+  moveOpen.value = false;
+  await runEach(
+    selectedRoots.value,
+    "Moving",
+    (folder) => patchFolder(folder, { parent }),
+    (n) => `Moved ${folderCount(n)} to ${title}.`,
+    "Those folders couldn't be moved.",
+  );
+}
+async function colorSelected(color: string) {
+  // Color is per selected folder, including a child selected with its parent.
+  const label = colorChoices.find((choice) => choice.value === color)?.label.toLowerCase() || "";
+  await runEach(
+    selectedFolders.value,
+    "Coloring",
+    (folder) => patchFolder(folder, { color }),
+    (n) => `Made ${folderCount(n)} ${label}.`,
+    "Those colors couldn't be changed.",
+  );
+}
 /** A menu that stays open behind you is worse than no menu. */
 function onDocument(event: MouseEvent) {
   if (moveOpen.value && !moveMenu.value?.contains(event.target as Node)) moveOpen.value = false;
@@ -179,48 +261,6 @@ function toggle(id: string) {
     : [...selected.value, id];
 }
 
-async function changeSelected(patch: Record<string, string>) {
-  actionBusy.value = true;
-  trouble.value = "";
-  try {
-    for (const folder of selectedRoots.value) {
-      await api(`/v1/folders/${folder.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-    }
-    await load();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Those folders couldn't be changed.";
-    await load();
-    trouble.value = message;
-  } finally {
-    actionBusy.value = false;
-  }
-}
-
-async function colorSelected(color: string) {
-  // Color is per selected folder, including a child selected with its parent.
-  actionBusy.value = true;
-  trouble.value = "";
-  try {
-    for (const folder of selectedFolders.value)
-      await api(`/v1/folders/${folder.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ color }),
-      });
-    await load();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Those colors couldn't be changed.";
-    await load();
-    trouble.value = message;
-  } finally {
-    actionBusy.value = false;
-  }
-}
-
 async function deleteSelected() {
   if (!selectedRoots.value.every((folder) => Boolean(folder.manage))) {
     trouble.value = "Only a folder's creator or a team owner can delete it.";
@@ -232,19 +272,13 @@ async function deleteSelected() {
     )
   )
     return;
-  actionBusy.value = true;
-  trouble.value = "";
-  try {
-    for (const folder of selectedRoots.value)
-      await api(`/v1/folders/${folder.id}`, { method: "DELETE" });
-    await load();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Those folders couldn't be deleted.";
-    await load();
-    trouble.value = message;
-  } finally {
-    actionBusy.value = false;
-  }
+  await runEach(
+    selectedRoots.value,
+    "Deleting",
+    (folder) => api(`/v1/folders/${folder.id}`, { method: "DELETE" }),
+    (n) => `Deleted ${folderCount(n)} and everything in ${n === 1 ? "it" : "them"}.`,
+    "Those folders couldn't be deleted.",
+  );
 }
 </script>
 
@@ -261,10 +295,13 @@ async function deleteSelected() {
     </div>
 
     <p v-if="trouble" role="alert" class="rounded-2 border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">{{ trouble }}</p>
+    <!-- Pinned to the bottom of the window, because a bulk action is started from the bar under a
+         long list and its result has to be seen from there. -->
+    <p v-if="notice" role="status" class="folder-done fixed bottom-6 left-1/2 z-40 m-0 -translate-x-1/2 rounded-pill bg-ink px-4 py-2 font-ui text-sm text-on-ink shadow-edge">{{ notice }}</p>
     <p v-if="busy" class="empty">Loading folders…</p>
     <template v-else-if="!trouble">
       <div v-if="folders.length" class="folder-list overflow-hidden rounded-3 bg-surface-raised shadow-edge" :class="{ picking: selected.length }">
-        <div v-for="({ folder, depth, color, childCount }, index) in visibleRows" :key="folder.id" class="folder-row flex items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0, 'is-selected': selected.includes(folder.id) }" :style="{ '--folder-depth': depth, '--folder-hue': color ? `var(--folder-${color})` : 'var(--muted)' }">
+        <div v-for="({ folder, depth, color, childCount }, index) in visibleRows" :key="folder.id" class="folder-row flex items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0, 'is-selected': selected.includes(folder.id), 'is-working': working.includes(folder.id) }" :style="{ '--folder-depth': depth, '--folder-hue': color ? `var(--folder-${color})` : 'var(--muted)' }">
           <span v-if="depth" class="folder-rails shrink-0" aria-hidden="true" />
           <button v-if="childCount" class="folder-toggle flex size-6 shrink-0 items-center justify-center rounded-1 text-muted hover:bg-field hover:text-fg" type="button" :aria-expanded="expanded.has(folder.id)" :aria-label="`${expanded.has(folder.id) ? 'Hide' : 'Show'} subfolders of ${folder.title}`" @click="toggleOpen(folder.id)">
             <svg class="folder-toggle-chevron size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -294,7 +331,7 @@ async function deleteSelected() {
 
       <div v-if="selected.length" class="mt-4 rounded-3 bg-surface-raised px-4 py-4 shadow-edge">
         <div class="flex flex-wrap items-center gap-3">
-          <span class="font-ui text-sm font-medium">{{ selected.length }} selected</span>
+          <span class="font-ui text-sm font-medium" aria-live="polite">{{ progress || `${selected.length} selected` }}</span>
           <span class="font-ui text-xs text-muted">Color</span>
           <div class="flex flex-wrap gap-2" role="group" aria-label="Set selected folder colors">
             <button v-for="choice in colorChoices" :key="choice.label" class="folder-color-choice size-7 rounded-full" :data-color="choice.value || 'neutral'" type="button" :disabled="actionBusy" :aria-label="`Set ${choice.label.toLowerCase()} color`" :title="choice.label" @click="colorSelected(choice.value)" />
@@ -314,7 +351,7 @@ async function deleteSelected() {
                   role="menuitem"
                   :disabled="option.here"
                   :style="{ paddingLeft: `calc(var(--s-2) + ${option.depth} * var(--s-4))` }"
-                  @click="moveTo(option.value)"
+                  @click="moveTo(option.value, option.title)"
                 >
                   <span class="truncate">{{ option.title }}</span>
                   <span v-if="option.here" class="shrink-0 text-xs text-muted">Already here</span>
@@ -362,6 +399,7 @@ async function deleteSelected() {
 .folder-toggle-chevron { rotate: -90deg; transition: rotate 150ms ease; }
 .folder-toggle[aria-expanded="true"] .folder-toggle-chevron { rotate: 0deg; }
 .folder-row.is-selected { background: var(--field); }
+.folder-row.is-working { opacity: 0.5; pointer-events: none; transition: opacity 150ms ease; }
 /* The checkbox stands in for the folder icon, so it costs no space of its own: it shows on hover,
    on focus, while anything is selected, and always on a touch screen. */
 .folder-pick, .folder-icon { transition: opacity 120ms ease; }
