@@ -333,6 +333,18 @@ export const saveFolderDocument = (folderId, documentId, version, body) =>
   });
 export const linkFolderGuide = (folderId, guide) =>
   call(`/v1/folders/${encodeURIComponent(folderId)}/guides`, { method: "POST", body: { guide } });
+export const unlinkFolderGuide = (folderId, guide) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/guides/${encodeURIComponent(guide)}`, {
+    method: "DELETE",
+  });
+export const deleteFolderDocument = (folderId, documentId) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
+    method: "DELETE",
+  });
+export const deleteFolderAsset = (folderId, assetId) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/assets/${encodeURIComponent(assetId)}`, {
+    method: "DELETE",
+  });
 /** What you did, newest first. `since` is a date prefix: 2026, 2026-09, 2026-09-11. */
 export const log = ({ repo = "", since = "", limit = 0 } = {}) =>
   call(`/v1/log${q({ repo, since, limit: limit || "" })}`);

@@ -169,7 +169,10 @@ agent holds the file in a code sandbox, `create_folder_upload` gives it a one-ti
 to send the bytes directly. To put a guide in a folder — a task, bug or handoff, new or
 already published — publish it as usual, then call `link_folder_guide` with the folder id and the
 guide id. For a team folder, publish the guide to that folder's team, or its members cannot see it.
-Linking leaves the guide unchanged, and `get_folder` lists linked guides with their kind. Folder files stay private to people who can read the folder.
+Linking leaves the guide unchanged, and `get_folder` lists linked guides with their kind;
+`unlink_folder_guide` takes one out again. `delete_folder_document` and `delete_folder_asset` remove
+one document or file for good, so use them only when the person asked for it to go. No tool deletes
+a whole folder: a person does that in the hub, where it takes every subfolder and file with it. Folder files stay private to people who can read the folder.
 
 Every guide, whatever its kind, is worked with four calls:
 

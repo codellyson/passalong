@@ -43,6 +43,9 @@ const WRITES = [
   "create_folder_document",
   "save_folder_document",
   "link_folder_guide",
+  "unlink_folder_guide",
+  "delete_folder_document",
+  "delete_folder_asset",
   "ask",
   "attach_file",
   "reply",
@@ -85,13 +88,18 @@ test("a tool that only reads says so, and a tool that writes does not claim to",
   assert.equal(READ_ONLY.length + WRITES.length, all.size, "a tool was added and not classified");
 });
 
-test("nothing claims to be destructive except the one call that replaces a document", async () => {
+test("only the calls that replace or remove something say they are destructive", async () => {
   const all = await tools();
   const destructive = [...all]
     .filter(([, t]) => t.annotations.destructiveHint === true)
     .map(([name]) => name);
-  // Publishing with an id that already exists replaces that guide. Everything else only adds.
-  assert.deepEqual(destructive, ["publish_guide"]);
+  // Publishing with an id that already exists replaces that guide, and the two folder deletes
+  // remove what cannot be brought back. Unlinking is not here: link_folder_guide undoes it.
+  assert.deepEqual(destructive.sort(), [
+    "delete_folder_asset",
+    "delete_folder_document",
+    "publish_guide",
+  ]);
 });
 
 test("only the tools that reach outside Passalong say so", async () => {

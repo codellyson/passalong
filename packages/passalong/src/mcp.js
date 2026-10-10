@@ -219,6 +219,8 @@ const passOut = openObject({ id: z.string(), passed: z.boolean() });
 
 const READS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
+// Removes something that cannot be brought back. Only a person's request should lead here.
+const REMOVES = { readOnlyHint: false, destructiveHint: true, openWorldHint: false };
 const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError: true });
 
 /**
@@ -360,7 +362,10 @@ export function buildServer() {
         "this machine, and get_folder_asset to read one already there. " +
         "To put a guide in a folder — a task, bug or handoff, new or already published — publish it " +
         "as usual (for a team folder, to that folder's team, or its members cannot see it), then call " +
-        "link_folder_guide with the folder id and the guide id. Linking leaves the guide unchanged.\n" +
+        "link_folder_guide with the folder id and the guide id. Linking leaves the guide unchanged; " +
+        "unlink_folder_guide takes it out again. Delete a document or file with " +
+        "delete_folder_document or delete_folder_asset only when the person asked for it to go: " +
+        "neither can be undone. No tool deletes a whole folder; a person does that in the hub.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
@@ -735,6 +740,60 @@ export function buildServer() {
     async ({ folder, guide }) => {
       try {
         return json(await api.linkFolderGuide(folder, guide));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "unlink_folder_guide",
+    {
+      title: "Unlink guide from folder",
+      annotations: ADDS,
+      description:
+        "Take a guide out of a folder. Only the link goes: the guide itself is unchanged, and link_folder_guide puts it back.",
+      inputSchema: { folder: z.string(), guide: z.string() },
+    },
+    async ({ folder, guide }) => {
+      try {
+        return json(await api.unlinkFolderGuide(folder, guide));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_folder_document",
+    {
+      title: "Delete folder document",
+      annotations: REMOVES,
+      description:
+        "Delete one document from a folder, with its earlier versions. It cannot be brought back, so do it only when the person asked for that document to go; to change what it says, use save_folder_document instead.",
+      inputSchema: { folder: z.string(), document: z.string() },
+    },
+    async ({ folder, document }) => {
+      try {
+        return json(await api.deleteFolderDocument(folder, document));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_folder_asset",
+    {
+      title: "Delete folder file",
+      annotations: REMOVES,
+      description:
+        "Delete one file from a folder. It cannot be brought back, so do it only when the person asked for that file to go.",
+      inputSchema: { folder: z.string(), asset: z.string() },
+    },
+    async ({ folder, asset }) => {
+      try {
+        return json(await api.deleteFolderAsset(folder, asset));
       } catch (err) {
         return fail(err);
       }

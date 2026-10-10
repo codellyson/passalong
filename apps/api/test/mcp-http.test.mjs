@@ -83,6 +83,8 @@ test("every tool it lists is one an agent could act on", async () => {
     "create_folder_document",
     "create_folder_upload",
     "create_upload",
+    "delete_folder_asset",
+    "delete_folder_document",
     "file_bugs",
     "get_folder",
     "get_folder_asset",
@@ -101,6 +103,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "save_folder_document",
     "search_guides",
     "take",
+    "unlink_folder_guide",
     "update_folder",
     "work",
   ]);
@@ -450,7 +453,7 @@ test("every tool says what it does to the world, so a client does not assume the
   );
   assert.deepEqual(
     by((t) => t.annotations.destructiveHint),
-    ["publish_guide"],
+    ["delete_folder_asset", "delete_folder_document", "publish_guide"],
   );
   assert.deepEqual(
     by((t) => t.annotations.openWorldHint),
@@ -1502,4 +1505,61 @@ test("create_upload can mint a link for a file, and says so in the command it ha
     `curl -sS --fail-with-body -X PUT --data-binary @FILE_PATH '${link}'`,
   );
   assert.match(body.result.content[0].text, /FILE_PATH/);
+});
+
+test("the folder removals each reach their one route, and a refusal comes back as an error", async () => {
+  const cases = [
+    [
+      "delete_folder_document",
+      { folder: "f1", document: "d1" },
+      "DELETE /v1/folders/f1/documents/d1",
+    ],
+    ["delete_folder_asset", { folder: "f1", asset: "a1" }, "DELETE /v1/folders/f1/assets/a1"],
+    ["unlink_folder_guide", { folder: "f1", guide: "g1" }, "DELETE /v1/folders/f1/guides/g1"],
+  ];
+  for (const [name, args, route] of cases) {
+    const { call, seen } = recorder({ [route]: { status: 200, text: '{"removed":true}' } });
+    const body = await read(
+      await handleMcp(
+        rpc({ jsonrpc: "2.0", id: 30, method: "tools/call", params: { name, arguments: args } }),
+        call,
+        VOCAB,
+      ),
+    );
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.path}`),
+      [route],
+      name,
+    );
+    assert.equal(body.result.structuredContent.removed, true, name);
+  }
+  // There is deliberately no tool for DELETE /v1/folders/:id: a whole tree is a person's call.
+  const { call } = recorder({
+    "DELETE /v1/folders/f1/documents/nope": {
+      status: 404,
+      text: '{"message":"That document isn\'t in this folder."}',
+    },
+  });
+  const refused = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 31,
+        method: "tools/call",
+        params: { name: "delete_folder_document", arguments: { folder: "f1", document: "nope" } },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.equal(refused.result.isError, true);
+  assert.match(refused.result.content[0].text, /isn't in this folder/);
+});
+
+test("no agent tool deletes a whole folder", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(rpc({ jsonrpc: "2.0", id: 32, method: "tools/list", params: {} }), call, VOCAB),
+  );
+  assert.ok(!body.result.tools.some((t) => t.name === "delete_folder"));
 });
