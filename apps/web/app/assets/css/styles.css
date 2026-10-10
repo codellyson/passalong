@@ -2666,14 +2666,40 @@ table.rows.guide-rows td:last-child > span {
   justify-content: flex-end;
 }
 
+/* The task list, the same way: from md it is laid out at its container's width with set columns,
+   so nothing in a cell can push it past its card. The title takes what is left. Its two optional
+   columns carry their widths on their own <th> (TaskTable.vue), since they appear by container. */
+@media (min-width: 48rem) {
+  table.rows.task-rows {
+    table-layout: fixed;
+  }
+  table.rows.task-rows th:first-child {
+    width: 3rem;
+  }
+  table.rows.task-rows th:nth-child(4) {
+    width: 8.5rem;
+  }
+  table.rows.task-rows th:nth-child(6) {
+    width: 5.5rem;
+  }
+  table.rows.task-rows th:last-child {
+    width: 12rem;
+  }
+  table.rows.task-rows td:last-child > div {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
 /* ---- the same list, on a phone, as cards --------------------------------------------------------
    Two or three widths. Below md (768px) a table marked `stack` is a stack of cards: each row has its
    checkbox at the left, its title across the top with what it says and who it went to under it, the
    state and the age under that, and its buttons last. From md, guide lists keep five columns:
    the summary and recipient sit under the title because the hub's 70rem cap cannot fit their
-   columns beside long states and actions. Task lists use their wider columns from xl (1280px).
+   columns beside long states and actions. Task lists add their wider columns when the table's own
+   container reaches 64rem (`@5xl:` in TaskTable.vue), never by the window's width.
    A card stretched across a tablet looked half empty.
-   The cells a task table moves under the title carry `hidden xl:table-cell`, which is kept
+   The cells a task table moves under the title carry `hidden @5xl:table-cell`, which is kept
    here by name because a class selector cannot out-rank the rules below. Opt in with `stack` on
    the table; the first cell is the checkbox and the second is the title. */
 @media (max-width: 47.99rem) {
