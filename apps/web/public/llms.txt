@@ -172,7 +172,11 @@ guide id. For a team folder, publish the guide to that folder's team, or its mem
 Linking leaves the guide unchanged, and `get_folder` lists linked guides with their kind;
 `unlink_folder_guide` takes one out again. `delete_folder_document` and `delete_folder_asset` remove
 one document or file for good, so use them only when the person asked for it to go. No tool deletes
-a whole folder: a person does that in the hub, where it takes every subfolder and file with it. Folder files stay private to people who can read the folder.
+a whole folder: a person does that in the hub, where it takes every subfolder and file with it.
+`list_folders` takes `query` to find folders whose name, description or documents mention some
+words (each result names its matching documents) and `guide` to find the folders a guide is in.
+`rename_folder_document` renames a document and keeps its history; `get_folder_document_history`
+lists a document's earlier versions or returns one, so a bad edit can be saved back over. Folder files stay private to people who can read the folder.
 
 Every guide, whatever its kind, is worked with four calls:
 

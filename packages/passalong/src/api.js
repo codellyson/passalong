@@ -301,7 +301,8 @@ export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 
 export const board = () => call("/v1/board");
-export const folders = (scope = "all") => call(`/v1/folders${q({ scope })}`);
+export const folders = (scope = "all", { query = "", guide = "" } = {}) =>
+  call(`/v1/folders${q({ scope, q: query, guide })}`);
 export const createFolder = (title, description = "", team = "", parent = "", color = "") =>
   call("/v1/folders", { method: "POST", body: { title, description, team, parent, color } });
 export const folder = (id) => call(`/v1/folders/${encodeURIComponent(id)}`);
@@ -331,6 +332,15 @@ export const saveFolderDocument = (folderId, documentId, version, body) =>
     method: "PUT",
     body: { version, body },
   });
+export const renameFolderDocument = (folderId, documentId, name) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
+    method: "PATCH",
+    body: { name },
+  });
+export const folderDocumentHistory = (folderId, documentId, version = 0) =>
+  call(
+    `/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}/revisions${version ? `/${version}` : ""}`,
+  );
 export const linkFolderGuide = (folderId, guide) =>
   call(`/v1/folders/${encodeURIComponent(folderId)}/guides`, { method: "POST", body: { guide } });
 export const unlinkFolderGuide = (folderId, guide) =>

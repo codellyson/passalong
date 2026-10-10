@@ -365,7 +365,10 @@ export function buildServer() {
         "link_folder_guide with the folder id and the guide id. Linking leaves the guide unchanged; " +
         "unlink_folder_guide takes it out again. Delete a document or file with " +
         "delete_folder_document or delete_folder_asset only when the person asked for it to go: " +
-        "neither can be undone. No tool deletes a whole folder; a person does that in the hub.\n" +
+        "neither can be undone. No tool deletes a whole folder; a person does that in the hub. " +
+        "list_folders with query finds folders and documents by their words, and with guide the " +
+        "folders a guide is in. rename_folder_document renames a document; " +
+        "get_folder_document_history reads earlier versions, so a bad edit can be put back.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
@@ -535,12 +538,16 @@ export function buildServer() {
     {
       title: "List project folders",
       annotations: READS,
-      description: "Find project folders of documents, assets and guides. Requires sync sign-in.",
-      inputSchema: { scope: z.string().optional().describe('"all", "mine", or a team slug') },
+      description: `Find project folders of documents, assets and guides. Pass query to find the folders whose name, description, or any document's name or text mention those words; each then names its matching documents. Pass guide to find the folders a guide is in. Requires sync sign-in.`,
+      inputSchema: {
+        scope: z.string().optional().describe('"all", "mine", or a team slug'),
+        query: z.string().optional().describe("Words to look for in folders and their documents"),
+        guide: z.string().optional().describe("A guide id: only the folders it is linked in"),
+      },
     },
-    async ({ scope }) => {
+    async ({ scope, query, guide }) => {
       try {
-        return json(await api.folders(scope || "all"));
+        return json(await api.folders(scope || "all", { query, guide }));
       } catch (err) {
         return fail(err);
       }
@@ -723,6 +730,44 @@ export function buildServer() {
     async ({ folder, document, version, body }) => {
       try {
         return json(await api.saveFolderDocument(folder, document, version, body));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "rename_folder_document",
+    {
+      title: "Rename folder document",
+      annotations: ADDS,
+      description:
+        "Rename a folder document. Its id, text and history stay; no version is needed, because a rename cannot overwrite anyone's text.",
+      inputSchema: { folder: z.string(), document: z.string(), name: z.string() },
+    },
+    async ({ folder, document, name }) => {
+      try {
+        return json(await api.renameFolderDocument(folder, document, name));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "get_folder_document_history",
+    {
+      title: "Read folder document history",
+      annotations: READS,
+      description:
+        "Read a folder document's earlier versions. Without version, lists them newest first; with version, returns that version's text. To bring one back, save it with save_folder_document over the current version.",
+      inputSchema: {
+        folder: z.string(),
+        document: z.string(),
+        version: z.number().int().positive().optional(),
+      },
+    },
+    async ({ folder, document, version }) => {
+      try {
+        return json(await api.folderDocumentHistory(folder, document, version || 0));
       } catch (err) {
         return fail(err);
       }

@@ -89,6 +89,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "get_folder",
     "get_folder_asset",
     "get_folder_document",
+    "get_folder_document_history",
     "get_guide",
     "get_report",
     "hand_in",
@@ -99,6 +100,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "pass",
     "progress",
     "publish_guide",
+    "rename_folder_document",
     "reply",
     "save_folder_document",
     "search_guides",
@@ -443,6 +445,7 @@ test("every tool says what it does to the world, so a client does not assume the
       "get_folder",
       "get_folder_asset",
       "get_folder_document",
+      "get_folder_document_history",
       "get_report",
       "inbox",
       "list_folders",
@@ -1562,4 +1565,46 @@ test("no agent tool deletes a whole folder", async () => {
     await handleMcp(rpc({ jsonrpc: "2.0", id: 32, method: "tools/list", params: {} }), call, VOCAB),
   );
   assert.ok(!body.result.tools.some((t) => t.name === "delete_folder"));
+});
+
+test("an agent can find folders by words or by guide, rename a document and read its history", async () => {
+  const cases = [
+    ["list_folders", { query: "web dashboard" }, "GET /v1/folders?q=web+dashboard"],
+    ["list_folders", { guide: "g1", scope: "mine" }, "GET /v1/folders?scope=mine&guide=g1"],
+    ["list_folders", {}, "GET /v1/folders"],
+    [
+      "rename_folder_document",
+      { folder: "f1", document: "d1", name: "Script v2" },
+      "PATCH /v1/folders/f1/documents/d1",
+    ],
+    [
+      "get_folder_document_history",
+      { folder: "f1", document: "d1" },
+      "GET /v1/folders/f1/documents/d1/revisions",
+    ],
+    [
+      "get_folder_document_history",
+      { folder: "f1", document: "d1", version: 2 },
+      "GET /v1/folders/f1/documents/d1/revisions/2",
+    ],
+  ];
+  for (const [name, args, route] of cases) {
+    const answer =
+      name === "rename_folder_document" ? '{"document":{"id":"d1"}}' : '{"folders":[]}';
+    const { call, seen } = recorder({ [route.split("?")[0]]: { status: 200, text: answer } });
+    const body = await read(
+      await handleMcp(
+        rpc({ jsonrpc: "2.0", id: 40, method: "tools/call", params: { name, arguments: args } }),
+        call,
+        VOCAB,
+      ),
+    );
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.path}`),
+      [route],
+      name,
+    );
+    assert.notEqual(body.result.isError, true, name);
+    if (name === "rename_folder_document") assert.deepEqual(seen[0].body, { name: "Script v2" });
+  }
 });

@@ -389,4 +389,6 @@ export interface GuideContext {
   children: Guide[];
   blocked_by: Guide[];
   blocks: Guide[];
+  /** The folders holding this guide that the reader can open. Absent from an older server. */
+  folders?: { id: string; title: string; color: string }[];
 }

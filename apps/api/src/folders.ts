@@ -82,6 +82,20 @@ routes.get("/", async (c) => {
     where = "f.team_id = ?";
     values = [team.id];
   }
+  // Two filters an agent needs to find its way back: the folders a guide sits in, and the
+  // folders whose name or description, or any document's name or text, mention some words.
+  const guide = c.req.query("guide") || "";
+  if (guide) {
+    where = `(${where}) AND EXISTS (SELECT 1 FROM folder_guide fg WHERE fg.folder_id = f.id AND fg.guide_id = ?)`;
+    values.push(guide);
+  }
+  const words = (c.req.query("q") || "").trim().slice(0, 100);
+  const like = `%${words.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+  if (words) {
+    where = `(${where}) AND (f.title LIKE ? ESCAPE '\\' OR f.description LIKE ? ESCAPE '\\' OR EXISTS (
+      SELECT 1 FROM folder_document d WHERE d.folder_id = f.id AND (d.name LIKE ? ESCAPE '\\' OR d.body LIKE ? ESCAPE '\\')))`;
+    values.push(like, like, like, like);
+  }
   const { results } = await c.env.DB.prepare(
     `SELECT f.id, f.title, f.description, f.parent_id, f.color, f.team_id, f.created_by, f.created, f.updated,
             COALESCE(t.name, '') AS team_name, COALESCE(t.slug, '') AS team_slug,
@@ -90,12 +104,18 @@ routes.get("/", async (c) => {
             ) THEN 1 ELSE 0 END AS manage,
             (SELECT COUNT(*) FROM folder_document d WHERE d.folder_id = f.id) AS documents,
             (SELECT COUNT(*) FROM folder_asset a WHERE a.folder_id = f.id) AS assets,
-            (SELECT COUNT(*) FROM folder_guide g WHERE g.folder_id = f.id) AS guides
+            (SELECT COUNT(*) FROM folder_guide g WHERE g.folder_id = f.id) AS guides${
+              words
+                ? `,
+            (SELECT json_group_array(json_object('id', d.id, 'name', d.name)) FROM folder_document d
+              WHERE d.folder_id = f.id AND (d.name LIKE ? ESCAPE '\\' OR d.body LIKE ? ESCAPE '\\')) AS matches`
+                : ""
+            }
        FROM folder f LEFT JOIN team t ON t.id = f.team_id
       WHERE ${where}
       ORDER BY f.updated DESC`,
   )
-    .bind(me, me, ...values)
+    .bind(me, me, ...(words ? [like, like] : []), ...values)
     .all<
       Folder & {
         team_name: string;
@@ -103,9 +123,15 @@ routes.get("/", async (c) => {
         documents: number;
         assets: number;
         guides: number;
+        matches?: string;
       }
     >();
-  return c.json({ folders: results });
+  // With words, each folder also names the documents that matched, so the next call can open one.
+  return c.json({
+    folders: words
+      ? results.map((f) => ({ ...f, matches: JSON.parse(f.matches || "[]") }))
+      : results,
+  });
 });
 
 routes.post("/", async (c) => {
@@ -371,6 +397,38 @@ routes.put("/:folder/documents/:document", async (c) => {
   const result = await documentIn(c, folder.id, documentId);
   await c.env.DB.prepare("UPDATE folder SET updated = ? WHERE id = ?").bind(at, folder.id).run();
   return c.json({ document: result });
+});
+
+// A rename is not an edit: it takes no version, because nobody's text can be overwritten by it,
+// and it keeps the document's id and history. Only the folder's name rule and uniqueness apply.
+routes.patch("/:folder/documents/:document", async (c) => {
+  const folder = await visible(c, c.req.param("folder"));
+  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!(await writable(c, folder)))
+    return message(
+      c,
+      402,
+      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+    );
+  const input = await c.req.json<{ name?: unknown }>().catch(() => null);
+  const name = titleOf(input?.name, 120);
+  if (!name || name.includes("/") || name.includes("\\"))
+    return message(c, 400, "Give the document a name without a path.");
+  const at = now();
+  let changed = 0;
+  try {
+    const result = await c.env.DB.prepare(
+      "UPDATE folder_document SET name = ?, updated = ? WHERE id = ? AND folder_id = ?",
+    )
+      .bind(name, at, c.req.param("document"), folder.id)
+      .run();
+    changed = result.meta.changes;
+  } catch {
+    return message(c, 409, "A document with that name is already in this folder.");
+  }
+  if (!changed) return message(c, 404, "That document isn't in this folder.");
+  await c.env.DB.prepare("UPDATE folder SET updated = ? WHERE id = ?").bind(at, folder.id).run();
+  return c.json({ document: await documentIn(c, folder.id, c.req.param("document")) });
 });
 
 routes.get("/:folder/documents/:document/revisions", async (c) => {

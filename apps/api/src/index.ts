@@ -4558,6 +4558,17 @@ app.get("/v1/guides/:id/context", async (c) => {
 
   const all = [row, ...parentRows, ...childRows, ...blockerRows, ...blocksRows];
   const views = new Map((await summaries(c, all)).map((v) => [v.id, v]));
+  // The folders holding this guide, so its page leads to the script and screens beside it. Only
+  // the ones this caller could open: a private folder linking a team guide is its owner's business.
+  const { results: folderRows } = await c.env.DB.prepare(
+    `SELECT f.id, f.title, f.color FROM folder_guide fg JOIN folder f ON f.id = fg.folder_id
+      WHERE fg.guide_id = ?
+        AND ((f.team_id = '' AND f.created_by = ?)
+          OR f.team_id IN (SELECT team_id FROM membership WHERE account_id = ?))
+      ORDER BY f.title`,
+  )
+    .bind(row.id, me, me)
+    .all<{ id: string; title: string; color: string }>();
   const pick = (rows: GuideRow[]) => rows.map((r) => views.get(r.id)).filter(Boolean);
 
   return c.json({
@@ -4602,6 +4613,7 @@ app.get("/v1/guides/:id/context", async (c) => {
     children: pick(childRows),
     blocked_by: pick(blockerRows),
     blocks: pick(blocksRows),
+    folders: folderRows,
   });
 });
 
