@@ -166,6 +166,7 @@ async function openDocument(documentId: string) {
     current.value = result?.document || null;
     draft.value = result?.document.body || "";
     editing.value = false;
+    renamingDocument.value = false;
     showingHistory.value = false;
     // A new document starts at its title. Left where it was, the page keeps the old scroll
     // against a different height and everything below the reading pane lurches.
@@ -357,6 +358,56 @@ async function deleteFolder() {
   }
 }
 
+const renamingFolder = ref(false);
+const renamingDocument = ref(false);
+
+async function renameFolder(event: Event) {
+  const form = event.target as HTMLFormElement;
+  const title = field(form, "title");
+  const description = field(form, "description");
+  if (!title) return;
+  saving.value = true;
+  trouble.value = "";
+  try {
+    await api(`/v1/folders/${id.value}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title, description }),
+    });
+    renamingFolder.value = false;
+    await load();
+  } catch (error) {
+    trouble.value = error instanceof Error ? error.message : "That folder couldn't be renamed.";
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function renameDocument(event: Event) {
+  const name = field(event.target as HTMLFormElement, "document");
+  if (!name || !current.value) return;
+  saving.value = true;
+  trouble.value = "";
+  try {
+    const result = await api<{ document: FolderDocument }>(
+      `/v1/folders/${id.value}/documents/${current.value.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      },
+    );
+    renamingDocument.value = false;
+    if (result?.document && current.value)
+      current.value = { ...current.value, name: result.document.name };
+    await load();
+  } catch (error) {
+    trouble.value = error instanceof Error ? error.message : "That document couldn't be renamed.";
+  } finally {
+    saving.value = false;
+  }
+}
+
 watch([signedIn, id], load, { immediate: true });
 </script>
 
@@ -373,7 +424,14 @@ watch([signedIn, id], load, { immediate: true });
             <span class="folder-title-icon flex size-10 shrink-0 items-center justify-center rounded-2" :data-color="displayColor || 'neutral'">
               <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
             </span>
-            <div class="min-w-0">
+            <form v-if="renamingFolder" class="flex min-w-0 flex-1 flex-col gap-2" @submit.prevent="renameFolder" @keydown.esc="renamingFolder = false">
+              <label class="sr-only" for="folder-rename-title">Folder name</label>
+              <input id="folder-rename-title" name="title" class="w-full text-lg sm:w-96" maxlength="100" :value="folder.title" required />
+              <label class="sr-only" for="folder-rename-description">Description</label>
+              <input id="folder-rename-description" name="description" class="w-full text-sm sm:w-96" maxlength="400" :value="folder.description" placeholder="What this folder is for" />
+              <div class="flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving">Save</button><button class="btn sm" type="button" @click="renamingFolder = false">Cancel</button></div>
+            </form>
+            <div v-else class="min-w-0">
               <h1 class="m-0 text-h1">{{ folder.title }}</h1>
               <p v-if="folder.description" class="m-0 mt-1 font-ui text-sm text-muted">{{ folder.description }}</p>
               <p class="m-0 mt-2 font-ui text-xs text-muted">{{ folder.team_name || "Private folder" }} <span aria-hidden="true">·</span> {{ children.length }} {{ children.length === 1 ? "subfolder" : "subfolders" }} <span aria-hidden="true">·</span> {{ documents.length }} documents <span aria-hidden="true">·</span> {{ assets.length }} files</p>
@@ -387,7 +445,10 @@ watch([signedIn, id], load, { immediate: true });
               </nav>
             </div>
           </div>
-          <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" @click="deleteFolder">Delete folder</button>
+          <div class="flex items-center gap-4">
+            <button v-if="!renamingFolder" class="folder-delete font-ui text-xs text-muted hover:text-fg" type="button" @click="renamingFolder = true">Rename</button>
+            <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" @click="deleteFolder">Delete folder</button>
+          </div>
         </div>
       </header>
       <input ref="fileInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="uploadFile" />
@@ -418,8 +479,9 @@ watch([signedIn, id], load, { immediate: true });
             </NuxtLink>
           </nav>
           <div class="mt-2 flex flex-col">
-            <button v-if="!addingDocument" class="folder-add rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" :aria-expanded="addingDocument" @click="startDocument">+ New document</button>
-            <form v-else class="px-2 py-2" @submit.prevent="createDocument">
+            <!-- An empty folder's main pane already offers these two, so the sidebar does not repeat them. -->
+            <button v-if="documents.length && !addingDocument" class="folder-add rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" :aria-expanded="addingDocument" @click="startDocument">+ New document</button>
+            <form v-else-if="addingDocument" class="px-2 py-2" @submit.prevent="createDocument">
               <input ref="newDocumentInput" v-model="newName" class="w-full text-sm" maxlength="120" placeholder="Document name" aria-label="New document name" @keydown.esc="addingDocument = false" />
               <div class="mt-2 flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving || !newName.trim()">Add</button><button class="btn sm" type="button" @click="addingDocument = false; newName = ''">Cancel</button></div>
             </form>
@@ -428,7 +490,7 @@ watch([signedIn, id], load, { immediate: true });
               <input ref="newSubfolderInput" v-model="newSubfolderName" class="w-full text-sm" maxlength="100" placeholder="Subfolder name" aria-label="New subfolder name" @keydown.esc="addingSubfolder = false" />
               <div class="mt-2 flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving || !newSubfolderName.trim()">Add</button><button class="btn sm" type="button" @click="addingSubfolder = false; newSubfolderName = ''">Cancel</button></div>
             </form>
-            <div ref="guideMenu" class="relative" @keydown.esc="guideMenuOpen = false">
+            <div v-if="documents.length" ref="guideMenu" class="relative" @keydown.esc="guideMenuOpen = false">
               <button class="folder-add w-full rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" aria-haspopup="menu" :aria-expanded="guideMenuOpen" @click="guideMenuOpen = !guideMenuOpen">+ New guide</button>
               <div v-if="guideMenuOpen" class="menu folder-guide-menu" role="menu">
                 <p class="menu-note mt-0 mb-1">Ask your agent. Click one to copy what to say; it lands in this folder.</p>
@@ -454,8 +516,15 @@ watch([signedIn, id], load, { immediate: true });
           <template v-if="current">
             <!-- The rule runs to both edges of the pane, so it meets the sidebar's line instead of stopping short of it. -->
             <div class="-mx-5 mb-8 flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 pb-4 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
-              <p class="m-0 font-ui text-xs text-muted">Document <span class="mx-2" aria-hidden="true">·</span> Version {{ current.version }}</p>
-              <div class="flex flex-wrap gap-2">
+              <form v-if="renamingDocument" class="flex min-w-0 flex-1 flex-wrap items-center gap-2" @submit.prevent="renameDocument" @keydown.esc="renamingDocument = false">
+                <label class="sr-only" for="document-rename">Document name</label>
+                <input id="document-rename" name="document" class="min-w-0 flex-1 text-sm" maxlength="120" :value="current.name" required />
+                <button class="btn primary" type="submit" :disabled="saving">Save</button>
+                <button class="btn" type="button" @click="renamingDocument = false">Cancel</button>
+              </form>
+              <p v-else class="m-0 font-ui text-xs text-muted">Document <span class="mx-2" aria-hidden="true">·</span> Version {{ current.version }}</p>
+              <div v-if="!renamingDocument" class="flex flex-wrap gap-2">
+                <button class="btn sm" type="button" @click="renamingDocument = true">Rename</button>
                 <button class="btn sm" type="button" :aria-expanded="showingHistory" @click="showHistory">History</button>
                 <button v-if="!editing" class="btn sm" type="button" @click="editing = true">Edit</button>
               </div>

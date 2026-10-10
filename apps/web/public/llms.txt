@@ -169,7 +169,14 @@ agent holds the file in a code sandbox, `create_folder_upload` gives it a one-ti
 to send the bytes directly. To put a guide in a folder — a task, bug or handoff, new or
 already published — publish it as usual, then call `link_folder_guide` with the folder id and the
 guide id. For a team folder, publish the guide to that folder's team, or its members cannot see it.
-Linking leaves the guide unchanged, and `get_folder` lists linked guides with their kind. Folder files stay private to people who can read the folder.
+Linking leaves the guide unchanged, and `get_folder` lists linked guides with their kind;
+`unlink_folder_guide` takes one out again. `delete_folder_document` and `delete_folder_asset` remove
+one document or file for good, so use them only when the person asked for it to go. No tool deletes
+a whole folder: a person does that in the hub, where it takes every subfolder and file with it.
+`list_folders` takes `query` to find folders whose name, description or documents mention some
+words (each result names its matching documents) and `guide` to find the folders a guide is in.
+`rename_folder_document` renames a document and keeps its history; `get_folder_document_history`
+lists a document's earlier versions or returns one, so a bad edit can be saved back over. Folder files stay private to people who can read the folder.
 
 Every guide, whatever its kind, is worked with four calls:
 
@@ -223,6 +230,8 @@ file with `attach_file`, link it, and keep the guide to what the next agent has 
 `log` is this user's own acts, newest first — what they published, what they took delivery of, and
 every verdict and ack they gave, each with a ready-made `text` line and the guide's repo. It answers
 "what have I been working on", and it is the opposite of `activity`, which is what other people did.
+The hub shows `log` as its **Activities** page, so "my activities" means `log`; `activity` is the
+hub's notifications.
 It holds what was passed along and not what was worked on: work that never became a guide has no
 entry, so do not present it as a complete record, and do not read a quiet month as an idle one.
 

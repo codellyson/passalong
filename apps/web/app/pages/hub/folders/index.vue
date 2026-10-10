@@ -131,6 +131,7 @@ const scopeOptions = computed(() => [
   })),
 ]);
 const busy = ref(false);
+const loaded = ref(false);
 const trouble = ref("");
 const prompt = computed(() => {
   const team = data.value.me?.teams?.find((entry) => entry.slug === scope.value);
@@ -151,6 +152,7 @@ async function load() {
     trouble.value = error instanceof Error ? error.message : "Your folders didn't load.";
   } finally {
     busy.value = false;
+    loaded.value = true;
   }
 }
 
@@ -250,7 +252,8 @@ async function deleteSelected() {
   <HubShell heading="Folders">
     <template #sub>Keep a project's writing, screens and guides together for you and your agents.</template>
 
-    <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <!-- Nothing to filter until there is something somewhere; a narrowed, empty view keeps it to widen back. -->
+    <div v-if="!loaded || folders.length || scope !== 'all'" class="mb-6 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-2 font-ui text-sm text-muted">Show
         <AppSelect v-model="scope" class="min-w-36" label="Show folders in" :options="scopeOptions" />
       </div>
@@ -278,7 +281,16 @@ async function deleteSelected() {
           <span class="hidden min-w-20 text-right font-ui text-xs text-muted md:block">{{ folder.team_name || "Private" }}</span>
         </div>
       </div>
-      <div v-else class="empty"><h2>No folders here yet</h2><p>Ask your connected agent to make one from what you are working on.</p></div>
+      <!-- One block, not a notice and then an instruction saying the same thing twice. -->
+      <section v-else class="folder-empty mx-auto max-w-xl py-8 text-center" aria-labelledby="folders-empty-h">
+        <h2 id="folders-empty-h" class="m-0 text-h3">No folders {{ scope === "all" ? "yet" : "here yet" }}</h2>
+        <p class="m-0 mt-2 font-ui text-sm text-muted">Describe the project to your agent in a sentence. It makes the folder, writes its first document and adds the files you share.</p>
+        <div class="mt-5 flex flex-wrap items-center gap-3 rounded-2 bg-surface-raised px-4 py-3 text-left shadow-edge">
+          <p class="m-0 min-w-0 flex-1 font-ui text-sm text-fg">“{{ prompt }}”</p>
+          <button class="btn sm" type="button" @click="copy(prompt, $event.currentTarget)">Copy example</button>
+        </div>
+        <p class="m-0 mt-4 font-ui text-sm text-muted">No agent connected yet? <a href="/connect">Connect one</a>: Claude, ChatGPT, Codex or anything that runs the CLI.</p>
+      </section>
 
       <div v-if="selected.length" class="mt-4 rounded-3 bg-surface-raised px-4 py-4 shadow-edge">
         <div class="flex flex-wrap items-center gap-3">
@@ -315,7 +327,7 @@ async function deleteSelected() {
         </div>
       </div>
 
-      <section class="mt-8 border-t border-line pt-6" aria-label="Create a folder with your agent">
+      <section v-if="folders.length" class="mt-8 border-t border-line pt-6" aria-label="Create a folder with your agent">
         <h2 class="m-0 text-h3">Make a folder with your agent</h2>
         <p class="mt-2 mb-3 max-w-prose font-ui text-sm text-muted">Describe the project in a sentence. Your agent can create the folder, write its first document and add the files you share.</p>
         <div class="flex flex-wrap items-center gap-3 rounded-2 bg-surface-raised px-4 py-3 shadow-edge">

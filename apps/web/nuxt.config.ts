@@ -70,6 +70,10 @@ export default defineNuxtConfig({
     // the browser refuses it and hydration then throws. Turning it off makes the entry a plain
     // external module, which `'self'` already allows.
     entryImportMap: false,
+    // Moving between hub pages happens inside the app, so the cross-document transition in
+    // styles.css never runs for it; this wraps each route change in a view transition instead.
+    // Nuxt skips it for anyone who asked for less motion.
+    viewTransition: true,
   },
 
   features: {

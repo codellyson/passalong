@@ -47,6 +47,19 @@ its kind (task, bug, transfer) and opening its guide page. "+ New guide" offers 
 report or a handoff the agent-first way — it copies a sentence for the agent that names the folder
 by title and id, so the agent publishes the guide and then links it with `link_folder_guide`.
 
+Agents can also remove: `unlink_folder_guide` takes a guide out (the guide is untouched), and
+`delete_folder_document` and `delete_folder_asset` remove one document or file for good — the two
+tools marked destructive, and told to act only on a person's request. No tool deletes a whole
+folder: one mistaken call would take every subfolder and file, so that stays a person's act in the
+hub.
+
+Agents can find their way back and undo their own mistakes: `list_folders` takes `query` (folder
+name and description, document names and text, with the matching documents named in each result)
+and `guide` (the folders a guide is in); `rename_folder_document` renames without a version, since
+a rename overwrites nobody's text; `get_folder_document_history` lists and returns earlier versions
+so a bad edit can be saved back over. In the hub, a guide's page lists its folders under "Tied to",
+and a folder and its documents can be renamed in place.
+
 This is a project context, not another kind of guide. The guide's task, bug and transfer semantics
 and its export format stay the same. Folder assets have their own storage and access rules rather
 than pretending to be screenshots claimed by a guide.

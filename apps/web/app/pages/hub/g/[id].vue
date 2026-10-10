@@ -459,7 +459,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 
           <!-- The guides it is tied to. Each opens here, so the chain is walked without leaving. -->
           <section
-            v-if="ctx.parent || ctx.children.length || ctx.blocked_by.length || ctx.blocks.length || g.report"
+            v-if="ctx.parent || ctx.children.length || ctx.blocked_by.length || ctx.blocks.length || g.report || ctx.folders?.length"
             :class="card"
             class="flex flex-col gap-4 font-ui text-sm"
           >
@@ -483,6 +483,13 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <div v-if="ctx.children.length" class="flex flex-col gap-2">
               <p class="m-0 text-muted">Follow-ups · {{ ctx.children.length }}</p>
               <HubGuideLink v-for="c in ctx.children" :key="c.id" :g="c" />
+            </div>
+            <div v-if="ctx.folders?.length" class="flex flex-col gap-2">
+              <p class="m-0 text-muted">In folders</p>
+              <NuxtLink v-for="f in ctx.folders" :key="f.id" :to="`/hub/folders/${f.id}`" class="flex items-center gap-2 rounded-2 bg-field px-3 py-2 text-fg no-underline hover:shadow-edge">
+                <svg class="size-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
+                <span class="min-w-0 flex-1">{{ f.title }}</span>
+              </NuxtLink>
             </div>
           </section>
         </aside>

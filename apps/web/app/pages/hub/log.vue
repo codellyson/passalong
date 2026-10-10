@@ -17,7 +17,7 @@ import type { LogEntry } from "~/types/hub";
 import { ASKS } from "~/utils/asks";
 
 usePage({
-  title: "Your log · Passalong",
+  title: "Activities · Passalong",
   description: "What you published, pulled and answered, newest first.",
   noindex: true,
 });
@@ -82,18 +82,18 @@ const months = computed(() => {
 </script>
 
 <template>
-  <HubShell heading="Your log">
+  <HubShell heading="Activities">
     <template #sub>What you've sent, opened and answered, newest first.</template>
 
     <!-- Failed is not empty: "Nothing yet" would tell someone with a year of work that they have
          none. -->
     <p v-if="failed.log" class="empty" role="alert">
-      Your log didn't load.
+      Your activities didn't load.
       <button class="linkish" type="button" @click="refresh(hubKeys.log)">Try again</button>
     </p>
-    <HubSkeleton v-else-if="loading.log" variant="lines" :rows="6" label="Loading your log" />
+    <HubSkeleton v-else-if="loading.log" variant="lines" :rows="6" label="Loading your activities" />
     <div v-else-if="!data.log.length" class="empty">
-      <h2>Nothing in your log yet</h2>
+      <h2>No activities yet</h2>
       <p>It fills up as you send guides, open them, and answer them, newest first.</p>
       <div class="actions">
         <HubAsk :text="ASKS.task" />
@@ -102,12 +102,12 @@ const months = computed(() => {
 
     <template v-else>
       <div class="toolbar">
-        <input v-model="q" type="search" placeholder="Search your log" aria-label="Search your log" />
+        <input v-model="q" type="search" placeholder="Search your activities" aria-label="Search your activities" />
       </div>
 
       <!-- The way out goes where the dead end is: a search with no results offers to clear itself. -->
       <div v-if="!visible.length" class="empty">
-        <p>Nothing in your log matches “{{ q.trim() }}”.</p>
+        <p>No activities match “{{ q.trim() }}”.</p>
         <div class="actions">
           <button class="btn" type="button" @click="q = ''">Clear search</button>
         </div>

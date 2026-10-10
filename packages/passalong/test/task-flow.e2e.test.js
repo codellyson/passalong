@@ -148,6 +148,84 @@ test("nested folders keep their space, color and subtree when moved", { skip }, 
   await assert.rejects(api.folder(scenes.id), /isn't available/);
 });
 
+test("an agent finds folders by words and by guide, renames, recovers and removes", {
+  skip,
+}, async () => {
+  const ctx = await setup();
+  const api = await import("../src/api.js");
+  const { folder } = await api.createFolder("Checkout research", "Payments notes");
+  const { document } = await api.createFolderDocument(folder.id, "Notes", "The 50%_off coupon");
+
+  // Words in a document's text find its folder and name the document; LIKE's own wildcards in the
+  // words are taken literally, so "0%_o" matches only the text that says exactly that.
+  const found = (await api.folders("all", { query: "0%_o" })).folders;
+  assert.deepEqual(
+    found.map((f) => f.id),
+    [folder.id],
+  );
+  assert.deepEqual(found[0].matches, [{ id: document.id, name: "Notes" }]);
+  assert.equal((await api.folders("all", { query: "50xxoff" })).folders.length, 0);
+
+  // A bad edit is put back from history.
+  await api.saveFolderDocument(folder.id, document.id, 1, "Rewritten by mistake");
+  const history = await api.folderDocumentHistory(folder.id, document.id);
+  assert.deepEqual(
+    history.revisions.map((r) => r.version),
+    [2, 1],
+  );
+  const first = await api.folderDocumentHistory(folder.id, document.id, 1);
+  await api.saveFolderDocument(folder.id, document.id, 2, first.revision.body);
+  assert.equal(
+    (await api.folderDocument(folder.id, document.id)).document.body,
+    "The 50%_off coupon",
+  );
+
+  // A rename keeps the id and history, and refuses a name the folder already has.
+  const renamed = await api.renameFolderDocument(folder.id, document.id, "Coupon notes");
+  assert.equal(renamed.document.id, document.id);
+  assert.equal(renamed.document.name, "Coupon notes");
+  await api.createFolderDocument(folder.id, "Other", "");
+  await assert.rejects(api.renameFolderDocument(folder.id, document.id, "Other"), /already/);
+
+  // A guide's folders: from list_folders, and on the guide's own context for the hub.
+  // A transfer, not a task: a Ready task would sit in this repo's queue and be taken by the next test.
+  const { id } = (
+    await ctx.p.share(
+      ctx.serialize({
+        meta: {
+          title: "Folder-linked notes",
+          summary: "Said to a person for the test.",
+          kind: "transfer",
+        },
+        body: "Context for the folder test.",
+      }),
+    )
+  ).guide.meta;
+  await api.linkFolderGuide(folder.id, id);
+  assert.deepEqual(
+    (await api.folders("all", { guide: id })).folders.map((f) => f.id),
+    [folder.id],
+  );
+  const context = await (
+    await fetch(`${API}/v1/guides/${id}/context`, {
+      headers: {
+        "x-passalong-version": VERSION,
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+      },
+    })
+  ).json();
+  assert.deepEqual(
+    context.folders.map((f) => f.id),
+    [folder.id],
+  );
+
+  // And out again: unlinking leaves the guide, deleting a document takes it for good.
+  await api.unlinkFolderGuide(folder.id, id);
+  assert.equal((await api.folders("all", { guide: id })).folders.length, 0);
+  await api.deleteFolderDocument(folder.id, document.id);
+  await assert.rejects(api.folderDocument(folder.id, document.id), /isn't in this folder/);
+});
+
 test("finishing with the write-up publishes it as the task's report", { skip }, async () => {
   const env = await setup();
   const { p, parse } = env;

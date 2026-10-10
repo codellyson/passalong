@@ -4,7 +4,7 @@
   the signed-out state is not a page — every /hub route collapses to the same sign-in card, and a
   layout would have to render a heading above it that describes a screen the visitor cannot see.
 
-  The top bar holds only places (Guides, Your log, Settings) and two menus: New, for making a
+  The top bar holds only places (Guides, Activities, Settings) and two menus: New, for making a
   guide, and you. It used to carry a large "Your transfers" heading, a sentence of counts computed
   differently from the counts below it, team chips labelled with slugs, and a "Report a bug" tab
   that was a verb among places. Each page now names itself, and the guides page counts its own
@@ -71,9 +71,11 @@ const route = useRoute();
 
 /**
  * The reading column, named once. The navbar sits outside <main> so that its background can span
- * the viewport without `100vw` — see the template — and its content has to line up with the page
- * under it, so both take their width from here.
+ * the viewport without `100vw` — see the template. The bar itself always takes the wide measure:
+ * when it followed each page's, the logo and links jumped sideways on every switch between a wide
+ * page and a narrow one, which reads as the whole app shifting.
  */
+const barMeasure = "max-w-[70rem]";
 // A guide's own page is wide for the same reason Settings is: the guide and what surrounds it sit
 // side by side.
 const measure = computed(() =>
@@ -146,7 +148,7 @@ const nearLimit = computed(() => {
 const tabs = [
   { to: "/hub", label: "Work" },
   { to: "/hub/folders", label: "Folders" },
-  { to: "/hub/log", label: "Your log" },
+  { to: "/hub/log", label: "Activities" },
   { to: "/hub/settings", label: "Settings" },
 ];
 
@@ -171,13 +173,13 @@ const active = (to: string) =>
   <!-- The navbar, outside <main> and spanning the viewport by being a block in the page rather
        than a box one viewport wide. `100vw` counts the vertical scrollbar, so the old full-bleed
        pseudo-element was about eight pixels wider than the page and the browser drew a horizontal
-       scrollbar on every screen. A plain block has no such opinion, and its content lines up with
-       the page under it because both use `measure`. -->
+       scrollbar on every screen. A plain block has no such opinion. Its content keeps one width on
+       every page (`barMeasure`), so switching pages never moves it. -->
   <div
     v-if="framed"
-    class="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md"
+    class="hub-bar sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md"
   >
-    <div class="mx-auto flex h-16 w-full items-center gap-2 px-[var(--s-5)] sm:gap-6" :class="measure">
+    <div class="mx-auto flex h-16 w-full items-center gap-2 px-[var(--s-5)] sm:gap-6" :class="barMeasure">
       <!-- One row at every width. On a phone the brand is its mark, New is a plus, the account
            is an avatar, and the theme switch moves into the account menu. -->
       <AppBrand to="/hub" compact />

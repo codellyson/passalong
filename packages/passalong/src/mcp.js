@@ -219,6 +219,8 @@ const passOut = openObject({ id: z.string(), passed: z.boolean() });
 
 const READS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
+// Removes something that cannot be brought back. Only a person's request should lead here.
+const REMOVES = { readOnlyHint: false, destructiveHint: true, openWorldHint: false };
 const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError: true });
 
 /**
@@ -360,7 +362,13 @@ export function buildServer() {
         "this machine, and get_folder_asset to read one already there. " +
         "To put a guide in a folder — a task, bug or handoff, new or already published — publish it " +
         "as usual (for a team folder, to that folder's team, or its members cannot see it), then call " +
-        "link_folder_guide with the folder id and the guide id. Linking leaves the guide unchanged.\n" +
+        "link_folder_guide with the folder id and the guide id. Linking leaves the guide unchanged; " +
+        "unlink_folder_guide takes it out again. Delete a document or file with " +
+        "delete_folder_document or delete_folder_asset only when the person asked for it to go: " +
+        "neither can be undone. No tool deletes a whole folder; a person does that in the hub. " +
+        "list_folders with query finds folders and documents by their words, and with guide the " +
+        "folders a guide is in. rename_folder_document renames a document; " +
+        "get_folder_document_history reads earlier versions, so a bad edit can be put back.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
@@ -530,12 +538,16 @@ export function buildServer() {
     {
       title: "List project folders",
       annotations: READS,
-      description: "Find project folders of documents, assets and guides. Requires sync sign-in.",
-      inputSchema: { scope: z.string().optional().describe('"all", "mine", or a team slug') },
+      description: `Find project folders of documents, assets and guides. Pass query to find the folders whose name, description, or any document's name or text mention those words; each then names its matching documents. Pass guide to find the folders a guide is in. Requires sync sign-in.`,
+      inputSchema: {
+        scope: z.string().optional().describe('"all", "mine", or a team slug'),
+        query: z.string().optional().describe("Words to look for in folders and their documents"),
+        guide: z.string().optional().describe("A guide id: only the folders it is linked in"),
+      },
     },
-    async ({ scope }) => {
+    async ({ scope, query, guide }) => {
       try {
-        return json(await api.folders(scope || "all"));
+        return json(await api.folders(scope || "all", { query, guide }));
       } catch (err) {
         return fail(err);
       }
@@ -724,6 +736,44 @@ export function buildServer() {
     },
   );
   server.registerTool(
+    "rename_folder_document",
+    {
+      title: "Rename folder document",
+      annotations: ADDS,
+      description:
+        "Rename a folder document. Its id, text and history stay; no version is needed, because a rename cannot overwrite anyone's text.",
+      inputSchema: { folder: z.string(), document: z.string(), name: z.string() },
+    },
+    async ({ folder, document, name }) => {
+      try {
+        return json(await api.renameFolderDocument(folder, document, name));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "get_folder_document_history",
+    {
+      title: "Read folder document history",
+      annotations: READS,
+      description:
+        "Read a folder document's earlier versions. Without version, lists them newest first; with version, returns that version's text. To bring one back, save it with save_folder_document over the current version.",
+      inputSchema: {
+        folder: z.string(),
+        document: z.string(),
+        version: z.number().int().positive().optional(),
+      },
+    },
+    async ({ folder, document, version }) => {
+      try {
+        return json(await api.folderDocumentHistory(folder, document, version || 0));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
     "link_folder_guide",
     {
       title: "Link guide to folder",
@@ -735,6 +785,60 @@ export function buildServer() {
     async ({ folder, guide }) => {
       try {
         return json(await api.linkFolderGuide(folder, guide));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "unlink_folder_guide",
+    {
+      title: "Unlink guide from folder",
+      annotations: ADDS,
+      description:
+        "Take a guide out of a folder. Only the link goes: the guide itself is unchanged, and link_folder_guide puts it back.",
+      inputSchema: { folder: z.string(), guide: z.string() },
+    },
+    async ({ folder, guide }) => {
+      try {
+        return json(await api.unlinkFolderGuide(folder, guide));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_folder_document",
+    {
+      title: "Delete folder document",
+      annotations: REMOVES,
+      description:
+        "Delete one document from a folder, with its earlier versions. It cannot be brought back, so do it only when the person asked for that document to go; to change what it says, use save_folder_document instead.",
+      inputSchema: { folder: z.string(), document: z.string() },
+    },
+    async ({ folder, document }) => {
+      try {
+        return json(await api.deleteFolderDocument(folder, document));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_folder_asset",
+    {
+      title: "Delete folder file",
+      annotations: REMOVES,
+      description:
+        "Delete one file from a folder. It cannot be brought back, so do it only when the person asked for that file to go.",
+      inputSchema: { folder: z.string(), asset: z.string() },
+    },
+    async ({ folder, asset }) => {
+      try {
+        return json(await api.deleteFolderAsset(folder, asset));
       } catch (err) {
         return fail(err);
       }
@@ -814,8 +918,8 @@ export function buildServer() {
         "delivery of, and every verdict and ack they gave. Each item has a rendered `text` line " +
         "and the guide's repo. Use it to answer 'what have I been working on', to write a " +
         "standup or a weekly summary, or to find work from a repo by when it happened rather " +
-        "than by what it was called. This is the opposite of `activity`, which is what other " +
-        "people did. IMPORTANT: it records what was passed along, not what was worked on — work " +
+        "than by what it was called. The hub calls this page Activities, so 'my activities' means " +
+        "this tool. It is the opposite of `activity`, which is what other people did. IMPORTANT: it records what was passed along, not what was worked on — work " +
         "that never became a guide has no entry, so never present it as a complete record of " +
         "this user's work, and never infer that a quiet period was an idle one.",
       inputSchema: {
@@ -842,8 +946,9 @@ export function buildServer() {
       annotations: READS,
       description:
         "What has happened to this user's guides and handoffs: who pulled one, who archived one, " +
-        "who was handed what, who joined a team. Each item has a ready-made `text` line. This only " +
-        "reads; clear_activity is what marks the feed seen.",
+        "who was handed what, who joined a team. Each item has a ready-made `text` line. This is " +
+        "the hub's notifications, not its Activities page — for the user's own acts ('my " +
+        "activities'), use log. This only reads; clear_activity is what marks the feed seen.",
       inputSchema: {
         all: z.boolean().default(false).describe("include what the user has already seen"),
       },
