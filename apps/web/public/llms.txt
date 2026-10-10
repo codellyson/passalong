@@ -230,6 +230,8 @@ file with `attach_file`, link it, and keep the guide to what the next agent has 
 `log` is this user's own acts, newest first — what they published, what they took delivery of, and
 every verdict and ack they gave, each with a ready-made `text` line and the guide's repo. It answers
 "what have I been working on", and it is the opposite of `activity`, which is what other people did.
+The hub shows `log` as its **Activities** page, so "my activities" means `log`; `activity` is the
+hub's notifications.
 It holds what was passed along and not what was worked on: work that never became a guide has no
 entry, so do not present it as a complete record, and do not read a quiet month as an idle one.
 

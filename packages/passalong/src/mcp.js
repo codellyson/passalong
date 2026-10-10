@@ -918,8 +918,8 @@ export function buildServer() {
         "delivery of, and every verdict and ack they gave. Each item has a rendered `text` line " +
         "and the guide's repo. Use it to answer 'what have I been working on', to write a " +
         "standup or a weekly summary, or to find work from a repo by when it happened rather " +
-        "than by what it was called. This is the opposite of `activity`, which is what other " +
-        "people did. IMPORTANT: it records what was passed along, not what was worked on — work " +
+        "than by what it was called. The hub calls this page Activities, so 'my activities' means " +
+        "this tool. It is the opposite of `activity`, which is what other people did. IMPORTANT: it records what was passed along, not what was worked on — work " +
         "that never became a guide has no entry, so never present it as a complete record of " +
         "this user's work, and never infer that a quiet period was an idle one.",
       inputSchema: {
@@ -946,8 +946,9 @@ export function buildServer() {
       annotations: READS,
       description:
         "What has happened to this user's guides and handoffs: who pulled one, who archived one, " +
-        "who was handed what, who joined a team. Each item has a ready-made `text` line. This only " +
-        "reads; clear_activity is what marks the feed seen.",
+        "who was handed what, who joined a team. Each item has a ready-made `text` line. This is " +
+        "the hub's notifications, not its Activities page — for the user's own acts ('my " +
+        "activities'), use log. This only reads; clear_activity is what marks the feed seen.",
       inputSchema: {
         all: z.boolean().default(false).describe("include what the user has already seen"),
       },

@@ -479,8 +479,9 @@ watch([signedIn, id], load, { immediate: true });
             </NuxtLink>
           </nav>
           <div class="mt-2 flex flex-col">
-            <button v-if="!addingDocument" class="folder-add rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" :aria-expanded="addingDocument" @click="startDocument">+ New document</button>
-            <form v-else class="px-2 py-2" @submit.prevent="createDocument">
+            <!-- An empty folder's main pane already offers these two, so the sidebar does not repeat them. -->
+            <button v-if="documents.length && !addingDocument" class="folder-add rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" :aria-expanded="addingDocument" @click="startDocument">+ New document</button>
+            <form v-else-if="addingDocument" class="px-2 py-2" @submit.prevent="createDocument">
               <input ref="newDocumentInput" v-model="newName" class="w-full text-sm" maxlength="120" placeholder="Document name" aria-label="New document name" @keydown.esc="addingDocument = false" />
               <div class="mt-2 flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving || !newName.trim()">Add</button><button class="btn sm" type="button" @click="addingDocument = false; newName = ''">Cancel</button></div>
             </form>
@@ -489,7 +490,7 @@ watch([signedIn, id], load, { immediate: true });
               <input ref="newSubfolderInput" v-model="newSubfolderName" class="w-full text-sm" maxlength="100" placeholder="Subfolder name" aria-label="New subfolder name" @keydown.esc="addingSubfolder = false" />
               <div class="mt-2 flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving || !newSubfolderName.trim()">Add</button><button class="btn sm" type="button" @click="addingSubfolder = false; newSubfolderName = ''">Cancel</button></div>
             </form>
-            <div ref="guideMenu" class="relative" @keydown.esc="guideMenuOpen = false">
+            <div v-if="documents.length" ref="guideMenu" class="relative" @keydown.esc="guideMenuOpen = false">
               <button class="folder-add w-full rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" aria-haspopup="menu" :aria-expanded="guideMenuOpen" @click="guideMenuOpen = !guideMenuOpen">+ New guide</button>
               <div v-if="guideMenuOpen" class="menu folder-guide-menu" role="menu">
                 <p class="menu-note mt-0 mb-1">Ask your agent. Click one to copy what to say; it lands in this folder.</p>

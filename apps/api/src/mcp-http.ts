@@ -1637,8 +1637,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       description:
         "This user's own acts on guides, newest first: published, pulled, and every verdict and " +
         "ack they gave, each with a rendered `text` line and the guide's repo. Use it for 'what " +
-        "have I been working on', a standup, or finding work by when it happened. The opposite " +
-        "of activity, which is what other people did. IMPORTANT: it records what was passed " +
+        "have I been working on', a standup, or finding work by when it happened. The hub calls " +
+        "this page Activities, so 'my activities' means this tool. The opposite of activity, " +
+        "which is what other people did. IMPORTANT: it records what was passed " +
         "along, not what was worked on — work that never became a guide has no entry, so never " +
         "present it as a complete record, and never read a quiet period as an idle one.",
       inputSchema: {

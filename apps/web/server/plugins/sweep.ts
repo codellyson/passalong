@@ -131,7 +131,7 @@ export default defineNitroPlugin((nitro) => {
             guide_id: g.id,
             actor_id: "",
             team_id: g.team_id,
-            note: "not opened for a fortnight; put it back from your log if it is still live",
+            note: "not opened for a fortnight; put it back from Activities if it is still live",
           });
       }
       if (old.length) console.log(`closed ${old.length} sent guide(s) nobody opened`);
