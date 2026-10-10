@@ -56,7 +56,9 @@ hub.
 Agents can find their way back and undo their own mistakes: `list_folders` takes `query` (folder
 name and description, document names and text, with the matching documents named in each result)
 and `guide` (the folders a guide is in); `rename_folder_document` renames without a version, since
-a rename overwrites nobody's text; `get_folder_document_history` lists and returns earlier versions
+a rename overwrites nobody's text; `move_folder_document` (and "Move to…" in the hub) moves a
+document to another folder in the same space by changing its `folder_id`, so its id and history go
+with it — never a copy and a delete, and never across spaces, since that would share it; `get_folder_document_history` lists and returns earlier versions
 so a bad edit can be saved back over. In the hub, a guide's page lists its folders under "Tied to",
 and a folder and its documents can be renamed in place.
 

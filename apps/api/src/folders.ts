@@ -399,8 +399,10 @@ routes.put("/:folder/documents/:document", async (c) => {
   return c.json({ document: result });
 });
 
-// A rename is not an edit: it takes no version, because nobody's text can be overwritten by it,
-// and it keeps the document's id and history. Only the folder's name rule and uniqueness apply.
+// Renaming and moving are not edits: neither takes a version, because neither can overwrite
+// anybody's text, and both keep the document's id — so its history, keyed by that id, goes with it.
+// A move stays within one space, as a folder's does: putting a private document into a team folder
+// would share it, and that is a decision for a person, not a side effect of tidying.
 routes.patch("/:folder/documents/:document", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
   if (!folder) return message(c, 404, "That folder isn't available to you.");
@@ -410,25 +412,59 @@ routes.patch("/:folder/documents/:document", async (c) => {
       402,
       "This team's plan has lapsed. Its folders can still be read, but not changed.",
     );
-  const input = await c.req.json<{ name?: unknown }>().catch(() => null);
-  const name = titleOf(input?.name, 120);
+  const input = await c.req.json<{ name?: unknown; folder?: unknown }>().catch(() => null);
+  const document = await documentIn(c, folder.id, c.req.param("document"));
+  if (!document) return message(c, 404, "That document isn't in this folder.");
+  if (!input || (input.name === undefined && input.folder === undefined))
+    return message(c, 400, "Send a new name, a folder to move it to, or both.");
+  const name = input.name === undefined ? document.name : titleOf(input.name, 120);
   if (!name || name.includes("/") || name.includes("\\"))
     return message(c, 400, "Give the document a name without a path.");
-  const at = now();
-  let changed = 0;
-  try {
-    const result = await c.env.DB.prepare(
-      "UPDATE folder_document SET name = ?, updated = ? WHERE id = ? AND folder_id = ?",
-    )
-      .bind(name, at, c.req.param("document"), folder.id)
-      .run();
-    changed = result.meta.changes;
-  } catch {
-    return message(c, 409, "A document with that name is already in this folder.");
+  let target = folder;
+  if (input.folder !== undefined) {
+    if (typeof input.folder !== "string" || !input.folder)
+      return message(c, 400, "Choose the folder to move it to by id.");
+    const found = await visible(c, input.folder);
+    if (!found || found.team_id !== folder.team_id)
+      return message(c, 404, "That folder isn't available in this space.");
+    if (!(await writable(c, found)))
+      return message(
+        c,
+        402,
+        "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      );
+    target = found;
   }
-  if (!changed) return message(c, 404, "That document isn't in this folder.");
-  await c.env.DB.prepare("UPDATE folder SET updated = ? WHERE id = ?").bind(at, folder.id).run();
-  return c.json({ document: await documentIn(c, folder.id, c.req.param("document")) });
+  if (target.id !== folder.id) {
+    const count = await c.env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM folder_document WHERE folder_id = ?",
+    )
+      .bind(target.id)
+      .first<{ n: number }>();
+    if ((count?.n || 0) >= 100) return message(c, 409, "That folder has 100 documents already.");
+  }
+  const at = now();
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        "UPDATE folder_document SET name = ?, folder_id = ?, updated = ? WHERE id = ? AND folder_id = ?",
+      ).bind(name, target.id, at, document.id, folder.id),
+      c.env.DB.prepare("UPDATE folder SET updated = ? WHERE id IN (?, ?)").bind(
+        at,
+        folder.id,
+        target.id,
+      ),
+    ]);
+  } catch {
+    return message(
+      c,
+      409,
+      target.id === folder.id
+        ? "A document with that name is already in this folder."
+        : "A document with that name is already in the folder you are moving it to.",
+    );
+  }
+  return c.json({ document: await documentIn(c, target.id, document.id), folder: target.id });
 });
 
 routes.get("/:folder/documents/:document/revisions", async (c) => {

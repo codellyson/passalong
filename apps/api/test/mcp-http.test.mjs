@@ -97,6 +97,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "link_folder_guide",
     "list_folders",
     "log",
+    "move_folder_document",
     "pass",
     "progress",
     "publish_guide",
@@ -1578,6 +1579,11 @@ test("an agent can find folders by words or by guide, rename a document and read
       "PATCH /v1/folders/f1/documents/d1",
     ],
     [
+      "move_folder_document",
+      { folder: "f1", document: "d1", to: "f2" },
+      "PATCH /v1/folders/f1/documents/d1",
+    ],
+    [
       "get_folder_document_history",
       { folder: "f1", document: "d1" },
       "GET /v1/folders/f1/documents/d1/revisions",
@@ -1589,8 +1595,9 @@ test("an agent can find folders by words or by guide, rename a document and read
     ],
   ];
   for (const [name, args, route] of cases) {
-    const answer =
-      name === "rename_folder_document" ? '{"document":{"id":"d1"}}' : '{"folders":[]}';
+    const answer = name.endsWith("_folder_document")
+      ? '{"document":{"id":"d1"}}'
+      : '{"folders":[]}';
     const { call, seen } = recorder({ [route.split("?")[0]]: { status: 200, text: answer } });
     const body = await read(
       await handleMcp(
@@ -1606,5 +1613,6 @@ test("an agent can find folders by words or by guide, rename a document and read
     );
     assert.notEqual(body.result.isError, true, name);
     if (name === "rename_folder_document") assert.deepEqual(seen[0].body, { name: "Script v2" });
+    if (name === "move_folder_document") assert.deepEqual(seen[0].body, { folder: "f2" });
   }
 });
