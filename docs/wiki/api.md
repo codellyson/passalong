@@ -58,8 +58,9 @@ Each narrows in SQL before its row limit; an unknown or inaccessible team slug i
 
 | Route | Access | Notes |
 | --- | --- | --- |
-| `GET /v1/folders?scope=`, `POST /v1/folders` | account | List visible folders or make one; `team` is optional on creation |
-| `GET /v1/folders/:id` | creator or current team member | Folder metadata, document and asset lists, linked guides |
+| `GET /v1/folders?scope=`, `POST /v1/folders` | account | List visible folders or make one; `team`, `parent` and `color` are optional on creation |
+| `GET /v1/folders/:id` | creator or current team member | Folder metadata, breadcrumbs, subfolders, documents, assets and linked guides |
+| `PATCH /v1/folders/:id` | folder writer | Rename, describe, recolor or move; cycles and moves across spaces are refused |
 | `POST /v1/folders/:id/documents` | folder reader | `{ name, body }` creates a Markdown document |
 | `GET`, `PUT`, `DELETE /v1/folders/:id/documents/:document` | folder reader | Save requires `{ body, version }`; stale version returns 409 |
 | `GET /v1/folders/:id/documents/:document/revisions[/:version]` | folder reader | List and read saved versions |
@@ -67,9 +68,9 @@ Each narrows in SQL before its row limit; an unknown or inaccessible team slug i
 | `POST /v1/uploads` with `{ folder, name }`, then `PUT /v1/uploads/:token` | folder writer, then one-time link | A sandbox can send a file directly to that folder; the link expires in 10 minutes and works once |
 | `GET /v1/folders/:id/assets/:asset/agent` | folder reader | Bounded image or text for MCP context |
 | `POST /v1/folders/:id/guides`, `DELETE /v1/folders/:id/guides/:guide` | folder reader | Link or unlink a guide without changing it |
-| `DELETE /v1/folders/:id` | creator or team owner | Deletes the folder's documents and assets, never linked guides |
+| `DELETE /v1/folders/:id` | creator or team owner | Deletes the folder subtree, documents and assets, never linked guides; a team owner must delete a subtree with teammates' folders |
 
-Folders have no nested folders. Their files belong to the folder and are independent of guide
+Folders may nest at multiple levels. Their files belong to the folder and are independent of guide
 attachments. A private folder is visible only to its creator; any current member may use a team
 folder. Inaccessible ids answer 404.
 

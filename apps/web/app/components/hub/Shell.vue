@@ -77,7 +77,10 @@ const route = useRoute();
 // A guide's own page is wide for the same reason Settings is: the guide and what surrounds it sit
 // side by side.
 const measure = computed(() =>
-  route.path === "/hub/settings" || route.path === "/hub" || route.path.startsWith("/hub/g/")
+  route.path === "/hub/settings" ||
+  route.path === "/hub" ||
+  route.path.startsWith("/hub/g/") ||
+  route.path.startsWith("/hub/folders")
     ? "max-w-[70rem]"
     : "max-w-[54rem]",
 );

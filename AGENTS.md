@@ -167,11 +167,13 @@ change. Its README says how.
     measured against an agent's half hour. Three layouts were prototyped on `prototype/taken-views`.
     `conversationOn()` must match every pattern a body can carry a stored thing by (`/v1/shots/` and
     `/v1/attachments/`), or the author's next edit releases whatever the missing one named.
-  - `src/folders.ts` — one-level project folders (migration 0046): Markdown documents, private R2
+  - `src/folders.ts` — project folders (migrations 0046 and 0047), nestable at any depth within
+    one private or team space, with optional grouping colors: Markdown documents, private R2
     assets, and links to guides. A folder's files belong to the folder, never to a linked guide;
     removing a guide must not remove a tutorial's script or screens. Personal folders belong to
     their creator; every current team member may read and edit a team folder, and its creator or
-    a team owner may delete it. Every document save carries the version read and refuses a stale
+    a team owner may delete it. Moving a folder refuses cycles and cross-space parents; deleting
+    a parent removes its descendants and their R2 files. Every document save carries the version read and refuses a stale
     one, so a person's edit and an agent's edit cannot silently replace each other. Both MCP
     servers expose the same folder document operations and a direct way to add assets: a local
     path over stdio, a client file input over HTTP, or a one-time folder-scoped upload link for a

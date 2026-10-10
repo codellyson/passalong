@@ -2,11 +2,13 @@ export interface Folder {
   id: string;
   title: string;
   description: string;
+  parent_id: string;
+  color: string;
   team_id: string;
   team_slug?: string;
   team_name?: string;
   created_by: string;
-  manage?: boolean;
+  manage?: boolean | number;
   created: string;
   updated: string;
   documents?: number;

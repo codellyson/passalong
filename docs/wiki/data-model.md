@@ -53,8 +53,9 @@ from its issues every time and an area with nothing left in it stops existing.
 
 ## folder, folder_document, folder_asset, folder_guide
 
-Migration 0046 adds one-level project folders. `folder` has a creator, optional team id, title and
-description. Private folders are visible only to their creator; team folders are visible to current
+Migrations 0046 and 0047 add project folders and nesting. `folder` has a creator, optional team id,
+title, description, optional parent id and optional color. A child stays in its parent's private or
+team space; the API prevents cycles. Private folders are visible only to their creator; team folders are visible to current
 members. `folder_document` holds the current Markdown and version; `folder_document_revision`
 holds each saved body. A write must name the version it read, so concurrent edits do not overwrite.
 `folder_asset` points to private bytes in R2 under `folders/<folder>/<asset>`, independent of a
