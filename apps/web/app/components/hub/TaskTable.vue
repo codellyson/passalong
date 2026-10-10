@@ -77,8 +77,13 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
 </script>
 
 <template>
-  <div ref="root" class="rounded-3 bg-raised shadow-edge">
-    <table class="rows stack m-0 w-full font-ui text-sm">
+  <!-- The table is laid out by its own width, never the window's. It sits in a board column far
+       narrower than the screen, so window breakpoints showed columns that did not fit and the
+       table ran out of its card. `@container` + `@5xl:` decides by the space it actually has, and
+       `table-fixed` with set widths makes long values wrap or truncate inside their cell instead
+       of widening the table. -->
+  <div ref="root" class="@container rounded-3 bg-raised shadow-edge">
+    <table class="rows stack task-rows m-0 w-full font-ui text-sm">
       <thead>
         <tr class="text-xs text-muted">
           <th class="w-8">
@@ -94,9 +99,9 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
             </label>
           </th>
           <th>Task</th>
-          <th class="hidden xl:table-cell">What it says</th>
+          <th class="hidden w-[20%] @5xl:table-cell">What it says</th>
           <th>State</th>
-          <th class="hidden xl:table-cell">Held by</th>
+          <th class="hidden w-36 @5xl:table-cell">Held by</th>
           <th>Age</th>
           <th><span class="sr-only">Actions</span></th>
         </tr>
@@ -104,25 +109,25 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
       <tbody>
         <tr v-for="t in tasks" :key="t.id">
           <td><HubSelectBox :id="t.id" :title="t.title" :archived="t.state === 'done'" :allowed="Boolean(t.mine || t.manage)" /></td>
-          <td class="min-w-40 max-w-[22rem] font-medium md:min-w-60">
+          <td class="font-medium">
             <div class="flex items-start gap-3">
               <HubGuideThumbnail :image="previews.get(t.id)" :guide="t.id" :title="t.title || t.id" />
               <div class="min-w-0 flex-1">
             <NuxtLink :to="`/hub/g/${t.id}`" class="line-clamp-2 text-fg no-underline hover:text-accent">{{ t.title || t.id }}</NuxtLink>
             <!-- What it says and Held by do not fit a narrow screen as columns; they sit under the
                  title there instead, so a phone shows what a desktop does. -->
-            <span v-if="t.summary" class="mt-1 line-clamp-1 block text-xs font-normal text-muted xl:hidden">{{ t.summary }}</span>
-            <span v-if="holder(t)" class="mt-0.5 block text-xs font-normal text-muted xl:hidden">
+            <span v-if="t.summary" class="mt-1 line-clamp-1 block text-xs font-normal text-muted @5xl:hidden">{{ t.summary }}</span>
+            <span v-if="holder(t)" class="mt-0.5 block text-xs font-normal text-muted @5xl:hidden">
               held by <b class="font-medium text-fg">{{ holder(t) }}</b>
             </span>
             </div>
             </div>
           </td>
-          <td class="hidden max-w-[24rem] text-muted xl:table-cell"><span class="line-clamp-2">{{ t.summary || "—" }}</span></td>
-          <td class="md:whitespace-nowrap" :class="STATE[t.state].tone">{{ STATE[t.state].text }}</td>
-          <td class="hidden whitespace-nowrap text-muted xl:table-cell">
-            <b v-if="holder(t)" class="font-medium text-fg">{{ holder(t) }}</b>
-            <span v-if="t.target" class="ml-1 font-code text-xs">{{ shorten(t.target, 24).text }}</span>
+          <td class="hidden text-muted @5xl:table-cell"><span class="line-clamp-2">{{ t.summary || "—" }}</span></td>
+          <td :class="STATE[t.state].tone">{{ STATE[t.state].text }}</td>
+          <td class="hidden text-muted @5xl:table-cell">
+            <b v-if="holder(t)" class="block truncate font-medium text-fg">{{ holder(t) }}</b>
+            <span v-if="t.target" class="block truncate font-code text-xs">{{ shorten(t.target, 24).text }}</span>
           </td>
           <td class="whitespace-nowrap text-muted">{{ rel(t.created) }}</td>
           <td class="relative">

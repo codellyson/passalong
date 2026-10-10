@@ -367,7 +367,8 @@ export function buildServer() {
         "delete_folder_document or delete_folder_asset only when the person asked for it to go: " +
         "neither can be undone. No tool deletes a whole folder; a person does that in the hub. " +
         "list_folders with query finds folders and documents by their words, and with guide the " +
-        "folders a guide is in. rename_folder_document renames a document; " +
+        "folders a guide is in. rename_folder_document renames a document and move_folder_document " +
+        "moves it to another folder in the same space, keeping its history; " +
         "get_folder_document_history reads earlier versions, so a bad edit can be put back.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
@@ -747,6 +748,28 @@ export function buildServer() {
     async ({ folder, document, name }) => {
       try {
         return json(await api.renameFolderDocument(folder, document, name));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "move_folder_document",
+    {
+      title: "Move folder document",
+      annotations: ADDS,
+      description:
+        "Move a folder document into another folder in the same space, private or the same team. It keeps its id, text and history; pass name too to rename it on the way. Refused if the other folder already has a document by that name.",
+      inputSchema: {
+        folder: z.string().describe("The folder the document is in now"),
+        document: z.string(),
+        to: z.string().describe("The folder to move it into"),
+        name: z.string().optional().describe("A new name, if it should change too"),
+      },
+    },
+    async ({ folder, document, to, name }) => {
+      try {
+        return json(await api.moveFolderDocument(folder, document, to, name || ""));
       } catch (err) {
         return fail(err);
       }

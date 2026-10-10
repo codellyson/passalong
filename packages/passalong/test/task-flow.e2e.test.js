@@ -148,6 +148,44 @@ test("nested folders keep their space, color and subtree when moved", { skip }, 
   await assert.rejects(api.folder(scenes.id), /isn't available/);
 });
 
+test("a document moves between folders with its history, and only within its space", {
+  skip,
+}, async () => {
+  await setup();
+  const api = await import("../src/api.js");
+  const { folder: from } = await api.createFolder("Drafts", "Unsorted");
+  const { folder: to } = await api.createFolder("Episode one", "Scripts");
+  const { document } = await api.createFolderDocument(from.id, "Script", "v1");
+  await api.saveFolderDocument(from.id, document.id, 1, "v2");
+
+  const moved = await api.moveFolderDocument(from.id, document.id, to.id);
+  assert.equal(moved.document.id, document.id);
+  assert.equal((await api.folder(from.id)).documents.length, 0);
+  assert.deepEqual(
+    (await api.folder(to.id)).documents.map((d) => d.id),
+    [document.id],
+  );
+  // Its versions came with it.
+  assert.deepEqual(
+    (await api.folderDocumentHistory(to.id, document.id)).revisions.map((r) => r.version),
+    [2, 1],
+  );
+
+  // Back again under a new name; and a name the target already has is refused.
+  await api.moveFolderDocument(to.id, document.id, from.id, "Script, rough");
+  assert.equal((await api.folder(from.id)).documents[0].name, "Script, rough");
+  await api.createFolderDocument(to.id, "Script, rough", "");
+  await assert.rejects(
+    api.moveFolderDocument(from.id, document.id, to.id),
+    /already in the folder/,
+  );
+  // A folder this account cannot see is refused the same way as one that does not exist.
+  await assert.rejects(
+    api.moveFolderDocument(from.id, document.id, "nosuchfolder"),
+    /isn't available/,
+  );
+});
+
 test("an agent finds folders by words and by guide, renames, recovers and removes", {
   skip,
 }, async () => {

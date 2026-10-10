@@ -351,15 +351,81 @@ async function deleteFolder() {
   )
     return;
   try {
+    deletingFolder.value = true;
     await api(`/v1/folders/${id.value}`, { method: "DELETE" });
-    await navigateTo("/hub/folders");
+    await navigateTo({ path: "/hub/folders", query: { deleted: folder.value.title } });
   } catch (error) {
     trouble.value = error instanceof Error ? error.message : "That folder couldn't be deleted.";
+  } finally {
+    deletingFolder.value = false;
   }
 }
 
 const renamingFolder = ref(false);
+const deletingFolder = ref(false);
 const renamingDocument = ref(false);
+
+// Moving a document: only to folders in this folder's own space, the rule the route enforces.
+const moveDocOpen = ref(false);
+const moveDocMenu = ref<HTMLElement | null>(null);
+const moveTargets = ref<{ id: string; title: string; depth: number }[]>([]);
+async function openMoveDocument() {
+  moveDocOpen.value = !moveDocOpen.value;
+  if (!moveDocOpen.value || !folder.value) return;
+  try {
+    const result = await api<{ folders: Folder[] }>("/v1/folders");
+    const all = (result?.folders || []).filter((f) => f.team_id === folder.value?.team_id);
+    const byId = new Map(all.map((f) => [f.id, f]));
+    const depthOf = (f: Folder) => {
+      let depth = 0;
+      for (let p = f.parent_id; p && byId.has(p) && depth < 20; p = byId.get(p)?.parent_id || "")
+        depth++;
+      return depth;
+    };
+    const path = (f: Folder): string => {
+      const parent = byId.get(f.parent_id);
+      return parent ? `${path(parent)}/${f.title}` : f.title;
+    };
+    const targets = all
+      .filter((f) => f.id !== folder.value?.id)
+      .sort((a, b) => path(a).localeCompare(path(b)))
+      .map((f) => ({ id: f.id, title: f.title, depth: depthOf(f) }));
+    // Indent from the shallowest folder listed, so a list that starts below the top does not open
+    // with an unexplained step in.
+    const base = Math.min(...targets.map((t) => t.depth));
+    moveTargets.value = targets.map((t) => ({ ...t, depth: t.depth - base }));
+  } catch (error) {
+    trouble.value = error instanceof Error ? error.message : "Your folders didn't load.";
+  }
+}
+async function moveDocument(to: { id: string; title: string }) {
+  if (!current.value) return;
+  moveDocOpen.value = false;
+  saving.value = true;
+  trouble.value = "";
+  try {
+    await api(`/v1/folders/${id.value}/documents/${current.value.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ folder: to.id }),
+    });
+    const moved = `${current.value.name} moved to ${to.title}.`;
+    current.value = null;
+    await load();
+    // After the reload, which opens the next document and clears notices on the way.
+    notice.value = moved;
+  } catch (error) {
+    trouble.value = error instanceof Error ? error.message : "That document couldn't be moved.";
+  } finally {
+    saving.value = false;
+  }
+}
+function onMoveDocClick(event: MouseEvent) {
+  if (moveDocOpen.value && !moveDocMenu.value?.contains(event.target as Node))
+    moveDocOpen.value = false;
+}
+onMounted(() => document.addEventListener("click", onMoveDocClick));
+onBeforeUnmount(() => document.removeEventListener("click", onMoveDocClick));
 
 async function renameFolder(event: Event) {
   const form = event.target as HTMLFormElement;
@@ -447,7 +513,7 @@ watch([signedIn, id], load, { immediate: true });
           </div>
           <div class="flex items-center gap-4">
             <button v-if="!renamingFolder" class="folder-delete font-ui text-xs text-muted hover:text-fg" type="button" @click="renamingFolder = true">Rename</button>
-            <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" @click="deleteFolder">Delete folder</button>
+            <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" :disabled="deletingFolder" @click="deleteFolder">{{ deletingFolder ? "Deleting…" : "Delete folder" }}</button>
           </div>
         </div>
       </header>
@@ -525,6 +591,24 @@ watch([signedIn, id], load, { immediate: true });
               <p v-else class="m-0 font-ui text-xs text-muted">Document <span class="mx-2" aria-hidden="true">·</span> Version {{ current.version }}</p>
               <div v-if="!renamingDocument" class="flex flex-wrap gap-2">
                 <button class="btn sm" type="button" @click="renamingDocument = true">Rename</button>
+                <div ref="moveDocMenu" class="relative" @keydown.esc="moveDocOpen = false">
+                  <button class="btn sm" type="button" aria-haspopup="menu" :aria-expanded="moveDocOpen" :disabled="saving" @click="openMoveDocument">
+                    Move to…
+                    <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                  </button>
+                  <div v-if="moveDocOpen" class="menu folder-doc-move-menu" role="menu" aria-label="Move this document to">
+                    <button
+                      v-for="target in moveTargets"
+                      :key="target.id"
+                      class="menu-item"
+                      type="button"
+                      role="menuitem"
+                      :style="{ paddingLeft: `calc(var(--s-2) + ${target.depth} * var(--s-4))` }"
+                      @click="moveDocument(target)"
+                    ><span class="truncate">{{ target.title }}</span></button>
+                    <p v-if="!moveTargets.length" class="menu-note">No other folder in this space yet. Make one, then move this into it.</p>
+                  </div>
+                </div>
                 <button class="btn sm" type="button" :aria-expanded="showingHistory" @click="showHistory">History</button>
                 <button v-if="!editing" class="btn sm" type="button" @click="editing = true">Edit</button>
               </div>
@@ -667,6 +751,7 @@ watch([signedIn, id], load, { immediate: true });
   transition: color 120ms ease, border-color 120ms ease;
 }
 .folder-tree-item:hover { color: var(--fg); }
+.folder-doc-move-menu { max-height: 18rem; overflow-y: auto; }
 /* Opens in place: the sidebar scrolls on its own, so a floating menu would be cut off at its edge. */
 .folder-guide-menu { position: static; width: auto; margin: var(--s-1) 0 var(--s-2); }
 .folder-tree-item.is-current {

@@ -337,6 +337,11 @@ export const renameFolderDocument = (folderId, documentId, name) =>
     method: "PATCH",
     body: { name },
   });
+export const moveFolderDocument = (folderId, documentId, to, name = "") =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
+    method: "PATCH",
+    body: name ? { folder: to, name } : { folder: to },
+  });
 export const folderDocumentHistory = (folderId, documentId, version = 0) =>
   call(
     `/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}/revisions${version ? `/${version}` : ""}`,
