@@ -101,6 +101,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "save_folder_document",
     "search_guides",
     "take",
+    "update_folder",
     "work",
   ]);
   for (const tool of body.result.tools) {
@@ -194,6 +195,31 @@ test("create_folder_upload scopes a one-time file link to the chosen folder", as
   assert.deepEqual(seen[0].body, { folder: "folder123", name: "screen.png" });
   assert.match(body.result.structuredContent.command, /--data-binary @FILE_PATH/);
   assert.equal(body.result.structuredContent.upload_url, link);
+});
+
+test("agents can create a nested colored folder and move it through the same routes as the hub", async () => {
+  const { call, seen } = recorder({
+    "POST /v1/folders": { status: 201, text: JSON.stringify({ folder: { id: "child" } }) },
+    "PATCH /v1/folders/child": { status: 200, text: JSON.stringify({ folder: { id: "child" } }) },
+  });
+  for (const [name, args] of [
+    ["create_folder", { title: "Script", parent: "project", color: "blue" }],
+    ["update_folder", { folder: "child", parent: "", color: "coral" }],
+  ]) {
+    const body = await read(
+      await handleMcp(
+        rpc({ jsonrpc: "2.0", id: 16, method: "tools/call", params: { name, arguments: args } }),
+        call,
+        VOCAB,
+      ),
+    );
+    assert.equal(body.result.structuredContent.folder.id, "child");
+  }
+  assert.equal(seen[0].path, "/v1/folders");
+  assert.equal(seen[0].body.parent, "project");
+  assert.equal(seen[0].body.color, "blue");
+  assert.equal(seen[1].method, "PATCH");
+  assert.deepEqual(seen[1].body, { parent: "", color: "coral" });
 });
 
 test("a local path passed as a download URL is pointed at create_upload", async () => {

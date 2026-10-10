@@ -108,6 +108,46 @@ test("an agent can create a folder and upload an asset with a scoped one-time li
   assert.equal((await fetch(upload_url, { method: "PUT", body: PNG })).status, 410);
 });
 
+test("nested folders keep their space, color and subtree when moved", { skip }, async () => {
+  await setup();
+  const api = await import("../src/api.js");
+  const { folder: root } = await api.createFolder(
+    "Video series",
+    "Scripts and footage",
+    "",
+    "",
+    "blue",
+  );
+  const { folder: script } = await api.createFolder("Episode one", "Draft script", "", root.id);
+  const { folder: scenes } = await api.createFolder("Scenes", "Screens and cuts", "", script.id);
+  assert.equal(script.parent_id, root.id);
+  assert.equal(scenes.parent_id, script.id);
+  assert.equal(
+    (await api.folder(script.id)).breadcrumbs.map((part) => part.id).join("/"),
+    `${root.id}/${script.id}`,
+  );
+  assert.equal((await api.folders()).folders.find((part) => part.id === root.id).color, "blue");
+
+  const moved = await api.updateFolder(script.id, { color: "coral", parent: "" });
+  assert.equal(moved.folder.parent_id, "");
+  assert.equal(moved.folder.color, "coral");
+  assert.equal(
+    (await api.folder(scenes.id)).breadcrumbs.map((part) => part.id).join("/"),
+    `${script.id}/${scenes.id}`,
+  );
+
+  await assert.rejects(api.updateFolder(script.id, { parent: scenes.id }), /subfolders/);
+  const deleted = await fetch(`${API}/v1/folders/${encodeURIComponent(script.id)}`, {
+    method: "DELETE",
+    headers: {
+      "x-passalong-version": VERSION,
+      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+    },
+  });
+  assert.equal(deleted.status, 200);
+  await assert.rejects(api.folder(scenes.id), /isn't available/);
+});
+
 test("finishing with the write-up publishes it as the task's report", { skip }, async () => {
   const env = await setup();
   const { p, parse } = env;

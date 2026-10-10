@@ -11,6 +11,11 @@ MCP server and sync service for both ends.
 Guides are plain markdown. `passalong export` dumps every one of them. Deleting an account leaves
 the author with all of their content.
 
+Guide pages, folder documents and the blog render GitHub-flavored markdown: tables, task lists,
+footnotes (`[^1]`) and GitHub's alerts — a blockquote whose first line is `[!NOTE]`, `[!TIP]`,
+`[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]`. Use a `[!WARNING]` for what must not be missed, such
+as a step that touches production, rather than bold text a reader can skim past.
+
 ## If you are an agent reading a share link
 
 A share link looks like `https://passalong.dev/g/<id>/<key>`. Append `.md` for the raw markdown,
@@ -149,15 +154,22 @@ none fits, call `create_folder` with a title and short description drawn from th
 then draft the first Markdown document with `create_folder_document`. A short request is enough;
 do not ask the person to fill a form or leave an empty folder. Omit `team` for a private folder;
 pass a team slug only when the person asked to share it with that team. The returned folder id is
-what the other folder tools take. `get_folder` lists its documents, assets and linked guides;
+what the other folder tools take. To group work inside an existing folder, pass its id as `parent`
+to `create_folder`; subfolders can nest further and stay in the same private or team space. An
+optional `color` marks a folder group; an uncolored subfolder inherits its parent's color in the
+hub. Use `update_folder` to rename, recolor or move a folder; pass `parent: ""` to move it to the
+top level. Check the target in `list_folders` first; moving into itself or a descendant is refused.
+`get_folder` lists its subfolders, documents, assets and linked guides;
 `create_folder_document` adds Markdown such as a brief or script. Read it with
 `get_folder_document` before editing, then pass its version to `save_folder_document`. If the save
 refuses an old version, reread and reconcile the other person's change. `get_folder_asset` brings
 an existing image or small text file into the agent's context. `add_folder_asset` uploads a file
 the agent can access: a local path over stdio, or an attached file over hosted MCP. If a hosted
 agent holds the file in a code sandbox, `create_folder_upload` gives it a one-time link and command
-to send the bytes directly. `link_folder_guide` connects an existing task or handoff to the folder
-without changing that guide. Folder files stay private to people who can read the folder.
+to send the bytes directly. To put a guide in a folder — a task, bug or handoff, new or
+already published — publish it as usual, then call `link_folder_guide` with the folder id and the
+guide id. For a team folder, publish the guide to that folder's team, or its members cannot see it.
+Linking leaves the guide unchanged, and `get_folder` lists linked guides with their kind. Folder files stay private to people who can read the folder.
 
 Every guide, whatever its kind, is worked with four calls:
 

@@ -39,6 +39,7 @@ const READ_ONLY = [
 const WRITES = [
   "add_folder_asset",
   "create_folder",
+  "update_folder",
   "create_folder_document",
   "save_folder_document",
   "link_folder_guide",

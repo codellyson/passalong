@@ -302,9 +302,11 @@ export const join = (code) =>
 
 export const board = () => call("/v1/board");
 export const folders = (scope = "all") => call(`/v1/folders${q({ scope })}`);
-export const createFolder = (title, description = "", team = "") =>
-  call("/v1/folders", { method: "POST", body: { title, description, team } });
+export const createFolder = (title, description = "", team = "", parent = "", color = "") =>
+  call("/v1/folders", { method: "POST", body: { title, description, team, parent, color } });
 export const folder = (id) => call(`/v1/folders/${encodeURIComponent(id)}`);
+export const updateFolder = (id, changes) =>
+  call(`/v1/folders/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });
 export const folderDocument = (folderId, documentId) =>
   call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`);
 export const folderAsset = (folderId, assetId) =>

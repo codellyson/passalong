@@ -1,20 +1,12 @@
 /** Small project folders: readable Markdown, reusable assets, and links to actionable guides. */
 import { Hono } from "hono";
 import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
+import { type Folder, findVisible, moveProblem } from "./folder-tree.js";
 import { planNow } from "./quota.js";
 
 type Env = { DB: D1Database; SHOTS?: R2Bucket };
 type Vars = { account: string };
 type Context = { Bindings: Env; Variables: Vars };
-type Folder = {
-  id: string;
-  created_by: string;
-  team_id: string;
-  title: string;
-  description: string;
-  created: string;
-  updated: string;
-};
 type Document = {
   id: string;
   folder_id: string;
@@ -49,20 +41,12 @@ const message = (
 ) => c.json({ message: text }, status);
 const titleOf = (value: unknown, limit = 100) =>
   typeof value === "string" ? value.trim().slice(0, limit) : "";
+const COLORS = new Set(["", "coral", "amber", "green", "blue", "violet"]);
+const colorOf = (value: unknown) => (typeof value === "string" && COLORS.has(value) ? value : null);
 const assetKey = (folder: string, asset: string) => `folders/${folder}/${asset}`;
 
 export async function visible(c: { env: Env; get: (key: "account") => string }, folderId: string) {
-  const folder = await c.env.DB.prepare("SELECT * FROM folder WHERE id = ?")
-    .bind(folderId)
-    .first<Folder>();
-  if (!folder) return null;
-  if (!folder.team_id) return folder.created_by === c.get("account") ? folder : null;
-  const member = await c.env.DB.prepare(
-    "SELECT 1 FROM membership WHERE team_id = ? AND account_id = ?",
-  )
-    .bind(folder.team_id, c.get("account"))
-    .first();
-  return member ? folder : null;
+  return findVisible(c.env.DB, c.get("account"), folderId);
 }
 
 async function documentIn(c: { env: Env }, folder: string, document: string) {
@@ -99,16 +83,19 @@ routes.get("/", async (c) => {
     values = [team.id];
   }
   const { results } = await c.env.DB.prepare(
-    `SELECT f.id, f.title, f.description, f.team_id, f.created_by, f.created, f.updated,
+    `SELECT f.id, f.title, f.description, f.parent_id, f.color, f.team_id, f.created_by, f.created, f.updated,
             COALESCE(t.name, '') AS team_name, COALESCE(t.slug, '') AS team_slug,
+            CASE WHEN f.created_by = ? OR EXISTS (
+              SELECT 1 FROM membership owner WHERE owner.team_id = f.team_id AND owner.account_id = ? AND owner.role = 'owner'
+            ) THEN 1 ELSE 0 END AS manage,
             (SELECT COUNT(*) FROM folder_document d WHERE d.folder_id = f.id) AS documents,
             (SELECT COUNT(*) FROM folder_asset a WHERE a.folder_id = f.id) AS assets,
             (SELECT COUNT(*) FROM folder_guide g WHERE g.folder_id = f.id) AS guides
        FROM folder f LEFT JOIN team t ON t.id = f.team_id
       WHERE ${where}
-      ORDER BY f.updated DESC LIMIT 200`,
+      ORDER BY f.updated DESC`,
   )
-    .bind(...values)
+    .bind(me, me, ...values)
     .all<
       Folder & {
         team_name: string;
@@ -123,18 +110,35 @@ routes.get("/", async (c) => {
 
 routes.post("/", async (c) => {
   const input = await c.req
-    .json<{ title?: unknown; description?: unknown; team?: unknown }>()
+    .json<{
+      title?: unknown;
+      description?: unknown;
+      team?: unknown;
+      parent?: unknown;
+      color?: unknown;
+    }>()
     .catch(() => null);
   const title = titleOf(input?.title);
   if (!title) return message(c, 400, "Give the folder a name.");
+  if (input && Object.hasOwn(input, "parent") && typeof input.parent !== "string")
+    return message(c, 400, "Choose a parent folder by id.");
   const description = titleOf(input?.description, 400);
   const count = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM folder WHERE created_by = ?")
     .bind(c.get("account"))
     .first<{ n: number }>();
   if ((count?.n || 0) >= 100)
     return message(c, 409, "You have 100 folders already. Use one of those for this project.");
+  const parentId = titleOf(input?.parent, 32);
   const teamSlug = titleOf(input?.team, 40);
   let teamId = "";
+  let parent: Folder | null = null;
+  if (parentId) {
+    parent = await visible(c, parentId);
+    if (!parent) return message(c, 404, "That parent folder isn't available to you.");
+    if (!(await writable(c, parent)))
+      return message(c, 402, "This folder can't be changed right now.");
+    teamId = parent.team_id;
+  }
   if (teamSlug) {
     const team = await c.env.DB.prepare(
       "SELECT t.id, t.plan, t.plan_until FROM team t JOIN membership m ON m.team_id = t.id WHERE t.slug = ? AND m.account_id = ?",
@@ -148,19 +152,25 @@ routes.post("/", async (c) => {
         402,
         "This team's plan has lapsed. Its folders can still be read, but not changed.",
       );
+    if (parent && team.id !== parent.team_id)
+      return message(c, 409, "A subfolder must stay in its parent's team.");
     teamId = team.id;
   }
+  const color = input && Object.hasOwn(input, "color") ? colorOf(input.color) : "";
+  if (color === null) return message(c, 400, "Choose a supported folder color.");
   const folder: Folder = {
     id: id(),
     created_by: c.get("account"),
     team_id: teamId,
     title,
     description,
+    parent_id: parentId,
+    color,
     created: now(),
     updated: now(),
   };
   await c.env.DB.prepare(
-    "INSERT INTO folder (id, created_by, team_id, title, description, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO folder (id, created_by, team_id, title, description, parent_id, color, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
     .bind(
       folder.id,
@@ -168,11 +178,45 @@ routes.post("/", async (c) => {
       folder.team_id,
       title,
       description,
+      parentId,
+      color,
       folder.created,
       folder.updated,
     )
     .run();
   return c.json({ folder }, 201);
+});
+
+routes.patch("/:folder", async (c) => {
+  const folder = await visible(c, c.req.param("folder"));
+  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!(await writable(c, folder)))
+    return message(c, 402, "This folder can't be changed right now.");
+  const input = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (
+    !input ||
+    !Object.keys(input).some((key) => ["title", "description", "parent", "color"].includes(key))
+  )
+    return message(c, 400, "Choose a folder change.");
+  if (Object.hasOwn(input, "parent") && typeof input.parent !== "string")
+    return message(c, 400, "Choose a parent folder by id.");
+  const title = Object.hasOwn(input, "title") ? titleOf(input.title) : folder.title;
+  if (!title) return message(c, 400, "Give the folder a name.");
+  const description = Object.hasOwn(input, "description")
+    ? titleOf(input.description, 400)
+    : folder.description;
+  const color = Object.hasOwn(input, "color") ? colorOf(input.color) : folder.color;
+  if (color === null) return message(c, 400, "Choose a supported folder color.");
+  const parentId = Object.hasOwn(input, "parent") ? titleOf(input.parent, 32) : folder.parent_id;
+  const problem = await moveProblem(c.env.DB, c.get("account"), folder, parentId);
+  if (problem) return message(c, problem.status, problem.message);
+  const updated = now();
+  await c.env.DB.prepare(
+    "UPDATE folder SET title = ?, description = ?, parent_id = ?, color = ?, updated = ? WHERE id = ?",
+  )
+    .bind(title, description, parentId, color, updated, folder.id)
+    .run();
+  return c.json({ folder: { ...folder, title, description, parent_id: parentId, color, updated } });
 });
 
 routes.get("/:folder", async (c) => {
@@ -188,7 +232,7 @@ routes.get("/:folder", async (c) => {
         .bind(folder.team_id)
         .first<{ slug: string }>()
     : null;
-  const [documents, assets, guides] = await Promise.all([
+  const [documents, assets, guides, children, ancestors] = await Promise.all([
     c.env.DB.prepare(
       "SELECT id, name, version, updated_by, created, updated FROM folder_document WHERE folder_id = ? ORDER BY updated DESC",
     )
@@ -202,6 +246,20 @@ routes.get("/:folder", async (c) => {
     )
       .bind(folder.id)
       .all(),
+    c.env.DB.prepare(
+      "SELECT id, title, description, parent_id, color FROM folder WHERE parent_id = ? ORDER BY title COLLATE NOCASE",
+    )
+      .bind(folder.id)
+      .all(),
+    c.env.DB.prepare(
+      `WITH RECURSIVE chain(id, title, parent_id, color, depth) AS (
+         SELECT id, title, parent_id, color, 0 FROM folder WHERE id = ?
+         UNION ALL SELECT f.id, f.title, f.parent_id, f.color, chain.depth + 1
+         FROM folder f JOIN chain ON f.id = chain.parent_id
+       ) SELECT id, title, color FROM chain ORDER BY depth DESC`,
+    )
+      .bind(folder.id)
+      .all(),
   ]);
   return c.json({
     folder: {
@@ -212,6 +270,8 @@ routes.get("/:folder", async (c) => {
     documents: documents.results,
     assets: assets.results,
     guides: guides.results,
+    children: children.results,
+    breadcrumbs: ancestors.results,
   });
 });
 
@@ -569,13 +629,53 @@ routes.delete("/:folder", async (c) => {
     if (!owner)
       return message(c, 403, "Only the person who made this folder or a team owner can delete it.");
   }
-  const { results } = await c.env.DB.prepare("SELECT id FROM folder_asset WHERE folder_id = ?")
+  if (folder.team_id) {
+    const otherOwner = await c.env.DB.prepare(
+      `WITH RECURSIVE subtree(id) AS (
+         SELECT id FROM folder WHERE id = ?
+         UNION ALL SELECT f.id FROM folder f JOIN subtree p ON f.parent_id = p.id
+       ) SELECT 1 FROM folder f JOIN subtree s ON f.id = s.id
+       WHERE f.created_by <> ? LIMIT 1`,
+    )
+      .bind(folder.id, c.get("account"))
+      .first();
+    if (otherOwner) {
+      const owner = await c.env.DB.prepare(
+        "SELECT 1 FROM membership WHERE team_id = ? AND account_id = ? AND role = 'owner'",
+      )
+        .bind(folder.team_id, c.get("account"))
+        .first();
+      if (!owner)
+        return message(
+          c,
+          403,
+          "Only a team owner can delete a subtree containing teammates' folders.",
+        );
+    }
+  }
+  const { results } = await c.env.DB.prepare(
+    `WITH RECURSIVE subtree(id) AS (
+       SELECT id FROM folder WHERE id = ?
+       UNION ALL SELECT f.id FROM folder f JOIN subtree p ON f.parent_id = p.id
+     ) SELECT a.folder_id, a.id FROM folder_asset a JOIN subtree s ON a.folder_id = s.id`,
+  )
     .bind(folder.id)
-    .all<{ id: string }>();
+    .all<{ folder_id: string; id: string }>();
   if (results.length && !c.env.SHOTS)
     return message(c, 501, "File storage isn't available right now.");
-  if (results.length) await c.env.SHOTS?.delete(results.map((a) => assetKey(folder.id, a.id)));
-  await c.env.DB.prepare("DELETE FROM folder WHERE id = ?").bind(folder.id).run();
+  for (let start = 0; start < results.length; start += 500) {
+    await c.env.SHOTS?.delete(
+      results.slice(start, start + 500).map((a) => assetKey(a.folder_id, a.id)),
+    );
+  }
+  await c.env.DB.prepare(
+    `WITH RECURSIVE subtree(id, depth) AS (
+       SELECT id, 0 FROM folder WHERE id = ?
+       UNION ALL SELECT f.id, p.depth + 1 FROM folder f JOIN subtree p ON f.parent_id = p.id
+     ) DELETE FROM folder WHERE id IN (SELECT id FROM subtree)`,
+  )
+    .bind(folder.id)
+    .run();
   return c.json({ removed: true });
 });
 

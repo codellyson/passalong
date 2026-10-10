@@ -5,6 +5,7 @@ in `AGENTS.md` and the PRs; this is the map.
 
 | Date | Decision | Why |
 | --- | --- | --- |
+| 2026-10-10 | **One Markdown renderer**: guides, the blog, learn pages and folder documents all use remark with GFM and GitHub's alerts; `marked` is gone. | Two parsers read the same Markdown two ways — footnotes worked in a folder and broke in a guide — and alerts needed writing once. Guides stay unsanitised behind their CSP; folder documents stay sanitised. |
 | 2026-09-27 | **Publish** sketched: an approved write-up can become a public post. Not built. | The changelog is a chore every team skips, and the checked write-up already exists. [docs/PUBLISH.md](../PUBLISH.md) |
 | 2026-09-27 | A **blog** in the repo, as markdown bundled into the Worker. | Posts reviewed like code; no CMS, no script on the page. |
 | 2026-09-27 | The new **mark**: a squircle P. Manifest `standalone`. | iOS delivers push only to a standalone home-screen app. |

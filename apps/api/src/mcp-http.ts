@@ -893,6 +893,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "FOLDERS ARE REUSABLE PROJECT CONTEXT, NOT GUIDES. When the user asks for a folder for a " +
         "script, brief, assets or work spanning several guides, call list_folders first to avoid " +
         "making a duplicate. If none fits, call create_folder with a title and short description. " +
+        "Use its parent id to nest a subfolder at any depth; keep a related project together. " +
+        "A folder's color can mark an area, and update_folder can recolor or move it later. " +
         "A short request is enough: name it from the person's purpose and draft the first Markdown " +
         "document with create_folder_document. Do not leave an empty folder or make them fill a form. " +
         "Pass `team` only when the user wants it shared with that team; use the slug they named " +
@@ -902,8 +904,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "version when editing. On a stale-version refusal, reread before retrying so another " +
         "person's work is not lost. Use add_folder_asset when the client supplies a file, or " +
         "create_folder_upload when the file is in a code sandbox and must be sent from there. " +
-        "Use get_folder_asset to read one already there, and link_folder_guide only when an " +
-        "existing guide uses that folder.\n" +
+        "Use get_folder_asset to read one already there. " +
+        "To put a guide in a folder — a task, bug or handoff, new or already published — publish it " +
+        "as usual (for a team folder, to that folder's team, or its members cannot see it), then call " +
+        "link_folder_guide with the folder id and the guide id. Linking leaves the guide unchanged.\n" +
         "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
         "more context — a missing detail, a step that needed explaining, what changed since, what " +
         "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
@@ -1161,15 +1165,55 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       annotations: ADDS,
       outputSchema: folderOut,
       description:
-        "Create a folder for project documents and assets after checking list_folders. Omit team for a private folder; pass a team slug only when sharing was requested.",
+        "Create a folder or nested subfolder after checking list_folders. Pass parent to nest it; omit team for a private root, and pass a team slug only when sharing was requested. A subfolder inherits its parent's space.",
       inputSchema: {
         title: z.string().describe("Name of the project or body of work"),
         description: z.string().optional().describe("Short purpose of the folder"),
         team: z.string().optional().describe("Team slug; omit for a private folder"),
+        parent: z
+          .string()
+          .optional()
+          .describe("Parent folder id for a nested subfolder; omit for a top-level folder"),
+        color: z
+          .enum(["coral", "amber", "green", "blue", "violet"])
+          .optional()
+          .describe("Optional grouping color"),
       },
     },
-    async ({ title, description, team }) =>
-      relay(call, "POST", "/v1/folders", { title, description, team }),
+    async ({ title, description, team, parent, color }) =>
+      relay(call, "POST", "/v1/folders", { title, description, team, parent, color }),
+  );
+
+  server.registerTool(
+    "update_folder",
+    {
+      title: "Organize project folder",
+      annotations: ADDS,
+      outputSchema: folderOut,
+      description:
+        "Rename, describe, recolor or move a folder. Pass parent as an empty string to move it to the top level. A folder cannot move inside itself or a descendant, or into another team/private space.",
+      inputSchema: {
+        folder: z.string(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        parent: z
+          .string()
+          .optional()
+          .describe("New parent folder id; empty string means top level"),
+        color: z.enum(["", "coral", "amber", "green", "blue", "violet"]).optional(),
+      },
+    },
+    async ({ folder, title, description, parent, color }) =>
+      relay(
+        call,
+        "PATCH",
+        `/v1/folders/${encodeURIComponent(folder)}`,
+        Object.fromEntries(
+          Object.entries({ title, description, parent, color }).filter(
+            ([, value]) => value !== undefined,
+          ),
+        ),
+      ),
   );
 
   server.registerTool(
@@ -1306,7 +1350,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       annotations: ADDS,
       outputSchema: folderGuideOut,
       description:
-        "Put an existing task or handoff guide beside the folder documents and assets it uses.",
+        "Put a task, bug or handoff guide in the folder, beside the documents and assets it uses: one just published or one that already existed.",
       inputSchema: { folder: z.string(), guide: z.string() },
     },
     async ({ folder, guide }) =>
