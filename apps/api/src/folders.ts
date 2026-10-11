@@ -2,9 +2,10 @@
 import { Hono } from "hono";
 import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
 import { type Folder, findVisible, moveProblem } from "./folder-tree.js";
+import { mintOrigin } from "./hosts.js";
 import { planNow } from "./quota.js";
 
-type Env = { DB: D1Database; SHOTS?: R2Bucket };
+type Env = { DB: D1Database; SHOTS?: R2Bucket; PUBLIC_ORIGIN?: string };
 type Vars = { account: string };
 type Context = { Bindings: Env; Variables: Vars };
 type Document = {
@@ -192,6 +193,7 @@ routes.post("/", async (c) => {
     description,
     parent_id: parentId,
     color,
+    share_key: "",
     created: now(),
     updated: now(),
   };
@@ -210,7 +212,7 @@ routes.post("/", async (c) => {
       folder.updated,
     )
     .run();
-  return c.json({ folder }, 201);
+  return c.json({ folder: { ...folder, space: await spaceOf(c, folder.team_id) } }, 201);
 });
 
 routes.patch("/:folder", async (c) => {
@@ -245,6 +247,61 @@ routes.patch("/:folder", async (c) => {
   return c.json({ folder: { ...folder, title, description, parent_id: parentId, color, updated } });
 });
 
+/**
+ * Where a folder lives, in words an agent can repeat to a person: "private", or the team's name and
+ * slug. It is on every answer that makes or reads one folder, because an agent that is not told
+ * reports what it assumed — one said "in the team space" about a folder it had made private.
+ */
+async function spaceOf(c: { env: Env }, teamId: string) {
+  if (!teamId) return "private (only you can see it)";
+  const team = await c.env.DB.prepare("SELECT name, slug FROM team WHERE id = ?")
+    .bind(teamId)
+    .first<{ name: string; slug: string }>();
+  return team ? `team ${team.name || team.slug} (${team.slug}), every member can see it` : "team";
+}
+
+// A folder's share link, the way a guide's works: /f/:id/:key, readable by whoever holds it with no
+// account. Anyone who may change the folder may share it or stop sharing it — the same people who
+// could copy its files out anyway. Stopping clears the key, so every copy of the old link dies; a
+// later share mints a new one rather than bringing the old one back.
+const shareUrl = (
+  c: { env: Env; req: { url: string } },
+  folder: { id: string; share_key: string },
+) =>
+  folder.share_key
+    ? `${mintOrigin(c.env.PUBLIC_ORIGIN, c.req.url)}/f/${folder.id}/${folder.share_key}`
+    : "";
+
+routes.post("/:folder/share", async (c) => {
+  const folder = await visible(c, c.req.param("folder"));
+  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!(await writable(c, folder)))
+    return message(
+      c,
+      402,
+      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+    );
+  const share_key = folder.share_key || `${id()}${id()}`.slice(0, 22);
+  if (!folder.share_key)
+    await c.env.DB.prepare("UPDATE folder SET share_key = ? WHERE id = ?")
+      .bind(share_key, folder.id)
+      .run();
+  return c.json({ url: shareUrl(c, { id: folder.id, share_key }) });
+});
+
+routes.delete("/:folder/share", async (c) => {
+  const folder = await visible(c, c.req.param("folder"));
+  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!(await writable(c, folder)))
+    return message(
+      c,
+      402,
+      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+    );
+  await c.env.DB.prepare("UPDATE folder SET share_key = '' WHERE id = ?").bind(folder.id).run();
+  return c.json({ url: "" });
+});
+
 routes.get("/:folder", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
   if (!folder) return message(c, 404, "That folder isn't available to you.");
@@ -273,7 +330,13 @@ routes.get("/:folder", async (c) => {
       .bind(folder.id)
       .all(),
     c.env.DB.prepare(
-      "SELECT id, title, description, parent_id, color FROM folder WHERE parent_id = ? ORDER BY title COLLATE NOCASE",
+      // With what each holds, so a folder that only groups others can show what is in them.
+      `SELECT f.id, f.title, f.description, f.parent_id, f.color,
+              (SELECT COUNT(*) FROM folder_document d WHERE d.folder_id = f.id) AS documents,
+              (SELECT COUNT(*) FROM folder_asset a WHERE a.folder_id = f.id) AS assets,
+              (SELECT COUNT(*) FROM folder_guide g WHERE g.folder_id = f.id) AS guides,
+              (SELECT COUNT(*) FROM folder s WHERE s.parent_id = f.id) AS subfolders
+         FROM folder f WHERE f.parent_id = ? ORDER BY f.title COLLATE NOCASE`,
     )
       .bind(folder.id)
       .all(),
@@ -292,6 +355,8 @@ routes.get("/:folder", async (c) => {
       ...folder,
       team_slug: team?.slug || "",
       manage: folder.created_by === c.get("account") || ownership?.role === "owner",
+      share_url: shareUrl(c, folder),
+      space: await spaceOf(c, folder.team_id),
     },
     documents: documents.results,
     assets: assets.results,

@@ -765,6 +765,7 @@ const folderDocumentOut = z
 const folderGuideOut = z.object({ guide: z.string() }).passthrough();
 const removedOut = z.object({ removed: z.boolean() }).passthrough();
 const historyOut = z.object({}).passthrough();
+const shareOut = z.object({ url: z.string() }).passthrough();
 const folderAssetOut = z
   .object({ id: z.string(), name: z.string(), type: z.string() })
   .passthrough();
@@ -894,6 +895,18 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "tool call. " +
         "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
         "the body, and publish_guide the same id — publishing claims whatever the markdown names.\n" +
+        "A FOLDER IS A PLACE; ITS DOCUMENTS ARE WHAT TO KNOW; GUIDES ARE WHAT TO DO. Sort every " +
+        "item before writing it into a folder. If someone still has to act on it — a defect that " +
+        "is still open, work not yet done, a check nobody has run — it is a guide: kind bug for " +
+        "something broken, kind task for work to do. Publish it and link_folder_guide it into the " +
+        "folder; a guide has an owner, a state and an answer. A document has none of those and " +
+        "tells nobody, so open work recorded only as a document is lost. If it is what someone " +
+        "needs to know — an overview, a decision, a finding, something already fixed with its " +
+        "commit — it is a document. An incident is both: one overview document, a document per " +
+        "resolved finding, and a bug or task guide per open item, all in the incident's folder. " +
+        "WHERE A FOLDER LIVES is in the `space` field of create_folder and get_folder: private, " +
+        "or a named team. Tell the person that, never what you meant to do; a folder made without " +
+        "`team` is private, and a subfolder takes its parent's space.\n" +
         "FOLDERS ARE REUSABLE PROJECT CONTEXT, NOT GUIDES. When the user asks for a folder for a " +
         "script, brief, assets or work spanning several guides, call list_folders first to avoid " +
         "making a duplicate. If none fits, call create_folder with a title and short description. " +
@@ -915,6 +928,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "unlink_folder_guide takes it out again. Delete a document or file with " +
         "delete_folder_document or delete_folder_asset only when the person asked for it to go: " +
         "neither can be undone. No tool deletes a whole folder; a person does that in the hub. " +
+        "share_folder returns a link anyone can read the folder by, like a guide's; use it only " +
+        "when the person asked to share the folder. " +
         "list_folders with query finds folders and documents by their words, and with guide the " +
         "folders a guide is in. rename_folder_document renames a document and move_folder_document " +
         "moves it to another folder in the same space, keeping its history; " +
@@ -1187,7 +1202,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       annotations: ADDS,
       outputSchema: folderOut,
       description:
-        "Create a folder or nested subfolder after checking list_folders. Pass parent to nest it; omit team for a private root, and pass a team slug only when sharing was requested. A subfolder inherits its parent's space.",
+        "Create a folder or nested subfolder after checking list_folders. Pass parent to nest it; omit team for a private root, and pass a team slug only when sharing was requested. A subfolder inherits its parent's space. The answer's `space` says where it landed: report that to the person.",
       inputSchema: {
         title: z.string().describe("Name of the project or body of work"),
         description: z.string().optional().describe("Short purpose of the folder"),
@@ -1334,7 +1349,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       title: "Write new folder document",
       annotations: ADDS,
       outputSchema: folderDocumentOut,
-      description: "Add a Markdown document such as a brief or script to a folder.",
+      description:
+        "Add a Markdown document to a folder: reference to read, such as a brief, script, overview or a finding already resolved. It has no owner and no state and notifies nobody, so anything someone must still act on (an open bug, work to do) belongs in a bug or task guide linked to the folder instead.",
       inputSchema: { folder: z.string(), name: z.string(), body: z.string() },
     },
     async ({ folder, name, body }) =>
@@ -1396,6 +1412,19 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         `/v1/folders/${encodeURIComponent(folder)}/documents/${encodeURIComponent(document)}`,
         { name },
       ),
+  );
+
+  server.registerTool(
+    "share_folder",
+    {
+      title: "Share folder link",
+      annotations: ADDS,
+      outputSchema: shareOut,
+      description:
+        "Get the folder's share link, making one if it has none: like a guide's link, anyone holding it can read the folder and the folders inside it and download its files, with no account. Linked guides are not included. Call it only when the person asked to share the folder or for its link; stopping sharing is done in the hub.",
+      inputSchema: { folder: z.string() },
+    },
+    async ({ folder }) => relay(call, "POST", `/v1/folders/${encodeURIComponent(folder)}/share`),
   );
 
   server.registerTool(

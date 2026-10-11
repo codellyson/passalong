@@ -46,6 +46,7 @@ const WRITES = [
   "link_folder_guide",
   "rename_folder_document",
   "move_folder_document",
+  "share_folder",
   "unlink_folder_guide",
   "delete_folder_document",
   "delete_folder_asset",

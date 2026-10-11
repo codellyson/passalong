@@ -129,6 +129,13 @@ export default defineNuxtConfig({
       noScripts: true,
       headers: { ...VIEW_HEADERS, "x-robots-tag": "noindex, nofollow, noarchive" },
     },
+    // A shared folder is a share link like a guide's, and gets exactly its treatment: no script,
+    // the strict policy, and never indexed. Its documents are sanitised as well, since a folder's
+    // files are private until someone shares the link.
+    "/f/**": {
+      noScripts: true,
+      headers: { ...VIEW_HEADERS, "x-robots-tag": "noindex, nofollow, noarchive" },
+    },
     // Setup instructions: prose, a few code blocks, nothing interactive. It gets the same
     // treatment as the landing rather than the hub's nonce, because a page that needs no script
     // should not ship a policy that allows one.

@@ -2,6 +2,7 @@
 User-agent: *
 Allow: /$
 Disallow: /g/
+Disallow: /f/
 Disallow: /v1/
 Disallow: /hub
 Disallow: /join

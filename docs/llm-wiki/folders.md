@@ -1,5 +1,16 @@
 # Folders
 
+**A folder is a place; its documents are what to know; guides are what to do.** That is the one
+rule for sorting what goes in. Anything someone still has to act on — an open defect, work not yet
+done, a check nobody ran — is a bug or task guide linked into the folder, because a guide has an
+owner, a state and an answer. A document has none of those and notifies nobody: an agent that filed
+an incident's open defects as documents left them with nobody on them. Overviews, decisions, and
+findings already resolved are documents. Both MCP servers lead their folder instructions with this
+rule, `create_folder_document` repeats it, and `packages/passalong/test/folder-rule.test.js` holds
+both servers and `llms.txt` to it. Where a folder lives comes back as `space` from `create_folder`
+and `get_folder` ("private …" or "team …"), and agents are told to report that — the same agent
+told a person a folder was in the team space when it had made it private.
+
 A folder holds the material for a project that outlives one handoff: a tutorial's brief, script,
 screenshots and reference files. A guide remains the request to do one piece of work. Linking the
 guide to the folder gives that request context without copying the files into its markdown or
@@ -61,6 +72,14 @@ document to another folder in the same space by changing its `folder_id`, so its
 with it — never a copy and a delete, and never across spaces, since that would share it; `get_folder_document_history` lists and returns earlier versions
 so a bad edit can be saved back over. In the hub, a guide's page lists its folders under "Tied to",
 and a folder and its documents can be renamed in place.
+
+A folder can be shared the way a guide is: a secret link, `/f/<id>/<key>` (migration 0048,
+`folder.share_key`), that anyone holding can read with no account. It opens that folder and every
+folder inside it, never anything above or beside it, and never its linked guides, which have
+links of their own. Unlike a guide, a folder is not shared until someone asks — "Share link" in the
+hub, `share_folder` for an agent — because it holds private files; "Stop sharing" clears the key so
+every copy of the old link stops working, and sharing again makes a different one. The page runs no
+script and is never indexed, like a guide page; files are downloads, never shown inline.
 
 This is a project context, not another kind of guide. The guide's task, bug and transfer semantics
 and its export format stay the same. Folder assets have their own storage and access rules rather

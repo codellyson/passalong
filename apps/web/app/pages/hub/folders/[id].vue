@@ -362,6 +362,53 @@ async function deleteFolder() {
 }
 
 const renamingFolder = ref(false);
+
+/** What a subfolder holds, in words: "5 documents · 1 file", or that it is empty. */
+function holds(child: Folder) {
+  const parts = [
+    [child.documents || 0, "document"],
+    [child.assets || 0, "file"],
+    [child.guides || 0, "guide"],
+    [child.subfolders || 0, "subfolder"],
+  ]
+    .filter(([n]) => n)
+    .map(([n, word]) => `${n} ${word}${n === 1 ? "" : "s"}`);
+  return parts.length ? parts.join(" · ") : "Empty";
+}
+const sharing = ref(false);
+
+/** Make (or reuse) the folder's share link; the link is then shown with Copy and Stop sharing. */
+async function shareFolder() {
+  sharing.value = true;
+  trouble.value = "";
+  try {
+    const result = await api<{ url: string }>(`/v1/folders/${id.value}/share`, { method: "POST" });
+    if (folder.value && result?.url) folder.value = { ...folder.value, share_url: result.url };
+  } catch (error) {
+    trouble.value = error instanceof Error ? error.message : "That folder couldn't be shared.";
+  } finally {
+    sharing.value = false;
+  }
+}
+async function stopSharing() {
+  if (
+    !confirm(
+      "Stop sharing this folder? Everyone with the link loses access, and a new link will be different.",
+    )
+  )
+    return;
+  sharing.value = true;
+  trouble.value = "";
+  try {
+    await api(`/v1/folders/${id.value}/share`, { method: "DELETE" });
+    if (folder.value) folder.value = { ...folder.value, share_url: "" };
+    notice.value = "This folder is no longer shared. The old link stopped working.";
+  } catch (error) {
+    trouble.value = error instanceof Error ? error.message : "That folder couldn't be unshared.";
+  } finally {
+    sharing.value = false;
+  }
+}
 const deletingFolder = ref(false);
 const renamingDocument = ref(false);
 
@@ -512,9 +559,18 @@ watch([signedIn, id], load, { immediate: true });
             </div>
           </div>
           <div class="flex items-center gap-4">
+            <button v-if="!folder.share_url" class="folder-delete font-ui text-xs text-muted hover:text-fg" type="button" :disabled="sharing" @click="shareFolder">{{ sharing ? "Sharing…" : "Share link" }}</button>
             <button v-if="!renamingFolder" class="folder-delete font-ui text-xs text-muted hover:text-fg" type="button" @click="renamingFolder = true">Rename</button>
             <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" :disabled="deletingFolder" @click="deleteFolder">{{ deletingFolder ? "Deleting…" : "Delete folder" }}</button>
           </div>
+        </div>
+        <!-- The link, once there is one: read-only like a guide's, for anyone who holds it. -->
+        <div v-if="folder.share_url" class="mt-4 flex flex-wrap items-center gap-2">
+          <label class="sr-only" for="folder-share-url">Share link</label>
+          <input id="folder-share-url" class="min-w-0 flex-1 font-code text-xs" :value="folder.share_url" readonly @focus="($event.target as HTMLInputElement).select()" />
+          <button class="btn" type="button" @click="copy(folder.share_url || '', $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy link</span></button>
+          <button class="btn outline danger" type="button" :disabled="sharing" @click="stopSharing">Stop sharing</button>
+          <p class="m-0 w-full font-ui text-xs text-muted">Anyone with this link can read this folder and the folders inside it, and download its files, without an account. Linked guides are not included.</p>
         </div>
       </header>
       <input ref="fileInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="uploadFile" />
@@ -639,12 +695,29 @@ watch([signedIn, id], load, { immediate: true });
             </template>
           </template>
           <div v-else class="folder-reading-empty">
-            <h2 class="m-0 text-h3">No documents yet</h2>
-            <p class="m-0 mt-2 max-w-md font-ui text-sm text-muted">A script, brief or reference page gives you and your agent a place to work from.</p>
+            <!-- A folder that groups others is not empty: what it holds is a level down. Lead with
+                 that, or a folder full of an incident's documents reads as if nothing were in it. -->
+            <section v-if="children.length" class="mb-8" aria-labelledby="folder-children-h">
+              <h2 id="folder-children-h" class="m-0 mb-3 text-h3">In this folder</h2>
+              <ul class="m-0 list-none overflow-hidden rounded-2 bg-surface-raised p-0 shadow-edge">
+                <li v-for="(child, index) in children" :key="child.id" :class="{ 'border-t border-line': index > 0 }">
+                  <NuxtLink :to="`/hub/folders/${child.id}`" class="flex items-start gap-3 px-4 py-3 text-fg no-underline hover:bg-field">
+                    <svg class="folder-heading-icon mt-0.5 size-5 shrink-0" :data-color="child.color || displayColor || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
+                    <span class="min-w-0 flex-1">
+                      <span class="block font-ui text-sm font-medium">{{ child.title }}</span>
+                      <span v-if="child.description" class="block font-ui text-xs text-muted">{{ child.description }}</span>
+                      <span class="mt-1 block font-ui text-xs text-muted">{{ holds(child) }}</span>
+                    </span>
+                  </NuxtLink>
+                </li>
+              </ul>
+            </section>
+            <h2 class="m-0 text-h3">{{ children.length ? "No documents at this level" : "No documents yet" }}</h2>
+            <p class="m-0 mt-2 max-w-md font-ui text-sm text-muted">Documents are for reading: a brief, a script, an overview, a finding that is already settled.</p>
             <button v-if="!addingDocument" class="btn primary mt-4" type="button" @click="startDocument">New document</button>
             <section class="mt-8 border-t border-line pt-6" aria-labelledby="folder-guide-start">
               <h2 id="folder-guide-start" class="m-0 text-h3">Put a guide in this folder</h2>
-              <p class="m-0 mt-2 mb-3 max-w-md font-ui text-sm text-muted">Ask your agent for a task, a bug report or a handoff. Copy what to say: it writes the guide and links it here. A guide that already exists can be linked under Guides below.</p>
+              <p class="m-0 mt-2 mb-3 max-w-md font-ui text-sm text-muted">Anything someone still has to do — an open bug, a piece of work — goes in a guide, which has an owner, a state and an answer. A document tells nobody. Copy what to say to your agent: it writes the guide and links it here.</p>
               <ul class="m-0 list-none overflow-hidden rounded-2 bg-surface-raised p-0 shadow-edge">
                 <li v-for="(item, index) in guideAsks" :key="item.kind" class="flex flex-wrap items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0 }">
                   <span class="shrink-0 rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase" :class="kindBadge(item.kind)?.class">{{ kindBadge(item.kind)?.label }}</span>

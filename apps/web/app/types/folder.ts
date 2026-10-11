@@ -9,11 +9,15 @@ export interface Folder {
   team_name?: string;
   created_by: string;
   manage?: boolean | number;
+  /** The folder's share link, or empty when it is not shared. Only on a single folder's read. */
+  share_url?: string;
   created: string;
   updated: string;
   documents?: number;
   assets?: number;
   guides?: number;
+  /** Only on a folder's children, where a grouping folder shows what each holds. */
+  subfolders?: number;
 }
 
 export interface FolderDocument {
