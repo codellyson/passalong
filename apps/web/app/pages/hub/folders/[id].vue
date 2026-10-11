@@ -683,11 +683,11 @@ watch([signedIn, id], load, { immediate: true });
           </template>
           <div v-else class="folder-reading-empty">
             <h2 class="m-0 text-h3">No documents yet</h2>
-            <p class="m-0 mt-2 max-w-md font-ui text-sm text-muted">A script, brief or reference page gives you and your agent a place to work from.</p>
+            <p class="m-0 mt-2 max-w-md font-ui text-sm text-muted">Documents are for reading: a brief, a script, an overview, a finding that is already settled.</p>
             <button v-if="!addingDocument" class="btn primary mt-4" type="button" @click="startDocument">New document</button>
             <section class="mt-8 border-t border-line pt-6" aria-labelledby="folder-guide-start">
               <h2 id="folder-guide-start" class="m-0 text-h3">Put a guide in this folder</h2>
-              <p class="m-0 mt-2 mb-3 max-w-md font-ui text-sm text-muted">Ask your agent for a task, a bug report or a handoff. Copy what to say: it writes the guide and links it here. A guide that already exists can be linked under Guides below.</p>
+              <p class="m-0 mt-2 mb-3 max-w-md font-ui text-sm text-muted">Anything someone still has to do — an open bug, a piece of work — goes in a guide, which has an owner, a state and an answer. A document tells nobody. Copy what to say to your agent: it writes the guide and links it here.</p>
               <ul class="m-0 list-none overflow-hidden rounded-2 bg-surface-raised p-0 shadow-edge">
                 <li v-for="(item, index) in guideAsks" :key="item.kind" class="flex flex-wrap items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0 }">
                   <span class="shrink-0 rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase" :class="kindBadge(item.kind)?.class">{{ kindBadge(item.kind)?.label }}</span>

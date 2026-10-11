@@ -1,5 +1,16 @@
 # Folders
 
+**A folder is a place; its documents are what to know; guides are what to do.** That is the one
+rule for sorting what goes in. Anything someone still has to act on — an open defect, work not yet
+done, a check nobody ran — is a bug or task guide linked into the folder, because a guide has an
+owner, a state and an answer. A document has none of those and notifies nobody: an agent that filed
+an incident's open defects as documents left them with nobody on them. Overviews, decisions, and
+findings already resolved are documents. Both MCP servers lead their folder instructions with this
+rule, `create_folder_document` repeats it, and `packages/passalong/test/folder-rule.test.js` holds
+both servers and `llms.txt` to it. Where a folder lives comes back as `space` from `create_folder`
+and `get_folder` ("private …" or "team …"), and agents are told to report that — the same agent
+told a person a folder was in the team space when it had made it private.
+
 A folder holds the material for a project that outlives one handoff: a tutorial's brief, script,
 screenshots and reference files. A guide remains the request to do one piece of work. Linking the
 guide to the folder gives that request context without copying the files into its markdown or

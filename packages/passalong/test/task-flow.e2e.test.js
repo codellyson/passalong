@@ -118,7 +118,11 @@ test("nested folders keep their space, color and subtree when moved", { skip }, 
     "",
     "blue",
   );
+  // Where it landed is said in the answer, so an agent reports that rather than what it meant.
+  assert.match(root.space, /^private/);
   const { folder: script } = await api.createFolder("Episode one", "Draft script", "", root.id);
+  assert.match(script.space, /^private/);
+  assert.match((await api.folder(script.id)).folder.space, /^private/);
   const { folder: scenes } = await api.createFolder("Scenes", "Screens and cuts", "", script.id);
   assert.equal(script.parent_id, root.id);
   assert.equal(scenes.parent_id, script.id);

@@ -148,6 +148,16 @@ the agent that holds their work, or leaving a note on one nobody holds yet), `in
 `activity` (reads), `clear_activity` (marks it seen), `log`, `plan_tasks`, and folder tools for
 listing, creating and editing project documents and assets.
 
+A folder is a place; its documents are what to know; guides are what to do. Before writing into a
+folder, sort each item. Anything someone still has to act on — an open defect, work not yet done, a
+check nobody has run — is a guide (`kind: bug` or `kind: task`), published and linked with
+`link_folder_guide`: it has an owner, a state and an answer. A document has none of those and tells
+nobody, so open work recorded only as a document is lost. What someone needs to know — an overview, a
+decision, a finding, something already fixed — is a document. An incident is both: an overview
+document, a document per resolved finding, and a guide per open item, in one folder. Where a folder
+lives is the `space` field `create_folder` and `get_folder` return: tell the person that rather than
+what you intended. A folder made without `team` is private; a subfolder takes its parent's space.
+
 Project folders hold reusable context for work spanning several guides. When asked to start a
 folder for a script, brief or project, call `list_folders` first and reuse a fitting folder. If
 none fits, call `create_folder` with a title and short description drawn from the person's request,

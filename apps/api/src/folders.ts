@@ -212,7 +212,7 @@ routes.post("/", async (c) => {
       folder.updated,
     )
     .run();
-  return c.json({ folder }, 201);
+  return c.json({ folder: { ...folder, space: await spaceOf(c, folder.team_id) } }, 201);
 });
 
 routes.patch("/:folder", async (c) => {
@@ -246,6 +246,19 @@ routes.patch("/:folder", async (c) => {
     .run();
   return c.json({ folder: { ...folder, title, description, parent_id: parentId, color, updated } });
 });
+
+/**
+ * Where a folder lives, in words an agent can repeat to a person: "private", or the team's name and
+ * slug. It is on every answer that makes or reads one folder, because an agent that is not told
+ * reports what it assumed — one said "in the team space" about a folder it had made private.
+ */
+async function spaceOf(c: { env: Env }, teamId: string) {
+  if (!teamId) return "private (only you can see it)";
+  const team = await c.env.DB.prepare("SELECT name, slug FROM team WHERE id = ?")
+    .bind(teamId)
+    .first<{ name: string; slug: string }>();
+  return team ? `team ${team.name || team.slug} (${team.slug}), every member can see it` : "team";
+}
 
 // A folder's share link, the way a guide's works: /f/:id/:key, readable by whoever holds it with no
 // account. Anyone who may change the folder may share it or stop sharing it — the same people who
@@ -337,6 +350,7 @@ routes.get("/:folder", async (c) => {
       team_slug: team?.slug || "",
       manage: folder.created_by === c.get("account") || ownership?.role === "owner",
       share_url: shareUrl(c, folder),
+      space: await spaceOf(c, folder.team_id),
     },
     documents: documents.results,
     assets: assets.results,

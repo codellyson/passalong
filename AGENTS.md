@@ -177,7 +177,11 @@ change. Its README says how.
     one, so a person's edit and an agent's edit cannot silently replace each other. Both MCP
     servers expose the same folder document operations and a direct way to add assets: a local
     path over stdio, a client file input over HTTP, or a one-time folder-scoped upload link for a
-    sandbox. `get_folder_asset` returns only bounded image or text content to an agent. The hub
+    sandbox. `get_folder_asset` returns only bounded image or text content to an agent.
+    **A folder is a place, documents are what to know, guides are what to do**: anything someone
+    must still act on is a bug or task guide linked into the folder, never only a document, which
+    has no owner or state and tells nobody. Both servers lead with that rule and say a folder's
+    `space`; `test/folder-rule.test.js` keeps them in step. The hub
     leads creation with an agent prompt and keeps its editor for corrections. It fetches private images with its credential and
     draws blob URLs, which is why the hub CSP permits `img-src blob:`.
   - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running
