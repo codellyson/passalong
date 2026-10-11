@@ -362,6 +362,40 @@ async function deleteFolder() {
 }
 
 const renamingFolder = ref(false);
+const sharing = ref(false);
+
+/** Make (or reuse) the folder's share link; the link is then shown with Copy and Stop sharing. */
+async function shareFolder() {
+  sharing.value = true;
+  trouble.value = "";
+  try {
+    const result = await api<{ url: string }>(`/v1/folders/${id.value}/share`, { method: "POST" });
+    if (folder.value && result?.url) folder.value = { ...folder.value, share_url: result.url };
+  } catch (error) {
+    trouble.value = error instanceof Error ? error.message : "That folder couldn't be shared.";
+  } finally {
+    sharing.value = false;
+  }
+}
+async function stopSharing() {
+  if (
+    !confirm(
+      "Stop sharing this folder? Everyone with the link loses access, and a new link will be different.",
+    )
+  )
+    return;
+  sharing.value = true;
+  trouble.value = "";
+  try {
+    await api(`/v1/folders/${id.value}/share`, { method: "DELETE" });
+    if (folder.value) folder.value = { ...folder.value, share_url: "" };
+    notice.value = "This folder is no longer shared. The old link stopped working.";
+  } catch (error) {
+    trouble.value = error instanceof Error ? error.message : "That folder couldn't be unshared.";
+  } finally {
+    sharing.value = false;
+  }
+}
 const deletingFolder = ref(false);
 const renamingDocument = ref(false);
 
@@ -512,9 +546,18 @@ watch([signedIn, id], load, { immediate: true });
             </div>
           </div>
           <div class="flex items-center gap-4">
+            <button v-if="!folder.share_url" class="folder-delete font-ui text-xs text-muted hover:text-fg" type="button" :disabled="sharing" @click="shareFolder">{{ sharing ? "Sharing…" : "Share link" }}</button>
             <button v-if="!renamingFolder" class="folder-delete font-ui text-xs text-muted hover:text-fg" type="button" @click="renamingFolder = true">Rename</button>
             <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" :disabled="deletingFolder" @click="deleteFolder">{{ deletingFolder ? "Deleting…" : "Delete folder" }}</button>
           </div>
+        </div>
+        <!-- The link, once there is one: read-only like a guide's, for anyone who holds it. -->
+        <div v-if="folder.share_url" class="mt-4 flex flex-wrap items-center gap-2">
+          <label class="sr-only" for="folder-share-url">Share link</label>
+          <input id="folder-share-url" class="min-w-0 flex-1 font-code text-xs" :value="folder.share_url" readonly @focus="($event.target as HTMLInputElement).select()" />
+          <button class="btn" type="button" @click="copy(folder.share_url || '', $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy link</span></button>
+          <button class="btn outline danger" type="button" :disabled="sharing" @click="stopSharing">Stop sharing</button>
+          <p class="m-0 w-full font-ui text-xs text-muted">Anyone with this link can read this folder and the folders inside it, and download its files, without an account. Linked guides are not included.</p>
         </div>
       </header>
       <input ref="fileInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="uploadFile" />

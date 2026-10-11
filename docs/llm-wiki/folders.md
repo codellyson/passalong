@@ -62,6 +62,14 @@ with it — never a copy and a delete, and never across spaces, since that would
 so a bad edit can be saved back over. In the hub, a guide's page lists its folders under "Tied to",
 and a folder and its documents can be renamed in place.
 
+A folder can be shared the way a guide is: a secret link, `/f/<id>/<key>` (migration 0048,
+`folder.share_key`), that anyone holding can read with no account. It opens that folder and every
+folder inside it, never anything above or beside it, and never its linked guides, which have
+links of their own. Unlike a guide, a folder is not shared until someone asks — "Share link" in the
+hub, `share_folder` for an agent — because it holds private files; "Stop sharing" clears the key so
+every copy of the old link stops working, and sharing again makes a different one. The page runs no
+script and is never indexed, like a guide page; files are downloads, never shown inline.
+
 This is a project context, not another kind of guide. The guide's task, bug and transfer semantics
 and its export format stay the same. Folder assets have their own storage and access rules rather
 than pretending to be screenshots claimed by a guide.

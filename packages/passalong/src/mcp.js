@@ -366,6 +366,8 @@ export function buildServer() {
         "unlink_folder_guide takes it out again. Delete a document or file with " +
         "delete_folder_document or delete_folder_asset only when the person asked for it to go: " +
         "neither can be undone. No tool deletes a whole folder; a person does that in the hub. " +
+        "share_folder returns a link anyone can read the folder by, like a guide's; use it only " +
+        "when the person asked to share the folder. " +
         "list_folders with query finds folders and documents by their words, and with guide the " +
         "folders a guide is in. rename_folder_document renames a document and move_folder_document " +
         "moves it to another folder in the same space, keeping its history; " +
@@ -748,6 +750,23 @@ export function buildServer() {
     async ({ folder, document, name }) => {
       try {
         return json(await api.renameFolderDocument(folder, document, name));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+  server.registerTool(
+    "share_folder",
+    {
+      title: "Share folder link",
+      annotations: ADDS,
+      description:
+        "Get the folder's share link, making one if it has none: like a guide's link, anyone holding it can read the folder and the folders inside it and download its files, with no account. Linked guides are not included. Call it only when the person asked to share the folder or for its link; stopping sharing is done in the hub.",
+      inputSchema: { folder: z.string() },
+    },
+    async ({ folder }) => {
+      try {
+        return json(await api.shareFolder(folder));
       } catch (err) {
         return fail(err);
       }

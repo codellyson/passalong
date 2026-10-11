@@ -12,6 +12,9 @@ sent from the Worker with categorical props only — never an id, handle, title 
 A guide page renders markdown a stranger wrote, and there is no sanitiser behind it — only the policy
 `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' https: data:`. That is the
 product's one real security property. The landing, docs, FAQ, connect and blog get it too (`noScripts`).
+A shared folder (`/f/:id/:key`) gets the same rule, `noindex` and a `robots.txt` disallow, and its
+documents also go through the sanitising folder renderer; its files are served as downloads only.
+`apps/web/test/share-links.test.mjs` pins both prefixes to these rules.
 
 Only `/hub`, `/join` and `/reset` run script, with a per-request nonce (`server/plugins/csp.ts`) —
 never `'unsafe-inline'`.

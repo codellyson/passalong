@@ -148,6 +148,66 @@ test("nested folders keep their space, color and subtree when moved", { skip }, 
   await assert.rejects(api.folder(scenes.id), /isn't available/);
 });
 
+test("a folder's share link opens it and what is inside it, and nothing else", {
+  skip,
+}, async () => {
+  await setup();
+  const api = await import("../src/api.js");
+  const { folder: root } = await api.createFolder("Launch kit", "Everything for the launch");
+  const { folder: inner } = await api.createFolder("Screens", "", "", root.id);
+  const { folder: other } = await api.createFolder("Unrelated", "Not shared");
+  await api.createFolderDocument(
+    root.id,
+    "Brief",
+    "# Launch brief\n\n> [!NOTE]\n> Read this first.",
+  );
+  const file = join(mkdtempSync(join(tmpdir(), "passalong-share-")), "home.png");
+  writeFileSync(file, PNG);
+  const { asset } = await api.addFolderAsset(inner.id, file);
+
+  const { url } = await api.shareFolder(root.id);
+  const [, id, key] = new URL(url).pathname.match(/^\/f\/([a-z0-9]+)\/([a-z0-9]+)$/) || [];
+  assert.equal(id, root.id);
+  // Asking again returns the same link rather than breaking the one already sent.
+  assert.equal((await api.shareFolder(root.id)).url, url);
+
+  const read = (path) => fetch(`${API}${path}`);
+  const page = await (await read(`/api/folder/${id}/${key}`)).json();
+  assert.equal(page.folder.title, "Launch kit");
+  assert.deepEqual(
+    page.children.map((c) => c.title),
+    ["Screens"],
+  );
+  assert.match(page.document.html, /markdown-alert-note/);
+  // A folder inside the shared one opens with the same key, and its files download.
+  const insidePage = await (await read(`/api/folder/${id}/${key}?in=${inner.id}`)).json();
+  assert.deepEqual(
+    insidePage.files.map((f) => f.id),
+    [asset.id],
+  );
+  const download = await read(`/f/${id}/${key}/files/${asset.id}`);
+  assert.equal(download.status, 200);
+  assert.match(download.headers.get("content-disposition") || "", /^attachment/);
+
+  // The key opens nothing outside its subtree, and a wrong key opens nothing at all.
+  assert.equal((await read(`/api/folder/${id}/${key}?in=${other.id}`)).status, 404);
+  assert.equal((await read(`/api/folder/${id}/${"x".repeat(22)}`)).status, 404);
+  assert.equal((await read(`/api/folder/${other.id}/${key}`)).status, 404);
+
+  // Stopping clears it: the old link dies, and a new share is a different link.
+  const stopped = await fetch(`${API}/v1/folders/${root.id}/share`, {
+    method: "DELETE",
+    headers: {
+      "x-passalong-version": VERSION,
+      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+    },
+  });
+  assert.equal(stopped.status, 200);
+  assert.equal((await read(`/api/folder/${id}/${key}`)).status, 404);
+  assert.equal((await read(`/f/${id}/${key}/files/${asset.id}`)).status, 404);
+  assert.notEqual((await api.shareFolder(root.id)).url, url);
+});
+
 test("a document moves between folders with its history, and only within its space", {
   skip,
 }, async () => {

@@ -105,6 +105,7 @@ test("every tool it lists is one an agent could act on", async () => {
     "reply",
     "save_folder_document",
     "search_guides",
+    "share_folder",
     "take",
     "unlink_folder_guide",
     "update_folder",

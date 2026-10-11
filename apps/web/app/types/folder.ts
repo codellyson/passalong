@@ -9,6 +9,8 @@ export interface Folder {
   team_name?: string;
   created_by: string;
   manage?: boolean | number;
+  /** The folder's share link, or empty when it is not shared. Only on a single folder's read. */
+  share_url?: string;
   created: string;
   updated: string;
   documents?: number;

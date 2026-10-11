@@ -346,6 +346,8 @@ export const folderDocumentHistory = (folderId, documentId, version = 0) =>
   call(
     `/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}/revisions${version ? `/${version}` : ""}`,
   );
+export const shareFolder = (folderId) =>
+  call(`/v1/folders/${encodeURIComponent(folderId)}/share`, { method: "POST" });
 export const linkFolderGuide = (folderId, guide) =>
   call(`/v1/folders/${encodeURIComponent(folderId)}/guides`, { method: "POST", body: { guide } });
 export const unlinkFolderGuide = (folderId, guide) =>

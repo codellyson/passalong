@@ -2,9 +2,10 @@
 import { Hono } from "hono";
 import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
 import { type Folder, findVisible, moveProblem } from "./folder-tree.js";
+import { mintOrigin } from "./hosts.js";
 import { planNow } from "./quota.js";
 
-type Env = { DB: D1Database; SHOTS?: R2Bucket };
+type Env = { DB: D1Database; SHOTS?: R2Bucket; PUBLIC_ORIGIN?: string };
 type Vars = { account: string };
 type Context = { Bindings: Env; Variables: Vars };
 type Document = {
@@ -192,6 +193,7 @@ routes.post("/", async (c) => {
     description,
     parent_id: parentId,
     color,
+    share_key: "",
     created: now(),
     updated: now(),
   };
@@ -245,6 +247,48 @@ routes.patch("/:folder", async (c) => {
   return c.json({ folder: { ...folder, title, description, parent_id: parentId, color, updated } });
 });
 
+// A folder's share link, the way a guide's works: /f/:id/:key, readable by whoever holds it with no
+// account. Anyone who may change the folder may share it or stop sharing it — the same people who
+// could copy its files out anyway. Stopping clears the key, so every copy of the old link dies; a
+// later share mints a new one rather than bringing the old one back.
+const shareUrl = (
+  c: { env: Env; req: { url: string } },
+  folder: { id: string; share_key: string },
+) =>
+  folder.share_key
+    ? `${mintOrigin(c.env.PUBLIC_ORIGIN, c.req.url)}/f/${folder.id}/${folder.share_key}`
+    : "";
+
+routes.post("/:folder/share", async (c) => {
+  const folder = await visible(c, c.req.param("folder"));
+  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!(await writable(c, folder)))
+    return message(
+      c,
+      402,
+      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+    );
+  const share_key = folder.share_key || `${id()}${id()}`.slice(0, 22);
+  if (!folder.share_key)
+    await c.env.DB.prepare("UPDATE folder SET share_key = ? WHERE id = ?")
+      .bind(share_key, folder.id)
+      .run();
+  return c.json({ url: shareUrl(c, { id: folder.id, share_key }) });
+});
+
+routes.delete("/:folder/share", async (c) => {
+  const folder = await visible(c, c.req.param("folder"));
+  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!(await writable(c, folder)))
+    return message(
+      c,
+      402,
+      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+    );
+  await c.env.DB.prepare("UPDATE folder SET share_key = '' WHERE id = ?").bind(folder.id).run();
+  return c.json({ url: "" });
+});
+
 routes.get("/:folder", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
   if (!folder) return message(c, 404, "That folder isn't available to you.");
@@ -292,6 +336,7 @@ routes.get("/:folder", async (c) => {
       ...folder,
       team_slug: team?.slug || "",
       manage: folder.created_by === c.get("account") || ownership?.role === "owner",
+      share_url: shareUrl(c, folder),
     },
     documents: documents.results,
     assets: assets.results,

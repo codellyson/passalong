@@ -765,6 +765,7 @@ const folderDocumentOut = z
 const folderGuideOut = z.object({ guide: z.string() }).passthrough();
 const removedOut = z.object({ removed: z.boolean() }).passthrough();
 const historyOut = z.object({}).passthrough();
+const shareOut = z.object({ url: z.string() }).passthrough();
 const folderAssetOut = z
   .object({ id: z.string(), name: z.string(), type: z.string() })
   .passthrough();
@@ -915,6 +916,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "unlink_folder_guide takes it out again. Delete a document or file with " +
         "delete_folder_document or delete_folder_asset only when the person asked for it to go: " +
         "neither can be undone. No tool deletes a whole folder; a person does that in the hub. " +
+        "share_folder returns a link anyone can read the folder by, like a guide's; use it only " +
+        "when the person asked to share the folder. " +
         "list_folders with query finds folders and documents by their words, and with guide the " +
         "folders a guide is in. rename_folder_document renames a document and move_folder_document " +
         "moves it to another folder in the same space, keeping its history; " +
@@ -1396,6 +1399,19 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         `/v1/folders/${encodeURIComponent(folder)}/documents/${encodeURIComponent(document)}`,
         { name },
       ),
+  );
+
+  server.registerTool(
+    "share_folder",
+    {
+      title: "Share folder link",
+      annotations: ADDS,
+      outputSchema: shareOut,
+      description:
+        "Get the folder's share link, making one if it has none: like a guide's link, anyone holding it can read the folder and the folders inside it and download its files, with no account. Linked guides are not included. Call it only when the person asked to share the folder or for its link; stopping sharing is done in the hub.",
+      inputSchema: { folder: z.string() },
+    },
+    async ({ folder }) => relay(call, "POST", `/v1/folders/${encodeURIComponent(folder)}/share`),
   );
 
   server.registerTool(

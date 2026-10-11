@@ -14,6 +14,8 @@ export type Folder = {
   description: string;
   parent_id: string;
   color: string;
+  /** The secret in the folder's share link; empty when it is not shared (migration 0048). */
+  share_key: string;
   created: string;
   updated: string;
 };
