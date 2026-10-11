@@ -8,10 +8,12 @@ folder documents have a Markdown editor because their purpose is continuing work
 
 One page for all work, in four tabs by what it needs from you:
 
-- **Needs you** — one list on the left of everything waiting on you, grouped by why: *Waiting for your
-  review*, *Handed in*, *Sent to you*, *Stuck on you*, *Went quiet*. The picked item is on the right,
-  asking its one question: a task's line-by-line review against Acceptance; a handed-in guide's
-  evidence with Close it / Send back; take-or-pass, then how it went.
+- **Needs you** — one list of everything waiting on you, grouped by why: *Waiting for your review*,
+  *Handed in*, *Sent to you*, *Stuck on you*, *Went quiet*, with a stat card per reason that filters
+  it. Each item opens on its own guide page (`/hub/g/:id`), which asks its one question: a task's
+  line-by-line review against Acceptance (`HubTaskReview`); a handed-in guide's evidence with Accept /
+  Ask for changes; take-or-pass, then how it went. The page steps Previous / Next through the list as
+  filtered (`useReviewQueue`, kept for the tab), and answering an item drops it and moves on.
 - **Taken** — who has what, across every kind.
 - **Open** — what nobody is on: ready, blocked and draft tasks, handoffs still out.
 - **Done** — folded, because it is most of what exists and none of what needs doing.

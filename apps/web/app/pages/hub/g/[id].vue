@@ -32,6 +32,7 @@ const {
   onArchive,
   onTaskReady,
   onTaskDraft,
+  data: hub,
 } = useHub();
 
 const { data, isPending, error } = useQuery({
@@ -128,6 +129,33 @@ const standing = computed(() => {
   return "Nobody has taken it yet.";
 });
 
+// ---- the list it was opened from ----------------------------------------------------------
+
+/**
+ * Opened from Needs you, the page steps through that list as it was filtered: the one before, the
+ * one after, and where this one sits. Answering an item takes it out and moves on to the next, so
+ * a pile of reviews is worked through here without going back to the list between each.
+ */
+const { queue, remember } = useReviewQueue();
+const place = computed(() => queue.value.findIndex((q) => q.id === id.value));
+const prevItem = computed(() => (place.value > 0 ? queue.value[place.value - 1] : null));
+const nextItem = computed(() =>
+  place.value >= 0 && place.value < queue.value.length - 1 ? queue.value[place.value + 1] : null,
+);
+async function advance() {
+  if (place.value < 0) return;
+  const after = nextItem.value ?? prevItem.value;
+  remember(queue.value.filter((q) => q.id !== id.value));
+  await navigateTo(after ? `/hub/g/${after.id}` : "/hub");
+}
+
+/** A task handed in for review gets the line-by-line review, from the hub's own copy of it. */
+const reviewTask = computed(() =>
+  isTask.value
+    ? (hub.value.tasks.find((t) => t.id === id.value && t.state === "review") ?? null)
+    : null,
+);
+
 // ---- acting on it --------------------------------------------------------------------------
 
 /** Accept is held until the evidence has been opened, as it is on the review rows. */
@@ -135,32 +163,42 @@ const read = ref(new Set<string>());
 const busy = ref("");
 const sendingBack = ref<string | null>(null);
 
-async function run(mark: string, work: () => Promise<unknown>) {
+async function run(mark: string, work: () => Promise<unknown>, answers = false) {
   if (busy.value) return;
   busy.value = mark;
   try {
-    await work();
+    const ok = (await work()) !== false;
     await queryClient.invalidateQueries({ queryKey: hubKeys.context(id.value) });
+    if (ok && answers) await advance();
   } finally {
     busy.value = "";
   }
 }
 
 const accept = (k: ContextClaim) =>
-  run(`accept:${k.place}`, () =>
-    isTask.value
-      ? onApprove({ id: id.value } as Task)
-      : onCloseHandedIn({ id: id.value, place: k.place } as HandedIn),
+  run(
+    `accept:${k.place}`,
+    () =>
+      isTask.value
+        ? onApprove({ id: id.value } as Task)
+        : onCloseHandedIn({ id: id.value, place: k.place } as HandedIn),
+    true,
   );
 
 function sendBack(k: ContextClaim, e: Event) {
   const why = field(e.currentTarget as HTMLFormElement, "why").trim();
   if (!why) return;
-  return run(`back:${k.place}`, async () => {
-    if (isTask.value) await onReject({ id: id.value } as Task, why);
-    else await onSendBackHandedIn({ id: id.value, place: k.place } as HandedIn, why);
-    sendingBack.value = null;
-  });
+  return run(
+    `back:${k.place}`,
+    async () => {
+      const ok = isTask.value
+        ? await onReject({ id: id.value } as Task, why)
+        : await onSendBackHandedIn({ id: id.value, place: k.place } as HandedIn, why);
+      sendingBack.value = null;
+      return ok;
+    },
+    true,
+  );
 }
 
 const takeBack = () => run("release", () => onTakeBack({ id: id.value } as Working));
@@ -245,6 +283,17 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
     </p>
 
     <article v-else-if="ctx && g" class="flex flex-col gap-6">
+      <!-- Only when opened from Needs you: where this sits in that list, and the way along it. -->
+      <nav v-if="place >= 0" class="flex flex-wrap items-center justify-between gap-3 font-ui text-sm" aria-label="Needs you">
+        <NuxtLink to="/hub" class="text-muted no-underline hover:text-fg">← Needs you</NuxtLink>
+        <span class="flex items-center gap-2">
+          <span class="text-muted tabular-nums">{{ place + 1 }} of {{ queue.length }}</span>
+          <NuxtLink v-if="prevItem" :to="`/hub/g/${prevItem.id}`" class="btn sm no-underline">Previous</NuxtLink>
+          <button v-else class="btn sm" type="button" disabled>Previous</button>
+          <NuxtLink v-if="nextItem" :to="`/hub/g/${nextItem.id}`" class="btn sm no-underline">Next</NuxtLink>
+          <button v-else class="btn sm" type="button" disabled>Next</button>
+        </span>
+      </nav>
       <header class="m-0 flex flex-col gap-2 border-b-0 p-0">
         <p class="m-0 flex flex-wrap items-center gap-2 font-ui text-sm text-muted">
           <span
@@ -348,6 +397,8 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <NuxtLink v-if="k.report" :to="`/hub/g/${k.report.id}`">{{ k.report.title || "The write-up" }}</NuxtLink>
             <a v-if="k.pr" :href="k.pr" target="_blank" rel="noopener">The change</a>
           </p>
+          <HubTaskReview v-if="reviewTask && mayAct" :task="reviewTask" @done="advance" />
+          <template v-else>
           <HubHandIn
             :evidence="k.evidence"
             :checks="k.checks"
@@ -380,6 +431,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               </button>
             </form>
           </div>
+          </template>
         </section>
 
         <!-- The document. Sandboxed with no script, on top of a page whose own policy already
