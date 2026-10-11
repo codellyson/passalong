@@ -96,7 +96,7 @@ if (!self.draft && answered) {
       </h1>
       <p class="lede">
         The short answers. If yours is not here, write to
-        <a href="mailto:contact@passalong.dev">contact@passalong.dev</a> and it probably should be.
+        <a href="mailto:support@kreativekorna.com">support@kreativekorna.com</a> and it probably should be.
       </p>
     </header>
 
