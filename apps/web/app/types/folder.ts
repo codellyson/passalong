@@ -16,6 +16,8 @@ export interface Folder {
   documents?: number;
   assets?: number;
   guides?: number;
+  /** Only on a folder's children, where a grouping folder shows what each holds. */
+  subfolders?: number;
 }
 
 export interface FolderDocument {

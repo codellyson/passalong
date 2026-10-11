@@ -362,6 +362,19 @@ async function deleteFolder() {
 }
 
 const renamingFolder = ref(false);
+
+/** What a subfolder holds, in words: "5 documents · 1 file", or that it is empty. */
+function holds(child: Folder) {
+  const parts = [
+    [child.documents || 0, "document"],
+    [child.assets || 0, "file"],
+    [child.guides || 0, "guide"],
+    [child.subfolders || 0, "subfolder"],
+  ]
+    .filter(([n]) => n)
+    .map(([n, word]) => `${n} ${word}${n === 1 ? "" : "s"}`);
+  return parts.length ? parts.join(" · ") : "Empty";
+}
 const sharing = ref(false);
 
 /** Make (or reuse) the folder's share link; the link is then shown with Copy and Stop sharing. */
@@ -682,7 +695,24 @@ watch([signedIn, id], load, { immediate: true });
             </template>
           </template>
           <div v-else class="folder-reading-empty">
-            <h2 class="m-0 text-h3">No documents yet</h2>
+            <!-- A folder that groups others is not empty: what it holds is a level down. Lead with
+                 that, or a folder full of an incident's documents reads as if nothing were in it. -->
+            <section v-if="children.length" class="mb-8" aria-labelledby="folder-children-h">
+              <h2 id="folder-children-h" class="m-0 mb-3 text-h3">In this folder</h2>
+              <ul class="m-0 list-none overflow-hidden rounded-2 bg-surface-raised p-0 shadow-edge">
+                <li v-for="(child, index) in children" :key="child.id" :class="{ 'border-t border-line': index > 0 }">
+                  <NuxtLink :to="`/hub/folders/${child.id}`" class="flex items-start gap-3 px-4 py-3 text-fg no-underline hover:bg-field">
+                    <svg class="folder-heading-icon mt-0.5 size-5 shrink-0" :data-color="child.color || displayColor || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
+                    <span class="min-w-0 flex-1">
+                      <span class="block font-ui text-sm font-medium">{{ child.title }}</span>
+                      <span v-if="child.description" class="block font-ui text-xs text-muted">{{ child.description }}</span>
+                      <span class="mt-1 block font-ui text-xs text-muted">{{ holds(child) }}</span>
+                    </span>
+                  </NuxtLink>
+                </li>
+              </ul>
+            </section>
+            <h2 class="m-0 text-h3">{{ children.length ? "No documents at this level" : "No documents yet" }}</h2>
             <p class="m-0 mt-2 max-w-md font-ui text-sm text-muted">Documents are for reading: a brief, a script, an overview, a finding that is already settled.</p>
             <button v-if="!addingDocument" class="btn primary mt-4" type="button" @click="startDocument">New document</button>
             <section class="mt-8 border-t border-line pt-6" aria-labelledby="folder-guide-start">

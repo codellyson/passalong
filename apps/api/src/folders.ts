@@ -330,7 +330,13 @@ routes.get("/:folder", async (c) => {
       .bind(folder.id)
       .all(),
     c.env.DB.prepare(
-      "SELECT id, title, description, parent_id, color FROM folder WHERE parent_id = ? ORDER BY title COLLATE NOCASE",
+      // With what each holds, so a folder that only groups others can show what is in them.
+      `SELECT f.id, f.title, f.description, f.parent_id, f.color,
+              (SELECT COUNT(*) FROM folder_document d WHERE d.folder_id = f.id) AS documents,
+              (SELECT COUNT(*) FROM folder_asset a WHERE a.folder_id = f.id) AS assets,
+              (SELECT COUNT(*) FROM folder_guide g WHERE g.folder_id = f.id) AS guides,
+              (SELECT COUNT(*) FROM folder s WHERE s.parent_id = f.id) AS subfolders
+         FROM folder f WHERE f.parent_id = ? ORDER BY f.title COLLATE NOCASE`,
     )
       .bind(folder.id)
       .all(),

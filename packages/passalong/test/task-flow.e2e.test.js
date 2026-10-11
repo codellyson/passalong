@@ -123,6 +123,13 @@ test("nested folders keep their space, color and subtree when moved", { skip }, 
   const { folder: script } = await api.createFolder("Episode one", "Draft script", "", root.id);
   assert.match(script.space, /^private/);
   assert.match((await api.folder(script.id)).folder.space, /^private/);
+  const { folder: scenes0 } = await api.createFolder("Cutaways", "", "", script.id);
+  await api.createFolderDocument(script.id, "Outline", "");
+  // A grouping folder says what each folder inside it holds, so it does not read as empty.
+  const child = (await api.folder(root.id)).children.find((c) => c.id === script.id);
+  assert.equal(child.documents, 1);
+  assert.equal(child.subfolders, 1);
+  assert.ok(scenes0.id);
   const { folder: scenes } = await api.createFolder("Scenes", "Screens and cuts", "", script.id);
   assert.equal(script.parent_id, root.id);
   assert.equal(scenes.parent_id, script.id);
