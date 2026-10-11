@@ -308,28 +308,6 @@ function glance(it: Item): { text: string; risk: string } | null {
       : "no checks filed";
   return { text, risk: it.task.claim.risk || "" };
 }
-/** Handed-in handoffs whose taker says it worked: the pile nobody has had a reason to open. */
-const workedHandoffs = computed(() =>
-  props.handedIn.filter((h) => h.worked && h.kind === "transfer"),
-);
-const bulk = ref<"" | "ask" | "busy">("");
-const bulkDone = ref(0);
-const bulkFailed = ref(false);
-async function acceptAllWorked() {
-  const list = [...workedHandoffs.value];
-  bulk.value = "busy";
-  bulkDone.value = 0;
-  bulkFailed.value = false;
-  for (const h of list) {
-    if (!(await onCloseHandedIn(h))) {
-      bulkFailed.value = true;
-      break;
-    }
-    bulkDone.value++;
-  }
-  bulk.value = "";
-}
-
 const approving = ref("");
 async function approveFromRow(t: Task) {
   approving.value = t.id;
@@ -360,22 +338,23 @@ const TONE = {
 <template>
   <div v-if="all.length" class="flex flex-col gap-6">
     <div class="flex flex-col gap-4">
-      <!-- The counts, and the filter: a chip per reason, none chosen is all of them. -->
-      <div v-if="!sel" class="flex flex-wrap gap-2 font-ui" role="group" aria-label="Filter by reason">
+      <!-- The counts, as stat cards that are also the filter: one per reason, none chosen is all
+           of them. Equal widths, so the numbers line up and read as a row of figures. -->
+      <div v-if="!sel" class="grid grid-cols-2 gap-3 font-ui sm:grid-cols-4" role="group" aria-label="Filter by reason">
         <button
           v-for="g in groups"
           :key="g.key"
           type="button"
-          class="flex cursor-pointer items-center gap-3 rounded-2 border-0 bg-raised px-4 py-3 text-left shadow-edge transition-colors duration-150"
-          :class="only === g.key ? 'bg-field' : 'hover:bg-surface'"
+          class="flex cursor-pointer flex-col items-start gap-3 rounded-3 border-0 bg-raised px-4 py-4 text-left shadow-edge transition-colors duration-150"
+          :class="only === g.key ? 'bg-field ring-1 ring-line-strong' : 'hover:bg-surface'"
           :aria-pressed="only === g.key"
           @click="only = only === g.key ? null : g.key"
         >
-          <span class="text-xl leading-none font-semibold text-fg tabular-nums">{{ g.items.length }}</span>
           <span class="flex min-w-0 items-center gap-2 text-xs leading-tight font-medium text-muted">
             <span class="size-1.5 shrink-0 rounded-pill" :class="g.tone" aria-hidden="true" />
             <span class="min-w-0">{{ g.short }}</span>
           </span>
+          <span class="text-3xl leading-none font-semibold text-fg tabular-nums">{{ g.items.length }}</span>
         </button>
       </div>
       <p v-if="onlyGroup" class="m-0 font-ui text-xs text-muted">{{ onlyGroup.note }}</p>
@@ -385,32 +364,6 @@ const TONE = {
     <!-- The glance: every item on one line, wide enough to read what it says and why it is here
          without opening it. Opening is the row's one link; a task with nothing to look at can be
          approved from it. -->
-    <div
-      v-if="!sel && (workedHandoffs.length || bulkFailed)"
-      class="flex flex-wrap items-center gap-3 rounded-3 bg-raised px-4 py-3 font-ui text-sm shadow-edge"
-    >
-      <template v-if="bulk === 'busy'">
-        <span class="text-muted">Closing {{ bulkDone }} of {{ bulkDone + workedHandoffs.length }}…</span>
-      </template>
-      <template v-else-if="bulk === 'ask'">
-        <span>
-          Close {{ workedHandoffs.length }} handoff{{ workedHandoffs.length === 1 ? "" : "s" }} without opening
-          them? Each taker is told it was accepted.
-        </span>
-        <button type="button" class="btn sm primary" @click="acceptAllWorked">Close {{ workedHandoffs.length }}</button>
-        <button type="button" class="btn sm" @click="bulk = ''">Cancel</button>
-      </template>
-      <template v-else>
-        <span v-if="bulkFailed" class="text-warn">Stopped on an error. {{ workedHandoffs.length }} left.</span>
-        <span v-else class="text-muted">
-          {{ workedHandoffs.length }} handoff{{ workedHandoffs.length === 1 ? "" : "s" }} where the taker says it worked.
-        </span>
-        <button v-if="workedHandoffs.length" type="button" class="btn sm" @click="bulk = 'ask'">
-          Close all that worked
-        </button>
-      </template>
-    </div>
-
     <div v-if="!sel" class="overflow-x-auto rounded-3 bg-raised shadow-edge">
       <table class="rows stack flat m-0 w-full font-ui text-sm">
         <thead>
@@ -426,7 +379,7 @@ const TONE = {
           <tr v-for="{ it, g } in shown" :key="it.key">
             <td class="min-w-60 max-w-[24rem] font-medium text-fg">
               <div class="flex items-start gap-3">
-                <HubGuideThumbnail :image="imageFor(it)" :guide="guideId(it)" :title="it.title" />
+                <HubGuideThumbnail :image="imageFor(it)" :guide="guideId(it)" :title="it.title" keep-space />
                 <div class="min-w-0 flex-1">
               <button type="button" class="linkish line-clamp-2 text-left font-medium !text-fg hover:!text-accent" @click="pick(it.key)">{{ it.title }}</button>
               <!-- Whether to trust it, before opening: how much of the Acceptance has a run, and what
