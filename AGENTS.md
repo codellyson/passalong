@@ -763,10 +763,11 @@ ships scripts and inlines styles whatever the config says.
   that directory would publish the guide to anyone who can see the repo. Don't "helpfully" remove it.
 - **An account is not the product; a team is.** Guides are only created by `share()`, which needs
   a session — the hub has no editor by design — so a self-serve account with no team has an empty
-  hub. The sign-in therefore offers three doors in deliberate order: paste a token (CLI users),
-  paste an invite link (the only one that leads anywhere immediately), and create an account,
+  hub. The sign-in therefore offers two doors beside signing in: paste an invite link (the only
+  one that leads anywhere immediately), and create an account,
   whose copy says outright that it will be empty until someone hands you something. The empty hub
-  repeats the invite paste for the same reason. Don't add a signup flow that dead-ends.
+  repeats the invite paste for the same reason. Don't add a signup flow that dead-ends. There is no
+  token box: the CLI never shows a token, and `passalong hub` signs the page in through the link.
 - **Prefilled inputs are uncontrolled**: bound with `:value`, read back through
   `field()` on submit. Reading the form into locals before touching state was forced in the Preact
   original — a re-render snapped a controlled input back and silently swallowed a handle on the

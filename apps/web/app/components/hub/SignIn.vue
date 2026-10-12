@@ -11,7 +11,7 @@
 import { useMutation } from "@tanstack/vue-query";
 
 defineProps<{ error: string | null; expired?: boolean }>();
-const emit = defineEmits<{ token: [string]; signedIn: [] }>();
+const emit = defineEmits<{ signedIn: [] }>();
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -97,10 +97,6 @@ function submit(e: Event) {
   send({ mode: mode.value, body });
 }
 
-function useToken(e: Event) {
-  const t = field(e.target as HTMLFormElement, "token");
-  if (t) emit("token", t);
-}
 
 /**
  * The scratch account, for working on this screen and the hub behind it without making one.
@@ -225,20 +221,8 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
       </p>
       <HubInvitePaste label="Invite link" />
       <p class="muted">
-        Using the Passalong terminal tool? It can sign this page in for you, or paste the token it
-        gives you here.
+        Using the Passalong terminal tool? Run <code>passalong hub</code> to open this page signed in.
       </p>
-      <form class="invite-paste" @submit.prevent="useToken">
-        <input
-          class="grow"
-          name="token"
-          type="password"
-          placeholder="pa_…"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <button class="btn" type="submit">Use token</button>
-      </form>
     </details>
     <!-- Not the form's error: this is a failed load, which on this screen means a token that was
          refused. -->
