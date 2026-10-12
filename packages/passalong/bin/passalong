@@ -40,11 +40,12 @@
 //   passalong archive <id>        off your board and out of the free tier's count (was `done`)
 //   passalong rm <id>             delete a guide locally and from sync
 //   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
-//   passalong login [token]       sign in from the browser, or attach this machine with a token
+//   passalong login               sign in from the browser
+//   passalong login --with-token  read a token from stdin instead (CI, scripts)
 //   passalong login --new         add another account to this machine
 //   passalong accounts            the accounts signed in here, and which is the default
 //   passalong use <name>          make one of them the default
-//   passalong logout <name>       forget one of them
+//   passalong logout [name]       forget one of them (default: the current one)
 //   passalong me [--handle H] [--name N] [--email E]   who you are to teammates
 //   passalong team                current team and its members
 //   passalong team create <name>  start a team (you become its owner)
@@ -167,75 +168,20 @@ async function browserLogin() {
     const got = await api.devicePoll(start.id, verifier).catch((e) => die(e.message));
     if (!got) continue;
     await keepLogin(got.token);
-    console.error("Attach other machines with:");
-    console.error(`  passalong login ${got.token}`);
-    console.error("(keep it private — it is a credential, not a password)");
     console.error("Give teammates a name to address you by: passalong me --handle <you>");
     return;
   }
   die("nobody approved it in time. Run `passalong login` again.");
 }
 
-/** The old way, kept for anyone who asks for it with `--email`: an email and a password, typed here. */
-async function passwordLogin(f) {
-// An account you cannot sign in to is one that dies with this file. This used to mint one
-  // silently and then suggest adding a password afterwards; it asks up front instead.
-  if (!tty)
-    die(
-      "no terminal to ask on. Sign in at " +
-        `${api.baseUrl()}/hub, then attach this machine with \`passalong login <token>\``,
-    );
-
-  const email = f.email || (await ask("Email: "));
-  if (!email) die("an email is needed to sign in");
-  const password = await ask("Password: ", { hidden: true });
-  if (!password) die("a password is needed to sign in");
-
-  const label = `${hostname()} cli`;
-  let who = await api.signIn(email, password, { label }).catch((e) => e);
-  if (who instanceof Error) {
-    // 401 is "no such account, or the wrong password", said the same way on purpose so the API
-    // does not confirm which addresses exist. The CLI has to ask rather than guess, because
-    // creating an account for a mistyped address is worse than being told to try again.
-    if (who.status !== 401) die(who.message);
-    const yes = (await ask(`No account signed in as ${email}. Create one? [y/N] `)).toLowerCase();
-    if (yes !== "y" && yes !== "yes")
-      die("not signed in. If the password was wrong, try again, or reset it at " + `${api.baseUrl()}/hub`);
-    const again = await ask("Choose a password: ", { hidden: true });
-    if (again !== password) die("those did not match");
-    who = await api.signIn(email, password, { make: true, label }).catch((e) => die(e.message));
-  }
-
-  await keepLogin(who.token);
-  console.error("Attach other machines with:");
-  console.error(`  passalong login ${who.token}`);
-  console.error("(keep it private — it is a credential, not a password)");
-  console.error("Give teammates a name to address you by: passalong me --handle <you>");
-}
-
-async function ask(question, { hidden = false } = {}) {
-  const { createInterface } = await import("node:readline");
-  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-  if (hidden) {
-    // readline still writes the prompt itself; everything after it is swallowed. The newline the
-    // user's Return would have echoed is put back by hand, or the next line starts mid-prompt.
-    rl.output.write(question);
-    rl._writeToOutput = () => {};
-  }
-  try {
-    // `close` as well as an answer: stdin reaching EOF part-way through — a pipe, a closed pty, a
-    // ^D — never calls the question's callback, and without this the promise is simply never
-    // settled and the process exits on a warning about it rather than saying what happened.
-    const answer = await new Promise((done) => {
-      rl.on("close", () => done(null));
-      rl.question(hidden ? "" : question, done);
-    });
-    if (hidden) process.stdout.write("\n");
-    if (answer === null) die("nothing to read from — sign in at the terminal, or pass a token");
-    return answer.trim();
-  } finally {
-    rl.close();
-  }
+/** A token piped in, for machines with no browser: `passalong login --with-token < token.txt`. */
+async function stdinLogin() {
+  if (process.stdin.isTTY) die("--with-token reads the token from stdin: passalong login --with-token < token.txt");
+  let raw = "";
+  for await (const chunk of process.stdin) raw += chunk;
+  const token = raw.trim();
+  if (!token) die("no token on stdin");
+  await keepLogin(token);
 }
 
 function edit(path) {
@@ -701,7 +647,7 @@ const commands = {
       console.log(`token          ${r.token}`);
       console.log(`password link  ${r.password_url}`);
       console.error(
-        `\n${r.email} is an admin. The token is for \`passalong login\`, the link sets their ` +
+        `\n${r.email} is an admin. The token is for \`passalong login --with-token\`, the link sets their ` +
           `password for the hub, and it expires ${r.expires.slice(0, 10)}. Neither is shown again.`,
       );
       return;
@@ -811,24 +757,21 @@ const commands = {
   },
 
   async login(f) {
-    const given = f._[0];
-    if (given) {
-      await keepLogin(given);
-      return;
-    }
+    // A token on the command line lands in shell history, so it is only read from stdin.
+    if (f._[0]) die("pass a token on stdin instead: passalong login --with-token < token.txt");
+    if (f.email || f.password)
+      die("password sign-in is gone: run `passalong login` and approve it in the browser");
+    if (f["with-token"]) return stdinLogin();
     if (api.loggedIn() && !f.new) {
       const who = await api.me().catch(() => null);
       if (who) {
-        console.error(`already logged in (account ${who.account}). Attach another machine with:`);
-        console.error(`  passalong login ${api.token()}`);
+        console.error(`already logged in as ${who.handle ? `@${who.handle}` : who.email || who.account}.`);
         console.error("Add another account to this machine with `passalong login --new`.");
         return;
       }
     }
-    // Passwords are for someone who asks: `--email` keeps the prompts. Everyone else is sent to the
-    // browser, which works with no terminal at all — an agent can start it, and the person it is
+    // The browser works with no terminal at all — an agent can start it, and the person it is
     // working for clicks once.
-    if (f.email || f.password) return passwordLogin(f);
     return browserLogin();
   },
 
@@ -865,7 +808,7 @@ const commands = {
 
   /** Forget one of them on this machine. The account itself is untouched: only its token here goes. */
   async logout(f) {
-    const name = f._[0] || die("usage: passalong logout <name> (see `passalong accounts`)");
+    const name = f._[0] || store.readConfig().active || die("not logged in (see `passalong accounts`)");
     const r = store.removeAccount(name);
     if (!r.removed) die(`no account called "${name}" here`);
     console.error(

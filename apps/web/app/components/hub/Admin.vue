@@ -322,7 +322,7 @@ const head =
           <dd class="m-0 font-code text-xs break-all text-fg">{{ made.password_url }}</dd>
         </dl>
         <p class="mt-2 mb-0 font-ui text-xs text-muted">
-          The token is for <code class="font-code">passalong login</code>; the link sets their hub
+          The token is for <code class="font-code">passalong login --with-token</code>; the link sets their hub
           password and lasts a day. It has also been emailed to them.
         </p>
         <button class="btn sm mt-3" type="button" @click="made = null">Done</button>
