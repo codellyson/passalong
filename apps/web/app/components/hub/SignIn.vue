@@ -97,7 +97,6 @@ function submit(e: Event) {
   send({ mode: mode.value, body });
 }
 
-
 /**
  * The scratch account, for working on this screen and the hub behind it without making one.
  *
