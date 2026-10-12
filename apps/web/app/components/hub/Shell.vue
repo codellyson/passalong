@@ -111,7 +111,9 @@ onMounted(() => {
   router.replace({ query: rest });
 });
 const unverified = computed(() =>
-  Boolean(data.value.me?.email && data.value.me.email_verified === false && verifiedFrom.value !== "1"),
+  Boolean(
+    data.value.me?.email && data.value.me.email_verified === false && verifiedFrom.value !== "1",
+  ),
 );
 const {
   mutate: resend,
