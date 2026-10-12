@@ -16,7 +16,11 @@ const emit = defineEmits<{ token: [string]; signedIn: [] }>();
 type Mode = "login" | "signup" | "forgot";
 
 // `?forgot=1` is where an expired reset link sends someone: straight to asking for a new one.
-const mode = ref<Mode>(useRoute().query.forgot ? "forgot" : "login");
+const route = useRoute();
+const mode = ref<Mode>(route.query.forgot ? "forgot" : "login");
+// `passalong login` opens /device. Signing in there is a step on the way to approving the
+// terminal, so it says that rather than looking like an ordinary (or expired) hub sign-in.
+const device = route.path === "/device";
 const authError = ref<string | null>(null);
 const notice = ref<string | null>(null);
 
@@ -131,13 +135,17 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
 <template>
   <section class="auth">
     <AppBrand />
-    <h1>{{ expired ? "Signed out" : copyFor.title }}</h1>
-    <p class="lede">{{ expired ? "Your session ended. Sign in and you are back where you were." : copyFor.lede }}</p>
+    <h1 v-if="device && mode === 'login'">Sign in to approve your terminal</h1>
+    <h1 v-else>{{ expired ? "Signed out" : copyFor.title }}</h1>
+    <p v-if="device && mode === 'login'" class="lede">
+      A terminal ran <code>passalong login</code>. Sign in, and you can approve it on the next step.
+    </p>
+    <p v-else class="lede">{{ expired ? "Your session ended. Sign in and you are back where you were." : copyFor.lede }}</p>
 
     <!-- Arriving signed out and being signed out mid-session look identical otherwise, and the
          second one reads as the app having forgotten you for no reason. -->
     <p
-      v-if="expired"
+      v-if="expired && !device"
       class="mx-auto mb-5 max-w-sm rounded-2 border border-warn bg-warn-soft px-3 py-3 font-ui text-sm text-muted"
     >
       Nothing was lost — guides live on the server, not in this tab.

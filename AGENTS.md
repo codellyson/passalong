@@ -519,8 +519,9 @@ change. Its README says how.
   HMAC-SHA256 via WebCrypto — a Worker has no bcrypt). The hub authenticates with an HttpOnly
   session cookie; the CLI and MCP servers send a bearer token from the `token` table, which is
   named, revocable and records `last_used`. One middleware accepts either, so routes never care
-  which. `POST /v1/accounts` still mints an **anonymous** account for `passalong login` and invite
-  links — an account nobody has claimed yet; `POST /v1/auth/password` claims it. Everything secret
+  which. `POST /v1/accounts` still mints an **anonymous** account for invite links — an account
+  nobody has claimed yet (`passalong login` is browser approval or `--with-token` on stdin, and
+  never mints one); `POST /v1/auth/password` claims it. Everything secret
   is stored as a SHA-256: tokens, session ids and reset codes are all bearer credentials.
 - **Analytics are sent from the Worker, never the browser** (`src/analytics.ts`). A share link is
   `/g/:id/:key` where the key is the secret, and every web analytics SDK reports the page URL — the

@@ -50,11 +50,12 @@ passalong broken <id> <why>   you tried it and it does not — the author is tol
 passalong archive <id>        off your board and out of the free tier's count (was `done`)
 passalong rm <id>             delete a guide locally and from sync
 passalong export [dir]        dump every guide as plain markdown
-passalong login [token]       sign in from the browser, or attach this machine with a token
+passalong login               sign in from the browser
+passalong login --with-token  read a token from stdin instead (CI, scripts)
 passalong login --new         add another account to this machine
 passalong accounts            the accounts signed in here, and which is the default
 passalong use <name>          make one of them the default
-passalong logout <name>       forget one of them
+passalong logout [name]       forget one of them (default: the current one)
 passalong me [--handle H] [--name N] [--email E]   who you are to teammates
 passalong team                current team and its members
 passalong team create <name>  start a team (you become its owner)
