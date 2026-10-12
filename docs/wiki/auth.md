@@ -86,3 +86,12 @@ different response is an account-existence oracle.
 | Session cookie | yes | yes | yes | yes |
 
 There is no read-only credential. A share link is the closest thing, and it is per guide.
+
+## Email verification
+
+Every signup, and every change of address, sends a link to confirm the email (migration 0050). Only
+the sha256 of the code is stored, in `email_verify`, beside the address it was sent to, so a link
+sent before an email change cannot verify the new one. `GET /v1/auth/verify/:code` is public (the
+code is the credential), sets `account.email_verified`, and redirects to the hub. A used password
+reset link marks the address verified too. Verification is recorded, not enforced: nothing is
+refused to an unverified account.

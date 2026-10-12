@@ -11,6 +11,9 @@ the action that caused it — and drops anything addressed to whoever caused it.
 - **Actorless events.** `stalled` (a lease ran out), `shelved` (nobody opened it for a fortnight),
   `blocked` (an agent is stuck on you), and your own agent's `task_finished` are sent without an actor,
   so they reach you even when "you" caused them.
+- **Admin alerts.** Some kinds are for whoever runs Passalong, not the people using it: `alertAdmins()`
+  in `alerts.ts` sends them to every super admin's feed and mails the first one. `ADMIN_ALERTS` lists
+  them (today `signed_up`); adding one is a kind, its sentence, an entry there and a call.
 
 ## Channels
 
@@ -34,7 +37,7 @@ Without `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, Settings sa
 `node scripts/vapid-keys.mjs` makes them. iOS delivers web push only to the home-screen app.
 
 ## Sources
-- `apps/api/src/notify.ts` (`notify`, `line`, `PUSHED`, `onPush`), `events.ts`, `webpush.ts`, `email.ts`, `mail-html.ts`
+- `apps/api/src/notify.ts` (`notify`, `line`, `PUSHED`, `onPush`), `alerts.ts`, `events.ts`, `webpush.ts`, `email.ts`, `mail-html.ts`
 - Migrations 0003 (notifications), 0033 (event indexes), 0034 (push)
 - `apps/web/app/composables/useLive.ts`, `components/hub/Toasts.vue`, `PushSettings.vue`, `public/sw.js`
 - [AGENTS.md](../../AGENTS.md): "Notifications", "Mail is written twice…", "Google Chat gets a card…", "The hub is live…", "Push reaches a device only for what needs you…"

@@ -16,6 +16,8 @@ export interface Me {
   email: string | null;
   /** False for an account minted by `passalong login` or an invite: a token, and no way to sign in. */
   has_password: boolean;
+  /** Whether the email was proven to reach its owner (migrations/0050). Absent from an older server. */
+  email_verified?: boolean;
   /** Guides are kept for good rather than tidied away on a clock. */
   keep_forever?: boolean;
   /** Whether this account may choose that. Everybody today; a plan will decide. */

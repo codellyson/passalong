@@ -11,7 +11,7 @@
   sections.
 -->
 <script setup lang="ts">
-import { useQuery } from "@tanstack/vue-query";
+import { useMutation, useQuery } from "@tanstack/vue-query";
 
 withDefaults(
   defineProps<{
@@ -51,6 +51,7 @@ const {
   start,
   load,
   api,
+  json,
 } = useHub();
 
 /**
@@ -94,6 +95,32 @@ const notice =
   "m-0 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-line py-2.5 font-ui text-sm text-muted first:border-t-0";
 /** The signal the fill used to carry, at the size a standing condition deserves. */
 const dot = "mt-1.5 size-1.5 shrink-0 rounded-pill bg-warn";
+
+/**
+ * Email verification (migrations/0050). The link in the mail lands on `/hub?verified=1`, or
+ * `?verified=expired` when it was used or ran out; the answer is read once, after mount so the
+ * server render never redirects, and taken out of the address so a reload does not repeat it.
+ */
+const router = useRouter();
+const verifiedFrom = ref("");
+onMounted(() => {
+  const v = route.query.verified;
+  if (v !== "1" && v !== "expired") return;
+  verifiedFrom.value = v;
+  const { verified: _, ...rest } = route.query;
+  router.replace({ query: rest });
+});
+const unverified = computed(() =>
+  Boolean(
+    data.value.me?.email && data.value.me.email_verified === false && verifiedFrom.value !== "1",
+  ),
+);
+const {
+  mutate: resend,
+  isPending: resending,
+  isSuccess: resent,
+  error: resendFailed,
+} = useMutation({ mutationFn: () => api("/v1/auth/verify", json("POST", {})) });
 
 /** The bar belongs to the signed-in shell, and to the moment before the server has said so. */
 const framed = computed(() => signedIn.value || maybe.value || meFailed.value);
@@ -251,6 +278,44 @@ const active = (to: string) =>
            the loudest colour on it and the reader's first glance, every single visit, for something
            nobody is going to act on right now. A dot carries the signal, a hairline separates the
            rows, and the work starts higher up the page. -->
+      <!-- Not a standing notice: an unproven address is something to do now, once, so it is a
+           callout like the failed-load one above rather than a quiet row in the band below. -->
+      <div
+        v-if="verifiedFrom === '1'"
+        role="status"
+        class="mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-ok bg-ok-soft px-4 py-3"
+      >
+        <p class="m-0 min-w-0 grow basis-64 font-ui text-sm font-semibold text-fg">
+          Your email is confirmed.
+        </p>
+        <button class="btn sm" type="button" @click="verifiedFrom = ''">Dismiss</button>
+      </div>
+      <div
+        v-else-if="unverified"
+        role="alert"
+        class="mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-warn bg-warn-soft px-4 py-3"
+      >
+        <div class="min-w-0 grow basis-64">
+          <p class="m-0 font-ui text-sm font-semibold text-fg">
+            {{ verifiedFrom === "expired" ? "That link has expired or was already used" : "Confirm your email" }}
+          </p>
+          <p class="mt-1 mb-0 font-ui text-sm text-muted">
+            <template v-if="resent">A new link is on its way to {{ data.me?.email }}. Open it to confirm.</template>
+            <template v-else-if="resendFailed">{{ resendFailed.message }}</template>
+            <template v-else>Open the link we sent to {{ data.me?.email }}.</template>
+          </p>
+        </div>
+        <button
+          v-if="!resent"
+          class="btn primary sm"
+          type="button"
+          :disabled="resending"
+          @click="resend()"
+        >
+          {{ resending ? "Sending…" : "Send a new link" }}
+        </button>
+      </div>
+
       <div v-if="lapsed.length || noPlan || nearLimit" class="mb-8 flex flex-col">
         <!-- Specific about which half stops: everything in the team can still be read and answered,
              and only new guides are refused. -->

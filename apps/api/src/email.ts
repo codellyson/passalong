@@ -279,3 +279,29 @@ export function sendInvite(env: MailEnv, o: { to: string; team: string; by: stri
     }),
   );
 }
+
+/** Proving the address reaches its owner. A credential like reset's: single use, and short-lived. */
+export function sendVerify(env: MailEnv, o: { to: string; url: string }) {
+  return sendMail(
+    env,
+    o.to,
+    "Confirm your email for Passalong",
+    [
+      "Confirm this is your email, so Passalong can reach you about work sent to you:",
+      "",
+      `  ${o.url}`,
+      "",
+      "The link works once and expires in a week. If you did not sign up, ignore this.",
+    ],
+    shell({
+      origin: env.PUBLIC_ORIGIN,
+      preview: "The link works once and expires in a week.",
+      heading: "Confirm your email",
+      body: [
+        p("Confirm this is your email, so Passalong can reach you about work sent to you."),
+        button("Confirm my email", o.url),
+        p("The link works once and expires in a week. If you did not sign up, ignore this.", MUTED),
+      ],
+    }),
+  );
+}

@@ -74,6 +74,7 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob\'s agent has a question about "Add Paystack webhook verification"',
     '@bob replied to your agent on "Add Paystack webhook verification"',
     'The agent holding "Add Paystack webhook verification" is stuck on you',
+    "@bob signed up",
   ]);
 });
 
