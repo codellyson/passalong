@@ -519,8 +519,9 @@ change. Its README says how.
   HMAC-SHA256 via WebCrypto — a Worker has no bcrypt). The hub authenticates with an HttpOnly
   session cookie; the CLI and MCP servers send a bearer token from the `token` table, which is
   named, revocable and records `last_used`. One middleware accepts either, so routes never care
-  which. `POST /v1/accounts` still mints an **anonymous** account for `passalong login` and invite
-  links — an account nobody has claimed yet; `POST /v1/auth/password` claims it. Everything secret
+  which. `POST /v1/accounts` still mints an **anonymous** account for invite links — an account
+  nobody has claimed yet (`passalong login` is browser approval or `--with-token` on stdin, and
+  never mints one); `POST /v1/auth/password` claims it. Everything secret
   is stored as a SHA-256: tokens, session ids and reset codes are all bearer credentials.
 - **Analytics are sent from the Worker, never the browser** (`src/analytics.ts`). A share link is
   `/g/:id/:key` where the key is the secret, and every web analytics SDK reports the page URL — the
@@ -774,10 +775,11 @@ ships scripts and inlines styles whatever the config says.
   that directory would publish the guide to anyone who can see the repo. Don't "helpfully" remove it.
 - **An account is not the product; a team is.** Guides are only created by `share()`, which needs
   a session — the hub has no editor by design — so a self-serve account with no team has an empty
-  hub. The sign-in therefore offers three doors in deliberate order: paste a token (CLI users),
-  paste an invite link (the only one that leads anywhere immediately), and create an account,
+  hub. The sign-in therefore offers two doors beside signing in: paste an invite link (the only
+  one that leads anywhere immediately), and create an account,
   whose copy says outright that it will be empty until someone hands you something. The empty hub
-  repeats the invite paste for the same reason. Don't add a signup flow that dead-ends.
+  repeats the invite paste for the same reason. Don't add a signup flow that dead-ends. There is no
+  token box: the CLI never shows a token, and `passalong hub` signs the page in through the link.
 - **Prefilled inputs are uncontrolled**: bound with `:value`, read back through
   `field()` on submit. Reading the form into locals before touching state was forced in the Preact
   original — a re-render snapped a controlled input back and silently swallowed a handle on the

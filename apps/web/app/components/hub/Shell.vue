@@ -139,11 +139,6 @@ onMounted(() => {
   start();
 });
 
-function onToken(t: string) {
-  setToken(t);
-  load();
-}
-
 function onSignedIn() {
   // Signing in replaces any pasted token: the cookie is the credential now, and a stale bearer
   // header would keep authenticating as whoever that token belongs to.
@@ -250,7 +245,6 @@ const active = (to: string) =>
       v-if="!signedIn && !maybe && !meFailed"
       :error="error || loadError"
       :expired="expired"
-      @token="onToken"
       @signed-in="onSignedIn"
     />
 

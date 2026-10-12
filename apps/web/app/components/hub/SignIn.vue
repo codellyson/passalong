@@ -11,12 +11,16 @@
 import { useMutation } from "@tanstack/vue-query";
 
 defineProps<{ error: string | null; expired?: boolean }>();
-const emit = defineEmits<{ token: [string]; signedIn: [] }>();
+const emit = defineEmits<{ signedIn: [] }>();
 
 type Mode = "login" | "signup" | "forgot";
 
 // `?forgot=1` is where an expired reset link sends someone: straight to asking for a new one.
-const mode = ref<Mode>(useRoute().query.forgot ? "forgot" : "login");
+const route = useRoute();
+const mode = ref<Mode>(route.query.forgot ? "forgot" : "login");
+// `passalong login` opens /device. Signing in there is a step on the way to approving the
+// terminal, so it says that rather than looking like an ordinary (or expired) hub sign-in.
+const device = route.path === "/device";
 const authError = ref<string | null>(null);
 const notice = ref<string | null>(null);
 
@@ -93,11 +97,6 @@ function submit(e: Event) {
   send({ mode: mode.value, body });
 }
 
-function useToken(e: Event) {
-  const t = field(e.target as HTMLFormElement, "token");
-  if (t) emit("token", t);
-}
-
 /**
  * The scratch account, for working on this screen and the hub behind it without making one.
  *
@@ -131,13 +130,17 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
 <template>
   <section class="auth">
     <AppBrand />
-    <h1>{{ expired ? "Signed out" : copyFor.title }}</h1>
-    <p class="lede">{{ expired ? "Your session ended. Sign in and you are back where you were." : copyFor.lede }}</p>
+    <h1 v-if="device && mode === 'login'">Sign in to approve your terminal</h1>
+    <h1 v-else>{{ expired ? "Signed out" : copyFor.title }}</h1>
+    <p v-if="device && mode === 'login'" class="lede">
+      A terminal ran <code>passalong login</code>. Sign in, and you can approve it on the next step.
+    </p>
+    <p v-else class="lede">{{ expired ? "Your session ended. Sign in and you are back where you were." : copyFor.lede }}</p>
 
     <!-- Arriving signed out and being signed out mid-session look identical otherwise, and the
          second one reads as the app having forgotten you for no reason. -->
     <p
-      v-if="expired"
+      v-if="expired && !device"
       class="mx-auto mb-5 max-w-sm rounded-2 border border-warn bg-warn-soft px-3 py-3 font-ui text-sm text-muted"
     >
       Nothing was lost — guides live on the server, not in this tab.
@@ -217,20 +220,8 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
       </p>
       <HubInvitePaste label="Invite link" />
       <p class="muted">
-        Using the Passalong terminal tool? It can sign this page in for you, or paste the token it
-        gives you here.
+        Using the Passalong terminal tool? Run <code>passalong hub</code> to open this page signed in.
       </p>
-      <form class="invite-paste" @submit.prevent="useToken">
-        <input
-          class="grow"
-          name="token"
-          type="password"
-          placeholder="pa_…"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <button class="btn" type="submit">Use token</button>
-      </form>
     </details>
     <!-- Not the form's error: this is a failed load, which on this screen means a token that was
          refused. -->
