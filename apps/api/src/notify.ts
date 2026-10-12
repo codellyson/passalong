@@ -74,6 +74,9 @@ export const KINDS = [
   // stalled, because the one it is most often about is your own agent — and notify() drops what
   // you caused yourself.
   "blocked",
+  // Alerts for whoever runs Passalong, not for the people using it: see ADMIN_ALERTS in alerts.ts.
+  // The actor is the account it is about; the note is what a person needs to recognise it.
+  "signed_up",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -769,6 +772,8 @@ export function line(r: LineFacts): string {
       return `${who}'s agent has a question about ${title}${note}`;
     case "replied":
       return `${who} replied to your agent on ${title}${note}`;
+    case "signed_up":
+      return `${who} signed up${note}`;
     default:
       return `${who} did something with ${title}`;
   }

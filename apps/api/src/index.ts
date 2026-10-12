@@ -55,6 +55,7 @@
 // `/g/**` routes that stayed because a crawler and an agent fetch them, not a browser — and
 // because `workers-og` is ~1.7MB of wasm that only the card should ever pay for.
 import { Hono } from "hono";
+import { alertAdmins } from "./alerts.js";
 import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
   ATTACH_MAX,
@@ -103,6 +104,7 @@ import {
   sendReplied,
   sendReset,
   sendVerdict,
+  sendVerify,
 } from "./email.js";
 import { eventStream, startAt } from "./events.js";
 import folderRoutes, {
@@ -859,6 +861,10 @@ const PUBLIC = new Set([
  * renders as a broken image, for the reader the evidence was for. The id is the secret, which is
  * the same bargain the share key already makes.
  */
+/** A verification link is opened from a mail, often in a browser that is not signed in. The code is the credential. */
+const publicVerify = (method: string, path: string) =>
+  method === "GET" && /^\/v1\/auth\/verify\/[A-Za-z0-9_-]+$/.test(path);
+
 const publicShot = (method: string, path: string) =>
   method === "GET" && /^\/v1\/shots\/[a-z0-9]+$/.test(path);
 
@@ -929,6 +935,7 @@ app.use("/v1/*", async (c, next) => {
   }
   if (PUBLIC.has(`${c.req.method} ${c.req.path}`)) return next();
   if (publicShot(c.req.method, c.req.path)) return next();
+  if (publicVerify(c.req.method, c.req.path)) return next();
   if (publicUpload(c.req.method, c.req.path)) return next();
   if (publicWebhook(c.req.method, c.req.path)) return next();
 
@@ -1112,6 +1119,7 @@ app.post("/v1/auth/signup", async (c) => {
     .bind(id, now(), email, await hashPassword(password), `retired:${rid(24)}`)
     .run();
   count(c, "account_created", { kind: "password" });
+  signedUp(c, id, email);
   return c.json({ account: id, email }, 201, { "set-cookie": await startSession(c, id) });
 });
 
@@ -1193,9 +1201,15 @@ app.post("/v1/auth/password", async (c) => {
         "Another account already uses that email. Sign in with that email instead, or use a different one.",
       );
   }
-  await c.env.DB.prepare("UPDATE account SET email = ?, password_hash = ? WHERE id = ?")
-    .bind(address, await hashPassword(password), account)
+  // A changed address is an unproven one: what was verified was the old address.
+  await c.env.DB.prepare(
+    "UPDATE account SET email = ?, password_hash = ?, email_verified = CASE WHEN email = ? THEN email_verified ELSE '' END WHERE id = ?",
+  )
+    .bind(address, await hashPassword(password), address, account)
     .run();
+  // An anonymous account (an invite link's) getting its first password is someone signing up.
+  if (!me?.password_hash) signedUp(c, account, address);
+  else if (address !== me?.email) later(c)?.(startVerify(c, account, address).catch(() => {}));
   // Changing a password ends every other session; a stolen one should not outlive the change.
   await c.env.DB.prepare("DELETE FROM session WHERE account_id = ?").bind(account).run();
   return c.json({ email: address }, 200, { "set-cookie": await startSession(c, account) });
@@ -1246,10 +1260,80 @@ app.post("/v1/auth/reset", async (c) => {
       row.account_id,
     ),
     c.env.DB.prepare("UPDATE reset SET used = ? WHERE hash = ?").bind(now(), hash),
+    // The link reached them, which proves the address as well as a verification link would.
+    c.env.DB.prepare(
+      "UPDATE account SET email_verified = ? WHERE id = ? AND email_verified = ''",
+    ).bind(now(), row.account_id),
     // Whoever was signed in before the reset should not still be.
     c.env.DB.prepare("DELETE FROM session WHERE account_id = ?").bind(row.account_id),
   ]);
   return c.json({ ok: true }, 200, { "set-cookie": await startSession(c, row.account_id) });
+});
+
+/**
+ * Email verification (migrations/0050_email_verify.sql). A link is sent on every signup and every
+ * change of address; opening it marks the address proven. Nothing is refused to an unverified
+ * account — this records that the address reaches its owner, it does not gate the product.
+ */
+async function startVerify(c: { env: Env; req: { url: string } }, account: string, email: string) {
+  const code = rand(40);
+  await c.env.DB.prepare(
+    "INSERT INTO email_verify (hash, account_id, email, created, expires) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(
+      await sha256(code),
+      account,
+      email,
+      now(),
+      new Date(Date.now() + 7 * 86400e3).toISOString(),
+    )
+    .run();
+  await sendVerify(c.env, { to: email, url: `${origin(c)}/v1/auth/verify/${code}` });
+}
+
+/** Everything a new account sets off: its verification mail, and the admins' alert. Off the response path. */
+function signedUp(
+  c: { env: Env; req: { url: string }; executionCtx: { waitUntil(p: Promise<unknown>): void } },
+  account: string,
+  email: string,
+) {
+  const run = later(c);
+  const work = Promise.all([
+    startVerify(c, account, email).catch((e) => console.error("verify mail", (e as Error).message)),
+    alertAdmins(c.env, { kind: "signed_up", actor_id: account, note: email }),
+  ]);
+  if (run) run(work);
+}
+
+app.get("/v1/auth/verify/:code", async (c) => {
+  const hash = await sha256(c.req.param("code"));
+  const row = await c.env.DB.prepare(
+    `SELECT v.account_id FROM email_verify v JOIN account a ON a.id = v.account_id
+     WHERE v.hash = ? AND v.used = '' AND v.expires > ? AND a.email = v.email`,
+  )
+    .bind(hash, now())
+    .first<{ account_id: string }>();
+  if (!row) return c.redirect(`${origin(c)}/hub?verified=expired`, 302);
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE email_verify SET used = ? WHERE hash = ?").bind(now(), hash),
+    c.env.DB.prepare("UPDATE account SET email_verified = ? WHERE id = ?").bind(
+      now(),
+      row.account_id,
+    ),
+  ]);
+  return c.redirect(`${origin(c)}/hub?verified=1`, 302);
+});
+
+/** Another link, for someone whose first one expired or never arrived. */
+app.post("/v1/auth/verify", async (c) => {
+  const account = c.get("account");
+  const me = await c.env.DB.prepare("SELECT email, email_verified FROM account WHERE id = ?")
+    .bind(account)
+    .first<{ email: string; email_verified: string }>();
+  if (!me?.email) return err(c, 400, "Add an email address first.");
+  if (me.email_verified) return c.json({ verified: true });
+  await startVerify(c, account, me.email);
+  return c.json({ sent: true });
 });
 
 // ---- tokens -----------------------------------------------------------------------------
@@ -1595,12 +1679,13 @@ app.delete("/v1/admin/gifts/:id", async (c) => {
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, password_hash, plan, plan_until, role, keep_forever FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, role, keep_forever FROM account WHERE id = ?",
   )
     .bind(account)
     .first<
       AccountRow & {
         password_hash: string;
+        email_verified: string;
         plan: string;
         plan_until: string;
         role: string;
@@ -1648,6 +1733,8 @@ app.get("/v1/me", async (c) => {
     // Whether this account can be signed in to, so the hub can offer to claim an anonymous one.
     // Never the hash itself.
     has_password: Boolean(me?.password_hash),
+    // Whether the email on the account was proven to reach its owner. See migrations/0050.
+    email_verified: Boolean(me?.email_verified),
     // Whether its guides are kept for good rather than tidied away on a clock, and whether it may
     // choose that. See migrations/0044_keep_forever.sql and quota.ts.
     keep_forever: Boolean(me?.keep_forever),
@@ -1740,11 +1827,20 @@ app.patch("/v1/me", async (c) => {
     sets.push("name = ?");
     binds.push(patch.name.trim().slice(0, 80));
   }
+  let newEmail = "";
   if (patch.email !== undefined) {
     const e = patch.email.trim().toLowerCase();
     if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return err(c, 400, NOT_AN_EMAIL);
+    const was = await c.env.DB.prepare("SELECT email FROM account WHERE id = ?")
+      .bind(account)
+      .first<{ email: string }>();
     sets.push("email = ?");
     binds.push(e);
+    // A changed address is an unproven one.
+    if (e !== was?.email) {
+      sets.push("email_verified = ''");
+      newEmail = e;
+    }
   }
   if (!sets.length)
     return err(
@@ -1755,6 +1851,7 @@ app.patch("/v1/me", async (c) => {
   await c.env.DB.prepare(`UPDATE account SET ${sets.join(", ")} WHERE id = ?`)
     .bind(...binds, account)
     .run();
+  if (newEmail) later(c)?.(startVerify(c, account, newEmail).catch(() => {}));
   const me = await c.env.DB.prepare("SELECT id, handle, name, email FROM account WHERE id = ?")
     .bind(account)
     .first<AccountRow>();

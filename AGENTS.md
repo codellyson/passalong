@@ -669,6 +669,18 @@ change. Its README says how.
   own agent's `task_finished`, both sent without an actor so `notify()` does not drop them as
   self-inflicted. Keys: `node scripts/vapid-keys.mjs`; without `VAPID_*` the hub says push is not
   set up. iOS delivers web push only to the home-screen app.
+- **Admin alerts are notifications for whoever runs Passalong** (`src/alerts.ts`). `alertAdmins()`
+  sends one to every `role = 'super'` account and everyone in `ADMIN_ACCOUNTS`: a feed row through
+  `notify()`, mailed the first time. Adding one is a kind in `KINDS`, its sentence in `line()`, an
+  entry in `ADMIN_ALERTS` (with its mail subject) and a call where it happens. Today the only one is
+  `signed_up`, on a password signup and on an invite account's first password.
+- **Email verification records, it does not gate** (migration 0050). Every signup and every change
+  of address sends a single-use link (`email_verify`, sha256 only, a week long, tied to the address
+  it was sent to); opening `GET /v1/auth/verify/:code` sets `account.email_verified` and redirects to
+  `/hub?verified=1` or `?verified=expired`. A used reset link also counts, since it reached them.
+  `POST /v1/auth/verify` sends another. The hub (`Shell.vue`) reads `?verified=` once and clears it,
+  and shows a "Confirm your email" callout with a resend while it is unproven. Nothing is refused to an unverified account; accounts that
+  had an email before 0050 were marked verified as of their creation.
 - **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
   to whoever should hear it: `handoff`, `shared`, `pulled`, `consumed`, `joined`. Rows first,
   delivery second — mail is a channel over the row, so the feed works with no mailer configured.
