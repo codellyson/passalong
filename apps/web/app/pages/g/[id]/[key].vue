@@ -208,7 +208,8 @@ usePage({
         <AppBrand />
         <span class="font-ui text-sm text-muted">
           {{ docked.length }} of {{ followUps.length }} follow-ups open ·
-          <a :href="closeAllHref">Close all</a>
+          <a :href="closeAllHref">Close all</a> ·
+          <a :href="`/hub/g/${encodeURIComponent(id)}`">Open in your hub</a>
         </span>
       </div>
 
@@ -217,6 +218,13 @@ usePage({
         class="border-b border-line pt-6 pb-4 md:sticky md:top-8 md:self-start md:border-b-0 md:py-8"
       >
         <AppBrand />
+
+        <!-- This page runs no script and cannot tell who is signed in, so the way back is always
+             drawn: the hub signs a visitor in if needed, and says so if the guide is not theirs. -->
+        <a
+          :href="`/hub/g/${encodeURIComponent(id)}`"
+          class="mt-3 block font-ui text-sm text-muted no-underline hover:text-accent"
+        >Open in your hub →</a>
 
         <nav v-if="contents.length" class="mt-4 md:mt-6">
           <p :class="rail">Contents</p>
