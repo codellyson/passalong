@@ -99,7 +99,7 @@ function run(work: () => void) {
       <NuxtLink
         v-if="g.children"
         class="menu-item"
-        :to="{ path: '/hub', query: { follows: g.id } }"
+        :to="{ path: '/hub/work', query: { follows: g.id } }"
         @click="shut"
       >
         See follow-ups ({{ g.children }})

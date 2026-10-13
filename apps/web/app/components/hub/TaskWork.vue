@@ -62,13 +62,13 @@ const handIn = async () => {
         </div>
       </form>
       <form v-if="handInOpen" class="mt-4 flex flex-col gap-3 border-t border-line pt-4" @submit.prevent="act(handIn)">
-        <label class="flex flex-col gap-2 font-ui text-sm">What did you do?<textarea v-model="writeup" rows="4" placeholder="Describe what you completed against the task’s Acceptance." /></label>
-        <label class="flex flex-col gap-2 font-ui text-sm">What should the reviewer know?<textarea v-model="evidence" rows="3" placeholder="Add links, outcomes, or other evidence." /></label>
-        <label class="flex flex-col gap-2 font-ui text-sm">Risk (optional)<textarea v-model="risk" rows="2" placeholder="Anything this change could affect." /></label>
-        <label class="flex flex-col gap-2 font-ui text-sm">One sentence summary<input v-model="summary" required maxlength="280" placeholder="The requested onboarding flow is now in place." /></label>
+        <label class="flex flex-col gap-2 font-ui text-sm">In one sentence, what did you do?<input v-model="summary" required maxlength="280" placeholder="The requested onboarding flow is now in place." /></label>
+        <label class="flex flex-col gap-2 font-ui text-sm">Details (optional)<textarea v-model="writeup" rows="4" placeholder="What you did, against each Acceptance line." /></label>
+        <label class="flex flex-col gap-2 font-ui text-sm">How did you check it?<textarea v-model="evidence" rows="3" placeholder="Links, screenshots, test results: what the reviewer can look at." /></label>
+        <label class="flex flex-col gap-2 font-ui text-sm">What could it break? (optional)<input v-model="risk" maxlength="280" placeholder="One line, or leave empty." /></label>
         <button class="btn primary self-start" type="submit" :disabled="busy || !summary.trim()">{{ busy ? "Handing in…" : "Send for review" }}</button>
       </form>
-      <p v-if="error" class="mt-3 mb-0 font-ui text-sm text-danger" role="status">{{ error }}</p>
     </template>
+    <p v-if="error" class="mt-3 mb-0 font-ui text-sm text-danger" role="status">{{ error }}</p>
   </section>
 </template>

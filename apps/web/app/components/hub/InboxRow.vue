@@ -75,7 +75,7 @@ const who = computed(() => {
       <div class="flex items-start gap-3">
         <HubGuideThumbnail :image="g.preview_image" :guide="g.id" :title="g.title || 'Untitled guide'" />
         <div class="min-w-0 flex-1">
-      <NuxtLink :to="`/hub/g/${g.id}`" class="line-clamp-1 font-medium text-fg no-underline hover:text-accent">{{ g.title || "Untitled guide" }}</NuxtLink>
+      <NuxtLink :to="`/hub/g/${g.id}`" class="line-clamp-2 font-medium text-fg no-underline hover:text-accent">{{ g.title || "Untitled guide" }}</NuxtLink>
       <!-- A word under the title only where it tells rows apart: a bug or a task among handoffs, a
            guide that follows another, one that has follow-ups. "transfer" was on nearly every row and
            said nothing there. -->
@@ -87,7 +87,7 @@ const who = computed(() => {
         <span v-if="g.parent && g.parent_title">
           follows
           <a v-if="g.parent_url" :href="g.parent_url" target="_blank" rel="noopener">{{ shorten(g.parent_title, 32).text }}</a>
-          <NuxtLink v-else :to="{ path: '/hub', query: { q: g.parent } }">{{ shorten(g.parent_title, 32).text }}</NuxtLink>
+          <NuxtLink v-else :to="{ path: '/hub/work', query: { q: g.parent } }">{{ shorten(g.parent_title, 32).text }}</NuxtLink>
         </span>
         <a v-if="g.children" :href="`${g.url}?with=all`" target="_blank" rel="noopener">
           {{ g.children }} {{ g.children === 1 ? "follow-up" : "follow-ups" }}
@@ -123,10 +123,9 @@ const who = computed(() => {
           v-else-if="key === 'waiting' || key === 'unjudged'"
           class="btn sm guide-review"
           :aria-expanded="open === 'verdict'"
-          :aria-label="`Tell ${sender} how it went`"
           @click="toggle('verdict')"
         >
-          Review
+          Say how it went
         </button>
         <!-- On the row, not three levels into a menu: the author knows the work is finished and
              had no verb for it but Archive under a "Terminals and agents" heading next to Delete.

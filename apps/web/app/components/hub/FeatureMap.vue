@@ -38,14 +38,15 @@ const support = [
 </script>
 
 <template>
-  <section class="rounded-3 bg-surface p-4 shadow-edge sm:p-5" aria-labelledby="feature-map-title">
-    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-      <div>
-        <p class="m-0 font-ui text-xs font-semibold uppercase tracking-widest text-accent">Passalong at a glance</p>
-        <h2 id="feature-map-title" class="mt-1 mb-0 text-lg font-medium tracking-tight">From first prompt to verified work</h2>
-      </div>
-      <p class="m-0 font-ui text-sm text-muted">One shared workflow for people and agents.</p>
-    </div>
+  <!-- Home opens it; closed it is one line, for someone who has read it once already. -->
+  <details class="feature-map rounded-3 bg-surface px-4 py-3 shadow-edge">
+    <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <h2 class="m-0 font-ui text-sm font-semibold text-fg">How Passalong works</h2>
+      <span class="flex items-center gap-2 font-ui text-sm text-muted">
+        One shared workflow for people and agents
+        <AppIcon name="reveal" class="feature-map-chevron shrink-0" />
+      </span>
+    </summary>
 
     <ol class="feature-flow mt-4 mb-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 xl:grid-cols-4">
       <li v-for="step in steps" :key="step.number" class="relative min-w-0 rounded-2 bg-raised p-4 shadow-edge">
@@ -74,10 +75,16 @@ const support = [
         <span class="shrink-0 font-ui text-xs font-medium text-accent group-hover:underline">{{ item.action }} <span aria-hidden="true">↗</span></span>
       </NuxtLink>
     </div>
-  </section>
+  </details>
 </template>
 
 <style scoped>
+.feature-map summary::-webkit-details-marker {
+  display: none;
+}
+.feature-map[open] .feature-map-chevron {
+  transform: rotate(180deg);
+}
 @media (min-width: 1280px) {
   .feature-flow > li:not(:last-child)::after {
     position: absolute;

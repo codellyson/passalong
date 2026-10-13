@@ -5265,6 +5265,11 @@ app.get("/v1/working", async (c) => {
 // person the same task lifecycle without asking them to manufacture an agent id or a report guide.
 app.post("/v1/tasks/:id/person-take", async (c) => {
   const account = c.get("account");
+  // Tasks only: a handoff or bug is taken in the browser by acking it, which also tells the sender.
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  if (found.row.kind !== "task")
+    return err(c, 400, "Only a task is taken here. Take a handoff or bug with I'll do this.");
   const who = { account, agent: personAgent(account), repo: "", any: true };
   const at = now();
   const got = await claims.take(c.env.DB, c.req.param("id"), who, {
@@ -5314,6 +5319,13 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
     },
   );
   if ("error" in result) return err(c, result.status, result.error);
+  // Claimed as an agent's are, or the hourly sweep deletes screenshots this hand-in names.
+  await claimEvidenceShots(
+    c,
+    account,
+    result.claim.guide_id,
+    `${body.evidence ?? ""}\n${body.writeup ?? ""}`,
+  );
   count(c, "task_finished", {});
   await taskEvent(c, result.claim.guide_id, "task_finished", "");
   return c.json({ id: result.claim.guide_id, state: "review" });
