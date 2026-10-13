@@ -29,6 +29,9 @@ that an agent will read:
 - An allowed sender's alert is published through `PUT /v1/guides/:id` as the account, written by
   `email`, as a **Draft task**. It reaches an agent only after a person marks it Ready. The email
   sits in a fence, labelled as evidence and not as instructions. You get an `alert` notification.
+  The address can name a repo (`inbound.target`, `PATCH /v1/inbound`). It becomes the task's
+  `target_context`, so an agent working in that repo takes the task with no id once it is Ready.
+  Without one, a no-id `take` never offers it, since that only matches tasks for the agent's own repo.
 - A repeat (same sender, same subject with its numbers taken out, task not archived) adds to
   `inbound_alert.times` and leaves at most one note an hour on the task's thread.
 

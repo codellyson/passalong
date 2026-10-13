@@ -5,9 +5,14 @@
 -- every time Settings opens. It decides whose inbox a message lands in; whether anything is
 -- created is decided by `inbound_sender`, so knowing the address alone gets a stranger only a
 -- pending row the owner can block.
+--
+-- `target` is the repo the alerts' tasks are for (`owner/repo`, see repoKey in claims.ts). An
+-- agent's `take` with no id only hands out tasks for the repo it is in, so without one an alert
+-- task waits for someone to take it by hand.
 CREATE TABLE inbound (
   account_id TEXT PRIMARY KEY REFERENCES account(id) ON DELETE CASCADE,
   key        TEXT NOT NULL UNIQUE,
+  target     TEXT NOT NULL DEFAULT '',
   created    TEXT NOT NULL
 );
 

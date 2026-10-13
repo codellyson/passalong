@@ -92,7 +92,6 @@ const nav = computed(() => {
           tone: me.value?.handle ? "" : "warn",
         },
         { href: "#notifications", label: "Notifications", note: "", tone: "" },
-        { href: "#alerts", label: "Alerts by email", note: "", tone: "" },
         {
           href: "#cleanup",
           label: "Clean-up",
@@ -133,6 +132,7 @@ const nav = computed(() => {
           note: String(data.value.tokens.length || ""),
           tone: "",
         },
+        { href: "#alerts", label: "Alerts by email", note: "", tone: "" },
       ],
     },
   ];
@@ -255,17 +255,6 @@ const noteTone: Record<string, string> = {
             <HubPushSettings />
           </section>
 
-          <section id="alerts" :class="sec" aria-labelledby="alerts-h">
-            <div :class="secHead">
-              <h3 id="alerts-h" :class="title">Alerts by email</h3>
-              <p :class="blurb">
-                An address for your error alerts. Each alert becomes a Draft task; mark it Ready and an
-                agent can take it.
-              </p>
-            </div>
-            <HubAlertInbox />
-          </section>
-
           <section id="cleanup" :class="sec" aria-labelledby="cleanup-h">
             <div :class="secHead">
               <h3 id="cleanup-h" :class="title">Clean-up</h3>
@@ -325,6 +314,17 @@ const noteTone: Record<string, string> = {
               </p>
             </div>
             <HubTokens />
+          </section>
+
+          <section id="alerts" :class="sec" aria-labelledby="alerts-h">
+            <div :class="secHead">
+              <h3 id="alerts-h" :class="title">Alerts by email</h3>
+              <p :class="blurb">
+                An address for your error alerts. Each alert becomes a Draft task; mark it Ready and an
+                agent can take it.
+              </p>
+            </div>
+            <HubAlertInbox />
           </section>
         </div>
       </div>

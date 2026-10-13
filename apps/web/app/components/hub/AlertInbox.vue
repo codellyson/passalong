@@ -18,7 +18,12 @@ interface Sender {
 const { api, json, data } = useHub();
 const myEmail = computed(() => data.value.me?.email || "your account's email");
 
-const state = ref<{ available: boolean; address: string; senders: Sender[] } | null>(null);
+const state = ref<{
+  available: boolean;
+  address: string;
+  target: string;
+  senders: Sender[];
+} | null>(null);
 const busy = ref("");
 const problem = ref("");
 const source = ref<"tool" | "code" | "gmail">("tool");
@@ -47,6 +52,9 @@ async function run(what: string, fn: () => Promise<unknown>) {
   }
 }
 
+/** Read through the form on submit: the input is prefilled, so it stays uncontrolled. */
+const saveTarget = (form: HTMLFormElement) =>
+  run("target", () => api("/v1/inbound", json("PATCH", { target: field(form, "target") })));
 const make = () => run("make", () => api("/v1/inbound", json("POST")));
 const off = () => run("off", () => api("/v1/inbound", { method: "DELETE" }));
 const decide = (s: Sender, to: "allowed" | "blocked") =>
@@ -115,6 +123,32 @@ const choices = [
             forward it from {{ myEmail }}.
           </p>
         </fieldset>
+
+        <form class="flex flex-col gap-2" @submit.prevent="saveTarget($event.target as HTMLFormElement)">
+          <label class="font-medium text-fg" for="alert-target">Which repo are these fixed in?</label>
+          <div class="flex flex-wrap items-center gap-2">
+            <input
+              id="alert-target"
+              :key="state.target"
+              name="target"
+              class="min-w-0 flex-1 basis-64"
+              placeholder="owner/repo"
+              :value="state.target"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button class="btn" type="submit" :disabled="Boolean(busy)">
+              {{ busy === "target" ? "Saving…" : "Save" }}
+            </button>
+          </div>
+          <p class="m-0 text-muted">
+            {{
+              state.target
+                ? `Once Ready, an agent working in ${state.target} takes these on its own.`
+                : "Without one, an agent only takes these when given the task. owner/repo, as in the git remote."
+            }}
+          </p>
+        </form>
       </template>
 
       <div v-if="pending.length" class="flex flex-col gap-2">

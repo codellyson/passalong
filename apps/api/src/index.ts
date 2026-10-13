@@ -5158,9 +5158,9 @@ const inboundDomain = (env: Env) =>
 app.get("/v1/inbound", async (c) => {
   const domain = inboundDomain(c.env);
   const me = c.get("account");
-  const box = await c.env.DB.prepare("SELECT key FROM inbound WHERE account_id = ?")
+  const box = await c.env.DB.prepare("SELECT key, target FROM inbound WHERE account_id = ?")
     .bind(me)
-    .first<{ key: string }>();
+    .first<{ key: string; target: string }>();
   const { results } = await c.env.DB.prepare(
     `SELECT sender, state, subject, first_at, last_at, times FROM inbound_sender
       WHERE account_id = ? ORDER BY state = 'pending' DESC, last_at DESC LIMIT 100`,
@@ -5170,6 +5170,7 @@ app.get("/v1/inbound", async (c) => {
   return c.json({
     available: Boolean(domain),
     address: box && domain ? `${box.key}@${domain}` : "",
+    target: box?.target || "",
     senders: results,
   });
 });
@@ -5187,6 +5188,22 @@ app.post("/v1/inbound", async (c) => {
     .run();
   count(c, "inbound_address");
   return c.json({ address: `${key}@${domain}` });
+});
+
+/**
+ * The repo the alerts' tasks are for, written the way an agent's repo is (`owner/repo`), so the
+ * agent working there takes them with no id. Empty means someone takes each one by hand.
+ */
+app.patch("/v1/inbound", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { target?: unknown };
+  if (typeof body.target !== "string")
+    return err(c, 400, 'Send {"target": "owner/repo"}, or "" to clear it.');
+  const target = claims.repoKey(body.target).slice(0, 200);
+  const done = await c.env.DB.prepare("UPDATE inbound SET target = ? WHERE account_id = ?")
+    .bind(target, c.get("account"))
+    .run();
+  if (!done.meta.changes) return err(c, 404, "Get an alert address first.");
+  return c.json({ target });
 });
 
 /** Turn it off. Senders are kept, so turning it back on does not ask about them again. */
@@ -5247,11 +5264,11 @@ export async function receiveEmail(
     // shortcut: a message over 1 MB is dropped unread; alerts are small, raise it if one is not.
     if (!key || message.rawSize > 1024 * 1024) return;
     const box = await env.DB.prepare(
-      `SELECT i.account_id, a.email, a.email_verified FROM inbound i
+      `SELECT i.account_id, i.target, a.email, a.email_verified FROM inbound i
          JOIN account a ON a.id = i.account_id WHERE i.key = ?`,
     )
       .bind(key)
-      .first<{ account_id: string; email: string; email_verified: string }>();
+      .first<{ account_id: string; target: string; email: string; email_verified: string }>();
     if (!box) return;
     const mail = await parseEmail(message.raw, message.from);
     if (!mail.sender) return;
@@ -5325,6 +5342,7 @@ export async function receiveEmail(
     markdown = setField(markdown, "kind", "task");
     markdown = setField(markdown, "status", "draft");
     markdown = setField(markdown, "source_context", `email from ${mail.sender}`);
+    if (box.target) markdown = setField(markdown, "target_context", box.target);
     const made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, markdown, "text/markdown");
     if (!made.ok) {
       console.error("inbound alert refused", made.status, made.text.slice(0, 200));
