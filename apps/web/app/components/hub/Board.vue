@@ -16,8 +16,8 @@
   mark on their left edge; Done is faded.
 -->
 <script setup lang="ts">
-import type { Guide } from "~/types/hub";
 import { aboutMe, type STAGES } from "~/composables/useWorkLists";
+import type { Guide } from "~/types/hub";
 
 const props = defineProps<{
   columns: ((typeof STAGES)[number] & { cards: Guide[] })[];
@@ -73,7 +73,10 @@ const HEALTH = {
 
 /** How long since anything happened to it: its holder last heard from, or its last edit. */
 function age(g: Guide) {
-  const heard = (g.held_by ?? []).map((h) => h.since).sort().at(-1);
+  const heard = (g.held_by ?? [])
+    .map((h) => h.since)
+    .sort()
+    .at(-1);
   const edited = g.updated || g.created;
   return rel(heard && heard > edited ? heard : edited).replace(/ ago$/, "");
 }

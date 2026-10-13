@@ -936,7 +936,7 @@ test("a screenshot handed in as evidence belongs to the guide, so the nightly sw
   ]);
 });
 
-test("in a team, each side hears what the other did to a task — and only the author moves it", {
+test("in a team, each side hears what the other did to a task — and anyone in it moves it", {
   skip,
 }, async () => {
   const env = await setup();
@@ -971,9 +971,9 @@ test("in a team, each side hears what the other did to a task — and only the a
   const draft = (await p.share(task("Still a draft"), { to: team.slug })).guide.meta.id;
   await p.activity(); // clears what was unread before this test
 
-  // The teammate can take it, but cannot queue the owner's draft or close the task by status.
+  // The teammate can take it, but cannot archive the task by status: that is its author's or an
+  // admin's, and finishing goes through the review.
   as(mate.token);
-  await assert.rejects(p.ready(draft), (e) => e.status === 403);
   await assert.rejects(api.setStatus(id, "consumed"), (e) => e.status === 403);
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
   execFileSync("git", ["init", "-q", dir]);
@@ -985,6 +985,8 @@ test("in a team, each side hears what the other did to a task — and only the a
     evidence: PROOF,
     cwd: dir,
   });
+  // A team's board is anyone's in it to move: the teammate can mark the owner's draft ready.
+  await p.ready(draft);
 
   as(owner);
   const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
@@ -1324,7 +1326,7 @@ test("the hook commands: a session is told what it holds, and stopped once befor
   assert.equal(existsSync(join(bare, ".passalong")), false);
 });
 
-test("a handoff in the browser: taking it holds it, saying it worked hands it in, and its author closes it", {
+test("a handoff in the browser: taking it holds it, saying it worked hands it in, and someone else closes it", {
   skip,
 }, async () => {
   const env = await setup();
@@ -1378,9 +1380,10 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
   const [waiting] = (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id);
   assert.equal(waiting.note, "streams fine now");
 
-  // Only the author closes it; closing archives it and tells the teammate.
+  // The teammate handed it in, so somebody else accepts it: nobody approves their own work. The
+  // author closes it, which archives it and tells the teammate.
   as(mate.token);
-  assert.equal((await call("POST", `/v1/guides/${id}/close`)).status, 404);
+  assert.equal((await call("POST", `/v1/guides/${id}/close`)).status, 409);
   await p.activity();
   as(owner);
   assert.equal((await call("POST", `/v1/guides/${id}/close`)).state, "done");

@@ -41,13 +41,18 @@ const followed = computed(() =>
 const mineOnly = computed({
   get: () => route.query.mine === "1" || route.query.tab === "needs",
   set: (on: boolean) =>
-    navigateTo({ query: { ...route.query, mine: on ? "1" : undefined, tab: undefined } }, { replace: true }),
+    navigateTo(
+      { query: { ...route.query, mine: on ? "1" : undefined, tab: undefined } },
+      { replace: true },
+    ),
 });
 const searching = computed(() => Boolean(q.value.trim() || follows.value || mineOnly.value));
 function clearSearch() {
   q.value = "";
   navigateTo(
-    { query: { ...route.query, q: undefined, follows: undefined, mine: undefined, tab: undefined } },
+    {
+      query: { ...route.query, q: undefined, follows: undefined, mine: undefined, tab: undefined },
+    },
     { replace: true },
   );
 }

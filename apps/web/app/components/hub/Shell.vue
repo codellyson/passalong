@@ -85,12 +85,12 @@ const measure = computed(() =>
   route.path === "/hub/work"
     ? "max-w-[90rem]"
     : route.path === "/hub/settings" ||
-  route.path === "/hub" ||
-  route.path === "/hub/work" ||
-  route.path.startsWith("/hub/g/") ||
-  route.path.startsWith("/hub/folders")
-    ? "max-w-[70rem]"
-    : "max-w-[54rem]",
+        route.path === "/hub" ||
+        route.path === "/hub/work" ||
+        route.path.startsWith("/hub/g/") ||
+        route.path.startsWith("/hub/folders")
+      ? "max-w-[70rem]"
+      : "max-w-[54rem]",
 );
 /**
  * One standing notice: a row, not a card. Shared with HubClaim so the two read as one band.
