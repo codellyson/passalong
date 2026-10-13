@@ -84,7 +84,7 @@ const barMeasure = "max-w-[90rem]";
 const measure = computed(() =>
   route.path === "/hub/work"
     ? "max-w-[90rem]"
-    : route.path === "/hub/settings" ||
+    : route.path.startsWith("/hub/settings") ||
         route.path === "/hub" ||
         route.path === "/hub/work" ||
         route.path.startsWith("/hub/g/") ||
@@ -186,8 +186,8 @@ const active = (to: string) =>
     ? route.path === "/hub/work" ||
       route.path.startsWith("/hub/answer") ||
       route.path.startsWith("/hub/report")
-    : to === "/hub/folders"
-      ? route.path.startsWith("/hub/folders")
+    : to === "/hub/folders" || to === "/hub/settings"
+      ? route.path.startsWith(to)
       : route.path === to;
 </script>
 

@@ -1,14 +1,12 @@
 <!--
   Settings: who you are, what you pay for, who you work with, and what else can act as you.
 
-  Scanned rather than read, and visited when something is wrong more often than not. So it opens
-  with "Needs you" — every failing channel, empty group and refused connector on the page, each with
-  the way to its fix — and a section nav that carries the same state, so the section you came for
-  is findable without scrolling.
+  Four pages, one topic each: Account (the default), Plan, Teams and Connections. It used to be one
+  long scroll of ten sections, and it was overwhelming: the section you came for was buried among
+  the ones you did not. The sidebar is now the four pages, each carrying its own state ("2 need
+  you", "1 failing"), and each page opens with the "Needs you" items that belong to it.
 
-  Four bands. Account and Plan are about you; Teams puts each team's people, groups, channels and
-  seats on one card, where the team plan used to be a separate section above it; Access is the two
-  kinds of credential, connected apps first because that is where setup happens now.
+  Old links still land: `/hub/settings#plan` is forwarded to the page holding `#plan`.
 -->
 <script setup lang="ts">
 import { appForHost, attention, connectorState } from "~/utils/connect-apps";
@@ -68,99 +66,58 @@ const failingApps = computed(
   () => connectors.value.filter((c) => connectorState(c).tone === "bad").length,
 );
 
-const nav = computed(() => {
-  const teams = (me.value?.teams ?? []).map((t) => {
-    const n = items.value.filter((i) => i.team?.slug === t.slug).length;
-    return {
-      href: `#team-${t.slug}`,
-      label: t.name || t.slug,
-      note: n ? `${n} needs you` : t.role,
-      tone: n ? "bad" : "",
-    };
-  });
-  return [
-    {
-      group: "Account",
-      links: [
-        ...(needsPassword.value
-          ? [{ href: "#signin", label: "Sign-in", note: "this browser only", tone: "warn" }]
-          : []),
-        {
-          href: "#profile",
-          label: "Profile",
-          note: me.value?.handle ? `@${me.value.handle}` : "no @name",
-          tone: me.value?.handle ? "" : "warn",
-        },
-        { href: "#notifications", label: "Notifications", note: "", tone: "" },
-        {
-          href: "#cleanup",
-          label: "Clean-up",
-          note: me.value?.keep_forever ? "off" : "",
-          tone: "",
-        },
-      ],
-    },
-    {
-      group: "Plan",
-      links: [
-        {
-          href: "#plan",
-          label: "Your plan",
-          note: planNote.value,
-          tone: items.value.some((i) => i.anchor === "plan") ? "bad" : "",
-        },
-      ],
-    },
-    {
-      group: "Teams",
-      links: [...teams, { href: "#new-team", label: "New team", note: "", tone: "" }],
-    },
-    {
-      group: "Access",
-      links: [
-        {
-          href: "#apps",
-          label: "Connected apps",
-          note: failingApps.value
-            ? `${failingApps.value} failing`
-            : String(connectors.value.length || ""),
-          tone: failingApps.value ? "bad" : "",
-        },
-        {
-          href: "#tokens",
-          label: "API tokens",
-          note: String(data.value.tokens.length || ""),
-          tone: "",
-        },
-        { href: "#alerts", label: "Alerts by email", note: "", tone: "" },
-      ],
-    },
-  ];
+const TABS = [
+  { id: "account", label: "Account", path: "/hub/settings" },
+  { id: "plan", label: "Plan", path: "/hub/settings/plan" },
+  { id: "teams", label: "Teams", path: "/hub/settings/teams" },
+  { id: "connections", label: "Connections", path: "/hub/settings/connections" },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
+
+/** Which page each section is on, so an old `#anchor` link and a "Needs you" item find it. */
+function tabOf(anchor: string): Tab {
+  if (anchor === "plan") return "plan";
+  if (anchor.startsWith("team-") || anchor === "new-team") return "teams";
+  if (["apps", "tokens", "alerts"].includes(anchor)) return "connections";
+  return "account";
+}
+
+const route = useRoute();
+const tab = computed<Tab>(() => TABS.find((t) => t.id === route.params.tab)?.id ?? "account");
+const pageItems = computed(() => items.value.filter((i) => tabOf(i.anchor) === tab.value));
+
+onMounted(() => {
+  const anchor = route.hash.slice(1);
+  const home = anchor ? tabOf(anchor) : tab.value;
+  if (home !== tab.value)
+    navigateTo(
+      { path: TABS.find((t) => t.id === home)?.path, hash: route.hash },
+      { replace: true },
+    );
 });
 
-// Which section is on screen, for the nav's marker. Nothing waits on this to be visible.
-const here = ref("#profile");
-let observer: IntersectionObserver | null = null;
-onMounted(() => {
-  observer = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) if (e.isIntersecting) here.value = `#${e.target.id}`;
-    },
-    { rootMargin: "-15% 0px -75% 0px" },
-  );
-  watchEffect(() => {
-    observer?.disconnect();
-    for (const g of nav.value)
-      for (const l of g.links) {
-        const el = document.getElementById(l.href.slice(1));
-        if (el) observer?.observe(el);
-      }
-  });
-});
-onBeforeUnmount(() => observer?.disconnect());
+/** What each page says beside its name: what needs you there first, else its one useful fact. */
+const nav = computed(() =>
+  TABS.map((t) => {
+    const n = items.value.filter((i) => tabOf(i.anchor) === t.id).length;
+    const fact =
+      t.id === "plan"
+        ? planNote.value
+        : t.id === "teams"
+          ? String(me.value?.teams?.length || "")
+          : t.id === "connections" && failingApps.value
+            ? `${failingApps.value} failing`
+            : "";
+    return {
+      ...t,
+      note: n ? `${n} need${n === 1 ? "s" : ""} you` : fact,
+      tone: n || (t.id === "connections" && failingApps.value) ? "bad" : "",
+    };
+  }),
+);
 
 const claiming = ref(false);
-const band = "flex flex-col border-t border-line pt-8 first:border-t-0 first:pt-0";
+const band = "flex flex-col";
 const bandLabel = "m-0 mb-2 font-ui text-xs font-semibold tracking-widest text-muted uppercase";
 const sec = "flex scroll-mt-20 flex-col gap-4 py-5";
 const secHead = "flex flex-wrap items-baseline gap-x-3 gap-y-1";
@@ -178,36 +135,33 @@ const noteTone: Record<string, string> = {
 <template>
   <HubShell>
     <div class="grid gap-8 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-12">
-      <nav class="flex flex-col gap-4 md:sticky md:top-20 md:self-start" aria-label="Settings sections">
+      <nav class="flex flex-col gap-4 md:sticky md:top-20 md:self-start" aria-label="Settings pages">
         <h1 class="m-0">Settings</h1>
-        <div class="flex gap-2 overflow-x-auto pb-1 md:flex-col md:gap-4 md:overflow-visible md:pb-0">
-          <div v-for="g in nav" :key="g.group" class="contents md:flex md:flex-col md:gap-0.5">
-            <span class="hidden px-2.5 pb-1 font-ui text-xs tracking-widest text-muted uppercase md:block">{{ g.group }}</span>
-            <a
-              v-for="l in g.links"
-              :key="l.href"
-              :href="l.href"
-              class="flex shrink-0 items-baseline justify-between gap-2 rounded-1 border border-line px-2.5 py-1.5 font-ui text-sm whitespace-nowrap text-fg no-underline hover:bg-surface md:border-transparent"
-              :class="here === l.href ? 'bg-surface font-medium md:shadow-[inset_2px_0_0_var(--accent)]' : ''"
-              :aria-current="here === l.href ? 'true' : undefined"
-            >
-              {{ l.label }}
-              <small v-if="l.note" class="text-xs font-normal" :class="noteTone[l.tone]">{{ l.note }}</small>
-            </a>
-          </div>
+        <div class="flex gap-2 overflow-x-auto pb-1 md:flex-col md:gap-0.5 md:overflow-visible md:pb-0">
+          <NuxtLink
+            v-for="t in nav"
+            :key="t.id"
+            :to="t.path"
+            class="flex shrink-0 items-baseline justify-between gap-2 rounded-1 border border-line px-2.5 py-1.5 font-ui text-sm whitespace-nowrap text-fg no-underline hover:bg-surface md:border-transparent"
+            :class="tab === t.id ? 'bg-surface font-medium md:shadow-[inset_2px_0_0_var(--accent)]' : ''"
+            :aria-current="tab === t.id ? 'page' : undefined"
+          >
+            {{ t.label }}
+            <small v-if="t.note" class="text-xs font-normal" :class="noteTone[t.tone]">{{ t.note }}</small>
+          </NuxtLink>
         </div>
       </nav>
 
       <div class="flex min-w-0 flex-col">
-        <section v-if="items.length" class="mb-8 rounded-2 bg-raised shadow-edge" aria-labelledby="needs-h">
+        <section v-if="pageItems.length" class="mb-8 rounded-2 bg-raised shadow-edge" aria-labelledby="needs-h">
           <!-- A div, not <header>: the global header rule's padding and margin outrank utilities. -->
           <div class="flex items-baseline gap-2 border-b border-line px-4 py-3">
             <h2 id="needs-h" class="m-0 font-ui text-base font-semibold text-fg">Needs you</h2>
-            <span class="font-ui text-sm text-muted">{{ plural(items.length, "thing") }}, most urgent first</span>
+            <span class="font-ui text-sm text-muted">{{ plural(pageItems.length, "thing") }}, most urgent first</span>
           </div>
           <ul class="m-0 list-none p-0">
             <li
-              v-for="(item, i) in items"
+              v-for="(item, i) in pageItems"
               :key="i"
               class="grid grid-cols-[0.5rem_1fr_auto] items-center gap-3 border-b border-line px-4 py-2.5 font-ui text-sm last:border-b-0"
             >
@@ -218,7 +172,7 @@ const noteTone: Record<string, string> = {
           </ul>
         </section>
 
-        <div :class="band">
+        <div v-if="tab === 'account'" :class="band">
           <h2 :class="bandLabel">Account</h2>
 
           <section v-if="needsPassword" id="signin" :class="sec" aria-labelledby="signin-h">
@@ -264,7 +218,7 @@ const noteTone: Record<string, string> = {
           </section>
         </div>
 
-        <div :class="band">
+        <div v-else-if="tab === 'plan'" :class="band">
           <h2 :class="bandLabel">Plan</h2>
           <section id="plan" :class="sec" aria-labelledby="plan-h">
             <div :class="secHead">
@@ -275,15 +229,15 @@ const noteTone: Record<string, string> = {
           </section>
         </div>
 
-        <div :class="band">
+        <div v-else-if="tab === 'teams'" :class="band">
           <h2 :class="bandLabel">Teams</h2>
           <section :class="sec" aria-label="Your teams">
             <HubTeamList />
           </section>
         </div>
 
-        <div :class="band">
-          <h2 :class="bandLabel">Access</h2>
+        <div v-else :class="band">
+          <h2 :class="bandLabel">Connections</h2>
 
           <section id="apps" :class="sec" aria-labelledby="apps-h">
             <div :class="secHead">
