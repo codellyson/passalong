@@ -107,7 +107,6 @@ import {
   sendVerify,
 } from "./email.js";
 import { eventStream, startAt } from "./events.js";
-import { addressKey, alertBody, fingerprint, GMAIL_CHECK, NOTE_EVERY_MS, parseEmail } from "./inbound.js";
 import folderRoutes, {
   folderAssetType,
   storeFolderAsset,
@@ -150,6 +149,14 @@ import {
 } from "./guide.js";
 import { guidePreview } from "./guide-preview.js";
 import { mintOrigin } from "./hosts.js";
+import {
+  addressKey,
+  alertBody,
+  fingerprint,
+  GMAIL_CHECK,
+  NOTE_EVERY_MS,
+  parseEmail,
+} from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
 import { newsFor } from "./news.js";
@@ -5142,7 +5149,10 @@ const personAgent = claims.personAgent;
 
 // ---- alerts by email (src/inbound.ts, migrations/0051_inbound.sql) -----------------------------
 
-const inboundDomain = (env: Env) => String(env.INBOUND_DOMAIN || "").trim().toLowerCase();
+const inboundDomain = (env: Env) =>
+  String(env.INBOUND_DOMAIN || "")
+    .trim()
+    .toLowerCase();
 
 /** This account's alert address, if it has one, and every sender that has written to it. */
 app.get("/v1/inbound", async (c) => {
@@ -5293,7 +5303,9 @@ export async function receiveEmail(
           me,
           "POST",
           `/v1/guides/${open.guide_id}/reply`,
-          JSON.stringify({ body: `This alert fired again: ${times} times in all, latest at ${at}.` }),
+          JSON.stringify({
+            body: `This alert fired again: ${times} times in all, latest at ${at}.`,
+          }),
           "application/json",
         );
       return;
@@ -5305,7 +5317,11 @@ export async function receiveEmail(
     // Built here, so the kind is said here: an alert is work nobody has done yet, and a new task is
     // a draft until a person marks it Ready.
     markdown = setField(markdown, "title", title);
-    markdown = setField(markdown, "summary", `Alert from ${mail.sender}: ${title}`.slice(0, SUMMARY_MAX));
+    markdown = setField(
+      markdown,
+      "summary",
+      `Alert from ${mail.sender}: ${title}`.slice(0, SUMMARY_MAX),
+    );
     markdown = setField(markdown, "kind", "task");
     markdown = setField(markdown, "status", "draft");
     markdown = setField(markdown, "source_context", `email from ${mail.sender}`);
