@@ -10,9 +10,8 @@
 
   Who a card is for is its footer's right-hand line, and that line is the "Give to…" control: the
   answer and the way to change it are one thing, and a separate button made every card a row taller.
-  Who has it is the left-hand line: their initials, ⚡ and the agent's name when an agent holds it,
-  and a dot for how the hold is doing (`health`, from the server) — with a word when somebody should
-  look. The age at the top is since anything last happened to it. Cards about you carry a coral
+  Who has it is the same line's left side: a dot for how the hold is doing (`health`, from the
+  server), their name, ⚡ when an agent holds it, and a word only when somebody should look. The age at the top is since anything last happened to it. Cards about you carry a coral
   mark on their left edge; Done is faded.
 -->
 <script setup lang="ts">
@@ -47,17 +46,9 @@ function onDocument(e: MouseEvent) {
 onMounted(() => document.addEventListener("click", onDocument));
 onBeforeUnmount(() => document.removeEventListener("click", onDocument));
 
-/** One or two letters for a name, as a person's mark in a small circle. */
-const initials = (name: string) =>
-  name.startsWith("#")
-    ? "#"
-    : name
-        .replace(/^@/, "")
-        .split(/[\s._-]+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((w) => w[0]!.toUpperCase())
-        .join("") || "?";
+/** The hold a card leads with: one that needs somebody first, else the first. */
+const lead = (g: Guide) =>
+  (g.held_by ?? []).find((h) => h.health === "quiet" || h.health === "asking") ?? g.held_by?.[0];
 
 /**
  * How a hold is doing, as a coloured dot and, when somebody should look, a word. Working and a
@@ -147,60 +138,44 @@ const shown = computed(
                 >Your review</span>
                 <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
               </span>
-              <span class="font-ui text-sm font-medium text-pretty">{{ g.title || "Untitled guide" }}</span>
+              <span class="line-clamp-2 font-ui text-sm font-medium text-pretty">{{ g.title || "Untitled guide" }}</span>
               <span v-if="g.summary" class="line-clamp-1 font-ui text-xs text-muted">{{ g.summary }}</span>
             </NuxtLink>
             <!-- The footer sits beside the link, not inside it: a button inside an <a> is invalid
                  and would open the page. -->
-            <div class="flex flex-col gap-1 px-3 pb-2 font-ui text-xs text-muted">
-              <span v-if="g.held_by?.length" class="flex min-w-0 flex-col gap-1">
-                <span v-for="(h, i) in g.held_by ?? []" :key="i" class="flex min-w-0 items-center gap-1">
-                  <span
-                    class="size-1.5 shrink-0 rounded-pill"
-                    :class="HEALTH[h.health].dot"
-                    role="img"
-                    :aria-label="HEALTH[h.health].label"
-                  />
-                  <span
-                    aria-hidden="true"
-                    class="grid size-5 shrink-0 place-items-center rounded-pill bg-surface text-[0.625rem] font-semibold text-fg"
-                  >{{ initials(h.name) }}</span>
-                  <span class="min-w-0 truncate">
-                    <b class="font-medium text-fg">{{ h.you ? "You" : h.name }}</b><template v-if="h.agent">
-                      · <span aria-hidden="true">⚡</span>{{ h.agent }}</template>
-                  </span>
-                  <span v-if="HEALTH[h.health].word" class="sr-only">, {{ HEALTH[h.health].word }}</span>
-                </span>
+            <div class="flex items-center gap-2 px-3 pb-2 font-ui text-xs text-muted">
+              <!-- Who has it: a dot for how it is going, their name, ⚡ when an agent holds it, and a
+                   word only when somebody should look. The agent's own name is on the card's page;
+                   several holders read as the first and a count. -->
+              <span v-if="lead(g)" class="flex min-w-0 items-center gap-1">
                 <span
-                  v-for="(h, i) in (g.held_by ?? []).filter((x) => HEALTH[x.health].word)"
-                  :key="`w${i}`"
-                  aria-hidden="true"
-                  :class="h.health === 'quiet' ? 'text-danger' : 'text-warn'"
-                >{{ h.you ? "You" : h.name.split(" ")[0] }} {{ HEALTH[h.health].word }}</span>
+                  class="size-1.5 shrink-0 rounded-pill"
+                  :class="HEALTH[lead(g)!.health].dot"
+                  role="img"
+                  :aria-label="HEALTH[lead(g)!.health].label"
+                />
+                <b class="min-w-0 truncate font-medium text-fg">{{ lead(g)!.you ? "You" : lead(g)!.name }}</b>
+                <span v-if="lead(g)!.agent" class="shrink-0" role="img" aria-label="an agent">⚡</span>
+                <span v-if="(g.held_by?.length ?? 0) > 1" class="shrink-0">+{{ g.held_by!.length - 1 }}</span>
+                <span
+                  v-if="HEALTH[lead(g)!.health].word"
+                  class="shrink-0"
+                  :class="lead(g)!.health === 'quiet' ? 'text-danger' : 'text-warn'"
+                >{{ HEALTH[lead(g)!.health].word }}</span>
               </span>
               <button
                 v-if="canGive(g)"
                 type="button"
-                class="flex min-w-0 cursor-pointer items-center gap-0.5 self-end rounded-1 border-0 bg-transparent p-0 font-ui text-xs text-muted hover:text-fg"
+                class="ml-auto flex min-w-0 cursor-pointer items-center gap-0.5 rounded-1 border-0 bg-transparent p-0 font-ui text-xs text-muted hover:text-fg"
                 :aria-expanded="giving === g.id"
                 :aria-label="`For ${address(g)}. Give it to someone else`"
                 @click.stop="giving = giving === g.id ? '' : g.id"
                 @keydown.esc="giving = ''"
               >
-                <span
-                  aria-hidden="true"
-                  class="grid size-5 place-items-center rounded-pill bg-surface text-[0.625rem] font-semibold text-fg"
-                >{{ initials(address(g)) }}</span>
-                <span class="ml-0.5 min-w-0 truncate">{{ address(g) }}</span>
+                <span class="min-w-0 truncate">{{ address(g) }}</span>
                 <AppIcon name="reveal" class="shrink-0" />
               </button>
-              <span v-else class="flex min-w-0 items-center gap-1 self-end">
-                <span
-                  aria-hidden="true"
-                  class="grid size-5 place-items-center rounded-pill bg-surface text-[0.625rem] font-semibold text-fg"
-                >{{ initials(address(g)) }}</span>
-                {{ address(g) }}
-              </span>
+              <span v-else class="ml-auto min-w-0 truncate">{{ address(g) }}</span>
             </div>
             <!-- In the card's flow rather than floating: the board scrolls sideways, and a scrolling
                  box clips anything that hangs outside it. -->
