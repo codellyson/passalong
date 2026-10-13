@@ -70,6 +70,8 @@ export interface Guide {
   status: string;
   url: string;
   created: string;
+  /** Its last edit or status change. */
+  updated?: string;
   pulls: number;
   /** Yours to promote or delete; someone else's to verify. */
   mine: boolean;
@@ -90,10 +92,29 @@ export interface Guide {
   pulled_by?: Pull[];
   verdict?: Verdict | null;
   /**
-   * You were named, rather than being in the team it was shared with. Someone writing your handle
-   * chose you; a team drop chose nobody, and the inbox sorts on the difference.
+   * Addressed to you, by handle or to a group you are in, rather than dropped in the team. Someone
+   * addressing you chose you; a team drop chose nobody, and the inbox sorts on the difference.
    */
   for_me?: boolean;
+  /**
+   * Someone else took it, holds it or said how it went, so it is not waiting on you. Worked out by
+   * the server with the same rule as the inbox; never true when you were named or said "on it".
+   */
+  answered_elsewhere?: boolean;
+  /** Its column on the team board, worked out by the server the same for everyone. */
+  stage?: "draft" | "todo" | "working" | "review" | "done";
+  /** Who holds it or handed it in. `agent` is empty for a person working it in the browser. */
+  held_by?: {
+    name: string;
+    agent: string;
+    you: boolean;
+    /** Handed in, waiting on a person's answer, gone quiet, a person's own hold, or working. */
+    health: "review" | "asking" | "person" | "quiet" | "working";
+    /** When it was last heard from. */
+    since: string;
+  }[];
+  /** Handed in, and you may review it: anyone in the team but whoever did the work. */
+  can_review?: boolean;
   /** The group inside the team it was handed to, by name. Empty when it went to a person or all. */
   to_group?: string;
   /** Who said they are on it, and who passed it back with a reason. See migrations/0013_acks.sql. */

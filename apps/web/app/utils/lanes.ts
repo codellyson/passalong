@@ -1,12 +1,7 @@
 /**
- * The hub as three questions, in the order someone opening it asks them: what needs me, what did
- * I send and where did it get to, and what is finished.
- *
- * This replaced a board of two lanes and a list of every guide sorted by state, which between them
- * showed most guides twice and made a reader learn eight state names before the page made sense.
- * The states themselves are unchanged and still come from `guide-state.ts`; this only decides
- * which of the three sections a guide belongs in, what order they go in, and the one plain
- * sentence its row says about it.
+ * The one plain sentence a guide's row says about where it is, and whether its author may close it.
+ * The states themselves come from `guide-state.ts`. (Which column a guide is in on the team board
+ * is the server's `stage`, not decided here.)
  *
  * The sentence uses one word per act everywhere in the product: send, open, take, pass, worked,
  * didn't work, archive. "Pull" is what a terminal does; a person opens.
@@ -21,85 +16,7 @@ export interface LaneRow {
   state: GuideState | null;
 }
 
-/** Bugs filed together, shown as one row: eleven near-identical lines were most of the noise. */
-export interface ReportGroup {
-  report: string;
-  title: string;
-  rows: LaneRow[];
-  /** The newest bug's, so a report sorts by when it last grew. */
-  created: string;
-}
-
-export type SentEntry = { row: LaneRow } | { group: ReportGroup };
-
 export type Tone = "danger" | "accent" | "ok" | "";
-
-export function laneOf({ g, state }: LaneRow): "needs" | "sent" | "done" {
-  if (g.status === "consumed") return "done";
-  const key = state?.key;
-  if (key === "waiting" || key === "unanswered" || key === "unjudged") return "needs";
-  // Sent to you and answered, or passed on: nothing more is owed by you.
-  if (!g.mine || !state) return "done";
-  // Someone opened it and said it worked. That is the end of a handoff, not a stage of one.
-  if (key === "landed" && g.verdict?.ok) return "done";
-  return "sent";
-}
-
-const byNewest = (a: LaneRow, b: LaneRow) => b.g.created.localeCompare(a.g.created);
-/** s1 is a blocker and s4 cosmetic, so the slugs compare as strings; no severity sorts last. */
-const bySeverity = (a: LaneRow, b: LaneRow) =>
-  (a.g.severity || "s9").localeCompare(b.g.severity || "s9");
-
-const urgent = (e: SentEntry) =>
-  "row" in e ? Boolean(e.row.state?.attention) : e.group.rows.some((r) => r.state?.attention);
-const createdOf = (e: SentEntry) => ("row" in e ? e.row.g.created : e.group.created);
-
-/**
- * Every section newest first. The one exception is in "You sent": a guide someone handed back or
- * said does not work comes first, because it is the only thing in that section you have to act on.
- */
-export function arrange(rows: LaneRow[]) {
-  const needs: LaneRow[] = [];
-  const sentRows: LaneRow[] = [];
-  const done: LaneRow[] = [];
-  for (const r of rows) {
-    const lane = laneOf(r);
-    (lane === "needs" ? needs : lane === "sent" ? sentRows : done).push(r);
-  }
-  needs.sort(byNewest);
-  done.sort(byNewest);
-
-  const groups = new Map<string, ReportGroup>();
-  const entries: SentEntry[] = [];
-  for (const r of sentRows) {
-    const id = r.g.report;
-    if (!id) {
-      entries.push({ row: r });
-      continue;
-    }
-    let group = groups.get(id);
-    if (!group) {
-      group = { report: id, title: r.g.report_title || "", rows: [], created: r.g.created };
-      groups.set(id, group);
-      entries.push({ group });
-    }
-    group.rows.push(r);
-    if (r.g.created > group.created) group.created = r.g.created;
-  }
-  // Inside a report the blocker leads: these were filed in one sitting, so their times say nothing.
-  for (const group of groups.values())
-    group.rows.sort((a, b) => bySeverity(a, b) || byNewest(a, b));
-
-  // A report with one bug left out there is just that bug.
-  const sent = entries.map((e) =>
-    "group" in e && e.group.rows.length === 1 ? { row: e.group.rows[0] as LaneRow } : e,
-  );
-  sent.sort(
-    (a, b) => Number(urgent(b)) - Number(urgent(a)) || createdOf(b).localeCompare(createdOf(a)),
-  );
-
-  return { needs, sent, done };
-}
 
 /** A person by name when the API sent one, else by handle. Anonymous only when nobody is known. */
 const named = (name?: string, handle?: string | null) =>

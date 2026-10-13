@@ -153,12 +153,6 @@ export function boardStates(board: Board | null): Map<string, GuideState> {
   return out;
 }
 
-/** A teammate took it, or said how it went. `me` is your @handle, which `taken_by` lists. */
-export function handledByOthers(g: Guide, me: string | null): boolean {
-  const others = (g.taken_by ?? []).filter((h) => h !== me);
-  return others.length > 0 || Boolean(g.verdict && g.verdict.by !== me);
-}
-
 export function stateOf(
   g: Guide,
   fromBoard: Map<string, GuideState>,
@@ -175,11 +169,11 @@ export function stateOf(
   // now; whatever you said before the reassignment, it is not waiting on you.
   if (!g.mine && g.to && !g.for_me) return null;
 
-  // Sent to a team or a group, and a teammate has already taken it or said how it went. It asked
-  // one of you, not each of you: it is not waiting on you, and showing it as though it were is how
-  // a second person starts work somebody has already done. Unless it was asked of you by name, or
-  // you took it yourself — then it is still yours to answer.
-  if (!g.mine && !g.for_me && !g.my_ack?.taken && handledByOthers(g, me)) return null;
+  // Sent to a team or a group, and a teammate has already taken it, holds it or said how it went.
+  // It asked one of you, not each of you: showing it as waiting on you is how a second person
+  // starts work somebody has already done. The server decides it (ANSWERED_ELSEWHERE in the API),
+  // the same rule the inbox filters on, so this page and the board cannot disagree.
+  if (!g.mine && g.answered_elsewhere) return null;
 
   // Handed to you and off the board. Whether it still needs you is whether you have answered.
   if (!g.mine) {

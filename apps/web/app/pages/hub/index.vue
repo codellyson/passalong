@@ -1,6 +1,6 @@
 <!--
-  Home: the hub's overview. The four counts from the Work page, each opening its tab there; how
-  Passalong works; and the activity feed. The lists themselves are /hub/work.
+  Home: the hub's overview. The board's five column counts, the same for everyone in the team; how
+  Passalong works; and the activity feed. The board itself is /hub/work.
 
   `/hub` was the Work page, so links carrying a work query (`?tab=`, `?q=`, `?follows=`,
   `?done=1`) are still out in the world. They go on to /hub/work with that query. `?verified=` and
@@ -17,26 +17,15 @@ definePageMeta({
 
 usePage({
   title: "Home · Passalong",
-  description: "What needs you, who is working on what, and how Passalong works.",
+  description: "What your team is doing, and how Passalong works.",
   noindex: true,
 });
 
 const { updating, scopeChanging } = useHub();
 const none = ref("");
-const { unavailable, waiting, first, hasTeams, needsCount, workingCount, openCount, doneCount } =
-  useWorkLists(none, none);
-
-const stats = computed(() => [
-  { label: "Needs you", count: needsCount.value, tab: "needs", hint: "Reviews and replies" },
-  {
-    label: "Being worked on",
-    count: workingCount.value,
-    tab: "working",
-    hint: "Held by people or agents",
-  },
-  { label: "Open", count: openCount.value, tab: "open", hint: "Ready and waiting" },
-  { label: "Done", count: doneCount.value, tab: "done", hint: "Completed work" },
-]);
+// The board's columns, counted the same for everyone in the team: Home is a summary of the board,
+// not of who is looking at it.
+const { unavailable, waiting, first, hasTeams, columns } = useWorkLists(none, none);
 </script>
 
 <template>
@@ -50,15 +39,15 @@ const stats = computed(() => [
       </h1>
 
       <!-- A failed list draws no counts rather than zeroes: the shell's banner offers Try again. -->
-      <nav v-if="!unavailable" aria-label="Work overview" class="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <nav v-if="!unavailable" aria-label="Work overview" class="grid grid-cols-2 gap-3 md:grid-cols-5">
         <NuxtLink
-          v-for="s in stats"
-          :key="s.tab"
-          :to="{ path: '/hub/work', query: { tab: s.tab } }"
+          v-for="s in columns"
+          :key="s.id"
+          to="/hub/work"
           class="flex flex-col gap-1 rounded-3 bg-raised px-4 py-3 text-fg no-underline shadow-edge transition-transform active:scale-[0.96]"
         >
           <span class="font-ui text-xs font-semibold uppercase tracking-widest text-muted">{{ s.label }}</span>
-          <span class="font-ui text-2xl font-semibold tabular-nums">{{ waiting ? "—" : s.count }}</span>
+          <span class="font-ui text-2xl font-semibold tabular-nums">{{ waiting ? "—" : s.cards.length }}</span>
           <span class="font-ui text-xs text-muted">{{ s.hint }}</span>
         </NuxtLink>
       </nav>

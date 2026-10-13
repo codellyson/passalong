@@ -69,7 +69,39 @@ const GUIDE = {
         "take it clears it from the others.",
     },
     to_group_name: { type: "string", description: "That group's display name, or empty." },
-    for_me: { type: "boolean", description: "You were named, rather than being in the team." },
+    for_me: {
+      type: "boolean",
+      description: "Addressed to you: by handle, or to a group you are in, rather than the team.",
+    },
+    stage: {
+      type: "string",
+      enum: ["draft", "todo", "working", "review", "done"],
+      description: "Its column on the team board, the same for everyone who sees it.",
+    },
+    held_by: {
+      type: "array",
+      description: "Who holds it or handed it in.",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          agent: { type: "string", description: "The agent's name; empty for a person." },
+          you: { type: "boolean" },
+          health: { type: "string", enum: ["working", "quiet", "asking", "person", "review"] },
+          since: { type: "string", format: "date-time", description: "Last heard from." },
+        },
+      },
+    },
+    can_review: {
+      type: "boolean",
+      description: "It is handed in and you may review it: anyone in the team but whoever did it.",
+    },
+    answered_elsewhere: {
+      type: "boolean",
+      description:
+        "Someone else took it, holds it or said how it went, so it is not waiting on you. Never " +
+        "true when it names you by handle or you said you are on it.",
+    },
     source_context: { type: "string" },
     tags: { type: "array", items: { type: "string" } },
     stack_assumptions: { type: "array", items: { type: "string" } },

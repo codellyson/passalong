@@ -63,31 +63,15 @@ test("a guide you passed on is in transit for you no longer", () => {
 // it or said how it went, it is not waiting on the rest — leaving it in their Needs you is how two
 // people end up doing the same work.
 test("a team's guide a teammate already handled is not waiting on you", () => {
-  const worked = guide({
-    team: "acme",
-    verdict: { ok: true, by: "ada", by_name: "Ada", note: "", at: "t" },
-  });
-  assert.equal(stateOf(worked, new Map(), "me"), null, "Ada said it worked: nothing owed by me");
+  // The rule itself (who answered, the by-name and "on it" exceptions, claims) is the server's;
+  // see the group test in apps/api/test/claims.test.mjs. The hub only reads the answer.
+  const worked = guide({ team: "acme", answered_elsewhere: true });
+  assert.equal(stateOf(worked, new Map(), "me"), null, "a teammate answered: nothing owed by me");
 
-  const taken = guide({ team: "acme", taken_by: ["ada"], taken_by_names: ["Ada"] });
-  assert.equal(stateOf(taken, new Map(), "me"), null, "Ada is on it: nothing owed by me");
-
-  // Still yours when it was asked of you, or when you took it yourself.
-  const named = guide({
-    team: "acme",
-    for_me: true,
-    verdict: { ok: true, by: "ada", note: "", at: "t" },
-  });
-  assert.equal(stateOf(named, new Map(), "me").key, "unjudged");
-  const mineToo = guide({
-    team: "acme",
-    taken_by: ["ada", "me"],
-    my_ack: { taken: true, note: "", at: "t" },
-  });
-  assert.equal(stateOf(mineToo, new Map(), "me").key, "unjudged");
-
-  // Nobody has touched it: you opened it, so how it went is still yours to say.
+  // Nobody else has answered: you opened it, so how it went is still yours to say.
   assert.equal(stateOf(guide({ team: "acme" }), new Map(), "me").key, "unjudged");
+  const kept = guide({ team: "acme", answered_elsewhere: false, taken_by: ["ada", "me"] });
+  assert.equal(stateOf(kept, new Map(), "me").key, "unjudged");
 });
 
 // Taken, then given to someone else: it is theirs now. Your "on it" from before the reassignment
