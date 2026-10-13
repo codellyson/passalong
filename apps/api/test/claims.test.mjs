@@ -10,7 +10,9 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  ANSWERED_ELSEWHERE,
   ASK_LEASE_MS,
+  answeredBinds,
   approve,
   archivesAt,
   ask,
@@ -1449,56 +1451,64 @@ test("the author sees what was handed in on a handoff, and can close it", async 
   assert.equal(row.guide.id, "h1");
   assert.equal(row.claim.note, "worked in o/r");
   assert.equal(row.claim.place, "o/r");
-  assert.deepEqual(await handedIn(db, "other"), [], "only the author's to close");
+  assert.deepEqual(await handedIn(db, "other"), [], "listed for the author");
 
-  assert.equal((await closeGuide(db, "h1", { account: "other", at: T0 })).status, 404);
+  const own = await closeGuide(db, "h1", { account: "other", at: T0 });
+  assert.equal(own.status, 409, "nobody accepts their own hand-in");
   const closed = await closeGuide(db, "h1", { account: "me", at: T0 });
   assert.deepEqual(closed.claimants, ["other"]);
   assert.equal(db.raw.prepare("SELECT status FROM guide WHERE id = 'h1'").get().status, "consumed");
   assert.deepEqual(await handedIn(db, "me"), []);
 });
 
-test("a team's owner can release, finish, approve and send back anyone's task in it; a member cannot", async () => {
+test("anyone in the team can release, finish, approve and send back a task — except their own work", async () => {
   const db = d1();
   const guide = seed(db);
   db.raw.exec(
-    `INSERT INTO account (id, token_hash, created) VALUES ('boss', 'hash-boss', '${T0}')`,
+    `INSERT INTO account (id, token_hash, created) VALUES ('mate', 'hash-mate', '${T0}')`,
   );
-  for (const id of ["t1", "t2", "t3", "t4"]) guide(id);
+  for (const id of ["t1", "t2", "t3", "t4", "t5"]) guide(id);
   teamed(db);
   db.raw.exec(
-    `INSERT INTO membership (team_id, account_id, role, joined) VALUES ('tm', 'boss', 'owner', '${T0}')`,
+    `INSERT INTO membership (team_id, account_id, joined) VALUES ('tm', 'mate', '${T0}')`,
   );
   const holder = { account: "other", agent: "agent-other1", repo: "o/r" };
-  const boss = { account: "boss", at: T0 };
-  const member = { account: "other", at: T0 };
+  const mate = { account: "mate", at: T0 };
+  const doer = { account: "other", at: T0 };
 
-  // Held by a teammate's agent that never handed in: the owner lets go of it, a member who is not
-  // the holder cannot.
+  // Held by a teammate's agent that never handed in: anyone in the team lets go of it, a stranger
+  // cannot.
   await take(db, "t1", holder, { at: T0 });
   assert.equal((await release(db, "t1", { account: "stranger", at: T0 })).status, 404);
-  const rel = await release(db, "t1", boss);
+  const rel = await release(db, "t1", mate);
   assert.equal(rel.state, "ready", JSON.stringify(rel));
   assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM claim WHERE guide_id = 't1'").get().n, 0);
 
-  // Held and finished in fact: the owner approves it on the spot.
+  // Held and finished in fact: a teammate approves it on the spot.
   await take(db, "t2", holder, { at: T0 });
-  const done = await markDone(db, "t2", { ...boss, note: "" });
+  const done = await markDone(db, "t2", { ...mate, note: "" });
   assert.equal(done.state, "done", JSON.stringify(done));
   assert.equal(db.raw.prepare("SELECT status FROM guide WHERE id = 't2'").get().status, "consumed");
   assert.match(
     db.raw.prepare("SELECT markdown FROM guide WHERE id = 't2'").get().markdown,
-    /marked done by its team's owner/,
+    /marked done by a teammate/,
   );
 
-  // Handed in, waiting on its author: the owner approves or sends it back.
-  for (const id of ["t3", "t4"]) {
+  // Handed in: anyone but the doer approves or sends it back.
+  for (const id of ["t3", "t4", "t5"]) {
     await take(db, id, holder, { at: T0 });
     await handIn(db, id, holder, { at: T0, note: "done", evidence: PROOF });
   }
-  assert.equal((await approve(db, "t3", member)).status, 404, "a member is not the gate");
-  assert.equal((await approve(db, "t3", boss)).state, "done");
-  assert.equal((await reject(db, "t4", { ...boss, why: "not what was asked" })).state, "ready");
+  assert.equal((await approve(db, "t3", doer)).status, 409, "nobody approves their own work");
+  assert.equal((await reject(db, "t3", { ...doer, why: "x" })).status, 409);
+  assert.equal((await approve(db, "t3", { account: "stranger", at: T0 })).status, 404);
+  assert.equal((await approve(db, "t3", mate)).state, "done");
+  assert.equal((await reject(db, "t4", { ...mate, why: "not what was asked" })).state, "ready");
+  assert.equal(
+    (await approve(db, "t5", { account: "me", at: T0 })).state,
+    "done",
+    "the author too",
+  );
 });
 
 test("a hand-in says whether its taker found it worked", async () => {
@@ -2175,16 +2185,25 @@ test("whoever's agent holds a task can mark it done, and it goes to its author f
   assert.equal((await approve(db, "t1", { account: "me", at: later(2) })).state, "done");
 });
 
-test("marking done is refused for anyone else, and for work nobody holds or already handed in", async () => {
+test("marking done is refused outside the team, and for work nobody holds or already handed in", async () => {
   const db = d1();
   const guide = seed(db);
   guide("t1");
+  guide("t2");
   teamed(db);
   assert.equal((await markDone(db, "t1", { account: "me", at: T0, note: "" })).status, 409);
   await take(db, "t1", A, { at: T0 });
-  assert.equal((await markDone(db, "t1", { account: "other", at: T0, note: "" })).status, 404);
-  assert.equal((await markDone(db, "t1", { account: "me", at: later(1), note: "" })).state, "done");
+  assert.equal((await markDone(db, "t1", { account: "stranger", at: T0, note: "" })).status, 404);
+  // The author's own agent holds it: saying it is done sends it to a teammate's review.
+  assert.equal(
+    (await markDone(db, "t1", { account: "me", at: later(1), note: "" })).state,
+    "review",
+  );
   assert.equal((await markDone(db, "t1", { account: "me", at: later(2), note: "" })).status, 409);
+  // A private task has nobody else, so its author's word approves it.
+  db.raw.exec("UPDATE guide SET team_id = '' WHERE id = 't2'");
+  await take(db, "t2", A, { at: T0 });
+  assert.equal((await markDone(db, "t2", { account: "me", at: later(3), note: "" })).state, "done");
 });
 
 test("an agent that went quiet lets its old task go when it asks for another by name", async () => {
@@ -2280,4 +2299,55 @@ test("a sent guide shows when it will be archived, and an author who keeps every
   assert.deepEqual(await staleSent(db, cutoff), [], "and the sweep leaves it where it is");
   db.raw.prepare("UPDATE account SET keep_forever = 0 WHERE id = 'me'").run();
   assert.equal((await staleSent(db, cutoff)).length, 1, "put back, it is archived as before");
+});
+
+// A guide sent to a group asks one of its members. Every member sees it and may take it, and once
+// one of them answers it stops waiting on the rest — on the inbox and on every guide row alike,
+// because both read ANSWERED_ELSEWHERE. A teammate's agent taking it counts: `take` writes a claim
+// and no ack, which is the case the hub's own copy of the rule used to miss.
+test("group members see one answer the same way, and the whole team sees the group's task", async () => {
+  const db = d1();
+  const guide = seed(db);
+  const acct = db.raw.prepare("INSERT INTO account (id, token_hash, created) VALUES (?, ?, ?)");
+  for (const id of ["bo", "cy"]) acct.run(id, `hash-${id}`, T0);
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tm', 'tm', 'T', 'me', '${T0}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES
+      ('tm', 'me', '${T0}'), ('tm', 'other', '${T0}'), ('tm', 'bo', '${T0}'), ('tm', 'cy', '${T0}');
+    INSERT INTO team_group (id, team_id, slug, created) VALUES ('fe', 'tm', 'frontend', '${T0}');
+    INSERT INTO group_member (group_id, account_id) VALUES ('fe', 'bo'), ('fe', 'cy');`);
+  guide("g1", { kind: "transfer", target: "" });
+  guide("g2", { kind: "transfer", target: "" });
+  guide("t1");
+  db.raw.exec(`UPDATE guide SET team_id = 'tm', to_group_id = 'fe';
+    UPDATE guide SET to_group_id = '', to_account_id = 'cy' WHERE id = 'g2';`);
+  const answered = (account, id) =>
+    Boolean(
+      db.raw
+        .prepare(`SELECT 1 FROM guide WHERE id = ? AND ${ANSWERED_ELSEWHERE}`)
+        .get(id, ...answeredBinds(account)),
+    );
+
+  // Untouched: waiting on both members alike.
+  assert.equal(answered("bo", "g1"), false);
+  assert.equal(answered("cy", "g1"), false);
+
+  // Bo's agent takes it. It stops waiting on Cy and stays with Bo.
+  await take(db, "g1", { account: "bo", agent: "bo-agent", repo: "o/r" }, { at: T0 });
+  assert.equal(answered("cy", "g1"), true, "a teammate's agent holds it");
+  assert.equal(answered("bo", "g1"), false, "it is Bo's own hold");
+
+  // Cy had said "on it" too: it is still Cy's to answer.
+  db.raw.exec(`INSERT INTO ack (guide_id, account_id, taken, at) VALUES ('g1', 'cy', 1, '${T0}')`);
+  assert.equal(answered("cy", "g1"), false, "you said you are on it");
+
+  // Named by handle: a teammate answering does not end what was asked of you.
+  db.raw.exec(`INSERT INTO verdict (guide_id, account_id, ok, at) VALUES ('g2', 'bo', 1, '${T0}')`);
+  assert.equal(answered("cy", "g2"), false, "asked of Cy by name");
+  assert.equal(answered("other", "g2"), true);
+
+  // Everyone in the team sees the group's task; only its members are told it is for them.
+  const t1 = async (account) => (await list(db, account, T0)).find((r) => r.task.id === "t1");
+  assert.equal(Boolean((await t1("bo")).task.for_me), true);
+  assert.equal(Boolean((await t1("cy")).task.for_me), true);
+  assert.equal(Boolean((await t1("other")).task.for_me), false, "on the board, not for them");
 });

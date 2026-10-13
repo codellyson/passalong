@@ -76,11 +76,15 @@ const route = useRoute();
  * when it followed each page's, the logo and links jumped sideways on every switch between a wide
  * page and a narrow one, which reads as the whole app shifting.
  */
-const barMeasure = "max-w-[70rem]";
+// 90rem since the Work page became a board: five columns wide enough to read need it, and the bar
+// takes the widest page's measure so nothing moves when you switch pages.
+const barMeasure = "max-w-[90rem]";
 // A guide's own page is wide for the same reason Settings is: the guide and what surrounds it sit
 // side by side.
 const measure = computed(() =>
-  route.path === "/hub/settings" ||
+  route.path === "/hub/work"
+    ? "max-w-[90rem]"
+    : route.path === "/hub/settings" ||
   route.path === "/hub" ||
   route.path === "/hub/work" ||
   route.path.startsWith("/hub/g/") ||
@@ -207,8 +211,10 @@ const active = (to: string) =>
       <!-- One row at every width. On a phone the brand is its mark, New is a plus, the account
            is an avatar, and the theme switch moves into the account menu. -->
       <AppBrand to="/hub" compact />
+      <!-- Below md the links are a bar at the bottom of the screen instead (below): five of them
+           beside the brand, New and the account did not fit, and scrolled out of sight. -->
       <nav
-        class="marked flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] sm:gap-1"
+        class="marked flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] max-md:hidden sm:gap-1"
         aria-label="Hub"
       >
         <NuxtLink
@@ -225,7 +231,7 @@ const active = (to: string) =>
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <!-- Reachable signed in or out: the sign-in screen is as likely as any to be too bright.
              Signed in on a phone it is in the account menu instead, to keep the bar one row. -->
-        <AppThemeToggle :class="signedIn ? 'max-sm:hidden' : ''" />
+        <AppThemeToggle :class="signedIn ? 'max-lg:hidden' : ''" />
         <template v-if="signedIn">
           <HubNewMenu />
           <HubAccountMenu />
@@ -236,7 +242,31 @@ const active = (to: string) =>
 
   <!-- Less room above than the 48px every other page gets: those open on a heading with nothing
        over it, and this one opens under a navbar that is already a band of its own. -->
-  <main class="pt-8" :class="measure">
+  <!-- The hub's links on a phone: a tab bar at the bottom, in reach of a thumb, with room for all
+       five. `env(safe-area-inset-bottom)` keeps it above the home indicator. -->
+  <nav
+    v-if="framed && signedIn"
+    class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+    aria-label="Hub"
+  >
+    <NuxtLink
+      v-for="t in tabs"
+      :key="t.to"
+      :to="t.to"
+      class="flex min-w-0 flex-col items-center gap-1 px-1 py-3 font-ui text-xs no-underline"
+      :class="active(t.to) ? 'font-semibold text-fg' : 'font-medium text-muted'"
+      :aria-current="active(t.to) ? 'page' : undefined"
+    >
+      <span
+        aria-hidden="true"
+        class="size-1 rounded-pill"
+        :class="active(t.to) ? 'bg-[var(--coral)]' : 'bg-transparent'"
+      />
+      <span class="max-w-full truncate">{{ t.label }}</span>
+    </NuxtLink>
+  </nav>
+
+  <main class="pt-8 max-md:pb-24" :class="measure">
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->

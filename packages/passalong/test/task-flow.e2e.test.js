@@ -1699,16 +1699,13 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
   const passed = await p.assign(id, `@${quiet.account}`);
   assert.equal(passed.to, `@${quiet.account}`);
 
-  // The author hears who it went to; a stranger to it still cannot move it.
+  // The author hears who it went to. Ada is still in the team, so she can still move it: a team's
+  // board is anyone's in it to move.
   as(owner);
   const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
   assert.match(heard, /gave "Delegated work" to someone else/);
   as(ada.token);
-  await assert.rejects(
-    p.assign(id, `@${handle}`),
-    (e) => e.status === 403,
-    "no longer hers to move",
-  );
+  assert.equal((await p.assign(id, `@${handle}`)).to, `@${handle}`);
   as(owner);
 });
 

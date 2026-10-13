@@ -15,9 +15,10 @@ test("delete is the author's or the owner of its team, and no one else's", () =>
   assert.match(r, /return err\(c, 403/);
 });
 
-test("assign is the author's, the assignee's, or the owner of its team", () => {
+test("assign is anyone's in its team, as moving work on the board is", () => {
   const r = route('app.post("/v1/guides/:id/assign"');
-  assert.match(r, /!found\.owner && !assignee && !\(await ownsTeam\(c, row\)\)/);
+  assert.match(r, /await readableGuide\(c, c\.req\.param\("id"\)\)/, "its author or a member");
+  assert.doesNotMatch(r, /return err\(c, 403/, "no narrower gate inside the team");
 });
 
 test("a guide row says whether you manage it: its author, or an owner of its team", () => {
