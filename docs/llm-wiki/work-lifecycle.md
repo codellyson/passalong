@@ -8,6 +8,10 @@ Every kind of guide is worked with the same four calls, each with an `agent` id 
 - **hand_in** — done here. Needs evidence (see [evidence-and-proof.md](evidence-and-proof.md)).
 - **pass** — not mine, or stuck, with the reason. Hands it back.
 
+In the hub, people can take a task from its guide page, post a progress note and hand it in with
+prose and evidence. This person-held claim uses a week-long lease and does not require an agent's
+separate report guide.
+
 Every answer ends with `next`: what to call now. Agents are told to follow it and stop when it says
 stop. The ten tools these replaced (`start_guide`, `next_task`, `finish_task`…) were described so
 alike that models misread them.

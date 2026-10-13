@@ -100,7 +100,7 @@ async function close(issues: Guide[], mark: string) {
 <template>
   <HubShell>
     <p v-if="trouble" class="rounded-3 bg-raised shadow-edge px-4 py-3 font-ui text-sm text-danger">
-      {{ trouble }} <NuxtLink to="/hub">Go to your guides</NuxtLink>
+      {{ trouble }} <NuxtLink to="/hub/work">Go to your guides</NuxtLink>
     </p>
 
     <section v-else-if="report" class="flex flex-col gap-4">
@@ -163,7 +163,7 @@ async function close(issues: Guide[], mark: string) {
       </section>
 
       <div class="flex flex-wrap gap-3">
-        <NuxtLink to="/hub" class="btn">Back to your guides</NuxtLink>
+        <NuxtLink to="/hub/work" class="btn">Back to your guides</NuxtLink>
         <!-- The whole set off the board in one move, for a report whose bugs are all answered
              or no longer worth fixing. Whoever each went to is told, and each can be put back. -->
         <button

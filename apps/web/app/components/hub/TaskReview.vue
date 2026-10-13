@@ -193,9 +193,10 @@ const label = "m-0 font-ui text-xs font-semibold tracking-widest text-muted uppe
             </ol>
           </section>
           <section class="flex flex-col gap-3">
-            <h3 :class="label">It says it checked · {{ claimed.length }}</h3>
+            <h3 :class="label">{{ task.claim?.report ? `It says it checked · ${claimed.length}` : "What came back" }}</h3>
+            <p v-if="task.claim?.writeup" class="m-0 whitespace-pre-wrap font-ui text-sm">{{ task.claim.writeup }}</p>
             <p
-              v-if="claimed.length && claimed.length < asked.length"
+              v-if="task.claim?.report && claimed.length && claimed.length < asked.length"
               class="m-0 rounded-2 bg-warn-soft px-3 py-2 font-ui text-xs text-warn"
             >
               {{ asked.length }} asked, {{ claimed.length }} claimed. Check which lines it skipped.
@@ -205,15 +206,14 @@ const label = "m-0 font-ui text-xs font-semibold tracking-widest text-muted uppe
                 <AppIcon name="check" class="mt-0.5 shrink-0 text-ok" />
                 <AppInline :text="c" />
               </li>
-              <li v-if="!claimed.length" class="py-2 font-ui text-sm text-danger">The write-up has no Verification section.</li>
+              <li v-if="task.claim?.report && !claimed.length" class="py-2 font-ui text-sm text-danger">The write-up has no Verification section.</li>
             </ol>
           </section>
         </div>
   
-        <!-- The older shape, for a hand-in that sent one block of evidence: the columns above are
-             the agent's word, and this is the run itself. -->
+        <!-- One evidence block: agent runs and a person's browser-shared evidence both land here. -->
         <section v-if="!perLine && task.claim?.evidence" class="flex flex-col gap-3">
-          <h3 :class="label">What it ran</h3>
+          <h3 :class="label">{{ task.claim?.report ? "What it ran" : "What they shared" }}</h3>
           <HubEvidence :text="task.claim.evidence" />
         </section>
   

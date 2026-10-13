@@ -87,7 +87,7 @@ const who = computed(() => {
         <span v-if="g.parent && g.parent_title">
           follows
           <a v-if="g.parent_url" :href="g.parent_url" target="_blank" rel="noopener">{{ shorten(g.parent_title, 32).text }}</a>
-          <NuxtLink v-else :to="{ path: '/hub', query: { q: g.parent } }">{{ shorten(g.parent_title, 32).text }}</NuxtLink>
+          <NuxtLink v-else :to="{ path: '/hub/work', query: { q: g.parent } }">{{ shorten(g.parent_title, 32).text }}</NuxtLink>
         </span>
         <a v-if="g.children" :href="`${g.url}?with=all`" target="_blank" rel="noopener">
           {{ g.children }} {{ g.children === 1 ? "follow-up" : "follow-ups" }}
@@ -95,7 +95,7 @@ const who = computed(() => {
       </span>
       <!-- The hub's capped width cannot hold separate summary and recipient columns. Keep both
            beneath the title, where they remain readable at every width. -->
-      <span v-if="g.summary" class="mt-1 line-clamp-2 block text-xs text-muted">{{ g.summary }}</span>
+      <span v-if="g.summary" class="mt-1 line-clamp-1 text-xs text-muted">{{ g.summary }}</span>
       <span v-if="who || expiry" class="mt-0.5 block text-xs text-muted">
         <span v-if="who">
           {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> · {{ who.team }}</template>
@@ -121,11 +121,11 @@ const who = computed(() => {
         </template>
         <button
           v-else-if="key === 'waiting' || key === 'unjudged'"
-          class="btn sm"
+          class="btn sm guide-review"
           :aria-expanded="open === 'verdict'"
           @click="toggle('verdict')"
         >
-          Tell {{ sender }} how it went
+          Say how it went
         </button>
         <!-- On the row, not three levels into a menu: the author knows the work is finished and
              had no verb for it but Archive under a "Terminals and agents" heading next to Delete.

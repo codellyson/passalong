@@ -4,9 +4,17 @@ The signed-in web app at `/hub`, and one of only three pages allowed to run scri
 `/reset`). It covers everything a browser-only person needs. Guides are created by `share()`;
 folder documents have a Markdown editor because their purpose is continuing work on a brief or script.
 
+## Home
+
+`/hub` is the overview: four count cards (Needs you, Being worked on, Open, Done), each opening
+its tab on the Work page; "How Passalong works", open; and the activity feed. A new account gets
+the first-run steps here instead. The counts come from `useWorkLists`, the same composable the
+Work page counts its tabs with, so the two pages cannot disagree. `/hub` used to be the Work page:
+a link to it carrying `?tab=`, `?q=`, `?follows=` or `?done=` goes on to `/hub/work` with its query.
+
 ## Work
 
-One page for all work, in four tabs by what it needs from you:
+`/hub/work`: one page for all work, in four tabs by what it needs from you:
 
 - **Needs you** — one list of everything waiting on you, grouped by why: *Waiting for your review*,
   *Handed in*, *Sent to you*, *Stuck on you*, *Went quiet*, with a stat card per reason that filters
@@ -20,6 +28,16 @@ One page for all work, in four tabs by what it needs from you:
 
 The board's buckets are defined in SQL, not the client; the hub reloads after a change rather than
 moving rows itself, so the two cannot drift.
+
+A browser-only person can take an eligible task from its guide page,
+post progress and hand it in there. These holds use the person's account identity and a week-long
+lease; their hand-in may include prose and evidence without requiring a separate report guide.
+Agent hand-ins still carry their report guide and their usual evidence contract.
+
+"How Passalong works" (a disclosure, open on Home) holds the work loop as four steps: capture a task, bug or
+handoff through CLI/MCP/API; route it to a person, group, team or queue; collaborate through progress,
+questions and attachments; then review checks and evidence. Links below the diagram lead to project
+folders, team settings and the activity feed.
 
 The title's scope picker applies to guides, tasks, work being held, hand-ins and activity. Team
 membership is checked at the API boundary, and each list narrows in SQL before its row limit. The
@@ -56,6 +74,6 @@ touches, and anything that needs you arrives as a toast. See [notifications.md](
 Profile, Notifications (push per device), plan, teams, connected apps, API tokens.
 
 ## Sources
-- `apps/web/app/pages/hub/index.vue`, `pages/hub/g/[id].vue`, `pages/hub/folders/`, `pages/hub/settings.vue`
+- `apps/web/app/pages/hub/index.vue` (Home), `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/folders/`, `pages/hub/settings.vue`
 - `apps/web/app/components/hub/NeedsYou.vue`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
 - [AGENTS.md](../../AGENTS.md): "The board", "The hub shows a guide by framing it…", "The hub is live…"

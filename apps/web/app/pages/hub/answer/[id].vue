@@ -70,7 +70,7 @@ const asks = computed(() => {
   return null;
 });
 
-const home = () => router.push("/hub");
+const home = () => router.push("/hub/work");
 </script>
 
 <template>
@@ -101,7 +101,7 @@ const home = () => router.push("/hub");
           </p>
         </div>
 
-        <NuxtLink to="/hub" class="font-ui text-sm">Go to your guides</NuxtLink>
+        <NuxtLink to="/hub/work" class="font-ui text-sm">Go to your guides</NuxtLink>
       </template>
 
       <div v-else-if="looked && !everything.isFetching.value" class="rounded-3 bg-raised shadow-edge p-5">
@@ -110,7 +110,7 @@ const home = () => router.push("/hub");
           It may have been deleted, or sent to a team you're not in. If someone sent it to you, ask
           them to check who it went to.
         </p>
-        <NuxtLink to="/hub" class="btn mt-4">Go to your guides</NuxtLink>
+        <NuxtLink to="/hub/work" class="btn mt-4">Go to your guides</NuxtLink>
       </div>
 
       <div v-else class="flex flex-col gap-4" role="status" aria-label="Finding the guide">

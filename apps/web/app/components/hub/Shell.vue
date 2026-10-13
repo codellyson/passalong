@@ -82,6 +82,7 @@ const barMeasure = "max-w-[70rem]";
 const measure = computed(() =>
   route.path === "/hub/settings" ||
   route.path === "/hub" ||
+  route.path === "/hub/work" ||
   route.path.startsWith("/hub/g/") ||
   route.path.startsWith("/hub/folders")
     ? "max-w-[70rem]"
@@ -166,9 +167,10 @@ const nearLimit = computed(() => {
   return Boolean(me && me.sync === "free" && me.guides >= me.limit * 0.8);
 });
 
-// One page for all work, whatever its kind (docs/V2.md §11): tasks and handoffs used to be two.
+// Home is the overview; Work is one page for all work, whatever its kind (docs/V2.md §11).
 const tabs = [
-  { to: "/hub", label: "Work" },
+  { to: "/hub", label: "Home" },
+  { to: "/hub/work", label: "Work" },
   { to: "/hub/folders", label: "Folders" },
   { to: "/hub/log", label: "Activities" },
   { to: "/hub/settings", label: "Settings" },
@@ -176,8 +178,8 @@ const tabs = [
 
 /** The pages that are about one guide or one report belong under Work. */
 const active = (to: string) =>
-  to === "/hub"
-    ? route.path === "/hub" ||
+  to === "/hub/work"
+    ? route.path === "/hub/work" ||
       route.path.startsWith("/hub/answer") ||
       route.path.startsWith("/hub/report")
     : to === "/hub/folders"
@@ -345,7 +347,7 @@ const active = (to: string) =>
             <template v-if="full"> New guides can't be sent until you make room.</template>
             Archiving a finished guide frees a space.
           </span>
-          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub', query: { done: '1' } }">Show finished work</NuxtLink>
+          <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub/work', query: { done: '1' } }">Show finished work</NuxtLink>
           <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>
         </p>
       </div>

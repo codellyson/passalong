@@ -146,7 +146,7 @@ async function advance() {
   if (place.value < 0) return;
   const after = nextItem.value ?? prevItem.value;
   remember(queue.value.filter((q) => q.id !== id.value));
-  await navigateTo(after ? `/hub/g/${after.id}` : "/hub");
+  await navigateTo(after ? `/hub/g/${after.id}` : "/hub/work");
 }
 
 /** A task handed in for review gets the line-by-line review, from the hub's own copy of it. */
@@ -279,13 +279,13 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 <template>
   <HubShell>
     <p v-if="trouble" :class="card" class="font-ui text-sm text-danger">
-      {{ trouble }} <NuxtLink to="/hub">Back to your work</NuxtLink>
+      {{ trouble }} <NuxtLink to="/hub/work">Back to your work</NuxtLink>
     </p>
 
     <article v-else-if="ctx && g" class="flex flex-col gap-6">
       <!-- Only when opened from Needs you: where this sits in that list, and the way along it. -->
       <nav v-if="place >= 0" class="flex flex-wrap items-center justify-between gap-3 font-ui text-sm" aria-label="Needs you">
-        <NuxtLink to="/hub" class="text-muted no-underline hover:text-fg">← Needs you</NuxtLink>
+        <NuxtLink to="/hub/work?tab=needs" class="text-muted no-underline hover:text-fg">← Needs you</NuxtLink>
         <span class="flex items-center gap-2">
           <span class="text-muted tabular-nums">{{ place + 1 }} of {{ queue.length }}</span>
           <NuxtLink v-if="prevItem" :to="`/hub/g/${prevItem.id}`" class="btn sm no-underline">Previous</NuxtLink>
@@ -374,6 +374,8 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <li v-for="h in hints" :key="h">{{ h }}</li>
         </ul>
       </header>
+
+      <HubTaskWork v-if="isTask" :guide="g" :claims="ctx.claims" :owner="mayAct" />
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">
