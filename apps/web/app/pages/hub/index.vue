@@ -28,7 +28,12 @@ const { unavailable, waiting, first, hasTeams, needsCount, workingCount, openCou
 
 const stats = computed(() => [
   { label: "Needs you", count: needsCount.value, tab: "needs", hint: "Reviews and replies" },
-  { label: "Being worked on", count: workingCount.value, tab: "working", hint: "Held by people or agents" },
+  {
+    label: "Being worked on",
+    count: workingCount.value,
+    tab: "working",
+    hint: "Held by people or agents",
+  },
   { label: "Open", count: openCount.value, tab: "open", hint: "Ready and waiting" },
   { label: "Done", count: doneCount.value, tab: "done", hint: "Completed work" },
 ]);

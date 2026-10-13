@@ -531,11 +531,18 @@ function build(queryClient: QueryClient) {
   const onTaskDraft = (t: Task) =>
     moveTask(t, "draft", `/v1/guides/${t.id}/status`, json("PATCH", { status: "draft" }));
   const personTaskChange = (id: string, path: string, body: unknown = {}) =>
-    change(
-      () => api(`/v1/tasks/${encodeURIComponent(id)}/${path}`, json(path === "person-progress" ? "PUT" : "POST", body)),
-      () => {},
-      [hubKeys.tasks, hubKeys.working, hubKeys.handedIn, hubKeys.allGuides, hubKeys.board, hubKeys.context(id)],
-    );
+    change(() =>
+      api(
+        `/v1/tasks/${encodeURIComponent(id)}/${path}`,
+        json(path === "person-progress" ? "PUT" : "POST", body),
+      ), () => {}, [
+      hubKeys.tasks,
+      hubKeys.working,
+      hubKeys.handedIn,
+      hubKeys.allGuides,
+      hubKeys.board,
+      hubKeys.context(id),
+    ]);
   const onPersonTaskTake = (id: string) => personTaskChange(id, "person-take");
   const onPersonTaskProgress = (id: string, note: string) =>
     personTaskChange(id, "person-progress", { note });

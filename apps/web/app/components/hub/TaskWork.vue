@@ -9,7 +9,11 @@ const held = computed(() => {
   return props.claims.find((c) => c.agent === person && c.state === "claimed") || null;
 });
 const canTake = computed(
-  () => !props.owner && props.guide.status === "published" && props.guide.for_me !== false && !props.claims.length,
+  () =>
+    !props.owner &&
+    props.guide.status === "published" &&
+    props.guide.for_me !== false &&
+    !props.claims.length,
 );
 const progress = ref("");
 const summary = ref("");

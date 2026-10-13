@@ -90,7 +90,9 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>) {
 
   const lanes = computed(() =>
     arrange(
-      guides.value.filter(matches).map((g) => ({ g, state: stateOf(g, fromBoard.value, me.value) })),
+      guides.value
+        .filter(matches)
+        .map((g) => ({ g, state: stateOf(g, fromBoard.value, me.value) })),
     ),
   );
   const sentCount = computed(() =>
@@ -112,36 +114,37 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>) {
   const reviewCount = computed(() => tasks.value.filter(taskNeedsYou).length);
 
   /** Tasks nobody is on and nobody needs to review: claimed ones are under Taken. */
-  const OPEN: { state: Task["state"]; title: string; note: string; edge: string; badge: string }[] = [
-    {
-      state: "review",
-      title: "Waiting for its author",
-      note: "A teammate's task, handed in and waiting on them.",
-      edge: "border-accent",
-      badge: "bg-accent-soft text-accent",
-    },
-    {
-      state: "ready",
-      title: "Ready for an agent",
-      note: "The next agent in the right repo takes these, oldest first.",
-      edge: "border-ok",
-      badge: "bg-ok-soft text-ok",
-    },
-    {
-      state: "blocked",
-      title: "Blocked",
-      note: "Waiting until the tasks they depend on are approved.",
-      edge: "border-warn",
-      badge: "bg-warn-soft text-warn",
-    },
-    {
-      state: "draft",
-      title: "Draft",
-      note: "No agent can pick these up until you mark them ready for agents.",
-      edge: "border-line-strong",
-      badge: "bg-surface text-muted",
-    },
-  ];
+  const OPEN: { state: Task["state"]; title: string; note: string; edge: string; badge: string }[] =
+    [
+      {
+        state: "review",
+        title: "Waiting for its author",
+        note: "A teammate's task, handed in and waiting on them.",
+        edge: "border-accent",
+        badge: "bg-accent-soft text-accent",
+      },
+      {
+        state: "ready",
+        title: "Ready for an agent",
+        note: "The next agent in the right repo takes these, oldest first.",
+        edge: "border-ok",
+        badge: "bg-ok-soft text-ok",
+      },
+      {
+        state: "blocked",
+        title: "Blocked",
+        note: "Waiting until the tasks they depend on are approved.",
+        edge: "border-warn",
+        badge: "bg-warn-soft text-warn",
+      },
+      {
+        state: "draft",
+        title: "Draft",
+        note: "No agent can pick these up until you mark them ready for agents.",
+        edge: "border-line-strong",
+        badge: "bg-surface text-muted",
+      },
+    ];
   const openTasks = computed(() => {
     const out = new Map<Task["state"], Task[]>();
     for (const t of tasks.value)

@@ -890,7 +890,12 @@ export async function renew(
   db: D1Database,
   id: string,
   who: Agent,
-  { at, note, fence, leaseMs = LEASE_MS }: { at: string; note: string | null; fence?: number; leaseMs?: number },
+  {
+    at,
+    note,
+    fence,
+    leaseMs = LEASE_MS,
+  }: { at: string; note: string | null; fence?: number; leaseMs?: number },
 ): Promise<ClaimRow | null> {
   const res = await db
     .prepare(

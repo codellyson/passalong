@@ -31,9 +31,24 @@ const steps = [
 ];
 
 const support = [
-  { title: "Project context", detail: "Folders, documents, and files", to: "/hub/folders", action: "Open folders" },
-  { title: "Team coordination", detail: "Assignments and announcements", to: "/hub/settings", action: "Team settings" },
-  { title: "Stay in the loop", detail: "Live activity and notifications", to: "/hub/log", action: "View activities" },
+  {
+    title: "Project context",
+    detail: "Folders, documents, and files",
+    to: "/hub/folders",
+    action: "Open folders",
+  },
+  {
+    title: "Team coordination",
+    detail: "Assignments and announcements",
+    to: "/hub/settings",
+    action: "Team settings",
+  },
+  {
+    title: "Stay in the loop",
+    detail: "Live activity and notifications",
+    to: "/hub/log",
+    action: "View activities",
+  },
 ];
 </script>
 
