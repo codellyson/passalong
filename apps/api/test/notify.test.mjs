@@ -75,6 +75,9 @@ test("every kind renders a sentence naming who did what", () => {
     '@bob replied to your agent on "Add Paystack webhook verification"',
     'The agent holding "Add Paystack webhook verification" is stuck on you',
     "@bob signed up",
+    // Both actorless: a machine sent them, so neither names a person.
+    'An alert came in: "Add Paystack webhook verification". It is a draft until you mark it Ready',
+    "A new sender wants to send you alerts. Allow or block it in Settings",
   ]);
 });
 

@@ -77,6 +77,10 @@ export const KINDS = [
   // Alerts for whoever runs Passalong, not for the people using it: see ADMIN_ALERTS in alerts.ts.
   // The actor is the account it is about; the note is what a person needs to recognise it.
   "signed_up",
+  // Alerts by email (inbound.ts), both actorless: a machine sent them. `alert` is the draft task an
+  // alert became; `alert_sender` is a new sender asking to be allowed, its address in the note.
+  "alert",
+  "alert_sender",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -169,6 +173,9 @@ export const PUSHED = new Set<Kind>([
   "blocked",
   // An agent waiting on your answer needs you the way a blocked one does.
   "asked",
+  // Something broke, and the task for it waits on your Ready. A new sender waits on you too.
+  "alert",
+  "alert_sender",
 ]);
 
 /** What a push carries: the feed's own sentence, the guide it is about, and its kind. */
@@ -774,6 +781,10 @@ export function line(r: LineFacts): string {
       return `${who} replied to your agent on ${title}${note}`;
     case "signed_up":
       return `${who} signed up${note}`;
+    case "alert":
+      return `An alert came in: ${title}. It is a draft until you mark it Ready`;
+    case "alert_sender":
+      return `${r.note || "A new sender"} wants to send you alerts. Allow or block it in Settings`;
     default:
       return `${who} did something with ${title}`;
   }
