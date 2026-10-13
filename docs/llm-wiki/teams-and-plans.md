@@ -8,8 +8,12 @@ someone hands it something, which is why sign-in offers an invite paste before a
 Inside a team, `to:` is one of three, and the inbox ranks them in this order:
 
 1. `@handle` — one person. Someone chose you.
-2. `#group` — the people who do a thing (`team_group`, `group_member`). One member taking it clears it
-   from the others — never from someone named by handle.
+2. `#group` — the people who do a thing (`team_group`, `group_member`). Every member sees it as
+   addressed to them (`for_me`). One member taking it, an agent holding it, or a verdict clears it
+   from the others — never from someone named by handle, nor from someone who said "on it". That
+   rule is `ANSWERED_ELSEWHERE` in claims.ts, read by the inbox and sent on every guide row as
+   `answered_elsewhere`, so the board and the guides page agree. Everyone in the team sees it on the
+   board; only the group is told it is for them.
 3. absent — the whole team. Chose nobody.
 
 Every surface that shows the lane says which kind each guide is, because the order is only honest if

@@ -54,7 +54,8 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
       <a class="menu-item" href="/">How Passalong works</a>
       <div class="menu-rule" />
       <!-- The navbar's theme button is hidden on a phone to fit one row; it lives here there. -->
-      <div class="sm:hidden">
+      <!-- Out of the bar below lg, where the bar needs the room. -->
+      <div class="lg:hidden">
         <AppThemeToggle row />
         <div class="menu-rule" />
       </div>

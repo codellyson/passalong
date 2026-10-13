@@ -363,18 +363,12 @@ test("a group address does not also land on everyone else in the team", async ()
 });
 
 test("somebody else taking it clears a shared ask, never one with your name on it", async () => {
+  // The rule is ANSWERED_ELSEWHERE in claims.ts, run against real SQLite in claims.test.mjs. This
+  // pins that the inbox and every guide row read that one rule rather than a copy of it.
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   const at = src.indexOf("async function inboxRows");
-  const body = src.slice(at, at + 3000);
-  assert.match(
-    body,
-    /SELECT guide_id FROM ack WHERE taken = 1 AND account_id <> \?/,
-    "one person answering a group is the answer for the group",
-  );
-  // The escape hatch beside it is the load-bearing half: without it, a teammate taking something
-  // addressed to you by name would quietly clear it off your board.
-  const clause = body.slice(body.indexOf("AND (to_account_id = ?"));
-  assert.match(clause.slice(0, 200), /to_account_id = \?/);
+  assert.match(src.slice(at, at + 3000), /AND NOT \$\{claims\.ANSWERED_ELSEWHERE\}/);
+  assert.match(src, /answered_elsewhere: elsewhere\.has\(r\.id\)/);
 });
 
 test("what parses and what may be set are two different lists", () => {

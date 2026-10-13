@@ -12,7 +12,8 @@ const canTake = computed(
   () =>
     !props.owner &&
     props.guide.status === "published" &&
-    props.guide.for_me !== false &&
+    // Sent to the whole team, or to you or a group you are in: not given to somebody else.
+    !((props.guide.to || props.guide.to_group) && !props.guide.for_me) &&
     !props.claims.length,
 );
 const progress = ref("");

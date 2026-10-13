@@ -381,8 +381,43 @@ export async function ownedTeams(db: D1Database, account: string): Promise<Set<s
 const MAY_DECIDE = `(account_id = ?2 OR (team_id <> '' AND team_id IN
   (SELECT team_id FROM membership WHERE account_id = ?2 AND role = 'owner')))`;
 
+/**
+ * Whoever may move a guide along: its author, or anyone in its team. A team's board is one board,
+ * and everybody on it can mark work ready, stop an agent, or review a hand-in — the way a card on a
+ * shared board is anyone's to move. Deleting and archiving stay with MAY_DECIDE. Bind ?2.
+ */
+const MAY_MOVE = `(account_id = ?2 OR (team_id <> '' AND team_id IN
+  (SELECT team_id FROM membership WHERE account_id = ?2)))`;
+
+/**
+ * Nobody reviews their own work. On a team guide, whoever holds the hand-in (their agent did it)
+ * cannot approve it or send it back — somebody else in the team does. A private guide has nobody
+ * else, so its author reviews it.
+ */
+export function ownWork(teamId: string, doer: string | undefined, account: string): boolean {
+  return teamId !== "" && doer === account;
+}
+const OWN_WORK =
+  "someone else in the team reviews this — it was your agent's work, and nobody approves their own";
+
 const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
   (SELECT team_id FROM membership WHERE account_id = ?1)))`;
+
+// Somebody else took it, holds it, or said how it went, so it is no longer waiting on you. That
+// only clears a guide addressed to more than one person: when a group or a team was asked, one
+// person answering is the answer for all of them, and leaving it in everyone else's lane is how two
+// people end up doing the same work. "On it" was the only answer counted once, so a teammate who did
+// the work and said it worked — without saying "on it" first — left it waiting on everyone else.
+// A guide with your handle on it was asked of you, and nobody else answering ends that; nor does it
+// end your own "on it", which is work you still owe. The inbox (index.ts) filters on this and every guide
+// row carries it as `answered_elsewhere`, so the board and the guides page cannot disagree about it.
+// A claim counts: `take` writes a claim and no ack, so a teammate's agent holding it is an answer.
+export const ANSWERED_ELSEWHERE = `(to_account_id <> ?
+  AND id NOT IN (SELECT guide_id FROM ack WHERE taken = 1 AND account_id = ?)
+  AND (id IN (SELECT guide_id FROM ack WHERE taken = 1 AND account_id <> ?)
+       OR id IN (SELECT guide_id FROM verdict WHERE account_id <> ?)
+       OR id IN (SELECT guide_id FROM claim WHERE account_id <> ?)))`;
+export const answeredBinds = (account: string) => Array(5).fill(account) as string[];
 
 // Addressed to this account, or to nobody in particular: a task assigned to one person or to one
 // group is theirs to take, and the queue does not hand it to anyone else's agent.
@@ -392,7 +427,7 @@ const FOR_ME = `(g.to_account_id = '' OR g.to_account_id = ?1) AND (g.to_group_i
 // The question this claim's agent is waiting on a person to answer, or null. Derived, as `stalled`
 // is: the latest `asked` since the claim was taken that no `replied` has followed. Nothing moves a
 // card to "waiting" and nothing has to move it back. See docs/CONVERSATION.md §4.2.
-const ASKING = `(SELECT e.body FROM task_event e
+export const ASKING = `(SELECT e.body FROM task_event e
    WHERE e.guide_id = c.guide_id AND e.kind = 'asked' AND e.at >= c.claimed_at
      AND NOT EXISTS (SELECT 1 FROM task_event r
                       WHERE r.guide_id = e.guide_id AND r.kind = 'replied' AND r.id > e.id)
@@ -1399,18 +1434,19 @@ async function authored(
   db: D1Database,
   id: string,
   account: string,
-): Promise<{ markdown: string; claim: ClaimRow | null } | { error: string; status: 404 }> {
+): Promise<
+  { markdown: string; team_id: string; claim: ClaimRow | null } | { error: string; status: 404 }
+> {
   const g = await db
-    .prepare(`SELECT markdown FROM guide WHERE id = ?1 AND ${MAY_DECIDE} AND kind = 'task'`)
+    .prepare(`SELECT markdown, team_id FROM guide WHERE id = ?1 AND ${MAY_MOVE} AND kind = 'task'`)
     .bind(id, account)
-    .first<{ markdown: string }>();
+    .first<{ markdown: string; team_id: string }>();
   if (!g)
     return {
       status: 404,
-      error:
-        "no such task of yours — only its author, or its team's owner, decides what happens to it",
+      error: "no such task in your teams — only its author, or someone in its team, can review it",
     };
-  return { markdown: g.markdown, claim: await claimOf(db, id) };
+  return { markdown: g.markdown, team_id: g.team_id, claim: await claimOf(db, id) };
 }
 
 /** The same gate, of any kind: releasing is something an author does to work of theirs. */
@@ -1420,13 +1456,13 @@ async function authoredAnyKind(
   account: string,
 ): Promise<{ markdown: string; kind: string } | { error: string; status: 404 }> {
   const g = await db
-    .prepare(`SELECT markdown, kind FROM guide WHERE id = ?1 AND ${MAY_DECIDE}`)
+    .prepare(`SELECT markdown, kind FROM guide WHERE id = ?1 AND ${MAY_MOVE}`)
     .bind(id, account)
     .first<{ markdown: string; kind: string }>();
   return (
     g || {
       status: 404,
-      error: "no such guide of yours — only its author, or its team's owner, takes it back",
+      error: "no such guide in your teams — only its author, or someone in its team, takes it back",
     }
   );
 }
@@ -1449,6 +1485,7 @@ export async function approve(
   if ("error" in t) return t;
   if (t.claim?.state !== "review")
     return { status: 409, error: "only a task in review can be approved — nobody has finished it" };
+  if (ownWork(t.team_id, t.claim.account_id, account)) return { status: 409, error: OWN_WORK };
   await db
     .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
     .bind(withStatus(t.markdown, "consumed"), at, id)
@@ -1478,19 +1515,21 @@ export async function markDone(
 > {
   const g = await db
     .prepare(
-      `SELECT account_id, markdown FROM guide WHERE id = ?1 AND ${MAY_DECIDE} AND kind = 'task'`,
+      `SELECT account_id, team_id, markdown FROM guide WHERE id = ?1 AND ${MAY_MOVE} AND kind = 'task'`,
     )
     .bind(id, account)
-    .first<{ account_id: string; markdown: string }>();
+    .first<{ account_id: string; team_id: string; markdown: string }>();
   const own = g
     ? null
     : await db
-        .prepare("SELECT account_id, markdown FROM guide WHERE id = ? AND kind = 'task'")
+        .prepare("SELECT account_id, team_id, markdown FROM guide WHERE id = ? AND kind = 'task'")
         .bind(id)
-        .first<{ account_id: string; markdown: string }>();
+        .first<{ account_id: string; team_id: string; markdown: string }>();
   const task = g ?? own;
   const claim = task ? await claimOf(db, id) : null;
-  const isAuthor = Boolean(g);
+  // Somebody else in the team saying it is done approves it; the holder saying so sends it to
+  // review, because nobody approves their own work.
+  const isAuthor = Boolean(g) && !ownWork(task!.team_id, claim?.account_id, account);
   if (!task || (!isAuthor && claim?.account_id !== account))
     return { status: 404, error: "no such task of yours, or none held by your agent" };
   if (!claim || claim.state !== "claimed")
@@ -1512,7 +1551,7 @@ export async function markDone(
     .bind(evidence, said, at, id, claim.place);
 
   if (isAuthor) {
-    const by = task.account_id === account ? "its author" : "its team's owner";
+    const by = task.account_id === account ? "its author" : "a teammate";
     const line = `${at.slice(0, 10)} marked done by ${by} while held by ${where}${said ? `: ${said}` : ""}`;
     await db.batch([
       toReview,
@@ -1573,6 +1612,7 @@ export async function reject(
   if ("error" in t) return t;
   if (t.claim?.state !== "review")
     return { status: 409, error: "only a task in review can be rejected — nobody has finished it" };
+  if (ownWork(t.team_id, t.claim.account_id, account)) return { status: 409, error: OWN_WORK };
   const markdown = withNote(t.markdown, `${at.slice(0, 10)} rejected: ${reason}`);
   await db.batch([
     db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
@@ -2206,15 +2246,15 @@ async function authoredGuide(
   db: D1Database,
   id: string,
   account: string,
-): Promise<{ markdown: string } | { error: string; status: 404 }> {
+): Promise<{ markdown: string; team_id: string } | { error: string; status: 404 }> {
   const g = await db
-    .prepare(`SELECT markdown FROM guide WHERE id = ?1 AND ${MAY_DECIDE} AND kind <> 'task'`)
+    .prepare(`SELECT markdown, team_id FROM guide WHERE id = ?1 AND ${MAY_MOVE} AND kind <> 'task'`)
     .bind(id, account)
-    .first<{ markdown: string }>();
+    .first<{ markdown: string; team_id: string }>();
   return (
     g || {
       status: 404,
-      error: "no such guide of yours — only its author, or its team's owner, closes it",
+      error: "no such guide in your teams — only its author, or someone in its team, reviews it",
     }
   );
 }
@@ -2234,28 +2274,39 @@ export async function closeGuide(
   id: string,
   { account, at }: { account: string; at: string },
 ): Promise<
-  { claimants: string[]; author: string; byOwner: boolean } | { error: string; status: 404 }
+  { claimants: string[]; author: string; byOwner: boolean } | { error: string; status: 404 | 409 }
 > {
   const g = await db
     .prepare("SELECT markdown, account_id, team_id FROM guide WHERE id = ? AND kind <> 'task'")
     .bind(id)
     .first<{ markdown: string; account_id: string; team_id: string }>();
   const byOwner = Boolean(g) && g!.account_id !== account;
-  const allowed =
-    g &&
-    (!byOwner ||
-      (g.team_id &&
-        (await db
-          .prepare(
-            "SELECT 1 FROM membership WHERE team_id = ? AND account_id = ? AND role = 'owner'",
-          )
+  const role = g?.team_id
+    ? (
+        await db
+          .prepare("SELECT role FROM membership WHERE team_id = ? AND account_id = ?")
           .bind(g.team_id, account)
-          .first())));
-  if (!g || !allowed)
+          .first<{ role: string }>()
+      )?.role
+    : undefined;
+  if (!g || (byOwner && !role))
     return {
       status: 404,
-      error: "no such guide of yours — only its author, or its team's owner, closes it",
+      error: "no such guide in your teams — only its author, or someone in its team, closes it",
     };
+  // Accepting a hand-in is a review, and anyone in the team but whoever did it may give one.
+  // Closing a guide nobody handed in is archiving it, which stays with its author or an admin.
+  const { results: inReview } = await db
+    .prepare("SELECT account_id FROM claim WHERE guide_id = ? AND state = 'review'")
+    .bind(id)
+    .all<{ account_id: string }>();
+  if (byOwner && role !== "owner" && !inReview.length)
+    return {
+      status: 409,
+      error: "nothing is handed in to accept — only its author, or a team admin, archives it",
+    };
+  if (inReview.some((r) => ownWork(g.team_id, r.account_id, account)))
+    return { status: 409, error: OWN_WORK };
   const { results } = await db
     .prepare("SELECT DISTINCT account_id FROM claim WHERE guide_id = ?")
     .bind(id)
@@ -2266,7 +2317,7 @@ export async function closeGuide(
       .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
       .bind(withStatus(g.markdown, "consumed"), at, id),
   ]);
-  await event(db, id, "closed", { account, at, body: byOwner ? "closed by the team owner" : "" });
+  await event(db, id, "closed", { account, at, body: byOwner ? "closed by a teammate" : "" });
   return { claimants: results.map((r) => r.account_id), author: g.account_id, byOwner };
 }
 
@@ -2372,6 +2423,7 @@ export async function sendBackHandedIn(
     .bind(id, place)
     .first<{ account_id: string }>();
   if (!c) return { status: 409, error: "nothing handed in there to send back" };
+  if (ownWork(g.team_id, c.account_id, account)) return { status: 409, error: OWN_WORK };
   await db.prepare("DELETE FROM claim WHERE guide_id = ? AND place = ?").bind(id, place).run();
   await event(db, id, "sent_back", { account, body: String(why).trim(), at });
   return { claimant: c.account_id };

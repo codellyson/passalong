@@ -161,10 +161,9 @@ change. Its README says how.
     `reply` on a guide nobody holds is a **note** (`noted`): the author or assignee only, handed to
     every taker, which is how a file reaches a task before it is taken. An upload link has a `kind`
     (image or file) and checks the bytes against it; a refused file does not spend the link.
-    The Taken tab is cards, not rows (`Taken.vue`, `utils/taken.ts`): the latest thing said, a short
-    trail from the thread route, a line to answer in place, and the counts on top as the filter.
-    Health is derived like `stalled` — a question outranks the silence, a person's hold is never
-    measured against an agent's half hour. Three layouts were prototyped on `prototype/taken-views`.
+    The hub shows who holds what as cards on the team board (`Board.vue`, held-by from `stage` and
+    `held_by` on each guide row); the separate Taken tab and its health pills went with the
+    per-viewer tabs. `plain()` (`utils/taken.ts`) still turns a message into one quoted line.
     `conversationOn()` must match every pattern a body can carry a stored thing by (`/v1/shots/` and
     `/v1/attachments/`), or the author's next edit releases whatever the missing one named.
   - `src/folders.ts` — project folders (migrations 0046 and 0047), nestable at any depth within
@@ -288,6 +287,17 @@ change. Its README says how.
   header and are known by Node's own `user-agent: node`; browsers, curl, SDKs and `/v1/mcp` are
   never gated. The floor is 0.16.0. **Raise `MIN_CLIENT` only after that version is `latest` on npm** — a floor above
   what npm hands out refuses every agent with nothing it can install.
+- **A team's board is one board, and anyone on it moves the work.** Everything in a team is seen by
+  everyone in it, in the same place: `/hub/work` is five columns (Draft, To do, In progress, In
+  review, Done) and a card's column is the server's `stage` (`boardPlace()` in index.ts), never
+  re-derived per viewer — four per-viewer tabs put one guide in different places for different
+  teammates, which is what this replaced. Anyone in the team marks work Ready or Draft, stops an
+  agent, gives it to someone else ("Give to…" on a card, `POST /v1/guides/:id/assign`) and reviews
+  a hand-in (`MAY_MOVE` in claims.ts); **nobody reviews their own work**
+  (`ownWork()`: the account whose agent handed it in cannot approve, accept or send it back, and the
+  hub draws **Your review** from `can_review` for everyone else). Archiving and deleting stay with
+  the author or a team admin (`MAY_DECIDE`). A private guide has no team, so its author is the only
+  one who sees it and the one who reviews it. "Show only mine" is a filter, never a different board.
 - **A hand-in answers the PR template, minus the boxes.** What changed is `writeup`, how it was
   verified and the evidence are `checks` (run or shown, never ticked), and what it could break is
   `risk` (migration 0032, on the claim, for the reviewer only) — one line, optional, because a

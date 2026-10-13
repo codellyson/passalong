@@ -6,28 +6,37 @@ folder documents have a Markdown editor because their purpose is continuing work
 
 ## Home
 
-`/hub` is the overview: four count cards (Needs you, Being worked on, Open, Done), each opening
-its tab on the Work page; "How Passalong works", open; and the activity feed. A new account gets
-the first-run steps here instead. The counts come from `useWorkLists`, the same composable the
-Work page counts its tabs with, so the two pages cannot disagree. `/hub` used to be the Work page:
+`/hub` is the overview: the board's five column counts (Draft, To do, In progress, In review, Done),
+the same for everyone in the team; "How Passalong works", open; and the activity feed. A new account
+gets the first-run steps here instead. The counts come from `useWorkLists`, the same composable the
+Work page draws the board with, so the two pages cannot disagree. `/hub` used to be the Work page:
 a link to it carrying `?tab=`, `?q=`, `?follows=` or `?done=` goes on to `/hub/work` with its query.
 
 ## Work
 
-`/hub/work`: one page for all work, in four tabs by what it needs from you:
+`/hub/work` is the team board (`HubBoard`), like any shared task board: every task, handoff and bug
+in scope is a card in one of five columns, and everyone in the team sees the same board. The column
+is the server's — `stage` on every guide row, from its status and its claims (`boardPlace()` in
+index.ts) — so a card moves when the work moves and never because of who is looking. A card says
+its kind, who it is for (`@handle`, `#group`, the team, or private), who it is from and who holds it;
+opening it goes to the guide page, where the actions are. From md the five columns sit side by
+side, at least 15rem each and sharing the rest — the Work page and the top bar take a 90rem measure so
+five fit at about 17rem on a wide screen — and the board scrolls sideways on its own when they do not; on a phone one column shows at a time, picked from tabs. A card's footer says who
+has it — initials, ⚡ and the agent's name, and a dot for its `health` (working, went quiet, asked a
+question, a person's hold, handed in), with a word when somebody should look — and who it is for,
+which is also the **Give to…** control. Its age is since its holder was last heard from or its last
+edit. Cards about you carry a coral mark on the left edge; Done is faded. **Show only mine** (`?mine=1`, and an old
+`?tab=needs` link) narrows to cards about you — yours, sent to you or your group, held by you, or
+yours to review — without moving any card. Done shows the newest twenty.
 
-- **Needs you** — one list of everything waiting on you, grouped by why: *Waiting for your review*,
-  *Handed in*, *Sent to you*, *Stuck on you*, *Went quiet*, with a stat card per reason that filters
-  it. Each item opens on its own guide page (`/hub/g/:id`), which asks its one question: a task's
-  line-by-line review against Acceptance (`HubTaskReview`); a handed-in guide's evidence with Accept /
-  Ask for changes; take-or-pass, then how it went. The page steps Previous / Next through the list as
-  filtered (`useReviewQueue`, kept for the tab), and answering an item drops it and moves on.
-- **Taken** — who has what, across every kind.
-- **Open** — what nobody is on: ready, blocked and draft tasks, handoffs still out.
-- **Done** — folded, because it is most of what exists and none of what needs doing.
+It replaced four tabs (Needs you, Being worked on, Open, Done) worked out per viewer, which put the
+same guide in different places for different teammates and counted it differently.
 
-The board's buckets are defined in SQL, not the client; the hub reloads after a change rather than
-moving rows itself, so the two cannot drift.
+**Who may do what on a team guide:** anyone in the team moves it between Draft and Ready, stops an
+agent, gives it to someone else (**Give to…** on every card that is not done), and reviews a hand-in (Approve / Accept / Ask for changes) — except whoever did the work:
+`ownWork()` in claims.ts refuses a review of your own hand-in, and the card wears **Your review**
+(`can_review`) for everyone else. Archiving and deleting stay with its author or a team admin. A
+private guide (no team) is its author's alone, and its author reviews it.
 
 A browser-only person can take an eligible task from its guide page,
 post progress and hand it in there. These holds use the person's account identity and a week-long
@@ -40,9 +49,8 @@ questions and attachments; then review checks and evidence. Links below the diag
 folders, team settings and the activity feed.
 
 The title's scope picker applies to guides, tasks, work being held, hand-ins and activity. Team
-membership is checked at the API boundary, and each list narrows in SQL before its row limit. The
-tab counts wait for every work list; a failed list shows an error and retry instead of an empty
-queue. Marking activity read only marks the selected scope.
+membership is checked at the API boundary, and each list narrows in SQL before its row limit. A
+failed list shows an error and retry instead of an empty board. Marking activity read only marks the selected scope.
 List rows show a compact image card when the guide carries a stored Passalong screenshot. The API
 chooses the first image named in the guide document, then the oldest image in its evidence, and
 only from shots still claimed by that guide. The hub loads it from its own origin.
@@ -75,5 +83,5 @@ Profile, Notifications (push per device), plan, teams, connected apps, API token
 
 ## Sources
 - `apps/web/app/pages/hub/index.vue` (Home), `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/folders/`, `pages/hub/settings.vue`
-- `apps/web/app/components/hub/NeedsYou.vue`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
+- `apps/web/app/components/hub/Board.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
 - [AGENTS.md](../../AGENTS.md): "The board", "The hub shows a guide by framing it…", "The hub is live…"

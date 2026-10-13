@@ -618,6 +618,62 @@ function nameOf(people: Map<string, AccountRow>, id: string): string {
 const personName = (r: { account_id: string; handle: string; name: string }) =>
   r.account_id ? displayName({ id: r.account_id, handle: r.handle, name: r.name }) : "someone";
 
+/**
+ * Where a guide sits on its team's board, the same for everyone who opens it: its status, then
+ * whether anybody holds it or handed it in. `can_review` is the one part about the viewer — anyone
+ * in the team may review a hand-in except whoever did the work (claims.ownWork).
+ */
+type BoardClaim = {
+  account_id: string;
+  state: string;
+  agent_id: string;
+  name: string;
+  lease_until: string;
+  updated: string;
+  asking: number;
+};
+
+function boardPlace(r: GuideRow, claimRows: BoardClaim[], me: string, at: string) {
+  const review = claimRows.filter((k) => k.state === "review");
+  const stage =
+    r.status === "consumed"
+      ? "done"
+      : r.status === "draft"
+        ? "draft"
+        : review.length
+          ? "review"
+          : claimRows.length
+            ? "working"
+            : "todo";
+  return {
+    stage,
+    // How each hold is doing, derived like `stalled` and never stored: handed in, waiting on a
+    // person's answer, gone quiet past its lease, a person's own hold (which reports no progress
+    // and is never measured against an agent's half hour), or working.
+    held_by: claimRows.map((k) => {
+      const person = k.agent_id.startsWith("person-");
+      return {
+        name: k.name || "someone",
+        agent: person ? "" : k.agent_id,
+        you: k.account_id === me,
+        health:
+          k.state === "review"
+            ? "review"
+            : k.asking
+              ? "asking"
+              : person
+                ? "person"
+                : k.lease_until <= at
+                  ? "quiet"
+                  : "working",
+        since: k.updated,
+      };
+    }),
+    can_review:
+      stage === "review" && review.some((k) => !claims.ownWork(r.team_id, k.account_id, me)),
+  };
+}
+
 async function summaries(c: Ctx, rows: GuideRow[]) {
   const me = c.get("account");
   const base = origin(c);
@@ -661,6 +717,50 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       ).results,
   );
   for (const g of groupRows) groups.set(g.id, { slug: g.slug, name: g.name.trim() || g.slug });
+  // Who holds each guide and how far it got, so the board can place it in one column that is the
+  // same for everyone who opens it.
+  const held = new Map<string, BoardClaim[]>();
+  for (const k of await inSlices(
+    rows.map((r) => r.id),
+    0,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(
+          `SELECT c.guide_id, c.account_id, c.state, c.agent_id, c.lease_until, c.updated,
+                  COALESCE(NULLIF(a.name, ''), NULLIF(a.handle, ''), '') AS name,
+                  ${claims.ASKING} IS NOT NULL AS asking
+             FROM claim c LEFT JOIN account a ON a.id = c.account_id
+            WHERE c.guide_id IN (${marks})`,
+        )
+          .bind(...slice)
+          .all<BoardClaim & { guide_id: string }>()
+      ).results,
+  ))
+    held.set(k.guide_id, [...(held.get(k.guide_id) || []), k]);
+  const at = now();
+  const myGroups = new Set(
+    (
+      await c.env.DB.prepare("SELECT group_id FROM group_member WHERE account_id = ?")
+        .bind(me)
+        .all<{ group_id: string }>()
+    ).results.map((r) => r.group_id),
+  );
+  const elsewhere = new Set(
+    (
+      await inSlices(
+        rows.map((r) => r.id),
+        5,
+        async (slice, marks) =>
+          (
+            await c.env.DB.prepare(
+              `SELECT id FROM guide WHERE id IN (${marks}) AND ${claims.ANSWERED_ELSEWHERE}`,
+            )
+              .bind(...slice, ...claims.answeredBinds(me))
+              .all<{ id: string }>()
+          ).results,
+      )
+    ).map((r) => r.id),
+  );
   // A row that belongs to a report says so by name, not by id: "part of Pre-release sweep" is a
   // link someone follows, and a bare eight characters is not.
   const reportIds = [...new Set(rows.map((r) => r.report_id).filter(Boolean))];
@@ -771,7 +871,10 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       // rewriting history to say it went nowhere, so this can be empty while the id is not.
       to_group: groups.get(r.to_group_id)?.slug || "",
       to_group_name: groups.get(r.to_group_id)?.name || "",
-      for_me: r.to_account_id === me,
+      // Addressed to you: by handle, or to a group you are in. The same meaning as on a task.
+      for_me: r.to_account_id === me || (r.to_group_id !== "" && myGroups.has(r.to_group_id)),
+      answered_elsewhere: elsewhere.has(r.id),
+      ...boardPlace(r, held.get(r.id) || [], me, at),
       report: r.report_id || "",
       report_title: reportTitles.get(r.report_id) || "",
       parent: r.parent_id || "",
@@ -3139,16 +3242,7 @@ async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
        -- Passing on something takes it off your board and puts it back on its author's. Saying
        -- "on it" does not: you still owe the work, so it stays where you will see it.
        AND id NOT IN (SELECT guide_id FROM ack WHERE account_id = ? AND taken = 0)
-       -- Somebody else took it, holds it, or said how it went. That only clears a guide addressed
-       -- to more than one person: when a group or a team was asked, one person answering is the
-       -- answer for all of them, and leaving it in everyone else's lane is how two people end up
-       -- doing the same work. "On it" was the only answer counted once, so a teammate who did the
-       -- work and said it worked — without saying "on it" first — left it waiting on everyone
-       -- else. A guide with your handle on it was asked of you, and nobody else answering ends that.
-       AND (to_account_id = ?
-            OR (id NOT IN (SELECT guide_id FROM ack WHERE taken = 1 AND account_id <> ?)
-                AND id NOT IN (SELECT guide_id FROM verdict WHERE account_id <> ?)
-                AND id NOT IN (SELECT guide_id FROM claim WHERE account_id <> ?)))
+       AND NOT ${claims.ANSWERED_ELSEWHERE}
      -- Named beats dropped. Someone writing your handle chose you; a guide shared with a team you
      -- happen to be in chose nobody, and a group sits between the two — so the lane reads in that
      -- order rather than by age alone, which buried what was addressed to you under the rest.
@@ -3162,10 +3256,7 @@ async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
       ...ids,
       account,
       account,
-      account,
-      account,
-      account,
-      account,
+      ...claims.answeredBinds(account),
       account,
       limit,
     )
@@ -4738,20 +4829,14 @@ app.patch("/v1/guides/:id/status", async (c) => {
     );
   if (!status || !(SETTABLE as readonly string[]).includes(status))
     return err(c, 400, `A guide's status can only be ${SETTABLE.join(", ")}.`);
-  if (!author && !["consumed", "published"].includes(status))
+  // A team's board is everyone's: anyone in the team moves a guide between Draft and Ready
+  // (readableGuide has already said they are in it). Archiving a task is approving it with nobody
+  // reading the work, so that stays with its author or an admin, and approval goes through the gate.
+  if (!author && found.row.kind === "task" && status === "consumed")
     return err(
       c,
       403,
-      "Only the author can move a guide back to draft. You can say you're done with it.",
-    );
-  // A task's status is its place in the queue: published puts it in front of agents and consumed
-  // is approval. Both are its author's call, through `ready` and the gate — a teammate marking one
-  // consumed would approve work with nobody reading it.
-  if (!author && found.row.kind === "task")
-    return err(
-      c,
-      403,
-      "Only a task's author, or its team's owner, moves it: ready, approve, reject or release.",
+      "Only a task's author, or a team admin, archives it. To finish it, approve its hand-in.",
     );
   // Moving an occupied task to Draft would hide it from the queue while its agent still held a
   // live claim. The author has Stop this agent for that transition.
@@ -6101,22 +6186,8 @@ app.post("/v1/guides/:id/assign", async (c) => {
   if (!found) return err(c, 404, GUIDE_GONE);
   const row = found.row;
   const me = c.get("account");
-  // Its author, or whoever it is assigned to — the person, or anyone in the group — may pass it on.
-  // Assigned to the whole team, it is nobody's in particular, and only its author moves it.
-  const assignee =
-    row.to_account_id === me ||
-    (row.to_group_id !== "" &&
-      Boolean(
-        await c.env.DB.prepare("SELECT 1 FROM group_member WHERE group_id = ? AND account_id = ?")
-          .bind(row.to_group_id, me)
-          .first(),
-      ));
-  if (!found.owner && !assignee && !(await ownsTeam(c, row)))
-    return err(
-      c,
-      403,
-      "Only its author, the team's owner, or whoever it is assigned to, can give it to someone else.",
-    );
+  // Anyone in its team may give it to someone else, as anyone may move it on the board:
+  // readableGuide has already said this is its author or a member of its team.
   if (!row.team_id)
     return err(
       c,

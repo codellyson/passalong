@@ -97,8 +97,14 @@ const writer = computed(() => {
   return { mcp: "the hosted MCP server", hub: "the hub", api: "the API" }[c] || "";
 });
 
-/** Its author, or the owner of its team: either may decide what happens to it. */
-const mayAct = computed(() => Boolean(ctx.value?.owner || ctx.value?.admin));
+/**
+ * Anyone who can open it here is its author or in its team, and a team's board is everyone's: they
+ * may mark it ready, move it to draft, stop an agent and review a hand-in. Archiving stays with its
+ * author or a team admin (`mayArchive`), and nobody reviews their own work (`mayReview`).
+ */
+const mayAct = computed(() => Boolean(ctx.value));
+const mayArchive = computed(() => Boolean(ctx.value?.owner || ctx.value?.admin));
+const mayReview = (k: ContextClaim) => mayAct.value && !(k.mine && Boolean(g.value?.team));
 
 /** One line saying where the guide stands, before any detail. */
 const standing = computed(() => {
@@ -108,17 +114,12 @@ const standing = computed(() => {
   if (g.value.status === "draft") return "A draft: nobody can take it until it is ready.";
   const review = c.claims.filter((k) => k.state === "review").length;
   const held = c.claims.filter((k) => k.state !== "review").length;
-  const author = fromName(g.value) || "its author";
-  if (!c.owner && c.admin && review)
-    return `Finished: waiting on ${author}. As the team's owner you can accept it or ask for changes.`;
-  if (c.owner && review)
-    return `Finished${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting on you to accept it or ask for changes.`;
-  // Said to the person who handed it in, in their own terms: it is done on their side, and whose
-  // move it is now has a name.
-  if (c.claims.some((k) => k.mine && k.state === "review"))
-    return `You handed it in. Waiting on ${author} to accept it.`;
+  // Said to the person who handed it in, in their own terms: it is done on their side, and somebody
+  // else in the team reviews it.
+  if (g.value.team && c.claims.some((k) => k.mine && k.state === "review"))
+    return "You handed it in. Waiting for someone else in the team to accept it.";
   if (review)
-    return `Finished${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting on ${author}.`;
+    return `Finished${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting for a review. ${g.value.team ? "Anyone in the team but whoever did it" : "You"} can accept it or ask for changes.`;
   if (held) return `Being worked on${held > 1 ? ` in ${held} places` : ""}.`;
   if (g.value.failing) return "Someone ran it and it didn't work.";
   if (g.value.verdict?.ok) return "Someone ran it and it works.";
@@ -143,7 +144,9 @@ const nextItem = computed(() =>
   place.value >= 0 && place.value < queue.value.length - 1 ? queue.value[place.value + 1] : null,
 );
 async function advance() {
-  if (place.value < 0) return;
+  // Not opened from a queue: stay, and show what the review just did.
+  if (place.value < 0)
+    return queryClient.invalidateQueries({ queryKey: hubKeys.context(id.value) });
   const after = nextItem.value ?? prevItem.value;
   remember(queue.value.filter((q) => q.id !== id.value));
   await navigateTo(after ? `/hub/g/${after.id}` : "/hub/work");
@@ -225,11 +228,11 @@ const hints = computed(() => {
   const out: string[] = [];
   if (!g.value.mine && !handedInByMe.value)
     out.push("Respond: say whether you are taking it, and later whether it worked.");
-  if ((c.owner || c.admin) && holding.value)
+  if (mayAct.value && holding.value)
     out.push(
       "Stop this agent: it goes back to waiting and the agent is told to stop. Nothing is deleted.",
     );
-  if ((c.owner || c.admin) && g.value.status !== "consumed" && !reviewing.value)
+  if (mayArchive.value && g.value.status !== "consumed" && !reviewing.value)
     out.push("Archive: moves it off your board. You can unarchive it.");
   if (mayAct.value && isTask.value && g.value.status === "published" && !c.claims.length)
     out.push("Move to Draft: keep it visible for review, but stop agents from taking it.");
@@ -340,7 +343,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             @click="takeBack"
           >{{ busy === "release" ? "Stopping…" : "Stop this agent" }}</button>
           <button
-            v-if="mayAct && g.status !== 'consumed' && !reviewing"
+            v-if="mayArchive && g.status !== 'consumed' && !reviewing"
             class="btn"
             type="button"
             :disabled="Boolean(busy)"
@@ -355,7 +358,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             @click="recall"
           >{{ busy === "recall" ? "Taking back…" : "Take back" }}</button>
           <button
-            v-if="mayAct && g.status === 'consumed'"
+            v-if="mayArchive && g.status === 'consumed'"
             class="btn"
             type="button"
             :disabled="Boolean(busy)"
@@ -375,7 +378,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         </ul>
       </header>
 
-      <HubTaskWork v-if="isTask" :guide="g" :claims="ctx.claims" :owner="mayAct" />
+      <HubTaskWork v-if="isTask" :guide="g" :claims="ctx.claims" :owner="Boolean(ctx.owner)" />
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">
@@ -399,7 +402,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <NuxtLink v-if="k.report" :to="`/hub/g/${k.report.id}`">{{ k.report.title || "The write-up" }}</NuxtLink>
             <a v-if="k.pr" :href="k.pr" target="_blank" rel="noopener">The change</a>
           </p>
-          <HubTaskReview v-if="reviewTask && mayAct" :task="reviewTask" @done="advance" />
+          <HubTaskReview v-if="reviewTask && mayReview(k)" :task="reviewTask" @done="advance" />
           <template v-else>
           <HubHandIn
             :evidence="k.evidence"
@@ -408,7 +411,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             :risk="k.risk"
             @read="read = new Set([...read, k.place])"
           />
-          <div v-if="mayAct" class="flex flex-col gap-2">
+          <div v-if="mayReview(k)" class="flex flex-col gap-2">
             <div class="flex flex-wrap gap-2">
               <button
                 class="btn primary sm"

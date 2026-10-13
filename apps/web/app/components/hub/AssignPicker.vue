@@ -1,6 +1,6 @@
 <!--
-  Who something is for, and the choice to give it to someone else in its team — open to its author,
-  and to whoever it is assigned to.
+  Who something is for, and the choice to give it to someone else in its team — open to anyone in
+  the team, as moving work on the board is. Opened from "Give to…" on a board card (Board.vue).
 
   The choices are the team as a whole, each teammate, and each group. A teammate with no @name is
   picked by their account id, which the server accepts as an address. Choosing
