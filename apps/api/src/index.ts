@@ -5154,6 +5154,7 @@ function taskView(
           // What it is waiting on you to answer, or empty. Derived, never stored.
           asking: claim.asking || "",
           evidence: claim.evidence,
+          writeup: claim.writeup,
           // Parsed here, once: the hub reads a list, and a screen that has to JSON.parse a column
           // is a screen that has to decide what to do when it does not parse.
           checks: readChecks(claim.checks),
@@ -5258,6 +5259,64 @@ app.get("/v1/working", async (c) => {
       lease_until: r.claim.lease_until,
     })),
   });
+});
+
+// The browser speaks as a person claim, not as an agent that has a terminal. These routes give a
+// person the same task lifecycle without asking them to manufacture an agent id or a report guide.
+app.post("/v1/tasks/:id/person-take", async (c) => {
+  const account = c.get("account");
+  const who = { account, agent: personAgent(account), repo: "", any: true };
+  const at = now();
+  const got = await claims.take(c.env.DB, c.req.param("id"), who, {
+    at,
+    many: true,
+    leaseMs: claims.PERSON_LEASE_MS,
+  });
+  if ("error" in got) return err(c, got.status, got.error);
+  if (!got.resumed) {
+    count(c, "task_claimed", { resumed: false });
+    await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
+  }
+  return c.json({ id: got.task.id, state: "claimed", note: got.claim.note });
+});
+
+app.put("/v1/tasks/:id/person-progress", async (c) => {
+  const account = c.get("account");
+  const body = (await c.req.json().catch(() => ({}))) as { note?: unknown };
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, claims.NOTE_MAX) : null;
+  const claim = await claims.renew(
+    c.env.DB,
+    c.req.param("id"),
+    { account, agent: personAgent(account) },
+    { at: now(), note, leaseMs: claims.PERSON_LEASE_MS },
+  );
+  if (!claim) return err(c, 409, "You do not hold this task. Take it before updating progress.");
+  return c.json({ id: claim.guide_id, state: "claimed", note: claim.note });
+});
+
+app.post("/v1/tasks/:id/person-hand_in", async (c) => {
+  const account = c.get("account");
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, claims.NOTE_MAX) : "";
+  if (!note) return err(c, 400, "Say in one sentence what you did.");
+  const result = await claims.handIn(
+    c.env.DB,
+    c.req.param("id"),
+    { account, agent: personAgent(account) },
+    {
+      at: now(),
+      note,
+      evidence: typeof body.evidence === "string" ? body.evidence : "",
+      checks: checksIn(body.checks),
+      writeup: typeof body.writeup === "string" ? body.writeup : "",
+      risk: typeof body.risk === "string" ? body.risk : "",
+      person: true,
+    },
+  );
+  if ("error" in result) return err(c, result.status, result.error);
+  count(c, "task_finished", {});
+  await taskEvent(c, result.claim.guide_id, "task_finished", "");
+  return c.json({ id: result.claim.guide_id, state: "review" });
 });
 
 app.post("/v1/tasks/next", async (c) => {

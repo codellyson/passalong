@@ -73,6 +73,12 @@ Plain markdown with frontmatter. No proprietary format, fully exportable, git-fr
 - Guides addressed to a person or team ("handoff to X"), with notification
 - Pull activity visible to the sender (did the transfer land?)
 - Team-wide MCP endpoint so every member's agents can search the team's guides
+- Browser task workflow for people who do not have an agent: take, progress, and hand in
+- A hub overview with counts for work needing attention, in progress, open, and done
+
+Team-wide assignment and channel announcements are already available: an author can assign work
+to everyone in a team, and configured team channels receive one announcement per event. Individual
+in-app notifications remain addressed to each member so each person can read and dismiss their own.
 
 Explicitly out of scope for v2: analytics dashboards, rich text editor, comments/threads, permissions beyond workspace membership.
 

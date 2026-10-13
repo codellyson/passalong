@@ -239,6 +239,8 @@ export interface Task {
     asking?: string;
     /** What it ran and what came back, sent with the hand-in. Empty until it hands in. */
     evidence?: string;
+    /** A person's browser hand-in can provide a prose write-up without a separate report guide. */
+    writeup?: string;
     /** The same evidence against the Acceptance line each piece answers, when the agent sorted it. */
     checks?: { check: string; ran: string; says?: string; ok?: boolean }[];
     /** What they think it could break. One line, often empty. See 0032_claim_risk.sql. */

@@ -54,6 +54,11 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 The hub's `GET /v1/tasks`, `/v1/working` and `/v1/handed_in` accept the same optional `scope`.
 Each narrows in SQL before its row limit; an unknown or inaccessible team slug is a 404.
 
+The hub's signed-in task actions use `POST /v1/tasks/:id/person-take`,
+`PUT /v1/tasks/:id/person-progress` and `POST /v1/tasks/:id/person-hand_in`. These operate on the
+account's person claim and accept a prose hand-in without a report guide; the agent routes keep
+their existing `agent` identity and contract.
+
 ## Project folders
 
 | Route | Access | Notes |

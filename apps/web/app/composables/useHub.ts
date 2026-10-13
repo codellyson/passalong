@@ -530,6 +530,17 @@ function build(queryClient: QueryClient) {
     moveTask(t, "ready", `/v1/guides/${t.id}/status`, json("PATCH", { status: "published" }));
   const onTaskDraft = (t: Task) =>
     moveTask(t, "draft", `/v1/guides/${t.id}/status`, json("PATCH", { status: "draft" }));
+  const personTaskChange = (id: string, path: string, body: unknown = {}) =>
+    change(
+      () => api(`/v1/tasks/${encodeURIComponent(id)}/${path}`, json(path === "person-progress" ? "PUT" : "POST", body)),
+      () => {},
+      [hubKeys.tasks, hubKeys.working, hubKeys.handedIn, hubKeys.allGuides, hubKeys.board, hubKeys.context(id)],
+    );
+  const onPersonTaskTake = (id: string) => personTaskChange(id, "person-take");
+  const onPersonTaskProgress = (id: string, note: string) =>
+    personTaskChange(id, "person-progress", { note });
+  const onPersonTaskHandIn = (id: string, body: unknown) =>
+    personTaskChange(id, "person-hand_in", body);
   /**
    * The author's close on a handoff or bug somebody handed in: accept it, which archives the guide,
    * or send that repo's hand-in back with why. The row leaves the list before the server answers.
@@ -717,6 +728,9 @@ function build(queryClient: QueryClient) {
     onVerdict,
     onTaskReady,
     onTaskDraft,
+    onPersonTaskTake,
+    onPersonTaskProgress,
+    onPersonTaskHandIn,
     onApprove,
     onAssign,
     onCloseHandedIn,

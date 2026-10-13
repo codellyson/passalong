@@ -375,6 +375,8 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         </ul>
       </header>
 
+      <HubTaskWork v-if="isTask" :guide="g" :claims="ctx.claims" :owner="mayAct" />
+
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">
         <!-- What came back, above the guide it answers: the write-up is the thing to read on a

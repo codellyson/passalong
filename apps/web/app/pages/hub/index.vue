@@ -247,6 +247,13 @@ const tabs = computed(() => [
   { id: "open" as const, label: "Open", count: openCount.value, tone: "" },
   { id: "done" as const, label: "Done", count: doneCount.value, tone: "" },
 ]);
+
+const stats = computed(() => [
+  { label: "Needs you", count: needsCount.value, tab: "needs" as Tab, hint: "Reviews and replies" },
+  { label: "In progress", count: workingCount.value, tab: "working" as Tab, hint: "Held by people or agents" },
+  { label: "Open", count: openCount.value, tab: "open" as Tab, hint: "Ready and waiting" },
+  { label: "Done", count: doneCount.value, tab: "done" as Tab, hint: "Completed work" },
+]);
 function pick(id: Tab) {
   navigateTo({ query: { ...route.query, tab: id, done: undefined } }, { replace: true });
 }
@@ -293,6 +300,22 @@ const list =
         Work<template v-if="hasTeams"> in <HubScopes /></template>
         <span v-if="updating || scopeChanging" role="status" class="font-ui text-sm font-normal text-muted">Updating…</span>
       </h1>
+
+      <nav v-if="!first" aria-label="Work overview" class="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <button
+          v-for="s in stats"
+          :key="s.tab"
+          type="button"
+          class="flex flex-col gap-1 rounded-3 bg-raised px-4 py-3 text-left shadow-edge"
+          @click="pick(s.tab)"
+        >
+          <span class="font-ui text-xs font-semibold uppercase tracking-widest text-muted">{{ s.label }}</span>
+          <span class="font-ui text-2xl font-semibold tabular-nums text-fg">{{ waiting ? "—" : s.count }}</span>
+          <span class="font-ui text-xs text-muted">{{ s.hint }}</span>
+        </button>
+      </nav>
+
+      <HubFeatureMap v-if="!first" />
 
       <!-- Named, not "one guide": the filter is only useful if you can see which guide it is. -->
       <p v-if="follows" class="m-0 font-ui text-sm text-muted">

@@ -75,7 +75,7 @@ const who = computed(() => {
       <div class="flex items-start gap-3">
         <HubGuideThumbnail :image="g.preview_image" :guide="g.id" :title="g.title || 'Untitled guide'" />
         <div class="min-w-0 flex-1">
-      <NuxtLink :to="`/hub/g/${g.id}`" class="line-clamp-2 font-medium text-fg no-underline hover:text-accent">{{ g.title || "Untitled guide" }}</NuxtLink>
+      <NuxtLink :to="`/hub/g/${g.id}`" class="line-clamp-1 font-medium text-fg no-underline hover:text-accent">{{ g.title || "Untitled guide" }}</NuxtLink>
       <!-- A word under the title only where it tells rows apart: a bug or a task among handoffs, a
            guide that follows another, one that has follow-ups. "transfer" was on nearly every row and
            said nothing there. -->
@@ -95,7 +95,7 @@ const who = computed(() => {
       </span>
       <!-- The hub's capped width cannot hold separate summary and recipient columns. Keep both
            beneath the title, where they remain readable at every width. -->
-      <span v-if="g.summary" class="mt-1 line-clamp-2 block text-xs text-muted">{{ g.summary }}</span>
+      <span v-if="g.summary" class="mt-1 line-clamp-1 text-xs text-muted">{{ g.summary }}</span>
       <span v-if="who || expiry" class="mt-0.5 block text-xs text-muted">
         <span v-if="who">
           {{ who.lead }} <b class="font-medium text-fg">{{ who.name }}</b><template v-if="who.team"> · {{ who.team }}</template>
@@ -121,11 +121,12 @@ const who = computed(() => {
         </template>
         <button
           v-else-if="key === 'waiting' || key === 'unjudged'"
-          class="btn sm"
+          class="btn sm guide-review"
           :aria-expanded="open === 'verdict'"
+          :aria-label="`Tell ${sender} how it went`"
           @click="toggle('verdict')"
         >
-          Tell {{ sender }} how it went
+          Review
         </button>
         <!-- On the row, not three levels into a menu: the author knows the work is finished and
              had no verb for it but Archive under a "Terminals and agents" heading next to Delete.

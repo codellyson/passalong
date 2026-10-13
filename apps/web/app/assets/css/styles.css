@@ -2662,8 +2662,28 @@ table.rows.guide-rows th:last-child {
   width: 12rem;
 }
 table.rows.guide-rows td:last-child > span {
+  display: flex;
+  width: 100%;
+  min-width: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+/* A long response prompt must yield space to its menu button. Without this, the button's
+   intrinsic width wins even in a fixed-layout table and pushes the menu outside the card. */
+table.rows.guide-rows td:last-child {
+  white-space: normal;
+}
+table.rows.guide-rows td:last-child > span > button {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
+table.rows.guide-rows td:last-child > span > button.guide-review {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+table.rows.guide-rows td:last-child > span > .relative {
+  flex: 0 0 auto;
 }
 
 /* The task list, the same way: from md it is laid out at its container's width with set columns,

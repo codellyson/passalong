@@ -890,7 +890,7 @@ export async function renew(
   db: D1Database,
   id: string,
   who: Agent,
-  { at, note, fence }: { at: string; note: string | null; fence?: number },
+  { at, note, fence, leaseMs = LEASE_MS }: { at: string; note: string | null; fence?: number; leaseMs?: number },
 ): Promise<ClaimRow | null> {
   const res = await db
     .prepare(
@@ -898,7 +898,7 @@ export async function renew(
         WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
-      leaseFrom(at),
+      leaseFrom(at, leaseMs),
       at,
       note === null ? null : note.trim().slice(0, NOTE_MAX),
       id,

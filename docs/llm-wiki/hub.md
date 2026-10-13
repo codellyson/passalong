@@ -21,6 +21,18 @@ One page for all work, in four tabs by what it needs from you:
 The board's buckets are defined in SQL, not the client; the hub reloads after a change rather than
 moving rows itself, so the two cannot drift.
 
+The work page opens with four count cards (Needs you, In progress, Open, Done) that jump to the
+matching tab; the tab counts remain the same source of truth. The activity feed is also on this
+page, below the work list. A browser-only person can take an eligible task from its guide page,
+post progress and hand it in there. These holds use the person's account identity and a week-long
+lease; their hand-in may include prose and evidence without requiring a separate report guide.
+Agent hand-ins still carry their report guide and their usual evidence contract.
+
+Below the counts, the dashboard shows the work loop as a four-step visual: capture a task, bug or
+handoff through CLI/MCP/API; route it to a person, group, team or queue; collaborate through progress,
+questions and attachments; then review checks and evidence. Links below the diagram lead to project
+folders, team settings and the activity feed.
+
 The title's scope picker applies to guides, tasks, work being held, hand-ins and activity. Team
 membership is checked at the API boundary, and each list narrows in SQL before its row limit. The
 tab counts wait for every work list; a failed list shows an error and retry instead of an empty
