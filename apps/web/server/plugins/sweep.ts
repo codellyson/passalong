@@ -10,7 +10,14 @@
 // written, deleted with that guide.
 
 import { sweepAttachments } from "#api/attachments";
-import { closeGuide, STALE_SENT_MS, staleSent, stalled } from "#api/claims";
+import {
+  closeGuide,
+  DRAFT_NUDGE_MS,
+  STALE_SENT_MS,
+  staleDrafts,
+  staleSent,
+  stalled,
+} from "#api/claims";
 import { notify } from "#api/notify";
 import { DYNAMIC_TTL_MS } from "#api/oauth";
 import { registrationCutoff, sweepRegistrations } from "#api/oauth-clients";
@@ -103,6 +110,26 @@ export default defineNitroPlugin((nitro) => {
       if (quiet.length) console.log(`told about ${quiet.length} stalled hold(s)`);
     } catch (err) {
       console.error("stall notice failed", err);
+    }
+
+    // Tasks left in Draft for a day. Draft is where every task starts, and one its author meant to
+    // queue sits there with nothing saying so. Feed only, no mail, like a stall notice.
+    try {
+      const now = Date.now();
+      const before = new Date(now - DRAFT_NUDGE_MS).toISOString();
+      const since = new Date(now - DRAFT_NUDGE_MS - STALL_WINDOW_MS).toISOString();
+      const drafts = await staleDrafts(env.DB as D1Database, before, since);
+      for (const g of drafts)
+        await notify(env as Parameters<typeof notify>[0], {
+          to: g.account_id,
+          kind: "still_draft",
+          guide_id: g.id,
+          actor_id: "",
+          team_id: g.team_id,
+        });
+      if (drafts.length) console.log(`reminded about ${drafts.length} draft task(s)`);
+    } catch (err) {
+      console.error("draft reminder failed", err);
     }
 
     /**

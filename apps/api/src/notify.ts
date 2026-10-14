@@ -66,6 +66,9 @@ export const KINDS = [
   // The id says "shelved" because rows are stored under it; every sentence a person reads says
   // "archived", which is what the hub calls the same thing.
   "shelved",
+  // Also actorless: a task left in Draft for a day. Draft is the default, and nothing else says
+  // the work never reached the queue.
+  "still_draft",
   // The conversation. `asked` is the one kind that reaches its own actor: your own agent asking you
   // is the commonest case there is, and the self-drop in notify() would have made it silent.
   "asked",
@@ -750,6 +753,8 @@ export function line(r: LineFacts): string {
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
       return `${title} was archived — nobody opened it${note}`;
+    case "still_draft":
+      return `${title} is still a draft — no agent can take it until you mark it Ready`;
     case "stalled":
       // No actor: nothing happened, time passed. Every other sentence here starts with who did it,
       // and "Someone" — what `who` falls back to — would read as a person having done something to

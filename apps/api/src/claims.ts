@@ -2378,6 +2378,35 @@ export async function staleSent(
 }
 
 /**
+ * How long a task sits untouched in Draft before its author is reminded. A new task is always
+ * draft and only a person's Ready publishes it, so a task somebody meant to queue and forgot to
+ * mark Ready waits forever with nothing saying so.
+ */
+export const DRAFT_NUDGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Draft tasks whose last edit crossed DRAFT_NUDGE_MS inside (`since`, `before`]: each one is
+ * returned in the one run it crosses, as `stalled` does, so this is a reminder and not a nag. An
+ * edit moves `updated` forward and the draft crosses again a day later.
+ */
+export async function staleDrafts(
+  db: D1Database,
+  before: string,
+  since: string,
+): Promise<{ id: string; account_id: string; team_id: string }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, account_id, team_id FROM guide
+        WHERE kind = 'task' AND status = 'draft' AND updated <= ?1 AND updated > ?2
+        ORDER BY updated ASC
+        LIMIT 200`,
+    )
+    .bind(before, since)
+    .all<{ id: string; account_id: string; team_id: string }>();
+  return results;
+}
+
+/**
  * When each of these guides will be archived for want of anybody touching it, for the ones that
  * will. The same conditions staleSent archives on, minus the clock, so a date shown here is a date
  * that happens: `updated` plus STALE_SENT_MS, any pull, answer, hold or verdict restarts it by
