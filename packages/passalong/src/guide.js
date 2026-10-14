@@ -525,7 +525,8 @@ export function bugGuide({
   area = "",
   report = "",
   environment = "",
-  status = "published",
+  // A draft like every new guide: it reaches people when a person marks it Ready.
+  status = "draft",
   evidence = [],
 } = {}) {
   /**

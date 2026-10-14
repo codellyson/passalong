@@ -2460,6 +2460,17 @@ export async function sendBackHandedIn(
     return { status: 400, error: "say why: whoever takes it next should know what was missing" };
   const g = await authoredGuide(db, id, account);
   if ("error" in g) return g;
+  // No place names the one hand-in there is, from a client that reviews by guide rather than by
+  // repo (`passalong reject`); with several, it has to say which.
+  if (!place) {
+    const { results } = await db
+      .prepare("SELECT place FROM claim WHERE guide_id = ? AND state = 'review'")
+      .bind(id)
+      .all<{ place: string }>();
+    if (results.length > 1)
+      return { status: 409, error: "handed in from several repos: send each back from the hub" };
+    place = results[0]?.place ?? "";
+  }
   const c = await db
     .prepare("SELECT account_id FROM claim WHERE guide_id = ? AND place = ? AND state = 'review'")
     .bind(id, place)

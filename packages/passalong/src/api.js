@@ -429,6 +429,11 @@ export const approveTask = (id) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/approve`, { method: "POST", body: {} });
 export const rejectTask = (id, why) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/reject`, { method: "POST", body: { why } });
+/** A handoff's or bug's approve and send-back. No `place` names the only hand-in there is. */
+export const closeGuide = (id) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/close`, { method: "POST", body: {} });
+export const sendBack = (id, why) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/send_back`, { method: "POST", body: { why } });
 /** Take work back from whoever holds it, of any kind. `/v1/tasks/…/release` is the old path. */
 export const release = (id) =>
   call(`/v1/guides/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });

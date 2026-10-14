@@ -1147,12 +1147,8 @@ test("a task is answered with the task tools, and the guide ones say so", { skip
   // A verdict or an ack on a task would be an answer nobody reads: its author reviews it from the
   // queue. Both are refused, and the refusal names the tools that do the job.
   const task = /take[^.]*hand_in|hand_in[^.]*take/;
-  // With a screenshot, so it gets as far as the server: the CLI refuses a "works" without one
-  // before asking, and that refusal is not the one this test is about.
-  const shotFile = join(mkdtempSync(join(tmpdir(), "passalong-shot-")), "works.png");
-  writeFileSync(shotFile, PNG);
   await assert.rejects(
-    p.verdict(id, true, "", { images: [shotFile] }),
+    api.verdict(id, true, "it works"),
     (e) => e.status === 400 && task.test(e.message),
   );
   await assert.rejects(api.ack(id, true, ""), (e) => e.status === 400 && task.test(e.message));

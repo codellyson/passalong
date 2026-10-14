@@ -297,11 +297,13 @@ export function buildServer() {
         "to act. It is what the person sees first in their hub; the document is behind it. A guide " +
         "with no summary is refused.\n" +
         "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
-        "is a spelling that is not one of the three. " +
+        "is a spelling that is not one of the three. EVERY NEW GUIDE IS A DRAFT, whatever its kind: " +
+        "it reaches nobody until a person reads it and marks it Ready, and every kind then moves the " +
+        "same way — Ready, taken, handed in, approved. " +
         `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
         "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
-        "alone, and treat Acceptance as the definition of done. New tasks say `status: draft`; " +
-        "a proposal awaiting a team decision stays Draft until a person makes it Ready. hand_in with `markdown`: a " +
+        "alone, and treat Acceptance as the definition of done. A proposal awaiting a team decision " +
+        "stays Draft until a person makes it Ready. hand_in with `markdown`: a " +
         "transfer guide about what you did (guide_template kind transfer shows the shape) — its " +
         "author reviews it against Acceptance.\n" +
         `kind: transfer (or no kind: line) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +
@@ -1572,9 +1574,9 @@ export function buildServer() {
           parent: guide.meta.parent || "",
           notified,
           ...(sizeWarning(markdown.length) ? { warning: sizeWarning(markdown.length) } : {}),
-          // A task does not go live on publish, and an agent that reports "queued it" has told
-          // the user something untrue. Said in the result so it is said to them.
-          ...(guide.meta.kind === "task" && guide.meta.status === "draft"
+          // Nothing goes live on publish, and an agent that reports "sent it" or "queued it" has
+          // told the user something untrue. Said in the result so it is said to them.
+          ...(guide.meta.status === "draft"
             ? {
                 status: "draft",
                 next: `in Draft: ask the user to read it, then run \`passalong ready ${guide.meta.id}\``,
@@ -1675,7 +1677,11 @@ export function buildServer() {
           { title: title || "", environment: environment || "", issues },
           { cwd: cwd || process.cwd(), to },
         );
-        return json(filed);
+        return json({
+          ...filed,
+          // Filed is not sent: every bug is a draft until a person reads it.
+          next: "all in Draft: ask the user to read them, then run `passalong ready --all`",
+        });
       } catch (err) {
         return fail(err);
       }
