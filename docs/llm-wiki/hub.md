@@ -79,11 +79,13 @@ touches, and anything that needs you arrives as a toast. See [notifications.md](
 
 ## Settings
 
-Four pages, one topic each, at `/hub/settings/[[tab]]`:
+Five pages, one topic each, at `/hub/settings/[[tab]]`:
 - **Account** (`/hub/settings`): profile, sign-in, notifications (push, per device), clean-up.
 - **Plan**: the plan.
 - **Teams**: the team cards.
-- **Connections**: connected apps, API tokens, Email in.
+- **Agents** (`/connections`, the address it had before the split): connected apps and API tokens,
+  what acts as you.
+- **Work in** (`/work-in`): email, Sentry, PostHog and webhooks, what sends work to you.
 
 It was one scroll of ten sections, and people found it overwhelming. The sidebar lists the four
 pages, each with its own state ("2 need you", "1 failing"), and each page opens with only the
