@@ -212,13 +212,12 @@ const close = () =>
     "close",
     async () =>
       g.value &&
-      (await (isTask.value
-        ? onArchive(g.value as Guide, true)
-        : onCloseGuide(g.value as Guide))),
+      (await (isTask.value ? onArchive(g.value as Guide, true) : onCloseGuide(g.value as Guide))),
   );
 /** Gone for good, with its screenshots and files: asked first, then back to the board. */
 async function remove() {
-  if (busy.value || !g.value || !confirm(`Delete "${g.value.title}"? This cannot be undone.`)) return;
+  if (busy.value || !g.value || !confirm(`Delete "${g.value.title}"? This cannot be undone.`))
+    return;
   busy.value = "delete";
   try {
     if (await onRemove(g.value as Guide)) await navigateTo("/hub/work");
