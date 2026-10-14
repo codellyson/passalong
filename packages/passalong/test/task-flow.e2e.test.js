@@ -54,6 +54,16 @@ async function proof() {
   return `![it works](${shot.url})`;
 }
 
+/**
+ * Share a guide and make it Ready, as its author does: every kind starts in Draft and reaches
+ * nobody until then, so a test that needs one taken, followed or answered sends it this way.
+ */
+async function send(p, md, opts) {
+  const shared = await p.share(md, opts);
+  await p.ready(shared.guide.meta.id);
+  return shared;
+}
+
 /** A fresh worktree of this account's own repo, and a ready task for it. */
 async function readyTask({ account, p, serialize }, title) {
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
@@ -870,8 +880,8 @@ test("a follow-up is never handed over alone: the guide it came out of comes wit
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
   const doc = (title) =>
     `---\ntitle: ${title}\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. open/close per day\n`;
-  const parent = (await p.share(doc("Store Hours UI"), { cwd: dir })).guide.meta.id;
-  const child = (await p.share(doc("Confirmation email"), { cwd: dir, follows: parent })).guide.meta
+  const parent = (await send(p, doc("Store Hours UI"), { cwd: dir })).guide.meta.id;
+  const child = (await send(p, doc("Confirmation email"), { cwd: dir, follows: parent })).guide.meta
     .id;
 
   const lead = await p.parentGuide({ id: child, parent });
@@ -1171,7 +1181,8 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
     return { status: res.status, ...(await res.json()) };
   };
   const h = (
-    await p.share(
+    await send(
+      p,
       "---\ntitle: Stream the PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     )
   ).guide.meta.id;
@@ -1256,7 +1267,8 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
 
   // A handoff by id: taken, then passed with the reason, and free for the next agent.
   const h = (
-    await p.share(
+    await send(
+      p,
       "---\ntitle: A handoff\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       { cwd: dir },
     )
@@ -1355,7 +1367,7 @@ test("a handoff in the browser: taking it holds it, saying it worked hands it in
   as(owner);
   const md =
     "---\ntitle: Stream the invoice PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const id = (await p.share(md, { to: team.slug })).guide.meta.id;
+  const id = (await send(p, md, { to: team.slug })).guide.meta.id;
 
   // The teammate takes it the way the browser does, and shows in Working now as a person.
   as(mate.token);
@@ -1407,7 +1419,8 @@ test("an agent cannot hand in a handoff it does not hold or send its author a fa
   await api.join(code);
   process.env.PASSALONG_TOKEN = owner;
   const id = (
-    await p.share(
+    await send(
+      p,
       "---\ntitle: Check the invoice PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       { to: team.slug },
     )
@@ -1500,7 +1513,7 @@ test("handed in means the actor's turn is over: no new guide under it until the 
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        markdown: `---\ntitle: ${title}\nsummary: Said to a person for the test.\nkind: transfer\nparent: ${parent}\n---\n\nWhat I found.\n`,
+        markdown: `---\ntitle: ${title}\nsummary: Said to a person for the test.\nkind: transfer\nstatus: draft\nparent: ${parent}\n---\n\nWhat I found.\n`,
       }),
     });
     return { ...(await res.json()), status: res.status };
@@ -1516,7 +1529,7 @@ test("handed in means the actor's turn is over: no new guide under it until the 
   as(owner);
   const md =
     "---\ntitle: Stream the receipt PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const id = (await p.share(md, { to: team.slug })).guide.meta.id;
+  const id = (await send(p, md, { to: team.slug })).guide.meta.id;
 
   // The teammate's agent works it, and may add context while it holds it.
   as(mate.token);
@@ -1734,7 +1747,7 @@ test("a team's guide one teammate said worked stops asking the others, so nobody
   as(owner);
   const md =
     "---\ntitle: Fix the invoice total\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const id = (await p.share(md, { to: team.slug })).guide.meta.id;
+  const id = (await send(p, md, { to: team.slug })).guide.meta.id;
 
   // Both see it waiting. Ada does it and says it worked — without saying "on it" first.
   as(bo.token);
@@ -1780,7 +1793,7 @@ test("taken, then given to someone else: it stops being yours", { skip }, async 
   as(owner);
   const md =
     "---\ntitle: Ship-to address\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const id = (await p.share(md, { to: `${team.slug}/@me${stamp}` })).guide.meta.id;
+  const id = (await send(p, md, { to: `${team.slug}/@me${stamp}` })).guide.meta.id;
 
   // I take it, then give it to Bami.
   as(me.token);
