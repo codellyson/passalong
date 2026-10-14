@@ -158,6 +158,7 @@ import {
   GMAIL_CHECK,
   NOTE_EVERY_MS,
   parseEmail,
+  titleOf,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { handleMcp } from "./mcp-http.js";
@@ -5342,8 +5343,8 @@ export async function receiveEmail(
     }
 
     const id = rid(8);
-    const title = mail.subject || `Email from ${mail.sender}`;
-    let markdown = emailBody(to.kind, { from: mail.sender, at, text: mail.text });
+    const title = titleOf(mail.subject) || `Email from ${mail.sender}`;
+    let markdown = emailBody(to.kind, { from: mail.sender, at, text: mail.text, own });
     markdown = setField(markdown, "title", title);
     markdown = setField(
       markdown,
@@ -5354,7 +5355,6 @@ export async function receiveEmail(
     markdown = setField(markdown, "kind", to.kind);
     // A new task is a draft until a person marks it Ready, like every other task.
     markdown = setField(markdown, "status", to.kind === "task" ? "draft" : "published");
-    markdown = setField(markdown, "source_context", `email from ${mail.sender}`);
     if (to.kind === "task" && box.target)
       markdown = setField(markdown, "target_context", box.target);
     const made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, markdown, "text/markdown");
