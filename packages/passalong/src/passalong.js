@@ -78,11 +78,12 @@ export async function share(markdown, { cwd = process.cwd(), to, follows } = {})
   ];
   if (errors.length)
     throw new PassalongError(`guide is not ready to share:\n  - ${errors.join("\n  - ")}`);
-  // A task stays a draft when it is shared. Draft is the column a task waits in until a person
-  // says it is ready for an agent — `ready()` — and an agent that drafts one over MCP comes
-  // through here too, so publishing on share would let a task queue itself with nobody reading it.
-  if (guide.meta.status === "draft" && guide.meta.kind !== "task")
-    guide = { ...guide, meta: { ...guide.meta, status: "published" } };
+  // Every guide is a draft when it is first shared, whatever its kind: Draft is where it waits
+  // until a person says it is ready — `ready()` — and an agent that writes one over MCP comes
+  // through here too, so publishing on share would let it reach people with nobody reading it.
+  // Sharing *is* putting it in Draft, so a new guide that names no status says so here; one already
+  // published keeps what its document says.
+  if (!guide.meta.status) guide = { ...guide, meta: { ...guide.meta, status: "draft" } };
 
   // The server is where a guide lives; nothing is kept on this machine.
   needsSync("sharing a guide");
@@ -592,16 +593,19 @@ export async function now({ cwd = process.cwd() } = {}) {
  * line the next reader needs.
  */
 export async function approveTask(id) {
-  needsSync("approving a task");
-  const r = await api.approveTask(id);
+  needsSync("approving work");
+  const { guide } = await resolve(id, { peek: true });
+  const r = await (guide.meta.kind === "task" ? api.approveTask(id) : api.closeGuide(id));
   store.remove(id);
   return r;
 }
 
 export async function rejectTask(id, why) {
-  needsSync("rejecting a task");
-  if (!String(why || "").trim()) throw new PassalongError("say why: the next agent reads it");
-  const r = await api.rejectTask(id, why);
+  needsSync("sending work back");
+  if (!String(why || "").trim())
+    throw new PassalongError("say why: whoever takes it next reads it");
+  const { guide } = await resolve(id, { peek: true });
+  const r = await (guide.meta.kind === "task" ? api.rejectTask(id, why) : api.sendBack(id, why));
   store.remove(id);
   return r;
 }
@@ -642,16 +646,9 @@ export async function release(id) {
  *     did not land leaves the sender in the silence the whole feature exists to end.
  */
 export async function start(ref, { cwd = process.cwd(), save = false } = {}) {
-  const pulled = await pull(ref, { cwd, save });
-  const id = pulled.guide.meta.id;
-  if (!api.loggedIn()) return { ...pulled, took: false, ack_error: "", own: false };
-  try {
-    await api.ack(id, true, "");
-    return { ...pulled, took: true, ack_error: "", own: false };
-  } catch (err) {
-    if (err.status === 403) return { ...pulled, took: false, ack_error: "", own: true };
-    return { ...pulled, took: false, ack_error: err.message, own: false };
-  }
+  const r = await take(await resolveId(ref), { cwd, save });
+  if (!r.guide?.markdown) return r;
+  return { ...r, markdown: r.guide.markdown };
 }
 
 /**
@@ -973,64 +970,6 @@ export async function activity({ all = false, limit = 50 } = {}) {
  * `done` says "I implemented it", a verdict says "I tried it and it holds up" — or does not.
  * A failing verdict needs a note; "it doesn't work" without a reason helps nobody.
  */
-/**
- * Say whether a guide held, and why at the length that takes.
- *
- * The reason used to be one field, capped at 280 characters by the row it was written for — so an
- * agent that had run the Verification and found it did not hold published a guide called
- * "Correction: …" instead, because measurements, commands and commit ids do not fit in a tweet.
- * The first line is the summary a row shows; the whole thing is what the guide shows.
- */
-export async function verdict(id, ok, note = "", { images = [] } = {}) {
-  if (!api.loggedIn()) throw new PassalongError("verdicts need sync — run `passalong login` first");
-  const said = note.trim();
-  if (!ok && !said)
-    throw new PassalongError("say what went wrong: passalong broken <id> <what happened>");
-  // "It works" is shown, not said: the server refuses one with no screenshot of it working, so
-  // the refusal is said here before anything is uploaded, in the words of the command that fixes it.
-  if (ok && !images.length && !/\/v1\/shots\/[a-z0-9]{6,16}/.test(said))
-    throw new PassalongError(
-      "show it working: passalong works <id> <screenshot.png> [what you checked]",
-    );
-  const guide = await resolveId(id);
-  const shots = [];
-  for (const file of images) shots.push((await attach(file)).markdown);
-  const line = said.split("\n")[0].slice(0, 280);
-  const detail = [said.length > line.length || shots.length ? said : "", ...shots]
-    .filter(Boolean)
-    .join("\n");
-  return api.verdict(guide, ok, line, detail);
-}
-
-/**
- * The words after `passalong works <id>`, split into the screenshots and the note: an argument is a
- * screenshot when it names an image file that exists, and everything else is what was checked.
- */
-export function proofArgs(args) {
-  const images = [];
-  const words = [];
-  for (const a of args) {
-    const ext = a.slice(a.lastIndexOf(".")).toLowerCase();
-    if (SHOT_TYPES[ext] && existsSync(a)) images.push(a);
-    else words.push(a);
-  }
-  return { images, note: words.join(" ") };
-}
-
-/**
- * Say whether you are taking a guide someone handed you — before doing any of it.
- *
- * The hop the product had no signal for: until this, a handoff nobody had answered looked exactly
- * like one nobody had noticed. Passing needs a reason for the same cause a failing verdict does —
- * "not me" without "why" leaves the sender where the silence did.
- */
-export async function ack(id, taken, note = "") {
-  if (!api.loggedIn()) throw new PassalongError("acks need sync — run `passalong login` first");
-  if (!taken && !note.trim())
-    throw new PassalongError("say why you are passing: pass a note with taken=false");
-  return api.ack(await resolveId(id), taken, note.trim());
-}
-
 /** Mark notifications seen. No ids means everything unread. */
 export const seen = (ids = []) => api.markRead(ids);
 
@@ -1063,15 +1002,11 @@ export async function setStatus(id, status) {
 }
 
 /**
- * Move a task from Draft to Ready: a person has read it and an agent may take it.
- *
- * Only tasks. Every other kind is published the moment it is shared, so "ready" on one would
- * either do nothing or reopen something archived under a name that does not say so.
+ * Move a guide from Draft to Ready: a person has read it, and whoever it is for may take it now.
+ * Every kind: a handoff or bug is a draft until somebody says so, as a task always was.
  */
 export async function ready(id) {
   const { guide } = await resolve(id, { peek: true });
-  if (guide.meta.kind !== "task")
-    throw new PassalongError(`${guide.meta.id || id} is not a task — ready is for tasks in Draft`);
   if (guide.meta.status !== "draft")
     throw new PassalongError(`${guide.meta.id} is not in Draft (status: ${guide.meta.status})`);
   return setStatus(guide.meta.id, "published");
@@ -1197,14 +1132,14 @@ export async function work({
 }
 
 /**
- * Make every task you wrote that is still in Draft ready, and return their ids. For the moment a
- * planner has written several and you have read them all. Only your own: moving a task into the
- * queue is its author's call.
+ * Make every guide you wrote that is still in Draft ready, and return their ids. For the moment a
+ * planner has written several and you have read them all. Only your own: sending a guide on is its
+ * author's call.
  */
 export async function readyDrafts() {
-  const drafts = (await tasks()).filter((t) => t.mine && t.state === "draft");
-  for (const t of drafts) await ready(t.id);
-  return drafts.map((t) => t.id);
+  const drafts = (await list("", { scope: "mine" })).filter((g) => g.status === "draft");
+  for (const g of drafts) await ready(g.id);
+  return drafts.map((g) => g.id);
 }
 
 export async function remove(id) {

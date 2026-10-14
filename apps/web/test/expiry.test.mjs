@@ -16,16 +16,16 @@ test("time left reads as a person would say it", () => {
   assert.equal(timeLeft("not a date", at), "under an hour");
 });
 
-test("proof deletion is said before archiving, and nothing is said when nothing is due", () => {
+test("proof deletion is said before going back to Draft, and nothing is said when nothing is due", () => {
   assert.equal(expiryLine({}, at), null);
   const proof = expiryLine({ proof_expires: from(3 * D) }, at);
   assert.equal(proof?.text, "Screenshots deleted in 3 days");
   assert.equal(proof?.soon, false);
   assert.match(proof?.why ?? "", /can't be brought back/, "the tooltip says what cannot be undone");
   const shelf = expiryLine({ archives_at: from(10 * H) }, at);
-  assert.equal(shelf?.text, "Archived in 10 hours");
+  assert.equal(shelf?.text, "Back to Draft in 10 hours");
   assert.equal(shelf?.soon, true);
-  assert.match(shelf?.why ?? "", /unarchive it/);
+  assert.match(shelf?.why ?? "", /Ready again/);
   assert.match(
     expiryLine({ proof_expires: from(4 * D), archives_at: from(D) }, at)?.text ?? "",
     /^Screenshots/,

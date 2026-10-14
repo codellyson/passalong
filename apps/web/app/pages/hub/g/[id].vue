@@ -132,7 +132,7 @@ const standing = computed(() => {
         : c.target === ""
           ? "Ready, for no repo: an agent takes it when it is given this task."
           : "Ready: the next agent in the right repo will take it.";
-  return "Nobody has taken it yet.";
+  return "Ready: nobody has taken it yet.";
 });
 
 // ---- the list it was opened from ----------------------------------------------------------
@@ -247,7 +247,9 @@ const reopen = () =>
  * the form on submit, because the input is prefilled and stays uncontrolled.
  */
 const taskReady = (form: HTMLFormElement) =>
-  run("ready", () => onTaskReady({ id: id.value } as Task, field(form, "repo")));
+  run("ready", () =>
+    onTaskReady({ id: id.value } as Task, isTask.value ? field(form, "repo") : undefined),
+  );
 const taskDraft = () => run("draft", () => onTaskDraft({ id: id.value } as Task));
 
 /** One line for each button whose name alone does not say what it does. */
@@ -255,16 +257,14 @@ const hints = computed(() => {
   const c = ctx.value;
   if (!c || !g.value) return [];
   const out: string[] = [];
-  if (!g.value.mine && !handedInByMe.value)
-    out.push("Respond: say whether you are taking it, and later whether it worked.");
   if (mayAct.value && holding.value)
     out.push(
       "Stop this agent: it goes back to waiting and the agent is told to stop. Nothing is deleted.",
     );
   if (mayArchive.value && g.value.status !== "consumed" && !reviewing.value)
     out.push("Archive: moves it off your board. You can unarchive it.");
-  if (mayAct.value && isTask.value && g.value.status === "published" && !c.claims.length)
-    out.push("Move to Draft: keep it visible for review, but stop agents from taking it.");
+  if (mayAct.value && g.value.status === "published" && !c.claims.length)
+    out.push("Move to Draft: keep it visible for review, but stop anyone from taking it.");
   return out;
 });
 
@@ -349,12 +349,12 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         >{{ expiry.text }}</p>
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
         <div class="mt-2 flex flex-wrap items-center gap-2">
-          <NuxtLink v-if="!g.mine && !handedInByMe" class="btn primary" :to="`/hub/answer/${g.id}`">Respond</NuxtLink>
           <form
-            v-if="mayAct && isTask && g.status === 'draft'"
+            v-if="mayAct && g.status === 'draft'"
             class="flex flex-wrap items-center gap-2"
             @submit.prevent="taskReady($event.target as HTMLFormElement)"
           >
+            <template v-if="isTask">
             <label class="sr-only" for="ready-repo">Which repo is this for?</label>
             <input
               id="ready-repo"
@@ -369,12 +369,13 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <datalist id="ready-repos">
               <option v-for="r in ctx.repos || []" :key="r" :value="r" />
             </datalist>
+            </template>
             <button class="btn primary" type="submit" :disabled="Boolean(busy)">
-              {{ busy === "ready" ? "Making ready…" : "Ready for agents" }}
+              {{ busy === "ready" ? "Making ready…" : isTask ? "Ready for agents" : "Ready" }}
             </button>
           </form>
           <button
-            v-if="mayAct && isTask && g.status === 'published' && !ctx.claims.length"
+            v-if="mayAct && g.status === 'published' && !ctx.claims.length"
             class="btn"
             type="button"
             :disabled="Boolean(busy)"
@@ -408,7 +409,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             type="button"
             :disabled="Boolean(busy)"
             @click="reopen"
-          >{{ busy === "reopen" ? "Unarchiving…" : isTask ? "Unarchive to Draft" : "Unarchive" }}</button>
+          >{{ busy === "reopen" ? "Unarchiving…" : "Unarchive to Draft" }}</button>
           <button
             v-if="mayArchive"
             class="btn outline danger"
@@ -437,7 +438,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         </ul>
       </header>
 
-      <HubTaskWork v-if="isTask" :guide="g" :claims="ctx.claims" :owner="Boolean(ctx.owner)" />
+      <HubTaskWork :guide="g" :claims="ctx.claims" :owner="Boolean(ctx.owner)" />
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">

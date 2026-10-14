@@ -61,15 +61,15 @@ test("sharing a task leaves it in Draft, and ready moves it on", async () => {
   await assert.rejects(passalong.ready(guide.meta.id), /not in Draft/);
 });
 
-test("ready refuses anything that is not a task", async () => {
+test("every kind is shared as a draft, and ready moves it on", async () => {
   const { guide } = await passalong.share(
     serialize({
       meta: { title: "t", summary: "A summary.", kind: "transfer" },
-      body: "## Problem\np\n\n## Steps\n1. x",
+      body: "Context for whoever picks it up.",
     }),
   );
-  assert.equal(guide.meta.status, "published");
-  await assert.rejects(passalong.ready(guide.meta.id), /not a task/);
+  assert.equal(guide.meta.status, "draft", "a handoff waits in Draft like a task");
+  assert.equal((await passalong.ready(guide.meta.id)).meta.status, "published");
 });
 
 test("an agent started by work is told to commit what it did, under the task's id", () => {

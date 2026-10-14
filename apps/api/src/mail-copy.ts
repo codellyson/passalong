@@ -37,17 +37,17 @@ export function handoffCopy(o: {
   const where = o.team ? ` in ${o.team}` : "";
   return {
     subject: `${o.fromName} sent you "${o.title}"`,
-    preview: `${o.fromName} sent you a guide${where}. Open it to say whether you're taking it.`,
+    preview: `${o.fromName} sent you a guide${where}. Open it to take it.`,
     eyebrow: `${o.fromName} sent you a guide${where}`,
     text: [
       `${o.fromName} sent you "${o.title}"${where}.`,
       "",
       `Open the guide: ${o.url}`,
       "",
-      "You can answer there: say whether you're taking it or passing it on, and once you have",
-      `tried it, whether it worked. It's the only word ${o.fromName} gets back.`,
+      "Take it there when you start: nobody else can take it while you hold it, and",
+      `${o.fromName} sees you have it. Hand it in when it is done, with what you ran to show it.`,
       "",
-      `Using a terminal or an agent? passalong pull ${o.id}`,
+      `Using a terminal or an agent? passalong take ${o.id}`,
     ],
   };
 }

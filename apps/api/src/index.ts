@@ -133,6 +133,7 @@ import {
   FOLLOW_UPS_MAX,
   type Meta,
   parseMeta,
+  publishProblem,
   SETTABLE,
   SEVERITIES,
   STATUSES,
@@ -144,7 +145,6 @@ import {
   summaryProblem,
   tag,
   tagList,
-  taskPublishProblem,
   unarchiveProblem,
   unheldFields,
   unreachableImages,
@@ -395,6 +395,10 @@ interface GuideRow {
   client: string;
   /** What it says to a person. See migrations/0041_summary.sql. Empty on a guide from before it. */
   summary: string;
+  /** The task this is the hand-in write-up for, or '' (0053_report_of.sql). */
+  report_of?: string;
+  /** How it reached Done: 'approved', 'archived', or '' (0054_outcome.sql). */
+  outcome?: string;
 }
 interface ReportRow {
   id: string;
@@ -866,6 +870,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       id: r.id,
       title: r.title,
       status: r.status,
+      // How it reached Done: approved after review, or archived. '' while it is not done.
+      outcome: r.outcome || "",
       created: r.created,
       updated: r.updated,
       source_context: r.source_context,
@@ -3225,7 +3231,8 @@ app.get("/v1/guides", async (c) => {
     where = "team_id = ?";
     binds.push(team.id);
   }
-  let sql = `SELECT * FROM guide WHERE ${where}`;
+  // A hand-in's write-up is read from its task's review, never listed as work (0053_report_of.sql).
+  let sql = `SELECT * FROM guide WHERE ${where} AND report_of = ''`;
   for (const t of q ? q.split(/\s+/) : []) {
     sql +=
       " AND (lower(title) LIKE ? OR lower(tags) LIKE ? OR lower(stack) LIKE ? OR lower(source_context) LIKE ? OR lower(markdown) LIKE ?)";
@@ -3920,6 +3927,126 @@ app.post("/v1/notifications/read", async (c) => {
  */
 const LINEAGE_MAX = 8;
 
+/**
+ * Tell whoever a guide just reached: a named person (mailed), each person in a group, the team's
+ * feed, and the team's channel. Called when a guide goes Ready — from Draft on the status route, or
+ * on a re-publish that changes the address of one already Ready. Never for a draft: nobody can take
+ * one, and "sent you" about work a person has not released yet is news about nothing.
+ *
+ * `addressed`, `handedToGroup` and `newlyShared` say which of those are new, because an unchanged
+ * address re-published is not a new event. Returns whether the named person was mailed.
+ */
+async function announceGuide(
+  c: Ctx,
+  {
+    id,
+    account,
+    title,
+    url,
+    team,
+    toAccount,
+    toGroup,
+    addressed,
+    handedToGroup,
+    newlyShared,
+  }: {
+    id: string;
+    account: string;
+    title: string;
+    url: string;
+    team: TeamRow | null;
+    toAccount: AccountRow | null;
+    toGroup: { id: string; slug: string; name: string } | null;
+    addressed: boolean;
+    handedToGroup: boolean;
+    newlyShared: boolean;
+  },
+): Promise<boolean> {
+  let notified = false;
+  if (addressed || handedToGroup || newlyShared) {
+    const me = (await accounts(c, [account])).get(account);
+    const fromName = displayName({ id: account, handle: me?.handle, name: me?.name });
+    if (addressed && toAccount) {
+      await notify(c.env, {
+        to: toAccount.id,
+        kind: "handoff",
+        guide_id: id,
+        actor_id: account,
+        team_id: team?.id,
+        // A handoff to a named person is the one event worth an email: it is addressed work.
+        mail: async () => {
+          notified = await sendHandoff(c.env, {
+            to: toAccount.email,
+            fromName,
+            title: title,
+            id,
+            url,
+            team: team?.name || "",
+          });
+          return notified;
+        },
+      });
+    }
+    // A group is addressed work for each of its people, so each of them is told the way a named
+    // person is — the same `handoff`, not the team's `shared`. No mail: one guide reaching six
+    // inboxes is six emails, and a group exists precisely because the sender does not know which
+    // of them will take it.
+    if (handedToGroup && toGroup) {
+      const { results } = await c.env.DB.prepare(
+        "SELECT account_id FROM group_member WHERE group_id = ? AND account_id <> ?",
+      )
+        .bind(toGroup.id, account)
+        .all<{ account_id: string }>();
+      await notifyAll(
+        c.env,
+        results.map((m) => m.account_id),
+        { kind: "handoff", guide_id: id, actor_id: account, team_id: team?.id },
+      );
+    }
+    // A team-wide share reaches the whole team's feed, but nobody's inbox: it is addressed to
+    // no one in particular, and that is exactly the mail people learn to filter out.
+    if (newlyShared && team) {
+      const { results } = await c.env.DB.prepare(
+        "SELECT account_id FROM membership WHERE team_id = ? AND account_id <> ?",
+      )
+        .bind(team.id, account)
+        .all<{ account_id: string }>();
+      const others = results.map((m) => m.account_id).filter((mid) => mid !== toAccount?.id);
+      await notifyAll(c.env, others, {
+        kind: "shared",
+        guide_id: id,
+        actor_id: account,
+        team_id: team.id,
+      });
+    }
+    if (team) {
+      // The room hears who it went to: a person, a group, or the team itself. Never "you" — a
+      // channel is read by everyone in it, so "sent you" would be wrong for all but one of them.
+      const kind = toAccount || toGroup ? "handoff" : "shared";
+      const to = toAccount
+        ? displayName(toAccount)
+        : toGroup
+          ? toGroup.name.trim() || `#${toGroup.slug}`
+          : "";
+      await announce(c.env, {
+        kind,
+        team_id: team.id,
+        text: line({
+          kind,
+          actor_name: fromName,
+          title: title,
+          team_name: team.name,
+          to,
+          times: 1,
+        }),
+        title: title,
+        url,
+      });
+    }
+  }
+  return notified;
+}
+
 app.put("/v1/guides/:id", async (c) => {
   const account = c.get("account");
   const id = c.req.param("id");
@@ -4230,8 +4357,8 @@ app.put("/v1/guides/:id", async (c) => {
   if (!["task", "bug", "transfer"].includes(said))
     return err(c, 400, `"${said}" is not a kind. Use \`task\`, \`bug\` or \`transfer\`.`);
 
-  const taskGate = taskPublishProblem(said, status, existing?.status);
-  if (taskGate) return err(c, 409, taskGate);
+  const gate = publishProblem(status, existing?.status);
+  if (gate) return err(c, 409, gate);
 
   /**
    * What it says to a person. Required of every new guide, and refused by name when absent, like the
@@ -4305,94 +4432,26 @@ app.put("/v1/guides/:id", async (c) => {
   // What a task waits for is rewritten from its frontmatter on every publish, like the rest of it.
   if (said === "task") await claims.blockOn(c.env.DB, id, meta.blocked_by || [], { account });
 
-  // Tell whoever the guide just became relevant to. Re-publishing an unchanged address is not a
-  // new event, so only a *newly* addressed person or a newly shared team hears anything.
-  let notified = false;
-  const addressed =
-    toAccount && toAccount.id !== account && existing?.to_account_id !== toAccount.id;
-  const handedToGroup = toGroup && existing?.to_group_id !== toGroup.id;
-  const newlyShared = team && existing?.team_id !== team.id;
-  if (addressed || handedToGroup || newlyShared) {
-    const me = (await accounts(c, [account])).get(account);
-    const fromName = displayName({ id: account, handle: me?.handle, name: me?.name });
-    if (addressed && toAccount) {
-      await notify(c.env, {
-        to: toAccount.id,
-        kind: "handoff",
-        guide_id: id,
-        actor_id: account,
-        team_id: team?.id,
-        // A handoff to a named person is the one event worth an email: it is addressed work.
-        mail: async () => {
-          notified = await sendHandoff(c.env, {
-            to: toAccount.email,
-            fromName,
-            title: String(meta.title),
-            id,
-            url,
-            team: team?.name || "",
-          });
-          return notified;
-        },
-      });
-    }
-    // A group is addressed work for each of its people, so each of them is told the way a named
-    // person is — the same `handoff`, not the team's `shared`. No mail: one guide reaching six
-    // inboxes is six emails, and a group exists precisely because the sender does not know which
-    // of them will take it.
-    if (handedToGroup && toGroup) {
-      const { results } = await c.env.DB.prepare(
-        "SELECT account_id FROM group_member WHERE group_id = ? AND account_id <> ?",
-      )
-        .bind(toGroup.id, account)
-        .all<{ account_id: string }>();
-      await notifyAll(
-        c.env,
-        results.map((m) => m.account_id),
-        { kind: "handoff", guide_id: id, actor_id: account, team_id: team?.id },
-      );
-    }
-    // A team-wide share reaches the whole team's feed, but nobody's inbox: it is addressed to
-    // no one in particular, and that is exactly the mail people learn to filter out.
-    if (newlyShared && team) {
-      const { results } = await c.env.DB.prepare(
-        "SELECT account_id FROM membership WHERE team_id = ? AND account_id <> ?",
-      )
-        .bind(team.id, account)
-        .all<{ account_id: string }>();
-      const others = results.map((m) => m.account_id).filter((mid) => mid !== toAccount?.id);
-      await notifyAll(c.env, others, {
-        kind: "shared",
-        guide_id: id,
-        actor_id: account,
-        team_id: team.id,
-      });
-    }
-    if (team) {
-      // The room hears who it went to: a person, a group, or the team itself. Never "you" — a
-      // channel is read by everyone in it, so "sent you" would be wrong for all but one of them.
-      const kind = toAccount || toGroup ? "handoff" : "shared";
-      const to = toAccount
-        ? displayName(toAccount)
-        : toGroup
-          ? toGroup.name.trim() || `#${toGroup.slug}`
-          : "";
-      await announce(c.env, {
-        kind,
-        team_id: team.id,
-        text: line({
-          kind,
-          actor_name: fromName,
+  // Nobody hears about a draft: a guide reaches people when a person marks it Ready, and the status
+  // route announces it then. Re-publishing an unchanged address is not a new event either, so only
+  // a *newly* addressed person or a newly shared team hears anything.
+  const notified =
+    status === "draft"
+      ? false
+      : await announceGuide(c, {
+          id,
+          account,
           title: String(meta.title),
-          team_name: team.name,
-          to,
-          times: 1,
-        }),
-        title: String(meta.title),
-        url,
-      });
-    }
-  }
+          url,
+          team,
+          toAccount,
+          toGroup,
+          addressed: Boolean(
+            toAccount && toAccount.id !== account && existing?.to_account_id !== toAccount.id,
+          ),
+          handedToGroup: Boolean(toGroup && existing?.to_group_id !== toGroup.id),
+          newlyShared: Boolean(team && existing?.team_id !== team.id),
+        });
   count(c, existing ? "guide_updated" : "guide_shared", {
     addressed: Boolean(toAccount),
     team: Boolean(team),
@@ -4896,24 +4955,25 @@ app.patch("/v1/guides/:id/status", async (c) => {
   if (!status || !(SETTABLE as readonly string[]).includes(status))
     return err(c, 400, `A guide's status can only be ${SETTABLE.join(", ")}.`);
   // A team's board is everyone's: anyone in the team moves a guide between Draft and Ready
-  // (readableGuide has already said they are in it). Archiving a task is approving it with nobody
-  // reading the work, so that stays with its author or an admin, and approval goes through the gate.
-  if (!author && found.row.kind === "task" && status === "consumed")
+  // (readableGuide has already said they are in it). Archiving is approving it with nobody reading
+  // the work, so that stays with its author or an admin, and approval goes through the gate. Every
+  // kind alike: a handoff or bug has the same states as a task.
+  if (!author && status === "consumed")
     return err(
       c,
       403,
-      "Only a task's author, or a team admin, archives it. To finish it, approve its hand-in.",
+      "Only its author, or a team admin, archives a guide. To finish it, approve its hand-in.",
     );
-  const back = unarchiveProblem(found.row.kind, found.row.status, status);
+  const back = unarchiveProblem(found.row.status, status);
   if (back) return err(c, 409, back);
-  // Moving an occupied task to Draft would hide it from the queue while its agent still held a
-  // live claim. The author has Stop this agent for that transition.
-  if (found.row.kind === "task" && status === "draft") {
+  // Moving occupied work to Draft would hide it while somebody still held a live claim. The author
+  // has Stop this agent for that transition.
+  if (status === "draft") {
     const held = await c.env.DB.prepare("SELECT 1 FROM claim WHERE guide_id = ? LIMIT 1")
       .bind(found.row.id)
       .first();
     if (held)
-      return err(c, 409, "Stop the agent or review its hand-in before moving this task to Draft.");
+      return err(c, 409, "Stop the agent or review its hand-in before moving this to Draft.");
   }
   let markdown = setField(found.row.markdown, "status", status);
   // Marking a task Ready can also say which repo it is for: the moment somebody decides a task is
@@ -4926,11 +4986,42 @@ app.patch("/v1/guides/:id/status", async (c) => {
       ? setField(markdown, "target_context", repo)
       : dropField(markdown, "target_context");
   }
+  // Archived by a person, not approved: Done says which (0054_outcome.sql). Leaving Done clears it.
   await c.env.DB.prepare(
-    "UPDATE guide SET status = ?, markdown = ?, target = ?, updated = ? WHERE id = ?",
+    "UPDATE guide SET status = ?, outcome = ?, markdown = ?, target = ?, updated = ? WHERE id = ?",
   )
-    .bind(status, markdown, repo, now(), found.row.id)
+    .bind(status, status === "consumed" ? "archived" : "", markdown, repo, now(), found.row.id)
     .run();
+  // Ready is when a guide reaches people: whoever it is addressed to is told now, never while it
+  // was a draft (announceGuide). Everything about the address is new to them.
+  if (found.row.status === "draft" && status === "published") {
+    const r = found.row;
+    const team = r.team_id
+      ? await c.env.DB.prepare("SELECT * FROM team WHERE id = ?").bind(r.team_id).first<TeamRow>()
+      : null;
+    const toAccount = r.to_account_id
+      ? await c.env.DB.prepare("SELECT id, handle, name, email FROM account WHERE id = ?")
+          .bind(r.to_account_id)
+          .first<AccountRow>()
+      : null;
+    const toGroup = r.to_group_id
+      ? await c.env.DB.prepare("SELECT id, slug, name FROM team_group WHERE id = ?")
+          .bind(r.to_group_id)
+          .first<{ id: string; slug: string; name: string }>()
+      : null;
+    await announceGuide(c, {
+      id: r.id,
+      account: r.account_id,
+      title: r.title,
+      url: shareUrl(origin(c), r),
+      team,
+      toAccount,
+      toGroup,
+      addressed: Boolean(toAccount && toAccount.id !== r.account_id),
+      handedToGroup: Boolean(toGroup),
+      newlyShared: Boolean(team),
+    });
+  }
   // Anything a person who is not the author does to a guide, its author hears about. Archiving
   // told them and un-archiving did not, which is the asymmetry that let a guide move on somebody
   // else's say-so in silence.
@@ -5379,8 +5470,8 @@ async function intake(
   markdown = setField(markdown, "summary", g.summary.slice(0, SUMMARY_MAX));
   // The kind is the one the address or URL named: stated by whoever chose which one to use.
   markdown = setField(markdown, "kind", g.kind);
-  // A new task is a draft until a person marks it Ready, like every other task.
-  markdown = setField(markdown, "status", g.kind === "task" ? "draft" : "published");
+  // A draft until a person marks it Ready, like every new guide.
+  markdown = setField(markdown, "status", "draft");
   if (g.kind === "task" && g.target) markdown = setField(markdown, "target_context", g.target);
   const made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, markdown, "text/markdown");
   if (!made.ok) {
@@ -5452,7 +5543,7 @@ app.post("/v1/in/:key/:kind", async (c) => {
       kind: "hooked",
       guide_id: made.id,
       actor_id: "",
-      note: `${from}, ${kind === "task" ? "a draft task until you mark it Ready" : `a ${kind}`}`,
+      note: `${from}, a draft ${kind} until you mark it Ready`,
     });
   }
   return c.json({ ok: true, made: made.id || null, merged: Boolean(made.id) && !made.created });
@@ -5522,7 +5613,7 @@ export async function receiveEmail(
         kind: "emailed",
         guide_id: made.id,
         actor_id: "",
-        note: to.kind === "task" ? "a draft task until you mark it Ready" : `a ${to.kind}`,
+        note: `a draft ${to.kind} until you mark it Ready`,
       });
   } catch (e) {
     console.error("inbound", (e as Error).message);
@@ -5746,11 +5837,9 @@ app.get("/v1/working", async (c) => {
 // person the same task lifecycle without asking them to manufacture an agent id or a report guide.
 app.post("/v1/tasks/:id/person-take", async (c) => {
   const account = c.get("account");
-  // Tasks only: a handoff or bug is taken in the browser by acking it, which also tells the sender.
+  // Any kind: a handoff or bug has the same states as a task, and is taken the same way.
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
-  if (found.row.kind !== "task")
-    return err(c, 400, "Only a task is taken here. Take a handoff or bug with I'll do this.");
   const who = { account, agent: personAgent(account), repo: "", any: true };
   const at = now();
   const got = await claims.take(c.env.DB, c.req.param("id"), who, {
@@ -6360,10 +6449,12 @@ app.post("/v1/guides/:id/pass", async (c) => {
     why,
     fence: fenceIn(who.fence),
   });
-  // Passing a handoff nobody took is still a real answer to its sender: not me, and why.
-  if ("error" in r && !(r.status === 409 && found.row.kind !== "task" && !found.owner))
+  // Passing work nobody took is still a real answer to its sender: not me, and why. Every kind.
+  const declined = "error" in r && r.status === 409 && !found.owner;
+  if ("error" in r && !declined)
     return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
-  if (found.row.kind === "task") {
+  if (declined) await recordAck(c, found.row, false, why.trim().slice(0, NOTE_MAX));
+  else if (found.row.kind === "task") {
     count(c, "task_passed", {});
     await taskEvent(c, found.row.id, "task_released", found.row.account_id, why);
   } else if (!found.owner) {

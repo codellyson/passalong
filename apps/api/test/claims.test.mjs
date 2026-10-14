@@ -16,6 +16,7 @@ import {
   approve,
   archivesAt,
   ask,
+  backToDraft,
   blockOn,
   checksProblem,
   closeGuide,
@@ -305,6 +306,10 @@ test("finishing needs a transfer guide, and moves the task to review", async () 
   const [row] = (await list(db, "me", T0)).filter((r) => r.task.id === "t1");
   assert.equal(row.state, "review");
   assert.equal(row.claim.report_id, "report");
+  // The write-up is the record of the work, not work: stored as Done and named for its task, which
+  // keeps it off the board.
+  const written = db.raw.prepare("SELECT status, report_of FROM guide WHERE id = 'report'").get();
+  assert.deepEqual({ ...written }, { status: "consumed", report_of: "t1" });
   // Finished is not held: the agent is free for the next one, and this task is not handed out again.
   assert.equal(await next(db, A, { at: T0 }), null);
 });
@@ -808,7 +813,7 @@ test("a handoff's checks are held to the same rule as a task's", async () => {
   assert.match(failed.error, /did not hold/);
 });
 
-test("a task left in Draft a day is returned once, in the run it crosses", async () => {
+test("a guide left in Draft a day is returned once, in the run it crosses", async () => {
   const db = d1();
   const guide = seed(db);
   const day = new Date(Date.parse(T0) - DRAFT_NUDGE_MS);
@@ -816,14 +821,15 @@ test("a task left in Draft a day is returned once, in the run it crosses", async
   guide("forgot", { status: "draft", created: at(-60_000) });
   guide("ready", { created: at(-60_000) });
   guide("note", { status: "draft", kind: "transfer", created: at(-60_000) });
+  guide("shared", { kind: "transfer", created: at(-60_000) });
   guide("fresh", { status: "draft", created: at(60_000) });
   guide("older", { status: "draft", created: at(-3 * 60 * 60 * 1000) });
 
   const window = await staleDrafts(db, day.toISOString(), at(-90 * 60 * 1000));
   assert.deepEqual(
     window.map((g) => g.id),
-    ["forgot"],
-    "only a draft task that crossed a day inside the window",
+    ["forgot", "note"],
+    "only drafts, of any kind, that crossed a day inside the window",
   );
 });
 
@@ -891,8 +897,9 @@ test("the author closes a guide nobody ever handed in", async () => {
   assert.equal((await closeGuide(db, "h1", { account: "other", at: T0 })).status, 404, "not yours");
   const done = await closeGuide(db, "h1", { account: "me", at: T0 });
   assert.deepEqual(done.claimants, [], "nobody had it, and that is the case this is for");
-  const row = await db.prepare("SELECT status FROM guide WHERE id = ?").bind("h1").first();
+  const row = await db.prepare("SELECT status, outcome FROM guide WHERE id = ?").bind("h1").first();
   assert.equal(row.status, "consumed", "off the board, and reversible");
+  assert.equal(row.outcome, "archived", "nothing was handed in, so nothing was approved");
 });
 
 test("nothing is handed in without evidence, and a claim is not evidence", async () => {
@@ -954,6 +961,8 @@ test("approving a task in review makes it done", async () => {
   const r = await approve(db, "t1", { account: "me", at: later(1_000) });
   assert.equal(r.error, undefined);
   assert.equal(await stateIn(db, "t1"), "done");
+  const { outcome } = db.raw.prepare("SELECT outcome FROM guide WHERE id = 't1'").get();
+  assert.equal(outcome, "approved", "Done says it was approved, not archived");
 });
 
 test("a task with an older repo-scoped hand-in can be approved", async () => {
@@ -1478,7 +1487,11 @@ test("the author sees what was handed in on a handoff, and can close it", async 
   assert.equal(own.status, 409, "nobody accepts their own hand-in");
   const closed = await closeGuide(db, "h1", { account: "me", at: T0 });
   assert.deepEqual(closed.claimants, ["other"]);
-  assert.equal(db.raw.prepare("SELECT status FROM guide WHERE id = 'h1'").get().status, "consumed");
+  assert.deepEqual(
+    { ...db.raw.prepare("SELECT status, outcome FROM guide WHERE id = 'h1'").get() },
+    { status: "consumed", outcome: "approved" },
+    "accepting a hand-in is approving it",
+  );
   assert.deepEqual(await handedIn(db, "me"), []);
 });
 
@@ -2371,4 +2384,43 @@ test("group members see one answer the same way, and the whole team sees the gro
   assert.equal(Boolean((await t1("bo")).task.for_me), true);
   assert.equal(Boolean((await t1("cy")).task.for_me), true);
   assert.equal(Boolean((await t1("other")).task.for_me), false, "on the board, not for them");
+});
+
+test("a guide nobody took goes back to Draft, not to Done, and keeps its age", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("sent", { kind: "transfer", target: "" });
+  guide("drafted", { kind: "transfer", target: "", status: "draft" });
+  assert.equal(await backToDraft(db, "sent"), true);
+  assert.equal(await backToDraft(db, "drafted"), false, "only Ready work moves");
+  const row = db.raw.prepare("SELECT status, outcome, updated FROM guide WHERE id = 'sent'").get();
+  assert.equal(row.status, "draft");
+  assert.equal(row.outcome, "", "not Done: nobody finished or shelved it");
+  assert.equal(row.updated, T0, "nothing happened to the work, so its age stands");
+});
+
+test("the backfills: old write-ups leave the board, and old Done says how it got there", () => {
+  const db = d1();
+  const guide = seed(db);
+  const at = (min) => new Date(Date.parse(T0) + min * 60_000).toISOString();
+  guide("task1", { status: "consumed" });
+  guide("wrote", { kind: "transfer", target: "", status: "consumed", created: at(0) });
+  guide("early", { kind: "transfer", target: "", created: at(-30) });
+  guide("shelf", { kind: "transfer", target: "", status: "consumed" });
+  db.raw.exec(`UPDATE guide SET parent_id = 'task1' WHERE id IN ('wrote', 'early');
+    INSERT INTO task_event (guide_id, kind, account_id, at) VALUES
+      ('task1', 'handed_in', 'me', '${at(1)}'), ('task1', 'approved', 'other', '${at(5)}');`);
+  // Re-run each migration's backfill against rows that exist, which the migrations as run at
+  // creation, on an empty database, never had.
+  const backfill = (file) => {
+    const sql = readFileSync(join(MIGRATIONS, file), "utf8");
+    db.raw.exec(sql.slice(sql.indexOf("UPDATE guide")));
+  };
+  backfill("0053_report_of.sql");
+  backfill("0054_outcome.sql");
+  const row = (id) => db.raw.prepare("SELECT report_of, outcome FROM guide WHERE id = ?").get(id);
+  assert.equal(row("wrote").report_of, "task1", "published a minute before the hand-in");
+  assert.equal(row("early").report_of, "", "half an hour before is context, not the write-up");
+  assert.equal(row("task1").outcome, "approved");
+  assert.equal(row("shelf").outcome, "archived");
 });

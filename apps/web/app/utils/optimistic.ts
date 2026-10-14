@@ -11,27 +11,7 @@ import type { Board, Guide } from "~/types/hub";
 
 const BUCKETS = ["waiting", "failing", "in_flight", "landed"] as const;
 
-export const withAck = (g: Guide, taken: boolean, note: string, at: string): Guide => ({
-  ...g,
-  my_ack: { taken, note, at },
-});
-
-export const withVerdict = (
-  g: Guide,
-  ok: boolean,
-  note: string,
-  by: string | null,
-  byName: string,
-): Guide => ({ ...g, verdict: { ok, note, by, by_name: byName } });
-
 export const withStatus = (g: Guide, status: string): Guide => ({ ...g, status });
-
-export function patchBoard(board: Board, id: string, fn: (g: Guide) => Guide): Board {
-  const out = { ...board };
-  for (const bucket of BUCKETS)
-    out[bucket] = (board[bucket] ?? []).map((g) => (g.id === id ? fn(g) : g));
-  return out;
-}
 
 /** Off the board entirely: passed on, answered, archived or deleted. */
 export function dropFromBoard(board: Board, id: string): Board {

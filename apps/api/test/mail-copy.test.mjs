@@ -56,9 +56,9 @@ test("the text half leads with opening the guide, and a command is only a footno
   const handoff = every()[0].text;
   assert.equal(handoff[0], `Hybee1 sent you "${TITLE}" in Khaime.`);
   assert.ok(handoff.includes(`Open the guide: ${URL_}`));
-  assert.match(handoff.join("\n"), /answer there/);
+  assert.match(handoff.join("\n"), /Take it there/);
   const commands = handoff.filter((l) => l.includes("passalong "));
-  assert.deepEqual(commands, [`Using a terminal or an agent? passalong pull ${ID}`]);
+  assert.deepEqual(commands, [`Using a terminal or an agent? passalong take ${ID}`]);
   assert.equal(handoff.at(-1), commands[0], "the command is the last thing, not the first");
 });
 

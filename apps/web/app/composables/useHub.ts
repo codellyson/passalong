@@ -6,7 +6,7 @@
 // button changed nothing on screen until two round trips later.
 //
 // Now each endpoint is its own query, built once per app in a detached scope and shared by every
-// component that calls `useHub()`. The names components already use — `data`, `load`, `onAck` and
+// component that calls `useHub()`. The names components already use — `data`, `load`, `onArchive` and
 // the rest — keep their meaning, and `loading` / `updating` say what is still on its way.
 import type { QueryClient, QueryKey } from "@tanstack/vue-query";
 import { keepPreviousData, useQuery } from "@tanstack/vue-query";
@@ -24,14 +24,7 @@ import type {
   Working,
 } from "~/types/hub";
 import { HttpError, SignedOut } from "~/utils/http";
-import {
-  dropFromBoard,
-  patchBoard,
-  patchList,
-  withAck,
-  withStatus,
-  withVerdict,
-} from "~/utils/optimistic";
+import { dropFromBoard, patchList, withStatus } from "~/utils/optimistic";
 
 const KEY = "passalong.token";
 /** The session cookie's name, as apps/api sets it. Only its presence is ever read here. */
@@ -76,13 +69,6 @@ export const hubKeys = {
 
 type GuideList = { guides: Guide[] };
 type Notes = { notifications: Note[]; unread: number };
-
-/**
- * Where an archived guide goes when it is put back. A task goes to Draft and never straight to
- * agents — archived includes approved, and Ready would hand finished work out again — and the
- * server refuses the other way (`unarchiveProblem`). Anything else is open again.
- */
-const unarchivedAs = (kind?: string) => (kind === "task" ? "draft" : "published");
 
 function build(queryClient: QueryClient) {
   const token = useState<string | null>("hub:token", () => null);
@@ -400,22 +386,14 @@ function build(queryClient: QueryClient) {
   const patchBoardCache = (fn: (b: Board) => Board) =>
     queryClient.setQueryData<Board>(hubKeys.board, (old) => (old ? fn(old) : old));
 
-  const ANSWERED: QueryKey[] = [
-    hubKeys.allGuides,
-    hubKeys.board,
-    hubKeys.notifications,
-    hubKeys.log,
-    // Taking or answering in the browser holds it, or hands it in: both lists move.
-    hubKeys.working,
-    hubKeys.handedIn,
-  ];
-
   /**
    * Archive a guide, or put it back. Archived is shelf space, not a judgement — and shelf space is
    * what the free plan counts, so this is how to make room without deleting anything.
    */
   const onArchive = (g: Guide, archived: boolean) => {
-    const status = archived ? "consumed" : unarchivedAs(g.kind);
+    // Put back, it goes to Draft and never straight to Ready: archived includes approved, and Ready
+    // would hand finished work out again. The server refuses the other way (`unarchiveProblem`).
+    const status = archived ? "consumed" : "draft";
     return change(() => api(`/v1/guides/${g.id}/status`, json("PATCH", { status })), () => {
       patchGuides(g.id, (x) => withStatus(x, status));
       if (archived) patchBoardCache((b) => dropFromBoard(b, g.id));
@@ -441,7 +419,6 @@ function build(queryClient: QueryClient) {
     ids: string[],
     action: "archive" | "unarchive" | "delete",
     also: QueryKey[] = [],
-    kinds: Record<string, string | undefined> = {},
   ): Promise<number> {
     error.value = null;
     const call = (id: string) =>
@@ -450,7 +427,7 @@ function build(queryClient: QueryClient) {
         : api(
             `/v1/guides/${id}/status`,
             json("PATCH", {
-              status: action === "archive" ? "consumed" : unarchivedAs(kinds[id]),
+              status: action === "archive" ? "consumed" : "draft",
             }),
           );
     const failed: string[] = [];
@@ -475,46 +452,6 @@ function build(queryClient: QueryClient) {
     }
     return ids.length - failed.length;
   }
-
-  /**
-   * The reader's first word back, before any work: taking it, or handing it back with a reason.
-   * Passing needs the reason for the same cause a failing verdict does.
-   */
-  const onAck = (g: Guide, taken: boolean, note = "") =>
-    change(
-      () => api(`/v1/guides/${g.id}/ack`, json("PUT", { taken, note })),
-      () => {
-        const at = new Date().toISOString();
-        patchGuides(g.id, (x) => withAck(x, taken, note, at));
-        patchBoardCache((b) =>
-          taken ? patchBoard(b, g.id, (x) => withAck(x, taken, note, at)) : dropFromBoard(b, g.id),
-        );
-      },
-      ANSWERED,
-    );
-
-  /**
-   * The reader's answer to "does this work?", and the only way a sender learns their handoff did
-   * not land. A failure must say why and a success must show it — screenshots, in `detail`. The
-   * note cap is the server's (280).
-   */
-  const onVerdict = (g: Guide, ok: boolean, note = "", detail = "") => {
-    const said = note.trim().slice(0, 280);
-    // The server answers a noteless failure with a 400. Not sending it is the same rule, said
-    // before the round trip rather than after.
-    if (!ok && !said) return Promise.resolve(false);
-    const me = meQ.data.value;
-    return change(
-      // A "works" carries its screenshots in `detail`: the server refuses one without.
-      () => api(`/v1/guides/${g.id}/verdict`, json("PUT", { ok, note: said, detail })),
-      () => {
-        const byName = me?.display || me?.name || (me?.handle ? `@${me.handle}` : "");
-        patchGuides(g.id, (x) => withVerdict(x, ok, said, me?.handle ?? null, byName));
-        patchBoardCache((b) => dropFromBoard(b, g.id));
-      },
-      ANSWERED,
-    );
-  };
 
   /**
    * The task gate, and the one move before it. All four are the author's, and the server says so
@@ -561,6 +498,18 @@ function build(queryClient: QueryClient) {
       hubKeys.context(id),
     ]);
   const onPersonTaskTake = (id: string) => personTaskChange(id, "person-take");
+  /**
+   * Not for me, with the reason: it goes back to whoever sent it, who is told why. The person's own
+   * agent name, as the hub takes things under (`personAgent()` on the server).
+   */
+  const onPass = (id: string, why: string) => {
+    const account = (meQ.data.value?.account || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+    return change(() =>
+      api(
+        `/v1/guides/${encodeURIComponent(id)}/pass`,
+        json("POST", { agent: `person-${account}`, why }),
+      ), () => {}, [hubKeys.allGuides, hubKeys.board, hubKeys.working, hubKeys.context(id)]);
+  };
   const onPersonTaskProgress = (id: string, note: string) =>
     personTaskChange(id, "person-progress", { note });
   const onPersonTaskHandIn = (id: string, body: unknown) =>
@@ -745,14 +694,13 @@ function build(queryClient: QueryClient) {
     start,
     load,
     refresh,
-    onAck,
     onArchive,
     onRemove,
     onBulk,
-    onVerdict,
     onTaskReady,
     onTaskDraft,
     onPersonTaskTake,
+    onPass,
     onPersonTaskProgress,
     onPersonTaskHandIn,
     onApprove,

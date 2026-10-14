@@ -29,25 +29,29 @@ export type Status = (typeof STATUSES)[number];
  */
 export const SETTABLE = ["draft", "published", "consumed"] as const;
 
-/** A task enters the agent queue only through the author's explicit Ready action. */
-export function taskPublishProblem(kind: string, status: string, previousStatus?: string): string {
-  if (kind !== "task") return "";
+/**
+ * Every guide, whatever its kind, starts in Draft and reaches anyone only through a person's
+ * explicit Ready. Tasks always did; a handoff or bug used to go out the moment it was shared, so an
+ * agent's guide reached people with nobody having read it. One set of states for every kind is the
+ * constraint the board works in: Draft, Ready, In progress, In review, Done.
+ */
+export function publishProblem(status: string, previousStatus?: string): string {
   if (!previousStatus && status !== "draft")
-    return "A new task must be Draft. Publish it with `status: draft`, let the person review it, then use Ready to put it in the agent queue.";
+    return "A new guide must be Draft. Publish it with `status: draft`, let the person read it, then they use Ready to send it on.";
   if (previousStatus && status !== previousStatus)
-    return "Changing a task's status needs a separate action from the person. Keep its current status in the document, then use Ready, Move to Draft, or the review controls in the hub.";
+    return "Changing a guide's status needs a separate action from the person. Keep its current status in the document, then use Ready, Move to Draft, or the review controls in the hub.";
   return "";
 }
 export type Settable = (typeof SETTABLE)[number];
 
 /**
- * An archived task comes back to Draft, never straight into the agent queue. Archived covers
- * approved as well as shelved, so putting one back as Ready handed finished work to the next agent
- * in that repo to do again. From Draft a person decides, with Ready, whether it is wanted.
+ * An archived guide comes back to Draft, never straight to Ready. Archived covers approved as well
+ * as shelved, so putting one back as Ready handed finished work to whoever takes it next. From
+ * Draft a person decides, with Ready, whether it is wanted.
  */
-export function unarchiveProblem(kind: string, from: string, to: string): string {
-  if (kind === "task" && from === "consumed" && to === "published")
-    return "An archived task comes back to Draft, not straight to agents: set it to draft, then mark it Ready if it is still wanted.";
+export function unarchiveProblem(from: string, to: string): string {
+  if (from === "consumed" && to === "published")
+    return "An archived guide comes back to Draft, not straight to Ready: set it to draft, then mark it Ready if it is still wanted.";
   return "";
 }
 

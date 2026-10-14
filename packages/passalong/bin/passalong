@@ -7,16 +7,16 @@
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
 //   passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
-//   passalong ready <id...|--all> tasks you have read are ready — an agent may take them now
+//   passalong ready <id...|--all> guides you have read are ready — whoever they are for may take them now
 //   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
 //   passalong work [--once] [--agent CMD]  run an agent on each ready task here, one after another
-//   passalong approve <id>        the work in review is done
-//   passalong reject <id> <why>   not done: back to Ready, and the next agent reads why
+//   passalong approve <id>        the work in review is done, of any kind
+//   passalong reject <id> <why>   not done: back to Ready, and whoever takes it next reads why
 //   passalong release <id>        take work back from whoever holds it, of any kind
 //   passalong attach <file>       upload a picture or a file and print the markdown that points at it
 //   passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
 //   passalong pull <id|link> [--save]  print a guide; --save also writes ./.passalong/<id>.md
-//   passalong start <id|link> [--save]  pull it and take it — one command for "I am doing this"
+//   passalong start <id|link> [--save]  the same as take, by link as well as id
 //   passalong inbox               guides handed to you that you have not pulled yet
 //   passalong board               waiting on you, in flight, landed, worth keeping
 //   passalong activity [--all]    what happened while you were away; clears unless --all
@@ -24,8 +24,8 @@
 //   passalong list [query]        your guides and your teams'
 //   passalong open <id> [--print] view a guide in the browser (or the terminal)
 //   passalong hub                 open your synced guides in the browser
-//   passalong take <id>           you are doing it — said before the work, so the sender stops guessing
-//   passalong pass <id> <why>     it is not yours — hands it back to its author with your reason
+//   passalong take <id> [--save]  you are doing it: nobody else can take it while you hold it
+//   passalong pass <id> <why>     it is not yours, or you are stuck — hands it back with your reason
 //   passalong assign <id> <to>    give it to @handle (or several: @ada @bola), a #group, or "team" — yours, or assigned to you
 //   passalong recall <id>         take back something you sent: private again, gone from their inboxes
 //   passalong admin create <email>   make an account that runs Passalong (owner only)
@@ -35,8 +35,6 @@
 //                                 give Solo to @handle, or Team to team/slug, until a date (operator only)
 //   passalong gifts               what has been given away, and what is still running
 //   passalong ungift <gift id>    take one back now
-//   passalong works <id> <shot.png...>  you tried it and it holds up — with a screenshot of it working
-//   passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
 //   passalong archive <id>        off your board and out of the free tier's count (was `done`)
 //   passalong rm <id>             delete a guide locally and from sync
 //   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
@@ -66,7 +64,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as api from "../src/api.js";
 import { scaffold, taskScaffold } from "../src/capture.js";
-import { serialize } from "../src/guide.js";
+import { parse, serialize } from "../src/guide.js";
 import * as passalong from "../src/passalong.js";
 import * as store from "../src/store.js";
 
@@ -433,23 +431,20 @@ const commands = {
   },
 
   /**
-   * Pull and take in one command. `pull` says it arrived, `take` says somebody is doing it, and
-   * they stay separate because reading a guide to decide it is not yours is what `pass` is for.
-   * This is the pair for the case where you already know: you are picking this up.
+   * Take it: you are doing it, and nobody else can take it while you hold it. The guide is printed,
+   * and `--save` also writes it to ./.passalong/. Every kind is taken the same way, and `start` is
+   * the same command by its older name, which also takes a share link.
    */
   async start(f) {
-    const ref = f._[0] || die("usage: passalong start <id|link>");
+    const ref = f._[0] || die("usage: passalong take <id|link>");
     const r = await passalong.start(ref, { save: Boolean(f.save) }).catch((e) => die(e.message));
+    if (!r.guide?.markdown) return console.error(r.say || "nothing to take");
     process.stdout.write(r.markdown);
     if (r.path) console.error(`\nsaved to ${r.path}`);
-    if (r.took) console.error("you are on it, and the author has been told");
-    else if (r.own) console.error("your own guide — nothing to take");
-    else if (r.ack_error) console.error(`not taken (${r.ack_error}) — run \`passalong take ${r.guide.meta.id}\``);
-    // Saying nothing here would be the silence the whole hop exists to end: you would have the
-    // guide, believe you had answered for it, and the sender would still be waiting.
-    else console.error("not taken — sync is off, so nobody was told (run `passalong login`)");
-    await listFollowUps(r.guide.meta);
+    console.error(`\nyou hold ${r.guide.id} — hand it in when it is done, or pass it with the reason`);
+    await listFollowUps(parse(r.markdown).meta);
   },
+
 
   /**
    * Upload an image and print the markdown that points at it. Evidence goes *in* the document:
@@ -589,17 +584,8 @@ const commands = {
     } else console.log(url);
   },
 
-  /**
-   * The first word back, before any of the work.
-   *
-   * Between a handoff and a pull the sender had no signal at all: an unanswered guide looks
-   * exactly like one nobody has noticed. These two are the hop the MCP tool and the hub already
-   * had and a terminal did not.
-   */
   async take(f) {
-    const id = f._[0] || die("usage: passalong take <id>");
-    const r = await passalong.ack(id, true).catch((e) => die(e.message));
-    console.error(`${r.id} — you are on it, and the author has been told`);
+    return commands.start(f);
   },
 
   async pass(f) {
@@ -608,9 +594,10 @@ const commands = {
     // Required, and the reason is the whole point: "not me" without "why" leaves the sender where
     // the silence did, still guessing whether to re-address it, wait, or go and ask.
     if (!why) die("say why you are passing: passalong pass <id> <why it is not yours>");
-    const r = await passalong.ack(id, false, why).catch((e) => die(e.message));
-    console.error(`${r.id} handed back — the author has been told: "${r.note}"`);
+    await passalong.pass(id, why).catch((e) => die(e.message));
+    console.error(`${id} handed back with your reason: "${why}"`);
   },
+
 
   async assign(f) {
     const id = f._[0] || die('usage: passalong assign <id> <@handle | #group | team>');
@@ -698,23 +685,6 @@ const commands = {
     const id = f._[0] || die("usage: passalong ungift <gift id>  (passalong gifts lists them)");
     await api.takeGiftBack(id).catch((e) => die(e.message));
     console.error(`${id} taken back — that plan is lapsed as of now`);
-  },
-
-  async works(f) {
-    const id = f._[0] || die("usage: passalong works <id> <screenshot.png...> [what you checked]");
-    const { images, note } = passalong.proofArgs(f._.slice(1));
-    const r = await passalong.verdict(id, true, note, { images }).catch((e) => die(e.message));
-    console.error(
-      `${r.id} verified with ${images.length || "your"} screenshot${images.length === 1 ? "" : "s"} — the author has been told`,
-    );
-  },
-
-  async broken(f) {
-    const id = f._[0] || die("usage: passalong broken <id> <what happened>");
-    const why = f._.slice(1).join(" ");
-    if (!why) die("say what went wrong: passalong broken <id> <what happened>");
-    const r = await passalong.verdict(id, false, why).catch((e) => die(e.message));
-    console.error(`${r.id} reported as not working — the author has been told: "${r.note}"`);
   },
 
   /**

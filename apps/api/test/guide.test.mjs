@@ -6,6 +6,7 @@ import {
   body,
   dropField,
   parseMeta,
+  publishProblem,
   SETTABLE,
   STATUSES,
   setField,
@@ -14,7 +15,6 @@ import {
   split,
   tag,
   tagList,
-  taskPublishProblem,
   unarchiveProblem,
   unreachableImages,
 } from "../src/guide.ts";
@@ -53,26 +53,20 @@ test("parseMeta mirrors the CLI parser for strings and lists", () => {
   });
 });
 
-test("a task enters the queue only after a separate Ready action", () => {
-  assert.match(taskPublishProblem("task", "published"), /must be Draft/);
-  assert.match(taskPublishProblem("task", "consumed"), /must be Draft/);
-  assert.match(taskPublishProblem("task", "published", "draft"), /separate action/);
-  assert.match(taskPublishProblem("task", "published", "consumed"), /separate action/);
-  assert.equal(taskPublishProblem("task", "draft"), "");
-  assert.equal(taskPublishProblem("task", "published", "published"), "");
-  assert.equal(taskPublishProblem("bug", "published"), "");
+test("every guide, of any kind, reaches anyone only after a separate Ready action", () => {
+  assert.match(publishProblem("published"), /must be Draft/);
+  assert.match(publishProblem("consumed"), /must be Draft/);
+  assert.match(publishProblem("published", "draft"), /separate action/);
+  assert.match(publishProblem("published", "consumed"), /separate action/);
+  assert.equal(publishProblem("draft"), "");
+  assert.equal(publishProblem("published", "published"), "", "a re-share keeps what it has");
 });
 
-test("an archived task comes back to Draft, never straight to agents", () => {
-  // Archived includes approved: back as Ready, finished work is the next agent's to do again.
-  assert.match(unarchiveProblem("task", "consumed", "published"), /back to Draft/);
-  assert.equal(unarchiveProblem("task", "consumed", "draft"), "");
-  assert.equal(
-    unarchiveProblem("task", "draft", "published"),
-    "",
-    "Ready from Draft is the way in",
-  );
-  assert.equal(unarchiveProblem("transfer", "consumed", "published"), "", "a handoff has no queue");
+test("an archived guide comes back to Draft, never straight to Ready", () => {
+  // Archived includes approved: back as Ready, finished work is somebody's to do again.
+  assert.match(unarchiveProblem("consumed", "published"), /back to Draft/);
+  assert.equal(unarchiveProblem("consumed", "draft"), "");
+  assert.equal(unarchiveProblem("draft", "published"), "", "Ready from Draft is the way in");
 });
 
 test("setField replaces an existing field in place", () => {
@@ -342,7 +336,7 @@ test("nothing a stranger does to your guide happens in silence", async () => {
   ])
     assert.match(block(`"${route}"`, 4000), calls, `${route} must tell the author`);
   for (const kind of [/kind: "reopened"/, /kind: "consumed"/]) {
-    const body = block('"/v1/guides/:id/status"');
+    const body = block('"/v1/guides/:id/status"', 7000);
     assert.match(body, /await notify\(c\.env/);
     assert.match(body, kind);
   }
