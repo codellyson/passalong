@@ -9,6 +9,7 @@ the action that caused it — and drops anything addressed to whoever caused it.
 - **One sentence.** `line()` in `notify.ts` is the only place wording lives; CLI, MCP, hub, toasts and
   push all print it.
 - **Actorless events.** `stalled` (a lease ran out), `shelved` (nobody opened it for a fortnight),
+  `still_draft` (a task untouched in Draft for a day, once per quiet day, feed only),
   `blocked` (an agent is stuck on you), and your own agent's `task_finished` are sent without an actor,
   so they reach you even when "you" caused them.
 - **Admin alerts.** Some kinds are for whoever runs Passalong, not the people using it: `alertAdmins()`

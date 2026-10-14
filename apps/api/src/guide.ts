@@ -41,6 +41,17 @@ export function taskPublishProblem(kind: string, status: string, previousStatus?
 export type Settable = (typeof SETTABLE)[number];
 
 /**
+ * An archived task comes back to Draft, never straight into the agent queue. Archived covers
+ * approved as well as shelved, so putting one back as Ready handed finished work to the next agent
+ * in that repo to do again. From Draft a person decides, with Ready, whether it is wanted.
+ */
+export function unarchiveProblem(kind: string, from: string, to: string): string {
+  if (kind === "task" && from === "consumed" && to === "published")
+    return "An archived task comes back to Draft, not straight to agents: set it to draft, then mark it Ready if it is still wanted.";
+  return "";
+}
+
+/**
  * The longest `summary:` a guide may carry. Mirrors SUMMARY_MAX in packages/passalong/src/guide.js,
  * which says why a guide has one: it is what a person reads, and the document is the agent's form.
  */

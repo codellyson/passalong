@@ -27,7 +27,12 @@ async function act(action: "archive" | "unarchive" | "delete") {
   if (!ids.length) return;
   busy.value = action;
   try {
-    await onBulk(ids, action, props.also);
+    await onBulk(
+      ids,
+      action,
+      props.also,
+      Object.fromEntries(list.value.map((p) => [p.id, p.kind])),
+    );
     confirming.value = false;
     clear();
   } finally {

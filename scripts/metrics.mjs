@@ -230,9 +230,8 @@ function report(read) {
       ` — ${pct(act.activated, act.shared)}`,
   );
   caveat(
-    "Undercounts. `passalong pull` serves a guide from the local store without calling the API\n" +
-      "    unless it carries a team, so pulling your own teamless guide in another repo — the v1\n" +
-      "    loop exactly — leaves no row to count.",
+    "Undercounts for CLIs before 2026-10-14, which served `passalong pull` from a local store\n" +
+      "    without calling the API unless the guide carried a team. Newer CLIs always call it.",
   );
 
   rule("Core health — transfers per active person, by week");

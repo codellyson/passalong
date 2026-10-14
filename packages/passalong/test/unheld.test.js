@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-// Isolated before the modules load: the store resolves its home once, and a real token would turn
-// these offline shares into writes against a live account.
+// Isolated before the modules load: the store resolves its home once, and shares go to a fake
+// server rather than a live account.
 const HOME = mkdtempSync(join(tmpdir(), "passalong-unheld-"));
 process.env.PASSALONG_HOME = HOME;
-delete process.env.PASSALONG_TOKEN;
+const { fakeServer } = await import("./fake-server.js");
+const server = fakeServer();
 const { share } = await import("../src/passalong.js");
 
 // The shape that found this: a design.md, whose tokens are nested maps in its frontmatter.
@@ -38,6 +39,7 @@ test("share refuses frontmatter it would empty, naming each field, and stores no
   );
   const stored = readdirSync(HOME, { recursive: true }).filter((f) => String(f).endsWith(".md"));
   assert.deepEqual(stored, []);
+  assert.equal(server.guides.size, 0, "and sends nothing");
 });
 
 test("the same content moved into the body shares, and keeps every line", async () => {

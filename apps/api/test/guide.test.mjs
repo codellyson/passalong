@@ -15,6 +15,7 @@ import {
   tag,
   tagList,
   taskPublishProblem,
+  unarchiveProblem,
   unreachableImages,
 } from "../src/guide.ts";
 
@@ -60,6 +61,18 @@ test("a task enters the queue only after a separate Ready action", () => {
   assert.equal(taskPublishProblem("task", "draft"), "");
   assert.equal(taskPublishProblem("task", "published", "published"), "");
   assert.equal(taskPublishProblem("bug", "published"), "");
+});
+
+test("an archived task comes back to Draft, never straight to agents", () => {
+  // Archived includes approved: back as Ready, finished work is the next agent's to do again.
+  assert.match(unarchiveProblem("task", "consumed", "published"), /back to Draft/);
+  assert.equal(unarchiveProblem("task", "consumed", "draft"), "");
+  assert.equal(
+    unarchiveProblem("task", "draft", "published"),
+    "",
+    "Ready from Draft is the way in",
+  );
+  assert.equal(unarchiveProblem("transfer", "consumed", "published"), "", "a handoff has no queue");
 });
 
 test("setField replaces an existing field in place", () => {

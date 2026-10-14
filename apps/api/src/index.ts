@@ -28,8 +28,9 @@
 //   POST   /v1/push/subscriptions      { endpoint, keys, label?, private? } turn push on for a device
 //   PATCH  /v1/push/subscriptions/:id  { private } · DELETE removes it · POST …/test sends a test
 //   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
-//   GET    /v1/guides/:id              guide as markdown (owner or team member); records a pull
+//   GET    /v1/guides/:id?peek=        guide as markdown (owner or team member); records a pull unless peek=1
 //   GET    /v1/guides/:id/context      everything around a guide, for the hub; records no pull
+//   GET    /v1/export?after=           every guide you can read, as markdown, a page at a time; no pull
 //   PATCH  /v1/guides/:id/status       { status }  owner: any; team member: consumed/published
 //   PUT    /v1/guides/:id/ack          { taken, note }  the reader's first word back
 //   PUT    /v1/guides/:id/verdict      { ok, note? } → does it actually work?
@@ -144,6 +145,7 @@ import {
   tag,
   tagList,
   taskPublishProblem,
+  unarchiveProblem,
   unheldFields,
   unreachableImages,
 } from "./guide.js";
@@ -4579,8 +4581,34 @@ async function recordReceipt(c: Ctx, row: GuideRow, via: string) {
 app.get("/v1/guides/:id", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
-  await recordPull(c, found.row, c.get("account"), "cli");
+  // `peek=1` reads without receiving: the CLI checks a guide's kind and status before `ready` or
+  // archiving it, and that is not anybody opening the work.
+  if (c.req.query("peek") !== "1") await recordPull(c, found.row, c.get("account"), "cli");
   return c.text(found.row.markdown, 200, { "content-type": "text/markdown; charset=utf-8" });
+});
+
+/**
+ * `passalong export`: every guide this account can read — its own, and its teams' — as the
+ * markdown stored now, a page at a time in id order, `next` naming where the following page
+ * starts. A signed-in CLI keeps no local copies, so this is what makes export a complete backup.
+ * It records no pull: a backup is not anybody opening the work, and a pull would tell its author
+ * it landed.
+ */
+const EXPORT_PAGE = 100;
+app.get("/v1/export", async (c) => {
+  const me = c.get("account");
+  const after = c.req.query("after") || "";
+  const { results } = await db(c)
+    .prepare(
+      `SELECT id, markdown FROM guide
+        WHERE (account_id = ?1 OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?1))
+          AND id > ?2
+        ORDER BY id LIMIT ?3`,
+    )
+    .bind(me, after, EXPORT_PAGE)
+    .all<{ id: string; markdown: string }>();
+  const next = results.length === EXPORT_PAGE ? (results.at(-1)?.id ?? "") : "";
+  return c.json({ guides: results, next });
 });
 
 /**
@@ -4876,6 +4904,8 @@ app.patch("/v1/guides/:id/status", async (c) => {
       403,
       "Only a task's author, or a team admin, archives it. To finish it, approve its hand-in.",
     );
+  const back = unarchiveProblem(found.row.kind, found.row.status, status);
+  if (back) return err(c, 409, back);
   // Moving an occupied task to Draft would hide it from the queue while its agent still held a
   // live claim. The author has Stop this agent for that transition.
   if (found.row.kind === "task" && status === "draft") {
@@ -4904,7 +4934,7 @@ app.patch("/v1/guides/:id/status", async (c) => {
   // Anything a person who is not the author does to a guide, its author hears about. Archiving
   // told them and un-archiving did not, which is the asymmetry that let a guide move on somebody
   // else's say-so in silence.
-  if (!found.owner && status === "published") {
+  if (!found.owner && found.row.status === "consumed" && status !== "consumed") {
     await notify(c.env, {
       to: found.row.account_id,
       kind: "reopened",

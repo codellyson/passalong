@@ -19,6 +19,7 @@ import {
   blockOn,
   checksProblem,
   closeGuide,
+  DRAFT_NUDGE_MS,
   deliver,
   dropOutside,
   evidenceProblem,
@@ -40,6 +41,7 @@ import {
   repoKey,
   STALE_SENT_MS,
   sendBackHandedIn,
+  staleDrafts,
   staleSent,
   stalled,
   stateOf,
@@ -804,6 +806,25 @@ test("a handoff's checks are held to the same rule as a task's", async () => {
   });
   assert.equal(failed.status, 400);
   assert.match(failed.error, /did not hold/);
+});
+
+test("a task left in Draft a day is returned once, in the run it crosses", async () => {
+  const db = d1();
+  const guide = seed(db);
+  const day = new Date(Date.parse(T0) - DRAFT_NUDGE_MS);
+  const at = (ms) => new Date(day.getTime() + ms).toISOString();
+  guide("forgot", { status: "draft", created: at(-60_000) });
+  guide("ready", { created: at(-60_000) });
+  guide("note", { status: "draft", kind: "transfer", created: at(-60_000) });
+  guide("fresh", { status: "draft", created: at(60_000) });
+  guide("older", { status: "draft", created: at(-3 * 60 * 60 * 1000) });
+
+  const window = await staleDrafts(db, day.toISOString(), at(-90 * 60 * 1000));
+  assert.deepEqual(
+    window.map((g) => g.id),
+    ["forgot"],
+    "only a draft task that crossed a day inside the window",
+  );
 });
 
 test("a sent guide nothing happened to is closed by the clock; one in play is not", async () => {

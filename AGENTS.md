@@ -60,7 +60,15 @@ change. Its README says how.
     a thread, under the title on rows, leading the guide page — and the document sits behind "Show
     details". The Work board's cards are the exception: a column of them is scanned by title, so
     they carry no summary and make room for more cards.
-  - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
+  - `src/store.js` — `~/.passalong` (`PASSALONG_HOME` overrides): config, accounts and drafts being
+    written. **No guide is kept on the machine unless somebody asks.** The server holds every guide
+    and is the only place one is read from: local copies used to be written by every share, pull and
+    take, and did nothing but go stale — a pull served one over the author's later edit — and pile
+    up, 314 on one machine. `pull`/`start --save` writes `.passalong/<id>.md` in the repo, and
+    `export` is the other explicit ask: it walks `GET /v1/export`, which records no pull, so it is a
+    complete backup. `ready` and archiving read with `?peek=1` for the same reason. `tidy()`
+    removes, once per machine, the old copies the server confirms it holds. Sharing needs an
+    account: an agent does not work without the network anyway.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
   - `src/mcp.js` — MCP tools. `buildServer()` builds the surface and `serve()` connects it over
     stdio, so `test/mcp-surface.test.js` can read what every tool tells a client. Each one carries
@@ -653,8 +661,8 @@ change. Its README says how.
   leaves it. Note which database: `--dev` reads the one Nitro manages under `.wrangler/state`, found
   by scanning rather than hardcoded because the file is named for the `database_id`. Two of the four
   metrics also cannot be computed as §14 originally worded them, and the script **prints the caveat
-  beside the number every run** — activation undercounts because `passalong pull` serves a local
-  copy without calling the API unless the guide has a team, and the quality proxy asked for
+  beside the number every run** — activation undercounts for CLIs older than 2026-10-14, whose
+  `pull` served a local copy without calling the API unless the guide had a team, and the quality proxy asked for
   `consumed`, which changed meaning. A report that quietly substitutes a near-miss is worse than
   one that says so.
 - **The hub is live, and the stream owns no table.** `GET /v1/events` (`src/events.ts`) is
@@ -700,8 +708,9 @@ change. Its README says how.
   `times`), and mail goes out only on the first occurrence. `notify()` never throws: a
   notification must not fail the action that caused it. `line()` in `notify.ts` is the single
   place the wording lives — CLI, MCP and hub all print the server's `text`.
-- **Local-first.** With no token every command works offline. Sync failures on `list` degrade to
-  a warning, never an error.
+- **Server-first.** Every guide lives on the server; with no token, sharing and reading by id
+  refuse with the login command. Nothing about a guide is written locally unless asked (`--save`,
+  `export`).
 - **CSP on the web view** (`default-src 'none'; style-src 'self'; font-src 'self'`) is what makes
   rendering owner markdown for other viewers safe. Don't loosen it to add scripts or inline
   styles; put styles in `public/styles.css`. `font-src` is same-origin only: fonts are served
@@ -782,7 +791,7 @@ ships scripts and inlines styles whatever the config says.
   else wrote and that CSP is the only thing making it safe — never relax it to add a feature.
   `passalong hub` passes the token in the URL fragment, which the page stores and scrubs on load.
 - A pulled guide carries its own **share URL** in the frontmatter, and that URL needs no account
-  to read. `pull` therefore drops a self-ignoring `.gitignore` (`*`) in `./.passalong/`: committing
+  to read. `pull --save` therefore drops a self-ignoring `.gitignore` (`*`) in `./.passalong/`: committing
   that directory would publish the guide to anyone who can see the repo. Don't "helpfully" remove it.
 - **An account is not the product; a team is.** Guides are only created by `share()`, which needs
   a session — the hub has no editor by design — so a self-serve account with no team has an empty

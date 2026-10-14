@@ -77,6 +77,13 @@ export const hubKeys = {
 type GuideList = { guides: Guide[] };
 type Notes = { notifications: Note[]; unread: number };
 
+/**
+ * Where an archived guide goes when it is put back. A task goes to Draft and never straight to
+ * agents — archived includes approved, and Ready would hand finished work out again — and the
+ * server refuses the other way (`unarchiveProblem`). Anything else is open again.
+ */
+const unarchivedAs = (kind?: string) => (kind === "task" ? "draft" : "published");
+
 function build(queryClient: QueryClient) {
   const token = useState<string | null>("hub:token", () => null);
   /** Set once the client has adopted its credential. Nothing is fetched before that, or on SSR. */
@@ -407,15 +414,13 @@ function build(queryClient: QueryClient) {
    * Archive a guide, or put it back. Archived is shelf space, not a judgement — and shelf space is
    * what the free plan counts, so this is how to make room without deleting anything.
    */
-  const onArchive = (g: Guide, archived: boolean) =>
-    change(() =>
-      api(
-        `/v1/guides/${g.id}/status`,
-        json("PATCH", { status: archived ? "consumed" : "published" }),
-      ), () => {
-      patchGuides(g.id, (x) => withStatus(x, archived ? "consumed" : "published"));
+  const onArchive = (g: Guide, archived: boolean) => {
+    const status = archived ? "consumed" : unarchivedAs(g.kind);
+    return change(() => api(`/v1/guides/${g.id}/status`, json("PATCH", { status })), () => {
+      patchGuides(g.id, (x) => withStatus(x, status));
       if (archived) patchBoardCache((b) => dropFromBoard(b, g.id));
     }, [hubKeys.allGuides, hubKeys.board, hubKeys.me]);
+  };
 
   const onRemove = (g: Guide) =>
     change(() => api(`/v1/guides/${g.id}`, { method: "DELETE" }), () => {
@@ -436,6 +441,7 @@ function build(queryClient: QueryClient) {
     ids: string[],
     action: "archive" | "unarchive" | "delete",
     also: QueryKey[] = [],
+    kinds: Record<string, string | undefined> = {},
   ): Promise<number> {
     error.value = null;
     const call = (id: string) =>
@@ -443,7 +449,9 @@ function build(queryClient: QueryClient) {
         ? api(`/v1/guides/${id}`, { method: "DELETE" })
         : api(
             `/v1/guides/${id}/status`,
-            json("PATCH", { status: action === "archive" ? "consumed" : "published" }),
+            json("PATCH", {
+              status: action === "archive" ? "consumed" : unarchivedAs(kinds[id]),
+            }),
           );
     const failed: string[] = [];
     for (let i = 0; i < ids.length; i += 4) {

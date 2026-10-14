@@ -8,6 +8,8 @@ import { test } from "node:test";
 // The store reads PASSALONG_HOME when it is first imported, so the modules that use it are
 // imported only after it points somewhere this test owns — never at the real ~/.passalong.
 process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-task-"));
+const { fakeServer } = await import("./fake-server.js");
+fakeServer();
 const { parse, serialize, template } = await import("../src/guide.js");
 const { taskScaffold } = await import("../src/capture.js");
 const passalong = await import("../src/passalong.js");
