@@ -121,10 +121,10 @@ const views = computed(() => [
 ]);
 
 /**
- * Where the answer buttons lead. This page runs no script, so it cannot hold a form: each button
- * is a link into the hub, which signs the visitor in if needed and asks the question there.
+ * Where taking it leads. This page runs no script, so it cannot hold a form: the button is a link
+ * to the guide in the hub, which signs the visitor in if needed and offers I'll do this there.
  */
-const answer = (what: string) => `/hub/answer/${encodeURIComponent(id.value)}?do=${what}`;
+const inHub = computed(() => `/hub/g/${encodeURIComponent(id.value)}`);
 const author = computed(() => str(meta.value?.author) || "the sender");
 /** Said to an agent, not typed into a form: this page runs no script, so it is shown to select. */
 const followUp = computed(() => followUpAsk(id.value));
@@ -486,12 +486,11 @@ usePage({
           <template v-else>
             <b class="block font-ui text-base text-fg">Was this sent to you?</b>
             <p class="mt-1 mb-0 font-ui text-sm text-muted">
-              Tell {{ author }} whether you're taking it. You'll be asked to sign in if you aren't.
+              Take it in the hub: {{ author }} sees you have it, and nobody else can take it while
+              you do. You'll be asked to sign in if you aren't.
             </p>
             <p class="mt-3 mb-0 flex flex-wrap items-center gap-2">
-              <a class="btn primary" :href="answer('take')">I'll do this</a>
-              <a class="btn" :href="answer('pass')">Not for me</a>
-              <a class="ml-1 font-ui text-sm" :href="answer('report')">Already on it? Say how it went</a>
+              <a class="btn primary" :href="inHub">I'll do this</a>
             </p>
           </template>
           <p class="mt-3 mb-0 font-ui text-sm text-muted">

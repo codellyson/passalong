@@ -21,8 +21,9 @@
 
   A card can be dragged to another column when that column means an act the card's own page
   offers: back to Draft, Stop this agent (To do, from In progress; asked first), Archive (Done) and
-  Unarchive (out of Done: a task to Draft, anything else to To do). Draft to To do asks which repo
-  the task is for (HubReadyPrompt), where it was dropped. While a card is dragged it fades where it
+  Unarchive (out of Done, to Draft), and Ready (Draft to To do), for every kind: a handoff or bug
+  has a task's states. Ready for a task asks which repo it is for (HubReadyPrompt), where it was
+  dropped. While a card is dragged it fades where it
   was, the columns it cannot go to fade, and a gap opens at the top of the one under it. A drop
   lands at once and is put back, with the hub's error, if the server refuses it. The same acts are
   in the right-click menu, which is the way there from a keyboard or a phone.
@@ -122,7 +123,7 @@ function age(g: Guide) {
 
 const { list: selected, has, toggle } = useSelection();
 const pick = (g: Guide) =>
-  toggle({ id: g.id, title: g.title || "", archived: g.status === "consumed", kind: g.kind });
+  toggle({ id: g.id, title: g.title || "", archived: g.status === "consumed" });
 
 /** The card whose quick actions are open, and where the pointer was. */
 const menu = ref<{ guide: Guide; x: number; y: number } | null>(null);
@@ -152,8 +153,10 @@ function moveTo(g: Guide, to: string): (() => Promise<boolean> | boolean) | null
   const from = g.stage;
   const task = g.kind === "task";
   if (from === to) return null;
-  if (task && from === "draft" && to === "todo") return () => false; // asked first: see drop()
-  if (task && from === "todo" && to === "draft" && !holding(g))
+  // Ready for a task asks which repo first (see drop()); anything else goes at once.
+  if (from === "draft" && to === "todo")
+    return task ? () => false : () => onTaskReady({ id: g.id } as Task);
+  if (from === "todo" && to === "draft" && !holding(g))
     return () => onTaskDraft({ id: g.id } as Task);
   if (from === "working" && to === "todo")
     return () =>
@@ -161,8 +164,8 @@ function moveTo(g: Guide, to: string): (() => Promise<boolean> | boolean) | null
       onTakeBack({ id: g.id } as Working);
   if (to === "done" && g.manage && from !== "review" && g.status !== "consumed")
     return () => (task ? onArchive(g, true) : onCloseGuide(g));
-  // Out of Done to where it comes back: a task to Draft, so nobody's agent redoes approved work.
-  if (from === "done" && to === (task ? "draft" : "todo") && g.manage && g.status === "consumed")
+  // Out of Done to Draft, so nobody redoes approved work without a person saying so.
+  if (from === "done" && to === "draft" && g.manage && g.status === "consumed")
     return () => onArchive(g, false);
   return null;
 }
@@ -231,7 +234,7 @@ function drop(col: string, e: DragEvent) {
   const act = g && moveTo(g, col);
   dragEnd();
   if (!g || !act) return;
-  if (g.stage === "draft" && col === "todo")
+  if (g.kind === "task" && g.stage === "draft" && col === "todo")
     readying.value = { guide: g, x: e.clientX, y: e.clientY };
   else place(g, col, act);
 }

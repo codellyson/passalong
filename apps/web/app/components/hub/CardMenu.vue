@@ -2,8 +2,8 @@
   A board card's quick actions, opened by right-clicking the card (or the context-menu key on it).
   The same acts as the guide's own page, worded the same way, and offered under the same rules:
   anyone in the team moves work and stops an agent, its author or a team admin (`manage`) archives
-  and deletes. Ready for agents… opens HubReadyPrompt where the menu was, because marking a task
-  Ready asks which repo it is for.
+  and deletes. Every kind has the same states, so the same acts. Ready for agents… on a task opens
+  HubReadyPrompt where the menu was, because marking a task Ready asks which repo it is for.
 
   Drawn at the pointer, fixed to the viewport and pulled back inside it, so it is never clipped by
   the board's sideways scroll. Escape, a click elsewhere, scrolling or picking an item closes it.
@@ -13,7 +13,7 @@ import type { Guide, Task, Working } from "~/types/hub";
 
 const props = defineProps<{ guide: Guide; x: number; y: number; canGive: boolean }>();
 const emit = defineEmits<{ close: []; give: []; ready: [] }>();
-const { onArchive, onCloseGuide, onRemove, onTaskDraft, onTakeBack } = useHub();
+const { onArchive, onCloseGuide, onRemove, onTaskDraft, onTaskReady, onTakeBack } = useHub();
 
 const g = computed(() => props.guide);
 const isTask = computed(() => g.value.kind === "task");
@@ -69,7 +69,9 @@ function remove() {
   if (!confirm(`Delete "${g.value.title}"? This cannot be undone.`)) return close();
   run(() => onRemove(g.value));
 }
+// A task asks which repo it is for first; anything else is Ready at once.
 function ready() {
+  if (!isTask.value) return run(() => onTaskReady({ id: g.value.id } as Task));
   emit("ready");
   close();
 }
@@ -98,14 +100,14 @@ function copyAndClose(text: string, e: Event) {
         <AppIcon name="open" />Open
       </NuxtLink>
       <button
-        v-if="isTask && g.stage === 'draft'"
+        v-if="g.stage === 'draft'"
         role="menuitem"
         class="menu-item"
         type="button"
         @click.stop="ready"
-      >Ready for agents…</button>
+      >{{ isTask ? "Ready for agents…" : "Ready" }}</button>
       <button
-        v-if="isTask && g.stage === 'todo'"
+        v-if="g.stage === 'todo' && !held"
         role="menuitem"
         class="menu-item"
         type="button"
@@ -128,7 +130,7 @@ function copyAndClose(text: string, e: Event) {
       <template v-if="g.manage">
         <div class="menu-rule" role="separator" />
         <button v-if="!archived" role="menuitem" class="menu-item" type="button" @click="archive">Archive</button>
-        <button v-else role="menuitem" class="menu-item" type="button" @click="unarchive">{{ isTask ? "Unarchive to Draft" : "Unarchive" }}</button>
+        <button v-else role="menuitem" class="menu-item" type="button" @click="unarchive">Unarchive to Draft</button>
         <button role="menuitem" class="menu-item destructive" type="button" @click="remove">Delete</button>
       </template>
     </div>

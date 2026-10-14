@@ -49,13 +49,13 @@ const handIn = async () => {
 </script>
 
 <template>
-  <section v-if="canTake || held" class="rounded-3 bg-raised p-4 shadow-edge" aria-label="Task work">
+  <section v-if="canTake || held" class="rounded-3 bg-raised p-4 shadow-edge" aria-label="Your work on this">
     <div v-if="canTake" class="flex flex-wrap items-center justify-between gap-3">
-      <p class="m-0 font-ui text-sm text-muted">You can take this task and keep its progress here.</p>
-      <button class="btn primary" type="button" :disabled="busy" @click="take">{{ busy ? "Taking…" : "Take task" }}</button>
+      <p class="m-0 font-ui text-sm text-muted">Take it to work on it yourself: nobody else can take it while you hold it.</p>
+      <button class="btn primary" type="button" :disabled="busy" @click="take">{{ busy ? "Taking…" : "I'll do this" }}</button>
     </div>
     <template v-else-if="held">
-      <h2 class="m-0 font-ui text-sm font-semibold text-fg">You’re working on this task</h2>
+      <h2 class="m-0 font-ui text-sm font-semibold text-fg">You’re working on this</h2>
       <form class="mt-3 flex flex-col gap-3" @submit.prevent="update">
         <label class="flex flex-col gap-2 font-ui text-sm">
           Progress update

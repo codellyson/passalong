@@ -3,13 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HttpError, SignedOut, shouldRetry } from "../app/utils/http.ts";
-import {
-  dropFromBoard,
-  patchBoard,
-  withAck,
-  withStatus,
-  withVerdict,
-} from "../app/utils/optimistic.ts";
+import { dropFromBoard, withStatus } from "../app/utils/optimistic.ts";
 
 const guide = (id, over = {}) => ({ id, mine: false, status: "published", ...over });
 const board = () => ({
@@ -17,12 +11,6 @@ const board = () => ({
   failing: [],
   in_flight: [guide("c", { mine: true })],
   landed: [],
-});
-
-test("taking a guide writes your answer onto it, and nothing else", () => {
-  const b = patchBoard(board(), "a", (g) => withAck(g, true, "", "now"));
-  assert.deepEqual(b.waiting[0].my_ack, { taken: true, note: "", at: "now" });
-  assert.equal(b.waiting[1].my_ack, undefined, "the other guide is untouched");
 });
 
 test("passing, answering or deleting takes a guide off the board", () => {
@@ -34,9 +22,7 @@ test("passing, answering or deleting takes a guide off the board", () => {
   assert.equal(b.in_flight.length, 1);
 });
 
-test("a verdict and an archive are what the list would say once the server agrees", () => {
-  const judged = withVerdict(guide("a"), false, "flag missing", "ada", "Ada");
-  assert.deepEqual(judged.verdict, { ok: false, note: "flag missing", by: "ada", by_name: "Ada" });
+test("an archive is what the list would say once the server agrees", () => {
   assert.equal(withStatus(guide("a"), "consumed").status, "consumed");
 });
 
