@@ -139,7 +139,6 @@ const shown = computed(
                 <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
               </span>
               <span class="line-clamp-2 font-ui text-sm font-medium text-pretty">{{ g.title || "Untitled guide" }}</span>
-              <span v-if="g.summary" class="line-clamp-1 font-ui text-xs text-muted">{{ g.summary }}</span>
             </NuxtLink>
             <!-- The footer sits beside the link, not inside it: a button inside an <a> is invalid
                  and would open the page. -->
