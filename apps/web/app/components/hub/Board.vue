@@ -11,8 +11,7 @@
   Who a card is for is its footer's right-hand line, and that line is the "Give to…" control: the
   answer and the way to change it are one thing, and a separate button made every card a row taller.
   Who has it is the same line's left side: a dot for how the hold is doing (`health`, from the
-  server), their name, ⚡ when an agent holds it, and a word only when somebody should look. The age at the top is since anything last happened to it. Cards about you carry a coral
-  mark on their left edge; Done is faded.
+  server), their name, ⚡ when an agent holds it, and a word only when somebody should look. The age at the top is since anything last happened to it. Done is faded.
 
   The round dot at a card's top-left selects it for the bar that archives or deletes several at
   once (HubBulkBar, on the page). It shows on hover and focus, and stays once anything is
@@ -32,7 +31,7 @@
   header that stays put, so the whole lane is somewhere to drop and nothing ends half-way down.
 -->
 <script setup lang="ts">
-import { aboutMe, type STAGES } from "~/composables/useWorkLists";
+import type { STAGES } from "~/composables/useWorkLists";
 import type { Guide, Task, Working } from "~/types/hub";
 
 const props = defineProps<{
@@ -313,7 +312,7 @@ const shown = computed(
           <li
             v-for="g in col.id === 'done' ? col.cards.slice(0, DONE_SHOWN) : col.cards"
             :key="g.id"
-            class="group relative flex shrink-0 flex-col rounded-2 bg-raised shadow-edge"
+            class="group relative flex shrink-0 flex-col rounded-2 bg-raised shadow-edge transition-transform has-[a:active]:scale-[0.96]"
             :class="[
               dragging?.id === g.id ? 'opacity-40' : col.id === 'done' ? 'opacity-70' : '',
               has(g.id) ? 'ring-2 ring-[var(--accent)]' : '',
@@ -323,50 +322,37 @@ const shown = computed(
             @dragend="dragEnd"
             @contextmenu.prevent="openMenu(g, $event)"
           >
-            <!-- Beside the link, not in it: a control inside an <a> would open the page. -->
-            <input
-              v-if="g.manage"
-              type="checkbox"
-              class="absolute top-2 left-3 z-10 size-4 cursor-pointer appearance-none rounded-pill border border-line-strong bg-field transition-opacity checked:border-[var(--accent)] checked:bg-[var(--accent)] checked:shadow-[inset_0_0_0_3px_var(--field)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-              :class="selected.length ? 'opacity-100' : 'opacity-0'"
-              :checked="has(g.id)"
-              :aria-label="`Select ${g.title || 'this guide'}`"
-              @change="pick(g)"
-            >
-            <!-- About you: a coral mark, the one place coral is used here — never a fill. -->
-            <span
-              v-if="aboutMe(g)"
-              aria-hidden="true"
-              class="absolute inset-y-2 left-0 w-0.5 rounded-pill bg-[var(--coral)]"
-            />
+            <!-- The top row: the select dot, the badges and the age, in one line so the dot sits on
+                 the badges' centre. Outside the link, because a control inside an <a> would open
+                 the page; the link below stretches over the whole card instead. -->
+            <div class="flex items-center gap-2 px-3 pt-2">
+              <!-- No room taken while hidden, so a card at rest starts at its badge. -->
+              <input
+                v-if="g.manage"
+                type="checkbox"
+                class="relative z-10 my-0 ml-0 -mr-2 h-4 w-0 shrink-0 cursor-pointer appearance-none rounded-pill border-0 border-line-strong bg-field opacity-0 transition-[width,margin,opacity] duration-150 checked:border-[var(--accent)] checked:bg-[var(--accent)] checked:shadow-[inset_0_0_0_3px_var(--field)] focus-visible:mr-0 focus-visible:w-4 focus-visible:border focus-visible:opacity-100 group-hover:mr-0 group-hover:w-4 group-hover:border group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:mr-0 [@media(hover:none)]:w-4 [@media(hover:none)]:border [@media(hover:none)]:opacity-100"
+                :class="selected.length ? '!mr-0 !w-4 !border !opacity-100' : ''"
+                :checked="has(g.id)"
+                :aria-label="`Select ${g.title || 'this guide'}`"
+                @change="pick(g)"
+              >
+              <span
+                v-if="kindBadge(g.kind)"
+                class="rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase"
+                :class="kindBadge(g.kind)!.class"
+              >{{ kindBadge(g.kind)!.label }}</span>
+              <span
+                v-if="g.can_review"
+                class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold text-accent"
+              >Your review</span>
+              <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
+            </div>
+            <!-- The title is the link, and its ::after covers the card, so anywhere on the card
+                 opens it; the dot and the footer's control sit above that layer. -->
             <NuxtLink
               :to="`/hub/g/${g.id}`"
-              class="flex flex-col gap-2 rounded-2 px-3 pt-2 pb-1 text-fg no-underline transition-transform active:scale-[0.96]"
-            >
-              <!-- Room for the dot only while it shows, so a card at rest has no gap at its start. -->
-              <span
-                class="flex flex-wrap items-center gap-2 transition-[padding] duration-150 motion-reduce:transition-none"
-                :class="
-                  !g.manage
-                    ? ''
-                    : selected.length
-                      ? 'pl-6'
-                      : 'group-focus-within:pl-6 group-hover:pl-6 [@media(hover:none)]:pl-6'
-                "
-              >
-                <span
-                  v-if="kindBadge(g.kind)"
-                  class="rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase"
-                  :class="kindBadge(g.kind)!.class"
-                >{{ kindBadge(g.kind)!.label }}</span>
-                <span
-                  v-if="g.can_review"
-                  class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold text-accent"
-                >Your review</span>
-                <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
-              </span>
-              <span class="line-clamp-2 font-ui text-sm font-medium text-pretty">{{ g.title || "Untitled guide" }}</span>
-            </NuxtLink>
+              class="line-clamp-2 px-3 pt-2 pb-1 font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 focus-visible:after:outline-2 focus-visible:after:outline-[var(--accent)] focus-visible:after:outline-solid"
+            >{{ g.title || "Untitled guide" }}</NuxtLink>
             <!-- The footer sits beside the link, not inside it: a button inside an <a> is invalid
                  and would open the page. -->
             <div class="flex items-center gap-2 px-3 pb-2 font-ui text-xs text-muted">
@@ -392,7 +378,7 @@ const shown = computed(
               <button
                 v-if="canGive(g)"
                 type="button"
-                class="ml-auto flex min-w-0 cursor-pointer items-center gap-0.5 rounded-1 border-0 bg-transparent p-0 font-ui text-xs text-muted hover:text-fg"
+                class="relative z-10 ml-auto flex min-w-0 cursor-pointer items-center gap-0.5 rounded-1 border-0 bg-transparent p-0 font-ui text-xs text-muted hover:text-fg"
                 :aria-expanded="giving === g.id"
                 :aria-label="`For ${address(g)}. Give it to someone else`"
                 @click.stop="giveFrom(g.id, $event)"
