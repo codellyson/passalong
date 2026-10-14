@@ -78,7 +78,7 @@ type Tab = (typeof TABS)[number]["id"];
 function tabOf(anchor: string): Tab {
   if (anchor === "plan") return "plan";
   if (anchor.startsWith("team-") || anchor === "new-team") return "teams";
-  if (["apps", "tokens", "alerts"].includes(anchor)) return "connections";
+  if (["apps", "tokens", "email-in"].includes(anchor)) return "connections";
   return "account";
 }
 
@@ -270,15 +270,15 @@ const noteTone: Record<string, string> = {
             <HubTokens />
           </section>
 
-          <section id="alerts" :class="sec" aria-labelledby="alerts-h">
+          <section id="email-in" :class="sec" aria-labelledby="email-in-h">
             <div :class="secHead">
-              <h3 id="alerts-h" :class="title">Alerts by email</h3>
+              <h3 id="email-in-h" :class="title">Email in</h3>
               <p :class="blurb">
-                An address for your error alerts. Each alert becomes a Draft task; mark it Ready and an
-                agent can take it.
+                Email one of these addresses and it becomes a guide: a task, a bug or a transfer.
+                Tasks wait as Drafts until you mark them Ready.
               </p>
             </div>
-            <HubAlertInbox />
+            <HubEmailIn />
           </section>
         </div>
       </div>

@@ -15,28 +15,35 @@ the action that caused it — and drops anything addressed to whoever caused it.
   in `alerts.ts` sends them to every super admin's feed and mails the first one. `ADMIN_ALERTS` lists
   them (today `signed_up`); adding one is a kind, its sentence, an entry there and a call.
 
-## Alerts by email
+## Email in
 
-Mail can also come **in**. An account gets an address from Settings (`POST /v1/inbound`,
-migration 0051) and adds it to whatever sends its alerts: a tool's notification settings, a BCC in
-its own backend, or a Gmail forward. Email Routing sends `INBOUND_DOMAIN` to the Worker, and
-`receiveEmail()` in `index.ts` (helpers in `inbound.ts`, hook in
-`apps/web/server/plugins/inbound.ts`) applies three rules, because the email is a stranger's text
-that an agent will read:
-- The address picks the account and nothing else. A sender's first message makes no task: it
-  becomes a pending `inbound_sender` and an `alert_sender` notification asking you to Allow or
-  Block it. The account's own verified email is allowed from the start.
-- An allowed sender's alert is published through `PUT /v1/guides/:id` as the account, written by
-  `email`, as a **Draft task**. It reaches an agent only after a person marks it Ready. The email
-  sits in a fence, labelled as evidence and not as instructions. You get an `alert` notification.
-  The address can name a repo (`inbound.target`, `PATCH /v1/inbound`). It becomes the task's
-  `target_context`, so an agent working in that repo takes the task with no id once it is Ready.
-  Without one, a no-id `take` never offers it, since that only matches tasks for the agent's own repo.
-- A repeat (same sender, same subject with its numbers taken out, task not archived) adds to
-  `inbound_alert.times` and leaves at most one note an hour on the task's thread.
+Mail can also come **in** and become a guide of any kind. An account gets one key from Settings
+(`POST /v1/inbound`, migration 0051), shown as three addresses: `key+task@`, `key+bug@`,
+`key+transfer@`. The kind is in the address because a guide's kind is always stated, never
+guessed: whoever picks the address states it, and mail to the bare `key@` is dropped. The
+addresses go wherever work comes from: a tool's notification settings, a BCC in the account's
+own backend, a Gmail forward.
+
+Email Routing sends `INBOUND_DOMAIN` to the Worker, and `receiveEmail()` in `index.ts` (helpers
+in `inbound.ts`, hook in `apps/web/server/plugins/inbound.ts`) applies three rules, because the
+email is a stranger's text that an agent will read:
+- **The address picks the account and the kind, nothing else.** A sender's first message makes no
+  guide: it becomes a pending `inbound_sender` row and an `email_sender` notification asking you to
+  Allow or Block it. The account's own verified email is allowed from the start.
+- **An allowed sender's email is published through `PUT /v1/guides/:id`** as the account, written
+  by `email`, in its kind's sections. The email sits in a fence, labelled as evidence and not as
+  instructions. A task is a **Draft** and reaches an agent only after a person marks it Ready; a
+  bug or transfer is published. You get an `emailed` notification.
+- **A task or bug that comes again** (same kind, same sender, same subject with its numbers taken
+  out, guide not archived) adds to `inbound_guide.times`, and leaves at most one note an hour on
+  the guide's thread. A transfer never merges.
+
+The key can name a repo (`inbound.target`, `PATCH /v1/inbound`). It becomes a task's
+`target_context`, so an agent working in that repo takes it with no id once it is Ready. Without
+one, a no-id `take` never offers it, because that only matches tasks for the agent's own repo.
 
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings
-says the feature is not set up.
+says Email in is not set up.
 
 ## Channels
 

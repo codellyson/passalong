@@ -12,10 +12,10 @@ const notifySrc = readFileSync(new URL("../src/notify.ts", import.meta.url), "ut
 
 test("only what needs you is pushed; the rest stays in the feed and the toasts", () => {
   assert.deepEqual([...PUSHED].sort(), [
-    "alert",
-    "alert_sender",
     "asked",
     "blocked",
+    "email_sender",
+    "emailed",
     "failed",
     "handoff",
     "sent_back",
