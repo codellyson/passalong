@@ -86,7 +86,11 @@
     "EMAIL_FROM": "no-reply@passalong.dev",
     // How the sender reads in an inbox list. Without it Gmail shows the local part, so every mail
     // arrived from "no-reply" — the one thing the sender cannot do, rather than who it is.
-    "EMAIL_FROM_NAME": "Passalong"
+    "EMAIL_FROM_NAME": "Passalong",
+    // Email in (apps/api/src/inbound.ts): mail to <key>+task|bug|transfer@ this domain becomes a
+    // guide. Email Routing on the subdomain must send it to this Worker (a catch-all rule, "Send to
+    // a Worker"); until it does, Settings shows the addresses and mail to them bounces.
+    "INBOUND_DOMAIN": "in.passalong.dev"
   },
 
   // Three hosts, moved here from apps/api at the cutover. `passalong.dev` is canonical.
