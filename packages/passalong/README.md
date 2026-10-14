@@ -29,11 +29,11 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 
 ```
 passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
-passalong pull <id|link>      fetch a guide into ./.passalong/ (git-ignored) and print it
+passalong pull <id|link>      print a guide; --save also writes ./.passalong/<id>.md (git-ignored)
 passalong inbox               guides handed to you that you have not pulled yet
 passalong board               waiting on you, in flight, landed, worth keeping
 passalong activity [--all]    what happened while you were away; clears unless --all
-passalong list [query]        your guides and your teams', local and synced
+passalong list [query]        your guides and your teams'
 passalong open <id> [--print] view a guide in the browser (or the terminal)
 passalong hub                 open your synced guides in the browser
 passalong works <id> <shot>   you tried it and it holds up, with a screenshot of it working
@@ -103,10 +103,10 @@ promote them into the team's small set of maintained references.
 
 Tools: `search_guides`, `inbox`, `get_guide`, `publish_guide` (with `to`), `guide_template`, `set_guide_status`.
 
-## Guides are files
+## Guides are plain markdown
 
-Plain markdown with frontmatter in `~/.passalong/guides`. Yours to edit, grep, and commit.
-`passalong export` dumps everything. Works with no account; `passalong login` adds sync and share links.
+Plain markdown with frontmatter, held on the server; nothing piles up on your machine. Ask for a
+file when you want one: `passalong pull <id> --save`, or `passalong export` for every guide.
 
 Point at a self-hosted server with `PASSALONG_API=https://your-host` before `passalong login`.
 

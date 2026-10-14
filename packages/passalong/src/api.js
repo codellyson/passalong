@@ -379,7 +379,10 @@ export const inbox = () => call("/v1/inbox");
 export const createReport = (body) => call("/v1/reports", { method: "POST", body });
 /** One report and the issues filed under it, grouped by product area. */
 export const report = (id) => call(`/v1/reports/${encodeURIComponent(id)}`);
-export const get = (id) => call(`/v1/guides/${id}`, { raw: true });
+export const get = (id, { peek = false } = {}) =>
+  call(`/v1/guides/${id}${q({ peek: peek ? "1" : "" })}`, { raw: true });
+/** One page of every guide this account can read, for `export`. Records no pull. */
+export const exportPage = (after = "") => call(`/v1/export${q({ after })}`);
 /**
  * A guide's follow-ups, one level down. `markdown` adds each one's content, oldest first and
  * capped server-side; neither form counts as opening them.

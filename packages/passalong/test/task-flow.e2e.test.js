@@ -1228,8 +1228,8 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
   const { dir } = await readyTask(env, "Verbs on a task");
 
   // No id: the next thing waiting in this repo — oldest first, so maybe a task an earlier test
-  // left ready. The document lands where a pull would put it.
-  const took = await p.take(undefined, { cwd: dir });
+  // left ready. The document comes back in the answer; asked to, it is saved where a pull would.
+  const took = await p.take(undefined, { cwd: dir, save: true });
   const id = took.guide.id;
   assert.equal(took.guide.kind, "task");
   assert.match(readFileSync(took.path, "utf8"), new RegExp(took.guide.title));

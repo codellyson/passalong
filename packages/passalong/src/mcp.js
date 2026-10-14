@@ -419,15 +419,6 @@ export function buildServer() {
   async function doTake({ id, cwd, any }) {
     const dir = cwd || process.cwd();
     try {
-      // Without sync there is no claim to make; a guide by id can still be read and worked from.
-      if (!api.loggedIn() && id) {
-        const r = await passalong.pull(id, { cwd: dir });
-        return text(
-          `${leadFor(parse(r.markdown).meta)}${r.markdown}\n\n<!-- passalong: not logged in, so ` +
-            "nobody was told you took it; written to " +
-            `${r.path} -->`,
-        );
-      }
       const r = await passalong.take(id, { cwd: dir, any: Boolean(any) });
       if (!r.guide) return text(nextNote(r) || "Nothing is waiting for this agent here.");
       const meta = parse(r.guide.markdown).meta;
@@ -436,8 +427,7 @@ export function buildServer() {
       const from = await passalong.parentGuide(meta);
       const held =
         `<!-- passalong: ${r.guide.id} is yours` +
-        `${r.guide.resumed ? " (you already held it — carry on from where it was left)" : ""}; ` +
-        `written to ${r.path}. -->`;
+        `${r.guide.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->`;
       const said = repliesNote(r.replies);
       return text(
         `${said ? `${said}\n\n` : ""}${from}${leadFor(meta)}${r.guide.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
@@ -907,7 +897,7 @@ export function buildServer() {
       annotations: READS,
       description:
         "Search transfer guides by words in the title, tags, stack, or body: the user's own " +
-        "(local and synced) plus every team they belong to. Empty query lists everything, newest first.",
+        "plus every team they belong to. Empty query lists everything, newest first.",
       inputSchema: {
         query: z.string().default(""),
         scope: z.string().optional().describe('"mine", "all" (default), or a team slug'),
@@ -916,7 +906,7 @@ export function buildServer() {
     async ({ query, scope }) => {
       try {
         const rows = await passalong.list(query, { scope: scope || "" });
-        return json({ guides: rows, warning: rows.warning });
+        return json({ guides: rows });
       } catch (err) {
         return fail(err);
       }
@@ -1343,18 +1333,13 @@ export function buildServer() {
       description:
         "READ a transfer guide by passalong id or share link and return its markdown. A guide over " +
         "20,000 characters comes back as an outline (its headings and their sizes) unless you ask " +
-        "for `section`, for one part, or `full`, for all of it. Also " +
-        "writes it to .passalong/<id>.md in the working directory so it survives the session. " +
+        "for `section`, for one part, or `full`, for all of it. Nothing is written to disk. " +
         "Pulling a teammate's guide tells them the transfer landed. Use this to look at a guide " +
         "you have not committed to. If you are about to DO the work, call take instead: " +
         "it does this and takes it in one call, which is the only way the sender learns " +
         "somebody picked it up.",
       inputSchema: {
         ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
-        cwd: z
-          .string()
-          .optional()
-          .describe("directory to write .passalong/<id>.md into; default is the server's cwd"),
         section: z
           .string()
           .optional()
@@ -1369,23 +1354,23 @@ export function buildServer() {
           .describe("the whole document, even one over 20,000 characters"),
       },
     },
-    async ({ ref, cwd, section, outline, full }) => {
+    async ({ ref, section, outline, full }) => {
       try {
-        const { markdown, path, from } = await passalong.pull(ref, { cwd: cwd || process.cwd() });
+        const { markdown, from } = await passalong.pull(ref);
         const meta = parse(markdown).meta;
         if (section) {
           const part = sectionOf(markdown, section);
           if (!part)
             return text(
-              `No heading matching "${section}".\n\n${outlineText(markdown, { id: meta.id || ref, path })}`,
+              `No heading matching "${section}".\n\n${outlineText(markdown, { id: meta.id || ref })}`,
             );
           return text(
-            `${part.text}\n\n<!-- passalong: ${meta.id || ref}, "${part.heading}" only; the whole guide is at ${path} -->`,
+            `${part.text}\n\n<!-- passalong: ${meta.id || ref}, "${part.heading}" only; ask with full: true for the whole guide -->`,
           );
         }
         if (outline || (!full && markdown.length > GUIDE_WARN))
           return text(
-            `${outlineText(markdown, { id: meta.id || ref, path })}\n\n<!-- passalong: ${from}; written to ${path} -->`,
+            `${outlineText(markdown, { id: meta.id || ref })}\n\n<!-- passalong: ${from} -->`,
           );
         const lead = leadFor(meta);
         const siblings = await related(meta);
@@ -1402,7 +1387,7 @@ export function buildServer() {
         // warning against executing the document, so being read first is its whole job.
         return text(
           `${follows}${lead}${markdown}${siblings}${context ? `\n\n${context}` : ""}` +
-            `\n\n<!-- passalong: ${from}; written to ${path} -->` +
+            `\n\n<!-- passalong: ${from} -->` +
             `\n${passalong.handoffNudge(meta)}` +
             `\n${passalong.followUpNote(meta)}`,
         );
@@ -1572,7 +1557,7 @@ export function buildServer() {
     },
     async ({ markdown, to, cwd, parent }) => {
       try {
-        const { guide, url, synced, notified, path } = await passalong.share(markdown, {
+        const { guide, url, synced, notified } = await passalong.share(markdown, {
           cwd: cwd || process.cwd(),
           to,
           follows: parent,
@@ -1586,7 +1571,6 @@ export function buildServer() {
           to: guide.meta.to || "",
           parent: guide.meta.parent || "",
           notified,
-          path,
           ...(sizeWarning(markdown.length) ? { warning: sizeWarning(markdown.length) } : {}),
           // A task does not go live on publish, and an agent that reports "queued it" has told
           // the user something untrue. Said in the result so it is said to them.
@@ -1800,5 +1784,6 @@ export function buildServer() {
 
 /** The stdio server: `passalong mcp`, and what `passalong setup` registers with a client. */
 export async function serve() {
+  passalong.tidy().catch(() => {});
   await buildServer().connect(new StdioServerTransport());
 }

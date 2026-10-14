@@ -103,7 +103,7 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 
 - `passalong share [file] [--to team[/handle]]` — publish a guide, get an id and a link
 - `passalong start <id|link>` — pull it and take it: one command for "I am doing this"
-- `passalong pull <id|link>` — fetch a guide into `./.passalong/` and print it, without answering for it
+- `passalong pull <id|link>` — print a guide without answering for it; `--save` also writes `./.passalong/<id>.md`
 - `passalong inbox` — guides handed to you that you have not pulled
 - `passalong board` — waiting on you, in flight, landed, worth keeping
 - `passalong activity [--all]` — what happened while you were away
@@ -317,7 +317,7 @@ the JSON it prints has `markdown`, the line to put in the guide body or pass as 
 bytes go straight to Passalong and never through the conversation, so never base64 an image into a
 tool call. If the command cannot reach `passalong.dev`, the sandbox's network settings are blocking
 it, and the user has to allow that domain for code execution. A local server is
-still better where you can run one: it works offline and knows which repo you are in.
+still better where you can run one: it knows which repo you are in.
 
 Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for
 function calling or a script, and a share link's `.md` needs no account at all.

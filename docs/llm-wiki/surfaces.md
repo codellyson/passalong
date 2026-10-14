@@ -5,8 +5,9 @@ in only two of them is one a third of users cannot send.
 
 ## CLI — `packages/passalong`
 
-Published to npm as `passalong`. Plain ESM, few flags on purpose, works offline against a local store
-at `~/.passalong` (sync is additive; failures degrade to a warning). Prints the guide id on stdout and
+Published to npm as `passalong`. Plain ESM, few flags on purpose. Guides live on the server and the
+CLI keeps no copy of one unless asked: `pull --save` writes `.passalong/<id>.md`, and `export` walks
+`GET /v1/export`. Sharing needs an account. `tidy()` clears copies older CLIs left, once per machine. Prints the guide id on stdout and
 everything else on stderr, so `ID=$(passalong share draft.md)` works.
 
 - `share`, `pull`, `take`, `pass`, `works`, `broken`, `done`, `task`, `ready`, `work`, `attach`,
