@@ -30,6 +30,7 @@ const {
   onCloseGuide,
   onRecall,
   onArchive,
+  onRemove,
   onTaskReady,
   onTaskDraft,
   data: hub,
@@ -205,7 +206,26 @@ function sendBack(k: ContextClaim, e: Event) {
 }
 
 const takeBack = () => run("release", () => onTakeBack({ id: id.value } as Working));
-const close = () => run("close", async () => g.value && (await onCloseGuide(g.value as Guide)));
+// `/close` is for handoffs and bugs only; a task is archived through its status, author or admin.
+const close = () =>
+  run(
+    "close",
+    async () =>
+      g.value &&
+      (await (isTask.value
+        ? onArchive(g.value as Guide, true)
+        : onCloseGuide(g.value as Guide))),
+  );
+/** Gone for good, with its screenshots and files: asked first, then back to the board. */
+async function remove() {
+  if (busy.value || !g.value || !confirm(`Delete "${g.value.title}"? This cannot be undone.`)) return;
+  busy.value = "delete";
+  try {
+    if (await onRemove(g.value as Guide)) await navigateTo("/hub/work");
+  } finally {
+    busy.value = "";
+  }
+}
 const recall = () => run("recall", async () => g.value && (await onRecall(g.value as Guide)));
 /** Sent to somebody, still unanswered, with nobody on it: the one moment taking it back makes sense. */
 const recallable = computed(
@@ -364,8 +384,22 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             :disabled="Boolean(busy)"
             @click="reopen"
           >{{ busy === "reopen" ? "Unarchiving…" : "Unarchive" }}</button>
+          <button
+            v-if="mayArchive"
+            class="btn outline danger"
+            type="button"
+            :disabled="Boolean(busy)"
+            @click="remove"
+          >{{ busy === "delete" ? "Deleting…" : "Delete" }}</button>
           <button class="btn" type="button" @click="copy(g.url, $event.currentTarget)">
             <AppIcon name="copy" /><span data-label>Copy share link</span>
+          </button>
+          <button
+            class="btn"
+            type="button"
+            @click="copy(`passalong pull ${g.url}`, $event.currentTarget)"
+          >
+            <AppIcon name="copy" /><span data-label>Copy pull command</span>
           </button>
           <a class="btn" :href="g.url" target="_blank" rel="noopener">
             <AppIcon name="open" />Open share page
