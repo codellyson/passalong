@@ -24,7 +24,6 @@ const state = ref<{
   available: boolean;
   addresses: Record<Kind, string> | null;
   hooks: Record<Kind, string> | null;
-  target: string;
   senders: Sender[];
 } | null>(null);
 
@@ -66,9 +65,6 @@ async function run(what: string, fn: () => Promise<unknown>) {
   }
 }
 
-/** Read through the form on submit: the input is prefilled, so it stays uncontrolled. */
-const saveTarget = (form: HTMLFormElement) =>
-  run("target", () => api("/v1/inbound", json("PATCH", { target: field(form, "target") })));
 const make = () => run("make", () => api("/v1/inbound", json("POST")));
 const off = () => run("off", () => api("/v1/inbound", { method: "DELETE" }));
 const decide = (s: Sender, to: "allowed" | "blocked") =>
@@ -77,10 +73,10 @@ const decide = (s: Sender, to: "allowed" | "blocked") =>
   );
 
 const choices = [
-  { id: "email", label: "Email" },
-  { id: "sentry", label: "Sentry" },
-  { id: "posthog", label: "PostHog" },
-  { id: "code", label: "Your own code" },
+  { id: "email", label: "Email", mark: "gmail" },
+  { id: "sentry", label: "Sentry", mark: "sentry" },
+  { id: "posthog", label: "PostHog", mark: "posthog" },
+  { id: "code", label: "Your own code", mark: "script" },
 ] as const;
 </script>
 
@@ -111,6 +107,7 @@ const choices = [
               :class="source === c.id ? 'primary' : ''"
             >
               <input v-model="source" class="sr-only" type="radio" name="work-source" :value="c.id" />
+              <AppMark :name="c.mark" :size="14" />
               {{ c.label }}
             </label>
           </div>
@@ -154,7 +151,8 @@ const choices = [
             </li>
             <li>
               Repeats of one Sentry issue stay one guide; resolved, assigned and other updates are
-              ignored.
+              ignored. For a task URL, add <code>?repo=owner/repo</code> so it arrives pointed at that
+              repo; otherwise you choose the repo when you mark it Ready.
             </li>
           </ol>
           <ol v-else-if="source === 'posthog'" class="m-0 flex flex-col gap-1 pl-5 text-muted">
@@ -166,12 +164,14 @@ const choices = [
             <li>
               Use <b class="font-medium text-fg">Test function</b>, then
               <b class="font-medium text-fg">Create &amp; enable</b>. Repeats of one issue stay one guide.
+              A task URL takes <code>?repo=owner/repo</code> too.
             </li>
           </ol>
           <div v-else class="flex flex-col gap-2 text-muted">
             <p class="m-0">
               POST JSON to a URL above. Only <code>title</code> is required; send the same
-              <code>id</code> again and it adds to the open guide instead of making a new one.
+              <code>id</code> again and it adds to the open guide instead of making a new one. Add
+              <code>?repo=owner/repo</code> to a task URL to say which repo it is for.
             </p>
             <code class="block overflow-x-auto rounded-1 border border-line bg-field px-3 py-2 font-code text-sm whitespace-pre text-fg">curl -X POST {{ state.hooks?.task }} \
   -H 'content-type: application/json' \
@@ -179,31 +179,6 @@ const choices = [
           </div>
         </fieldset>
 
-        <form class="flex flex-col gap-2" @submit.prevent="saveTarget($event.target as HTMLFormElement)">
-          <label class="font-medium text-fg" for="email-target">Which repo are tasks for?</label>
-          <div class="flex flex-wrap items-center gap-2">
-            <input
-              id="email-target"
-              :key="state.target"
-              name="target"
-              class="min-w-0 flex-1 basis-64"
-              placeholder="owner/repo"
-              :value="state.target"
-              autocomplete="off"
-              spellcheck="false"
-            />
-            <button class="btn" type="submit" :disabled="Boolean(busy)">
-              {{ busy === "target" ? "Saving…" : "Save" }}
-            </button>
-          </div>
-          <p class="m-0 text-muted">
-            {{
-              state.target
-                ? `Once Ready, an agent working in ${state.target} takes these tasks on its own.`
-                : "Without one, an agent only takes these tasks when given one. owner/repo, as in the git remote."
-            }}
-          </p>
-        </form>
       </template>
 
       <div v-if="pending.length" class="flex flex-col gap-2">

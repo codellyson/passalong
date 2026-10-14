@@ -387,6 +387,8 @@ interface GuideRow {
   kind: string;
   /** The guide this one came out of. See migrations/0015_lineage.sql. */
   parent_id: string;
+  /** The repo a task is for, as repoKey writes it; '' for any other kind, or a task for no repo. */
+  target: string;
   /** What last wrote it: `cli@<version>`, `mcp`, `hub`, `api`, or "" from before 0035. */
   client: string;
   /** What it says to a person. See migrations/0041_summary.sql. Empty on a guide from before it. */
@@ -4783,8 +4785,24 @@ app.get("/v1/guides/:id/context", async (c) => {
     .all<{ id: string; title: string; color: string }>();
   const pick = (rows: GuideRow[]) => rows.map((r) => views.get(r.id)).filter(Boolean);
 
+  // A task's repo, and the repos this account's tasks and agents already use, so whoever marks it
+  // Ready can say which repo it is for by picking rather than typing.
+  const repos =
+    row.kind === "task"
+      ? (
+          await c.env.DB.prepare(
+            `SELECT target AS repo FROM guide WHERE account_id = ?1 AND kind = 'task' AND target <> ''
+             UNION SELECT repo FROM claim WHERE account_id = ?1 AND repo <> ''
+             LIMIT 50`,
+          )
+            .bind(c.get("account"))
+            .all<{ repo: string }>()
+        ).results.map((r) => r.repo)
+      : [];
   return c.json({
     guide: views.get(row.id),
+    target: row.target,
+    repos,
     owner: found.owner,
     admin: !found.owner && (await ownsTeam(c, row)),
     claims: claimRows.map((k) => ({
@@ -4832,7 +4850,10 @@ app.get("/v1/guides/:id/context", async (c) => {
 app.patch("/v1/guides/:id/status", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
-  const { status } = (await c.req.json().catch(() => ({}))) as { status?: string };
+  const { status, target } = (await c.req.json().catch(() => ({}))) as {
+    status?: string;
+    target?: unknown;
+  };
   const author = found.owner || (await ownsTeam(c, found.row));
   // `promoted` is readable and no longer settable, so it is refused by name rather than by being
   // missing from a list — an installed CLI still calls this, and "must be one of ..." would read
@@ -4864,9 +4885,21 @@ app.patch("/v1/guides/:id/status", async (c) => {
     if (held)
       return err(c, 409, "Stop the agent or review its hand-in before moving this task to Draft.");
   }
-  const markdown = setField(found.row.markdown, "status", status);
-  await c.env.DB.prepare("UPDATE guide SET status = ?, markdown = ?, updated = ? WHERE id = ?")
-    .bind(status, markdown, now(), found.row.id)
+  let markdown = setField(found.row.markdown, "status", status);
+  // Marking a task Ready can also say which repo it is for: the moment somebody decides a task is
+  // worth doing is the moment they know where. Written into the document as well as the column,
+  // so a pulled task says the same thing the queue does. Only when sent: an older client sends none.
+  let repo = found.row.target;
+  if (found.row.kind === "task" && status === "published" && typeof target === "string") {
+    repo = claims.repoKey(target).slice(0, 200);
+    markdown = repo
+      ? setField(markdown, "target_context", repo)
+      : dropField(markdown, "target_context");
+  }
+  await c.env.DB.prepare(
+    "UPDATE guide SET status = ?, markdown = ?, target = ?, updated = ? WHERE id = ?",
+  )
+    .bind(status, markdown, repo, now(), found.row.id)
     .run();
   // Anything a person who is not the author does to a guide, its author hears about. Archiving
   // told them and un-archiving did not, which is the asymmetry that let a guide move on somebody
@@ -5181,9 +5214,9 @@ const hooksOf = (key: string, base: string) =>
 app.get("/v1/inbound", async (c) => {
   const domain = inboundDomain(c.env);
   const me = c.get("account");
-  const box = await c.env.DB.prepare("SELECT key, target FROM inbound WHERE account_id = ?")
+  const box = await c.env.DB.prepare("SELECT key FROM inbound WHERE account_id = ?")
     .bind(me)
-    .first<{ key: string; target: string }>();
+    .first<{ key: string }>();
   const { results } = await c.env.DB.prepare(
     `SELECT sender, state, subject, first_at, last_at, times FROM inbound_sender
       WHERE account_id = ? ORDER BY state = 'pending' DESC, last_at DESC LIMIT 100`,
@@ -5194,7 +5227,6 @@ app.get("/v1/inbound", async (c) => {
     available: Boolean(domain),
     addresses: box ? addressesOf(box.key, domain) : null,
     hooks: box ? hooksOf(box.key, origin(c)) : null,
-    target: box?.target || "",
     senders: results,
   });
 });
@@ -5212,22 +5244,6 @@ app.post("/v1/inbound", async (c) => {
     .run();
   count(c, "inbound_address");
   return c.json({ addresses: addressesOf(key, domain), hooks: hooksOf(key, origin(c)) });
-});
-
-/**
- * The repo the tasks from email are for, written the way an agent's repo is (`owner/repo`), so the
- * agent working there takes them with no id. Empty means someone takes each one by hand.
- */
-app.patch("/v1/inbound", async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as { target?: unknown };
-  if (typeof body.target !== "string")
-    return err(c, 400, 'Send {"target": "owner/repo"}, or "" to clear it.');
-  const target = claims.repoKey(body.target).slice(0, 200);
-  const done = await c.env.DB.prepare("UPDATE inbound SET target = ? WHERE account_id = ?")
-    .bind(target, c.get("account"))
-    .run();
-  if (!done.meta.changes) return err(c, 404, "Get your addresses first.");
-  return c.json({ target });
 });
 
 /** Turn it off. Senders are kept, so turning it back on does not ask about them again. */
@@ -5367,9 +5383,9 @@ async function intake(
 app.post("/v1/in/:key/:kind", async (c) => {
   const kind = EMAIL_KINDS.find((k) => k === c.req.param("kind"));
   if (!kind) return err(c, 404, "Use /task, /bug or /transfer at the end of the address.");
-  const box = await c.env.DB.prepare("SELECT account_id, target FROM inbound WHERE key = ?")
+  const box = await c.env.DB.prepare("SELECT account_id FROM inbound WHERE key = ?")
     .bind(c.req.param("key").toLowerCase())
-    .first<{ account_id: string; target: string }>();
+    .first<{ account_id: string }>();
   if (!box) return err(c, 404, "No such address. Copy it again from Settings.");
   const raw = await c.req.text();
   if (raw.length > 1024 * 1024) return err(c, 413, "That is over 1 MB.");
@@ -5390,7 +5406,9 @@ app.post("/v1/in/:key/:kind", async (c) => {
   const made = await intake(c.env, ctx, {
     account: box.account_id,
     kind,
-    target: box.target,
+    // `?repo=owner/repo` on the URL: one Sentry or PostHog project per repo, so its tasks arrive
+    // already pointed at it. Without it, the repo is chosen when the task is marked Ready.
+    target: claims.repoKey(c.req.query("repo") || "").slice(0, 200),
     print: hookPrint(kind, hook),
     title: hook.title,
     summary: `Sent in by ${from}: ${hook.title}`,
@@ -5424,11 +5442,11 @@ export async function receiveEmail(
     // shortcut: a message over 1 MB is dropped unread; alerts and notes are small, raise it if not.
     if (!to || message.rawSize > 1024 * 1024) return;
     const box = await env.DB.prepare(
-      `SELECT i.account_id, i.target, a.email, a.email_verified FROM inbound i
+      `SELECT i.account_id, a.email, a.email_verified FROM inbound i
          JOIN account a ON a.id = i.account_id WHERE i.key = ?`,
     )
       .bind(to.key)
-      .first<{ account_id: string; target: string; email: string; email_verified: string }>();
+      .first<{ account_id: string; email: string; email_verified: string }>();
     if (!box) return;
     const mail = await parseEmail(message.raw, message.from);
     if (!mail.sender) return;
@@ -5460,7 +5478,8 @@ export async function receiveEmail(
     const made = await intake(env, ctx, {
       account: me,
       kind: to.kind,
-      target: box.target,
+      // An email cannot say which repo; whoever marks the task Ready does.
+      target: "",
       print: fingerprint(to.kind, mail.sender, mail.subject),
       title,
       summary: `Emailed by ${mail.sender}: ${title}`,
