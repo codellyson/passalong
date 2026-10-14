@@ -58,7 +58,8 @@ change. Its README says how.
     (`bugGuide` says the bug's title, the author's own words; `plan_tasks` takes `summary` per step;
     `taskScaffold` says the sentence the person typed). The hub shows it by default — first bubble of
     a thread, under the title on rows, leading the guide page — and the document sits behind "Show
-    details".
+    details". The Work board's cards are the exception: a column of them is scanned by title, so
+    they carry no summary and make room for more cards.
   - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
   - `src/mcp.js` — MCP tools. `buildServer()` builds the surface and `serve()` connects it over
