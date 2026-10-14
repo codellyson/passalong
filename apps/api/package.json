@@ -12,6 +12,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "hono": "^4.6.0",
+    "postal-mime": "^4.0.5",
     "workers-og": "^0.0.27",
     "zod": "^3.24.0"
   },

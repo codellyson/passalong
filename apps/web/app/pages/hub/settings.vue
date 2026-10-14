@@ -132,6 +132,7 @@ const nav = computed(() => {
           note: String(data.value.tokens.length || ""),
           tone: "",
         },
+        { href: "#email-in", label: "Email in", note: "", tone: "" },
       ],
     },
   ];
@@ -313,6 +314,17 @@ const noteTone: Record<string, string> = {
               </p>
             </div>
             <HubTokens />
+          </section>
+
+          <section id="email-in" :class="sec" aria-labelledby="email-in-h">
+            <div :class="secHead">
+              <h3 id="email-in-h" :class="title">Email in</h3>
+              <p :class="blurb">
+                Email one of these addresses and it becomes a guide: a task, a bug or a transfer.
+                Tasks wait as Drafts until you mark them Ready.
+              </p>
+            </div>
+            <HubEmailIn />
           </section>
         </div>
       </div>

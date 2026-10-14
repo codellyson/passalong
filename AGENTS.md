@@ -240,7 +240,7 @@ change. Its README says how.
 ## Contracts
 
 - **What wrote a guide is a column, not a field (migration 0035).** `guide.client` is
-  `cli@<version>` (from `x-passalong-version`), `mcp`, `hub` or `api`, decided by `writtenBy()`
+  `cli@<version>` (from `x-passalong-version`), `mcp`, `hub`, `api` or `email` (a guide from email, see inbound.ts), decided by `writtenBy()`
   in `clients.ts` from the credential the middleware already checked, and replaced on every
   `PUT /v1/guides/:id` because the last write produced the markdown stored now. Never frontmatter:
   a field in the document travels with it and is re-published by whichever client pulls it next,
