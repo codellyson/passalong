@@ -54,14 +54,46 @@ const addressed = (g: Guide) => (g.to ? `@${g.to}` : g.to_group ? `#${g.to_group
 /** Anyone in the team can give work to someone else, as they can move it. Done work stays put. */
 const canGive = (g: Guide) => Boolean(g.team) && g.stage !== "done";
 
-/** The one card whose "Give to…" picker is open. A click anywhere else closes it. */
+/**
+ * The one card whose "Give to…" picker is open, and where it floats: under the control that opened
+ * it, fixed to the window and kept inside it. Floating rather than in the card's flow, which made
+ * the card grow; drawn on the page body, because the lanes scroll both ways and clip anything
+ * hanging out of them. A click outside it, Escape, or scrolling the board closes it.
+ */
 const giving = ref("");
-const root = ref<HTMLElement | null>(null);
-function onDocument(e: MouseEvent) {
-  if (giving.value && !root.value?.contains(e.target as Node)) giving.value = "";
+const givingGuide = computed(() =>
+  giving.value ? props.columns.flatMap((c) => c.cards).find((g) => g.id === giving.value) : null,
+);
+const givePos = ref({ left: 0, top: 0 });
+const popover = ref<HTMLElement | null>(null);
+async function openGive(id: string, x: number, y: number) {
+  if (giving.value === id) return (giving.value = "");
+  giving.value = id;
+  givePos.value = { left: x, top: y };
+  await nextTick();
+  const box = popover.value?.getBoundingClientRect();
+  if (box)
+    givePos.value = {
+      left: Math.max(8, Math.min(x, window.innerWidth - box.width - 8)),
+      top: y + box.height > window.innerHeight - 8 ? Math.max(8, y - box.height - 28) : y,
+    };
 }
-onMounted(() => document.addEventListener("click", onDocument));
-onBeforeUnmount(() => document.removeEventListener("click", onDocument));
+function giveFrom(id: string, e: MouseEvent) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  openGive(id, r.right - 288, r.bottom + 4);
+}
+// The controls that open it stop their own click, so any click that arrives here is elsewhere.
+function onDocument(e: Event) {
+  if (giving.value && !popover.value?.contains(e.target as Node)) giving.value = "";
+}
+onMounted(() => {
+  document.addEventListener("click", onDocument);
+  window.addEventListener("scroll", onDocument, true);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("click", onDocument);
+  window.removeEventListener("scroll", onDocument, true);
+});
 
 /** The hold a card leads with: one that needs somebody first, else the first. */
 const lead = (g: Guide) =>
@@ -231,7 +263,7 @@ const shown = computed(
 </script>
 
 <template>
-  <div ref="root" class="flex flex-col gap-3">
+  <div class="flex flex-col gap-3">
     <div role="tablist" aria-label="Board columns" class="flex gap-1 overflow-x-auto [scrollbar-width:none] md:hidden">
       <button
         v-for="col in view"
@@ -353,18 +385,13 @@ const shown = computed(
                 class="ml-auto flex min-w-0 cursor-pointer items-center gap-0.5 rounded-1 border-0 bg-transparent p-0 font-ui text-xs text-muted hover:text-fg"
                 :aria-expanded="giving === g.id"
                 :aria-label="`For ${address(g)}. Give it to someone else`"
-                @click.stop="giving = giving === g.id ? '' : g.id"
+                @click.stop="giveFrom(g.id, $event)"
                 @keydown.esc="giving = ''"
               >
                 <span class="min-w-0 truncate">{{ address(g) }}</span>
                 <AppIcon name="reveal" class="shrink-0" />
               </button>
               <span v-else class="ml-auto min-w-0 truncate">{{ address(g) }}</span>
-            </div>
-            <!-- In the card's flow rather than floating: the board scrolls sideways, and a scrolling
-                 box clips anything that hangs outside it. -->
-            <div v-if="giving === g.id" class="mx-2 mb-2 rounded-2 bg-field p-2 shadow-edge" @click.stop>
-              <HubAssignPicker :id="g.id" :team="g.team || ''" :to="addressed(g)" @done="giving = ''" />
             </div>
           </li>
         </ul>
@@ -381,9 +408,25 @@ const shown = computed(
       :y="menu.y"
       :can-give="canGive(menu.guide)"
       @close="menu = null"
-      @give="giving = menu!.guide.id"
+      @give="openGive(menu!.guide.id, menu!.x, menu!.y)"
       @ready="readying = { ...menu! }"
     />
+    <Teleport to="body">
+      <div
+        v-if="givingGuide"
+        ref="popover"
+        class="menu !fixed !m-0 w-72"
+        :style="{ left: `${givePos.left}px`, top: `${givePos.top}px`, right: 'auto' }"
+        @keydown.esc="giving = ''"
+      >
+        <HubAssignPicker
+          :id="givingGuide.id"
+          :team="givingGuide.team || ''"
+          :to="addressed(givingGuide)"
+          @done="giving = ''"
+        />
+      </div>
+    </Teleport>
     <HubReadyPrompt
       v-if="readying"
       :key="readying.guide.id"
