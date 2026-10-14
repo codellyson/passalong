@@ -34,7 +34,10 @@ only cards you may manage have one. Right-clicking a card opens its quick action
 Open, Ready for agents…, Move to Draft, Give to…, Stop this agent, copy link or pull command,
 Archive or Unarchive, Delete — the guide page's acts under its rules. A card can also be dragged
 to a column that means one of those acts (back to Draft, Stop this agent, Archive, Unarchive);
-Draft to To do opens the card's page, because Ready asks which repo.
+Draft to To do asks which repo where it was dropped (`HubReadyPrompt`, which Ready for agents… in
+the menu opens too). A drop lands at once and goes back, with the hub's error, if the server
+refuses; while dragging, a gap opens where the card would land. From md the columns are lanes the
+height of the window, each scrolling its own cards under a fixed header.
 
 It replaced four tabs (Needs you, Being worked on, Open, Done) worked out per viewer, which put the
 same guide in different places for different teammates and counted it differently.

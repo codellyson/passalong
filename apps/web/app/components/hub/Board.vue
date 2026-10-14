@@ -22,9 +22,14 @@
 
   A card can be dragged to another column when that column means an act the card's own page
   offers: back to Draft, Stop this agent (To do, from In progress; asked first), Archive (Done) and
-  Unarchive (out of Done: a task to Draft, anything else to To do). Draft to To do opens the card's page, because Ready asks which repo the
-  task is for. While a card is dragged, the columns it cannot go to fade. The same acts are in the
-  right-click menu, which is the way there from a keyboard or a phone.
+  Unarchive (out of Done: a task to Draft, anything else to To do). Draft to To do asks which repo
+  the task is for (HubReadyPrompt), where it was dropped. While a card is dragged it fades where it
+  was, the columns it cannot go to fade, and a gap opens at the top of the one under it. A drop
+  lands at once and is put back, with the hub's error, if the server refuses it. The same acts are
+  in the right-click menu, which is the way there from a keyboard or a phone.
+
+  From md the columns are lanes the height of the window, each scrolling its own cards under a
+  header that stays put, so the whole lane is somewhere to drop and nothing ends half-way down.
 -->
 <script setup lang="ts">
 import { aboutMe, type STAGES } from "~/composables/useWorkLists";
@@ -100,7 +105,7 @@ function openMenu(g: Guide, e: MouseEvent) {
   };
 }
 
-const { onArchive, onCloseGuide, onTaskDraft, onTakeBack } = useHub();
+const { onArchive, onCloseGuide, onTaskDraft, onTaskReady, onTakeBack } = useHub();
 
 /** The card being dragged, and the column under it. */
 const dragging = ref<Guide | null>(null);
@@ -109,13 +114,14 @@ const holding = (g: Guide) => (g.held_by ?? []).some((h) => h.health !== "review
 
 /**
  * What dropping `g` in column `to` does, or null when it does nothing there. Each is the act the
- * guide's page offers, under the same rule: anyone in the team moves work, `manage` archives.
+ * guide's page offers, under the same rule: anyone in the team moves work, `manage` archives. An
+ * act answers false when it did not happen, and the card goes back.
  */
-function moveTo(g: Guide, to: string): (() => unknown) | null {
+function moveTo(g: Guide, to: string): (() => Promise<boolean> | boolean) | null {
   const from = g.stage;
   const task = g.kind === "task";
   if (from === to) return null;
-  if (task && from === "draft" && to === "todo") return () => navigateTo(`/hub/g/${g.id}`);
+  if (task && from === "draft" && to === "todo") return () => false; // asked first: see drop()
   if (task && from === "todo" && to === "draft" && !holding(g))
     return () => onTaskDraft({ id: g.id } as Task);
   if (from === "working" && to === "todo")
@@ -130,8 +136,53 @@ function moveTo(g: Guide, to: string): (() => unknown) | null {
   return null;
 }
 
+/**
+ * Where a moved card is shown until the board catches up: its id and the column it was put in. A
+ * refused move deletes its entry and the card is back where the server has it.
+ */
+const placed = ref<Record<string, string>>({});
+const view = computed(() => {
+  const moved = props.columns.flatMap((c) =>
+    c.cards.filter((g) => placed.value[g.id] && placed.value[g.id] !== c.id),
+  );
+  return props.columns.map((c) => ({
+    ...c,
+    cards: [
+      ...moved.filter((g) => placed.value[g.id] === c.id),
+      ...c.cards.filter((g) => !placed.value[g.id] || placed.value[g.id] === c.id),
+    ],
+  }));
+});
+// Once the server's board agrees, the entry has nothing left to say.
+watch(
+  () => props.columns,
+  (cols) => {
+    const now = { ...placed.value };
+    for (const c of cols) for (const g of c.cards) if (now[g.id] === c.id) delete now[g.id];
+    placed.value = now;
+  },
+);
+async function place(g: Guide, to: string, act: () => Promise<boolean> | boolean) {
+  placed.value = { ...placed.value, [g.id]: to };
+  if (!(await act())) {
+    const { [g.id]: _, ...rest } = placed.value;
+    placed.value = rest;
+  }
+}
+
+/** The task waiting on its repo before it goes Ready, and where to ask. */
+const readying = ref<{ guide: Guide; x: number; y: number } | null>(null);
+function ready(repo: string) {
+  const g = readying.value?.guide;
+  readying.value = null;
+  if (g) place(g, "todo", () => onTaskReady({ id: g.id } as Task, repo));
+}
+
+/** How tall the dragged card is, for the gap that opens where it would land. */
+const gap = ref(0);
 function dragStart(g: Guide, e: DragEvent) {
   dragging.value = g;
+  gap.value = (e.currentTarget as HTMLElement).offsetHeight;
   e.dataTransfer?.setData("text/plain", g.title || g.id);
   if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
 }
@@ -144,11 +195,33 @@ function dragOver(col: string, e: DragEvent) {
   e.preventDefault();
   over.value = col;
 }
-async function drop(col: string) {
-  const act = dragging.value && moveTo(dragging.value, col);
+function drop(col: string, e: DragEvent) {
+  const g = dragging.value;
+  const act = g && moveTo(g, col);
   dragEnd();
-  if (act) await act();
+  if (!g || !act) return;
+  if (g.stage === "draft" && col === "todo")
+    readying.value = { guide: g, x: e.clientX, y: e.clientY };
+  else place(g, col, act);
 }
+
+/**
+ * From md, the lanes reach the bottom of the window: the row is as tall as what is left below its
+ * own top. Measured, because what sits above the board (a banner, a filter line) varies.
+ */
+const lanes = ref<HTMLElement | null>(null);
+const laneHeight = ref("");
+function measure() {
+  const el = lanes.value;
+  if (!el || !window.matchMedia("(min-width: 768px)").matches) return (laneHeight.value = "");
+  const top = el.getBoundingClientRect().top + window.scrollY;
+  laneHeight.value = `max(24rem, calc(100dvh - ${top}px - 1.5rem))`;
+}
+onMounted(() => {
+  measure();
+  window.addEventListener("resize", measure);
+});
+onBeforeUnmount(() => window.removeEventListener("resize", measure));
 
 /** The column a phone shows: the first with anything in it, until a tab is picked. */
 const picked = ref("");
@@ -161,7 +234,7 @@ const shown = computed(
   <div ref="root" class="flex flex-col gap-3">
     <div role="tablist" aria-label="Board columns" class="flex gap-1 overflow-x-auto [scrollbar-width:none] md:hidden">
       <button
-        v-for="col in columns"
+        v-for="col in view"
         :key="col.id"
         type="button"
         role="tab"
@@ -174,32 +247,43 @@ const shown = computed(
       </button>
     </div>
 
-    <div class="flex items-start gap-3 md:gap-2 md:overflow-x-auto md:pb-2">
+    <div
+      ref="lanes"
+      class="flex items-start gap-3 md:items-stretch md:gap-2 md:overflow-x-auto md:pb-2"
+      :style="laneHeight ? { height: laneHeight } : undefined"
+    >
       <section
-        v-for="col in columns"
+        v-for="col in view"
         :key="col.id"
-        class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 transition-opacity md:flex-[1_0_15rem]"
+        class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 transition-opacity md:min-h-0 md:flex-[1_0_15rem]"
         :class="[
           shown === col.id ? '' : 'max-md:hidden',
           dragging && dragging.stage !== col.id && !moveTo(dragging, col.id) ? 'opacity-50' : '',
           over === col.id ? 'ring-2 ring-[var(--accent)]' : '',
         ]"
         @dragover="dragOver(col.id, $event)"
-        @drop.prevent="drop(col.id)"
+        @drop.prevent="drop(col.id, $event)"
         :aria-labelledby="`col-${col.id}`"
       >
         <div class="flex items-baseline gap-2 px-1">
           <h2 :id="`col-${col.id}`" class="m-0 font-ui text-sm font-semibold">{{ col.label }}</h2>
           <span class="font-ui text-xs tabular-nums text-muted">{{ col.cards.length }}</span>
         </div>
-        <p v-if="!col.cards.length" class="m-0 px-1 font-ui text-xs text-muted">{{ col.hint }}</p>
-        <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
+        <p v-if="!col.cards.length && over !== col.id" class="m-0 px-1 font-ui text-xs text-muted">{{ col.hint }}</p>
+        <!-- The lane's cards scroll inside it, under the header. -->
+        <ul class="m-0 -mx-1 flex list-none flex-col gap-2 px-1 pb-1 md:min-h-0 md:flex-1 md:overflow-y-auto">
+          <li
+            v-if="over === col.id"
+            aria-hidden="true"
+            class="shrink-0 rounded-2 border-2 border-dashed border-line-strong"
+            :style="{ height: `${gap}px` }"
+          />
           <li
             v-for="g in col.id === 'done' ? col.cards.slice(0, DONE_SHOWN) : col.cards"
             :key="g.id"
-            class="group relative flex flex-col rounded-2 bg-raised shadow-edge"
+            class="group relative flex shrink-0 flex-col rounded-2 bg-raised shadow-edge"
             :class="[
-              col.id === 'done' ? 'opacity-70' : '',
+              dragging?.id === g.id ? 'opacity-40' : col.id === 'done' ? 'opacity-70' : '',
               has(g.id) ? 'ring-2 ring-[var(--accent)]' : '',
             ]"
             :draggable="giving !== g.id"
@@ -298,6 +382,16 @@ const shown = computed(
       :can-give="canGive(menu.guide)"
       @close="menu = null"
       @give="giving = menu!.guide.id"
+      @ready="readying = { ...menu! }"
+    />
+    <HubReadyPrompt
+      v-if="readying"
+      :key="readying.guide.id"
+      :guide="readying.guide"
+      :x="readying.x"
+      :y="readying.y"
+      @close="readying = null"
+      @ready="ready"
     />
   </div>
 </template>

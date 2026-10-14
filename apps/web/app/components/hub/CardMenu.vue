@@ -2,8 +2,8 @@
   A board card's quick actions, opened by right-clicking the card (or the context-menu key on it).
   The same acts as the guide's own page, worded the same way, and offered under the same rules:
   anyone in the team moves work and stops an agent, its author or a team admin (`manage`) archives
-  and deletes. Ready is the one that goes to the page instead, because marking a task Ready asks
-  which repo it is for, and that question belongs with the task in front of you.
+  and deletes. Ready for agents… opens HubReadyPrompt where the menu was, because marking a task
+  Ready asks which repo it is for.
 
   Drawn at the pointer, fixed to the viewport and pulled back inside it, so it is never clipped by
   the board's sideways scroll. Escape, a click elsewhere, scrolling or picking an item closes it.
@@ -12,7 +12,7 @@
 import type { Guide, Task, Working } from "~/types/hub";
 
 const props = defineProps<{ guide: Guide; x: number; y: number; canGive: boolean }>();
-const emit = defineEmits<{ close: []; give: [] }>();
+const emit = defineEmits<{ close: []; give: []; ready: [] }>();
 const { onArchive, onCloseGuide, onRemove, onTaskDraft, onTakeBack } = useHub();
 
 const g = computed(() => props.guide);
@@ -69,6 +69,10 @@ function remove() {
   if (!confirm(`Delete "${g.value.title}"? This cannot be undone.`)) return close();
   run(() => onRemove(g.value));
 }
+function ready() {
+  emit("ready");
+  close();
+}
 function give() {
   emit("give");
   close();
@@ -93,13 +97,13 @@ function copyAndClose(text: string, e: Event) {
       <NuxtLink role="menuitem" class="menu-item" :to="`/hub/g/${g.id}`" @click="close">
         <AppIcon name="open" />Open
       </NuxtLink>
-      <NuxtLink
+      <button
         v-if="isTask && g.stage === 'draft'"
         role="menuitem"
         class="menu-item"
-        :to="`/hub/g/${g.id}`"
-        @click="close"
-      >Ready for agents…</NuxtLink>
+        type="button"
+        @click.stop="ready"
+      >Ready for agents…</button>
       <button
         v-if="isTask && g.stage === 'todo'"
         role="menuitem"
