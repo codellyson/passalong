@@ -194,7 +194,8 @@ async function call(url: string, secret: string, body?: unknown, method = "POST"
     // The provider's own words, which are usually the useful ones ("Product not found"), capped so
     // a stack trace of theirs cannot become a page of ours. Never the key, which is only in a header.
     const message =
-      ((parsed.error as { message?: string } | undefined)?.message ??
+      ((parsed.detail as string | undefined) ??
+        (parsed.error as { message?: string } | undefined)?.message ??
         (parsed.message as string | undefined) ??
         text) ||
       `${res.status} ${res.statusText}`;

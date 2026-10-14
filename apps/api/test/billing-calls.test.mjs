@@ -84,6 +84,18 @@ test("a missing product is refused before any request is made", async () => {
 test("Bachs's own words come back, and an answer with no page is not a success", async () => {
   stub({ ok: false, status: 404, json: { error: { message: "Product not found" } } });
   await assert.rejects(startCheckout(KEYS, team), { message: "Product not found" });
+  // What the sandbox actually answers: `detail` beside an error code.
+  stub({
+    ok: false,
+    status: 422,
+    json: {
+      detail: "success_url must be a publicly accessible URL",
+      error_code: "VALIDATION_ERROR",
+    },
+  });
+  await assert.rejects(startCheckout(KEYS, team), {
+    message: "success_url must be a publicly accessible URL",
+  });
   stub({ json: {} });
   await assert.rejects(startCheckout(KEYS, team), /no checkout page/);
 });
