@@ -150,8 +150,10 @@ import {
 import { guidePreview } from "./guide-preview.js";
 import { mintOrigin } from "./hosts.js";
 import {
-  addressKey,
-  alertBody,
+  addressOf,
+  KINDS as EMAIL_KINDS,
+  type EmailKind,
+  emailBody,
   fingerprint,
   GMAIL_CHECK,
   NOTE_EVERY_MS,
@@ -282,7 +284,7 @@ type Env = MailEnv &
     DEMO_LOGIN?: string;
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
-    /** The domain Email Routing sends alerts to (inbound.ts). Unset: Settings says it is not set up. */
+    /** The domain Email Routing sends guides to (inbound.ts). Unset: Settings says it is not set up. */
     INBOUND_DOMAIN?: string;
   };
 /** `client` is what the credential says wrote this request — see `writtenBy` in clients.ts. */
@@ -1007,7 +1009,7 @@ const publicWebhook = (method: string, path: string) =>
  * it there.
  */
 const INTERNAL = Symbol("passalong.internal.account");
-/** What wrote it, when that is not the MCP server: an alert by email is `email`. */
+/** What wrote it, when that is not the MCP server: a guide from email is `email`. */
 const INTERNAL_CLIENT = Symbol("passalong.internal.client");
 
 type Marked = Record<symbol, unknown>;
@@ -5147,14 +5149,20 @@ app.put("/v1/guides/:id/ack", async (c) => {
 
 const personAgent = claims.personAgent;
 
-// ---- alerts by email (src/inbound.ts, migrations/0051_inbound.sql) -----------------------------
+// ---- email in: guides from email (src/inbound.ts, migrations/0051_inbound.sql) ----------------
 
 const inboundDomain = (env: Env) =>
   String(env.INBOUND_DOMAIN || "")
     .trim()
     .toLowerCase();
 
-/** This account's alert address, if it has one, and every sender that has written to it. */
+/** One address per kind, `key+kind@domain`. Empty when there is no key or no domain. */
+const addressesOf = (key: string | undefined, domain: string) =>
+  Object.fromEntries(
+    EMAIL_KINDS.map((k) => [k, key && domain ? `${key}+${k}@${domain}` : ""]),
+  ) as Record<EmailKind, string>;
+
+/** This account's addresses, if it has them, and every sender that has written to them. */
 app.get("/v1/inbound", async (c) => {
   const domain = inboundDomain(c.env);
   const me = c.get("account");
@@ -5169,16 +5177,16 @@ app.get("/v1/inbound", async (c) => {
     .all();
   return c.json({
     available: Boolean(domain),
-    address: box && domain ? `${box.key}@${domain}` : "",
+    addresses: box ? addressesOf(box.key, domain) : null,
     target: box?.target || "",
     senders: results,
   });
 });
 
-/** Make the address, or replace it with a new one: the old one stops working at once. */
+/** Make the addresses, or replace them with new ones: the old ones stop working at once. */
 app.post("/v1/inbound", async (c) => {
   const domain = inboundDomain(c.env);
-  if (!domain) return err(c, 409, "Alerts by email aren't set up on this server.");
+  if (!domain) return err(c, 409, "Email in isn't set up on this server.");
   const key = rid(16);
   await c.env.DB.prepare(
     `INSERT INTO inbound (account_id, key, created) VALUES (?, ?, ?)
@@ -5187,11 +5195,11 @@ app.post("/v1/inbound", async (c) => {
     .bind(c.get("account"), key, now())
     .run();
   count(c, "inbound_address");
-  return c.json({ address: `${key}@${domain}` });
+  return c.json({ addresses: addressesOf(key, domain) });
 });
 
 /**
- * The repo the alerts' tasks are for, written the way an agent's repo is (`owner/repo`), so the
+ * The repo the tasks from email are for, written the way an agent's repo is (`owner/repo`), so the
  * agent working there takes them with no id. Empty means someone takes each one by hand.
  */
 app.patch("/v1/inbound", async (c) => {
@@ -5202,17 +5210,17 @@ app.patch("/v1/inbound", async (c) => {
   const done = await c.env.DB.prepare("UPDATE inbound SET target = ? WHERE account_id = ?")
     .bind(target, c.get("account"))
     .run();
-  if (!done.meta.changes) return err(c, 404, "Get an alert address first.");
+  if (!done.meta.changes) return err(c, 404, "Get your addresses first.");
   return c.json({ target });
 });
 
 /** Turn it off. Senders are kept, so turning it back on does not ask about them again. */
 app.delete("/v1/inbound", async (c) => {
   await c.env.DB.prepare("DELETE FROM inbound WHERE account_id = ?").bind(c.get("account")).run();
-  return c.json({ address: "" });
+  return c.json({ addresses: null });
 });
 
-/** Allow or block a sender. Allowing does not replay what it already sent; its next alert counts. */
+/** Allow or block a sender. Allowing does not replay what it already sent; its next email counts. */
 app.patch("/v1/inbound/senders", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { sender?: unknown; state?: unknown };
   const state = body.state === "allowed" || body.state === "blocked" ? body.state : "";
@@ -5260,14 +5268,14 @@ export async function receiveEmail(
   ctx?: ExecutionContext,
 ): Promise<void> {
   try {
-    const key = addressKey(message.to, inboundDomain(env));
-    // shortcut: a message over 1 MB is dropped unread; alerts are small, raise it if one is not.
-    if (!key || message.rawSize > 1024 * 1024) return;
+    const to = addressOf(message.to, inboundDomain(env));
+    // shortcut: a message over 1 MB is dropped unread; alerts and notes are small, raise it if not.
+    if (!to || message.rawSize > 1024 * 1024) return;
     const box = await env.DB.prepare(
       `SELECT i.account_id, i.target, a.email, a.email_verified FROM inbound i
          JOIN account a ON a.id = i.account_id WHERE i.key = ?`,
     )
-      .bind(key)
+      .bind(to.key)
       .first<{ account_id: string; target: string; email: string; email_verified: string }>();
     if (!box) return;
     const mail = await parseEmail(message.raw, message.from);
@@ -5290,29 +5298,34 @@ export async function receiveEmail(
       if (seen?.state === "pending") {
         // Asked once. Gmail's check is asked each time, because each one carries a new code.
         if (seen.times === 1 || mail.sender === GMAIL_CHECK)
-          await notify(env, { to: me, kind: "alert_sender", actor_id: "", note: mail.sender });
+          await notify(env, { to: me, kind: "email_sender", actor_id: "", note: mail.sender });
         return;
       }
       if (seen?.state !== "allowed") return;
     }
 
-    const print = fingerprint(mail.sender, mail.subject);
-    const open = await env.DB.prepare(
-      `SELECT a.guide_id, a.times, a.noted_at FROM inbound_alert a JOIN guide g ON g.id = a.guide_id
-        WHERE a.account_id = ? AND a.fingerprint = ? AND g.status <> 'consumed'`,
-    )
-      .bind(me, print)
-      .first<{ guide_id: string; times: number; noted_at: string }>();
+    // A task or bug that fires again is one guide, not another. A transfer never merges: each one
+    // forwarded is its own piece of context, whatever its subject.
+    const print = fingerprint(to.kind, mail.sender, mail.subject);
+    const open =
+      to.kind === "transfer"
+        ? null
+        : await env.DB.prepare(
+            `SELECT a.guide_id, a.times, a.noted_at FROM inbound_guide a JOIN guide g ON g.id = a.guide_id
+              WHERE a.account_id = ? AND a.fingerprint = ? AND g.status <> 'consumed'`,
+          )
+            .bind(me, print)
+            .first<{ guide_id: string; times: number; noted_at: string }>();
     if (open) {
       const times = open.times + 1;
       const quiet = !open.noted_at || Date.parse(at) - Date.parse(open.noted_at) >= NOTE_EVERY_MS;
       await env.DB.prepare(
-        "UPDATE inbound_alert SET times = ?, last_at = ?, noted_at = ? WHERE account_id = ? AND fingerprint = ?",
+        "UPDATE inbound_guide SET times = ?, last_at = ?, noted_at = ? WHERE account_id = ? AND fingerprint = ?",
       )
         .bind(times, at, quiet ? at : open.noted_at, me, print)
         .run();
-      // A note on the task's thread, so whoever holds it hears it is still firing. At most hourly:
-      // an alert storm is one line, not a hundred.
+      // A note on the guide's thread, so whoever holds it hears it is still happening. At most
+      // hourly: an alert storm is one line, not a hundred.
       if (quiet)
         await asOwner(
           env,
@@ -5321,7 +5334,7 @@ export async function receiveEmail(
           "POST",
           `/v1/guides/${open.guide_id}/reply`,
           JSON.stringify({
-            body: `This alert fired again: ${times} times in all, latest at ${at}.`,
+            body: `The same email came again: ${times} times in all, latest at ${at}.`,
           }),
           "application/json",
         );
@@ -5329,33 +5342,40 @@ export async function receiveEmail(
     }
 
     const id = rid(8);
-    const title = mail.subject || `Alert from ${mail.sender}`;
-    let markdown = alertBody({ from: mail.sender, at, text: mail.text });
-    // Built here, so the kind is said here: an alert is work nobody has done yet, and a new task is
-    // a draft until a person marks it Ready.
+    const title = mail.subject || `Email from ${mail.sender}`;
+    let markdown = emailBody(to.kind, { from: mail.sender, at, text: mail.text });
     markdown = setField(markdown, "title", title);
     markdown = setField(
       markdown,
       "summary",
-      `Alert from ${mail.sender}: ${title}`.slice(0, SUMMARY_MAX),
+      `Emailed by ${mail.sender}: ${title}`.slice(0, SUMMARY_MAX),
     );
-    markdown = setField(markdown, "kind", "task");
-    markdown = setField(markdown, "status", "draft");
+    // The kind is the one the address named: stated by whoever chose which address to send to.
+    markdown = setField(markdown, "kind", to.kind);
+    // A new task is a draft until a person marks it Ready, like every other task.
+    markdown = setField(markdown, "status", to.kind === "task" ? "draft" : "published");
     markdown = setField(markdown, "source_context", `email from ${mail.sender}`);
-    if (box.target) markdown = setField(markdown, "target_context", box.target);
+    if (to.kind === "task" && box.target)
+      markdown = setField(markdown, "target_context", box.target);
     const made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, markdown, "text/markdown");
     if (!made.ok) {
-      console.error("inbound alert refused", made.status, made.text.slice(0, 200));
+      console.error("inbound guide refused", made.status, made.text.slice(0, 200));
       return;
     }
     await env.DB.prepare(
-      `INSERT INTO inbound_alert (account_id, fingerprint, guide_id, last_at) VALUES (?, ?, ?, ?)
+      `INSERT INTO inbound_guide (account_id, fingerprint, guide_id, last_at) VALUES (?, ?, ?, ?)
        ON CONFLICT(account_id, fingerprint) DO UPDATE SET guide_id = excluded.guide_id,
          times = 1, last_at = excluded.last_at, noted_at = ''`,
     )
       .bind(me, print, id, at)
       .run();
-    await notify(env, { to: me, kind: "alert", guide_id: id, actor_id: "" });
+    await notify(env, {
+      to: me,
+      kind: "emailed",
+      guide_id: id,
+      actor_id: "",
+      note: to.kind === "task" ? "a draft task until you mark it Ready" : `a ${to.kind}`,
+    });
   } catch (e) {
     console.error("inbound", (e as Error).message);
   }

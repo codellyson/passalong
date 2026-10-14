@@ -132,7 +132,7 @@ const nav = computed(() => {
           note: String(data.value.tokens.length || ""),
           tone: "",
         },
-        { href: "#alerts", label: "Alerts by email", note: "", tone: "" },
+        { href: "#email-in", label: "Email in", note: "", tone: "" },
       ],
     },
   ];
@@ -316,15 +316,15 @@ const noteTone: Record<string, string> = {
             <HubTokens />
           </section>
 
-          <section id="alerts" :class="sec" aria-labelledby="alerts-h">
+          <section id="email-in" :class="sec" aria-labelledby="email-in-h">
             <div :class="secHead">
-              <h3 id="alerts-h" :class="title">Alerts by email</h3>
+              <h3 id="email-in-h" :class="title">Email in</h3>
               <p :class="blurb">
-                An address for your error alerts. Each alert becomes a Draft task; mark it Ready and an
-                agent can take it.
+                Email one of these addresses and it becomes a guide: a task, a bug or a transfer.
+                Tasks wait as Drafts until you mark them Ready.
               </p>
             </div>
-            <HubAlertInbox />
+            <HubEmailIn />
           </section>
         </div>
       </div>
