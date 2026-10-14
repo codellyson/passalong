@@ -343,7 +343,17 @@ const shown = computed(
               :to="`/hub/g/${g.id}`"
               class="flex flex-col gap-2 rounded-2 px-3 pt-2 pb-1 text-fg no-underline transition-transform active:scale-[0.96]"
             >
-              <span class="flex flex-wrap items-center gap-2 pl-6">
+              <!-- Room for the dot only while it shows, so a card at rest has no gap at its start. -->
+              <span
+                class="flex flex-wrap items-center gap-2 transition-[padding] duration-150 motion-reduce:transition-none"
+                :class="
+                  !g.manage
+                    ? ''
+                    : selected.length
+                      ? 'pl-6'
+                      : 'group-focus-within:pl-6 group-hover:pl-6 [@media(hover:none)]:pl-6'
+                "
+              >
                 <span
                   v-if="kindBadge(g.kind)"
                   class="rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase"
