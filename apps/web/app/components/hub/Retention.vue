@@ -45,9 +45,9 @@ async function flip(next: boolean) {
         <b>Clean up automatically</b>
         <span class="mt-1 block text-muted">
           Screenshots that proved a finished guide are deleted 5 days after it is closed, and a
-          guide you sent that nobody has opened is archived after 14 days. Archiving is reversible:
-          unarchive it from its ⋯ menu. Deleting a screenshot is not. Turn this off to keep both
-          for good.
+          guide you sent that nobody has taken goes back to Draft after 14 days, for you to mark
+          Ready again. Deleting a screenshot cannot be undone. Turn this off to keep both as they
+          are.
         </span>
       </span>
     </label>

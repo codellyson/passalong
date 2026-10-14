@@ -395,6 +395,10 @@ interface GuideRow {
   client: string;
   /** What it says to a person. See migrations/0041_summary.sql. Empty on a guide from before it. */
   summary: string;
+  /** The task this is the hand-in write-up for, or '' (0053_report_of.sql). */
+  report_of?: string;
+  /** How it reached Done: 'approved', 'archived', or '' (0054_outcome.sql). */
+  outcome?: string;
 }
 interface ReportRow {
   id: string;
@@ -866,6 +870,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       id: r.id,
       title: r.title,
       status: r.status,
+      // How it reached Done: approved after review, or archived. '' while it is not done.
+      outcome: r.outcome || "",
       created: r.created,
       updated: r.updated,
       source_context: r.source_context,
@@ -4980,10 +4986,11 @@ app.patch("/v1/guides/:id/status", async (c) => {
       ? setField(markdown, "target_context", repo)
       : dropField(markdown, "target_context");
   }
+  // Archived by a person, not approved: Done says which (0054_outcome.sql). Leaving Done clears it.
   await c.env.DB.prepare(
-    "UPDATE guide SET status = ?, markdown = ?, target = ?, updated = ? WHERE id = ?",
+    "UPDATE guide SET status = ?, outcome = ?, markdown = ?, target = ?, updated = ? WHERE id = ?",
   )
-    .bind(status, markdown, repo, now(), found.row.id)
+    .bind(status, status === "consumed" ? "archived" : "", markdown, repo, now(), found.row.id)
     .run();
   // Ready is when a guide reaches people: whoever it is addressed to is told now, never while it
   // was a draft (announceGuide). Everything about the address is new to them.
@@ -6442,10 +6449,12 @@ app.post("/v1/guides/:id/pass", async (c) => {
     why,
     fence: fenceIn(who.fence),
   });
-  // Passing a handoff nobody took is still a real answer to its sender: not me, and why.
-  if ("error" in r && !(r.status === 409 && found.row.kind !== "task" && !found.owner))
+  // Passing work nobody took is still a real answer to its sender: not me, and why. Every kind.
+  const declined = "error" in r && r.status === 409 && !found.owner;
+  if ("error" in r && !declined)
     return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
-  if (found.row.kind === "task") {
+  if (declined) await recordAck(c, found.row, false, why.trim().slice(0, NOTE_MAX));
+  else if (found.row.kind === "task") {
     count(c, "task_passed", {});
     await taskEvent(c, found.row.id, "task_released", found.row.account_id, why);
   } else if (!found.owner) {

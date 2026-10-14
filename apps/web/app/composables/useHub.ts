@@ -498,6 +498,18 @@ function build(queryClient: QueryClient) {
       hubKeys.context(id),
     ]);
   const onPersonTaskTake = (id: string) => personTaskChange(id, "person-take");
+  /**
+   * Not for me, with the reason: it goes back to whoever sent it, who is told why. The person's own
+   * agent name, as the hub takes things under (`personAgent()` on the server).
+   */
+  const onPass = (id: string, why: string) => {
+    const account = (meQ.data.value?.account || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+    return change(() =>
+      api(
+        `/v1/guides/${encodeURIComponent(id)}/pass`,
+        json("POST", { agent: `person-${account}`, why }),
+      ), () => {}, [hubKeys.allGuides, hubKeys.board, hubKeys.working, hubKeys.context(id)]);
+  };
   const onPersonTaskProgress = (id: string, note: string) =>
     personTaskChange(id, "person-progress", { note });
   const onPersonTaskHandIn = (id: string, body: unknown) =>
@@ -688,6 +700,7 @@ function build(queryClient: QueryClient) {
     onTaskReady,
     onTaskDraft,
     onPersonTaskTake,
+    onPass,
     onPersonTaskProgress,
     onPersonTaskHandIn,
     onApprove,

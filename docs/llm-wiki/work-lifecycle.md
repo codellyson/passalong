@@ -47,6 +47,11 @@ Work is not done because whoever did it says so.
   `guide.ts`; the status route answers 409). `consumed` covers approved as well as shelved, so
   unarchiving one as Ready handed finished work to whoever took it next. Only its author or an
   admin archives a guide, of any kind.
+- **Done says how it got there** (`outcome`, migration 0054): **Approved** when a person approved
+  it or accepted its hand-in, **Archived** when its author or an admin shelved it. Done cards say
+  which. A Ready guide nobody took in 14 days goes back to Draft rather than to Done.
+- **Not for me** is `pass` on work you don't hold, any kind: whoever sent it is told, with the
+  reason, and the hub offers it beside I'll do this.
 - **A task's write-up is not work.** The transfer an agent publishes for its hand-in is stored as
   Done and named for its task (`report_of`, migration 0053) once the hand-in names it, and the
   board leaves it out.

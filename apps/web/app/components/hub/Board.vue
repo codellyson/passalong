@@ -348,6 +348,10 @@ const shown = computed(
                 v-if="g.can_review"
                 class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold text-accent"
               >Your review</span>
+              <!-- Done is approved work and archived work; the card says which, in words. -->
+              <span v-if="g.stage === 'done' && g.outcome" class="font-ui text-xs text-muted">{{
+                g.outcome === "approved" ? "Approved" : "Archived"
+              }}</span>
               <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
             </div>
             <!-- The title is the link, and its ::after covers the card, so anywhere on the card

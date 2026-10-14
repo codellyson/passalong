@@ -50,7 +50,7 @@ the three to the same answers.
 ## What goes away by itself
 
 Two clocks, both swept hourly (`apps/web/server/plugins/sweep.ts`). A sent guide nobody has pulled,
-answered, held or judged is **archived** (`consumed`, reversible; it shows in Done as "archived") after 14 days (`STALE_SENT_MS`). The
+answered, held or judged goes **back to Draft** (`backToDraft`, not Done: Done is finished work) after 14 days (`STALE_SENT_MS`), for its author to mark Ready again. The
 proof screenshots on a closed guide are **deleted** 5 days after it closed (`PROOF_DAYS`); the
 guide and its own document stay. Both are on by default and both stop for an account that sets
 `account.keep_forever` (migration 0044, `PATCH /v1/me`, Settings → Clean-up). `quota.ts`'s `mayKeep`

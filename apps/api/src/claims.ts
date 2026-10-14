@@ -1500,7 +1500,9 @@ export async function approve(
     return { status: 409, error: "only a task in review can be approved — nobody has finished it" };
   if (ownWork(t.team_id, t.claim.account_id, account)) return { status: 409, error: OWN_WORK };
   await db
-    .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
+    .prepare(
+      "UPDATE guide SET status = 'consumed', outcome = 'approved', markdown = ?, updated = ? WHERE id = ?",
+    )
     .bind(withStatus(t.markdown, "consumed"), at, id)
     .run();
   await event(db, id, "approved", { account, at });
@@ -1569,7 +1571,9 @@ export async function markDone(
     await db.batch([
       toReview,
       db
-        .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
+        .prepare(
+          "UPDATE guide SET status = 'consumed', outcome = 'approved', markdown = ?, updated = ? WHERE id = ?",
+        )
         .bind(withStatus(withNote(task.markdown, line), "consumed"), at, id),
     ]);
     await event(db, id, "approved", { account, at, body: said });
@@ -2326,25 +2330,44 @@ export async function closeGuide(
     .all<{ account_id: string }>();
   await db.batch([
     db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
+    // Accepting what was handed in is approving it; closing with nothing handed in is archiving.
     db
-      .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
-      .bind(withStatus(g.markdown, "consumed"), at, id),
+      .prepare(
+        "UPDATE guide SET status = 'consumed', outcome = ?, markdown = ?, updated = ? WHERE id = ?",
+      )
+      .bind(inReview.length ? "approved" : "archived", withStatus(g.markdown, "consumed"), at, id),
   ]);
   await event(db, id, "closed", { account, at, body: byOwner ? "closed by a teammate" : "" });
   return { claimants: results.map((r) => r.account_id), author: g.account_id, byOwner };
 }
 
 /**
- * Guides sent to somebody that nothing has happened to, for something on a clock to close.
+ * Guides sent to somebody that nothing has happened to, for something on a clock to put back.
  *
  * "Nothing" is meant strictly: nobody pulled it, nobody said they were taking it, nobody holds it,
  * nobody gave a verdict. A guide with any of those is a conversation in progress, however slow,
- * and closing it would be taking it off somebody's list while they are still on it.
+ * and moving it would be taking it off somebody's list while they are still on it.
  *
- * `consumed` is the right end for this and not a lie about the work: it is the author's shelf,
- * reversible, and explicitly not a judgement that the work landed. What it says is that this
- * stopped being live, which after a fortnight of silence it did.
+ * They go back to Draft (`backToDraft`), not to Done. Done is finished work, approved or archived
+ * by a person; a guide nobody took is neither, it stopped waiting on somebody who is not coming.
+ * From Draft its author marks it Ready again, to the same person or another, or archives it.
  */
+export async function backToDraft(db: D1Database, id: string): Promise<boolean> {
+  const g = await db
+    .prepare("SELECT markdown FROM guide WHERE id = ? AND status = 'published'")
+    .bind(id)
+    .first<{ markdown: string }>();
+  if (!g) return false;
+  // `updated` is left alone: nothing happened to the work, and moving it is not news a day later
+  // from the Draft reminder too.
+  await db
+    .prepare(
+      "UPDATE guide SET status = 'draft', markdown = ? WHERE id = ? AND status = 'published'",
+    )
+    .bind(withStatus(g.markdown, "draft"), id)
+    .run();
+  return true;
+}
 /**
  * How long a sent guide may sit with nothing happening to it before the clock shelves it.
  *

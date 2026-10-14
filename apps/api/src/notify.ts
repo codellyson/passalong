@@ -62,9 +62,8 @@ export const KINDS = [
   "reassigned",
   // The one event with no actor: a lease ran out and nobody did anything, which is the news.
   "stalled",
-  // The other one. A guide sent to somebody sat untouched long enough that the clock archived it.
-  // The id says "shelved" because rows are stored under it; every sentence a person reads says
-  // "archived", which is what the hub calls the same thing.
+  // The other one. A guide sent to somebody sat untouched long enough that the clock put it back
+  // in Draft. The id says "shelved" because rows are stored under it; the sentence says Draft.
   "shelved",
   // Also actorless: a guide left in Draft for a day. Draft is where every guide starts, and nothing
   // else says it never reached anyone.
@@ -755,7 +754,7 @@ export function line(r: LineFacts): string {
     case "shelved":
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
-      return `${title} was archived — nobody opened it${note}`;
+      return `${title} went back to Draft — nobody took it${note}`;
     case "still_draft":
       return `${title} is still a draft — nobody can take it until you mark it Ready`;
     case "stalled":

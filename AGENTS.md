@@ -295,7 +295,13 @@ change. Its README says how.
   stays Draft. Email, webhooks and `file_bugs` file every kind as a draft, and the day-old Draft
   reminder covers every kind. **A task's write-up is not on the board**: the transfer an agent
   publishes for its hand-in is stored as Done and named for its task (`report_of`, migration
-  0053) when the hand-in names it, and `GET /v1/guides` leaves it out.
+  0053) when the hand-in names it, and `GET /v1/guides` leaves it out; ones approved before then are
+  found by timing (published within five minutes before their author's hand-in event). **Done says
+  how it got there**: `outcome` (migration 0054) is `approved` (approve, accepting a hand-in, an
+  author's mark-done) or `archived` (the status route, closing with nothing handed in), and is
+  cleared when it leaves Done. **Ready work nobody took for a fortnight goes back to Draft**
+  (`backToDraft`), never to Done, which is finished work. **Not for me** is `pass` on work you do
+  not hold, for any kind: the sender is told why.
 - **A CLI too old for the server's rules is refused, not warned.** Every CLI call carries
   `x-passalong-version` (`VERSION` in `src/api.js`), and the token branch of the auth middleware
   answers **426** below `MIN_CLIENT` (`apps/api/src/clients.ts`) with the install command and the
