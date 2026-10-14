@@ -305,6 +305,10 @@ test("finishing needs a transfer guide, and moves the task to review", async () 
   const [row] = (await list(db, "me", T0)).filter((r) => r.task.id === "t1");
   assert.equal(row.state, "review");
   assert.equal(row.claim.report_id, "report");
+  // The write-up is the record of the work, not work: stored as Done and named for its task, which
+  // keeps it off the board.
+  const written = db.raw.prepare("SELECT status, report_of FROM guide WHERE id = 'report'").get();
+  assert.deepEqual({ ...written }, { status: "consumed", report_of: "t1" });
   // Finished is not held: the agent is free for the next one, and this task is not handed out again.
   assert.equal(await next(db, A, { at: T0 }), null);
 });
@@ -808,7 +812,7 @@ test("a handoff's checks are held to the same rule as a task's", async () => {
   assert.match(failed.error, /did not hold/);
 });
 
-test("a task left in Draft a day is returned once, in the run it crosses", async () => {
+test("a guide left in Draft a day is returned once, in the run it crosses", async () => {
   const db = d1();
   const guide = seed(db);
   const day = new Date(Date.parse(T0) - DRAFT_NUDGE_MS);
@@ -816,14 +820,15 @@ test("a task left in Draft a day is returned once, in the run it crosses", async
   guide("forgot", { status: "draft", created: at(-60_000) });
   guide("ready", { created: at(-60_000) });
   guide("note", { status: "draft", kind: "transfer", created: at(-60_000) });
+  guide("shared", { kind: "transfer", created: at(-60_000) });
   guide("fresh", { status: "draft", created: at(60_000) });
   guide("older", { status: "draft", created: at(-3 * 60 * 60 * 1000) });
 
   const window = await staleDrafts(db, day.toISOString(), at(-90 * 60 * 1000));
   assert.deepEqual(
     window.map((g) => g.id),
-    ["forgot"],
-    "only a draft task that crossed a day inside the window",
+    ["forgot", "note"],
+    "only drafts, of any kind, that crossed a day inside the window",
   );
 });
 

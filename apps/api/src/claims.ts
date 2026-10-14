@@ -1257,6 +1257,19 @@ export async function finish(
           : "this agent does not hold that task — it was released, or never taken here",
     };
   }
+  // The write-up is the record of this work, not work for anyone: off the board, stored as Done,
+  // naming the task it reports on (0053_report_of.sql). It was a draft until now, like every guide.
+  const written = await db
+    .prepare("SELECT markdown FROM guide WHERE id = ?")
+    .bind(report)
+    .first<{ markdown: string }>();
+  if (written)
+    await db
+      .prepare(
+        "UPDATE guide SET status = 'consumed', markdown = ?, report_of = ?, updated = ? WHERE id = ?",
+      )
+      .bind(withStatus(written.markdown, "consumed"), id, at, report)
+      .run();
   const claim = await claimFor(db, id, who);
   if (claim)
     await event(db, id, "handed_in", {
@@ -2378,14 +2391,14 @@ export async function staleSent(
 }
 
 /**
- * How long a task sits untouched in Draft before its author is reminded. A new task is always
- * draft and only a person's Ready publishes it, so a task somebody meant to queue and forgot to
- * mark Ready waits forever with nothing saying so.
+ * How long a guide sits untouched in Draft before its author is reminded. Every new guide is a
+ * draft and only a person's Ready sends it on, so one somebody meant to send and forgot to mark
+ * Ready waits forever with nothing saying so.
  */
 export const DRAFT_NUDGE_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Draft tasks whose last edit crossed DRAFT_NUDGE_MS inside (`since`, `before`]: each one is
+ * Drafts, of any kind, whose last edit crossed DRAFT_NUDGE_MS inside (`since`, `before`]: each one is
  * returned in the one run it crosses, as `stalled` does, so this is a reminder and not a nag. An
  * edit moves `updated` forward and the draft crosses again a day later.
  */
@@ -2397,7 +2410,7 @@ export async function staleDrafts(
   const { results } = await db
     .prepare(
       `SELECT id, account_id, team_id FROM guide
-        WHERE kind = 'task' AND status = 'draft' AND updated <= ?1 AND updated > ?2
+        WHERE status = 'draft' AND updated <= ?1 AND updated > ?2
         ORDER BY updated ASC
         LIMIT 200`,
     )

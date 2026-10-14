@@ -112,8 +112,8 @@ export default defineNitroPlugin((nitro) => {
       console.error("stall notice failed", err);
     }
 
-    // Tasks left in Draft for a day. Draft is where every task starts, and one its author meant to
-    // queue sits there with nothing saying so. Feed only, no mail, like a stall notice.
+    // Guides left in Draft for a day. Draft is where every guide starts, and one its author meant to
+    // send sits there with nothing saying so. Feed only, no mail, like a stall notice.
     try {
       const now = Date.now();
       const before = new Date(now - DRAFT_NUDGE_MS).toISOString();
@@ -127,7 +127,7 @@ export default defineNitroPlugin((nitro) => {
           actor_id: "",
           team_id: g.team_id,
         });
-      if (drafts.length) console.log(`reminded about ${drafts.length} draft task(s)`);
+      if (drafts.length) console.log(`reminded about ${drafts.length} draft(s)`);
     } catch (err) {
       console.error("draft reminder failed", err);
     }
