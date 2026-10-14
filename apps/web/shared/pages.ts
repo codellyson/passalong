@@ -30,8 +30,9 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/", draft: false, updated: "2026-10-03" },
   { path: "/mcp-server", draft: false, updated: "2026-10-03" },
   { path: "/connect", draft: false, updated: "2026-10-03" },
-  { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-03" },
-  { path: "/docs/guide-format", draft: false, footer: "Guide format", updated: "2026-09-27" },
+  { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-14" },
+  { path: "/docs/guide-format", draft: false, footer: "Guide format", updated: "2026-10-14" },
+  { path: "/docs/integrations", draft: false, footer: "Integrations", updated: "2026-10-14" },
   { path: "/faq", draft: false, footer: "FAQ", updated: "2026-10-03" },
   // A draft until its first post is published. The posts themselves are content/blog/*.md, each
   // with its own `draft`, and the sitemap lists the published ones once /blog is.

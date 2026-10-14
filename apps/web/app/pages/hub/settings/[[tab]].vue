@@ -1,10 +1,14 @@
 <!--
   Settings: who you are, what you pay for, who you work with, and what else can act as you.
 
-  Four pages, one topic each: Account (the default), Plan, Teams and Connections. It used to be one
-  long scroll of ten sections, and it was overwhelming: the section you came for was buried among
-  the ones you did not. The sidebar is now the four pages, each carrying its own state ("2 need
+  Five pages, one topic each: Account (the default), Plan, Teams, Agents and Integrations. It used to be
+  one long scroll of ten sections, and it was overwhelming: the section you came for was buried
+  among the ones you did not. The sidebar is now the pages, each carrying its own state ("2 need
   you", "1 failing"), and each page opens with the "Needs you" items that belong to it.
+
+  Agents and Integrations are two pages because they face opposite ways: Agents is what acts as you
+  (connected apps, API tokens), Integrations is what sends work to you (email, Sentry, PostHog).
+  Agents keeps the `connections` address it had when both were one page.
 
   Old links still land: `/hub/settings#plan` is forwarded to the page holding `#plan`.
 -->
@@ -70,7 +74,8 @@ const TABS = [
   { id: "account", label: "Account", path: "/hub/settings" },
   { id: "plan", label: "Plan", path: "/hub/settings/plan" },
   { id: "teams", label: "Teams", path: "/hub/settings/teams" },
-  { id: "connections", label: "Connections", path: "/hub/settings/connections" },
+  { id: "connections", label: "Agents", path: "/hub/settings/connections" },
+  { id: "integrations", label: "Integrations", path: "/hub/settings/integrations" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -78,7 +83,8 @@ type Tab = (typeof TABS)[number]["id"];
 function tabOf(anchor: string): Tab {
   if (anchor === "plan") return "plan";
   if (anchor.startsWith("team-") || anchor === "new-team") return "teams";
-  if (["apps", "tokens", "email-in"].includes(anchor)) return "connections";
+  if (["apps", "tokens"].includes(anchor)) return "connections";
+  if (["integrations", "email-in"].includes(anchor)) return "integrations";
   return "account";
 }
 
@@ -236,8 +242,8 @@ const noteTone: Record<string, string> = {
           </section>
         </div>
 
-        <div v-else :class="band">
-          <h2 :class="bandLabel">Connections</h2>
+        <div v-else-if="tab === 'connections'" :class="band">
+          <h2 :class="bandLabel">Agents</h2>
 
           <section id="apps" :class="sec" aria-labelledby="apps-h">
             <div :class="secHead">
@@ -269,16 +275,19 @@ const noteTone: Record<string, string> = {
             </div>
             <HubTokens />
           </section>
+        </div>
 
-          <section id="email-in" :class="sec" aria-labelledby="email-in-h">
+        <div v-else :class="band">
+          <h2 :class="bandLabel">Integrations</h2>
+          <section id="integrations" :class="sec" aria-labelledby="integrations-h">
             <div :class="secHead">
-              <h3 id="email-in-h" :class="title">Email in</h3>
+              <h3 id="integrations-h" :class="title">Email, Sentry and PostHog</h3>
               <p :class="blurb">
-                Email one of these addresses and it becomes a guide: a task, a bug or a transfer.
-                Tasks wait as Drafts until you mark them Ready.
+                Errors from Sentry and PostHog, and emails sent to you, arrive here as tasks, bugs or
+                transfers. Tasks wait as Drafts until you mark them Ready.
               </p>
             </div>
-            <HubEmailIn />
+            <HubIntegrations />
           </section>
         </div>
       </div>

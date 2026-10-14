@@ -78,6 +78,7 @@ test("every kind renders a sentence naming who did what", () => {
     // Both actorless: a machine sent them, so neither names a person.
     'An email became "Add Paystack webhook verification"',
     "A new sender wants to email you guides. Allow or block it in Settings",
+    '"Add Paystack webhook verification" came in from a webhook',
   ]);
 });
 

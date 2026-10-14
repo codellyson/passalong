@@ -28,7 +28,10 @@ const FIELDS = [
     name: "title",
     note: "What the work accomplishes, as a verb phrase. It is the line in an inbox.",
   },
-  { name: "kind", note: "transfer (or absent), bug or task. Read it before acting." },
+  {
+    name: "kind",
+    note: "transfer, bug or task, always stated: a guide without one is refused. Read it before acting.",
+  },
   {
     name: "created",
     note: "When it was written. Stamped for you; the reader uses it to judge the stack.",
@@ -52,7 +55,7 @@ const FIELDS = [
   },
   {
     name: "target_context",
-    note: "Tasks only. The repo the work is for, as owner/repo. Empty is a task for no repo.",
+    note: "Tasks only. The repo the work is for, as owner/repo; chosen when the task is marked Ready if it has none. Empty is a task for no repo.",
   },
   {
     name: "blocked_by",
