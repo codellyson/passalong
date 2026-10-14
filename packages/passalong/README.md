@@ -28,7 +28,7 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 ## Commands
 
 ```
-passalong share [file] [--to team[/handle]]  publish a guide → id + link; --to hands it to a team or teammate
+passalong share [file] [--to team[/handle]]  publish a guide as a draft → id + link; --to addresses it
 passalong pull <id|link>      print a guide; --save also writes ./.passalong/<id>.md (git-ignored)
 passalong inbox               guides handed to you that you have not pulled yet
 passalong board               waiting on you, in flight, landed, worth keeping
@@ -36,8 +36,6 @@ passalong activity [--all]    what happened while you were away; clears unless -
 passalong list [query]        your guides and your teams'
 passalong open <id> [--print] view a guide in the browser (or the terminal)
 passalong hub                 open your synced guides in the browser
-passalong works <id> <shot>   you tried it and it holds up, with a screenshot of it working
-passalong broken <id> <why>   you tried it and it does not — the author is told, with your reason
 passalong archive <id>        off your board and out of the free tier's count (was `done`)
 passalong promote <id>        deprecated: mark promoted
 passalong rm <id>             delete a guide locally and from sync
@@ -75,11 +73,10 @@ passalong inbox                         # on Ada's side: what was handed to you
 passalong activity                      # back on your side: it landed, and who pulled it
 ```
 
-A receiver who tries the work reports back with `passalong works <id> <screenshot.png>` or
-`passalong broken <id> <why>`. That is separate from `done`, which means *implemented*: a verdict
-means it actually runs. A passing one has to show it — at least one screenshot of it working, kept
-until 5 days after the guide is closed — a failing one has to say why, and the author sees it on
-their board and in their inbox.
+Every guide, whatever its kind, moves the same way: it is a draft until a person marks it Ready
+(`passalong ready <id>`), then whoever takes it (`passalong take <id>`) holds it, hands it in with
+the evidence, and a person approves it or sends it back with the reason (`passalong approve` /
+`passalong reject`).
 
 Sign in at [the hub](https://passalong.dev/hub) with an email and password, and mint
 an API token there for the CLI and MCP servers — named, revocable, and shown once. Your password

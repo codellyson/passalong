@@ -47,20 +47,17 @@ export function sendHandoff(
       body: [
         button("Open the guide", o.url),
         p(
-          `You can answer there: say whether you're taking it or passing it on. Until you do, ` +
-            `${b(o.fromName)} can't tell whether you have seen it.`,
+          `Take it there when you start: nobody else can take it while you hold it, and ` +
+            `${b(o.fromName)} sees you have it.`,
         ),
-        p(
-          "Once you have tried it, say whether it worked. It's the only word they get back.",
-          MUTED,
-        ),
+        p("Hand it in when it is done, with what you ran to show it.", MUTED),
       ],
-      // The CLI is for whoever lives in a terminal or hands this to an agent. The archiving verb is
-      // not mentioned: what the sender is owed is whether it worked, not that it was put away.
+      // The CLI is for whoever lives in a terminal or hands this to an agent: the same verb as the
+      // button, so every kind is taken the one way.
       foot: [
         footnote(
-          `Using a terminal or an agent? <code>passalong pull ${o.id}</code>, then ` +
-            `<code>passalong works ${o.id} &lt;screenshot&gt;</code> once you have seen it working.`,
+          `Using a terminal or an agent? <code>passalong take ${o.id}</code>, and hand it in ` +
+            "when it is done.",
         ),
       ],
     }),
