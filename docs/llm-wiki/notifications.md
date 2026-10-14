@@ -51,7 +51,7 @@ metric alert warning or critical; everything else answers 200 and makes nothing)
 its default `{event, person}` body (an error tracking alert or an `$exception`), and anything
 else as `{title, text, url, id}`. Repeats merge on the sender's own id when it has one (a Sentry
 issue, a PostHog issue or fingerprint), else on the title. A webhook guide notifies as `hooked`.
-Settings calls the whole card **Work in** and shows one source's addresses and steps at a time.
+Settings shows it on its own page, **Integrations**, one source's addresses and steps at a time.
 
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings
 says Email in is not set up.

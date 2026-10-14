@@ -85,7 +85,7 @@ Five pages, one topic each, at `/hub/settings/[[tab]]`:
 - **Teams**: the team cards.
 - **Agents** (`/connections`, the address it had before the split): connected apps and API tokens,
   what acts as you.
-- **Work in** (`/work-in`): email, Sentry, PostHog and webhooks, what sends work to you.
+- **Integrations** (`/integrations`): email, Sentry, PostHog and webhooks, what sends work to you.
 
 It was one scroll of ten sections, and people found it overwhelming. The sidebar lists the four
 pages, each with its own state ("2 need you", "1 failing"), and each page opens with only the

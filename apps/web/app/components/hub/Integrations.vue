@@ -1,5 +1,5 @@
 <!--
-  Work in (apps/api/src/inbound.ts): the ways a guide arrives from outside — email to an address,
+  Integrations (apps/api/src/inbound.ts): the ways a guide arrives from outside — email to an address,
   or a webhook from Sentry, PostHog or your own code — and the email senders asking to be let in.
 
   The kind is in the address or URL (`+bug`, `/bug`) because a guide's kind is always stated,
@@ -87,9 +87,9 @@ const choices = [
 <template>
   <div class="flex flex-col gap-4 font-ui text-sm">
     <p v-if="problem" class="m-0 text-danger" role="alert">{{ problem }}</p>
-    <HubSkeleton v-if="!state && !problem" variant="lines" :rows="2" label="Loading work in" />
+    <HubSkeleton v-if="!state && !problem" variant="lines" :rows="2" label="Loading integrations" />
     <p v-else-if="state && !state.available" class="m-0 text-muted">
-      Work in isn't set up on this server yet.
+      Integrations aren't set up on this server yet.
     </p>
 
     <template v-else-if="state">
