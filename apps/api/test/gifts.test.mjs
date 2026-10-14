@@ -355,8 +355,8 @@ test("a subscription arriving clears the date a gift left behind", () => {
   // Otherwise a webhook would put somebody on a paid plan that expires on a day an operator typed
   // months earlier, and the charge would go on.
   const webhook = index.slice(
-    index.indexOf("const soloId ="),
-    index.indexOf('count(c, "plan_changed", { provider, plan: change.plan, subject: "team" })'),
+    index.indexOf('app.post("/v1/billing/webhook/bachs"'),
+    index.indexOf("const billingFailed ="),
   );
   assert.equal([...webhook.matchAll(/plan_until = ''/g)].length, 2, "the account's and the team's");
 });

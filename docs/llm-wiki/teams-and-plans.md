@@ -26,15 +26,16 @@ What an account may sync is a **name**, not a number: `unlimited` (a seat on a p
 one integer where 0 meant unlimited, and the day "may sync nothing" arrived, both zeroes read as
 unlimited.
 
-- **Team** is per seat and lifts whoever sits in it. Seats are counted where somebody joins, not at
+- **Team** is $20 a month for up to 10 seats and lifts whoever sits in it; bigger teams are set up by hand. Seats are counted where somebody joins, not at
   checkout. A plan belongs to the team; an account's ceiling is derived from it on every read, never
   copied onto the account.
 - **Solo** is one person's plan (`account.plan`), for someone who would otherwise invent a team of one.
 - **Free** is open to new accounts in production (`FREE_SIGNUP` is `"1"`, reopened 2026-10-08; it was closed from 2026-09-11 and the wall it made is why). It is a ceiling of `FREE_SYNC_LIMIT` synced guides; accounts that existed before the cutover keep theirs either way.
 - **Lapsed is read-only, not dark.** New work stops flowing in; nothing already there is withheld,
   and verdicts and acks keep working — they belong to the reader, not the person who missed a payment.
-- **Checkout is hosted** (Stripe, Paystack); the webhook, verified over the raw body, is what writes a
-  plan. Test or live is read off the key itself.
+- **Checkout is hosted** by Bachs, a merchant of record, and its billing page is where a payer changes
+  a card or cancels; the webhook, verified over the raw body, is what writes a plan, and an event
+  older than the stored plan is dropped. Test or live is read off the key itself.
 - **Gifts** end on their date, and never touch a subscription.
 
 ## Roles

@@ -83,14 +83,12 @@ import {
 } from "./auth.js";
 import {
   BillingError,
-  isProvider,
+  fromBachs,
   modeOf,
-  type Provider,
-  parseEvent,
-  setSeats,
+  portalSession,
   startCheckout,
-  verifyPaystack,
-  verifyStripe,
+  TEAM_SEATS,
+  verifyWebhook,
 } from "./billing.js";
 import * as claims from "./claims.js";
 import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
@@ -262,11 +260,10 @@ type Env = MailEnv &
     FREE_SIGNUP?: string;
     /** Billing. Optional, like every other integration here: without them a deployment runs
         exactly as before and every webhook is refused rather than trusted. */
-    STRIPE_WEBHOOK_SECRET?: string;
-    STRIPE_SECRET?: string;
-    STRIPE_PRICE?: string;
-    PAYSTACK_SECRET?: string;
-    PAYSTACK_PLAN?: string;
+    BACHS_SECRET?: string;
+    BACHS_WEBHOOK_SECRET?: string;
+    BACHS_TEAM_PRODUCT?: string;
+    BACHS_SOLO_PRODUCT?: string;
     FREE_SYNC_LIMIT: string;
     /**
      * Who may give a plan away: account ids, comma-separated. Empty — the default — means nobody,
@@ -2060,8 +2057,10 @@ app.get("/v1/teams/:slug", async (c) => {
     plan: team.plan,
     // Zero seats on a free plan is not "no room" — seats are simply not what limits that team, so
     // the client reads the plan first. Never the subscription id: it is the provider's handle on a
-    // paying customer and nothing in a browser needs it.
+    // paying customer and nothing in a browser needs it. Whether one exists is enough to offer
+    // the billing page, which a given plan has none of.
     seats: team.seats,
+    subscribed: !!team.subscription_id,
     members_count: members.length,
   });
 });
@@ -3387,89 +3386,91 @@ app.get("/v1/log", async (c) => {
 
 // ---- billing ----------------------------------------------------------------------------------
 
-// The provider telling us a subscription changed. It is the only write in the product that no
-// person authenticates: the signature over the raw body is the entire credential, which is why
+// Bachs telling us a subscription changed. It is the only write in the product that no person
+// authenticates: the signature over the raw body is the entire credential, which is why
 // `billing.ts` is unit-tested to the edges and why the body is read with `c.req.text()` here —
 // parsing first and verifying second is the classic way to verify a different set of bytes than
 // the one that was signed.
-app.post("/v1/billing/webhook/:provider", async (c) => {
-  const named = c.req.param("provider");
-  if (!isProvider(named)) return err(c, 404, "That billing provider isn't supported.");
-  const provider: Provider = named;
+app.post("/v1/billing/webhook/bachs", async (c) => {
   const raw = await c.req.text();
+  // The V2 header carries every valid signature during a secret rotation; the older pair is the
+  // same signature split in two, accepted so a delivery without V2 is not refused for its shape.
+  const header =
+    c.req.header("x-bachs-signature-v2") ||
+    `t=${c.req.header("x-bachs-timestamp") || ""},v1=${c.req.header("x-bachs-signature") || ""}`;
 
   let event: unknown;
   try {
-    event =
-      provider === "stripe"
-        ? await verifyStripe(
-            raw,
-            c.req.header("stripe-signature") || "",
-            c.env.STRIPE_WEBHOOK_SECRET || "",
-          )
-        : await verifyPaystack(
-            raw,
-            c.req.header("x-paystack-signature") || "",
-            c.env.PAYSTACK_SECRET || "",
-          );
+    event = await verifyWebhook(raw, header, c.env.BACHS_WEBHOOK_SECRET || "");
   } catch (e) {
-    // The provider's own message, which is about our configuration and never about their payload,
-    // so there is nothing here that helps someone guess a secret.
+    // Our own message, which is about the signature and never about their payload, so there is
+    // nothing here that helps someone guess a secret.
     return err(c, 400, e instanceof BillingError ? e.message : "could not read that webhook");
   }
 
-  const change = parseEvent(provider, event);
+  const change = fromBachs(event);
   // 200 for an event we do not act on. A webhook endpoint that errors on anything it has no opinion
   // about is one the provider retries all day and then disables, taking the events that do matter
   // with it.
   if (!change) return c.json({ ok: true, applied: false });
 
-  // By subscription first, then by the team id the provider carried in metadata. The second is how
-  // a *first* subscription is ever matched: the id does not exist when we send someone to a checkout
-  // page, so until this event arrives there is nothing on the team to look it up by.
-  type TeamPlanRow = { id: string; slug: string; plan: string; seats: number };
-  // A Solo subscription belongs to a person, so it is looked up the same two ways and applied to
-  // `account` instead. Checked first only because it is the cheaper query; the two subjects are
-  // mutually exclusive, since the metadata carries exactly one of them.
-  const soloId =
-    change.account_id ||
-    (
-      await c.env.DB.prepare("SELECT id FROM account WHERE subscription_id = ?")
-        .bind(change.subscription_id)
-        .first<{ id: string }>()
-    )?.id ||
-    "";
-  if (soloId && !change.team_id) {
-    const plan = change.plan === "team" ? "solo" : change.plan;
-    // `plan_until` is cleared: a subscription is not a gift, and a date left over from one would
-    // expire a plan somebody is now being charged for. See migrations/0026_gifts.sql.
-    const done = await c.env.DB.prepare(
-      "UPDATE account SET plan = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
+  // Delivery is out of order. An event older than the one that set the stored plan for this same
+  // subscription is history, and applying it would undo what came after — a late `created` turning
+  // a cancelled plan back on. `plan_since` holds Bachs's own time for what it last wrote.
+  const stale = (row: { subscription_id: string; plan_since: string } | null) =>
+    !!row &&
+    !!change.at &&
+    row.subscription_id === change.subscription_id &&
+    row.plan_since > change.at;
+  const since = change.at || now();
+
+  // A Solo subscription belongs to a person, so it is looked up the same two ways a team is — by
+  // subscription, then by the account the checkout carried in metadata — and applied to `account`.
+  // The two subjects are mutually exclusive, since the metadata carries exactly one of them.
+  type Held = { id: string; subscription_id: string; plan_since: string };
+  if (!change.team_id) {
+    const solo = await c.env.DB.prepare(
+      "SELECT id, subscription_id, plan_since FROM account WHERE subscription_id = ? OR id = ? LIMIT 1",
     )
-      .bind(plan, now(), change.subscription_id, soloId)
-      .run();
-    if (done.meta.changes) {
-      count(c, "plan_changed", { provider, plan, subject: "account" });
+      .bind(change.subscription_id, change.account_id || "")
+      .first<Held>();
+    if (solo) {
+      if (stale(solo)) return c.json({ ok: true, applied: false });
+      const plan = change.plan === "team" ? "solo" : change.plan;
+      // `plan_until` is cleared: a subscription is not a gift, and a date left over from one would
+      // expire a plan somebody is now being charged for. See migrations/0026_gifts.sql.
+      await c.env.DB.prepare(
+        "UPDATE account SET plan = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
+      )
+        .bind(plan, since, change.subscription_id, solo.id)
+        .run();
+      count(c, "plan_changed", { provider: "bachs", plan, subject: "account" });
       return c.json({ ok: true, applied: true });
     }
   }
 
+  // By subscription first, then by the team id carried in metadata. The second is how a *first*
+  // subscription is ever matched: the id does not exist when we send someone to a checkout page, so
+  // until this event arrives there is nothing on the team to look it up by.
+  type TeamPlanRow = Held & { seats: number };
   let team = await c.env.DB.prepare(
-    "SELECT id, slug, plan, seats FROM team WHERE subscription_id = ?",
+    "SELECT id, seats, subscription_id, plan_since FROM team WHERE subscription_id = ?",
   )
     .bind(change.subscription_id)
     .first<TeamPlanRow>();
   if (!team && change.team_id) {
-    team = await c.env.DB.prepare("SELECT id, slug, plan, seats FROM team WHERE id = ?")
+    team = await c.env.DB.prepare(
+      "SELECT id, seats, subscription_id, plan_since FROM team WHERE id = ?",
+    )
       .bind(change.team_id)
       .first<TeamPlanRow>();
   }
   // Also 200, and deliberately: a subscription we have never heard of is the provider's business,
   // not a failure of ours, and answering 4xx would have them retry something that can never work.
-  if (!team) return c.json({ ok: true, applied: false });
+  if (!team || stale(team)) return c.json({ ok: true, applied: false });
 
-  // Seats only move when the event carried a count. A payment failing says nothing about how many
-  // seats were bought, and writing zero there would silently unseat the whole team.
+  // Seats only move when the event carried a count. A lapse says nothing about how many seats were
+  // bought, and writing zero there would silently unseat the whole team.
   // The subscription id is written here and only here, which is what binds a team to the thing
   // paying for it. Never cleared on a lapse: a lapsed team that renews is the same subscription,
   // and forgetting it would orphan every event that follows.
@@ -3478,11 +3479,21 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
   await c.env.DB.prepare(
     "UPDATE team SET plan = ?, seats = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
   )
-    .bind(change.plan, change.seats ?? team.seats, now(), change.subscription_id, team.id)
+    .bind(change.plan, change.seats ?? team.seats, since, change.subscription_id, team.id)
     .run();
-  count(c, "plan_changed", { provider, plan: change.plan, subject: "team" });
+  count(c, "plan_changed", { provider: "bachs", plan: change.plan, subject: "team" });
   return c.json({ ok: true, applied: true });
 });
+
+/** A refusal from Bachs, or from us about Bachs, in words a person can act on. */
+const billingFailed = (c: Parameters<typeof err>[0], e: unknown) =>
+  err(
+    c,
+    502,
+    e instanceof BillingError
+      ? e.message
+      : "We couldn't reach the payment provider. Try again in a moment.",
+  );
 
 // Buy Solo: a subscription that belongs to this account rather than to a team.
 //
@@ -3490,22 +3501,16 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
 // subscription route was team-scoped and owner-only, so an individual who wanted to pay had to
 // invent a team of one. That is also why `FREE_SIGNUP` could not be closed: there was nowhere for a
 // new account to go.
-//
-// One seat, not a number: the plan is one person by definition, and a quantity field on it would be
-// a way to ask a question with only one answer.
 app.post("/v1/subscribe", async (c) => {
   const account = c.get("account");
-  const { provider } = (await c.req.json().catch(() => ({}))) as { provider?: string };
-  if (!provider || !isProvider(provider))
-    return err(c, 400, "Choose Stripe or Paystack to pay with.");
-
   const me = await c.env.DB.prepare("SELECT email, plan, subscription_id FROM account WHERE id = ?")
     .bind(account)
     .first<{ email: string; plan: string; subscription_id: string }>();
   // Asked of the subscription, not of the plan: somebody on a gifted Solo (0026_gifts.sql) has the
   // plan and pays nothing, and telling them they already have it would leave them no way to buy
-  // the thing before their gift runs out.
-  if (me?.subscription_id) return err(c, 400, "You're already on the Solo plan.");
+  // the thing before their gift runs out. A lapsed one renews through a new checkout.
+  if (me?.subscription_id && me.plan === "solo")
+    return err(c, 400, "You're already on the Solo plan.");
   if (!me?.email)
     return err(
       c,
@@ -3514,51 +3519,39 @@ app.post("/v1/subscribe", async (c) => {
     );
 
   try {
-    const checkout = await startCheckout(provider, c.env, {
+    const checkout = await startCheckout(c.env, {
       subject: { kind: "account", id: account },
-      seats: 1,
       email: me.email,
       returnTo: `${origin(c)}/hub/settings`,
     });
-    count(c, "checkout_started", { provider, mode: checkout.mode, subject: "account" });
+    count(c, "checkout_started", { provider: "bachs", mode: checkout.mode, subject: "account" });
     return c.json(checkout);
   } catch (e) {
-    return err(
-      c,
-      502,
-      e instanceof BillingError
-        ? e.message
-        : "We couldn't reach the payment provider. Try again in a moment.",
-    );
+    return billingFailed(c, e);
   }
 });
 
 // Start paying. Owner only, and it hands back a hosted page rather than taking a card: this product
-// does not touch card details, which is also why there is no form here to build.
+// does not touch card details, which is also why there is no form here to build. The Team product
+// is flat — up to `TEAM_SEATS` people — so there is no quantity to ask for.
 app.post("/v1/teams/:slug/subscribe", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
   if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
   if (team.role !== "owner")
     return err(c, 403, "Only the team's owner can change its plan. Ask them to do it.");
-  const { provider, seats } = (await c.req.json().catch(() => ({}))) as {
-    provider?: string;
-    seats?: number;
-  };
-  if (!provider || !isProvider(provider))
-    return err(c, 400, "Choose Stripe or Paystack to pay with.");
-  const wanted = Math.trunc(Number(seats)) || 0;
-  if (wanted < 1) return err(c, 400, "Choose at least one seat.");
+  if (team.plan === "team" && team.subscription_id)
+    return err(c, 400, `${team.name} is already on the Team plan.`);
 
   const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
     .bind(team.id)
     .first<{ n: number }>();
-  // Buying fewer seats than the team already has would leave it instantly over its own limit, and
-  // the person who finds out is whoever tries to accept the next invite.
-  if (wanted < (members?.n ?? 0))
+  // Paying for ten would leave a bigger team instantly over its own limit, and the person who finds
+  // out is whoever tries to accept the next invite. Bigger teams are arranged by hand for now.
+  if ((members?.n ?? 0) > TEAM_SEATS)
     return err(
       c,
       400,
-      `${team.name} already has ${members?.n} members, so choose at least ${members?.n} seats.`,
+      `The Team plan covers ${TEAM_SEATS} people and ${team.name} has ${members?.n}. Write to support@kreativekorna.com and we'll set it up.`,
     );
 
   const me = await c.env.DB.prepare("SELECT email FROM account WHERE id = ?")
@@ -3572,82 +3565,47 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
     );
 
   try {
-    const checkout = await startCheckout(provider, c.env, {
+    const checkout = await startCheckout(c.env, {
       subject: { kind: "team", id: team.id },
-      seats: wanted,
       email: me.email,
       returnTo: `${origin(c)}/hub/settings`,
     });
-    count(c, "checkout_started", { provider, mode: checkout.mode, subject: "team" });
+    count(c, "checkout_started", { provider: "bachs", mode: checkout.mode, subject: "team" });
     return c.json(checkout);
   } catch (e) {
-    return err(
-      c,
-      502,
-      e instanceof BillingError
-        ? e.message
-        : "We couldn't reach the payment provider. Try again in a moment.",
-    );
+    return billingFailed(c, e);
   }
 });
 
-// Change how many seats are paid for. Owner only, and never below the number of people already in
-// the team — the seat count is what admits the next member, so setting it under the current size is
-// a refusal aimed at whoever joins next rather than at the person doing it.
-app.patch("/v1/teams/:slug/seats", async (c) => {
-  const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
-  if (team.role !== "owner")
-    return err(c, 403, "Only the team's owner can change its seats. Ask them to do it.");
-  if (team.plan !== "team")
-    return err(c, 400, `${team.name} isn't on a paid plan, so there are no seats to change.`);
-  if (!team.subscription_id)
-    return err(
-      c,
-      400,
-      `${team.name} has no subscription to change. Choose a plan in Settings first.`,
-    );
-  const { seats } = (await c.req.json().catch(() => ({}))) as { seats?: number };
-  const wanted = Math.trunc(Number(seats)) || 0;
-  if (wanted < 1) return err(c, 400, "Choose at least one seat.");
-  const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
-    .bind(team.id)
-    .first<{ n: number }>();
-  if (wanted < (members?.n ?? 0))
-    return err(
-      c,
-      400,
-      `${team.name} has ${members?.n} members. Remove someone before dropping to ${wanted} seat${wanted === 1 ? "" : "s"}.`,
-    );
-
-  // Stripe ids are `sub_...`; Paystack's are `SUB_...`. The subscription itself says which provider
-  // it belongs to, so nothing has to be stored twice and the two can never disagree.
-  const provider: Provider = team.subscription_id.startsWith("sub_") ? "stripe" : "paystack";
+// Bachs's own billing page for whoever pays: card, invoices, cancelling. `{ team: slug }` for a
+// team's subscription, which only its owner may open; nothing for your own Solo one. A fresh link
+// per click, because the link is a credential for that customer.
+app.post("/v1/billing/portal", async (c) => {
+  const { team: slug } = (await c.req.json().catch(() => ({}))) as { team?: string };
+  let subscription = "";
+  if (slug) {
+    const team = await teamBySlug(c, slug);
+    if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+    if (team.role !== "owner")
+      return err(c, 403, "Only the team's owner can manage its billing. Ask them to do it.");
+    subscription = team.subscription_id;
+  } else {
+    const me = await c.env.DB.prepare("SELECT subscription_id FROM account WHERE id = ?")
+      .bind(c.get("account"))
+      .first<{ subscription_id: string }>();
+    subscription = me?.subscription_id || "";
+  }
+  if (!subscription) return err(c, 400, "There's no subscription to manage yet.");
   try {
-    await setSeats(provider, c.env, team.subscription_id, wanted);
+    return c.json(await portalSession(c.env, subscription));
   } catch (e) {
-    return err(
-      c,
-      502,
-      e instanceof BillingError
-        ? e.message
-        : "We couldn't reach the payment provider. Try again in a moment.",
-    );
+    return billingFailed(c, e);
   }
-  // The provider's webhook is what writes the number: one source for what is paid for, and it is
-  // the subscription. Answering with the asked-for figure would have the hub show a seat count
-  // nothing has confirmed yet.
-  return c.json({ ok: true, seats: team.seats, pending: wanted });
 });
 
-// What this deployment can take money with, and in which mode. No secrets, only their shape — and
+// Whether this deployment can take money, and in which mode. No secrets, only their shape — and
 // the mode is read off the key, so it cannot disagree with the keys actually in use.
-app.get("/v1/billing", (c) =>
-  c.json({
-    stripe: modeOf(c.env.STRIPE_SECRET || ""),
-    paystack: modeOf(c.env.PAYSTACK_SECRET || ""),
-  }),
-);
+app.get("/v1/billing", (c) => c.json({ mode: modeOf(c.env.BACHS_SECRET || "") }));
 
 // ---- notifications ----------------------------------------------------------------------
 

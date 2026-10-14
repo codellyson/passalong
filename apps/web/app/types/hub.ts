@@ -210,6 +210,8 @@ export interface TeamDetail extends Team {
   guides: number;
   /** How many members the plan is paid for. Zero on a free plan, where seats are not the limit. */
   seats?: number;
+  /** Paid for through Bachs, so there is a billing page to open. A given plan has none. */
+  subscribed?: boolean;
   members_count?: number;
   /** How many channels are connected. Never their URLs — those are credentials for rooms. */
   channels?: number;
