@@ -78,7 +78,7 @@ type Tab = (typeof TABS)[number]["id"];
 function tabOf(anchor: string): Tab {
   if (anchor === "plan") return "plan";
   if (anchor.startsWith("team-") || anchor === "new-team") return "teams";
-  if (["apps", "tokens", "email-in"].includes(anchor)) return "connections";
+  if (["apps", "tokens", "work-in", "email-in"].includes(anchor)) return "connections";
   return "account";
 }
 
@@ -270,15 +270,15 @@ const noteTone: Record<string, string> = {
             <HubTokens />
           </section>
 
-          <section id="email-in" :class="sec" aria-labelledby="email-in-h">
+          <section id="work-in" :class="sec" aria-labelledby="work-in-h">
             <div :class="secHead">
-              <h3 id="email-in-h" :class="title">Email in</h3>
+              <h3 id="work-in-h" :class="title">Work in</h3>
               <p :class="blurb">
-                Email one of these addresses and it becomes a guide: a task, a bug or a transfer.
+                Turn email, Sentry, PostHog or your own code into guides: a task, a bug or a transfer.
                 Tasks wait as Drafts until you mark them Ready.
               </p>
             </div>
-            <HubEmailIn />
+            <HubWorkIn />
           </section>
         </div>
       </div>

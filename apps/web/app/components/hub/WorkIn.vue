@@ -1,12 +1,11 @@
 <!--
-  Email in (apps/api/src/inbound.ts): addresses that turn email into guides, one per kind, and the
-  senders that have written to them.
+  Work in (apps/api/src/inbound.ts): the ways a guide arrives from outside — email to an address,
+  or a webhook from Sentry, PostHog or your own code — and the email senders asking to be let in.
 
-  The kind is in the address — `+task`, `+bug`, `+transfer` — because a guide's kind is always
-  stated, never guessed, and whoever picks the address is the one stating it. How to use them
-  depends on who sends the email, so it asks that and shows one set of steps: a tool takes an
-  address in its notification settings, your own code adds one as a BCC, and mail you cannot
-  change is forwarded from Gmail. A sender's first message only asks to be let in.
+  The kind is in the address or URL (`+bug`, `/bug`) because a guide's kind is always stated,
+  never guessed, and whoever picks the address is the one stating it. It asks where the work comes
+  from and shows only that source's addresses and steps: Settings is overwhelming already, and four
+  sources' instructions at once would be the worst of it.
 -->
 <script setup lang="ts">
 interface Sender {
@@ -24,6 +23,7 @@ type Kind = "task" | "bug" | "transfer";
 const state = ref<{
   available: boolean;
   addresses: Record<Kind, string> | null;
+  hooks: Record<Kind, string> | null;
   target: string;
   senders: Sender[];
 } | null>(null);
@@ -36,7 +36,11 @@ const KINDS: { id: Kind; label: string; note: string }[] = [
 ];
 const busy = ref("");
 const problem = ref("");
-const source = ref<"tool" | "code" | "gmail">("tool");
+const source = ref<"email" | "sentry" | "posthog" | "code">("email");
+/** Email shows its addresses; every other source posts to its URL. */
+const shown = computed(() =>
+  source.value === "email" ? state.value?.addresses : state.value?.hooks,
+);
 /** Replacing or removing the addresses breaks whatever uses them, so it asks in place first. */
 const confirming = ref<"" | "new" | "off">("");
 
@@ -73,18 +77,19 @@ const decide = (s: Sender, to: "allowed" | "blocked") =>
   );
 
 const choices = [
-  { id: "tool", label: "A tool" },
-  { id: "code", label: "My own code" },
-  { id: "gmail", label: "Mail I can't change" },
+  { id: "email", label: "Email" },
+  { id: "sentry", label: "Sentry" },
+  { id: "posthog", label: "PostHog" },
+  { id: "code", label: "Your own code" },
 ] as const;
 </script>
 
 <template>
   <div class="flex flex-col gap-4 font-ui text-sm">
     <p v-if="problem" class="m-0 text-danger" role="alert">{{ problem }}</p>
-    <HubSkeleton v-if="!state && !problem" variant="lines" :rows="2" label="Loading email in" />
+    <HubSkeleton v-if="!state && !problem" variant="lines" :rows="2" label="Loading work in" />
     <p v-else-if="state && !state.available" class="m-0 text-muted">
-      Email in isn't set up on this server yet.
+      Work in isn't set up on this server yet.
     </p>
 
     <template v-else-if="state">
@@ -92,26 +97,12 @@ const choices = [
         <button class="btn primary" type="button" :disabled="Boolean(busy)" @click="make">
           {{ busy === "make" ? "Making…" : "Get your addresses" }}
         </button>
-        <span class="text-muted">One for each kind of guide: task, bug and transfer.</span>
+        <span class="text-muted">For email, Sentry, PostHog and your own code: one for each kind of guide.</span>
       </div>
 
       <template v-else>
-        <ul class="m-0 flex list-none flex-col gap-3 p-0">
-          <li v-for="k in KINDS" :key="k.id" class="flex flex-col gap-2">
-            <span><b class="font-medium text-fg">{{ k.label }}</b> <span class="text-muted">· {{ k.note }}</span></span>
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="flex h-[var(--control-h)] min-w-0 flex-1 items-center overflow-x-auto rounded-1 border border-line-strong bg-field px-3 font-code text-sm whitespace-nowrap text-fg"
-              >{{ state.addresses[k.id] }}</code>
-              <button class="btn" type="button" @click="copy(state.addresses[k.id], $event.currentTarget)">
-                <AppIcon name="copy" /><span data-label>Copy</span>
-              </button>
-            </div>
-          </li>
-        </ul>
-
         <fieldset class="m-0 flex flex-col gap-3 border-0 p-0">
-          <legend class="mb-2 p-0 font-medium text-fg">Who sends the email?</legend>
+          <legend class="mb-2 p-0 font-medium text-fg">Where does the work come from?</legend>
           <div class="flex flex-wrap gap-2" role="radiogroup">
             <label
               v-for="c in choices"
@@ -119,25 +110,73 @@ const choices = [
               class="btn sm static"
               :class="source === c.id ? 'primary' : ''"
             >
-              <input v-model="source" class="sr-only" type="radio" name="email-source" :value="c.id" />
+              <input v-model="source" class="sr-only" type="radio" name="work-source" :value="c.id" />
               {{ c.label }}
             </label>
           </div>
-          <p v-if="source === 'tool'" class="m-0 text-muted">
-            In Sentry, PostHog, an uptime monitor or any tool that sends email, add one of the
-            addresses as one more recipient: usually Bug for errors. Your own inbox keeps getting them
-            too.
-          </p>
-          <div v-else-if="source === 'code'" class="flex flex-col gap-2 text-muted">
-            <p class="m-0">Where your backend sends mail, add the address for the kind you want as a BCC:</p>
-            <code class="block overflow-x-auto rounded-1 border border-line bg-field px-3 py-2 font-code text-sm whitespace-pre text-fg">bcc: "{{ state.addresses.bug }}"</code>
+
+          <ul v-if="shown" class="m-0 flex list-none flex-col gap-3 p-0">
+            <li v-for="k in KINDS" :key="k.id" class="flex flex-col gap-2">
+              <span><b class="font-medium text-fg">{{ k.label }}</b> <span class="text-muted">· {{ k.note }}</span></span>
+              <div class="flex flex-wrap items-center gap-2">
+                <code
+                  class="flex h-[var(--control-h)] min-w-0 flex-1 items-center overflow-x-auto rounded-1 border border-line-strong bg-field px-3 font-code text-sm whitespace-nowrap text-fg"
+                >{{ shown[k.id] }}</code>
+                <button class="btn" type="button" @click="copy(shown[k.id], $event.currentTarget)">
+                  <AppIcon name="copy" /><span data-label>Copy</span>
+                </button>
+              </div>
+            </li>
+          </ul>
+
+          <div v-if="source === 'email'" class="flex flex-col gap-2 text-muted">
+            <p class="m-0">
+              Give an address to anything that sends email — an uptime monitor, a form, a colleague —
+              or add it as a BCC where your backend sends mail. A sender's first email asks to be
+              allowed below. To pass on one email, forward it from {{ myEmail }}.
+            </p>
+            <p class="m-0">
+              For mail you can't change, forward it from Gmail: Settings, then
+              <b class="font-medium text-fg">Forwarding</b>, add an address, and Gmail's confirmation
+              code shows up below as a sender. Then make a filter for the mail you want.
+            </p>
           </div>
-          <p v-else class="m-0 text-muted">
-            In Gmail, open Settings, then <b class="font-medium text-fg">Forwarding</b>, and add one of
-            the addresses. Gmail sends a confirmation code here: it appears below as a sender, with the
-            code in its subject. Then make a filter that forwards the mail you want. To pass on one
-            email, just forward it from {{ myEmail }}.
-          </p>
+          <ol v-else-if="source === 'sentry'" class="m-0 flex flex-col gap-1 pl-5 text-muted">
+            <li>
+              In Sentry, open <b class="font-medium text-fg">Settings → Developer Settings → Custom
+              Integrations</b> and create an <b class="font-medium text-fg">Internal Integration</b>.
+            </li>
+            <li>Paste the Bug URL above as its <b class="font-medium text-fg">Webhook URL</b>.</li>
+            <li>
+              Under <b class="font-medium text-fg">Webhooks</b>, tick <b class="font-medium text-fg">issue</b>
+              for every new issue, and turn on <b class="font-medium text-fg">Alert Rule Action</b> to
+              send only what an alert rule picks. Save.
+            </li>
+            <li>
+              Repeats of one Sentry issue stay one guide; resolved, assigned and other updates are
+              ignored.
+            </li>
+          </ol>
+          <ol v-else-if="source === 'posthog'" class="m-0 flex flex-col gap-1 pl-5 text-muted">
+            <li>
+              In PostHog, open <b class="font-medium text-fg">Error tracking → Configuration →
+              Alerting</b> and add an <b class="font-medium text-fg">HTTP Webhook</b> for issues created.
+            </li>
+            <li>Paste the Bug URL above, and leave the body as it is.</li>
+            <li>
+              Use <b class="font-medium text-fg">Test function</b>, then
+              <b class="font-medium text-fg">Create &amp; enable</b>. Repeats of one issue stay one guide.
+            </li>
+          </ol>
+          <div v-else class="flex flex-col gap-2 text-muted">
+            <p class="m-0">
+              POST JSON to a URL above. Only <code>title</code> is required; send the same
+              <code>id</code> again and it adds to the open guide instead of making a new one.
+            </p>
+            <code class="block overflow-x-auto rounded-1 border border-line bg-field px-3 py-2 font-code text-sm whitespace-pre text-fg">curl -X POST {{ state.hooks?.task }} \
+  -H 'content-type: application/json' \
+  -d '{"title": "Checkout is down", "text": "500s since 09:12", "url": "https://…", "id": "checkout-500"}'</code>
+          </div>
         </fieldset>
 
         <form class="flex flex-col gap-2" @submit.prevent="saveTarget($event.target as HTMLFormElement)">
@@ -160,8 +199,8 @@ const choices = [
           <p class="m-0 text-muted">
             {{
               state.target
-                ? `Once Ready, an agent working in ${state.target} takes a task from email on its own.`
-                : "Without one, an agent only takes a task from email when given it. owner/repo, as in the git remote."
+                ? `Once Ready, an agent working in ${state.target} takes these tasks on its own.`
+                : "Without one, an agent only takes these tasks when given one. owner/repo, as in the git remote."
             }}
           </p>
         </form>
@@ -207,7 +246,7 @@ const choices = [
       <div v-if="state.addresses" class="flex flex-wrap items-center gap-2">
         <template v-if="confirming">
           <span class="text-muted">
-            {{ confirming === "new" ? "The old addresses stop working at once." : "Email sent to them stops arriving." }}
+            {{ confirming === "new" ? "The old addresses stop working at once." : "Email and webhooks sent to them stop arriving." }}
           </span>
           <button class="btn outline danger sm" type="button" :disabled="Boolean(busy)" @click="confirming === 'new' ? make() : off()">
             {{ confirming === "new" ? "Make new addresses" : "Turn it off" }}

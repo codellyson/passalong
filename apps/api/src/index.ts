@@ -156,8 +156,11 @@ import {
   emailBody,
   fingerprint,
   GMAIL_CHECK,
+  hookPrint,
   NOTE_EVERY_MS,
   parseEmail,
+  readHook,
+  SOURCE_NAMES,
   titleOf,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
@@ -993,6 +996,9 @@ const publicShot = (method: string, path: string) =>
  * screen that has nothing to do with the problem. Letting it through costs nothing: the route
  * refuses an unknown provider, and a known one still has to carry a valid signature.
  */
+/** Webhooks into Email in (`/v1/in/<key>/<kind>`): the key in the path is the credential. */
+const publicIntake = (method: string, path: string) =>
+  method === "POST" && path.startsWith("/v1/in/");
 const publicWebhook = (method: string, path: string) =>
   method === "POST" && path.startsWith("/v1/billing/webhook/");
 
@@ -1058,6 +1064,7 @@ app.use("/v1/*", async (c, next) => {
   if (publicVerify(c.req.method, c.req.path)) return next();
   if (publicUpload(c.req.method, c.req.path)) return next();
   if (publicWebhook(c.req.method, c.req.path)) return next();
+  if (publicIntake(c.req.method, c.req.path)) return next();
 
   const auth = c.req.header("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
@@ -5163,6 +5170,13 @@ const addressesOf = (key: string | undefined, domain: string) =>
     EMAIL_KINDS.map((k) => [k, key && domain ? `${key}+${k}@${domain}` : ""]),
   ) as Record<EmailKind, string>;
 
+/** The webhook URL for each kind, on the same key: `<origin>/v1/in/<key>/<kind>`. */
+const hooksOf = (key: string, base: string) =>
+  Object.fromEntries(EMAIL_KINDS.map((k) => [k, `${base}/v1/in/${key}/${k}`])) as Record<
+    EmailKind,
+    string
+  >;
+
 /** This account's addresses, if it has them, and every sender that has written to them. */
 app.get("/v1/inbound", async (c) => {
   const domain = inboundDomain(c.env);
@@ -5179,6 +5193,7 @@ app.get("/v1/inbound", async (c) => {
   return c.json({
     available: Boolean(domain),
     addresses: box ? addressesOf(box.key, domain) : null,
+    hooks: box ? hooksOf(box.key, origin(c)) : null,
     target: box?.target || "",
     senders: results,
   });
@@ -5196,7 +5211,7 @@ app.post("/v1/inbound", async (c) => {
     .bind(c.get("account"), key, now())
     .run();
   count(c, "inbound_address");
-  return c.json({ addresses: addressesOf(key, domain) });
+  return c.json({ addresses: addressesOf(key, domain), hooks: hooksOf(key, origin(c)) });
 });
 
 /**
@@ -5218,7 +5233,7 @@ app.patch("/v1/inbound", async (c) => {
 /** Turn it off. Senders are kept, so turning it back on does not ask about them again. */
 app.delete("/v1/inbound", async (c) => {
   await c.env.DB.prepare("DELETE FROM inbound WHERE account_id = ?").bind(c.get("account")).run();
-  return c.json({ addresses: null });
+  return c.json({ addresses: null, hooks: null });
 });
 
 /** Allow or block a sender. Allowing does not replay what it already sent; its next email counts. */
@@ -5258,6 +5273,142 @@ async function asOwner(
   );
   return { ok: res.ok, status: res.status, text: await res.text() };
 }
+
+/**
+ * Make the guide something sent in, or count it against the open one it repeats. Shared by email
+ * and webhooks, so both obey the same rules: published through PUT /v1/guides/:id as the account,
+ * a task a Draft until a person marks it Ready, and a repeat one guide with at most one note an
+ * hour on its thread. A transfer never merges: each one is its own piece of context.
+ */
+async function intake(
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  g: {
+    account: string;
+    kind: EmailKind;
+    target: string;
+    print: string;
+    title: string;
+    summary: string;
+    body: string;
+    again: string;
+  },
+): Promise<{ id: string; created: boolean }> {
+  const me = g.account;
+  const at = now();
+  const open =
+    g.kind === "transfer"
+      ? null
+      : await env.DB.prepare(
+          `SELECT a.guide_id, a.times, a.noted_at FROM inbound_guide a JOIN guide g ON g.id = a.guide_id
+            WHERE a.account_id = ? AND a.fingerprint = ? AND g.status <> 'consumed'`,
+        )
+          .bind(me, g.print)
+          .first<{ guide_id: string; times: number; noted_at: string }>();
+  if (open) {
+    const times = open.times + 1;
+    const quiet = !open.noted_at || Date.parse(at) - Date.parse(open.noted_at) >= NOTE_EVERY_MS;
+    await env.DB.prepare(
+      "UPDATE inbound_guide SET times = ?, last_at = ?, noted_at = ? WHERE account_id = ? AND fingerprint = ?",
+    )
+      .bind(times, at, quiet ? at : open.noted_at, me, g.print)
+      .run();
+    // A note on the guide's thread, so whoever holds it hears it is still happening. At most
+    // hourly: an alert storm is one line, not a hundred.
+    if (quiet)
+      await asOwner(
+        env,
+        ctx,
+        me,
+        "POST",
+        `/v1/guides/${open.guide_id}/reply`,
+        JSON.stringify({ body: `${g.again}: ${times} times in all, latest at ${at}.` }),
+        "application/json",
+      );
+    return { id: open.guide_id, created: false };
+  }
+
+  const id = rid(8);
+  let markdown = setField(g.body, "title", g.title);
+  markdown = setField(markdown, "summary", g.summary.slice(0, SUMMARY_MAX));
+  // The kind is the one the address or URL named: stated by whoever chose which one to use.
+  markdown = setField(markdown, "kind", g.kind);
+  // A new task is a draft until a person marks it Ready, like every other task.
+  markdown = setField(markdown, "status", g.kind === "task" ? "draft" : "published");
+  if (g.kind === "task" && g.target) markdown = setField(markdown, "target_context", g.target);
+  const made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, markdown, "text/markdown");
+  if (!made.ok) {
+    console.error("inbound guide refused", made.status, made.text.slice(0, 200));
+    return { id: "", created: false };
+  }
+  await env.DB.prepare(
+    `INSERT INTO inbound_guide (account_id, fingerprint, guide_id, last_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(account_id, fingerprint) DO UPDATE SET guide_id = excluded.guide_id,
+       times = 1, last_at = excluded.last_at, noted_at = ''`,
+  )
+    .bind(me, g.print, id, at)
+    .run();
+  return { id, created: true };
+}
+
+/**
+ * A webhook: `POST /v1/in/<key>/<kind>`, from Sentry, PostHog or anything that can POST JSON
+ * (readHook in inbound.ts says which). The key in the path is the credential — the same one the
+ * email addresses carry, so New addresses rotates both — and the kind in the path is stated by
+ * whoever pasted that URL. Public by path, like the billing webhooks, because the sender has no
+ * account here.
+ *
+ * shortcut: Sentry's HMAC signature is not checked, because that needs its client secret stored
+ * per account; the unguessable key is the credential. Check it when someone asks for the secret.
+ *
+ * Every reading it can act on answers 200, and so does one it chose to ignore (a resolved issue,
+ * Sentry's installation ping): a webhook that errors is one its sender retries and then disables.
+ */
+app.post("/v1/in/:key/:kind", async (c) => {
+  const kind = EMAIL_KINDS.find((k) => k === c.req.param("kind"));
+  if (!kind) return err(c, 404, "Use /task, /bug or /transfer at the end of the address.");
+  const box = await c.env.DB.prepare("SELECT account_id, target FROM inbound WHERE key = ?")
+    .bind(c.req.param("key").toLowerCase())
+    .first<{ account_id: string; target: string }>();
+  if (!box) return err(c, 404, "No such address. Copy it again from Settings.");
+  const raw = await c.req.text();
+  if (raw.length > 1024 * 1024) return err(c, 413, "That is over 1 MB.");
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return err(c, 400, 'Send JSON, for example {"title": "Checkout is down", "text": "..."}.');
+  }
+  const hook = readHook(c.req.raw.headers, body);
+  if (!hook) return c.json({ ok: true, made: null });
+  const from = SOURCE_NAMES[hook.source];
+  let ctx: ExecutionContext | undefined;
+  try {
+    // Reading executionCtx throws where there is none (a test, some local paths).
+    ctx = c.executionCtx as unknown as ExecutionContext;
+  } catch {}
+  const made = await intake(c.env, ctx, {
+    account: box.account_id,
+    kind,
+    target: box.target,
+    print: hookPrint(kind, hook),
+    title: hook.title,
+    summary: `Sent in by ${from}: ${hook.title}`,
+    body: emailBody(kind, { from, at: now(), text: hook.text, via: `from ${from}` }),
+    again: `${from} sent this again`,
+  });
+  if (made.created) {
+    count(c, "inbound_hook", { source: hook.source, kind });
+    await notify(c.env, {
+      to: box.account_id,
+      kind: "hooked",
+      guide_id: made.id,
+      actor_id: "",
+      note: `${from}, ${kind === "task" ? "a draft task until you mark it Ready" : `a ${kind}`}`,
+    });
+  }
+  return c.json({ ok: true, made: made.id || null, merged: Boolean(made.id) && !made.created });
+});
 
 /**
  * One message from Email Routing. Never throws and never bounces: see the header of inbound.ts for
@@ -5305,77 +5456,25 @@ export async function receiveEmail(
       if (seen?.state !== "allowed") return;
     }
 
-    // A task or bug that fires again is one guide, not another. A transfer never merges: each one
-    // forwarded is its own piece of context, whatever its subject.
-    const print = fingerprint(to.kind, mail.sender, mail.subject);
-    const open =
-      to.kind === "transfer"
-        ? null
-        : await env.DB.prepare(
-            `SELECT a.guide_id, a.times, a.noted_at FROM inbound_guide a JOIN guide g ON g.id = a.guide_id
-              WHERE a.account_id = ? AND a.fingerprint = ? AND g.status <> 'consumed'`,
-          )
-            .bind(me, print)
-            .first<{ guide_id: string; times: number; noted_at: string }>();
-    if (open) {
-      const times = open.times + 1;
-      const quiet = !open.noted_at || Date.parse(at) - Date.parse(open.noted_at) >= NOTE_EVERY_MS;
-      await env.DB.prepare(
-        "UPDATE inbound_guide SET times = ?, last_at = ?, noted_at = ? WHERE account_id = ? AND fingerprint = ?",
-      )
-        .bind(times, at, quiet ? at : open.noted_at, me, print)
-        .run();
-      // A note on the guide's thread, so whoever holds it hears it is still happening. At most
-      // hourly: an alert storm is one line, not a hundred.
-      if (quiet)
-        await asOwner(
-          env,
-          ctx,
-          me,
-          "POST",
-          `/v1/guides/${open.guide_id}/reply`,
-          JSON.stringify({
-            body: `The same email came again: ${times} times in all, latest at ${at}.`,
-          }),
-          "application/json",
-        );
-      return;
-    }
-
-    const id = rid(8);
     const title = titleOf(mail.subject) || `Email from ${mail.sender}`;
-    let markdown = emailBody(to.kind, { from: mail.sender, at, text: mail.text, own });
-    markdown = setField(markdown, "title", title);
-    markdown = setField(
-      markdown,
-      "summary",
-      `Emailed by ${mail.sender}: ${title}`.slice(0, SUMMARY_MAX),
-    );
-    // The kind is the one the address named: stated by whoever chose which address to send to.
-    markdown = setField(markdown, "kind", to.kind);
-    // A new task is a draft until a person marks it Ready, like every other task.
-    markdown = setField(markdown, "status", to.kind === "task" ? "draft" : "published");
-    if (to.kind === "task" && box.target)
-      markdown = setField(markdown, "target_context", box.target);
-    const made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, markdown, "text/markdown");
-    if (!made.ok) {
-      console.error("inbound guide refused", made.status, made.text.slice(0, 200));
-      return;
-    }
-    await env.DB.prepare(
-      `INSERT INTO inbound_guide (account_id, fingerprint, guide_id, last_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(account_id, fingerprint) DO UPDATE SET guide_id = excluded.guide_id,
-         times = 1, last_at = excluded.last_at, noted_at = ''`,
-    )
-      .bind(me, print, id, at)
-      .run();
-    await notify(env, {
-      to: me,
-      kind: "emailed",
-      guide_id: id,
-      actor_id: "",
-      note: to.kind === "task" ? "a draft task until you mark it Ready" : `a ${to.kind}`,
+    const made = await intake(env, ctx, {
+      account: me,
+      kind: to.kind,
+      target: box.target,
+      print: fingerprint(to.kind, mail.sender, mail.subject),
+      title,
+      summary: `Emailed by ${mail.sender}: ${title}`,
+      body: emailBody(to.kind, { from: mail.sender, at, text: mail.text, own }),
+      again: "The same email came again",
     });
+    if (made.created)
+      await notify(env, {
+        to: me,
+        kind: "emailed",
+        guide_id: made.id,
+        actor_id: "",
+        note: to.kind === "task" ? "a draft task until you mark it Ready" : `a ${to.kind}`,
+      });
   } catch (e) {
     console.error("inbound", (e as Error).message);
   }

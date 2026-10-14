@@ -42,6 +42,17 @@ The key can name a repo (`inbound.target`, `PATCH /v1/inbound`). It becomes a ta
 `target_context`, so an agent working in that repo takes it with no id once it is Ready. Without
 one, a no-id `take` never offers it, because that only matches tasks for the agent's own repo.
 
+**Webhooks use the same key.** `POST /v1/in/<key>/<kind>` (public by path; the key is the
+credential, and Sentry's HMAC is not checked yet) turns a webhook into a guide through the same
+`intake()` as email, so the same rules hold: a Draft task, a quoted body, merged repeats.
+`readHook()` in `inbound.ts` reads the sender from the request: **Sentry** by its
+`Sentry-Hook-Resource` header (issue created or unresolved, alert triggered, error created,
+metric alert warning or critical; everything else answers 200 and makes nothing), **PostHog** by
+its default `{event, person}` body (an error tracking alert or an `$exception`), and anything
+else as `{title, text, url, id}`. Repeats merge on the sender's own id when it has one (a Sentry
+issue, a PostHog issue or fingerprint), else on the title. A webhook guide notifies as `hooked`.
+Settings calls the whole card **Work in** and shows one source's addresses and steps at a time.
+
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings
 says Email in is not set up.
 
