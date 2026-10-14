@@ -78,26 +78,19 @@ export async function share(markdown, { cwd = process.cwd(), to, follows } = {})
   ];
   if (errors.length)
     throw new PassalongError(`guide is not ready to share:\n  - ${errors.join("\n  - ")}`);
-  // A task stays a draft when it is shared. Draft is the column a task waits in until a person
-  // says it is ready for an agent — `ready()` — and an agent that drafts one over MCP comes
-  // through here too, so publishing on share would let a task queue itself with nobody reading it.
-  if (guide.meta.status === "draft" && guide.meta.kind !== "task")
-    guide = { ...guide, meta: { ...guide.meta, status: "published" } };
+  // Every guide is a draft when it is first shared, whatever its kind: Draft is where it waits
+  // until a person says it is ready — `ready()` — and an agent that writes one over MCP comes
+  // through here too, so publishing on share would let it reach people with nobody reading it.
+  // Sharing *is* putting it in Draft, so a new guide that names no status says so here; one already
+  // published keeps what its document says.
+  if (!guide.meta.status) guide = { ...guide, meta: { ...guide.meta, status: "draft" } };
 
-  let url = guide.meta.url || null;
-  let synced = false;
-  let notified = false;
-  if (api.loggedIn()) {
-    const res = await api.publish(guide.meta.id, serialize(guide));
-    url = res.url;
-    synced = true;
-    notified = Boolean(res.notified);
-    guide = { ...guide, meta: { ...guide.meta, url } };
-  } else if (guide.meta.team) {
-    throw new PassalongError("sharing to a team needs sync — run `passalong login` first");
-  }
-  const path = store.save(guide);
-  return { guide, path, url, synced, notified };
+  // The server is where a guide lives; nothing is kept on this machine.
+  needsSync("sharing a guide");
+  const res = await api.publish(guide.meta.id, serialize(guide));
+  const url = res.url;
+  guide = { ...guide, meta: { ...guide.meta, url } };
+  return { guide, url, synced: true, notified: Boolean(res.notified) };
 }
 
 /**
@@ -151,8 +144,11 @@ export async function fileBugs(
   return { report: { id: report.id, title, environment, team }, issues: filed };
 }
 
-/** Resolve a reference (id, share URL, or local file path) to a guide. */
-export async function resolve(ref) {
+/**
+ * Resolve a reference (id, share URL, or local file path) to a guide. An id is the server's to
+ * answer: nothing keeps a copy on this machine. `peek` reads without recording a pull.
+ */
+export async function resolve(ref, { peek = false } = {}) {
   if (/^https?:\/\//.test(ref)) {
     const md = await api.fetchShared(ref);
     return { guide: parse(md), from: "link" };
@@ -162,21 +158,13 @@ export async function resolve(ref) {
   }
   if (!ID_RE.test(ref))
     throw new PassalongError(`"${ref}" is not a passalong id, share link, or .md file`);
-  const local = store.get(ref);
-  if (local) return { guide: local, from: "local" };
-  if (api.loggedIn()) {
-    try {
-      const md = await api.get(ref);
-      const guide = parse(md);
-      store.save(guide); // cache so the next pull is offline
-      return { guide, from: "sync" };
-    } catch (err) {
-      if (err.status !== 404) throw err;
-    }
+  needsSync("reading a guide by id");
+  try {
+    return { guide: parse(await api.get(ref, { peek })), from: "sync" };
+  } catch (err) {
+    if (err.status === 404) throw new PassalongError(`no guide "${ref}"`);
+    throw err;
   }
-  throw new PassalongError(
-    `no guide "${ref}" (not local${api.loggedIn() ? " or synced" : "; not logged in, so sync was not checked"})`,
-  );
 }
 
 /**
@@ -201,22 +189,21 @@ export async function resolveId(ref) {
 }
 
 /**
- * Pull a guide into a working directory: writes .passalong/<id>.md there and returns the guide
- * so the caller can put the text straight into an agent's context. A pull of someone else's
- * guide is also recorded server-side, which is how the sender sees the transfer landed.
+ * Pull a guide and return it, so the caller can put the text straight into an agent's context. A
+ * pull of someone else's guide is recorded server-side, which is how the sender sees the transfer
+ * landed. Nothing is written unless `save` asks: then it lands in `.passalong/<id>.md` here.
  */
-export async function pull(ref, { cwd = process.cwd(), write = true } = {}) {
+export async function pull(ref, { cwd = process.cwd(), save = false } = {}) {
   const { guide, from } = await resolve(ref);
-  // A locally cached copy of a teammate's guide still counts as a pull for them.
-  if (from === "local" && api.loggedIn() && guide.meta.team) {
-    api.get(guide.meta.id).catch(() => {});
-  }
-  let path = null;
-  if (write) {
-    path = join(localDir(cwd), `${guide.meta.id}.md`);
-    writeFileSync(path, serialize(guide));
-  }
-  return { guide, from, path, markdown: serialize(guide) };
+  const markdown = serialize(guide);
+  return { guide, from, path: save ? saveTo(cwd, guide.meta.id, markdown) : null, markdown };
+}
+
+/** Write a guide into `.passalong/<id>.md` under `cwd`, when somebody asked for a file. */
+function saveTo(cwd, id, markdown) {
+  const path = join(localDir(cwd), `${id}.md`);
+  writeFileSync(path, markdown);
+  return path;
 }
 
 /**
@@ -284,17 +271,13 @@ export async function tasks() {
 
 /**
  * Take the next task for this worktree's repo, or get back the one this worktree already holds.
- * `null` when there is nothing to do. The guide is written to `.passalong/<id>.md` like a pull.
+ * `null` when there is nothing to do. Written to `.passalong/<id>.md` only when `save` asks.
  */
-export async function nextTask({ cwd = process.cwd(), any = false } = {}) {
+export async function nextTask({ cwd = process.cwd(), any = false, save = false } = {}) {
   needsSync("taking a task");
   const { task } = await api.nextTask({ ...agent(cwd), any });
   if (!task) return null;
-  const guide = parse(task.markdown);
-  const path = join(localDir(agent(cwd).worktree), `${task.id}.md`);
-  writeFileSync(path, task.markdown);
-  store.save(guide);
-  return { ...task, path };
+  return { ...task, path: save ? saveTo(agent(cwd).worktree, task.id, task.markdown) : null };
 }
 
 /** Word from the agent holding a task: renews its lease, and `note` becomes the board's line. */
@@ -397,18 +380,15 @@ export async function finishTask(
  * `next`, the calls that make sense from here, and `say` when the move is to stop.
  *
  * take: this worktree's agent takes guide `id`, or with no id the next one waiting for it. The
- * document is written to `.passalong/<id>.md`, like a pull, so the agent works from a file.
+ * document comes back in the answer, and is written to `.passalong/<id>.md` only when `save` asks.
  */
-export async function take(id, { cwd = process.cwd(), any = false } = {}) {
+export async function take(id, { cwd = process.cwd(), any = false, save = false } = {}) {
   needsSync("taking work");
   const who = agent(cwd);
   const r = await api.take({ ...who, ...(id ? { id: await resolveId(id) } : {}), any });
   if (!r.guide?.markdown) return r;
   rememberFence(r.guide.id, r.guide.fence, cwd);
-  const path = join(localDir(who.worktree), `${r.guide.id}.md`);
-  writeFileSync(path, r.guide.markdown);
-  store.save(parse(r.guide.markdown));
-  return { ...r, path };
+  return { ...r, path: save ? saveTo(who.worktree, r.guide.id, r.guide.markdown) : null };
 }
 
 /** Word from the agent that holds it: the lease starts again, and `note` is what the hub shows. */
@@ -613,16 +593,19 @@ export async function now({ cwd = process.cwd() } = {}) {
  * line the next reader needs.
  */
 export async function approveTask(id) {
-  needsSync("approving a task");
-  const r = await api.approveTask(id);
+  needsSync("approving work");
+  const { guide } = await resolve(id, { peek: true });
+  const r = await (guide.meta.kind === "task" ? api.approveTask(id) : api.closeGuide(id));
   store.remove(id);
   return r;
 }
 
 export async function rejectTask(id, why) {
-  needsSync("rejecting a task");
-  if (!String(why || "").trim()) throw new PassalongError("say why: the next agent reads it");
-  const r = await api.rejectTask(id, why);
+  needsSync("sending work back");
+  if (!String(why || "").trim())
+    throw new PassalongError("say why: whoever takes it next reads it");
+  const { guide } = await resolve(id, { peek: true });
+  const r = await (guide.meta.kind === "task" ? api.rejectTask(id, why) : api.sendBack(id, why));
   store.remove(id);
   return r;
 }
@@ -662,17 +645,10 @@ export async function release(id) {
  *   - anything else is reported in `ack_error` rather than swallowed, because an ack that quietly
  *     did not land leaves the sender in the silence the whole feature exists to end.
  */
-export async function start(ref, { cwd = process.cwd(), write = true } = {}) {
-  const pulled = await pull(ref, { cwd, write });
-  const id = pulled.guide.meta.id;
-  if (!api.loggedIn()) return { ...pulled, took: false, ack_error: "", own: false };
-  try {
-    await api.ack(id, true, "");
-    return { ...pulled, took: true, ack_error: "", own: false };
-  } catch (err) {
-    if (err.status === 403) return { ...pulled, took: false, ack_error: "", own: true };
-    return { ...pulled, took: false, ack_error: err.message, own: false };
-  }
+export async function start(ref, { cwd = process.cwd(), save = false } = {}) {
+  const r = await take(await resolveId(ref), { cwd, save });
+  if (!r.guide?.markdown) return r;
+  return { ...r, markdown: r.guide.markdown };
 }
 
 /**
@@ -949,24 +925,11 @@ export async function parentGuide(
   }
 }
 
-/** Local guides merged with synced ones (by id), newest first, optionally filtered. */
-export async function list(query = "", { remote = true, scope = "" } = {}) {
-  const local = scope && scope !== "all" && scope !== "mine" ? [] : store.search(query);
-  const seen = new Set(local.map((g) => g.meta.id));
-  const rows = local.map((g) => ({ ...summary(g), where: "local" }));
-  if (remote && api.loggedIn()) {
-    try {
-      const res = await api.list(query, scope);
-      for (const r of res.guides) {
-        const row = seen.has(r.id) ? rows.find((x) => x.id === r.id) : null;
-        if (row) Object.assign(row, r, { where: "synced" });
-        else rows.push({ ...r, where: "synced" });
-      }
-    } catch (err) {
-      rows.warning = `sync unavailable: ${err.message}`;
-    }
-  }
-  return rows.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+/** Guides on the server this account can see, newest first, optionally filtered. */
+export async function list(query = "", { scope = "" } = {}) {
+  needsSync("listing guides");
+  const res = await api.list(query, scope);
+  return res.guides.map((r) => ({ ...r, where: "synced" }));
 }
 
 /** Guides handed to you (or your teams) that you have not pulled yet. Needs sync. */
@@ -1007,64 +970,6 @@ export async function activity({ all = false, limit = 50 } = {}) {
  * `done` says "I implemented it", a verdict says "I tried it and it holds up" — or does not.
  * A failing verdict needs a note; "it doesn't work" without a reason helps nobody.
  */
-/**
- * Say whether a guide held, and why at the length that takes.
- *
- * The reason used to be one field, capped at 280 characters by the row it was written for — so an
- * agent that had run the Verification and found it did not hold published a guide called
- * "Correction: …" instead, because measurements, commands and commit ids do not fit in a tweet.
- * The first line is the summary a row shows; the whole thing is what the guide shows.
- */
-export async function verdict(id, ok, note = "", { images = [] } = {}) {
-  if (!api.loggedIn()) throw new PassalongError("verdicts need sync — run `passalong login` first");
-  const said = note.trim();
-  if (!ok && !said)
-    throw new PassalongError("say what went wrong: passalong broken <id> <what happened>");
-  // "It works" is shown, not said: the server refuses one with no screenshot of it working, so
-  // the refusal is said here before anything is uploaded, in the words of the command that fixes it.
-  if (ok && !images.length && !/\/v1\/shots\/[a-z0-9]{6,16}/.test(said))
-    throw new PassalongError(
-      "show it working: passalong works <id> <screenshot.png> [what you checked]",
-    );
-  const guide = await resolveId(id);
-  const shots = [];
-  for (const file of images) shots.push((await attach(file)).markdown);
-  const line = said.split("\n")[0].slice(0, 280);
-  const detail = [said.length > line.length || shots.length ? said : "", ...shots]
-    .filter(Boolean)
-    .join("\n");
-  return api.verdict(guide, ok, line, detail);
-}
-
-/**
- * The words after `passalong works <id>`, split into the screenshots and the note: an argument is a
- * screenshot when it names an image file that exists, and everything else is what was checked.
- */
-export function proofArgs(args) {
-  const images = [];
-  const words = [];
-  for (const a of args) {
-    const ext = a.slice(a.lastIndexOf(".")).toLowerCase();
-    if (SHOT_TYPES[ext] && existsSync(a)) images.push(a);
-    else words.push(a);
-  }
-  return { images, note: words.join(" ") };
-}
-
-/**
- * Say whether you are taking a guide someone handed you — before doing any of it.
- *
- * The hop the product had no signal for: until this, a handoff nobody had answered looked exactly
- * like one nobody had noticed. Passing needs a reason for the same cause a failing verdict does —
- * "not me" without "why" leaves the sender where the silence did.
- */
-export async function ack(id, taken, note = "") {
-  if (!api.loggedIn()) throw new PassalongError("acks need sync — run `passalong login` first");
-  if (!taken && !note.trim())
-    throw new PassalongError("say why you are passing: pass a note with taken=false");
-  return api.ack(await resolveId(id), taken, note.trim());
-}
-
 /** Mark notifications seen. No ids means everything unread. */
 export const seen = (ids = []) => api.markRead(ids);
 
@@ -1088,25 +993,20 @@ export function summary(g) {
 export async function setStatus(id, status) {
   if (!STATUSES.includes(status))
     throw new PassalongError(`status must be one of ${STATUSES.join(", ")}`);
-  const { guide } = await resolve(id);
+  const { guide } = await resolve(id, { peek: true });
   const next = { ...guide, meta: { ...guide.meta, status } };
   // The server first. Saved the other way round, a refusal left the local copy saying what the
   // server had just refused — a teammate's `ready` on someone else's task read as done here.
-  if (api.loggedIn() && guide.meta.url) await api.setStatus(id, status);
-  store.save(next);
+  await api.setStatus(id, status);
   return next;
 }
 
 /**
- * Move a task from Draft to Ready: a person has read it and an agent may take it.
- *
- * Only tasks. Every other kind is published the moment it is shared, so "ready" on one would
- * either do nothing or reopen something archived under a name that does not say so.
+ * Move a guide from Draft to Ready: a person has read it, and whoever it is for may take it now.
+ * Every kind: a handoff or bug is a draft until somebody says so, as a task always was.
  */
 export async function ready(id) {
-  const { guide } = await resolve(id);
-  if (guide.meta.kind !== "task")
-    throw new PassalongError(`${guide.meta.id || id} is not a task — ready is for tasks in Draft`);
+  const { guide } = await resolve(id, { peek: true });
   if (guide.meta.status !== "draft")
     throw new PassalongError(`${guide.meta.id} is not in Draft (status: ${guide.meta.status})`);
   return setStatus(guide.meta.id, "published");
@@ -1162,8 +1062,7 @@ export async function planTasks(steps, { cwd = process.cwd() } = {}) {
 /** What an agent started by `work()` is told. The task itself goes in too, so it cannot start blind. */
 export function workPrompt(t) {
   return [
-    `You hold passalong task ${t.id}, and no other agent can take it while you do.`,
-    `It is written to ${t.path}; here it is:`,
+    `You hold passalong task ${t.id}, and no other agent can take it while you do. Here it is:`,
     "",
     t.markdown.trim(),
     "",
@@ -1216,7 +1115,7 @@ export async function work({
     const run = spawnSync(command, [...args, workPrompt(t)], {
       cwd,
       stdio: "inherit",
-      env: { ...process.env, PASSALONG_TASK: t.id, PASSALONG_TASK_PATH: t.path },
+      env: { ...process.env, PASSALONG_TASK: t.id },
     });
     const state = (await tasks()).find((x) => x.id === t.id)?.state;
     if (state !== "review")
@@ -1233,14 +1132,14 @@ export async function work({
 }
 
 /**
- * Make every task you wrote that is still in Draft ready, and return their ids. For the moment a
- * planner has written several and you have read them all. Only your own: moving a task into the
- * queue is its author's call.
+ * Make every guide you wrote that is still in Draft ready, and return their ids. For the moment a
+ * planner has written several and you have read them all. Only your own: sending a guide on is its
+ * author's call.
  */
 export async function readyDrafts() {
-  const drafts = (await tasks()).filter((t) => t.mine && t.state === "draft");
-  for (const t of drafts) await ready(t.id);
-  return drafts.map((t) => t.id);
+  const drafts = (await list("", { scope: "mine" })).filter((g) => g.status === "draft");
+  for (const g of drafts) await ready(g.id);
+  return drafts.map((g) => g.id);
 }
 
 export async function remove(id) {
@@ -1255,14 +1154,49 @@ export async function remove(id) {
   store.remove(id);
 }
 
-/** Write every local guide to a directory as plain markdown. Returns the paths written. */
-export function exportAll(dir) {
+/**
+ * Write every guide to a directory as plain markdown: signed in, every one the server lets this
+ * account read, and the local store's own besides. Returns the paths written.
+ */
+export async function exportAll(dir) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const paths = [];
-  for (const g of store.list()) {
-    const p = join(dir, `${g.meta.id}.md`);
-    writeFileSync(p, serialize(g));
-    paths.push(p);
+  const paths = new Map();
+  if (api.loggedIn()) {
+    let after = "";
+    do {
+      const page = await api.exportPage(after);
+      for (const g of page.guides) paths.set(g.id, g.markdown);
+      after = page.next;
+    } while (after);
   }
-  return paths;
+  for (const g of store.list()) if (!paths.has(g.meta.id)) paths.set(g.meta.id, serialize(g));
+  return [...paths].map(([id, md]) => {
+    const p = join(dir, `${id}.md`);
+    writeFileSync(p, md);
+    return p;
+  });
+}
+
+/**
+ * Once per machine, signed in: drop the local copies the server says it holds. They were written
+ * by every share, pull and take before `keep()`, and nothing ever removed one. What the server
+ * does not return — shared while signed out, or from another account — is left where it is.
+ */
+export async function tidy() {
+  if (!api.loggedIn() || store.readConfig().tidied) return 0;
+  const local = new Set(store.list().map((g) => g.meta.id));
+  let removed = 0;
+  let after = "";
+  while (local.size) {
+    const page = await api.exportPage(after);
+    for (const g of page.guides)
+      if (local.delete(g.id)) {
+        store.remove(g.id);
+        removed++;
+      }
+    after = page.next;
+    if (!after) break;
+  }
+  store.writeConfig({ tidied: true });
+  return removed;
 }

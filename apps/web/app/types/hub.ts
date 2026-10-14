@@ -65,9 +65,11 @@ export interface Guide {
   preview_image?: { url: string; alt: string } | null;
   /** When its proof screenshots are deleted, or "". Only on a closed guide that has some. */
   proof_expires?: string;
-  /** When it is archived for want of anybody touching it, or "". Only on a sent guide nobody has. */
+  /** When it goes back to Draft for want of anybody taking it, or "". Only on a sent guide nobody has. */
   archives_at?: string;
   status: string;
+  /** How it reached Done: approved after review, or archived. '' while it is not done. */
+  outcome?: "approved" | "archived" | "";
   url: string;
   created: string;
   /** Its last edit or status change. */

@@ -11,8 +11,8 @@ export function timeLeft(iso: string, at = Date.now()): string {
  * The line a guide shows when it is about to be tidied away by itself, or null.
  *
  * Two clocks exist. Proof screenshots on a closed guide are deleted for good, and a sent guide
- * nobody touched is archived, which is reversible: the first is the one worth a warning, so it wins
- * when a guide is on both. `soon` is the last two days, for a louder colour.
+ * nobody took goes back to Draft, which is reversible: the first is the one worth a warning, so it
+ * wins when a guide is on both. `soon` is the last two days, for a louder colour.
  */
 export function expiryLine(
   g: { proof_expires?: string; archives_at?: string },
@@ -27,8 +27,8 @@ export function expiryLine(
     : g.archives_at
       ? {
           iso: g.archives_at,
-          text: (t: string) => `Archived in ${t}`,
-          why: "Nobody has opened this guide. If nothing happens to it for 14 days it is archived automatically: it moves to Done, and you can unarchive it from its ⋯ menu. Turn off Clean-up in Settings to stop that.",
+          text: (t: string) => `Back to Draft in ${t}`,
+          why: "Nobody has taken this guide. If nothing happens to it for 14 days it goes back to Draft, and you can mark it Ready again for the same person or someone else. Turn off Clean-up in Settings to stop that.",
         }
       : null;
   if (!pick) return null;

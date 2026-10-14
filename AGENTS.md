@@ -60,7 +60,15 @@ change. Its README says how.
     a thread, under the title on rows, leading the guide page — and the document sits behind "Show
     details". The Work board's cards are the exception: a column of them is scanned by title, so
     they carry no summary and make room for more cards.
-  - `src/store.js` — local store at `~/.passalong` (`PASSALONG_HOME` overrides). One `.md` per guide.
+  - `src/store.js` — `~/.passalong` (`PASSALONG_HOME` overrides): config, accounts and drafts being
+    written. **No guide is kept on the machine unless somebody asks.** The server holds every guide
+    and is the only place one is read from: local copies used to be written by every share, pull and
+    take, and did nothing but go stale — a pull served one over the author's later edit — and pile
+    up, 314 on one machine. `pull`/`start --save` writes `.passalong/<id>.md` in the repo, and
+    `export` is the other explicit ask: it walks `GET /v1/export`, which records no pull, so it is a
+    complete backup. `ready` and archiving read with `?peek=1` for the same reason. `tidy()`
+    removes, once per machine, the old copies the server confirms it holds. Sharing needs an
+    account: an agent does not work without the network anyway.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
   - `src/mcp.js` — MCP tools. `buildServer()` builds the surface and `serve()` connects it over
     stdio, so `test/mcp-surface.test.js` can read what every tool tells a client. Each one carries
@@ -273,11 +281,27 @@ change. Its README says how.
   against. `blocked_by:` is the one list field only tasks have, so the parser defaults
   `stack_assumptions` and `tags` and nothing else — defaulting it would write `blocked_by: []` into
   every guide anybody re-shares. A blocker counts as finished when a person approved it, never when
-  an agent finished it. A new task is always `draft`: `PUT /v1/guides/:id` refuses a new task or a
-  draft edit that would put it straight into the queue. Only a person's Ready action (the status
-  route) publishes it. A proposal awaiting a team decision stays Draft; when agreed, the person
-  makes the resulting implementation tasks Ready. An unclaimed Ready task can return to Draft, but
-  one an agent holds must be taken back or reviewed first.
+  an agent finished it.
+- **Every guide has a task's states, whatever its kind (2026-10-14).** Draft, Ready, In progress,
+  In review, Done, and the same moves between them. A new guide is always `draft`: `PUT
+  /v1/guides/:id` refuses a new guide, or an edit that changes status, through `publishProblem()`
+  in `guide.ts` — handoffs and bugs used to go out the moment they were shared, so an agent's guide
+  reached people nobody had read it. Only a person's Ready (the status route) sends it on, and that
+  is when whoever it is addressed to is told (`announceGuide()`), never while it was a draft.
+  Ready asks which repo only for a task. Anyone in the team moves work between Draft and Ready;
+  nothing held moves to Draft until it is taken back or reviewed; only its author or an admin
+  archives it; and an archived guide comes back to Draft, never straight to Ready
+  (`unarchiveProblem()`), because archived includes approved. A proposal awaiting a team decision
+  stays Draft. Email, webhooks and `file_bugs` file every kind as a draft, and the day-old Draft
+  reminder covers every kind. **A task's write-up is not on the board**: the transfer an agent
+  publishes for its hand-in is stored as Done and named for its task (`report_of`, migration
+  0053) when the hand-in names it, and `GET /v1/guides` leaves it out; ones approved before then are
+  found by timing (published within five minutes before their author's hand-in event). **Done says
+  how it got there**: `outcome` (migration 0054) is `approved` (approve, accepting a hand-in, an
+  author's mark-done) or `archived` (the status route, closing with nothing handed in), and is
+  cleared when it leaves Done. **Ready work nobody took for a fortnight goes back to Draft**
+  (`backToDraft`), never to Done, which is finished work. **Not for me** is `pass` on work you do
+  not hold, for any kind: the sender is told why.
 - **A CLI too old for the server's rules is refused, not warned.** Every CLI call carries
   `x-passalong-version` (`VERSION` in `src/api.js`), and the token branch of the auth middleware
   answers **426** below `MIN_CLIENT` (`apps/api/src/clients.ts`) with the install command and the
@@ -470,7 +494,8 @@ change. Its README says how.
   except `archived`. The hub offers it to the author only — a non-owner marking a guide consumed
   still sends the author a "someone shipped this" receipt, and putting that in the same menu item
   is what conflated the two meanings the first time.
-- **An ack is the reader's first word back, and it is a row.** `PUT /v1/guides/:id/ack` takes
+- **An ack is the reader's first word back, and it is a row.** *(No longer offered: every kind is
+  taken with `take` now. The route stays for clients that call it.)* `PUT /v1/guides/:id/ack` takes
   `{ taken, note }` — the same shape and the same reasoning as a verdict (migration `0004`): it
   belongs to the reader, it can be negative, several people can each answer, and it is never in the
   markdown, because the document is the author's while this is a fact about a transfer of it. The
@@ -505,14 +530,18 @@ change. Its README says how.
   rather than reading `prefers-color-scheme`. The masthead's mark is an absolute PNG with the
   wordmark beside it as text: images are blocked by default for a sender nobody has replied to.
   Anything a person typed — a title, a verdict's reason — goes through `esc()` on the way in.
-- **Every answer a reader can give exists in all three places.** The hub, the MCP tools and the
-  CLI: `take`/`pass` for the ack, `works`/`broken` for the verdict, `done` to archive. A signal that
-  exists in only two of them is one a third of the product's users cannot send, and the mail that
-  tells someone what to do next can only name commands that exist.
+- **Every answer exists in all three places, and every kind has the same ones.** The hub, the MCP
+  tools and the CLI: `take`, `progress`, `hand_in` and `pass` for whoever does the work, approve and
+  send back for whoever reviews it, Ready and Move to Draft, archive. A signal that exists in only
+  two of them is one a third of the product's users cannot send, and the mail that tells someone
+  what to do next can only name commands that exist. The reader's old answers — the ack (`take`/
+  `pass` meaning "I'll do it"/"not me") and the verdict (`works`/`broken`) — are no longer offered
+  anywhere: taking is holding it, and whether it works is the review. Their routes still answer
+  for clients that call them, and `/hub/answer/:id` forwards to the guide's page.
   The hub says each in plain words rather than the command's name, and says them the same way on
-  every surface of the hub: `take` is **I'll do this**, `pass` is **Not for me**, `release` is
-  **Stop this agent**, archiving is **Archive** and **Unarchive**, a hand-in is answered with
-  **Accept** (or **Approve** for a task) and **Ask for changes**. A button whose name cannot say
+  every surface of the hub: `take` is **I'll do this**, `release` is **Stop this agent**, archiving
+  is **Archive** and **Unarchive to Draft**, a hand-in is answered with **Accept** (or **Approve**
+  for a task) and **Ask for changes**. A button whose name cannot say
   what it does gets a line of visible text beside it, never a `title` tooltip.
 - **Google Chat gets a card; nothing else does.** Chat cannot unfurl a link — previews there come
   from a Chat app registering URL patterns, and a team connects an incoming webhook — so `chatCard()`
@@ -596,7 +625,8 @@ change. Its README says how.
   (guide, account) and without the "pulled" notification — the verdict is the news. Without this a
   guide that was read and verified still showed as never delivered on both sides: the receiver's
   inbox never cleared and the sender's board said "not picked up".
-- **Verdicts (migration 0004).** `PUT /v1/guides/:id/verdict {ok, note}` is the reader's answer to
+- **Verdicts (migration 0004).** *(No longer offered: the review answers whether it works. The
+  route stays for clients that call it.)* `PUT /v1/guides/:id/verdict {ok, note}` is the reader's answer to
   "does this work?", and the only way an author learns a handoff did not land. Deliberately **not**
   a status: `status` is the author's lifecycle, holds one value and lives inside the markdown, none
   of which fits a judgement that belongs to the reader, can be negative, and can come from several
@@ -652,8 +682,8 @@ change. Its README says how.
   leaves it. Note which database: `--dev` reads the one Nitro manages under `.wrangler/state`, found
   by scanning rather than hardcoded because the file is named for the `database_id`. Two of the four
   metrics also cannot be computed as §14 originally worded them, and the script **prints the caveat
-  beside the number every run** — activation undercounts because `passalong pull` serves a local
-  copy without calling the API unless the guide has a team, and the quality proxy asked for
+  beside the number every run** — activation undercounts for CLIs older than 2026-10-14, whose
+  `pull` served a local copy without calling the API unless the guide had a team, and the quality proxy asked for
   `consumed`, which changed meaning. A report that quietly substitutes a near-miss is worse than
   one that says so.
 - **The hub is live, and the stream owns no table.** `GET /v1/events` (`src/events.ts`) is
@@ -699,8 +729,9 @@ change. Its README says how.
   `times`), and mail goes out only on the first occurrence. `notify()` never throws: a
   notification must not fail the action that caused it. `line()` in `notify.ts` is the single
   place the wording lives — CLI, MCP and hub all print the server's `text`.
-- **Local-first.** With no token every command works offline. Sync failures on `list` degrade to
-  a warning, never an error.
+- **Server-first.** Every guide lives on the server; with no token, sharing and reading by id
+  refuse with the login command. Nothing about a guide is written locally unless asked (`--save`,
+  `export`).
 - **CSP on the web view** (`default-src 'none'; style-src 'self'; font-src 'self'`) is what makes
   rendering owner markdown for other viewers safe. Don't loosen it to add scripts or inline
   styles; put styles in `public/styles.css`. `font-src` is same-origin only: fonts are served
@@ -781,7 +812,7 @@ ships scripts and inlines styles whatever the config says.
   else wrote and that CSP is the only thing making it safe — never relax it to add a feature.
   `passalong hub` passes the token in the URL fragment, which the page stores and scrubs on load.
 - A pulled guide carries its own **share URL** in the frontmatter, and that URL needs no account
-  to read. `pull` therefore drops a self-ignoring `.gitignore` (`*`) in `./.passalong/`: committing
+  to read. `pull --save` therefore drops a self-ignoring `.gitignore` (`*`) in `./.passalong/`: committing
   that directory would publish the guide to anyone who can see the repo. Don't "helpfully" remove it.
 - **An account is not the product; a team is.** Guides are only created by `share()`, which needs
   a session — the hub has no editor by design — so a self-serve account with no team has an empty

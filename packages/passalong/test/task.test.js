@@ -8,6 +8,8 @@ import { test } from "node:test";
 // The store reads PASSALONG_HOME when it is first imported, so the modules that use it are
 // imported only after it points somewhere this test owns — never at the real ~/.passalong.
 process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-task-"));
+const { fakeServer } = await import("./fake-server.js");
+fakeServer();
 const { parse, serialize, template } = await import("../src/guide.js");
 const { taskScaffold } = await import("../src/capture.js");
 const passalong = await import("../src/passalong.js");
@@ -59,15 +61,15 @@ test("sharing a task leaves it in Draft, and ready moves it on", async () => {
   await assert.rejects(passalong.ready(guide.meta.id), /not in Draft/);
 });
 
-test("ready refuses anything that is not a task", async () => {
+test("every kind is shared as a draft, and ready moves it on", async () => {
   const { guide } = await passalong.share(
     serialize({
       meta: { title: "t", summary: "A summary.", kind: "transfer" },
-      body: "## Problem\np\n\n## Steps\n1. x",
+      body: "Context for whoever picks it up.",
     }),
   );
-  assert.equal(guide.meta.status, "published");
-  await assert.rejects(passalong.ready(guide.meta.id), /not a task/);
+  assert.equal(guide.meta.status, "draft", "a handoff waits in Draft like a task");
+  assert.equal((await passalong.ready(guide.meta.id)).meta.status, "published");
 });
 
 test("an agent started by work is told to commit what it did, under the task's id", () => {

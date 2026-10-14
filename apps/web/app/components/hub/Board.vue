@@ -11,12 +11,29 @@
   Who a card is for is its footer's right-hand line, and that line is the "Give to…" control: the
   answer and the way to change it are one thing, and a separate button made every card a row taller.
   Who has it is the same line's left side: a dot for how the hold is doing (`health`, from the
-  server), their name, ⚡ when an agent holds it, and a word only when somebody should look. The age at the top is since anything last happened to it. Cards about you carry a coral
-  mark on their left edge; Done is faded.
+  server), their name, ⚡ when an agent holds it, and a word only when somebody should look. The age at the top is since anything last happened to it. Done is faded.
+
+  The round dot at a card's top-left selects it for the bar that archives or deletes several at
+  once (HubBulkBar, on the page). It shows on hover and focus, and stays once anything is
+  selected; on a touch screen, which has no hover, it always shows. Only cards the viewer may
+  archive or delete (`manage`) have one. Right-clicking a card opens its quick actions
+  (HubCardMenu).
+
+  A card can be dragged to another column when that column means an act the card's own page
+  offers: back to Draft, Stop this agent (To do, from In progress; asked first), Archive (Done) and
+  Unarchive (out of Done, to Draft), and Ready (Draft to To do), for every kind: a handoff or bug
+  has a task's states. Ready for a task asks which repo it is for (HubReadyPrompt), where it was
+  dropped. While a card is dragged it fades where it
+  was, the columns it cannot go to fade, and a gap opens at the top of the one under it. A drop
+  lands at once and is put back, with the hub's error, if the server refuses it. The same acts are
+  in the right-click menu, which is the way there from a keyboard or a phone.
+
+  From md the columns are lanes the height of the window, each scrolling its own cards under a
+  header that stays put, so the whole lane is somewhere to drop and nothing ends half-way down.
 -->
 <script setup lang="ts">
-import { aboutMe, type STAGES } from "~/composables/useWorkLists";
-import type { Guide } from "~/types/hub";
+import type { STAGES } from "~/composables/useWorkLists";
+import type { Guide, Task, Working } from "~/types/hub";
 
 const props = defineProps<{
   columns: ((typeof STAGES)[number] & { cards: Guide[] })[];
@@ -37,14 +54,46 @@ const addressed = (g: Guide) => (g.to ? `@${g.to}` : g.to_group ? `#${g.to_group
 /** Anyone in the team can give work to someone else, as they can move it. Done work stays put. */
 const canGive = (g: Guide) => Boolean(g.team) && g.stage !== "done";
 
-/** The one card whose "Give to…" picker is open. A click anywhere else closes it. */
+/**
+ * The one card whose "Give to…" picker is open, and where it floats: under the control that opened
+ * it, fixed to the window and kept inside it. Floating rather than in the card's flow, which made
+ * the card grow; drawn on the page body, because the lanes scroll both ways and clip anything
+ * hanging out of them. A click outside it, Escape, or scrolling the board closes it.
+ */
 const giving = ref("");
-const root = ref<HTMLElement | null>(null);
-function onDocument(e: MouseEvent) {
-  if (giving.value && !root.value?.contains(e.target as Node)) giving.value = "";
+const givingGuide = computed(() =>
+  giving.value ? props.columns.flatMap((c) => c.cards).find((g) => g.id === giving.value) : null,
+);
+const givePos = ref({ left: 0, top: 0 });
+const popover = ref<HTMLElement | null>(null);
+async function openGive(id: string, x: number, y: number) {
+  if (giving.value === id) return (giving.value = "");
+  giving.value = id;
+  givePos.value = { left: x, top: y };
+  await nextTick();
+  const box = popover.value?.getBoundingClientRect();
+  if (box)
+    givePos.value = {
+      left: Math.max(8, Math.min(x, window.innerWidth - box.width - 8)),
+      top: y + box.height > window.innerHeight - 8 ? Math.max(8, y - box.height - 28) : y,
+    };
 }
-onMounted(() => document.addEventListener("click", onDocument));
-onBeforeUnmount(() => document.removeEventListener("click", onDocument));
+function giveFrom(id: string, e: MouseEvent) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  openGive(id, r.right - 288, r.bottom + 4);
+}
+// The controls that open it stop their own click, so any click that arrives here is elsewhere.
+function onDocument(e: Event) {
+  if (giving.value && !popover.value?.contains(e.target as Node)) giving.value = "";
+}
+onMounted(() => {
+  document.addEventListener("click", onDocument);
+  window.addEventListener("scroll", onDocument, true);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("click", onDocument);
+  window.removeEventListener("scroll", onDocument, true);
+});
 
 /** The hold a card leads with: one that needs somebody first, else the first. */
 const lead = (g: Guide) =>
@@ -72,6 +121,142 @@ function age(g: Guide) {
   return rel(heard && heard > edited ? heard : edited).replace(/ ago$/, "");
 }
 
+const { list: selected, has, toggle } = useSelection();
+const pick = (g: Guide) =>
+  toggle({ id: g.id, title: g.title || "", archived: g.status === "consumed" });
+
+/** The card whose quick actions are open, and where the pointer was. */
+const menu = ref<{ guide: Guide; x: number; y: number } | null>(null);
+function openMenu(g: Guide, e: MouseEvent) {
+  // The context-menu key reports no pointer position, so the menu opens at the card instead.
+  const card = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  menu.value = {
+    guide: g,
+    x: e.clientX || card.left + 16,
+    y: e.clientY || card.top + 16,
+  };
+}
+
+const { onArchive, onCloseGuide, onTaskDraft, onTaskReady, onTakeBack } = useHub();
+
+/** The card being dragged, and the column under it. */
+const dragging = ref<Guide | null>(null);
+const over = ref("");
+const holding = (g: Guide) => (g.held_by ?? []).some((h) => h.health !== "review");
+
+/**
+ * What dropping `g` in column `to` does, or null when it does nothing there. Each is the act the
+ * guide's page offers, under the same rule: anyone in the team moves work, `manage` archives. An
+ * act answers false when it did not happen, and the card goes back.
+ */
+function moveTo(g: Guide, to: string): (() => Promise<boolean> | boolean) | null {
+  const from = g.stage;
+  const task = g.kind === "task";
+  if (from === to) return null;
+  // Ready for a task asks which repo first (see drop()); anything else goes at once.
+  if (from === "draft" && to === "todo")
+    return task ? () => false : () => onTaskReady({ id: g.id } as Task);
+  if (from === "todo" && to === "draft" && !holding(g))
+    return () => onTaskDraft({ id: g.id } as Task);
+  if (from === "working" && to === "todo")
+    return () =>
+      confirm(`Stop the agent working on "${g.title}"? It goes back to To do.`) &&
+      onTakeBack({ id: g.id } as Working);
+  if (to === "done" && g.manage && from !== "review" && g.status !== "consumed")
+    return () => (task ? onArchive(g, true) : onCloseGuide(g));
+  // Out of Done to Draft, so nobody redoes approved work without a person saying so.
+  if (from === "done" && to === "draft" && g.manage && g.status === "consumed")
+    return () => onArchive(g, false);
+  return null;
+}
+
+/**
+ * Where a moved card is shown until the board catches up: its id and the column it was put in. A
+ * refused move deletes its entry and the card is back where the server has it.
+ */
+const placed = ref<Record<string, string>>({});
+const view = computed(() => {
+  const moved = props.columns.flatMap((c) =>
+    c.cards.filter((g) => placed.value[g.id] && placed.value[g.id] !== c.id),
+  );
+  return props.columns.map((c) => ({
+    ...c,
+    cards: [
+      ...moved.filter((g) => placed.value[g.id] === c.id),
+      ...c.cards.filter((g) => !placed.value[g.id] || placed.value[g.id] === c.id),
+    ],
+  }));
+});
+// Once the server's board agrees, the entry has nothing left to say.
+watch(
+  () => props.columns,
+  (cols) => {
+    const now = { ...placed.value };
+    for (const c of cols) for (const g of c.cards) if (now[g.id] === c.id) delete now[g.id];
+    placed.value = now;
+  },
+);
+async function place(g: Guide, to: string, act: () => Promise<boolean> | boolean) {
+  placed.value = { ...placed.value, [g.id]: to };
+  if (!(await act())) {
+    const { [g.id]: _, ...rest } = placed.value;
+    placed.value = rest;
+  }
+}
+
+/** The task waiting on its repo before it goes Ready, and where to ask. */
+const readying = ref<{ guide: Guide; x: number; y: number } | null>(null);
+function ready(repo: string) {
+  const g = readying.value?.guide;
+  readying.value = null;
+  if (g) place(g, "todo", () => onTaskReady({ id: g.id } as Task, repo));
+}
+
+/** How tall the dragged card is, for the gap that opens where it would land. */
+const gap = ref(0);
+function dragStart(g: Guide, e: DragEvent) {
+  dragging.value = g;
+  gap.value = (e.currentTarget as HTMLElement).offsetHeight;
+  e.dataTransfer?.setData("text/plain", g.title || g.id);
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+}
+function dragEnd() {
+  dragging.value = null;
+  over.value = "";
+}
+function dragOver(col: string, e: DragEvent) {
+  if (!dragging.value || !moveTo(dragging.value, col)) return;
+  e.preventDefault();
+  over.value = col;
+}
+function drop(col: string, e: DragEvent) {
+  const g = dragging.value;
+  const act = g && moveTo(g, col);
+  dragEnd();
+  if (!g || !act) return;
+  if (g.kind === "task" && g.stage === "draft" && col === "todo")
+    readying.value = { guide: g, x: e.clientX, y: e.clientY };
+  else place(g, col, act);
+}
+
+/**
+ * From md, the lanes reach the bottom of the window: the row is as tall as what is left below its
+ * own top. Measured, because what sits above the board (a banner, a filter line) varies.
+ */
+const lanes = ref<HTMLElement | null>(null);
+const laneHeight = ref("");
+function measure() {
+  const el = lanes.value;
+  if (!el || !window.matchMedia("(min-width: 768px)").matches) return (laneHeight.value = "");
+  const top = el.getBoundingClientRect().top + window.scrollY;
+  laneHeight.value = `max(24rem, calc(100dvh - ${top}px - 1.5rem))`;
+}
+onMounted(() => {
+  measure();
+  window.addEventListener("resize", measure);
+});
+onBeforeUnmount(() => window.removeEventListener("resize", measure));
+
 /** The column a phone shows: the first with anything in it, until a tab is picked. */
 const picked = ref("");
 const shown = computed(
@@ -80,10 +265,10 @@ const shown = computed(
 </script>
 
 <template>
-  <div ref="root" class="flex flex-col gap-3">
+  <div class="flex flex-col gap-3">
     <div role="tablist" aria-label="Board columns" class="flex gap-1 overflow-x-auto [scrollbar-width:none] md:hidden">
       <button
-        v-for="col in columns"
+        v-for="col in view"
         :key="col.id"
         type="button"
         role="tab"
@@ -96,50 +281,85 @@ const shown = computed(
       </button>
     </div>
 
-    <div class="flex items-start gap-3 md:gap-2 md:overflow-x-auto md:pb-2">
+    <div
+      ref="lanes"
+      class="flex items-start gap-3 md:items-stretch md:gap-2 md:overflow-x-auto md:pb-2"
+      :style="laneHeight ? { height: laneHeight } : undefined"
+    >
       <section
-        v-for="col in columns"
+        v-for="col in view"
         :key="col.id"
-        class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 md:flex-[1_0_15rem]"
-        :class="shown === col.id ? '' : 'max-md:hidden'"
+        class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 transition-opacity md:min-h-0 md:flex-[1_0_15rem]"
+        :class="[
+          shown === col.id ? '' : 'max-md:hidden',
+          dragging && dragging.stage !== col.id && !moveTo(dragging, col.id) ? 'opacity-50' : '',
+          over === col.id ? 'ring-2 ring-[var(--accent)]' : '',
+        ]"
+        @dragover="dragOver(col.id, $event)"
+        @drop.prevent="drop(col.id, $event)"
         :aria-labelledby="`col-${col.id}`"
       >
         <div class="flex items-baseline gap-2 px-1">
           <h2 :id="`col-${col.id}`" class="m-0 font-ui text-sm font-semibold">{{ col.label }}</h2>
           <span class="font-ui text-xs tabular-nums text-muted">{{ col.cards.length }}</span>
         </div>
-        <p v-if="!col.cards.length" class="m-0 px-1 font-ui text-xs text-muted">{{ col.hint }}</p>
-        <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
+        <p v-if="!col.cards.length && over !== col.id" class="m-0 px-1 font-ui text-xs text-muted">{{ col.hint }}</p>
+        <!-- The lane's cards scroll inside it, under the header. -->
+        <ul class="m-0 -mx-1 flex list-none flex-col gap-2 px-1 pb-1 md:min-h-0 md:flex-1 md:overflow-y-auto">
+          <li
+            v-if="over === col.id"
+            aria-hidden="true"
+            class="shrink-0 rounded-2 border-2 border-dashed border-line-strong"
+            :style="{ height: `${gap}px` }"
+          />
           <li
             v-for="g in col.id === 'done' ? col.cards.slice(0, DONE_SHOWN) : col.cards"
             :key="g.id"
-            class="relative flex flex-col rounded-2 bg-raised shadow-edge"
-            :class="col.id === 'done' ? 'opacity-70' : ''"
+            class="group relative flex shrink-0 flex-col rounded-2 bg-raised shadow-edge transition-transform has-[a:active]:scale-[0.96]"
+            :class="[
+              dragging?.id === g.id ? 'opacity-40' : col.id === 'done' ? 'opacity-70' : '',
+              has(g.id) ? 'ring-2 ring-[var(--accent)]' : '',
+            ]"
+            :draggable="giving !== g.id"
+            @dragstart="dragStart(g, $event)"
+            @dragend="dragEnd"
+            @contextmenu.prevent="openMenu(g, $event)"
           >
-            <!-- About you: a coral mark, the one place coral is used here — never a fill. -->
-            <span
-              v-if="aboutMe(g)"
-              aria-hidden="true"
-              class="absolute inset-y-2 left-0 w-0.5 rounded-pill bg-[var(--coral)]"
-            />
+            <!-- The top row: the select dot, the badges and the age, in one line so the dot sits on
+                 the badges' centre. Outside the link, because a control inside an <a> would open
+                 the page; the link below stretches over the whole card instead. -->
+            <div class="flex items-center gap-2 px-3 pt-2">
+              <!-- No room taken while hidden, so a card at rest starts at its badge. -->
+              <input
+                v-if="g.manage"
+                type="checkbox"
+                class="relative z-10 my-0 ml-0 -mr-2 h-4 w-0 shrink-0 cursor-pointer appearance-none rounded-pill border-0 border-line-strong bg-field opacity-0 transition-[width,margin,opacity] duration-150 checked:border-[var(--accent)] checked:bg-[var(--accent)] checked:shadow-[inset_0_0_0_3px_var(--field)] focus-visible:mr-0 focus-visible:w-4 focus-visible:border focus-visible:opacity-100 group-hover:mr-0 group-hover:w-4 group-hover:border group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:mr-0 [@media(hover:none)]:w-4 [@media(hover:none)]:border [@media(hover:none)]:opacity-100"
+                :class="selected.length ? '!mr-0 !w-4 !border !opacity-100' : ''"
+                :checked="has(g.id)"
+                :aria-label="`Select ${g.title || 'this guide'}`"
+                @change="pick(g)"
+              >
+              <span
+                v-if="kindBadge(g.kind)"
+                class="rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase"
+                :class="kindBadge(g.kind)!.class"
+              >{{ kindBadge(g.kind)!.label }}</span>
+              <span
+                v-if="g.can_review"
+                class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold text-accent"
+              >Your review</span>
+              <!-- Done is approved work and archived work; the card says which, in words. -->
+              <span v-if="g.stage === 'done' && g.outcome" class="font-ui text-xs text-muted">{{
+                g.outcome === "approved" ? "Approved" : "Archived"
+              }}</span>
+              <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
+            </div>
+            <!-- The title is the link, and its ::after covers the card, so anywhere on the card
+                 opens it; the dot and the footer's control sit above that layer. -->
             <NuxtLink
               :to="`/hub/g/${g.id}`"
-              class="flex flex-col gap-2 rounded-2 px-3 pt-2 pb-1 text-fg no-underline transition-transform active:scale-[0.96]"
-            >
-              <span class="flex flex-wrap items-center gap-2">
-                <span
-                  v-if="kindBadge(g.kind)"
-                  class="rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase"
-                  :class="kindBadge(g.kind)!.class"
-                >{{ kindBadge(g.kind)!.label }}</span>
-                <span
-                  v-if="g.can_review"
-                  class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold text-accent"
-                >Your review</span>
-                <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
-              </span>
-              <span class="line-clamp-2 font-ui text-sm font-medium text-pretty">{{ g.title || "Untitled guide" }}</span>
-            </NuxtLink>
+              class="line-clamp-2 px-3 pt-2 pb-1 font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 focus-visible:after:outline-2 focus-visible:after:outline-[var(--accent)] focus-visible:after:outline-solid"
+            >{{ g.title || "Untitled guide" }}</NuxtLink>
             <!-- The footer sits beside the link, not inside it: a button inside an <a> is invalid
                  and would open the page. -->
             <div class="flex items-center gap-2 px-3 pb-2 font-ui text-xs text-muted">
@@ -165,21 +385,16 @@ const shown = computed(
               <button
                 v-if="canGive(g)"
                 type="button"
-                class="ml-auto flex min-w-0 cursor-pointer items-center gap-0.5 rounded-1 border-0 bg-transparent p-0 font-ui text-xs text-muted hover:text-fg"
+                class="relative z-10 ml-auto flex min-w-0 cursor-pointer items-center gap-0.5 rounded-1 border-0 bg-transparent p-0 font-ui text-xs text-muted hover:text-fg"
                 :aria-expanded="giving === g.id"
                 :aria-label="`For ${address(g)}. Give it to someone else`"
-                @click.stop="giving = giving === g.id ? '' : g.id"
+                @click.stop="giveFrom(g.id, $event)"
                 @keydown.esc="giving = ''"
               >
                 <span class="min-w-0 truncate">{{ address(g) }}</span>
                 <AppIcon name="reveal" class="shrink-0" />
               </button>
               <span v-else class="ml-auto min-w-0 truncate">{{ address(g) }}</span>
-            </div>
-            <!-- In the card's flow rather than floating: the board scrolls sideways, and a scrolling
-                 box clips anything that hangs outside it. -->
-            <div v-if="giving === g.id" class="mx-2 mb-2 rounded-2 bg-field p-2 shadow-edge" @click.stop>
-              <HubAssignPicker :id="g.id" :team="g.team || ''" :to="addressed(g)" @done="giving = ''" />
             </div>
           </li>
         </ul>
@@ -188,5 +403,41 @@ const shown = computed(
         </p>
       </section>
     </div>
+    <HubCardMenu
+      v-if="menu"
+      :key="menu.guide.id + menu.x + menu.y"
+      :guide="menu.guide"
+      :x="menu.x"
+      :y="menu.y"
+      :can-give="canGive(menu.guide)"
+      @close="menu = null"
+      @give="openGive(menu!.guide.id, menu!.x, menu!.y)"
+      @ready="readying = { ...menu! }"
+    />
+    <Teleport to="body">
+      <div
+        v-if="givingGuide"
+        ref="popover"
+        class="menu !fixed !m-0 w-72"
+        :style="{ left: `${givePos.left}px`, top: `${givePos.top}px`, right: 'auto' }"
+        @keydown.esc="giving = ''"
+      >
+        <HubAssignPicker
+          :id="givingGuide.id"
+          :team="givingGuide.team || ''"
+          :to="addressed(givingGuide)"
+          @done="giving = ''"
+        />
+      </div>
+    </Teleport>
+    <HubReadyPrompt
+      v-if="readying"
+      :key="readying.guide.id"
+      :guide="readying.guide"
+      :x="readying.x"
+      :y="readying.y"
+      @close="readying = null"
+      @ready="ready"
+    />
   </div>
 </template>

@@ -1257,6 +1257,19 @@ export async function finish(
           : "this agent does not hold that task — it was released, or never taken here",
     };
   }
+  // The write-up is the record of this work, not work for anyone: off the board, stored as Done,
+  // naming the task it reports on (0053_report_of.sql). It was a draft until now, like every guide.
+  const written = await db
+    .prepare("SELECT markdown FROM guide WHERE id = ?")
+    .bind(report)
+    .first<{ markdown: string }>();
+  if (written)
+    await db
+      .prepare(
+        "UPDATE guide SET status = 'consumed', markdown = ?, report_of = ?, updated = ? WHERE id = ?",
+      )
+      .bind(withStatus(written.markdown, "consumed"), id, at, report)
+      .run();
   const claim = await claimFor(db, id, who);
   if (claim)
     await event(db, id, "handed_in", {
@@ -1487,7 +1500,9 @@ export async function approve(
     return { status: 409, error: "only a task in review can be approved — nobody has finished it" };
   if (ownWork(t.team_id, t.claim.account_id, account)) return { status: 409, error: OWN_WORK };
   await db
-    .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
+    .prepare(
+      "UPDATE guide SET status = 'consumed', outcome = 'approved', markdown = ?, updated = ? WHERE id = ?",
+    )
     .bind(withStatus(t.markdown, "consumed"), at, id)
     .run();
   await event(db, id, "approved", { account, at });
@@ -1556,7 +1571,9 @@ export async function markDone(
     await db.batch([
       toReview,
       db
-        .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
+        .prepare(
+          "UPDATE guide SET status = 'consumed', outcome = 'approved', markdown = ?, updated = ? WHERE id = ?",
+        )
         .bind(withStatus(withNote(task.markdown, line), "consumed"), at, id),
     ]);
     await event(db, id, "approved", { account, at, body: said });
@@ -2313,25 +2330,44 @@ export async function closeGuide(
     .all<{ account_id: string }>();
   await db.batch([
     db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id),
+    // Accepting what was handed in is approving it; closing with nothing handed in is archiving.
     db
-      .prepare("UPDATE guide SET status = 'consumed', markdown = ?, updated = ? WHERE id = ?")
-      .bind(withStatus(g.markdown, "consumed"), at, id),
+      .prepare(
+        "UPDATE guide SET status = 'consumed', outcome = ?, markdown = ?, updated = ? WHERE id = ?",
+      )
+      .bind(inReview.length ? "approved" : "archived", withStatus(g.markdown, "consumed"), at, id),
   ]);
   await event(db, id, "closed", { account, at, body: byOwner ? "closed by a teammate" : "" });
   return { claimants: results.map((r) => r.account_id), author: g.account_id, byOwner };
 }
 
 /**
- * Guides sent to somebody that nothing has happened to, for something on a clock to close.
+ * Guides sent to somebody that nothing has happened to, for something on a clock to put back.
  *
  * "Nothing" is meant strictly: nobody pulled it, nobody said they were taking it, nobody holds it,
  * nobody gave a verdict. A guide with any of those is a conversation in progress, however slow,
- * and closing it would be taking it off somebody's list while they are still on it.
+ * and moving it would be taking it off somebody's list while they are still on it.
  *
- * `consumed` is the right end for this and not a lie about the work: it is the author's shelf,
- * reversible, and explicitly not a judgement that the work landed. What it says is that this
- * stopped being live, which after a fortnight of silence it did.
+ * They go back to Draft (`backToDraft`), not to Done. Done is finished work, approved or archived
+ * by a person; a guide nobody took is neither, it stopped waiting on somebody who is not coming.
+ * From Draft its author marks it Ready again, to the same person or another, or archives it.
  */
+export async function backToDraft(db: D1Database, id: string): Promise<boolean> {
+  const g = await db
+    .prepare("SELECT markdown FROM guide WHERE id = ? AND status = 'published'")
+    .bind(id)
+    .first<{ markdown: string }>();
+  if (!g) return false;
+  // `updated` is left alone: nothing happened to the work, and moving it is not news a day later
+  // from the Draft reminder too.
+  await db
+    .prepare(
+      "UPDATE guide SET status = 'draft', markdown = ? WHERE id = ? AND status = 'published'",
+    )
+    .bind(withStatus(g.markdown, "draft"), id)
+    .run();
+  return true;
+}
 /**
  * How long a sent guide may sit with nothing happening to it before the clock shelves it.
  *
@@ -2378,6 +2414,35 @@ export async function staleSent(
 }
 
 /**
+ * How long a guide sits untouched in Draft before its author is reminded. Every new guide is a
+ * draft and only a person's Ready sends it on, so one somebody meant to send and forgot to mark
+ * Ready waits forever with nothing saying so.
+ */
+export const DRAFT_NUDGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Drafts, of any kind, whose last edit crossed DRAFT_NUDGE_MS inside (`since`, `before`]: each one is
+ * returned in the one run it crosses, as `stalled` does, so this is a reminder and not a nag. An
+ * edit moves `updated` forward and the draft crosses again a day later.
+ */
+export async function staleDrafts(
+  db: D1Database,
+  before: string,
+  since: string,
+): Promise<{ id: string; account_id: string; team_id: string }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, account_id, team_id FROM guide
+        WHERE status = 'draft' AND updated <= ?1 AND updated > ?2
+        ORDER BY updated ASC
+        LIMIT 200`,
+    )
+    .bind(before, since)
+    .all<{ id: string; account_id: string; team_id: string }>();
+  return results;
+}
+
+/**
  * When each of these guides will be archived for want of anybody touching it, for the ones that
  * will. The same conditions staleSent archives on, minus the clock, so a date shown here is a date
  * that happens: `updated` plus STALE_SENT_MS, any pull, answer, hold or verdict restarts it by
@@ -2418,6 +2483,17 @@ export async function sendBackHandedIn(
     return { status: 400, error: "say why: whoever takes it next should know what was missing" };
   const g = await authoredGuide(db, id, account);
   if ("error" in g) return g;
+  // No place names the one hand-in there is, from a client that reviews by guide rather than by
+  // repo (`passalong reject`); with several, it has to say which.
+  if (!place) {
+    const { results } = await db
+      .prepare("SELECT place FROM claim WHERE guide_id = ? AND state = 'review'")
+      .bind(id)
+      .all<{ place: string }>();
+    if (results.length > 1)
+      return { status: 409, error: "handed in from several repos: send each back from the hub" };
+    place = results[0]?.place ?? "";
+  }
   const c = await db
     .prepare("SELECT account_id FROM claim WHERE guide_id = ? AND place = ? AND state = 'review'")
     .bind(id, place)

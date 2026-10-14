@@ -29,9 +29,10 @@ or `?view=verify` for the view that leads with what to check and folds the imple
    Adapt those to the current codebase rather than copying them.
 3. Check any `Verification` or `Acceptance` the guide gives before reporting success.
 4. Use `take` when you mean to do the work, then `hand_in` with what changed and the evidence,
-   or `pass` with the reason it is not yours. A person trying a transfer can answer with
-   `passalong works <id> <screenshot.png>` or `passalong broken <id> "<why>"`; "works" needs a
-   screenshot of it working.
+   or `pass` with the reason it is not yours. Every kind moves the same way: Draft, Ready, taken,
+   handed in, and approved or sent back by a person.
+5. Every new guide you publish is a draft — say `status: draft`. It reaches nobody until a person
+   reads it and marks it Ready.
 
 ## Three kinds of guide
 
@@ -102,25 +103,24 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 ```
 
 - `passalong share [file] [--to team[/handle]]` — publish a guide, get an id and a link
-- `passalong start <id|link>` — pull it and take it: one command for "I am doing this"
-- `passalong pull <id|link>` — fetch a guide into `./.passalong/` and print it, without answering for it
+- `passalong take <id>` (or `start <id|link>`) — you are doing it: prints it and holds it, so nobody
+  else takes it; `--save` also writes `./.passalong/<id>.md`
+- `passalong pull <id|link>` — print a guide without answering for it; `--save` also writes `./.passalong/<id>.md`
 - `passalong inbox` — guides handed to you that you have not pulled
 - `passalong board` — waiting on you, in flight, landed, worth keeping
 - `passalong activity [--all]` — what happened while you were away
 - `passalong log [repo]` — what you did, newest first, under a heading per month
 - `passalong list [query]` — your guides and your teams'
 - `passalong open <id> [--print]` — view in the browser, or the terminal
-- `passalong works <id> <screenshot.png...>` / `passalong broken <id> <why>` — the verdict, after
-  trying it. "Works" needs a screenshot of it working; it is removed 5 days after the guide closes
 - `passalong archive <id>` — move a guide off your board and out of the free tier's count
 - `passalong export [dir]` — every guide as plain markdown
 - `passalong team create|invite|join|use` — teams
 - `passalong me [--handle H]` — how teammates address you
 - `passalong reply <id> <message> [--file PATH ...]` — write to whoever holds it, or leave a note
   for whoever takes it; the agent reads it the next time it checks in
-- `passalong take <id>` / `passalong pass <id> <why>` — whether you are doing what you were handed
-- `passalong task "<what needs doing>"` / `passalong ready <id>` — write a task; it waits in Draft
-  until it is ready for an agent
+- `passalong pass <id> <why>` — it is not yours, or you are stuck: handed back with the reason
+- `passalong task "<what needs doing>"` / `passalong ready <id>` — write a task; it waits in Draft,
+  like every new guide, until a person marks it ready
 - `passalong tasks` — every task and its column: draft, ready, claimed, stalled, review, done
 - `passalong approve <id>` / `passalong reject <id> <why>` — the review gate. A person's commands:
   an agent never approves or rejects work, its own or another's
@@ -317,7 +317,7 @@ the JSON it prints has `markdown`, the line to put in the guide body or pass as 
 bytes go straight to Passalong and never through the conversation, so never base64 an image into a
 tool call. If the command cannot reach `passalong.dev`, the sandbox's network settings are blocking
 it, and the user has to allow that domain for code execution. A local server is
-still better where you can run one: it works offline and knows which repo you are in.
+still better where you can run one: it knows which repo you are in.
 
 Failing both, everything is plain HTTP: `GET /v1/openapi.json` describes the API for
 function calling or a script, and a share link's `.md` needs no account at all.

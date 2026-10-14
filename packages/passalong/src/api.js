@@ -379,7 +379,10 @@ export const inbox = () => call("/v1/inbox");
 export const createReport = (body) => call("/v1/reports", { method: "POST", body });
 /** One report and the issues filed under it, grouped by product area. */
 export const report = (id) => call(`/v1/reports/${encodeURIComponent(id)}`);
-export const get = (id) => call(`/v1/guides/${id}`, { raw: true });
+export const get = (id, { peek = false } = {}) =>
+  call(`/v1/guides/${id}${q({ peek: peek ? "1" : "" })}`, { raw: true });
+/** One page of every guide this account can read, for `export`. Records no pull. */
+export const exportPage = (after = "") => call(`/v1/export${q({ after })}`);
 /**
  * A guide's follow-ups, one level down. `markdown` adds each one's content, oldest first and
  * capped server-side; neither form counts as opening them.
@@ -426,6 +429,11 @@ export const approveTask = (id) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/approve`, { method: "POST", body: {} });
 export const rejectTask = (id, why) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/reject`, { method: "POST", body: { why } });
+/** A handoff's or bug's approve and send-back. No `place` names the only hand-in there is. */
+export const closeGuide = (id) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/close`, { method: "POST", body: {} });
+export const sendBack = (id, why) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/send_back`, { method: "POST", body: { why } });
 /** Take work back from whoever holds it, of any kind. `/v1/tasks/…/release` is the old path. */
 export const release = (id) =>
   call(`/v1/guides/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });

@@ -95,6 +95,5 @@ test("every mail sends both halves, and the handoff no longer names a retired ve
     !handoff.includes("passalong done"),
     "the handoff used to end on the wrong instruction",
   );
-  assert.match(handoff, /passalong works \$\{o\.id\}/);
-  assert.match(handoff, /passalong pull \$\{o\.id\}/);
+  assert.match(handoff, /passalong take \$\{o\.id\}/);
 });

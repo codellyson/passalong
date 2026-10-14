@@ -52,12 +52,12 @@ and gets three things from it that the old hand-written HTML had to do by hand: 
 the stylesheet, `.vue` files instead of template strings, and a typecheck that has already caught
 bugs the string templates could not have.
 
-## Local-first
+## Server-first
 
-Every command works offline with no token. Publishing writes to `./.passalong/` first; sync is
-what happens next if an account exists. A failed sync on `list` degrades to a warning, never an
-error. This is the reason the CLI is usable in a repo that has never heard of the hosted service,
-and the reason guides survive the service.
+Every guide lives on the server, and the CLI keeps no copy of one unless asked: `pull --save`
+writes `./.passalong/<id>.md`, and `passalong export` writes every guide you can read as plain
+markdown, which is how guides survive the service. Sharing needs an account; an agent does not
+work without the network anyway, and local copies only went stale and piled up.
 
 ## Where the same knowledge lives twice
 

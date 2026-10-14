@@ -10,7 +10,14 @@
 // written, deleted with that guide.
 
 import { sweepAttachments } from "#api/attachments";
-import { closeGuide, STALE_SENT_MS, staleSent, stalled } from "#api/claims";
+import {
+  backToDraft,
+  DRAFT_NUDGE_MS,
+  STALE_SENT_MS,
+  staleDrafts,
+  staleSent,
+  stalled,
+} from "#api/claims";
 import { notify } from "#api/notify";
 import { DYNAMIC_TTL_MS } from "#api/oauth";
 import { registrationCutoff, sweepRegistrations } from "#api/oauth-clients";
@@ -105,25 +112,41 @@ export default defineNitroPlugin((nitro) => {
       console.error("stall notice failed", err);
     }
 
+    // Guides left in Draft for a day. Draft is where every guide starts, and one its author meant to
+    // send sits there with nothing saying so. Feed only, no mail, like a stall notice.
+    try {
+      const now = Date.now();
+      const before = new Date(now - DRAFT_NUDGE_MS).toISOString();
+      const since = new Date(now - DRAFT_NUDGE_MS - STALL_WINDOW_MS).toISOString();
+      const drafts = await staleDrafts(env.DB as D1Database, before, since);
+      for (const g of drafts)
+        await notify(env as Parameters<typeof notify>[0], {
+          to: g.account_id,
+          kind: "still_draft",
+          guide_id: g.id,
+          actor_id: "",
+          team_id: g.team_id,
+        });
+      if (drafts.length) console.log(`reminded about ${drafts.length} draft(s)`);
+    } catch (err) {
+      console.error("draft reminder failed", err);
+    }
+
     /**
      * Guides sent to somebody that nothing ever happened to.
      *
-     * Leaving `Open` needs the receiver to open it and say it worked. When they never do, the
-     * author is the one person who knows and the only exits are a menu item three levels down or
-     * nothing at all — so a board fills with work that was finished weeks ago and a free plan
-     * fills with it too.
+     * Ready work nobody took sits in To do waiting on somebody who is not coming, and fills a free
+     * plan too (Draft is not counted). After a fortnight it goes back to Draft — not to Done, which
+     * is finished work — and its author marks it Ready again, for the same person or another.
      *
      * Both sides are told, including the author: this happened without them, and a guide that
-     * left the board silently is worse than one that stayed. `consumed` is reversible, and the
-     * notification is how somebody knows there is something to reverse.
+     * moved silently is worse than one that stayed.
      */
     try {
-      const at = new Date().toISOString();
       const before = new Date(Date.now() - STALE_SENT_MS).toISOString();
       const old = await staleSent(env.DB as D1Database, before);
       for (const g of old) {
-        const done = await closeGuide(env.DB as D1Database, g.id, { account: g.account_id, at });
-        if ("error" in done) continue;
+        if (!(await backToDraft(env.DB as D1Database, g.id))) continue;
         for (const to of [g.account_id, g.to].filter(Boolean))
           await notify(env as Parameters<typeof notify>[0], {
             to,
@@ -131,10 +154,10 @@ export default defineNitroPlugin((nitro) => {
             guide_id: g.id,
             actor_id: "",
             team_id: g.team_id,
-            note: "not opened for a fortnight; put it back from Activities if it is still live",
+            note: "nobody took it in a fortnight; mark it Ready again if it is still wanted",
           });
       }
-      if (old.length) console.log(`closed ${old.length} sent guide(s) nobody opened`);
+      if (old.length) console.log(`put ${old.length} sent guide(s) nobody took back in Draft`);
     } catch (err) {
       console.error("stale close failed", err);
     }

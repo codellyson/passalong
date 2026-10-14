@@ -2,7 +2,8 @@
 import type { ContextClaim, Guide } from "~/types/hub";
 
 const props = defineProps<{ guide: Guide; claims: ContextClaim[]; owner: boolean }>();
-const { data, onPersonTaskTake, onPersonTaskProgress, onPersonTaskHandIn, error } = useHub();
+const { data, onPersonTaskTake, onPersonTaskProgress, onPersonTaskHandIn, onPass, error } =
+  useHub();
 const held = computed(() => {
   const account = data.value.me?.account || "";
   const person = `person-${account.toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
@@ -34,6 +35,10 @@ async function act(work: () => Promise<boolean>) {
 }
 
 const take = () => act(() => onPersonTaskTake(props.guide.id));
+/** Not for me: the reason is required, because "not me" without "why" leaves the sender guessing. */
+const passing = ref(false);
+const why = ref("");
+const pass = () => act(() => onPass(props.guide.id, why.value.trim()));
 const update = () => act(() => onPersonTaskProgress(props.guide.id, progress.value));
 const handIn = async () => {
   if (!summary.value.trim()) return false;
@@ -49,13 +54,23 @@ const handIn = async () => {
 </script>
 
 <template>
-  <section v-if="canTake || held" class="rounded-3 bg-raised p-4 shadow-edge" aria-label="Task work">
+  <section v-if="canTake || held" class="rounded-3 bg-raised p-4 shadow-edge" aria-label="Your work on this">
     <div v-if="canTake" class="flex flex-wrap items-center justify-between gap-3">
-      <p class="m-0 font-ui text-sm text-muted">You can take this task and keep its progress here.</p>
-      <button class="btn primary" type="button" :disabled="busy" @click="take">{{ busy ? "Taking…" : "Take task" }}</button>
+      <p class="m-0 font-ui text-sm text-muted">Take it to work on it yourself: nobody else can take it while you hold it.</p>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn primary" type="button" :disabled="busy" @click="take">{{ busy ? "Taking…" : "I'll do this" }}</button>
+        <button class="btn outline warn" type="button" :aria-expanded="passing" @click="passing = !passing">Not for me</button>
+      </div>
     </div>
+    <form v-if="canTake && passing" class="mt-3 flex flex-col gap-3 border-t border-line pt-3" @submit.prevent="pass">
+      <label class="flex flex-col gap-2 font-ui text-sm">
+        Why isn't it yours? Whoever sent it is told.
+        <input v-model="why" required maxlength="280" placeholder="Not my area — the payments team owns this." />
+      </label>
+      <button class="btn outline warn self-start" type="submit" :disabled="busy || !why.trim()">{{ busy ? "Handing back…" : "Hand it back" }}</button>
+    </form>
     <template v-else-if="held">
-      <h2 class="m-0 font-ui text-sm font-semibold text-fg">You’re working on this task</h2>
+      <h2 class="m-0 font-ui text-sm font-semibold text-fg">You’re working on this</h2>
       <form class="mt-3 flex flex-col gap-3" @submit.prevent="update">
         <label class="flex flex-col gap-2 font-ui text-sm">
           Progress update
