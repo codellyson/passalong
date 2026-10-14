@@ -39,9 +39,23 @@ email is a stranger's text that an agent will read:
   out, guide not archived) adds to `inbound_guide.times`, and leaves at most one note an hour on
   the guide's thread. A transfer never merges.
 
-The key can name a repo (`inbound.target`, `PATCH /v1/inbound`). It becomes a task's
-`target_context`, so an agent working in that repo takes it with no id once it is Ready. Without
-one, a no-id `take` never offers it, because that only matches tasks for the agent's own repo.
+A task's repo is chosen where it is known. A webhook URL can carry `?repo=owner/repo` (one Sentry or
+PostHog project per repo), and that becomes the task's `target_context`. Otherwise whoever marks the
+task Ready picks the repo on its page (`PATCH /v1/guides/:id/status` with `target`, which the context
+route offers from repos the account's tasks and agents already use). An agent's no-id `take` only
+offers tasks for its own repo, so a task Ready with no repo is taken by id. Migration 0052 dropped
+the one-repo-per-account `inbound.target` this replaced.
+
+**Webhooks use the same key.** `POST /v1/in/<key>/<kind>` (public by path; the key is the
+credential, and Sentry's HMAC is not checked yet) turns a webhook into a guide through the same
+`intake()` as email, so the same rules hold: a Draft task, a quoted body, merged repeats.
+`readHook()` in `inbound.ts` reads the sender from the request: **Sentry** by its
+`Sentry-Hook-Resource` header (issue created or unresolved, alert triggered, error created,
+metric alert warning or critical; everything else answers 200 and makes nothing), **PostHog** by
+its default `{event, person}` body (an error tracking alert or an `$exception`), and anything
+else as `{title, text, url, id}`. Repeats merge on the sender's own id when it has one (a Sentry
+issue, a PostHog issue or fingerprint), else on the title. A webhook guide notifies as `hooked`.
+Settings shows it on its own page, **Integrations**, one source's addresses and steps at a time.
 
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings
 says Email in is not set up.

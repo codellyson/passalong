@@ -127,7 +127,11 @@ const standing = computed(() => {
   if (isTask.value)
     return c.blocked_by.some((b) => b.status !== "consumed")
       ? "Waiting on the tasks it is blocked by."
-      : "Ready: the next agent in the right repo will take it.";
+      : c.target
+        ? `Ready: the next agent working in ${c.target} will take it.`
+        : c.target === ""
+          ? "Ready, for no repo: an agent takes it when it is given this task."
+          : "Ready: the next agent in the right repo will take it.";
   return "Nobody has taken it yet.";
 });
 
@@ -237,7 +241,13 @@ const recallable = computed(
 );
 const reopen = () =>
   run("reopen", async () => g.value && (await onArchive(g.value as Guide, false)));
-const taskReady = () => run("ready", () => onTaskReady({ id: id.value } as Task));
+/**
+ * Ready asks which repo the task is for: an agent's take with no id only offers tasks for the repo
+ * it is in, and the person deciding a task is worth doing is the one who knows where. Read through
+ * the form on submit, because the input is prefilled and stays uncontrolled.
+ */
+const taskReady = (form: HTMLFormElement) =>
+  run("ready", () => onTaskReady({ id: id.value } as Task, field(form, "repo")));
 const taskDraft = () => run("draft", () => onTaskDraft({ id: id.value } as Task));
 
 /** One line for each button whose name alone does not say what it does. */
@@ -340,13 +350,29 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <NuxtLink v-if="!g.mine && !handedInByMe" class="btn primary" :to="`/hub/answer/${g.id}`">Respond</NuxtLink>
-          <button
+          <form
             v-if="mayAct && isTask && g.status === 'draft'"
-            class="btn primary"
-            type="button"
-            :disabled="Boolean(busy)"
-            @click="taskReady"
-          >{{ busy === "ready" ? "Making ready…" : "Ready for agents" }}</button>
+            class="flex flex-wrap items-center gap-2"
+            @submit.prevent="taskReady($event.target as HTMLFormElement)"
+          >
+            <label class="sr-only" for="ready-repo">Which repo is this for?</label>
+            <input
+              id="ready-repo"
+              name="repo"
+              class="w-56"
+              list="ready-repos"
+              placeholder="Repo: owner/repo"
+              :value="ctx.target || ''"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <datalist id="ready-repos">
+              <option v-for="r in ctx.repos || []" :key="r" :value="r" />
+            </datalist>
+            <button class="btn primary" type="submit" :disabled="Boolean(busy)">
+              {{ busy === "ready" ? "Making ready…" : "Ready for agents" }}
+            </button>
+          </form>
           <button
             v-if="mayAct && isTask && g.status === 'published' && !ctx.claims.length"
             class="btn"

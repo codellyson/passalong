@@ -1,5 +1,6 @@
 <!--
-  The marks of the apps you can connect, inline.
+  The marks of the apps you can connect, and of the tools that send work in (Settings →
+  Integrations), inline.
 
   Separate from AppIcon for two reasons. These are somebody else's logos, drawn filled on their own
   canvases rather than stroked on AppIcon's 16-unit grid; and they are used in one place, the
@@ -12,7 +13,9 @@
   shape, used only to name their app beside its own name. Nothing here implies they endorse this.
 
   `currentColor` on the monochrome marks, so a tile's own colour carries them in either theme.
-  Claude keeps its brand orange, which is legible on both grounds.
+  Claude keeps its brand orange and Gmail its red, both legible on both grounds; Sentry's purple is
+  not on the dark one, so it takes the text colour like PostHog. Sentry, PostHog and Gmail are the
+  Simple Icons paths (simple-icons@13.21.0, CC0), each on its 24-unit canvas.
 -->
 <script setup lang="ts">
 withDefaults(defineProps<{ name: keyof typeof MARKS; size?: number }>(), { size: 18 });
@@ -56,6 +59,32 @@ const MARKS: Record<string, Mark> = {
       { d: "M9 2.5v6M15 2.5v6", width: 2 },
       { d: "M7 8.5h10v2.5a5 5 0 0 1-10 0z", width: 2 },
       { d: "M12 16.5v5", width: 2 },
+    ],
+  },
+  sentry: {
+    box: "0 0 24 24",
+    fill: [
+      {
+        d: "M13.91 2.505c-.873-1.448-2.972-1.448-3.844 0L6.904 7.92a15.478 15.478 0 0 1 8.53 12.811h-2.221A13.301 13.301 0 0 0 5.784 9.814l-2.926 5.06a7.65 7.65 0 0 1 4.435 5.848H2.194a.365.365 0 0 1-.298-.534l1.413-2.402a5.16 5.16 0 0 0-1.614-.913L.296 19.275a2.182 2.182 0 0 0 .812 2.999 2.24 2.24 0 0 0 1.086.288h6.983a9.322 9.322 0 0 0-3.845-8.318l1.11-1.922a11.47 11.47 0 0 1 4.95 10.24h5.915a17.242 17.242 0 0 0-7.885-15.28l2.244-3.845a.37.37 0 0 1 .504-.13c.255.14 9.75 16.708 9.928 16.9a.365.365 0 0 1-.327.543h-2.287c.029.612.029 1.223 0 1.831h2.297a2.206 2.206 0 0 0 1.922-3.31z",
+      },
+    ],
+  },
+  posthog: {
+    box: "0 0 24 24",
+    fill: [
+      {
+        d: "M9.854 14.5 5 9.647.854 5.5A.5.5 0 0 0 0 5.854V8.44a.5.5 0 0 0 .146.353L5 13.647l.147.146L9.854 18.5l.146.147v-.049c.065.03.134.049.207.049h2.586a.5.5 0 0 0 .353-.854L9.854 14.5zm0-5-4-4a.487.487 0 0 0-.409-.144.515.515 0 0 0-.356.21.493.493 0 0 0-.089.288V8.44a.5.5 0 0 0 .147.353l9 9a.5.5 0 0 0 .853-.354v-2.585a.5.5 0 0 0-.146-.354l-5-5zm1-4a.5.5 0 0 0-.854.354V8.44a.5.5 0 0 0 .147.353l4 4a.5.5 0 0 0 .853-.354V9.854a.5.5 0 0 0-.146-.354l-4-4zm12.647 11.515a3.863 3.863 0 0 1-2.232-1.1l-4.708-4.707a.5.5 0 0 0-.854.354v6.585a.5.5 0 0 0 .5.5H23.5a.5.5 0 0 0 .5-.5v-.6c0-.276-.225-.497-.499-.532zm-5.394.032a.8.8 0 1 1 0-1.6.8.8 0 0 1 0 1.6zM.854 15.5a.5.5 0 0 0-.854.354v2.293a.5.5 0 0 0 .5.5h2.293c.222 0 .39-.135.462-.309a.493.493 0 0 0-.109-.545L.854 15.501zM5 14.647.854 10.5a.5.5 0 0 0-.854.353v2.586a.5.5 0 0 0 .146.353L4.854 18.5l.146.147h2.793a.5.5 0 0 0 .353-.854L5 14.647z",
+      },
+    ],
+  },
+  /** Gmail's envelope, for Email: forwarding from Gmail is the commonest way mail gets here. */
+  gmail: {
+    box: "0 0 24 24",
+    fill: [
+      {
+        d: "M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z",
+        color: "#ea4335",
+      },
     ],
   },
   /** Your own code calling the API. Braces, the shape every example is wrapped in. */

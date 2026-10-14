@@ -526,8 +526,17 @@ function build(queryClient: QueryClient) {
         ),
       [hubKeys.tasks, hubKeys.working, hubKeys.allGuides, hubKeys.board],
     );
-  const onTaskReady = (t: Task) =>
-    moveTask(t, "ready", `/v1/guides/${t.id}/status`, json("PATCH", { status: "published" }));
+  /** `target`, when given, is the repo the task is for; left out, the task keeps the one it has. */
+  const onTaskReady = (t: Task, target?: string) =>
+    moveTask(
+      t,
+      "ready",
+      `/v1/guides/${t.id}/status`,
+      json(
+        "PATCH",
+        target === undefined ? { status: "published" } : { status: "published", target },
+      ),
+    );
   const onTaskDraft = (t: Task) =>
     moveTask(t, "draft", `/v1/guides/${t.id}/status`, json("PATCH", { status: "draft" }));
   const personTaskChange = (id: string, path: string, body: unknown = {}) =>

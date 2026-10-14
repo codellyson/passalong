@@ -396,6 +396,10 @@ export interface ContextClaim {
 /** Everything around one guide, for its page in the hub. No markdown: that stays on the share page. */
 export interface GuideContext {
   guide: Guide;
+  /** A task's repo, as the queue matches it; '' for no repo. Absent from an older server. */
+  target?: string;
+  /** Repos this account's tasks and agents already use, to pick from when marking a task Ready. */
+  repos?: string[];
   owner: boolean;
   /** The owner of its team, and not its author: may act on it as if they were. */
   admin?: boolean;

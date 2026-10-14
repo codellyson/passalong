@@ -84,6 +84,8 @@ export const KINDS = [
   // an email became; `email_sender` is a new sender asking to be allowed, its address in the note.
   "emailed",
   "email_sender",
+  // A webhook (Sentry, PostHog, your own code) made a guide. The note says from where, and what.
+  "hooked",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -179,6 +181,7 @@ export const PUSHED = new Set<Kind>([
   // Something came in by email for you to look at, or a new sender is waiting to be let in.
   "emailed",
   "email_sender",
+  "hooked",
 ]);
 
 /** What a push carries: the feed's own sentence, the guide it is about, and its kind. */
@@ -788,6 +791,8 @@ export function line(r: LineFacts): string {
       return `${who} signed up${note}`;
     case "emailed":
       return `An email became ${title}${note}`;
+    case "hooked":
+      return `${title} came in from ${r.note || "a webhook"}`;
     case "email_sender":
       return `${r.note || "A new sender"} wants to email you guides. Allow or block it in Settings`;
     default:

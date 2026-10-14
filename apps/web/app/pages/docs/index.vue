@@ -94,6 +94,15 @@ const TOPICS = [
     link: "Attaching screenshots",
   },
   {
+    h: "Errors, alerts and email in",
+    p:
+      "Point Sentry, PostHog, an email address or your own code at Passalong and each one becomes " +
+      "a task, a bug or a transfer, with what was sent quoted in it. Repeats of one issue stay one " +
+      "guide, and a task waits as a Draft until you mark it Ready and say which repo it is for.",
+    href: "/docs/integrations",
+    link: "Set up integrations",
+  },
+  {
     h: "CLI, MCP tools and API",
     p:
       "Every command and every MCP tool is listed in llms.txt, which is written for an agent and " +
