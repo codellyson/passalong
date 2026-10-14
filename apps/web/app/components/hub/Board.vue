@@ -13,10 +13,22 @@
   Who has it is the same line's left side: a dot for how the hold is doing (`health`, from the
   server), their name, ⚡ when an agent holds it, and a word only when somebody should look. The age at the top is since anything last happened to it. Cards about you carry a coral
   mark on their left edge; Done is faded.
+
+  The round dot at a card's top-left selects it for the bar that archives or deletes several at
+  once (HubBulkBar, on the page). It shows on hover and focus, and stays once anything is
+  selected; on a touch screen, which has no hover, it always shows. Only cards the viewer may
+  archive or delete (`manage`) have one. Right-clicking a card opens its quick actions
+  (HubCardMenu).
+
+  A card can be dragged to another column when that column means an act the card's own page
+  offers: back to Draft, Stop this agent (To do, from In progress; asked first), Archive (Done) and
+  Unarchive (out of Done). Draft to To do opens the card's page, because Ready asks which repo the
+  task is for. While a card is dragged, the columns it cannot go to fade. The same acts are in the
+  right-click menu, which is the way there from a keyboard or a phone.
 -->
 <script setup lang="ts">
 import { aboutMe, type STAGES } from "~/composables/useWorkLists";
-import type { Guide } from "~/types/hub";
+import type { Guide, Task, Working } from "~/types/hub";
 
 const props = defineProps<{
   columns: ((typeof STAGES)[number] & { cards: Guide[] })[];
@@ -72,6 +84,71 @@ function age(g: Guide) {
   return rel(heard && heard > edited ? heard : edited).replace(/ ago$/, "");
 }
 
+const { list: selected, has, toggle } = useSelection();
+const pick = (g: Guide) =>
+  toggle({ id: g.id, title: g.title || "", archived: g.status === "consumed" });
+
+/** The card whose quick actions are open, and where the pointer was. */
+const menu = ref<{ guide: Guide; x: number; y: number } | null>(null);
+function openMenu(g: Guide, e: MouseEvent) {
+  // The context-menu key reports no pointer position, so the menu opens at the card instead.
+  const card = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  menu.value = {
+    guide: g,
+    x: e.clientX || card.left + 16,
+    y: e.clientY || card.top + 16,
+  };
+}
+
+const { onArchive, onCloseGuide, onTaskDraft, onTakeBack } = useHub();
+
+/** The card being dragged, and the column under it. */
+const dragging = ref<Guide | null>(null);
+const over = ref("");
+const holding = (g: Guide) => (g.held_by ?? []).some((h) => h.health !== "review");
+
+/**
+ * What dropping `g` in column `to` does, or null when it does nothing there. Each is the act the
+ * guide's page offers, under the same rule: anyone in the team moves work, `manage` archives.
+ */
+function moveTo(g: Guide, to: string): (() => unknown) | null {
+  const from = g.stage;
+  const task = g.kind === "task";
+  if (from === to) return null;
+  if (task && from === "draft" && to === "todo") return () => navigateTo(`/hub/g/${g.id}`);
+  if (task && from === "todo" && to === "draft" && !holding(g))
+    return () => onTaskDraft({ id: g.id } as Task);
+  if (from === "working" && to === "todo")
+    return () =>
+      confirm(`Stop the agent working on "${g.title}"? It goes back to To do.`) &&
+      onTakeBack({ id: g.id } as Working);
+  if (to === "done" && g.manage && from !== "review" && g.status !== "consumed")
+    return () => (task ? onArchive(g, true) : onCloseGuide(g));
+  if (from === "done" && to === "todo" && g.manage && g.status === "consumed")
+    return () => onArchive(g, false);
+  return null;
+}
+
+function dragStart(g: Guide, e: DragEvent) {
+  dragging.value = g;
+  e.dataTransfer?.setData("text/plain", g.title || g.id);
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+}
+function dragEnd() {
+  dragging.value = null;
+  over.value = "";
+}
+function dragOver(col: string, e: DragEvent) {
+  if (!dragging.value || !moveTo(dragging.value, col)) return;
+  e.preventDefault();
+  over.value = col;
+}
+async function drop(col: string) {
+  const act = dragging.value && moveTo(dragging.value, col);
+  dragEnd();
+  if (act) await act();
+}
+
 /** The column a phone shows: the first with anything in it, until a tab is picked. */
 const picked = ref("");
 const shown = computed(
@@ -100,8 +177,14 @@ const shown = computed(
       <section
         v-for="col in columns"
         :key="col.id"
-        class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 md:flex-[1_0_15rem]"
-        :class="shown === col.id ? '' : 'max-md:hidden'"
+        class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 transition-opacity md:flex-[1_0_15rem]"
+        :class="[
+          shown === col.id ? '' : 'max-md:hidden',
+          dragging && dragging.stage !== col.id && !moveTo(dragging, col.id) ? 'opacity-50' : '',
+          over === col.id ? 'ring-2 ring-[var(--accent)]' : '',
+        ]"
+        @dragover="dragOver(col.id, $event)"
+        @drop.prevent="drop(col.id)"
         :aria-labelledby="`col-${col.id}`"
       >
         <div class="flex items-baseline gap-2 px-1">
@@ -113,9 +196,26 @@ const shown = computed(
           <li
             v-for="g in col.id === 'done' ? col.cards.slice(0, DONE_SHOWN) : col.cards"
             :key="g.id"
-            class="relative flex flex-col rounded-2 bg-raised shadow-edge"
-            :class="col.id === 'done' ? 'opacity-70' : ''"
+            class="group relative flex flex-col rounded-2 bg-raised shadow-edge"
+            :class="[
+              col.id === 'done' ? 'opacity-70' : '',
+              has(g.id) ? 'ring-2 ring-[var(--accent)]' : '',
+            ]"
+            :draggable="giving !== g.id"
+            @dragstart="dragStart(g, $event)"
+            @dragend="dragEnd"
+            @contextmenu.prevent="openMenu(g, $event)"
           >
+            <!-- Beside the link, not in it: a control inside an <a> would open the page. -->
+            <input
+              v-if="g.manage"
+              type="checkbox"
+              class="absolute top-2 left-3 z-10 size-4 cursor-pointer appearance-none rounded-pill border border-line-strong bg-field transition-opacity checked:border-[var(--accent)] checked:bg-[var(--accent)] checked:shadow-[inset_0_0_0_3px_var(--field)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+              :class="selected.length ? 'opacity-100' : 'opacity-0'"
+              :checked="has(g.id)"
+              :aria-label="`Select ${g.title || 'this guide'}`"
+              @change="pick(g)"
+            >
             <!-- About you: a coral mark, the one place coral is used here — never a fill. -->
             <span
               v-if="aboutMe(g)"
@@ -126,7 +226,7 @@ const shown = computed(
               :to="`/hub/g/${g.id}`"
               class="flex flex-col gap-2 rounded-2 px-3 pt-2 pb-1 text-fg no-underline transition-transform active:scale-[0.96]"
             >
-              <span class="flex flex-wrap items-center gap-2">
+              <span class="flex flex-wrap items-center gap-2 pl-6">
                 <span
                   v-if="kindBadge(g.kind)"
                   class="rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase"
@@ -188,5 +288,15 @@ const shown = computed(
         </p>
       </section>
     </div>
+    <HubCardMenu
+      v-if="menu"
+      :key="menu.guide.id + menu.x + menu.y"
+      :guide="menu.guide"
+      :x="menu.x"
+      :y="menu.y"
+      :can-give="canGive(menu.guide)"
+      @close="menu = null"
+      @give="giving = menu!.guide.id"
+    />
   </div>
 </template>

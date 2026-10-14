@@ -28,6 +28,13 @@ which is also the **Give to…** control. Its age is since its holder was last h
 edit. Cards about you carry a coral mark on the left edge; Done is faded. **Show only mine** (`?mine=1`, and an old
 `?tab=needs` link) narrows to cards about you — yours, sent to you or your group, held by you, or
 yours to review — without moving any card. Done shows the newest twenty.
+A round dot at a card's top-left (shown on hover, always on touch, and on every card once one is
+selected) selects it for the floating bar that archives, unarchives or deletes several at once;
+only cards you may manage have one. Right-clicking a card opens its quick actions (`HubCardMenu`):
+Open, Ready for agents…, Move to Draft, Give to…, Stop this agent, copy link or pull command,
+Archive or Unarchive, Delete — the guide page's acts under its rules. A card can also be dragged
+to a column that means one of those acts (back to Draft, Stop this agent, Archive, Unarchive);
+Draft to To do opens the card's page, because Ready asks which repo.
 
 It replaced four tabs (Needs you, Being worked on, Open, Done) worked out per viewer, which put the
 same guide in different places for different teammates and counted it differently.

@@ -107,6 +107,7 @@ const empty = computed(() => columns.value.every((c) => !c.cards.length));
               </button>
             </p>
             <HubBoard :columns="columns" />
+            <HubBulkBar />
           </template>
         </section>
       </template>
