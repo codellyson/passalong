@@ -124,7 +124,7 @@ function copyAndClose(text: string, e: Event) {
       <template v-if="g.manage">
         <div class="menu-rule" role="separator" />
         <button v-if="!archived" role="menuitem" class="menu-item" type="button" @click="archive">Archive</button>
-        <button v-else role="menuitem" class="menu-item" type="button" @click="unarchive">Unarchive</button>
+        <button v-else role="menuitem" class="menu-item" type="button" @click="unarchive">{{ isTask ? "Unarchive to Draft" : "Unarchive" }}</button>
         <button role="menuitem" class="menu-item destructive" type="button" @click="remove">Delete</button>
       </template>
     </div>

@@ -42,6 +42,10 @@ Work is not done because whoever did it says so.
 
 - A **task** handed in goes to *review*: the author approves it (it becomes `consumed`) or rejects it
   with a reason the next agent reads first — per Acceptance line, in the hub's review pane.
+- **An archived task comes back to Draft**, never straight to agents (`unarchiveProblem()` in
+  `guide.ts`; the status route answers 409). `consumed` covers approved as well as shelved, so
+  unarchiving one as Ready handed finished work to the next agent in that repo to do again. A
+  handoff or bug unarchives to open, since nothing takes it from a queue.
 - A **handoff or bug** handed in waits for the author to close it or send that repo's hand-in back.
 - **Handed in means the actor's turn is over.** A new guide whose `parent:` the publisher has handed
   in is refused (409): what the actor found goes on the hand-in, not in a second guide.

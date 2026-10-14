@@ -16,6 +16,8 @@ export interface Picked {
   title: string;
   /** Already archived, so it is a candidate for Unarchive rather than Archive. */
   archived: boolean;
+  /** A task unarchives to Draft. */
+  kind?: string;
 }
 
 export function useSelection() {

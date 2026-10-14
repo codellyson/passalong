@@ -145,6 +145,7 @@ import {
   tag,
   tagList,
   taskPublishProblem,
+  unarchiveProblem,
   unheldFields,
   unreachableImages,
 } from "./guide.js";
@@ -4903,6 +4904,8 @@ app.patch("/v1/guides/:id/status", async (c) => {
       403,
       "Only a task's author, or a team admin, archives it. To finish it, approve its hand-in.",
     );
+  const back = unarchiveProblem(found.row.kind, found.row.status, status);
+  if (back) return err(c, 409, back);
   // Moving an occupied task to Draft would hide it from the queue while its agent still held a
   // live claim. The author has Stop this agent for that transition.
   if (found.row.kind === "task" && status === "draft") {
@@ -4931,7 +4934,7 @@ app.patch("/v1/guides/:id/status", async (c) => {
   // Anything a person who is not the author does to a guide, its author hears about. Archiving
   // told them and un-archiving did not, which is the asymmetry that let a guide move on somebody
   // else's say-so in silence.
-  if (!found.owner && status === "published") {
+  if (!found.owner && found.row.status === "consumed" && status !== "consumed") {
     await notify(c.env, {
       to: found.row.account_id,
       kind: "reopened",

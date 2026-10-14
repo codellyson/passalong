@@ -408,7 +408,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             type="button"
             :disabled="Boolean(busy)"
             @click="reopen"
-          >{{ busy === "reopen" ? "Unarchiving…" : "Unarchive" }}</button>
+          >{{ busy === "reopen" ? "Unarchiving…" : isTask ? "Unarchive to Draft" : "Unarchive" }}</button>
           <button
             v-if="mayArchive"
             class="btn outline danger"

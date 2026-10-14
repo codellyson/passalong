@@ -22,7 +22,7 @@
 
   A card can be dragged to another column when that column means an act the card's own page
   offers: back to Draft, Stop this agent (To do, from In progress; asked first), Archive (Done) and
-  Unarchive (out of Done). Draft to To do opens the card's page, because Ready asks which repo the
+  Unarchive (out of Done: a task to Draft, anything else to To do). Draft to To do opens the card's page, because Ready asks which repo the
   task is for. While a card is dragged, the columns it cannot go to fade. The same acts are in the
   right-click menu, which is the way there from a keyboard or a phone.
 -->
@@ -86,7 +86,7 @@ function age(g: Guide) {
 
 const { list: selected, has, toggle } = useSelection();
 const pick = (g: Guide) =>
-  toggle({ id: g.id, title: g.title || "", archived: g.status === "consumed" });
+  toggle({ id: g.id, title: g.title || "", archived: g.status === "consumed", kind: g.kind });
 
 /** The card whose quick actions are open, and where the pointer was. */
 const menu = ref<{ guide: Guide; x: number; y: number } | null>(null);
@@ -124,7 +124,8 @@ function moveTo(g: Guide, to: string): (() => unknown) | null {
       onTakeBack({ id: g.id } as Working);
   if (to === "done" && g.manage && from !== "review" && g.status !== "consumed")
     return () => (task ? onArchive(g, true) : onCloseGuide(g));
-  if (from === "done" && to === "todo" && g.manage && g.status === "consumed")
+  // Out of Done to where it comes back: a task to Draft, so nobody's agent redoes approved work.
+  if (from === "done" && to === (task ? "draft" : "todo") && g.manage && g.status === "consumed")
     return () => onArchive(g, false);
   return null;
 }
