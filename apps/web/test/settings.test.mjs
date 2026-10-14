@@ -197,7 +197,10 @@ test("a connector's host picks which app's steps a Reconnect opens", () => {
 // lives and who reaches it — not in a customer's Settings, and not shown to a customer at all.
 
 const { readFileSync } = await import("node:fs");
-const settings = readFileSync(new URL("../app/pages/hub/settings.vue", import.meta.url), "utf8");
+const settings = readFileSync(
+  new URL("../app/pages/hub/settings/[[tab]].vue", import.meta.url),
+  "utf8",
+);
 const page = readFileSync(new URL("../app/pages/admin.vue", import.meta.url), "utf8");
 const menu = readFileSync(
   new URL("../app/components/hub/AccountMenu.vue", import.meta.url),

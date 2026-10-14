@@ -79,9 +79,18 @@ touches, and anything that needs you arrives as a toast. See [notifications.md](
 
 ## Settings
 
-Profile, Notifications (push per device), plan, teams, connected apps, API tokens.
+Four pages, one topic each, at `/hub/settings/[[tab]]`:
+- **Account** (`/hub/settings`): profile, sign-in, notifications (push, per device), clean-up.
+- **Plan**: the plan.
+- **Teams**: the team cards.
+- **Connections**: connected apps, API tokens, Email in.
+
+It was one scroll of ten sections, and people found it overwhelming. The sidebar lists the four
+pages, each with its own state ("2 need you", "1 failing"), and each page opens with only the
+"Needs you" items that belong to it. An old `/hub/settings#anchor` link is forwarded to the page
+holding that anchor (`tabOf()`).
 
 ## Sources
-- `apps/web/app/pages/hub/index.vue` (Home), `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/folders/`, `pages/hub/settings.vue`
+- `apps/web/app/pages/hub/index.vue` (Home), `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/folders/`, `pages/hub/settings/[[tab]].vue`
 - `apps/web/app/components/hub/Board.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
 - [AGENTS.md](../../AGENTS.md): "The board", "The hub shows a guide by framing it…", "The hub is live…"
