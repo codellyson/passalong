@@ -20,6 +20,7 @@ import {
   blockOn,
   checksProblem,
   closeGuide,
+  complete,
   DRAFT_NUDGE_MS,
   deliver,
   dropOutside,
@@ -35,9 +36,11 @@ import {
   next,
   PERSON_LEASE_MS,
   pass,
+  proofProblem,
   reject,
   release,
   renew,
+  reopen,
   reply,
   repoKey,
   STALE_SENT_MS,
@@ -2476,4 +2479,74 @@ test("archiving lets go of everyone on it, and the ones already stuck are cleare
     .all()
     .map((r) => r.guide_id);
   assert.deepEqual(left, ["live"], "only a hand-in on a guide still open is kept");
+});
+
+test("finishing needs something a person can look at, unless checks answer for themselves", () => {
+  assert.equal(proofProblem("![works](https://passalong.dev/v1/shots/d2eg7b2xaqx7)", []), null);
+  assert.equal(proofProblem("$ npm test\n41 pass, 0 fail", []), null, "a command and its line");
+  assert.equal(proofProblem("npm test → 41 pass, 0 fail", []), null);
+  assert.equal(proofProblem("ran `pnpm test`: 12 passed, 0 failed", []), null);
+  assert.match(proofProblem("I checked it and it works fine now", []), /show it/);
+  assert.equal(proofProblem("", [{ check: "x", cmd: "true", exit: 0, ok: true }]), null);
+});
+
+test("a hand-in is final: Done, with what was shown kept, and Reopen puts it back", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await take(db, "t1", A, { at: T0 });
+  await finish(db, "t1", A, { at: later(1), evidence: PROOF, report: "", note: "done" });
+  assert.deepEqual(await complete(db, "t1", { account: "me", at: later(2) }), { done: true });
+  const g = () => db.raw.prepare("SELECT status, outcome FROM guide WHERE id = 't1'").get();
+  assert.deepEqual({ ...g() }, { status: "consumed", outcome: "finished" });
+  assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM claim").get().n, 0, "nothing left waiting");
+  const shown = db.raw.prepare("SELECT ok, detail FROM verdict WHERE guide_id = 't1'").get();
+  assert.deepEqual({ ...shown }, { ok: 1, detail: PROOF }, "the proof stays on the guide");
+
+  assert.equal((await reopen(db, "t1", { account: "me", at: later(3), why: "" })).status, 400);
+  const back = await reopen(db, "t1", { account: "me", at: later(4), why: "the header overlaps" });
+  assert.deepEqual(back.finishers, ["me"], "whoever finished it is told");
+  assert.deepEqual({ ...g() }, { status: "published", outcome: "" }, "back in To do");
+  assert.equal((await reopen(db, "t1", { account: "me", at: later(5), why: "x" })).status, 409);
+
+  guide("shelf", { status: "consumed" });
+  db.raw.exec("UPDATE guide SET outcome = 'archived' WHERE id = 'shelf'");
+  const shelf = await reopen(db, "shelf", { account: "me", at: later(6), why: "x" });
+  assert.match(shelf.error, /unarchive it instead/, "archived is not finished");
+});
+
+test("a handoff held in two repos is Done only when the last of them finishes", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("h1", { kind: "transfer", target: "" });
+  teamed(db);
+  const here = { account: "other", agent: "agent-x", repo: "o/r" };
+  const there = { account: "me", agent: "agent-y", repo: "o/s" };
+  assert.ok((await take(db, "h1", here, { at: T0 })).claim);
+  assert.ok((await take(db, "h1", there, { at: T0 })).claim, "a second repo holds it too");
+  await handIn(db, "h1", here, { at: later(1), note: "held here", evidence: PROOF });
+  assert.deepEqual(await complete(db, "h1", { account: "other", at: later(2) }), { done: false });
+  await handIn(db, "h1", there, { at: later(3), note: "held there", evidence: PROOF });
+  assert.deepEqual(await complete(db, "h1", { account: "me", at: later(4) }), { done: true });
+});
+
+test("hand-ins waiting in review on the day this ships are finished, with their proof kept", () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("waiting");
+  guide("shared", { kind: "transfer", target: "" });
+  const claim = db.raw.prepare(`INSERT INTO claim
+    (guide_id, place, account_id, agent_id, state, claimed_at, lease_until, updated, evidence)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  claim.run("waiting", "o/r", "me", "agent-a", "review", T0, T0, T0, PROOF);
+  claim.run("shared", "o/r", "me", "agent-a", "review", T0, T0, T0, PROOF);
+  claim.run("shared", "o/s", "other", "agent-b", "claimed", T0, T0, T0, "");
+  db.raw.exec(readFileSync(join(MIGRATIONS, "0056_finish_review.sql"), "utf8"));
+  const row = (id) => ({
+    ...db.raw.prepare("SELECT status, outcome FROM guide WHERE id = ?").get(id),
+  });
+  assert.deepEqual(row("waiting"), { status: "consumed", outcome: "finished" });
+  assert.deepEqual(row("shared"), { status: "published", outcome: "" }, "still held in o/s");
+  assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM claim WHERE state = 'review'").get().n, 0);
+  assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM verdict WHERE ok = 1").get().n, 2);
 });

@@ -5931,9 +5931,10 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
     result.claim.guide_id,
     `${body.evidence ?? ""}\n${body.writeup ?? ""}`,
   );
+  const ended = await claims.complete(c.env.DB, result.claim.guide_id, { account, at: now() });
   count(c, "task_finished", {});
   await taskEvent(c, result.claim.guide_id, "task_finished", "");
-  return c.json({ id: result.claim.guide_id, state: "review" });
+  return c.json({ id: result.claim.guide_id, state: ended.done ? "done" : "working" });
 });
 
 app.post("/v1/tasks/next", async (c) => {
@@ -6004,6 +6005,12 @@ app.post("/v1/tasks/:id/finish", async (c) => {
 // The gate. A person's calls, not an agent's: there is no MCP tool for any of these, because an
 // agent approving work — its own or another's — is the thing the gate exists to stop.
 app.post("/v1/tasks/:id/approve", async (c) => {
+  // Nothing waits for approval now (docs/REVIEW.md): finished work is already Done. An installed
+  // CLI still calls this, so on Done work it succeeds and changes nothing.
+  const done = await c.env.DB.prepare("SELECT 1 FROM guide WHERE id = ? AND status = 'consumed'")
+    .bind(c.req.param("id"))
+    .first();
+  if (done) return c.json({ id: c.req.param("id"), state: "done" });
   const r = await claims.approve(c.env.DB, c.req.param("id"), {
     account: c.get("account"),
     at: now(),
@@ -6027,14 +6034,11 @@ app.post("/v1/guides/:id/mark_done", async (c) => {
     note: typeof body.note === "string" ? body.note : "",
   });
   if ("error" in r) return err(c, r.status, r.error);
-  if (r.state === "done") {
-    count(c, "task_approved", {});
-    await taskEvent(c, id, "task_approved", r.claimant);
-  } else {
-    count(c, "task_finished", {});
-    await taskEvent(c, id, "task_finished", "");
-  }
-  return c.json({ id, state: r.state });
+  // Said done by a person rather than the agent: finished like any hand-in, with nobody after it.
+  if (r.state !== "done") await claims.complete(c.env.DB, id, { account: r.claimant, at: now() });
+  count(c, "task_finished", {});
+  await taskEvent(c, id, "task_finished", "");
+  return c.json({ id, state: "done" });
 });
 
 app.post("/v1/tasks/:id/reject", async (c) => {
@@ -6406,9 +6410,16 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   // reason as the write-up: required, it is "low risk" on every hand-in and says nothing.
   const risk = typeof who.risk === "string" ? who.risk.trim().slice(0, NOTE_MAX) : "";
 
+  if (typeof who.writeup === "string" && who.writeup.trim().length > claims.WRITEUP_CAP)
+    return err(
+      c,
+      400,
+      `Keep \`writeup\` to ${claims.WRITEUP_CAP} characters: what you had to adapt and why. The rest belongs in the diff.`,
+    );
+
   if (found.row.kind === "task") {
+    // No write-up guide is asked for any more; an older client's is still filed (claims.finish).
     const report = typeof who.report === "string" ? who.report.trim() : "";
-    if (!report) return err(c, 400, "send `report`: the id of the transfer guide about this work");
     const done = await claims.finish(c.env.DB, found.row.id, who, {
       at,
       report,
@@ -6422,11 +6433,13 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
     if ("error" in done)
       return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
     await claimEvidenceShots(c, who.account, found.row.id, evidence);
+    // Finishing is final (docs/REVIEW.md): Done, with what was shown kept on the guide.
+    const ended = await claims.complete(c.env.DB, found.row.id, { account: who.account, at });
     count(c, "task_finished", {});
     await taskEvent(c, found.row.id, "task_finished", "");
     return c.json({
       id: found.row.id,
-      state: "review",
+      state: ended.done ? "done" : "working",
       report: done.claim.report_id,
       ...claims.steps("task", "handed_in"),
     });
@@ -6439,11 +6452,12 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
       'Say whether its Verification held: send "ok": true, or "ok": false with a note.',
     );
   if (!who.ok && !note) return err(c, 400, "Say what went wrong, so the author knows what to fix.");
-  if (found.owner) return err(c, 403, "This is your own guide: there is nobody to hand it in to.");
   // Evidence before the verdict is recorded: a refused hand-in must leave nothing behind, or the
   // author is told "it worked" by a call that did not go through. Checks are evidence sorted
   // against the Verification line each one answers, and bringing them is bringing it.
-  const bad = checks.length ? claims.checksProblem(checks) : claims.evidenceProblem(evidence);
+  const bad = checks.length
+    ? claims.checksProblem(checks)
+    : (claims.evidenceProblem(evidence) ?? (who.ok ? claims.proofProblem(evidence, checks) : null));
   if (bad) return err(c, 400, bad);
   // The evidence the agent just sent, on the verdict as well as the claim. This is the correction
   // channel: a hand-in that says it did not hold now carries what was run, and the guide shows it.
@@ -6459,12 +6473,19 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   });
   if ("error" in done)
     return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
-  await recordVerdict(c, found.row, who.ok, note, { stored: true });
+  if (!found.owner) await recordVerdict(c, found.row, who.ok, note, { stored: true });
   await claimEvidenceShots(c, who.account, found.row.id, evidence);
+  // Finished when it held and nobody else still has it; one that did not hold goes back as it was.
+  const ended = await claims.complete(c.env.DB, found.row.id, {
+    account: who.account,
+    at,
+    ok: who.ok,
+  });
   return c.json({
     id: found.row.id,
     ok: who.ok,
     note,
+    state: ended.done ? "done" : "working",
     ...claims.steps(found.row.kind, "handed_in"),
   });
 });
@@ -6798,6 +6819,30 @@ app.post("/v1/guides/:id/recall", async (c) => {
 });
 
 /** Turn one repo's hand-in down, with why: it is open there again, and its taker is told. */
+/**
+ * Reopen finished work (docs/REVIEW.md §4): back to To do with why, for anyone in its team. The
+ * reason is at the top of the guide for whoever takes it next, and whoever finished it is told.
+ */
+app.post("/v1/guides/:id/reopen", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { why?: unknown };
+  const why = typeof body.why === "string" ? body.why : "";
+  const id = c.req.param("id");
+  const r = await claims.reopen(c.env.DB, id, { account: c.get("account"), at: now(), why });
+  if ("error" in r) return err(c, r.status, r.error);
+  const found = await readableGuide(c, id);
+  for (const to of r.finishers)
+    await notify(c.env, {
+      to,
+      kind: "sent_back",
+      guide_id: id,
+      actor_id: c.get("account"),
+      team_id: found?.row.team_id || "",
+      note: why.trim().slice(0, 280),
+    });
+  count(c, "guide_reopened", {});
+  return c.json({ id, state: "ready" });
+});
+
 app.post("/v1/guides/:id/send_back", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { place?: unknown; why?: unknown };
   const why = typeof body.why === "string" ? body.why.trim().slice(0, 1000) : "";
