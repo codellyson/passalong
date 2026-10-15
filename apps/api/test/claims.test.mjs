@@ -2424,3 +2424,30 @@ test("the backfills: old write-ups leave the board, and old Done says how it got
   assert.equal(row("task1").outcome, "approved");
   assert.equal(row("shelf").outcome, "archived");
 });
+
+test("archiving lets go of everyone on it, and the ones already stuck are cleared", async () => {
+  // The route is not importable (see hosts.ts), so it is held to the rule by its source.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const route = src.slice(src.indexOf('app.patch("/v1/guides/:id/status"'));
+  const archiving = route.slice(
+    route.indexOf('if (status === "consumed") {'),
+    route.indexOf("UPDATE guide SET status"),
+  );
+  assert.match(archiving, /DELETE FROM claim WHERE guide_id = \?/, "archiving clears its claims");
+
+  const db = d1();
+  const guide = seed(db);
+  guide("archived", { kind: "transfer", target: "", status: "consumed" });
+  guide("live", { kind: "transfer", target: "" });
+  const claim = db.raw.prepare(`INSERT INTO claim
+    (guide_id, place, account_id, agent_id, state, claimed_at, lease_until, updated)
+    VALUES (?, 'o/r', 'other', 'agent-other', 'review', ?, ?, ?)`);
+  claim.run("archived", T0, T0, T0);
+  claim.run("live", T0, T0, T0);
+  db.raw.exec(readFileSync(join(MIGRATIONS, "0055_archive_claims.sql"), "utf8"));
+  const left = db.raw
+    .prepare("SELECT guide_id FROM claim")
+    .all()
+    .map((r) => r.guide_id);
+  assert.deepEqual(left, ["live"], "only a hand-in on a guide still open is kept");
+});
