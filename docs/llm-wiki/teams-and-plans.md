@@ -35,7 +35,8 @@ unlimited.
   and verdicts and acks keep working — they belong to the reader, not the person who missed a payment.
 - **Checkout is hosted** by Bachs, a merchant of record, and its billing page is where a payer changes
   a card or cancels; the webhook, verified over the raw body, is what writes a plan, and an event
-  older than the stored plan is dropped. Test or live is read off the key itself.
+  older than the stored plan is dropped. An event from another subscription never ends the stored one
+  or replaces one still paying; a second paying subscription alerts admins (`billed_twice`) to refund. Test or live is read off the key itself.
 - **Gifts** end on their date, and never touch a subscription.
 
 ## Roles

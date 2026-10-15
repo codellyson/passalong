@@ -423,7 +423,11 @@ change. Its README says how.
   valid secret during a rotation (any match counts), and **the timestamp is checked**, because
   without a tolerance a captured "subscription is active" replays forever. Delivery is at-least-once
   and out of order, so an event older than the one that set the stored plan for the same
-  subscription is dropped (`plan_since` holds Bachs's `created_at`). Three rules in the mapping, each
+  subscription is dropped (`plan_since` holds Bachs's `created_at`). An event from a *different*
+  subscription than the stored one never ends it — a late lapse is an old subscription ending — and
+  never replaces one still paying: that is a second checkout completed for the same plan, so the
+  stored one stays bound and admins get `billed_twice` to refund the other. Renewing a lapsed plan
+  with a new subscription is applied. Three rules in the mapping, each
   of which was a way to get this wrong: `past_due` is **not** lapsed, since downgrading on the first
   failed attempt makes an overnight bank decline look like a cancellation; an event that grants no
   seats leaves seats **untouched**, since writing zero would unseat the whole team on a lapse; and an
@@ -713,8 +717,9 @@ change. Its README says how.
 - **Admin alerts are notifications for whoever runs Passalong** (`src/alerts.ts`). `alertAdmins()`
   sends one to every `role = 'super'` account and everyone in `ADMIN_ACCOUNTS`: a feed row through
   `notify()`, mailed the first time. Adding one is a kind in `KINDS`, its sentence in `line()`, an
-  entry in `ADMIN_ALERTS` (with its mail subject) and a call where it happens. Today the only one is
-  `signed_up`, on a password signup and on an invite account's first password.
+  entry in `ADMIN_ALERTS` (with its mail subject) and a call where it happens. Today there are two:
+  `signed_up`, on a password signup and on an invite account's first password, and `billed_twice`,
+  when a second subscription starts paying for a plan another already pays for.
 - **Email verification records, it does not gate** (migration 0050). Every signup and every change
   of address sends a single-use link (`email_verify`, sha256 only, a week long, tied to the address
   it was sent to); opening `GET /v1/auth/verify/:code` sets `account.email_verified` and redirects to

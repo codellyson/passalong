@@ -3432,19 +3432,42 @@ app.post("/v1/billing/webhook/bachs", async (c) => {
     row.subscription_id === change.subscription_id &&
     row.plan_since > change.at;
   const since = change.at || now();
+  // An event from a subscription other than the one already stored. A lapse from it is an old
+  // subscription ending — late, or retried — and must not end the one that replaced it. A paying
+  // one while the stored subscription is still paying is a second checkout completed for the same
+  // plan: somebody is charged twice, the stored one stays bound, and whoever runs this is told so
+  // they can refund. Anything else (renewing a lapsed plan) is applied.
+  const elsewhere = async (
+    row: { subscription_id: string; plan: string },
+    subject: string,
+    actor = "",
+  ) => {
+    if (!row.subscription_id || row.subscription_id === change.subscription_id) return false;
+    if (change.plan === "lapsed") return true;
+    if (row.plan !== "team" && row.plan !== "solo") return false;
+    c.executionCtx.waitUntil(
+      alertAdmins(c.env, {
+        kind: "billed_twice",
+        actor_id: actor,
+        note: `${subject} (${row.subscription_id} and ${change.subscription_id})`,
+      }),
+    );
+    return true;
+  };
 
   // A Solo subscription belongs to a person, so it is looked up the same two ways a team is — by
   // subscription, then by the account the checkout carried in metadata — and applied to `account`.
   // The two subjects are mutually exclusive, since the metadata carries exactly one of them.
-  type Held = { id: string; subscription_id: string; plan_since: string };
+  type Held = { id: string; plan: string; subscription_id: string; plan_since: string };
   if (!change.team_id) {
     const solo = await c.env.DB.prepare(
-      "SELECT id, subscription_id, plan_since FROM account WHERE subscription_id = ? OR id = ? LIMIT 1",
+      "SELECT id, plan, subscription_id, plan_since FROM account WHERE subscription_id = ? OR id = ? LIMIT 1",
     )
       .bind(change.subscription_id, change.account_id || "")
       .first<Held>();
     if (solo) {
-      if (stale(solo)) return c.json({ ok: true, applied: false });
+      if (stale(solo) || (await elsewhere(solo, `account ${solo.id}`, solo.id)))
+        return c.json({ ok: true, applied: false });
       const plan = change.plan === "team" ? "solo" : change.plan;
       // `plan_until` is cleared: a subscription is not a gift, and a date left over from one would
       // expire a plan somebody is now being charged for. See migrations/0026_gifts.sql.
@@ -3463,20 +3486,21 @@ app.post("/v1/billing/webhook/bachs", async (c) => {
   // until this event arrives there is nothing on the team to look it up by.
   type TeamPlanRow = Held & { seats: number };
   let team = await c.env.DB.prepare(
-    "SELECT id, seats, subscription_id, plan_since FROM team WHERE subscription_id = ?",
+    "SELECT id, plan, seats, subscription_id, plan_since FROM team WHERE subscription_id = ?",
   )
     .bind(change.subscription_id)
     .first<TeamPlanRow>();
   if (!team && change.team_id) {
     team = await c.env.DB.prepare(
-      "SELECT id, seats, subscription_id, plan_since FROM team WHERE id = ?",
+      "SELECT id, plan, seats, subscription_id, plan_since FROM team WHERE id = ?",
     )
       .bind(change.team_id)
       .first<TeamPlanRow>();
   }
   // Also 200, and deliberately: a subscription we have never heard of is the provider's business,
   // not a failure of ours, and answering 4xx would have them retry something that can never work.
-  if (!team || stale(team)) return c.json({ ok: true, applied: false });
+  if (!team || stale(team) || (await elsewhere(team, `team ${team.id}`)))
+    return c.json({ ok: true, applied: false });
 
   // Seats only move when the event carried a count. A lapse says nothing about how many seats were
   // bought, and writing zero there would silently unseat the whole team.

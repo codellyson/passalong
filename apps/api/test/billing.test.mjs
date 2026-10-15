@@ -4,6 +4,7 @@
 // free unlimited plan for anyone who can POST, so every way of getting it wrong is pinned here.
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { BillingError, fromBachs, modeOf, TEAM_SEATS, verifyWebhook } from "../src/billing.ts";
 
@@ -121,4 +122,22 @@ test("the mode is read off the key, never configured beside it", () => {
   assert.equal(modeOf(""), "unset");
   assert.equal(modeOf("sk_sandbox_abc"), "test");
   assert.equal(modeOf("sk_live_abc"), "live");
+});
+
+// ---- the route --------------------------------------------------------------------------------
+
+// The route has no harness here, so its one rule about other subscriptions is pinned by reading it:
+// a late lapse from an old subscription must not end the one that replaced it, and a second paying
+// subscription for the same plan is reported rather than bound. Checked end to end against a local
+// server with signed events when it went in.
+test("an event from another subscription neither ends nor replaces the stored one", () => {
+  const index = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+  const route = index.slice(
+    index.indexOf('app.post("/v1/billing/webhook/bachs"'),
+    index.indexOf("const billingFailed ="),
+  );
+  assert.match(route, /if \(change\.plan === "lapsed"\) return true;/);
+  assert.match(route, /kind: "billed_twice"/);
+  // Asked of both subjects, after the out-of-order check.
+  assert.equal([...route.matchAll(/stale\((solo|team)\) \|\| \(await elsewhere\(/g)].length, 2);
 });
