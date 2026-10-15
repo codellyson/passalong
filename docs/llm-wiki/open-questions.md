@@ -13,6 +13,11 @@ page it belongs to, and into [decisions.md](decisions.md).
 - **Publish (the feature)** — five decisions in [docs/PUBLISH.md](../PUBLISH.md) §14: the page's
   address, pricing, solo pages, whether the task's author gets a say, and the name.
 
+- **Review** — [docs/REVIEW.md](../REVIEW.md) (proposed 2026-10-15): 64% of hand-ins are archived
+  unanswered and none has ever been sent back. Three decisions in §4: whether a hand-in without proof
+  a person can look at is refused, whether approving your own agent's work counts as a review, and
+  whether an unanswered hand-in expires.
+
 ## Known gaps
 
 - **Hold history.** A claim is deleted on approve, release and pass, so Progress cannot show a hold that
@@ -26,3 +31,4 @@ page it belongs to, and into [decisions.md](decisions.md).
 
 ## Sources
 - [docs/PUBLISH.md](../PUBLISH.md), the PR descriptions for #60–#64
+- [docs/REVIEW.md](../REVIEW.md)
