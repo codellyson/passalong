@@ -69,7 +69,7 @@ export interface Guide {
   archives_at?: string;
   status: string;
   /** How it reached Done: approved after review, or archived. '' while it is not done. */
-  outcome?: "approved" | "archived" | "";
+  outcome?: "finished" | "approved" | "archived" | "";
   url: string;
   created: string;
   /** Its last edit or status change. */
@@ -412,6 +412,8 @@ export interface GuideContext {
     by: { handle: string; name: string };
     note: string;
     detail: string;
+    /** What finishing took, in the finisher's words. Absent from an older server. */
+    writeup?: string;
     at: string;
   }[];
   /** Each person's standing answer to "are you taking this?", with when they gave it. */

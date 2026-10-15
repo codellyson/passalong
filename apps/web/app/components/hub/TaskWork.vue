@@ -2,8 +2,32 @@
 import type { ContextClaim, Guide } from "~/types/hub";
 
 const props = defineProps<{ guide: Guide; claims: ContextClaim[]; owner: boolean }>();
-const { data, onPersonTaskTake, onPersonTaskProgress, onPersonTaskHandIn, onPass, error } =
+const { data, api, onPersonTaskTake, onPersonTaskProgress, onPersonTaskHandIn, onPass, error } =
   useHub();
+
+/**
+ * Finishing needs proof a person can look at (docs/REVIEW.md §3), so the form takes a screenshot:
+ * uploaded like a reply's picture, and its line put into what shows it works.
+ */
+const uploading = ref(false);
+async function addShot(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  uploading.value = true;
+  try {
+    const name = file.name.replace(/[^\x20-\x7e]/g, "") || "screenshot";
+    const got = await api<{ shot: { url: string } }>("/v1/shots", {
+      method: "POST",
+      headers: { "content-type": file.type, "x-shot-name": name },
+      body: file,
+    });
+    if (got?.shot) evidence.value = `${evidence.value.trim()}\n![${name}](${got.shot.url})`.trim();
+  } finally {
+    uploading.value = false;
+  }
+}
 const held = computed(() => {
   const account = data.value.me?.account || "";
   const person = `person-${account.toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
@@ -78,15 +102,19 @@ const handIn = async () => {
         </label>
         <div class="flex flex-wrap gap-2">
           <button class="btn" type="submit" :disabled="busy || !progress.trim()">{{ busy ? "Saving…" : "Update progress" }}</button>
-          <button class="btn primary" type="button" :aria-expanded="handInOpen" @click="handInOpen = !handInOpen">Hand in</button>
+          <button class="btn primary" type="button" :aria-expanded="handInOpen" @click="handInOpen = !handInOpen">Finish</button>
         </div>
       </form>
       <form v-if="handInOpen" class="mt-4 flex flex-col gap-3 border-t border-line pt-4" @submit.prevent="act(handIn)">
         <label class="flex flex-col gap-2 font-ui text-sm">In one sentence, what did you do?<input v-model="summary" required maxlength="280" placeholder="The requested onboarding flow is now in place." /></label>
-        <label class="flex flex-col gap-2 font-ui text-sm">Details (optional)<textarea v-model="writeup" rows="4" placeholder="What you did, against each Acceptance line." /></label>
-        <label class="flex flex-col gap-2 font-ui text-sm">How did you check it?<textarea v-model="evidence" rows="3" placeholder="Links, screenshots, test results: what the reviewer can look at." /></label>
+        <label class="flex flex-col gap-2 font-ui text-sm">What shows it works?<textarea v-model="evidence" rows="3" placeholder="A screenshot, or the command you ran and its result: npm test → 41 pass" /></label>
+        <label class="btn sm self-start" :aria-busy="uploading">
+          {{ uploading ? "Uploading…" : "Add a screenshot" }}
+          <input type="file" accept="image/*" class="sr-only" :disabled="uploading" @change="addShot" />
+        </label>
+        <label class="flex flex-col gap-2 font-ui text-sm">What you had to adapt (optional)<textarea v-model="writeup" rows="3" maxlength="500" placeholder="A few lines at most. Anything longer belongs in the change itself." /></label>
         <label class="flex flex-col gap-2 font-ui text-sm">What could it break? (optional)<input v-model="risk" maxlength="280" placeholder="One line, or leave empty." /></label>
-        <button class="btn primary self-start" type="submit" :disabled="busy || !summary.trim()">{{ busy ? "Handing in…" : "Send for review" }}</button>
+        <button class="btn primary self-start" type="submit" :disabled="busy || !summary.trim()">{{ busy ? "Finishing…" : "Finish" }}</button>
       </form>
     </template>
     <p v-if="error" class="mt-3 mb-0 font-ui text-sm text-danger" role="status">{{ error }}</p>

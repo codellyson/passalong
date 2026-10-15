@@ -304,9 +304,9 @@ export function buildServer() {
         `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
         "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
         "alone, and treat Acceptance as the definition of done. A proposal awaiting a team decision " +
-        "stays Draft until a person makes it Ready. hand_in with `markdown`: a " +
-        "transfer guide about what you did (guide_template kind transfer shows the shape) — its " +
-        "author reviews it against Acceptance.\n" +
+        "stays Draft until a person makes it Ready. hand_in when every Acceptance line holds: it is " +
+        "final — the task goes to Done with what you showed, and nobody reviews it after you — so " +
+        "show it, and say anything you had to adapt in `writeup` (500 characters).\n" +
         `kind: transfer (or no kind: line) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +
         "Follow its Steps, adapting anything marked ASSUMES to this codebase; run its " +
         "Verification, then hand_in with ok and, when it failed, a note saying what went wrong.\n" +
@@ -1158,7 +1158,7 @@ export function buildServer() {
       outputSchema: handInOut,
       annotations: ADDS,
       description:
-        "Done here, with proof, sorted against the line it answers. Send `checks`: one entry per " +
+        "Finished here, with proof. IT IS FINAL: the work goes to Done with what you showed, and nobody reviews it after you (anyone can reopen it with a reason). So SHOW IT: a screenshot for anything with a screen — before and after, for a bug — or, for backend work, the one command and the line of its output that shows it works. Send `checks`: one entry per " +
         "line the guide asks for — `## Acceptance` on a task, `## Verification` on a handoff or a " +
         "bug — each with that line and the evidence for it. That is what its author reads, line " +
         "against line, instead of hunting through a wall of output for the part that answers each " +
@@ -1166,8 +1166,7 @@ export function buildServer() {
         "command proves it: the command is run here before the hand-in lands, a non-zero exit " +
         "refuses it, and what it printed is recorded instead of your account of it. Use `ran` for " +
         "a check no command can settle. `evidence` as one block is the older shape and still " +
-        "works. A task also takes `markdown`, a transfer guide about what you did and decided — " +
-        "this publishes it and attaches it. A handoff or a bug takes `ok`, whether its " +
+        "works. A task needs no write-up guide any more. A handoff or a bug takes `ok`, whether its " +
         "Verification held here, and `note` saying what went wrong when it did not. DO NOT " +
         "publish a guide to carry your evidence: it belongs on this call, and a second document " +
         'titled "Hand-in evidence" is the thing `checks` exists to replace. If it worked but you ' +
@@ -1243,10 +1242,10 @@ export function buildServer() {
           .string()
           .optional()
           .describe(
-            "handoff or bug: what you had to adapt to make it work here — a version, a name, a " +
-              "step that needed something the guide does not mention. Prose, and optional: leave " +
-              "it out when it worked as written. The next person to open the guide is shown it, " +
-              "which is why it does not need to be a guide of its own",
+            "what you had to adapt to make it work here — a version, a name, a step that needed " +
+              "something the guide does not mention. 500 characters at most; anything longer " +
+              "belongs in the change. Optional: leave it out when it worked as written. The next " +
+              "person to open the guide is shown it",
           ),
         risk: z
           .string()
@@ -1260,11 +1259,11 @@ export function buildServer() {
         markdown: z
           .string()
           .optional()
-          .describe("task: the write-up; start from guide_template kind transfer"),
+          .describe("older shape, not needed: say what you adapted in `writeup` instead"),
         report: z
           .string()
           .optional()
-          .describe("task, instead of markdown: id of a write-up already published"),
+          .describe("older shape, not needed: say what you adapted in `writeup` instead"),
         pr: z.string().optional().describe("task: PR or branch link, when there is one"),
         cwd: z
           .string()

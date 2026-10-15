@@ -869,8 +869,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "handed in, approved. " +
         "kind: task is work nobody has done yet. It has no Steps: work out how to " +
         "reach Goal within Constraints, leave Out of scope alone, and treat Acceptance as the " +
-        "definition of done. A proposal awaiting a team decision stays Draft. When Acceptance holds, publish_guide a transfer guide about what you " +
-        "did, then hand_in with its id as `report`.\n" +
+        "definition of done. A proposal awaiting a team decision stays Draft. When Acceptance holds, " +
+        "hand_in: it is final — the task goes to Done with what you showed, and nobody reviews it " +
+        "after you — so show it, and say anything you had to adapt in `writeup` (500 characters).\n" +
         "kind: transfer (or no kind: line) is a finished implementation to repeat here. Follow " +
         "its Steps, adapting anything marked ASSUMES to this codebase; run its Verification, then " +
         "hand_in with ok and, when it failed, a note saying what went wrong.\n" +
@@ -1944,13 +1945,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       annotations: ADDS,
       outputSchema: finishOut,
       description:
-        "Done here, with proof. Every hand-in carries what you ran and what came back. On a TASK " +
+        "Finished here, with proof. IT IS FINAL: the work goes to Done with what you showed, and nobody reviews it after you (anyone can reopen it with a reason). So SHOW IT: a screenshot for anything with a screen — before and after, for a bug — or, for backend work, the one command and the line of its output that shows it works. Every hand-in carries what you ran and what came back. On a TASK " +
         "send `checks`: one entry per Acceptance line, each with that line and the evidence for " +
         "it — that is what its author reads, line against line, instead of hunting through a wall " +
         "of output for the part that answers each one. `evidence` is the same thing as one block, " +
         "for a handoff or a bug, which have no Acceptance lines; send it when you are not sending " +
-        "`checks`. A task also takes `report`, the id of a transfer guide you published about the " +
-        "work (publish_guide it first). A handoff or a bug takes `ok`, whether its Verification " +
+        "`checks`. A task needs no write-up guide any more. A handoff or a bug takes `ok`, whether its Verification " +
         "held, and `note` saying what went wrong when it did not. EVERY CHECK IS RUN OR SHOWN: put the " +
         "command in `cmd` and it is executed here before this hand-in lands, or, when no command " +
         "can settle it, call attach_screenshot and put the line it returns in `ran` — capture it to " +
@@ -2002,9 +2002,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           .string()
           .optional()
           .describe(
-            "handoff or bug: what you had to adapt to make it work here — a version, a name, a " +
-              "step that needed something the guide does not mention. Optional; leave it out " +
-              "when it worked as written. The next person to open the guide is shown it",
+            "what you had to adapt to make it work here — a version, a name, a step that needed " +
+              "something the guide does not mention. 500 characters at most. Optional; leave it " +
+              "out when it worked as written. The next person to open the guide is shown it",
           ),
         risk: z
           .string()
@@ -2015,7 +2015,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
               "route other clients call. Optional; leave it out when there is nothing specific, " +
               'rather than writing "low risk". Its author reads it before accepting the work',
           ),
-        report: z.string().optional().describe("task: id of the transfer guide about this work"),
+        report: z
+          .string()
+          .optional()
+          .describe("older shape, not needed: say what you adapted in `writeup`"),
         pr: z.string().optional().describe("task: PR or branch link"),
       },
     },

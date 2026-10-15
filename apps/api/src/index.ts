@@ -4270,40 +4270,6 @@ app.put("/v1/guides/:id", async (c) => {
   const tooBig = sizeProblem(markdown.length, existing?.size ?? 0);
   if (tooBig) return err(c, 413, tooBig);
 
-  // Handed in means the actor's turn is over. A new guide under work its publisher has handed in,
-  // and that is waiting on its author, is refused.
-  //
-  // Every follow-up in real use that nobody asked for came from exactly here: an agent handed in,
-  // was told something about its evidence, and published a second guide to carry what it had
-  // found — "Hand-in evidence: …", six screenshots with Problem and Steps around them. The author
-  // then had two documents to review and one of them was the agent answering itself. Instructions
-  // saying not to were already on hand_in; the note on every `take` said the opposite ("what you
-  // found doing it — publish that"), and an agent follows the text it read last.
-  //
-  // Only new guides: a write-up published before the hand-in can still be corrected. Only the
-  // hand-in's own account, and never the author of the parent, who is the one reviewing it. Only
-  // until the author answers: a send-back or a close deletes the claim, and an approved task is
-  // `consumed` while its claim stays in review, so it is excluded by status.
-  if (parentId && !existing) {
-    const handed = await c.env.DB.prepare(
-      `SELECT 1 FROM claim c JOIN guide g ON g.id = c.guide_id
-        WHERE c.guide_id = ? AND c.account_id = ? AND c.state = 'review' AND g.account_id <> ?
-          AND g.status <> 'consumed'
-        LIMIT 1`,
-    )
-      .bind(parentId, account, account)
-      .first();
-    if (handed)
-      return err(
-        c,
-        409,
-        `You handed ${parentId} in, and it is waiting on its author. What you did and found ` +
-          "belongs on that hand-in — `checks` for what you ran, `writeup` for what you had to " +
-          "adapt — not in a new guide. Nothing more is needed from you: stop, and tell the " +
-          "person it is handed in.",
-      );
-  }
-
   // Frontmatter still round-trips `promoted`, because the document is the record and a guide shared
   // a month ago must re-share today. It cannot be acquired, though: only a guide already carrying
   // the status keeps it, and that is read from the stored row rather than the markdown just sent.
@@ -4829,7 +4795,7 @@ app.get("/v1/guides/:id/context", async (c) => {
     // What each person who answered showed: a "works" carries screenshots of it working, a
     // "didn't work" the whole report. The summary above has only the latest one-line note.
     c.env.DB.prepare(
-      `SELECT v.ok, v.note, v.detail, v.at, COALESCE(a.handle, '') AS handle,
+      `SELECT v.ok, v.note, v.detail, v.writeup, v.at, COALESCE(a.handle, '') AS handle,
               COALESCE(a.name, '') AS name
          FROM verdict v LEFT JOIN account a ON a.id = v.account_id
         WHERE v.guide_id = ? ORDER BY v.at DESC`,
@@ -4838,6 +4804,7 @@ app.get("/v1/guides/:id/context", async (c) => {
       .all<{
         ok: number;
         note: string;
+        writeup: string;
         detail: string;
         at: string;
         handle: string;
@@ -4927,6 +4894,8 @@ app.get("/v1/guides/:id/context", async (c) => {
       by: { handle: v.handle, name: v.name },
       note: v.note,
       detail: v.detail,
+      // What finishing it took, in the finisher's words: shown under the proof on a Done guide.
+      writeup: v.writeup,
       at: v.at,
     })),
     acks: answered.results.map((k) => ({

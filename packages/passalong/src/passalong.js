@@ -577,6 +577,14 @@ export async function now({ cwd = process.cwd() } = {}) {
   return { held, waiting, needs: review + handed + waiting.inbox, agent: who.agent };
 }
 
+/** Finished work back to To do, with why (docs/REVIEW.md §4). */
+export async function reopen(id, why) {
+  needsSync("reopening work");
+  if (!String(why || "").trim())
+    throw new PassalongError("say why: whoever takes it next reads it");
+  return api.reopen(await resolveId(id), why);
+}
+
 /**
  * The gate, a person's three answers to a task. Approve: the work in review is done. Reject: it
  * goes back to Ready with `why` on it for the next agent. Release: a task an agent holds, live or

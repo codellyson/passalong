@@ -30,6 +30,7 @@ const {
   onCloseGuide,
   onRecall,
   onArchive,
+  onReopen,
   onRemove,
   onTaskReady,
   onTaskDraft,
@@ -111,7 +112,9 @@ const mayReview = (k: ContextClaim) => mayAct.value && !(k.mine && Boolean(g.val
 const standing = computed(() => {
   const c = ctx.value;
   if (!c || !g.value) return "";
-  if (g.value.status === "consumed") return "Archived.";
+  // Done says how it got there: finished with proof, or shelved by its author.
+  if (g.value.status === "consumed")
+    return g.value.outcome === "archived" || !g.value.outcome ? "Archived." : "Finished.";
   if (g.value.status === "draft") return "A draft: nobody can take it until it is ready.";
   const review = c.claims.filter((k) => k.state === "review").length;
   const held = c.claims.filter((k) => k.state !== "review").length;
@@ -241,6 +244,21 @@ const recallable = computed(
 );
 const reopen = () =>
   run("reopen", async () => g.value && (await onArchive(g.value as Guide, false)));
+
+/** Finished, not archived: what Reopen is for, and what leads with the proof it was finished with. */
+const finished = computed(() => g.value?.status === "consumed" && g.value.outcome !== "archived");
+/** What it was finished with: the latest standing "it works", kept after the hand-in's claim. */
+const shown = computed(() => (ctx.value?.verdicts ?? []).find((v) => v.ok) ?? null);
+const reopening = ref(false);
+function sendReopen(form: HTMLFormElement) {
+  const why = field(form, "why").trim();
+  if (!why) return;
+  return run("reopen-why", async () => {
+    const ok = await onReopen(id.value, why);
+    if (ok) reopening.value = false;
+    return ok;
+  });
+}
 /**
  * Ready asks which repo the task is for: an agent's take with no id only offers tasks for the repo
  * it is in, and the person deciding a task is worth doing is the one who knows where. Read through
@@ -404,6 +422,14 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             @click="recall"
           >{{ busy === "recall" ? "Taking back…" : "Take back" }}</button>
           <button
+            v-if="mayAct && finished"
+            class="btn"
+            type="button"
+            :aria-expanded="reopening"
+            :disabled="Boolean(busy)"
+            @click="reopening = !reopening"
+          >Reopen</button>
+          <button
             v-if="mayArchive && g.status === 'consumed'"
             class="btn"
             type="button"
@@ -431,6 +457,13 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <AppIcon name="open" />Open share page
           </a>
         </div>
+        <!-- Reopen asks why, and the reason goes at the top of the guide for whoever takes it next. -->
+        <form v-if="reopening" class="flex flex-wrap items-center gap-2" @submit.prevent="sendReopen($event.target as HTMLFormElement)">
+          <label class="sr-only" for="reopen-why">Why reopen it?</label>
+          <input id="reopen-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="What's wrong — whoever finished it is told" />
+          <button class="btn primary" type="submit" :disabled="Boolean(busy)">{{ busy === "reopen-why" ? "Reopening…" : "Reopen" }}</button>
+        </form>
+        <HubAskCheck v-if="g.team && g.status !== 'draft'" :guide="g" />
         <!-- What the less obvious buttons do, said beside them rather than in a tooltip: a title
              attribute is delayed, unstyled and never shown on a phone. -->
         <ul v-if="hints.length" class="m-0 flex list-none flex-col gap-1 p-0 font-ui text-xs text-muted">
@@ -497,6 +530,14 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             </form>
           </div>
           </template>
+        </section>
+
+        <!-- What it was finished with, first: finishing is final, so this is the record of it. -->
+        <section v-if="finished && shown" :class="card" class="flex flex-col gap-3" aria-label="What it was finished with">
+          <h2 :class="label">Finished with</h2>
+          <p class="m-0 font-ui text-sm"><b class="font-medium">{{ who(shown.by) }}</b><template v-if="shown.note">: {{ shown.note }}</template></p>
+          <HubEvidence v-if="shown.detail" :text="shown.detail" />
+          <p v-if="shown.writeup" class="m-0 font-ui text-sm text-muted">{{ shown.writeup }}</p>
         </section>
 
         <!-- The document. Sandboxed with no script, on top of a page whose own policy already

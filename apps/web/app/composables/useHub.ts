@@ -498,6 +498,15 @@ function build(queryClient: QueryClient) {
       hubKeys.context(id),
     ]);
   const onPersonTaskTake = (id: string) => personTaskChange(id, "person-take");
+  /** Finished work back to To do, with why at its top; whoever finished it is told. */
+  const onReopen = (id: string, why: string) =>
+    change(() =>
+      api(`/v1/guides/${encodeURIComponent(id)}/reopen`, json("POST", { why })), () => {}, [
+      hubKeys.allGuides,
+      hubKeys.board,
+      hubKeys.tasks,
+      hubKeys.context(id),
+    ]);
   /**
    * Not for me, with the reason: it goes back to whoever sent it, who is told why. The person's own
    * agent name, as the hub takes things under (`personAgent()` on the server).
@@ -700,6 +709,7 @@ function build(queryClient: QueryClient) {
     onTaskReady,
     onTaskDraft,
     onPersonTaskTake,
+    onReopen,
     onPass,
     onPersonTaskProgress,
     onPersonTaskHandIn,

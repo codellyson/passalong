@@ -137,7 +137,9 @@ function openMenu(g: Guide, e: MouseEvent) {
   };
 }
 
-const { onArchive, onCloseGuide, onTaskDraft, onTaskReady, onTakeBack } = useHub();
+const { onArchive, onCloseGuide, onReopen, onTaskDraft, onTaskReady, onTakeBack } = useHub();
+/** Finished, not shelved: what Reopen is for. Archived work comes back through Unarchive. */
+const finished = (g: Guide) => g.status === "consumed" && g.outcome !== "archived";
 
 /** The card being dragged, and the column under it. */
 const dragging = ref<Guide | null>(null);
@@ -164,7 +166,13 @@ function moveTo(g: Guide, to: string): (() => Promise<boolean> | boolean) | null
       onTakeBack({ id: g.id } as Working);
   if (to === "done" && g.manage && from !== "review" && g.status !== "consumed")
     return () => (task ? onArchive(g, true) : onCloseGuide(g));
-  // Out of Done to Draft, so nobody redoes approved work without a person saying so.
+  // Finished work dragged back to To do is reopened, with why; anything out of Done to Draft is
+  // unarchived, so nobody redoes it without a person saying so.
+  if (from === "done" && to === "todo" && finished(g))
+    return () => {
+      const why = prompt(`Why reopen "${g.title}"? Whoever finished it is told.`)?.trim();
+      return Boolean(why) && onReopen(g.id, why as string);
+    };
   if (from === "done" && to === "draft" && g.manage && g.status === "consumed")
     return () => onArchive(g, false);
   return null;
@@ -350,7 +358,7 @@ const shown = computed(
               >Your review</span>
               <!-- Done is approved work and archived work; the card says which, in words. -->
               <span v-if="g.stage === 'done' && g.outcome" class="font-ui text-xs text-muted">{{
-                g.outcome === "approved" ? "Approved" : "Archived"
+                { finished: "Finished", approved: "Approved", archived: "Archived" }[g.outcome]
               }}</span>
               <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
             </div>

@@ -89,7 +89,11 @@ export function statusLine({ g, state }: LaneRow): { text: string; tone: Tone } 
     if (who.length)
       return { text: `${list(who)} ${who.length === 1 ? "is" : "are"} taking it`, tone: "" };
   }
-  if (g.status === "consumed") return { text: "archived", tone: "" };
+  if (g.status === "consumed")
+    return {
+      text: g.outcome === "archived" || !g.outcome ? "archived" : "finished",
+      tone: "",
+    };
   if (!g.mine && g.my_ack && !g.my_ack.taken) {
     return { text: `you passed${g.my_ack.note ? `: ${g.my_ack.note}` : ""}`, tone: "" };
   }

@@ -1,7 +1,8 @@
 # Finishing with proof, and no review stage
 
-**Status:** Proposed 2026-10-15, direction agreed. Not built yet, except the archive fix in §8,
-which is. Supersedes the first draft of this file (review as a glance), which kept the stage and
+**Status:** Proposed and built 2026-10-15. §9's open questions were settled the simple way:
+screenshots only (no recordings yet), a command and its line count as backend proof, and a reopen
+tells whoever finished it, not the team channel. Supersedes the first draft of this file (review as a glance), which kept the stage and
 tried to make it cheaper.
 
 ## 1. Why

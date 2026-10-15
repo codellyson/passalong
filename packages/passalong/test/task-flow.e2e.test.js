@@ -820,14 +820,20 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
     ],
     cwd: dir,
   });
+  // Finishing is final: Done, and what was run stays on the guide as what it was finished with.
   const row = (await p.tasks()).find((t) => t.id === id);
-  assert.equal(row.state, "review");
-  assert.equal(row.claim.checks.length, 1);
-  assert.equal(row.claim.checks[0].check, "the hub follows the OS setting");
-  assert.equal(row.claim.checks[0].exit, 0, "the runner recorded what it returned");
-  assert.match(row.claim.checks[0].ran, /58 pass, 0 fail/, "and kept its output, not an account");
-  // The block of text is filled from them, so everything that reads `evidence` still works.
-  assert.match(row.claim.evidence, /58 pass, 0 fail/);
+  assert.equal(row.state, "done");
+  const ctx = await (
+    await fetch(`${API}/v1/guides/${id}/context`, {
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "x-passalong-version": VERSION,
+      },
+    })
+  ).json();
+  const shown = ctx.verdicts.find((v) => v.ok);
+  assert.match(shown.detail, /the hub follows the OS setting/, "filed under the line it answers");
+  assert.match(shown.detail, /58 pass, 0 fail/, "and kept its output, not an account");
 });
 
 test("a check with nothing behind it is refused, like any other claim", { skip }, async () => {
@@ -1211,10 +1217,10 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
   assert.equal(said.note, "halfway");
   assert.ok(said.next.length);
 
-  // Your own guide: nobody to hand it in to, and the claim is still yours to pass.
+  // Your own guide can be finished too — nothing reviews it — but never without proof.
   assert.equal(
     (await call("POST", `/v1/guides/${h}/hand_in`, { ...a, ok: true, note: "Done." })).status,
-    403,
+    400,
   );
   const passed = await call("POST", `/v1/guides/${h}/pass`, { ...a, why: "wrong repo after all" });
   assert.deepEqual(
@@ -1259,7 +1265,7 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
     evidence: "npm test -w apps/api → 285 pass, 0 fail",
     cwd: dir,
   });
-  assert.equal(handed.state, "review");
+  assert.equal(handed.state, "done", "finishing is final");
   assert.deepEqual(
     handed.next.map((s) => s.tool),
     ["take"],
@@ -1479,94 +1485,6 @@ test("a CLI below the server's floor is refused with what to run; the rest are s
   assert.equal((await me({ "x-passalong-version": VERSION })).status, 200);
   // Node's own fetch with no version is every CLI up to 0.11.0, which is below the floor.
   assert.equal((await me({})).status, 426);
-});
-
-test("handed in means the actor's turn is over: no new guide under it until the author answers", {
-  skip,
-}, async () => {
-  const env = await setup();
-  const { p, newId } = env;
-  const api = await import("../src/api.js");
-  const owner = process.env.PASSALONG_TOKEN;
-  const as = (token) => {
-    process.env.PASSALONG_TOKEN = token;
-  };
-  const call = async (method, path, body) => {
-    const res = await fetch(`${API}${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-        "x-passalong-version": VERSION,
-        "content-type": "application/json",
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    return { status: res.status, ...(await res.json()) };
-  };
-  // A publish answers with the guide, whose own `status` would shadow the HTTP one in `call`.
-  const followUp = async (parent, title) => {
-    const res = await fetch(`${API}/v1/guides/${newId()}`, {
-      method: "PUT",
-      headers: {
-        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-        "x-passalong-version": VERSION,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        markdown: `---\ntitle: ${title}\nsummary: Said to a person for the test.\nkind: transfer\nstatus: draft\nparent: ${parent}\n---\n\nWhat I found.\n`,
-      }),
-    });
-    return { ...(await res.json()), status: res.status };
-  };
-
-  const team = await api.createTeam(`review ${Date.now()}`);
-  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
-  const { code } = await api.invite(team.slug);
-  const mate = await secondAccount();
-  as(mate.token);
-  await api.join(code);
-
-  as(owner);
-  const md =
-    "---\ntitle: Stream the receipt PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const id = (await send(p, md, { to: team.slug })).guide.meta.id;
-
-  // The teammate's agent works it, and may add context while it holds it.
-  as(mate.token);
-  const a = { agent: "e2e-agent-review", repo: "e2e/review" };
-  assert.equal((await call("POST", "/v1/take", { ...a, id })).guide.id, id);
-  assert.equal((await followUp(id, "Context while working")).status, 201);
-  const handed = await call("POST", `/v1/guides/${id}/hand_in`, {
-    ...a,
-    ok: true,
-    evidence: PROOF,
-    note: "Done, it holds.",
-    risk: "the receipt route is shared with invoices",
-  });
-  assert.deepEqual(
-    handed.next.map((s) => s.tool),
-    ["take"],
-  );
-
-  // Handed in: a second guide to carry what it found is refused, and the refusal is the remedy.
-  const refused = await followUp(id, "Hand-in evidence: receipt PDF");
-  assert.equal(refused.status, 409);
-  assert.match(refused.message, /handed .* in/);
-  assert.match(refused.message, /writeup/);
-  assert.match(refused.message, /stop/);
-
-  // The author is the one reviewing it, and may add to their own guide at any time. They are also
-  // told what it could break, beside the evidence.
-  as(owner);
-  const [waiting] = (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id);
-  assert.equal(waiting.risk, "the receipt route is shared with invoices");
-  assert.equal((await followUp(id, "Also check the footer")).status, 201);
-
-  // Once the author has answered, the actor's turn is not over any more — it is simply over.
-  assert.equal((await call("POST", `/v1/guides/${id}/close`)).state, "done");
-  as(mate.token);
-  assert.equal((await followUp(id, "Found later")).status, 201);
-  as(owner);
 });
 
 test("the status line shows what this worktree holds, from a cache it refreshes itself", {
@@ -1839,7 +1757,7 @@ test("an image held as bytes attaches, and answers the check it was taken for", 
     cwd: dir,
   });
   const row = (await p.tasks()).find((t) => t.id === id);
-  assert.equal(row.state, "review", "a shown check is evidence");
+  assert.equal(row.state, "done", "a shown check is proof, and finishing is final");
 });
 
 test("the server requires a kind, takes a new task Ready, and never starts one archived", {

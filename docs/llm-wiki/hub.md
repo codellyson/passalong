@@ -6,7 +6,7 @@ folder documents have a Markdown editor because their purpose is continuing work
 
 ## Home
 
-`/hub` is the overview: the board's five column counts (Draft, To do, In progress, In review, Done),
+`/hub` is the overview: the board's column counts (Draft, To do, In progress, Done),
 the same for everyone in the team; "How Passalong works", open; and the activity feed. A new account
 gets the first-run steps here instead. The counts come from `useWorkLists`, the same composable the
 Work page draws the board with, so the two pages cannot disagree. `/hub` used to be the Work page:
@@ -45,10 +45,11 @@ It replaced four tabs (Needs you, Being worked on, Open, Done) worked out per vi
 same guide in different places for different teammates and counted it differently.
 
 **Who may do what on a team guide:** anyone in the team moves it between Draft and Ready, stops an
-agent, gives it to someone else (**Give to…** on every card that is not done), and reviews a hand-in (Approve / Accept / Ask for changes) — except whoever did the work:
-`ownWork()` in claims.ts refuses a review of your own hand-in, and the card wears **Your review**
-(`can_review`) for everyone else. Archiving and deleting stay with its author or a team admin. A
-private guide (no team) is its author's alone, and its author reviews it.
+agent, gives it to someone else (**Give to…** on every card that is not done), and reopens finished
+work with a reason (**Reopen**, on the guide page, the card menu, or dragging it out of Done).
+Finishing is final, so there is no review: a guide page leads a finished guide with what it was
+**Finished with**, and **Ask someone to check** sends a teammate a follow-up task to look at it.
+Archiving and deleting stay with its author or a team admin.
 
 A browser-only person can take an eligible task from its guide page,
 post progress and hand it in there. These holds use the person's account identity and a week-long
