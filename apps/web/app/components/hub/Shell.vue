@@ -233,6 +233,7 @@ const active = (to: string) =>
              Signed in on a phone it is in the account menu instead, to keep the bar one row. -->
         <AppThemeToggle :class="signedIn ? 'max-lg:hidden' : ''" />
         <template v-if="signedIn">
+          <HubGoTo />
           <HubNewMenu />
           <HubAccountMenu />
         </template>
