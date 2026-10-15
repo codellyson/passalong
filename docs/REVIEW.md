@@ -1,137 +1,159 @@
-# Review: a glance, not a reading assignment
+# Finishing with proof, and no review stage
 
-**Status:** Proposed 2026-10-15. Nothing here is built yet, except the archive fix in §5, which is.
+**Status:** Proposed 2026-10-15, direction agreed. Not built yet, except the archive fix in §8,
+which is. Supersedes the first draft of this file (review as a glance), which kept the stage and
+tried to make it cheaper.
 
 ## 1. Why
 
-Every hand-in is meant to be reviewed: a person approves it or sends it back, and nobody approves
-their own work. That gate is how Passalong says work is finished rather than claimed finished. In
-practice it is mostly skipped, and what agents hand in is shaped for the gate rather than for the
-person behind it.
+Every hand-in waits in **In review** until a person approves it or sends it back, and nobody may
+approve their own work. The idea was that work is finished when somebody else says so, not when an
+agent claims it. In practice the stage is skipped, and what agents hand in is shaped for the gate
+rather than for a person.
 
-The numbers are from production, read on 2026-10-15, covering 2026-10-02 (when `task_event` began)
-to then. Small and mostly one team's use, so read them as a direction, not a measurement.
+Production, 2026-10-02 (when `task_event` began) to 2026-10-15. Small and mostly one team's use:
 
-**What happens after a hand-in (95 hand-ins)**
-
-| Outcome | Hand-ins | Share |
+| After a hand-in (95) | Hand-ins | Share |
 | --- | --- | --- |
-| Archived while the hand-in waited, never answered | 61 | 64% |
+| Archived while it waited, never answered | 61 | 64% |
 | Approved or closed by a reviewer | 27 | 28% |
 | Still waiting | 7 | 7% |
-| Sent back ("Ask for changes") | 0 | 0% |
+| Sent back | 0 | 0% |
 
-- Nobody has ever sent work back. Review is approve-or-skip, never a gate anything fails.
-- 11 of the 27 answered were answered by the account that handed them in: private guides, where a
-  person's own agent hands in to them.
-- Most answers came 1 to 24 hours later. People come back; they archive instead of reviewing.
+- Nothing has ever been sent back. The stage is approve-or-skip; it has never stopped anything.
+- 11 of the 27 answers were people approving their own agent's work, which is the right thing to do
+  and which the rule exists to forbid.
+- A hand-in averages about 5,400 characters (the longest 13,400) and carries a screenshot in about
+  42%. A screenshot did not make one more likely to be reviewed: nothing did.
 
-**What a reviewer is given (97 hand-ins in review)**
+Two things are wrong at once:
 
-- About 5,400 characters on average, the longest 13,400. 60% are over 2,000.
-- About 42% carry a screenshot. Two checks on average: most of the length is prose and logs.
+1. **The stage costs more than it catches.** It parks every finished piece of work, puts it in
+   somebody's Needs you, and is worked around by archiving. It is only worth anything when you
+   actually need another person — and then the honest way is to ask them, which Passalong already
+   does: send them a guide.
+2. **Proof is mixed in with noise.** "Evidence" holds both what the machine needs (a test passed)
+   and what a person needs (is this what I asked for?). The second is what makes work checkable,
+   and there is no easy way to show it to someone else.
 
-**Did a screenshot or a short hand-in get reviewed more?** (83 handoff and bug hand-ins, whose
-evidence is kept after review)
+## 2. The model
 
-| | Reviewed | Archived unreviewed |
-| --- | --- | --- |
-| Screenshot, short | 2 of 15 | 10 |
-| Screenshot, long | 4 of 21 | 13 |
-| No screenshot, short | 4 of 24 | 20 |
-| No screenshot, long | 10 of 23 | 10 |
+Four states instead of five, for every kind of guide:
 
-A screenshot did not make a hand-in more likely to be reviewed. Nothing did: the step is skipped
-whatever arrives. So the problem is not only that hand-ins are long. It is that reviewing one costs
-more than archiving it, and nothing says the difference matters.
+**Draft → Ready → In progress → Done**
 
-## 2. What evidence is for, split in two
+- **Finishing goes straight to Done**, and finishing requires proof (§3). There is no waiting
+  state, no Approve, no Ask for changes, and no rule about whose work it is.
+- **Reopen** is the safety valve (§4): anyone in the team can send Done work back to To do with a
+  reason, which is what Ask for changes was meant to be, available after the fact instead of
+  standing in the way of every piece of work.
+- **Asking someone to check** is a request, not a stage (§5): a follow-up addressed to a person,
+  carrying the proof, worked like any other guide.
 
-A hand-in carries two different things under one name, `evidence`:
+## 3. Finishing requires proof
 
-1. **Proof for the machine.** Tests, type checks, a build. `checks.js` already runs a check's
-   command and records its exit code, so the verdict is the process's, not the agent's. What a
-   person needs from this is one fact — every check passed, or which one did not — not its output.
-2. **Proof for a person.** The thing that answers "is this what I asked for?": a screenshot of the
-   screen, a before and after, or for backend work the one command and the line of output that
-   decides it. A test cannot say a button is in the wrong place or that the copy reads badly.
+`hand_in` keeps its name and its place in the four verbs (take, progress, hand_in, pass), and now
+means finished. It is refused without one piece of proof a person can look at, and what counts
+depends on the work:
 
-Today both arrive as one pile of text, and longer looks more thorough, so agents send more. The
-reviewer is handed the machine's job and skips it.
+| The work | Proof |
+| --- | --- |
+| Anything with a screen | A screenshot, or a short recording |
+| A bug | Before and after |
+| Backend, data, infrastructure | The one command and the line of its output that shows it works |
 
-## 3. Proposal
+The refusal names which of the three this guide needs, the way the evidence rule names what is
+missing today. A person finishing in the hub has the same rule and the same upload.
 
-### 3.1 Checks become a line, logs fold away
+Around the proof:
 
-The review shows checks as one line per Acceptance item, with a mark: `✓ 4 of 4 checks passed`, or
-the one that failed, named. The output of each check is behind a disclosure, opened only when
-something failed or looks wrong. Nothing about how checks are run or recorded changes; this is how
-they are shown.
+- **Checks become one line.** `checks.js` still runs each check's command and records its exit
+  code. A person sees `✓ 4 of 4 checks passed`, or the one that failed by name. The output of each
+  is folded away, there for when something looks wrong.
+- **The write-up is capped** at about 500 characters: what had to be adapted and why. Anything
+  longer belongs in the diff, a follow-up, or nowhere.
+- **No separate write-up guide.** A task's hand-in no longer has to publish a transfer and name it
+  as `report`; the capped write-up goes on the hand-in. That retires the guides migration 0053 hid
+  from the board.
 
-### 3.2 One thing a person can look at, by kind
+The proof stays on the guide. Anyone who opens a Done guide later sees what was shown when it was
+finished, first, above the document.
 
-Each hand-in brings one piece of proof meant for a person, and what counts depends on the work:
+## 4. Reopen
 
-- **Anything with a screen:** a screenshot, or a short recording.
-- **A bug:** before and after.
-- **Backend, data, infrastructure:** the one command and the line of its output that shows it
-  works, not the whole run.
+From a Done guide — its page, its card's menu, or dragging it out of Done — **Reopen** asks for a
+reason and puts it back in To do. The reason goes at the top of the guide for whoever takes it next,
+the same place a send-back's reason went, and whoever finished it is told.
 
-The hand-in is refused without it, the way it is refused without evidence today, and the refusal
-says which of the three this guide needs. This is the one new rule.
+- Anyone in the team can reopen, as anyone can move work on the board.
+- Reopening an archived guide still goes to Draft, not To do (`unarchiveProblem`): archived is not
+  finished, and a person decides again whether it is wanted.
+- Reopens are the quality signal that replaces send-backs. How often finished work comes back, and
+  from whom, is the number worth watching; it goes into `pnpm metrics`.
 
-### 3.3 The review is one screen
+## 5. Asking someone to check
 
-What leads, in this order: one sentence on what changed (the hand-in's `note`), the proof from
-§3.2, the checks line from §3.1, the risk line, a link to the diff. Then **Approve** and **Ask for
-changes**. The write-up and the logs are below, folded.
+When you want another person's eyes — "open this in the browser and tell me it looks right" — you
+ask them, from the guide's page: **Ask someone to check** picks a teammate and writes one line of
+what to look at. That makes a follow-up guide:
 
-Approve is held today until the evidence has been opened, which on a 5,000-character hand-in means
-reading it. It becomes "until the proof has been seen": the screenshot opened, or the command line
-shown. Seconds, not minutes.
+- addressed to them, with the original as its `parent`, so it carries the proof and the guide with it;
+- a task, Ready at once, because a person wrote it in the hub (the Ready action is theirs);
+- answered the way any guide is: they take it, look, and finish it with proof of their own — or pass
+  it with what is wrong, which comes back to you.
 
-### 3.4 The write-up is capped
+It is the one review that exists, and it exists only when somebody asked for it, from somebody they
+chose. The same works from an agent: `publish_guide` a follow-up addressed to a person.
 
-The write-up says what had to be adapted and why, in a few lines. A cap (500 characters is a
-starting point) keeps it that. Anything longer belongs in the diff, in a follow-up, or nowhere.
+## 6. What goes away
 
-### 3.5 Archiving a hand-in asks first
+| Gone | Where it went |
+| --- | --- |
+| The In review column | Finished work goes straight to Done |
+| Approve, Ask for changes, closing a hand-in | Finishing is the end; Reopen undoes it |
+| "Nobody approves their own work" (`ownWork`) | Nothing to approve |
+| Approve held until the evidence is opened | Nothing to hold |
+| The required write-up guide (`report`) | A capped write-up on the hand-in |
+| Needs you's hand-ins list, "Your review" | Requests to check are guides addressed to you, in your inbox |
+| `outcome = approved` | `finished` from now on; earlier rows keep `approved` |
 
-64% of hand-ins were archived without an answer. Archiving a guide with a hand-in waiting should
-not be the quiet way past the review. The board and the guide page ask "Approve it, or send it
-back?" when someone archives work that is waiting on review; bulk archive says how many hand-ins it
-would skip and offers to approve them instead.
+Routes that installed clients still call keep answering: `POST /v1/tasks/:id/approve` and
+`/v1/guides/:id/close` on work that is already Done succeed and change nothing, so an older CLI's
+`approve` does not fail. `MIN_CLIENT` is raised with the release that teaches agents the new rule.
 
-### 3.6 Record that the proof was seen
+## 7. What happens to work in flight
 
-Nothing records whether a reviewer looked before approving; the "opened" state lives in the browser.
-One event, written when the proof is opened on the review screen, answers the question this
-proposal cannot: whether approvals follow a look or replace one. It records that something was
-opened, never what was in it.
+- Hand-ins waiting in review on the day this ships become Done, `outcome = finished`, with their
+  proof as it is. Nothing was going to review them: 64% never were.
+- `blocked_by`: a blocker counted as finished when a person approved it. It now counts when it is
+  Done. That lets one agent's finished work release the next task without a person in between,
+  which is the point of a plan of tasks — and Reopen on the blocker does not re-block what already
+  started. If a plan needs a person between two steps, the step in between is a request to check (§5).
 
-## 4. Questions for a decision
-
-1. **Is §3.2 a refusal or a nudge?** Refusing a hand-in without person-facing proof is the strong
-   version and the one that changes behaviour. The soft version shows the reviewer that it is
-   missing. Recommendation: refuse, for the reason the evidence rule refuses today.
-2. **Does approving your own agent's work on a private guide count as a review?** It is 11 of 27
-   answers. For one person working alone it is the right step; it should not be counted as a second
-   pair of eyes anywhere the product says so.
-3. **Should a hand-in nobody answers expire?** A Ready guide nobody takes goes back to Draft after
-   14 days. A hand-in nobody reviews has no clock. One option: after 14 days, ask its author once,
-   then leave it.
-
-## 5. Done already: archiving clears its claims
+## 8. Done already: archiving clears its claims
 
 Archiving through the status route left a guide's claims behind, so a hand-in waited forever on a
 guide already in Done, in Needs you and the In review lists, with nobody able to answer it. 61 were
 stuck like that. Archiving now clears every claim on the guide and tells whoever held it or handed
 it in that it is done with; migration 0055 clears the ones already stuck.
 
-## 6. Order of work
+## 9. Questions still open
 
-1. §3.6, the seen event, first and alone: a week of it says how much of §3.3 is needed.
-2. §3.1 and §3.3: the review screen. Display only, no rule changes, nothing for agents to learn.
-3. §3.5: asking before archiving a hand-in.
-4. §3.2 and §3.4: the rules for agents. These change what the MCP servers and `llms.txt` tell
-   agents, so they ship with a CLI release and a `MIN_CLIENT` raise, like every rule change.
+1. **Recordings.** Screenshots are stored today; a short recording is not. Is a recording in scope
+   for the first version, or do screens start with screenshots only?
+2. **What a backend proof looks like in the hub.** One command and one line of output is easy to
+   fake. It is still better than 5,000 characters nobody reads, and the check's recorded exit code
+   sits beside it — but it is the weakest of the three.
+3. **Who sees that work was reopened.** Whoever finished it is told. Should the team's channel hear
+   it too, the way a decline does?
+
+## 10. Order of work
+
+1. **Server: finishing is Done.** `hand_in` ends the claim and sets the guide Done with
+   `outcome = finished`; Reopen (`POST /v1/guides/:id/reopen`, with a reason); `blocked_by` reads
+   Done; the in-flight migration (§7). The proof refusal (§3) lands here too.
+2. **Hub.** Four columns. The guide page leads with the proof; checks as one line; Reopen; Ask
+   someone to check. Needs you loses its hand-ins list.
+3. **Agents.** The MCP servers, `llms.txt` and the capture skill say finishing needs proof and is
+   final; the write-up is capped and `report` is gone. A CLI release, then `MIN_CLIENT`.
+4. **Metrics.** Reopen rate in `pnpm metrics`, beside the caveats it prints today.

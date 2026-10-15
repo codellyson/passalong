@@ -13,10 +13,10 @@ page it belongs to, and into [decisions.md](decisions.md).
 - **Publish (the feature)** — five decisions in [docs/PUBLISH.md](../PUBLISH.md) §14: the page's
   address, pricing, solo pages, whether the task's author gets a say, and the name.
 
-- **Review** — [docs/REVIEW.md](../REVIEW.md) (proposed 2026-10-15): 64% of hand-ins are archived
-  unanswered and none has ever been sent back. Three decisions in §4: whether a hand-in without proof
-  a person can look at is refused, whether approving your own agent's work counts as a review, and
-  whether an unanswered hand-in expires.
+- **Finishing with proof** — [docs/REVIEW.md](../REVIEW.md) (direction agreed 2026-10-15): no review
+  stage. Finishing needs proof a person can look at and goes straight to Done; Reopen undoes it, and
+  asking someone to check is a follow-up addressed to them. Open in §9: recordings, what backend proof
+  looks like, and who hears about a reopen.
 
 ## Known gaps
 
