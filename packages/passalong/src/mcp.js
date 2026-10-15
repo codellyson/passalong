@@ -333,8 +333,8 @@ export function buildServer() {
         "session into a guide (guide_template kind transfer shows the shape) and call " +
         "publish_guide, with `to` as team, team/@handle for one teammate, or team/#group for the " +
         "people who do a thing. " +
-        "BEFORE PUBLISHING ANYTHING, CHECK WHAT IS ALREADY OPEN: call take with no id, or read the " +
-        "inbox, and see what you hold. If this session's work answers something you hold, hand_in " +
+        "BEFORE PUBLISHING ANYTHING, CHECK WHAT IS ALREADY OPEN: call board (it lists what this " +
+        "worktree holds) or read the inbox. If this session's work answers something you hold, hand_in " +
         "that — never publish a second guide about it. A transfer guide is for work that has to " +
         "cross a boundary: another repo, another machine, a teammate without your branch. Work you " +
         "committed and pushed where the team can already see it has crossed no boundary, and a " +
@@ -943,12 +943,17 @@ export function buildServer() {
         "The state of this user's transfers as queues: waiting on you (handed to you, not " +
         "pulled), not working (someone gave it a failing verdict — the most urgent), in flight " +
         "(handed over, nobody has taken it — `stale` means it has sat over a week), and landed " +
-        "(someone else has it). Use it to answer 'what is outstanding?'.",
+        "(someone else has it), and `held`: what this worktree's agents hold now. Use it to answer " +
+        "'what is outstanding?' and to see what you hold, without taking anything.",
       inputSchema: {},
     },
     async () => {
       try {
-        return json(await passalong.board());
+        const [board, now] = await Promise.all([
+          passalong.board(),
+          passalong.now().catch(() => ({ held: [] })),
+        ]);
+        return json({ ...board, held: now.held });
       } catch (err) {
         return fail(err);
       }
@@ -1099,9 +1104,9 @@ export function buildServer() {
       annotations: ADDS,
       description:
         "Say you are doing it, and get it. With `id`, that guide — any kind: a task, a bug, a " +
-        "handoff. With no id, the next thing waiting for this worktree's agent. While you hold it " +
-        "no other agent can take it here, and its sender sees you are on it. One thing at a time: " +
-        "if you already hold something, finish or pass that first. If somebody else has it, the " +
+        "handoff. With no id, the next thing waiting — always something new, never what you hold. " +
+        "While you hold it no other agent can take it here, and its sender sees you are on it. You " +
+        "may hold several at once; the person watches them on the board. If somebody else has it, the " +
         "answer says who — tell the user rather than doing the work twice. Every answer ends with " +
         "what to call next.",
       inputSchema: {
@@ -1525,8 +1530,8 @@ export function buildServer() {
       title: "Publish guide",
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
       description:
-        "Publish a guide from markdown (frontmatter + sections). Check what you hold first (take " +
-        "with no id): if this session answers something you hold, hand_in that instead, and if the " +
+        "Publish a guide from markdown (frontmatter + sections). Check what you hold first " +
+        "(board): if this session answers something you hold, hand_in that instead, and if the " +
         "work never left a branch the team can see, publish what is still open as a bug or a task " +
         "rather than a write-up of the fix. A transfer guide by default, or " +
         "a single bug with `kind: bug`; use file_bugs for more than one; or a task for work nobody " +

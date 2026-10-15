@@ -5302,7 +5302,6 @@ app.put("/v1/guides/:id/ack", async (c) => {
   if (body.taken)
     await claims.take(c.env.DB, found.row.id, person, {
       at,
-      many: true,
       leaseMs: claims.PERSON_LEASE_MS,
     });
   else await claims.pass(c.env.DB, found.row.id, person, { at, why: note || "passed" });
@@ -5844,7 +5843,6 @@ app.post("/v1/tasks/:id/person-take", async (c) => {
   const at = now();
   const got = await claims.take(c.env.DB, c.req.param("id"), who, {
     at,
-    many: true,
     leaseMs: claims.PERSON_LEASE_MS,
   });
   if ("error" in got) return err(c, got.status, got.error);

@@ -438,11 +438,12 @@ const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN guide x ON x.id = b.blo
   WHERE b.guide_id = g.id AND x.status <> 'consumed')`;
 
 /**
- * Hand this agent a task, or `null` when there is nothing for it.
+ * Hand this agent a new task, or `null` when there is nothing for it.
  *
- * An agent holds one task at a time. If it already has one — live or stalled — that is the answer,
- * and asking again renews the lease: this is how a restarted session in the same worktree takes
- * its card back. Otherwise the oldest ready task for this repo is claimed.
+ * Always a new one: an agent may hold as many as it can work, and several sessions in one worktree
+ * are one agent to the queue, so handing back what it holds would give the second session the
+ * first one's task. A restarted session takes its work back by id (`take`), which the session-start
+ * hook names. The person watching the board is the limit, not the queue (2026-10-15).
  *
  * Routing: an agent in a repo gets only tasks for that repo. An agent in no repo gets only tasks
  * for no repo, because a research task taken from inside a checkout tends to end with commits in
@@ -456,20 +457,6 @@ export async function next(
   who: Agent,
   { at, any = false }: { at: string; any?: boolean },
 ): Promise<{ task: TaskRow; claim: ClaimRow; resumed: boolean } | null> {
-  const held = await db
-    .prepare(
-      `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created
-         FROM claim c JOIN guide g ON g.id = c.guide_id
-        WHERE c.agent_id = ?1 AND c.account_id = ?2 AND c.state = 'claimed'
-        ORDER BY c.claimed_at LIMIT 1`,
-    )
-    .bind(who.agent, who.account)
-    .first<TaskRow>();
-  if (held) {
-    const claim = await renew(db, held.id, who, { at, note: null });
-    if (claim) return { task: held, claim, resumed: true };
-  }
-
   const repo = repoKey(who.repo);
   const where = any ? "" : "AND g.target = ?2";
   const { results } = await db
@@ -608,43 +595,6 @@ async function event(
 type Refusal = { error: string; status: 400 | 404 | 409; holder?: ClaimRow };
 
 /**
- * An agent's silent hold, given up because it asked for something else. What it left is described
- * the way release() describes it, so the next one to take it knows where to look.
- */
-async function letGo(
-  db: D1Database,
-  held: { guide_id: string; place: string; host: string; worktree: string; note: string },
-  who: Agent,
-  at: string,
-) {
-  const g = await db
-    .prepare("SELECT kind, markdown FROM guide WHERE id = ?")
-    .bind(held.guide_id)
-    .first<{ kind: string; markdown: string }>();
-  const drop = db
-    .prepare("DELETE FROM claim WHERE guide_id = ? AND place = ? AND agent_id = ?")
-    .bind(held.guide_id, held.place, who.agent);
-  if (g?.kind === "task") {
-    const where = [held.host, held.worktree].filter(Boolean).join(":") || `agent ${who.agent}`;
-    const said = held.note ? `; last progress: "${held.note}"` : "";
-    const line = `${at.slice(0, 10)} released from ${where}: its agent went quiet and took another task${said}`;
-    await db.batch([
-      drop,
-      db
-        .prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?")
-        .bind(withNote(g.markdown, line), at, held.guide_id),
-    ]);
-  } else await drop.run();
-  await event(db, held.guide_id, "released", {
-    account: who.account,
-    agent: who.agent,
-    host: held.host,
-    body: "its agent took another task after going quiet",
-    at,
-  });
-}
-
-/**
  * This agent takes one guide, of any kind, by id: "I am doing this". The same lock as `next`.
  *
  * A task is taken once, wherever the agent is, and only from the repo it is for unless `any`. A
@@ -652,8 +602,8 @@ async function letGo(
  * team can be repeated in each teammate's checkout and never twice in one. A refusal because
  * somebody has it names who, so the agent can say so instead of silently doubling the work.
  *
- * An agent holds one thing at a time, as with `next`: taking what it already holds renews it, and
- * taking something else while it holds one is refused with the id it has to finish or pass first.
+ * An agent may hold several things at once: taking what it already holds renews it, and taking
+ * something else beside it is allowed. Whoever runs the agents watches the board.
  */
 export async function take(
   db: D1Database,
@@ -661,12 +611,9 @@ export async function take(
   who: Agent,
   {
     at,
-    many = false,
     leaseMs = LEASE_MS,
   }: {
     at: string;
-    /** A person, not an agent: they may hold several things at once. */
-    many?: boolean;
     leaseMs?: number;
   },
 ): Promise<{ task: TaskRow & { kind: string }; claim: ClaimRow; resumed: boolean } | Refusal> {
@@ -680,39 +627,16 @@ export async function take(
     .first<TaskRow & { kind: string; to_account_id: string; blocked: number; for_me: number }>();
   if (!g) return { status: 404, error: "no such guide that you can see" };
 
-  let held = await db
+  const held = await db
     .prepare(
-      many
-        ? "SELECT guide_id, place, lease_until, host, worktree, note FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' AND guide_id = ?"
-        : "SELECT guide_id, place, lease_until, host, worktree, note FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' ORDER BY guide_id = ? DESC LIMIT 1",
+      "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' AND guide_id = ?",
     )
     .bind(who.agent, who.account, id)
-    .first<{
-      guide_id: string;
-      place: string;
-      lease_until: string;
-      host: string;
-      worktree: string;
-      note: string;
-    }>();
-  if (held?.guide_id === id) {
+    .first<{ guide_id: string }>();
+  if (held) {
     const claim = await renew(db, id, who, { at, note: null });
     if (claim) return { task: g, claim, resumed: true };
   }
-  // Asking for something else by name, while the last hold has been silent past its lease, is
-  // moving on: the old one goes back to whoever is next, with where it was left. Held live, it is
-  // still refused, because that agent is working on it.
-  if (held && held.lease_until <= at) {
-    await letGo(db, held, who, at);
-    held = null;
-  }
-  if (held)
-    return {
-      status: 409,
-      error:
-        `this agent already holds ${held.guide_id}: hand it in or pass it before taking another. ` +
-        "If that work is finished, its author or whoever runs this agent can mark it done in the hub.",
-    };
 
   if (g.status !== "published")
     return {
@@ -1514,7 +1438,7 @@ export async function approve(
  *
  * The agent that did the work often cannot hand it in: the session ended, the evidence was refused
  * in a shape it kept getting wrong, or it is simply gone. Until somebody said so the task stayed
- * held, and an agent holds one thing at a time, so the next task waited on it too.
+ * held, and nobody else could take it.
  *
  * Two people may say it. The author, who is the gate anyway, so it is approved on the spot. The
  * account whose agent holds it, who cannot approve their own work, so it goes to review with a line

@@ -3,7 +3,8 @@
 Every kind of guide is worked with the same four calls, each with an `agent` id the caller reuses:
 
 - **take** — "I am doing this". Locks it so nobody else does the same work twice. Without an id it
-  hands out the next ready task for the caller's repo.
+  hands out the next ready task for the caller's repo — always a new one. An agent may hold several
+  at once (2026-10-15): the person watching the board is the limit, not the queue.
 - **progress** — one line at each milestone. Renews the lease.
 - **hand_in** — done here. Needs evidence (see [evidence-and-proof.md](evidence-and-proof.md)).
 - **pass** — not mine, or stuck, with the reason. Hands it back.
@@ -23,6 +24,10 @@ once; a handoff or bug is taken once **per repo**, since the same transfer can b
 teammate's checkout.
 If an older task still has a repo-scoped claim, that claim remains its lock and its review record;
 the author can approve that hand-in without creating another claim.
+The agent is the worktree (`.passalong/agent.json`), so several sessions in one checkout are one
+agent: the session-start hook lists everything the worktree holds and says to resume only your own,
+and the Stop hook names them all once. A quiet hold is never let go behind a person's back; it shows
+stalled on the board for them to resume or stop.
 
 - **Lease.** 30 minutes from the last call. A lapsed lease is **stalled** — derived on read, still
   locked — and the cron tells the author once.

@@ -877,7 +877,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "apply: Reproduce is how to see the bug and running it produces the bug, Verification is " +
         "the behaviour that should have happened. Fix the defect, then check Verification and " +
         "hand_in with the result. A bug report is not broken because you reproduced it.\n" +
-        "BEFORE PUBLISHING ANYTHING, CHECK WHAT IS ALREADY OPEN: call work, or take with no id, " +
+        "BEFORE PUBLISHING ANYTHING, CHECK WHAT IS ALREADY OPEN: call work, " +
         "and see what you hold. If this session's work answers something you hold, hand_in that — " +
         "never publish a second guide about it. A transfer guide is for work that has to cross a " +
         "boundary: another repo, another machine, a teammate without your branch. Work you " +
@@ -1900,8 +1900,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       outputSchema: takeOut,
       description:
         "Say you are doing it, and get it. With `id`, that guide — any kind: a task, a bug, a " +
-        "handoff. With no id, the next ready task for `repo`. While you hold it no other agent " +
-        "can take it there, and its sender sees you are on it. One at a time. If somebody else " +
+        "handoff. With no id, the next ready task for `repo` — always a new one, never what you " +
+        "hold. While you hold it no other agent can take it there, and its sender sees you are on " +
+        "it. You may hold several; the person watches them. If somebody else " +
         "has it, the answer says who: tell the user rather than doing the work twice. Every " +
         "answer ends with what to call next.",
       inputSchema: takeIn,
