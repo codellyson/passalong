@@ -111,6 +111,30 @@ test("cancelled, unpaid or deleted lapses, and a lapse never reports seats", () 
   }
 });
 
+test("a cancelled plan is still paid, and says when it ends", () => {
+  const end = "2026-11-14T18:54:51Z";
+  const cancelled = fromBachs(
+    event("customer.subscription.updated", {
+      status: "active",
+      cancel_at_period_end: true,
+      current_period_end: end,
+    }),
+  );
+  assert.equal(cancelled.plan, "team");
+  assert.equal(cancelled.ends, end);
+  // Resumed ("Keep subscription"): nothing is ending, which clears the date.
+  const resumed = fromBachs(
+    event("customer.subscription.updated", {
+      status: "active",
+      cancel_at_period_end: false,
+      current_period_end: end,
+    }),
+  );
+  assert.equal(resumed.ends, "");
+  // Once it has ended there is no date to show: the plan says lapsed.
+  assert.equal(fromBachs(event("customer.subscription.deleted", { status: "canceled" })).ends, "");
+});
+
 test("an event nobody mapped is ignored, not refused", () => {
   assert.equal(fromBachs(event("payment.succeeded", { status: "active" })), null);
   assert.equal(fromBachs(event("customer.subscription.updated", { status: "paused" })), null);

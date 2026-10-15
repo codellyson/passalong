@@ -29,6 +29,8 @@ const plan = computed(() => data.value.me?.plan ?? "free");
  * on the day it ends: somebody who thinks they bought this would find out by being refused.
  */
 const until = computed(() => day(data.value.me?.plan_until));
+/** When a bought plan that was cancelled stops. Said, or a cancelled plan looks like it renews. */
+const ends = computed(() => day(data.value.me?.plan_ends));
 /** Why the ceiling is what it is, which is not always this plan. */
 const sync = computed(() => data.value.me?.sync ?? "free");
 const onATeamSeat = computed(() => sync.value === "unlimited" && plan.value !== "solo");
@@ -76,6 +78,10 @@ async function go(path: string) {
       assistants to them.<template v-if="until">
         {{ " " }}This one was given to you and runs until {{ until }}, after which it lapses —
         nothing is taken away, and new guides past the free limit wait until you subscribe.
+      </template><template v-if="ends">
+        {{ " " }}You cancelled it, so it ends on {{ ends }} and won't renew. Nothing is taken away
+        then, and new guides past the free limit wait until you subscribe again. To keep it, open
+        Manage billing.
       </template>
     </p>
     <p v-else-if="plan === 'lapsed'" class="m-0 font-ui text-sm text-muted">

@@ -36,7 +36,8 @@ unlimited.
 - **Checkout is hosted** by Bachs, a merchant of record, and its billing page is where a payer changes
   a card or cancels; the webhook, verified over the raw body, is what writes a plan, and an event
   older than the stored plan is dropped. An event from another subscription never ends the stored one
-  or replaces one still paying; a second paying subscription alerts admins (`billed_twice`) to refund. Test or live is read off the key itself.
+  or replaces one still paying; a second paying subscription alerts admins (`billed_twice`) to refund.
+  A cancelled plan stays paid to the end of its period, and the hub says when it ends (`plan_ends`). Test or live is read off the key itself.
 - **Gifts** end on their date, and never touch a subscription.
 
 ## Roles

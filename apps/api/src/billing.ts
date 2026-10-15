@@ -72,6 +72,11 @@ export interface PlanChange {
    * compares this against when the stored plan was set and drops anything older.
    */
   at?: string;
+  /**
+   * When a cancelled plan stops: the end of the period already paid for, while it is still paid.
+   * '' when nothing is ending, which is also how resuming a cancellation clears it.
+   */
+  ends: string;
   /** For the audit line in a log, never shown to a user. */
   reason: string;
 }
@@ -128,6 +133,8 @@ export function fromBachs(event: unknown): PlanChange | null {
     data?: {
       subscription_id?: string;
       status?: string;
+      cancel_at_period_end?: boolean;
+      current_period_end?: string;
       metadata?: Record<string, string>;
     };
   };
@@ -140,12 +147,13 @@ export function fromBachs(event: unknown): PlanChange | null {
 
   const status = d.status ?? "";
   if (e.type === "customer.subscription.deleted" || ENDED.has(status))
-    return { ...base, plan: "lapsed", reason: `${e.type}: ${status || "deleted"}` };
+    return { ...base, plan: "lapsed", ends: "", reason: `${e.type}: ${status || "deleted"}` };
   if (PAYING.has(status))
     return {
       ...base,
       plan: "team",
       seats: team_id ? TEAM_SEATS : undefined,
+      ends: (d.cancel_at_period_end && d.current_period_end) || "",
       reason: `${e.type}: ${status}`,
     };
   return null;

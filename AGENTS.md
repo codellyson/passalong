@@ -427,7 +427,10 @@ change. Its README says how.
   subscription than the stored one never ends it — a late lapse is an old subscription ending — and
   never replaces one still paying: that is a second checkout completed for the same plan, so the
   stored one stays bound and admins get `billed_twice` to refund the other. Renewing a lapsed plan
-  with a new subscription is applied. Three rules in the mapping, each
+  with a new subscription is applied. Bachs cancels at the end of the period already paid for, so a
+  cancelled plan stays paid and the webhook stores when it stops in `plan_ends` (migration 0055, on
+  account and team; cleared when resumed or lapsed), which the hub states beside the plan — never
+  `plan_until`, which is a gift's end and is enforced by the hourly sweep. Three rules in the mapping, each
   of which was a way to get this wrong: `past_due` is **not** lapsed, since downgrading on the first
   failed attempt makes an overnight bank decline look like a cancellation; an event that grants no
   seats leaves seats **untouched**, since writing zero would unseat the whole team on a lapse; and an

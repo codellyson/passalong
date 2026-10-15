@@ -362,6 +362,8 @@ interface TeamRow {
   seats: number;
   subscription_id: string;
   plan_since: string;
+  /** When a cancelled plan stops; '' when nothing is ending (migration 0055). */
+  plan_ends: string;
 }
 interface GuideRow {
   id: string;
@@ -1813,7 +1815,7 @@ app.delete("/v1/admin/gifts/:id", async (c) => {
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, role, keep_forever FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, plan_ends, role, keep_forever FROM account WHERE id = ?",
   )
     .bind(account)
     .first<
@@ -1822,6 +1824,7 @@ app.get("/v1/me", async (c) => {
         email_verified: string;
         plan: string;
         plan_until: string;
+        plan_ends: string;
         role: string;
         keep_forever: number;
       }
@@ -1857,6 +1860,8 @@ app.get("/v1/me", async (c) => {
     plan: ownPlan,
     // When it stops, and only for a plan that was given: a bought one ends when the provider says.
     plan_until: me?.plan_until || "",
+    // When a bought plan that was cancelled stops — it is paid until then (migration 0055).
+    plan_ends: me?.plan_ends || "",
     // '' for everybody who uses Passalong, 'super' for whoever runs it (migrations/0027_super.sql).
     // The hub draws the operator section from this; the routes check the database, not this field.
     role: (await isAdmin(c.env.DB, c.env.ADMIN_ACCOUNTS, account)) ? "super" : me?.role || "",
@@ -2069,6 +2074,7 @@ app.get("/v1/teams/:slug", async (c) => {
     // the billing page, which a given plan has none of.
     seats: team.seats,
     subscribed: !!team.subscription_id,
+    plan_ends: team.plan_ends || "",
     members_count: members.length,
   });
 });
@@ -3472,9 +3478,9 @@ app.post("/v1/billing/webhook/bachs", async (c) => {
       // `plan_until` is cleared: a subscription is not a gift, and a date left over from one would
       // expire a plan somebody is now being charged for. See migrations/0026_gifts.sql.
       await c.env.DB.prepare(
-        "UPDATE account SET plan = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
+        "UPDATE account SET plan = ?, plan_since = ?, plan_until = '', plan_ends = ?, subscription_id = ? WHERE id = ?",
       )
-        .bind(plan, since, change.subscription_id, solo.id)
+        .bind(plan, since, change.ends, change.subscription_id, solo.id)
         .run();
       count(c, "plan_changed", { provider: "bachs", plan, subject: "account" });
       return c.json({ ok: true, applied: true });
@@ -3510,9 +3516,16 @@ app.post("/v1/billing/webhook/bachs", async (c) => {
   // `plan_until` cleared for the same reason as above: what the team is on is now the provider's
   // to end, not a date an operator typed.
   await c.env.DB.prepare(
-    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
+    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, plan_until = '', plan_ends = ?, subscription_id = ? WHERE id = ?",
   )
-    .bind(change.plan, change.seats ?? team.seats, since, change.subscription_id, team.id)
+    .bind(
+      change.plan,
+      change.seats ?? team.seats,
+      since,
+      change.ends,
+      change.subscription_id,
+      team.id,
+    )
     .run();
   count(c, "plan_changed", { provider: "bachs", plan: change.plan, subject: "team" });
   return c.json({ ok: true, applied: true });

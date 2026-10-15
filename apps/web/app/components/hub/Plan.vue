@@ -50,6 +50,8 @@ const testing = computed(() => modesData.value?.mode === "test");
 const TEAM_SEATS = 10;
 
 const owner = computed(() => team.value?.role === "owner");
+/** When a cancelled plan stops. Said, or a cancelled plan looks like it renews. */
+const ends = computed(() => day(team.value?.plan_ends));
 const members = computed(() => team.value?.members.length ?? 0);
 /** Who to ask, by name, when you are not the one who can change the plan. */
 const ownerName = computed(() => {
@@ -117,7 +119,13 @@ async function go(path: string, body: Record<string, string> = {}) {
       >Test mode: no real money is charged</span>
     </div>
 
-    <p class="m-0 font-ui text-sm text-muted">{{ plan.says }}</p>
+    <p class="m-0 font-ui text-sm text-muted">
+      {{ plan.says
+      }}<template v-if="team.plan === 'team' && ends">
+        {{ " " }}It was cancelled, so it ends on {{ ends }} and won't renew. After that the team is
+        read-only until it subscribes again<template v-if="owner">; to keep it, open Manage billing</template>.
+      </template>
+    </p>
 
     <p v-if="!available" class="m-0 font-ui text-sm text-muted">
       Paid plans aren't available yet. Check back later.
