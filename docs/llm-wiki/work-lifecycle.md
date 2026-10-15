@@ -47,7 +47,8 @@ Work is not done because whoever did it says so.
 - **An archived guide comes back to Draft**, never straight to Ready (`unarchiveProblem()` in
   `guide.ts`; the status route answers 409). `consumed` covers approved as well as shelved, so
   unarchiving one as Ready handed finished work to whoever took it next. Only its author or an
-  admin archives a guide, of any kind.
+  admin archives a guide, of any kind. Archiving lets go of everyone on it: its claims are cleared, including a hand-in nobody
+  answered, and whoever held it is told it is done with (migration 0055 cleared the 61 left stuck).
 - **Done says how it got there** (`outcome`, migration 0054): **Approved** when a person approved
   it or accepted its hand-in, **Archived** when its author or an admin shelved it. Done cards say
   which. A Ready guide nobody took in 14 days goes back to Draft rather than to Done.

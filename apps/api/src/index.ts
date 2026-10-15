@@ -4995,6 +4995,28 @@ app.patch("/v1/guides/:id/status", async (c) => {
       ? setField(markdown, "target_context", repo)
       : dropField(markdown, "target_context");
   }
+  // Archiving lets go of everyone on it. A hand-in left waiting on a guide that is already Done is
+  // one nobody can answer: it sat in Needs you and on the board's In review lists, and 61 were
+  // stuck that way in production (0055_archive_claims.sql). Whoever held it or handed it in hears
+  // it is done with — not "accepted", which closing a hand-in says; nobody reviewed this one.
+  if (status === "consumed") {
+    const { results: held } = await c.env.DB.prepare(
+      "SELECT DISTINCT account_id FROM claim WHERE guide_id = ?",
+    )
+      .bind(found.row.id)
+      .all<{ account_id: string }>();
+    if (held.length) {
+      await c.env.DB.prepare("DELETE FROM claim WHERE guide_id = ?").bind(found.row.id).run();
+      for (const { account_id } of held)
+        await notify(c.env, {
+          to: account_id,
+          kind: "consumed",
+          guide_id: found.row.id,
+          actor_id: c.get("account"),
+          team_id: found.row.team_id,
+        });
+    }
+  }
   // Archived by a person, not approved: Done says which (0054_outcome.sql). Leaving Done clears it.
   await c.env.DB.prepare(
     "UPDATE guide SET status = ?, outcome = ?, markdown = ?, target = ?, updated = ? WHERE id = ?",
