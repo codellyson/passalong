@@ -4461,6 +4461,15 @@ app.put("/v1/guides/:id", async (c) => {
       id,
       url,
       status,
+      // A draft reaches nobody until a person marks it Ready, on its hub page — never the share
+      // page, which runs no script and has no buttons. Said here so an agent hands the person the
+      // page that can do it, over either transport.
+      ...(status === "draft"
+        ? {
+            ready_at: `${base}/hub/g/${id}`,
+            next: `in Draft: ask the person to read it and mark it Ready at ${base}/hub/g/${id}`,
+          }
+        : {}),
       created: !existing,
       team: team?.slug || "",
       to: toAccount?.handle || (toGroup ? `#${toGroup.slug}` : ""),
@@ -5761,11 +5770,15 @@ app.get("/v1/tasks", async (c) => {
         team: r.task.team_slug,
         // Assigned to you, or to a group you are in: yours to pass on, as well as its author's.
         for_me: Boolean(r.task.for_me),
+        // Several people are an unnamed group (`~…`) nobody can type: said as their `@names`, which is
+        // also an address assign takes, so Give to… can mark it as the current one.
         to: r.task.to_handle
           ? `@${r.task.to_handle}`
-          : r.task.to_group_slug
-            ? `#${r.task.to_group_slug}`
-            : "",
+          : r.task.to_group_slug.startsWith("~")
+            ? r.task.to_group_name.split(/,\s*/).join(" ")
+            : r.task.to_group_slug
+              ? `#${r.task.to_group_slug}`
+              : "",
       };
       if (!v.claim || !r.by) return v;
       const report_url = r.report_key

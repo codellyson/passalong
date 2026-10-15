@@ -32,7 +32,8 @@ or `?view=verify` for the view that leads with what to check and folds the imple
    or `pass` with the reason it is not yours. Every kind moves the same way: Draft, Ready, taken,
    handed in, and approved or sent back by a person.
 5. Every new guide you publish is a draft — say `status: draft`. It reaches nobody until a person
-   reads it and marks it Ready.
+   reads it and marks it Ready on its hub page: the publish answer's `ready_at`. Give them that, not
+   the share link — a share page has no buttons.
 
 ## Three kinds of guide
 

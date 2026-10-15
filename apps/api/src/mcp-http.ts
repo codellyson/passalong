@@ -864,7 +864,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "with no summary is refused.\n" +
         "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
         "is a spelling that is not one of the three. EVERY NEW GUIDE IS A DRAFT, whatever its kind: " +
-        "say `status: draft`; it reaches nobody until a person reads it and marks it Ready, and " +
+        "say `status: draft`; it reaches nobody until a person reads it and marks it Ready on its " +
+        "hub page (the publish answer's `ready_at` — never the share link, which has no buttons), and " +
         "every kind then moves the same way — Ready, taken, handed in, approved. " +
         "kind: task is work nobody has done yet. It has no Steps: work out how to " +
         "reach Goal within Constraints, leave Out of scope alone, and treat Acceptance as the " +
@@ -2228,7 +2229,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       const result = {
         report,
         issues: filed,
-        next: "all in Draft: ask the user to read them in the hub and mark them Ready",
+        next: `all in Draft: ask the user to read them and mark them Ready on the board at ${origin}/hub/work`,
       };
       return { ...text(JSON.stringify(result, null, 2)), structuredContent: result };
     },

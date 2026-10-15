@@ -1369,6 +1369,8 @@ export async function list(
       team_slug: string;
       to_handle: string;
       to_group_slug: string;
+      /** The group's name: for several people (`~…`), their `@names`. */
+      to_group_name: string;
     };
     claim: ClaimRow | null;
     state: TaskState;
@@ -1386,7 +1388,8 @@ export async function list(
                 ${BLOCKED} AS blocked, COALESCE(t.slug, '') AS team_slug,
                 (g.to_account_id = ?1 OR (g.to_group_id <> '' AND g.to_group_id IN
                   (SELECT group_id FROM group_member WHERE account_id = ?1))) AS for_me,
-                COALESCE(ta.handle, '') AS to_handle, COALESCE(tg.slug, '') AS to_group_slug
+                COALESCE(ta.handle, '') AS to_handle, COALESCE(tg.slug, '') AS to_group_slug,
+                COALESCE(tg.name, '') AS to_group_name
            FROM guide g
            LEFT JOIN team t ON t.id = g.team_id
            LEFT JOIN account ta ON ta.id = g.to_account_id AND g.to_account_id <> ''
@@ -1403,6 +1406,7 @@ export async function list(
           team_slug: string;
           to_handle: string;
           to_group_slug: string;
+          to_group_name: string;
         }
       >(),
     db

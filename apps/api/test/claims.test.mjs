@@ -2424,3 +2424,29 @@ test("the backfills: old write-ups leave the board, and old Done says how it got
   assert.equal(row("task1").outcome, "approved");
   assert.equal(row("shelf").outcome, "archived");
 });
+
+test("several people read as their names, and a draft's publish says where Ready is", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("pair");
+  db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('ta', 'alpha', 'Alpha', 'me', '${T0}');
+    INSERT INTO membership (team_id, account_id, joined) VALUES ('ta', 'me', '${T0}');
+    INSERT INTO team_group (id, team_id, slug, name, created) VALUES ('g1', 'ta', '~cda71730db', '@ada, @bola', '${T0}');
+    UPDATE guide SET team_id = 'ta', to_group_id = 'g1' WHERE id = 'pair';`);
+  const row = (await list(db, "me", T0)).find((r) => r.task.id === "pair");
+  assert.equal(row.task.to_group_slug, "~cda71730db");
+  assert.equal(
+    row.task.to_group_name,
+    "@ada, @bola",
+    "the names, which the route says as @ada @bola",
+  );
+
+  // The routes are not importable (see hosts.ts), so the rest is held to the source.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  assert.match(src, /r\.task\.to_group_name\.split\(\/,\\s\*\/\)\.join\(" "\)/);
+  assert.match(
+    src,
+    /ready_at: `\$\{base\}\/hub\/g\/\$\{id\}`/,
+    "a draft's publish names its hub page",
+  );
+});

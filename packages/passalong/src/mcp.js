@@ -1084,7 +1084,7 @@ export function buildServer() {
         const ids = await passalong.planTasks(steps, { cwd: cwd || process.cwd() });
         return json({
           drafts: ids.map((id, i) => ({ id, title: steps[i].title, after: steps[i].after || [] })),
-          next: "all in Draft: ask the user to read them, then run `passalong ready --all`",
+          next: `all in Draft: ask the user to read them and mark them Ready on the board at ${api.baseUrl()}/hub/work, or run \`passalong ready --all\``,
         });
       } catch (err) {
         return fail(err);
@@ -1579,7 +1579,8 @@ export function buildServer() {
           ...(guide.meta.status === "draft"
             ? {
                 status: "draft",
-                next: `in Draft: ask the user to read it, then run \`passalong ready ${guide.meta.id}\``,
+                // The hub page, never the share link: the share page has no Ready button.
+                next: `in Draft: ask the user to read it and mark it Ready at ${api.baseUrl()}/hub/g/${guide.meta.id}, or run \`passalong ready ${guide.meta.id}\``,
               }
             : {}),
         });
@@ -1680,7 +1681,7 @@ export function buildServer() {
         return json({
           ...filed,
           // Filed is not sent: every bug is a draft until a person reads it.
-          next: "all in Draft: ask the user to read them, then run `passalong ready --all`",
+          next: `all in Draft: ask the user to read them and mark them Ready on the board at ${api.baseUrl()}/hub/work, or run \`passalong ready --all\``,
         });
       } catch (err) {
         return fail(err);
