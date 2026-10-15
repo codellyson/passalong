@@ -6,7 +6,7 @@
 //     handed to whoever pulls or starts that guide
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
-//   passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
+//   passalong task "<what needs doing>"  write a task for an agent; Ready at once
 //   passalong ready <id...|--all> guides you have read are ready — whoever they are for may take them now
 //   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
 //   passalong work [--once] [--agent CMD]  run an agent on each ready task here, one after another
@@ -337,9 +337,8 @@ const commands = {
     const id = guide.meta.id;
     console.log(id);
     const target = guide.meta.target_context;
-    console.error(`task "${guide.meta.title}" is in Draft${target ? ` for ${target}` : " (no repo)"}`);
+    console.error(`task "${guide.meta.title}" is Ready${target ? ` for ${target}` : " (no repo)"}`);
     if (guide.meta.team) console.error(`handed to ${guide.meta.team} (team inbox)`);
-    console.error(`when an agent may take it: passalong ready ${id}`);
   },
 
   async tasks() {

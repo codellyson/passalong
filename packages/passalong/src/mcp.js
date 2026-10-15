@@ -297,9 +297,10 @@ export function buildServer() {
         "to act. It is what the person sees first in their hub; the document is behind it. A guide " +
         "with no summary is refused.\n" +
         "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
-        "is a spelling that is not one of the three. EVERY NEW GUIDE IS A DRAFT, whatever its kind: " +
-        "it reaches nobody until a person reads it and marks it Ready, and every kind then moves the " +
-        "same way — Ready, taken, handed in, approved. " +
+        "is a spelling that is not one of the three. A NEW GUIDE IS READY: it reaches whoever it is " +
+        "for at once. Say `status: draft` only when the person should read it first — something you " +
+        "are unsure of — and tell them; plan_tasks drafts for you. Every kind moves the same way — " +
+        "Ready, taken, handed in, approved. " +
         `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
         "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
         "alone, and treat Acceptance as the definition of done. A proposal awaiting a team decision " +
@@ -1678,11 +1679,7 @@ export function buildServer() {
           { title: title || "", environment: environment || "", issues },
           { cwd: cwd || process.cwd(), to },
         );
-        return json({
-          ...filed,
-          // Filed is not sent: every bug is a draft until a person reads it.
-          next: `all in Draft: ask the user to read them and mark them Ready on the board at ${api.baseUrl()}/hub/work, or run \`passalong ready --all\``,
-        });
+        return json(filed);
       } catch (err) {
         return fail(err);
       }

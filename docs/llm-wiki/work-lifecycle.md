@@ -35,10 +35,11 @@ the author can approve that hand-in without creating another claim.
 
 Work is not done because whoever did it says so.
 
-- **Every guide, of every kind, enters Draft** (`publishProblem()`), including one published over
-  hosted MCP, by email or webhook, or by `file_bugs`. A person explicitly makes it Ready, and that
-  is when whoever it is addressed to is told. Updating a draft's markdown cannot make it Ready; a
-  proposal awaiting a team decision stays Draft. Unclaimed Ready work can move back to Draft, while
+- **A new guide is Ready unless it says `status: draft`**, whatever its kind: drafts were where
+  addressed work sat forgotten. Draft is for what a person should read first — a plan of tasks,
+  email and webhooks, anything an agent is unsure of — and a person makes it Ready; whoever it is
+  addressed to is told at Ready, never while it is a draft. Updating a draft's markdown cannot make
+  it Ready; a proposal awaiting a team decision stays Draft. Unclaimed Ready work can move back to Draft, while
   held work must first be taken back or reviewed. Ready asks which repo only for a task.
 
 - A **task** handed in goes to *review*: the author approves it (it becomes `consumed`) or rejects it

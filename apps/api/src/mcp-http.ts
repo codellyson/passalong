@@ -428,7 +428,6 @@ const fileBugsOut = z
     issues: z.array(
       z.object({ id: z.string(), url: z.string().optional(), title: z.string() }).passthrough(),
     ),
-    next: z.string().optional(),
   })
   .passthrough();
 
@@ -863,10 +862,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "to act. It is what the person sees first in their hub; the document is behind it. A guide " +
         "with no summary is refused.\n" +
         "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
-        "is a spelling that is not one of the three. EVERY NEW GUIDE IS A DRAFT, whatever its kind: " +
-        "say `status: draft`; it reaches nobody until a person reads it and marks it Ready on its " +
-        "hub page (the publish answer's `ready_at` — never the share link, which has no buttons), and " +
-        "every kind then moves the same way — Ready, taken, handed in, approved. " +
+        "is a spelling that is not one of the three. A NEW GUIDE IS READY: it reaches whoever it is " +
+        "for at once. Say `status: draft` only when the person should read it first; a draft " +
+        "reaches nobody until they mark it Ready on its hub page (the publish answer's `ready_at` — " +
+        "never the share link, which has no buttons). Every kind moves the same way — Ready, taken, " +
+        "handed in, approved. " +
         "kind: task is work nobody has done yet. It has no Steps: work out how to " +
         "reach Goal within Constraints, leave Out of scope alone, and treat Acceptance as the " +
         "definition of done. A proposal awaiting a team decision stays Draft. When Acceptance holds, publish_guide a transfer guide about what you " +
@@ -1729,7 +1729,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "session answers something you hold, hand_in that instead, and if the work never left a " +
         "branch the team can see, publish what is still open as a bug or a task rather than a " +
         "write-up of the fix. A transfer guide, a single bug with " +
-        "`kind: bug`, or a task with `kind: task` — every one with `status: draft`, until a person makes it Ready. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
+        "`kind: bug`, or a task with `kind: task`. Ready at once; `status: draft` when the person should read it first. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
         "is minted and returned. To change a guide, pass the id it came back with; inventing a " +
         "fresh id to retry or to correct one publishes a second copy, and every copy counts " +
         "against the author's synced limit. Created, author and source_context are filled in. " +
@@ -2225,12 +2225,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         }
         filed.push({ id, url: (JSON.parse(res.text) as { url: string }).url, title: issue.title });
       }
-      // Filed is not sent: every bug is a draft until a person reads it and marks it Ready.
-      const result = {
-        report,
-        issues: filed,
-        next: `all in Draft: ask the user to read them and mark them Ready on the board at ${origin}/hub/work`,
-      };
+      const result = { report, issues: filed };
       return { ...text(JSON.stringify(result, null, 2)), structuredContent: result };
     },
   );
@@ -2393,8 +2388,7 @@ function bugDocument(issue: {
     `title: ${quote(issue.title)}`,
     `summary: ${quote((issue.summary || "").trim() || issue.title)}`,
     "kind: bug",
-    // A draft like every new guide: it reaches people when a person marks it Ready.
-    "status: draft",
+    "status: published",
     `report: ${issue.report}`,
   ];
   if (issue.area) front.push(`area: ${issue.area}`);

@@ -30,14 +30,16 @@ export type Status = (typeof STATUSES)[number];
 export const SETTABLE = ["draft", "published", "consumed"] as const;
 
 /**
- * Every guide, whatever its kind, starts in Draft and reaches anyone only through a person's
- * explicit Ready. Tasks always did; a handoff or bug used to go out the moment it was shared, so an
- * agent's guide reached people with nobody having read it. One set of states for every kind is the
- * constraint the board works in: Draft, Ready, In progress, In review, Done.
+ * A new guide is Ready unless whoever wrote it said `status: draft`, whatever its kind. Draft-first
+ * was tried and addressed work sat forgotten in it: on 2026-10-15 every draft in production was a
+ * task sent to somebody, untouched for over a day. Draft is for what a person should read first —
+ * a plan of tasks, an email or a webhook nobody wrote — and anyone can move work back to it.
+ * What a new guide cannot be is archived, and an edit cannot change status: that is the person's
+ * separate action, as it always was.
  */
 export function publishProblem(status: string, previousStatus?: string): string {
-  if (!previousStatus && status !== "draft")
-    return "A new guide must be Draft. Publish it with `status: draft`, let the person read it, then they use Ready to send it on.";
+  if (!previousStatus && status === "consumed")
+    return "A new guide can't start archived. Publish it Ready, or with `status: draft` for the person to read first.";
   if (previousStatus && status !== previousStatus)
     return "Changing a guide's status needs a separate action from the person. Keep its current status in the document, then use Ready, Move to Draft, or the review controls in the hub.";
   return "";

@@ -283,17 +283,20 @@ change. Its README says how.
   every guide anybody re-shares. A blocker counts as finished when a person approved it, never when
   an agent finished it.
 - **Every guide has a task's states, whatever its kind (2026-10-14).** Draft, Ready, In progress,
-  In review, Done, and the same moves between them. A new guide is always `draft`: `PUT
-  /v1/guides/:id` refuses a new guide, or an edit that changes status, through `publishProblem()`
-  in `guide.ts` — handoffs and bugs used to go out the moment they were shared, so an agent's guide
-  reached people nobody had read it. Only a person's Ready (the status route) sends it on, and that
-  is when whoever it is addressed to is told (`announceGuide()`), never while it was a draft.
+  In review, Done, and the same moves between them. **A new guide is Ready unless whoever wrote it
+  says `status: draft`** (2026-10-15): Draft-first was tried for every kind, and addressed work sat
+  forgotten in it — every draft in production was a task sent to somebody, untouched for over a
+  day. Draft is for what a person should read first: a plan of tasks (`plan_tasks` says so), email
+  and webhooks (nobody wrote them), or anything an agent is unsure of. `publishProblem()` in
+  `guide.ts` refuses a new guide that starts archived, and an edit that changes status. Whoever it
+  is addressed to is told when it is Ready — at publish, or when a person marks a draft Ready on the
+  status route (`announceGuide()`) — never while it is a draft.
   Ready asks which repo only for a task. Anyone in the team moves work between Draft and Ready;
   nothing held moves to Draft until it is taken back or reviewed; only its author or an admin
   archives it; and an archived guide comes back to Draft, never straight to Ready
   (`unarchiveProblem()`), because archived includes approved. A proposal awaiting a team decision
-  stays Draft. Email, webhooks and `file_bugs` file every kind as a draft, and the day-old Draft
-  reminder covers every kind. **A task's write-up is not on the board**: the transfer an agent
+  stays Draft. Email and webhooks file every kind as a draft, and the day-old Draft reminder
+  covers every kind. **A task's write-up is not on the board**: the transfer an agent
   publishes for its hand-in is stored as Done and named for its task (`report_of`, migration
   0053) when the hand-in names it, and `GET /v1/guides` leaves it out; ones approved before then are
   found by timing (published within five minutes before their author's hand-in event). **Done says

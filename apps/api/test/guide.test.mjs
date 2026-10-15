@@ -53,9 +53,9 @@ test("parseMeta mirrors the CLI parser for strings and lists", () => {
   });
 });
 
-test("every guide, of any kind, reaches anyone only after a separate Ready action", () => {
-  assert.match(publishProblem("published"), /must be Draft/);
-  assert.match(publishProblem("consumed"), /must be Draft/);
+test("a new guide is Ready or a draft, never archived, and an edit leaves status alone", () => {
+  assert.equal(publishProblem("published"), "", "Ready is the default");
+  assert.match(publishProblem("consumed"), /can't start archived/);
   assert.match(publishProblem("published", "draft"), /separate action/);
   assert.match(publishProblem("published", "consumed"), /separate action/);
   assert.equal(publishProblem("draft"), "");

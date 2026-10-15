@@ -54,14 +54,9 @@ async function proof() {
   return `![it works](${shot.url})`;
 }
 
-/**
- * Share a guide and make it Ready, as its author does: every kind starts in Draft and reaches
- * nobody until then, so a test that needs one taken, followed or answered sends it this way.
- */
+/** Share a guide so it reaches whoever it is for: Ready, the default for every kind. */
 async function send(p, md, opts) {
-  const shared = await p.share(md, opts);
-  await p.ready(shared.guide.meta.id);
-  return shared;
+  return p.share(md, opts);
 }
 
 /** A fresh worktree of this account's own repo, and a ready task for it. */
@@ -74,6 +69,7 @@ async function readyTask({ account, p, serialize }, title) {
       title,
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
     },
     body: "## Goal\nDark mode.\n\n## Acceptance\n- the hub follows the OS setting",
@@ -400,6 +396,7 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
       title: "Add dark mode",
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
     },
     body: "## Goal\nDark mode.\n\n## Acceptance\n- the hub follows the OS setting",
@@ -444,6 +441,7 @@ test("blocked_by in a task's frontmatter holds it until its blocker is approved"
       title: "API on the schema",
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
       blocked_by: [first.id],
     },
@@ -477,6 +475,7 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
             title,
             summary: "Said to a person for the test.",
             kind: "task",
+            status: "draft",
             target_context: `e2e/${account}`,
           },
           body: "## Goal\ng\n\n## Acceptance\n- a",
@@ -972,6 +971,7 @@ test("in a team, each side hears what the other did to a task — and anyone in 
         title: body,
         summary: "Said to a person for the test.",
         kind: "task",
+        status: "draft",
         target_context: `e2e/${account}`,
       },
       body: `## Goal\n${body}\n\n## Acceptance\n- a`,
@@ -1628,6 +1628,7 @@ test("reassigning a task: only the assignee's agents get it, and whoever is left
       title: "Assigned work",
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
     },
     body: "## Goal\nx\n\n## Acceptance\n- a",
@@ -1697,6 +1698,7 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
       title: "Delegated work",
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
     },
     body: "## Goal\nx\n\n## Acceptance\n- a",
@@ -1840,7 +1842,9 @@ test("an image held as bytes attaches, and answers the check it was taken for", 
   assert.equal(row.state, "review", "a shown check is evidence");
 });
 
-test("the server requires a kind and keeps a new task in Draft until Ready", { skip }, async () => {
+test("the server requires a kind, takes a new task Ready, and never starts one archived", {
+  skip,
+}, async () => {
   // The load-bearing half. The CLI parser no longer seeds `transfer`, but a client on any older
   // version still publishes documents with no `kind:` line — and the row used to coerce whatever
   // arrived into transfer. That is how 162 of 200 real guides were stored as transfers while their
@@ -1872,11 +1876,15 @@ test("the server requires a kind and keeps a new task in Draft until Ready", { s
   assert.equal(wrong.status, 400, "and so is a spelling that is not a kind");
   assert.match((await wrong.json()).message, /is not a kind/);
 
-  const premature = await put(
-    `---\ntitle: Not reviewed\nsummary: Said to a person for the test.\nkind: task\nstatus: published\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
+  const sentAtOnce = await put(
+    `---\ntitle: Sent at once\nsummary: Said to a person for the test.\nkind: task\nstatus: published\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
   );
-  assert.equal(premature.status, 409, "a new task cannot bypass the human Ready action");
-  assert.match((await premature.json()).message, /must be Draft/);
+  assert.equal(sentAtOnce.status, 201, "a new task is Ready when its author says so, the default");
+  const shelved = await put(
+    `---\ntitle: Born done\nsummary: Said to a person for the test.\nkind: task\nstatus: consumed\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
+  );
+  assert.equal(shelved.status, 409, "but it cannot start archived");
+  assert.match((await shelved.json()).message, /can't start archived/);
 
   // And a stated task is stored exactly as stated, then a person moves it to Ready.
   const id = rid();
