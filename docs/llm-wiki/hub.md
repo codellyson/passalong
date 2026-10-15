@@ -14,6 +14,8 @@ a link to it carrying `?tab=`, `?q=`, `?follows=` or `?done=` goes on to `/hub/w
 
 ## Work
 
+**Go to id** in the header (`HubGoTo`, ⌘K or Ctrl+K) opens a guide by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`guideIdFrom()` in `utils/goto.ts`). Hidden on a phone, where the bar has no room.
+
 `/hub/work` is the team board (`HubBoard`), like any shared task board: every task, handoff and bug
 in scope is a card in one of five columns, and everyone in the team sees the same board. The column
 is the server's — `stage` on every guide row, from its status and its claims (`boardPlace()` in
