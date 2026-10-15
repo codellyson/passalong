@@ -16,16 +16,12 @@ const busy = ref(false);
 /** Shared with each team's plan block: one fetch, and it only changes with a deploy. */
 const { data: modesData } = useQuery({
   queryKey: hubKeys.billing,
-  queryFn: () => api<{ stripe: string; paystack: string }>("/v1/billing"),
+  queryFn: () => api<{ mode: string }>("/v1/billing"),
   enabled: signedIn,
   staleTime: Number.POSITIVE_INFINITY,
 });
-const modes = computed(() => modesData.value ?? null);
-
-const available = computed(() =>
-  (["stripe", "paystack"] as const).filter((p) => modes.value?.[p] && modes.value[p] !== "unset"),
-);
-const testing = computed(() => available.value.some((p) => modes.value?.[p] === "test"));
+const available = computed(() => !!modesData.value?.mode && modesData.value.mode !== "unset");
+const testing = computed(() => modesData.value?.mode === "test");
 
 const plan = computed(() => data.value.me?.plan ?? "free");
 /**
@@ -33,6 +29,8 @@ const plan = computed(() => data.value.me?.plan ?? "free");
  * on the day it ends: somebody who thinks they bought this would find out by being refused.
  */
 const until = computed(() => day(data.value.me?.plan_until));
+/** When a bought plan that was cancelled stops. Said, or a cancelled plan looks like it renews. */
+const ends = computed(() => day(data.value.me?.plan_ends));
 /** Why the ceiling is what it is, which is not always this plan. */
 const sync = computed(() => data.value.me?.sync ?? "free");
 const onATeamSeat = computed(() => sync.value === "unlimited" && plan.value !== "solo");
@@ -43,13 +41,14 @@ const COPY: Record<string, { label: string; tone: string }> = {
   lapsed: { label: "Payment lapsed", tone: "bg-warn-soft text-warn" },
 };
 const badge = computed(() => COPY[plan.value] ?? COPY.free);
-/** The provider as its own brand writes it, not the id this app stores it under. */
-const PROVIDER: Record<string, string> = { stripe: "Stripe", paystack: "Paystack" };
+/** Paid for by a subscription, rather than given: only then is there a billing page to open. */
+const paying = computed(() => plan.value === "solo" && !until.value);
 
-async function subscribe(provider: string) {
+/** Leave for a hosted page: Bachs's checkout, or its billing page for a plan already paid for. */
+async function go(path: string) {
   busy.value = true;
   try {
-    const out = await api<{ url: string }>("/v1/subscribe", json("POST", { provider }));
+    const out = await api<{ url: string }>(path, json("POST", {}));
     // Their page, not ours. Same tab: coming back is what the success URL is for, and a popup is
     // the thing a browser is most likely to swallow.
     if (out?.url) location.href = out.url;
@@ -79,6 +78,10 @@ async function subscribe(provider: string) {
       assistants to them.<template v-if="until">
         {{ " " }}This one was given to you and runs until {{ until }}, after which it lapses —
         nothing is taken away, and new guides past the free limit wait until you subscribe.
+      </template><template v-if="ends">
+        {{ " " }}You cancelled it, so it ends on {{ ends }} and won't renew. Nothing is taken away
+        then, and new guides past the free limit wait until you subscribe again. To keep it, open
+        Manage billing.
       </template>
     </p>
     <p v-else-if="plan === 'lapsed'" class="m-0 font-ui text-sm text-muted">
@@ -126,21 +129,20 @@ async function subscribe(provider: string) {
       <p class="m-0 font-ui text-sm text-muted">You're on the free plan. Solo removes the limit.</p>
     </div>
 
-    <p v-if="!available.length" class="m-0 font-ui text-sm text-muted">
+    <p v-if="!available" class="m-0 font-ui text-sm text-muted">
       Paid plans aren't available yet. Check back later.
     </p>
+    <div v-else-if="paying" class="flex flex-wrap items-center gap-3">
+      <button class="btn" :disabled="busy" @click="go('/v1/billing/portal')">Manage billing</button>
+      <span class="font-ui text-sm text-muted">Card, invoices and cancelling.</span>
+    </div>
     <!-- A gift is still a plan you do not own: the button stays, so it can be bought before the
          gift runs out rather than after it has. -->
-    <div v-else-if="plan !== 'solo' || until" class="flex flex-wrap gap-2">
-      <button
-        v-for="p in available"
-        :key="p"
-        class="btn primary"
-        :disabled="busy"
-        @click="subscribe(p)"
-      >
-        {{ plan === "lapsed" ? "Renew" : "Subscribe" }} with {{ PROVIDER[p] || p }}
+    <div v-else class="flex flex-wrap items-center gap-3">
+      <button class="btn primary" :disabled="busy" @click="go('/v1/subscribe')">
+        {{ plan === "lapsed" ? "Renew Solo" : "Subscribe to Solo" }}
       </button>
+      <span class="font-ui text-sm text-muted">$5 a month.</span>
     </div>
   </div>
 </template>

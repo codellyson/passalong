@@ -32,6 +32,8 @@ export interface Me {
   plan: string;
   /** Set only on a plan that was given rather than bought: when it stops. See apps/api/src/gifts.ts. */
   plan_until?: string;
+  /** Set on a bought plan that was cancelled: when it stops. It is paid until then. */
+  plan_ends?: string;
   /** "" for everybody, "super" for whoever runs Passalong. Draws /admin, and the way to it. */
   role?: string;
   /** Whether this account may make or remove a super — only the deployment's ADMIN_ACCOUNTS may. */
@@ -212,6 +214,10 @@ export interface TeamDetail extends Team {
   guides: number;
   /** How many members the plan is paid for. Zero on a free plan, where seats are not the limit. */
   seats?: number;
+  /** Paid for through Bachs, so there is a billing page to open. A given plan has none. */
+  subscribed?: boolean;
+  /** Set when the team's plan was cancelled: when it stops. It is paid until then. */
+  plan_ends?: string;
   members_count?: number;
   /** How many channels are connected. Never their URLs — those are credentials for rooms. */
   channels?: number;

@@ -42,11 +42,11 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 | `DELETE /v1/guides/:id` | **owner only** | |
 | `GET /v1/inbox` | account | Handed to you or your teams, not yet pulled |
 | `GET /v1/board` | account | The queues: waiting, not working, in flight, landed |
-| `POST /v1/subscribe` | account — `{ provider }` → a hosted checkout URL for Solo. No seat count: the plan is one person |
-| `POST /v1/teams/:slug/subscribe` | team **owner** — `{ provider, seats }` → a hosted checkout URL. Seats may not be fewer than the team's current members |
-| `PATCH /v1/teams/:slug/seats` | team **owner** — `{ seats }`, paid plans only. Answers with the *confirmed* count and the pending one; the webhook is what writes it. Paystack cannot change quantity after a subscription starts and says so |
-| `GET /v1/billing` | account — which providers are configured and in which mode. Never a key |
-| `POST /v1/billing/webhook/:provider` | **none** — the signature over the raw body is the credential. `stripe` or `paystack`; anything else is 404. 200 with `applied: false` for an event we do not act on or a subscription we do not know |
+| `POST /v1/subscribe` | account — → a Bachs checkout URL for Solo |
+| `POST /v1/teams/:slug/subscribe` | team **owner** — → a Bachs checkout URL for Team (flat, up to 10 people). Refused for a team already over 10, which is set up by hand |
+| `POST /v1/billing/portal` | account — `{ team? }` → a one-time Bachs billing page for that team's subscription (owner only) or your own Solo one |
+| `GET /v1/billing` | account — `{ mode }`: `unset`, `test` or `live`, read off the key. Never a key |
+| `POST /v1/billing/webhook/bachs` | **none** — the signature over the raw body is the credential. 200 with `applied: false` for an event we do not act on, a subscription we do not know, or one older than what is stored |
 | `GET /v1/log?repo=&since=&limit=` | account | Your own acts, newest first. `since` is a date prefix (`2026`, `2026-09`, `2026-09-11`) and anything else is a 400 |
 | `GET /v1/notifications?unread=&scope=` | account | `scope=all` (default), `mine`, or a team slug. The unread count follows the same scope. |
 | `POST /v1/notifications/read?scope=` | account | `{ ids? }` — everything unread in the selected scope when `ids` is omitted |

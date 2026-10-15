@@ -399,41 +399,47 @@ change. Its README says how.
   to a reader, in the list and in the report editor both, and `severityTone()`/`severityLabel()`
   in `app/utils/report.ts` are the only copies of that lookup.
 - **The checkout is hosted, the mode is read off the key, and the webhook is what writes a plan.**
-  Both providers hand back a page of their own, because the alternative is this product handling
-  card details — which is also why there is no card form to build and no seat-change screen beyond a
-  number. `modeOf()` derives test-versus-live from the key itself rather than a setting beside it:
-  a flag somebody has to remember to flip is how a product spends three weeks taking payments that
-  were never real, and the hub badges every plan block when any configured key is a test one.
-  `POST /v1/teams/:slug/subscribe` and `PATCH /v1/teams/:slug/seats` are **owner only** and refuse a
-  seat count below the team's current membership — the seat count is what admits the next member, so
-  setting it under the current size is a refusal aimed at whoever joins next rather than at the
-  person doing it. The seats route answers with the **confirmed** count and the pending one, never
-  the asked-for figure: the subscription is the single source for what is paid for, so the hub waits
-  for the webhook rather than showing a number nothing has agreed to. Paystack cannot change
-  quantity on a running subscription at all and says so out loud, which is better than appearing to
-  succeed and quietly billing the old number. Every provider key is an optional binding: without
-  them the tier is unavailable and the hub says so, rather than offering a button that cannot work.
+  Payments go through **Bachs** (docs.bachs.io), a merchant of record — not Stripe, not Paystack,
+  both of which were removed. Bachs hands back a page of its own for checkout and another for
+  billing (`POST /v1/billing/portal`, a fresh link per click, the customer read off the
+  subscription), because the alternative is this product handling card details. Both products are
+  **flat**: Team is $20 a month for up to `TEAM_SEATS` (10) people and Solo is $5, so there is no
+  seat count to change and no seat route; `POST /v1/teams/:slug/subscribe` is **owner only** and
+  refuses a team already over ten, which is set up by hand until a recurring quantity has been
+  proven in the sandbox. `modeOf()` derives test-versus-live — and the host — from the key itself
+  (`sk_sandbox_` against `sk_live_`) rather than a setting beside it: a flag somebody has to
+  remember to flip is how a product spends three weeks taking payments that were never real, and
+  the hub badges every plan block when the key is a sandbox one. Every key is an optional binding:
+  without them the tier is unavailable and the hub says so, rather than offering a button that
+  cannot work.
 - **A billing webhook is the only write in the product that no person authenticates**, so the
-  signature over the **raw** body is the entire credential. `billing.ts` reads it with
-  `c.req.text()` and verifies before anything parses: parse first and you verify a different set of
-  bytes than the one that was signed, which is the classic way this is got wrong. The module
+  signature over the **raw** body is the entire credential. The route reads it with `c.req.text()`
+  and `verifyWebhook()` checks it before anything parses: parse first and you verify a different set
+  of bytes than the one that was signed, which is the classic way this is got wrong. `billing.ts`
   **imports no sibling `.ts` on purpose** — it has to be unit-testable and a value import of a
   sibling is what Node's type stripping cannot resolve, so `eq()` is a local copy of
-  `timingSafeEqual` rather than an import (the same reason `chatCard` lives inside notify.ts). Both
-  providers are here because the first paying teams and the Show HN ones do not reach for the same
-  processor: Stripe signs `${t}.${body}` with HMAC-SHA256 and **the timestamp is checked**, because
-  without a tolerance a captured "subscription is active" replays forever; Paystack signs the body
-  with HMAC-SHA512 and has no timestamp at all, which is survivable only because every event sets a
-  plan to a value rather than moving it by a step. Three rules in the mapping, each of which was a
-  way to get this wrong: `past_due` is **not** lapsed, since downgrading on the first failed
-  attempt makes an overnight bank decline look like a cancellation; an event that carries no seat
-  count leaves seats **untouched**, since writing zero would unseat the whole team on a payment
-  retry; and an event nobody mapped answers **200**, because an endpoint that errors on what it
-  does not care about is one the provider retries all day and then disables, taking the events that
-  do matter with it. The webhook path is public by **prefix**, not by the two exact routes: a
-  webhook aimed at the wrong URL is a real thing that happens during setup, and the middleware
-  answering it with "not signed in — sign in at /hub" sends whoever is reading the provider's
-  delivery log to a screen with nothing to do with the problem.
+  `timingSafeEqual` rather than an import (the same reason `chatCard` lives inside notify.ts). Bachs
+  signs `${t}.${body}` with HMAC-SHA256 in `X-Bachs-Signature-V2: t=…,v1=…`, repeating `v1` once per
+  valid secret during a rotation (any match counts), and **the timestamp is checked**, because
+  without a tolerance a captured "subscription is active" replays forever. Delivery is at-least-once
+  and out of order, so an event older than the one that set the stored plan for the same
+  subscription is dropped (`plan_since` holds Bachs's `created_at`). An event from a *different*
+  subscription than the stored one never ends it — a late lapse is an old subscription ending — and
+  never replaces one still paying: that is a second checkout completed for the same plan, so the
+  stored one stays bound and admins get `billed_twice` to refund the other. Renewing a lapsed plan
+  with a new subscription is applied. Bachs cancels at the end of the period already paid for, so a
+  cancelled plan stays paid and the webhook stores when it stops in `plan_ends` (migration 0055, on
+  account and team; cleared when resumed or lapsed), which the hub states beside the plan — never
+  `plan_until`, which is a gift's end and is enforced by the hourly sweep. Three rules in the mapping, each
+  of which was a way to get this wrong: `past_due` is **not** lapsed, since downgrading on the first
+  failed attempt makes an overnight bank decline look like a cancellation; an event that grants no
+  seats leaves seats **untouched**, since writing zero would unseat the whole team on a lapse; and an
+  event nobody mapped answers **200**, because an endpoint that errors on what it does not care
+  about is one the provider retries all day and then disables, taking the events that do matter
+  with it. The webhook path is public by **prefix**, not by the exact route: a webhook aimed at the
+  wrong URL is a real thing that happens during setup, and the middleware answering it with "not
+  signed in — sign in at /hub" sends whoever is reading the provider's delivery log to a screen with
+  nothing to do with the problem.
 - **A plan belongs to a team, and an account's ceiling is derived from it — never copied onto the
   account.** §11 sells the team, so the decision that follows is that a *free* member of a paid team
   publishes without a ceiling: the seat lifts whoever sits in it, paid for or not. `quota()` asks
@@ -714,8 +720,9 @@ change. Its README says how.
 - **Admin alerts are notifications for whoever runs Passalong** (`src/alerts.ts`). `alertAdmins()`
   sends one to every `role = 'super'` account and everyone in `ADMIN_ACCOUNTS`: a feed row through
   `notify()`, mailed the first time. Adding one is a kind in `KINDS`, its sentence in `line()`, an
-  entry in `ADMIN_ALERTS` (with its mail subject) and a call where it happens. Today the only one is
-  `signed_up`, on a password signup and on an invite account's first password.
+  entry in `ADMIN_ALERTS` (with its mail subject) and a call where it happens. Today there are two:
+  `signed_up`, on a password signup and on an invite account's first password, and `billed_twice`,
+  when a second subscription starts paying for a plan another already pays for.
 - **Email verification records, it does not gate** (migration 0050). Every signup and every change
   of address sends a single-use link (`email_verify`, sha256 only, a week long, tied to the address
   it was sent to); opening `GET /v1/auth/verify/:code` sets `account.email_verified` and redirects to
