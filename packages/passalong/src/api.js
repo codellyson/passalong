@@ -120,6 +120,19 @@ export function loggedIn() {
   return Boolean(token());
 }
 
+/**
+ * Every login this machine holds, as `{ token, api }` for a call's `as`: each kept account and the
+ * one in use, once each. For work that belongs to all of them, like `tidy`, rather than to one.
+ */
+export function logins() {
+  const all = Object.values(readAccounts())
+    .filter((a) => a.token)
+    .map((a) => ({ token: a.token, api: a.api || readConfig().api || DEFAULT_API }));
+  if (token()) all.push({ token: token(), api: baseUrl() });
+  const seen = new Set();
+  return all.filter((a) => !seen.has(`${a.token} ${a.api}`) && seen.add(`${a.token} ${a.api}`));
+}
+
 /** The team this account works in. It belongs to the account, not the machine. */
 export function currentTeam() {
   const p = picked();
@@ -149,12 +162,12 @@ export { nameFor };
 
 async function call(
   path,
-  { method = "GET", body, auth = true, raw = false, uploadName = "" } = {},
+  { method = "GET", body, auth = true, raw = false, uploadName = "", as = null } = {},
 ) {
   const headers = { ...CLIENT };
   if (auth) {
-    if (needsChoice()) throw new ApiError(409, choiceMessage());
-    const t = token();
+    if (!as && needsChoice()) throw new ApiError(409, choiceMessage());
+    const t = as ? as.token : token();
     if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
     headers.authorization = `Bearer ${t}`;
   }
@@ -166,9 +179,10 @@ async function call(
         : "application/json";
   }
   if (uploadName) headers["x-file-name"] = uploadName.replace(/[^\x20-\x7e]/g, "").slice(0, 120);
+  const base = as ? as.api.replace(/\/$/, "") : baseUrl();
   let res;
   try {
-    res = await fetch(`${baseUrl()}${path}`, {
+    res = await fetch(`${base}${path}`, {
       method,
       headers,
       body:
@@ -179,7 +193,7 @@ async function call(
             : JSON.stringify(body),
     });
   } catch (err) {
-    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
+    throw new ApiError(0, `could not reach ${base} (${err.message})`);
   }
   if (!res.ok) {
     const text = await res.text();
@@ -379,10 +393,10 @@ export const inbox = () => call("/v1/inbox");
 export const createReport = (body) => call("/v1/reports", { method: "POST", body });
 /** One report and the issues filed under it, grouped by product area. */
 export const report = (id) => call(`/v1/reports/${encodeURIComponent(id)}`);
-export const get = (id, { peek = false } = {}) =>
-  call(`/v1/guides/${id}${q({ peek: peek ? "1" : "" })}`, { raw: true });
+export const get = (id, { peek = false, as = null } = {}) =>
+  call(`/v1/guides/${id}${q({ peek: peek ? "1" : "" })}`, { raw: true, as });
 /** One page of every guide this account can read, for `export`. Records no pull. */
-export const exportPage = (after = "") => call(`/v1/export${q({ after })}`);
+export const exportPage = (after = "", as = null) => call(`/v1/export${q({ after })}`, { as });
 /**
  * A guide's follow-ups, one level down. `markdown` adds each one's content, oldest first and
  * capped server-side; neither form counts as opening them.
@@ -485,7 +499,7 @@ export async function uploadFile(bytes, type, name = "") {
   try {
     res = await fetch(`${baseUrl()}/v1/attachments`, { method: "POST", headers, body: bytes });
   } catch (err) {
-    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
+    throw new ApiError(0, `could not reach ${base} (${err.message})`);
   }
   if (!res.ok) {
     const body = await res.text();
@@ -509,7 +523,7 @@ export async function uploadShot(bytes, type, name = "") {
   try {
     res = await fetch(`${baseUrl()}/v1/shots`, { method: "POST", headers, body: bytes });
   } catch (err) {
-    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
+    throw new ApiError(0, `could not reach ${base} (${err.message})`);
   }
   if (!res.ok) {
     const body = await res.text();

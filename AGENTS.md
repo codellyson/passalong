@@ -67,7 +67,11 @@ change. Its README says how.
     up, 314 on one machine. `pull`/`start --save` writes `.passalong/<id>.md` in the repo, and
     `export` is the other explicit ask: it walks `GET /v1/export`, which records no pull, so it is a
     complete backup. `ready` and archiving read with `?peek=1` for the same reason. `tidy()`
-    removes, once per machine, the old copies the server confirms it holds. Sharing needs an
+    removes, once per machine (`tidied: 2`), the old copies the server confirms it holds, asking
+    every login in `accounts`, and those whose `url:` is on a login's own host (the old
+    kreativekorna host counts as passalong.dev) and that the server answers 404 for with `?peek=1`:
+    stale copies of deleted guides, 241 on one machine after the first pass. No url, localhost,
+    another host or any answer but 200/404 keeps the copy; never delete on doubt. Sharing needs an
     account: an agent does not work without the network anyway.
   - `src/passalong.js` — the operations (share, pull, list, status, export). Both surfaces call these.
   - `src/mcp.js` — MCP tools. `buildServer()` builds the surface and `serve()` connects it over

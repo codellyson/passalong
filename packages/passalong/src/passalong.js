@@ -1181,26 +1181,70 @@ export async function exportAll(dir) {
   });
 }
 
+// The host this product answered on before passalong.dev. It serves the same data, so a copy
+// whose url names it belongs to the default API.
+const OLD_HOST = "passalong.kreativekorna.com";
+const hostOf = (url) => {
+  try {
+    const { host, hostname } = new URL(url);
+    if (["localhost", "127.0.0.1", "[::1]"].includes(hostname)) return "";
+    return host === OLD_HOST ? new URL(api.DEFAULT_API).host : host;
+  } catch {
+    return "";
+  }
+};
+// Raised whenever tidy learns to remove something it used to keep, so machines that tidied run it once more.
+const TIDIED = 2;
+
 /**
  * Once per machine, signed in: drop the local copies the server says it holds. They were written
- * by every share, pull and take before `keep()`, and nothing ever removed one. What the server
- * does not return — shared while signed out, or from another account — is left where it is.
+ * by every share, pull and take before `keep()`, and nothing ever removed one. Every login on the
+ * machine is asked, since a copy may be any of theirs. A copy whose `url:` is on a login's own host
+ * and that the server answers 404 for is a guide since deleted, and goes too. Anything else — no
+ * url, localhost, another host, or an answer that was neither 200 nor 404 — is left where it is,
+ * and an export that failed leaves the flag unset so the next start tries again.
  */
 export async function tidy() {
-  if (!api.loggedIn() || store.readConfig().tidied) return 0;
-  const local = new Set(store.list().map((g) => g.meta.id));
+  const logins = api.logins();
+  if (!logins.length || store.readConfig().tidied === TIDIED) return 0;
+  const local = new Map(store.list().map((g) => [g.meta.id, hostOf(g.meta.url)]));
   let removed = 0;
-  let after = "";
-  while (local.size) {
-    const page = await api.exportPage(after);
-    for (const g of page.guides)
-      if (local.delete(g.id)) {
-        store.remove(g.id);
-        removed++;
-      }
-    after = page.next;
-    if (!after) break;
+  let sure = true;
+  const drop = (id) => {
+    if (!local.delete(id)) return;
+    store.remove(id);
+    removed++;
+  };
+  for (const as of logins) {
+    try {
+      let after = "";
+      do {
+        const page = await api.exportPage(after, as);
+        for (const g of page.guides) drop(g.id);
+        after = page.next;
+      } while (after && local.size);
+    } catch {
+      sure = false;
+    }
   }
-  store.writeConfig({ tidied: true });
+  const said = new Map();
+  for (const as of logins) {
+    const host = hostOf(as.api);
+    const ids = [...local].filter(([, h]) => h && h === host).map(([id]) => id);
+    // Eight at a time: a few hundred copies is a few seconds, not a few hundred open requests.
+    for (let i = 0; i < ids.length; i += 8)
+      await Promise.all(
+        ids.slice(i, i + 8).map(async (id) => {
+          const status = await api.get(id, { peek: true, as }).then(
+            () => 200,
+            (err) => err.status ?? 0,
+          );
+          said.set(id, [...(said.get(id) ?? []), status]);
+        }),
+      );
+  }
+  for (const [id, statuses] of said)
+    if (statuses.includes(200) || statuses.every((s) => s === 404)) drop(id);
+  if (sure) store.writeConfig({ tidied: TIDIED });
   return removed;
 }
