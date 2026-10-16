@@ -54,14 +54,9 @@ async function proof() {
   return `![it works](${shot.url})`;
 }
 
-/**
- * Share a guide and make it Ready, as its author does: every kind starts in Draft and reaches
- * nobody until then, so a test that needs one taken, followed or answered sends it this way.
- */
+/** Share a guide so it reaches whoever it is for: Ready, the default for every kind. */
 async function send(p, md, opts) {
-  const shared = await p.share(md, opts);
-  await p.ready(shared.guide.meta.id);
-  return shared;
+  return p.share(md, opts);
 }
 
 /** A fresh worktree of this account's own repo, and a ready task for it. */
@@ -74,6 +69,7 @@ async function readyTask({ account, p, serialize }, title) {
       title,
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
     },
     body: "## Goal\nDark mode.\n\n## Acceptance\n- the hub follows the OS setting",
@@ -400,6 +396,7 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
       title: "Add dark mode",
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
     },
     body: "## Goal\nDark mode.\n\n## Acceptance\n- the hub follows the OS setting",
@@ -444,6 +441,7 @@ test("blocked_by in a task's frontmatter holds it until its blocker is approved"
       title: "API on the schema",
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
       blocked_by: [first.id],
     },
@@ -477,6 +475,7 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
             title,
             summary: "Said to a person for the test.",
             kind: "task",
+            status: "draft",
             target_context: `e2e/${account}`,
           },
           body: "## Goal\ng\n\n## Acceptance\n- a",
@@ -821,14 +820,20 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
     ],
     cwd: dir,
   });
+  // Finishing is final: Done, and what was run stays on the guide as what it was finished with.
   const row = (await p.tasks()).find((t) => t.id === id);
-  assert.equal(row.state, "review");
-  assert.equal(row.claim.checks.length, 1);
-  assert.equal(row.claim.checks[0].check, "the hub follows the OS setting");
-  assert.equal(row.claim.checks[0].exit, 0, "the runner recorded what it returned");
-  assert.match(row.claim.checks[0].ran, /58 pass, 0 fail/, "and kept its output, not an account");
-  // The block of text is filled from them, so everything that reads `evidence` still works.
-  assert.match(row.claim.evidence, /58 pass, 0 fail/);
+  assert.equal(row.state, "done");
+  const ctx = await (
+    await fetch(`${API}/v1/guides/${id}/context`, {
+      headers: {
+        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+        "x-passalong-version": VERSION,
+      },
+    })
+  ).json();
+  const shown = ctx.verdicts.find((v) => v.ok);
+  assert.match(shown.detail, /the hub follows the OS setting/, "filed under the line it answers");
+  assert.match(shown.detail, /58 pass, 0 fail/, "and kept its output, not an account");
 });
 
 test("a check with nothing behind it is refused, like any other claim", { skip }, async () => {
@@ -972,6 +977,7 @@ test("in a team, each side hears what the other did to a task — and anyone in 
         title: body,
         summary: "Said to a person for the test.",
         kind: "task",
+        status: "draft",
         target_context: `e2e/${account}`,
       },
       body: `## Goal\n${body}\n\n## Acceptance\n- a`,
@@ -1211,10 +1217,10 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
   assert.equal(said.note, "halfway");
   assert.ok(said.next.length);
 
-  // Your own guide: nobody to hand it in to, and the claim is still yours to pass.
+  // Your own guide can be finished too — nothing reviews it — but never without proof.
   assert.equal(
     (await call("POST", `/v1/guides/${h}/hand_in`, { ...a, ok: true, note: "Done." })).status,
-    403,
+    400,
   );
   const passed = await call("POST", `/v1/guides/${h}/pass`, { ...a, why: "wrong repo after all" });
   assert.deepEqual(
@@ -1259,7 +1265,7 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
     evidence: "npm test -w apps/api → 285 pass, 0 fail",
     cwd: dir,
   });
-  assert.equal(handed.state, "review");
+  assert.equal(handed.state, "done", "finishing is final");
   assert.deepEqual(
     handed.next.map((s) => s.tool),
     ["take"],
@@ -1481,94 +1487,6 @@ test("a CLI below the server's floor is refused with what to run; the rest are s
   assert.equal((await me({})).status, 426);
 });
 
-test("handed in means the actor's turn is over: no new guide under it until the author answers", {
-  skip,
-}, async () => {
-  const env = await setup();
-  const { p, newId } = env;
-  const api = await import("../src/api.js");
-  const owner = process.env.PASSALONG_TOKEN;
-  const as = (token) => {
-    process.env.PASSALONG_TOKEN = token;
-  };
-  const call = async (method, path, body) => {
-    const res = await fetch(`${API}${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-        "x-passalong-version": VERSION,
-        "content-type": "application/json",
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    return { status: res.status, ...(await res.json()) };
-  };
-  // A publish answers with the guide, whose own `status` would shadow the HTTP one in `call`.
-  const followUp = async (parent, title) => {
-    const res = await fetch(`${API}/v1/guides/${newId()}`, {
-      method: "PUT",
-      headers: {
-        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-        "x-passalong-version": VERSION,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        markdown: `---\ntitle: ${title}\nsummary: Said to a person for the test.\nkind: transfer\nstatus: draft\nparent: ${parent}\n---\n\nWhat I found.\n`,
-      }),
-    });
-    return { ...(await res.json()), status: res.status };
-  };
-
-  const team = await api.createTeam(`review ${Date.now()}`);
-  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
-  const { code } = await api.invite(team.slug);
-  const mate = await secondAccount();
-  as(mate.token);
-  await api.join(code);
-
-  as(owner);
-  const md =
-    "---\ntitle: Stream the receipt PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const id = (await send(p, md, { to: team.slug })).guide.meta.id;
-
-  // The teammate's agent works it, and may add context while it holds it.
-  as(mate.token);
-  const a = { agent: "e2e-agent-review", repo: "e2e/review" };
-  assert.equal((await call("POST", "/v1/take", { ...a, id })).guide.id, id);
-  assert.equal((await followUp(id, "Context while working")).status, 201);
-  const handed = await call("POST", `/v1/guides/${id}/hand_in`, {
-    ...a,
-    ok: true,
-    evidence: PROOF,
-    note: "Done, it holds.",
-    risk: "the receipt route is shared with invoices",
-  });
-  assert.deepEqual(
-    handed.next.map((s) => s.tool),
-    ["take"],
-  );
-
-  // Handed in: a second guide to carry what it found is refused, and the refusal is the remedy.
-  const refused = await followUp(id, "Hand-in evidence: receipt PDF");
-  assert.equal(refused.status, 409);
-  assert.match(refused.message, /handed .* in/);
-  assert.match(refused.message, /writeup/);
-  assert.match(refused.message, /stop/);
-
-  // The author is the one reviewing it, and may add to their own guide at any time. They are also
-  // told what it could break, beside the evidence.
-  as(owner);
-  const [waiting] = (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id);
-  assert.equal(waiting.risk, "the receipt route is shared with invoices");
-  assert.equal((await followUp(id, "Also check the footer")).status, 201);
-
-  // Once the author has answered, the actor's turn is not over any more — it is simply over.
-  assert.equal((await call("POST", `/v1/guides/${id}/close`)).state, "done");
-  as(mate.token);
-  assert.equal((await followUp(id, "Found later")).status, 201);
-  as(owner);
-});
-
 test("the status line shows what this worktree holds, from a cache it refreshes itself", {
   skip,
 }, async () => {
@@ -1628,6 +1546,7 @@ test("reassigning a task: only the assignee's agents get it, and whoever is left
       title: "Assigned work",
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
     },
     body: "## Goal\nx\n\n## Acceptance\n- a",
@@ -1697,6 +1616,7 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
       title: "Delegated work",
       summary: "Said to a person for the test.",
       kind: "task",
+      status: "draft",
       target_context: `e2e/${account}`,
     },
     body: "## Goal\nx\n\n## Acceptance\n- a",
@@ -1837,10 +1757,12 @@ test("an image held as bytes attaches, and answers the check it was taken for", 
     cwd: dir,
   });
   const row = (await p.tasks()).find((t) => t.id === id);
-  assert.equal(row.state, "review", "a shown check is evidence");
+  assert.equal(row.state, "done", "a shown check is proof, and finishing is final");
 });
 
-test("the server requires a kind and keeps a new task in Draft until Ready", { skip }, async () => {
+test("the server requires a kind, takes a new task Ready, and never starts one archived", {
+  skip,
+}, async () => {
   // The load-bearing half. The CLI parser no longer seeds `transfer`, but a client on any older
   // version still publishes documents with no `kind:` line — and the row used to coerce whatever
   // arrived into transfer. That is how 162 of 200 real guides were stored as transfers while their
@@ -1872,11 +1794,15 @@ test("the server requires a kind and keeps a new task in Draft until Ready", { s
   assert.equal(wrong.status, 400, "and so is a spelling that is not a kind");
   assert.match((await wrong.json()).message, /is not a kind/);
 
-  const premature = await put(
-    `---\ntitle: Not reviewed\nsummary: Said to a person for the test.\nkind: task\nstatus: published\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
+  const sentAtOnce = await put(
+    `---\ntitle: Sent at once\nsummary: Said to a person for the test.\nkind: task\nstatus: published\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
   );
-  assert.equal(premature.status, 409, "a new task cannot bypass the human Ready action");
-  assert.match((await premature.json()).message, /must be Draft/);
+  assert.equal(sentAtOnce.status, 201, "a new task is Ready when its author says so, the default");
+  const shelved = await put(
+    `---\ntitle: Born done\nsummary: Said to a person for the test.\nkind: task\nstatus: consumed\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
+  );
+  assert.equal(shelved.status, 409, "but it cannot start archived");
+  assert.match((await shelved.json()).message, /can't start archived/);
 
   // And a stated task is stored exactly as stated, then a person moves it to Ready.
   const id = rid();

@@ -63,37 +63,38 @@ been `"0"`, which refused a new account's first task. Set it to `"0"` to close i
 carrying `grandfathered` (migration 0016) keep their ceiling either way, and the local store is
 untouched — `passalong share` writes to the machine with no account and no ceiling.
 
-**Billing.** Five Worker secrets, all optional: without them the paid tier is simply unavailable
-and every webhook is refused rather than trusted.
+**Billing.** Payments go through [Bachs](https://docs.bachs.io), a merchant of record. Four Worker
+secrets, all optional: without them the paid tier is simply unavailable and every webhook is
+refused rather than trusted.
 
 | Secret | What it is |
 | --- | --- |
-| `STRIPE_SECRET` | API key. `sk_test_…` or `sk_live_…` |
-| `STRIPE_PRICE` | The recurring price id the subscription is for |
-| `STRIPE_WEBHOOK_SECRET` | `whsec_…`, from the endpoint you register |
-| `PAYSTACK_SECRET` | API key, which is **also** the webhook signing key |
-| `PAYSTACK_PLAN` | The plan code the subscription is for |
+| `BACHS_SECRET` | API key. `sk_sandbox_…` (sandbox host) or `sk_live_…` (live host) |
+| `BACHS_WEBHOOK_SECRET` | The signing secret of the endpoint you register |
+| `BACHS_TEAM_PRODUCT` | The recurring product id for Team: $20 a month, up to 10 people |
+| `BACHS_SOLO_PRODUCT` | The recurring product id for Solo: $5 a month |
 
-**Test mode is not a setting.** It is read off the key (`modeOf` in `billing.ts`), so it cannot
-disagree with the keys actually in use — configure test keys and the hub badges every plan block
-"test mode — no real money moves". A mode flag beside the key is how a product spends three weeks
-taking payments that were never real.
+**Test mode is not a setting.** It is read off the key (`modeOf` in `billing.ts`), and so is the
+host — a sandbox key calls `sandbox-api.bachs.io`. Configure a sandbox key and the hub badges every
+plan block "test mode — no real money moves". A mode flag beside the key is how a product spends
+three weeks taking payments that were never real.
 
-Register the webhook endpoints as `https://passalong.dev/v1/billing/webhook/stripe` and
-`…/paystack`. Stripe needs `customer.subscription.created`, `.updated` and `.deleted`; Paystack
-needs `subscription.create`, `subscription.disable` and `invoice.payment_failed`. Anything else is
-answered 200 and ignored, so subscribing to more is harmless.
+Register the webhook endpoint as `https://passalong.dev/v1/billing/webhook/bachs` with
+`customer.subscription.created`, `.updated` and `.deleted`. Anything else is answered 200 and
+ignored, so subscribing to more is harmless.
 
-What the tests cannot reach is the provider validating ids that only exist in your account — a
-price id, a plan code, a live subscription. `apps/api/test/billing-calls.test.mjs` pins everything
-this side of that by stubbing `fetch`: the endpoint, the encoding, the field names, where the
-metadata goes and how an error is read back. Run it before the first real checkout and after any
-change to `billing.ts`.
+Both products are flat, so there is no seat count to change. A team bigger than ten is set up by
+hand until a recurring quantity has been proven in the sandbox; the hub tells its owner to write
+to support.
 
-To exercise the rest, put the test keys in `apps/web/.dev.vars` (gitignored) and point the
-provider's CLI forwarder at `http://localhost:3000/v1/billing/webhook/<provider>`. Note the
-webhook, not the checkout, is what writes a plan — so a subscription only takes effect once the
-event arrives.
+What the tests cannot reach is Bachs validating ids that only exist in your account — a product
+id, a live subscription. `apps/api/test/billing-calls.test.mjs` pins everything this side of that
+by stubbing `fetch`: the host, the field names, where the metadata goes and how an error is read
+back. Run it before the first real checkout and after any change to `billing.ts`.
+
+To exercise the rest, put sandbox keys in `apps/web/.dev.vars` (gitignored) and point a tunnel at
+`http://localhost:3000/v1/billing/webhook/bachs`. The webhook, not the checkout, is what writes a
+plan — so a subscription only takes effect once the event arrives.
 
 ## Preflight (run before every deploy)
 

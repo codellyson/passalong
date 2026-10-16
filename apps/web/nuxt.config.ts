@@ -62,7 +62,11 @@ export default defineNuxtConfig({
   // file that `style-src 'self'` allows.
   css: ["~/assets/css/tailwind.css"],
 
-  vite: { plugins: [tailwindcss()] },
+  vite: {
+    plugins: [tailwindcss()],
+    // Dev only: a quick tunnel is how a payment provider reaches `nuxt dev` (docs/DEPLOY.md).
+    server: { allowedHosts: [".trycloudflare.com"] },
+  },
 
   experimental: {
     // Nuxt injects an inline <script type="importmap"> to resolve the entry chunk, and an

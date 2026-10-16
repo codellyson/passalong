@@ -280,20 +280,22 @@ change. Its README says how.
   comes back as a transfer guide. `Acceptance` is required because it is what the work is approved
   against. `blocked_by:` is the one list field only tasks have, so the parser defaults
   `stack_assumptions` and `tags` and nothing else — defaulting it would write `blocked_by: []` into
-  every guide anybody re-shares. A blocker counts as finished when a person approved it, never when
-  an agent finished it.
+  every guide anybody re-shares. A blocker counts as finished when it is Done.
 - **Every guide has a task's states, whatever its kind (2026-10-14).** Draft, Ready, In progress,
-  In review, Done, and the same moves between them. A new guide is always `draft`: `PUT
-  /v1/guides/:id` refuses a new guide, or an edit that changes status, through `publishProblem()`
-  in `guide.ts` — handoffs and bugs used to go out the moment they were shared, so an agent's guide
-  reached people nobody had read it. Only a person's Ready (the status route) sends it on, and that
-  is when whoever it is addressed to is told (`announceGuide()`), never while it was a draft.
+  Done, and the same moves between them (In review went on 2026-10-15: see the next contract). **A new guide is Ready unless whoever wrote it
+  says `status: draft`** (2026-10-15): Draft-first was tried for every kind, and addressed work sat
+  forgotten in it — every draft in production was a task sent to somebody, untouched for over a
+  day. Draft is for what a person should read first: a plan of tasks (`plan_tasks` says so), email
+  and webhooks (nobody wrote them), or anything an agent is unsure of. `publishProblem()` in
+  `guide.ts` refuses a new guide that starts archived, and an edit that changes status. Whoever it
+  is addressed to is told when it is Ready — at publish, or when a person marks a draft Ready on the
+  status route (`announceGuide()`) — never while it is a draft.
   Ready asks which repo only for a task. Anyone in the team moves work between Draft and Ready;
   nothing held moves to Draft until it is taken back or reviewed; only its author or an admin
   archives it; and an archived guide comes back to Draft, never straight to Ready
   (`unarchiveProblem()`), because archived includes approved. A proposal awaiting a team decision
-  stays Draft. Email, webhooks and `file_bugs` file every kind as a draft, and the day-old Draft
-  reminder covers every kind. **A task's write-up is not on the board**: the transfer an agent
+  stays Draft. Email and webhooks file every kind as a draft, and the day-old Draft reminder
+  covers every kind. **A task's write-up is not on the board**: the transfer an agent
   publishes for its hand-in is stored as Done and named for its task (`report_of`, migration
   0053) when the hand-in names it, and `GET /v1/guides` leaves it out; ones approved before then are
   found by timing (published within five minutes before their author's hand-in event). **Done says
@@ -310,33 +312,38 @@ change. Its README says how.
   the other. `passalong mcp` prints no update notice and an agent never reads stderr, so the
   refusal on the call it just made is the one text it is sure to see. CLIs up to 0.11.0 send no
   header and are known by Node's own `user-agent: node`; browsers, curl, SDKs and `/v1/mcp` are
-  never gated. The floor is 0.16.0. **Raise `MIN_CLIENT` only after that version is `latest` on npm** — a floor above
+  never gated. The floor is 0.19.0. **Raise `MIN_CLIENT` only after that version is `latest` on npm** — a floor above
   what npm hands out refuses every agent with nothing it can install.
 - **A team's board is one board, and anyone on it moves the work.** Everything in a team is seen by
-  everyone in it, in the same place: `/hub/work` is five columns (Draft, To do, In progress, In
-  review, Done) and a card's column is the server's `stage` (`boardPlace()` in index.ts), never
-  re-derived per viewer — four per-viewer tabs put one guide in different places for different
-  teammates, which is what this replaced. Anyone in the team marks work Ready or Draft, stops an
-  agent, gives it to someone else ("Give to…" on a card, `POST /v1/guides/:id/assign`) and reviews
-  a hand-in (`MAY_MOVE` in claims.ts); **nobody reviews their own work**
-  (`ownWork()`: the account whose agent handed it in cannot approve, accept or send it back, and the
-  hub draws **Your review** from `can_review` for everyone else). Archiving and deleting stay with
-  the author or a team admin (`MAY_DECIDE`). A private guide has no team, so its author is the only
-  one who sees it and the one who reviews it. "Show only mine" is a filter, never a different board.
-- **A hand-in answers the PR template, minus the boxes.** What changed is `writeup`, how it was
-  verified and the evidence are `checks` (run or shown, never ticked), and what it could break is
-  `risk` (migration 0032, on the claim, for the reviewer only) — one line, optional, because a
-  required risk field says "low risk" every time. Ownership is the reviewer's, not the agent's:
-  close and approve on a hub row stay disabled until the evidence has been opened
-  (`HubHandIn`'s `read`). An agent ticking "I verified it" is the self-attestation `checks`
-  exists to replace.
-- **Handed in means the actor's turn is over.** `PUT /v1/guides/:id` refuses a *new* guide whose
-  `parent:` the publisher has handed in and that is waiting on its author (409). Every follow-up
-  nobody asked for came from there: an agent handed in, then published a second guide to carry
-  what it found. What the actor did and found goes on the hand-in, in `checks` and `writeup`.
-  The note on every `take` used to say the opposite ("what you found doing it — publish that"),
-  and an agent follows the text it read last. The author is never refused, and the rule ends when
-  the author answers: send-back and close delete the claim, and an approved task is `consumed`.
+  everyone in it, in the same place: `/hub/work` is four columns (Draft, To do, In progress, Done)
+  and a card's column is the server's `stage` (`boardPlace()` in index.ts), never re-derived per
+  viewer — four per-viewer tabs put one guide in different places for different teammates, which
+  is what this replaced. Anyone in the team marks work Ready or Draft, stops an agent, gives it to
+  someone else ("Give to…" on a card, `POST /v1/guides/:id/assign`) and reopens finished work
+  (`MAY_MOVE` in claims.ts). Archiving and deleting stay with the author or a team admin
+  (`MAY_DECIDE`). "Show only mine" is a filter, never a different board. **By person**
+  **A team's board is a Trello board with a list per person (2026-10-16):** Draft, To do, a column
+  per teammate and per group with work waiting, In progress, Done. Work waiting to be started sits
+  in the column of whoever it was sent to (`lanes`, `lanesOf()` in index.ts: a person, `#group`, or
+  each of several named people, as one guide shown in each, never copies), or To do when it is for
+  nobody in particular; dragging it to a column gives it there. In progress and Done hold everyone's
+  work. **By person** is on by default; turning it off (`?by=stage`) snaps back to the four stage
+  columns with everyone's work together. Rows per person were tried first and crowded the page.
+  "All teams" has no people, so it keeps the stage columns.
+- **Finishing is final, and needs proof; there is no review stage (2026-10-15, docs/REVIEW.md).**
+  In production 64% of hand-ins were archived with nobody answering them and none was ever sent
+  back, so the stage cost more than it caught. `hand_in` now ends the work: `complete()` in
+  claims.ts keeps what was shown as a standing verdict (the guide page leads with it as "Finished
+  with"), lets go of the claim, and puts the guide in Done with `outcome = finished` once nobody
+  else holds it — a handoff held in several repos waits for the last. It is refused without proof a
+  person can look at (`proofProblem()`): a screenshot, or a command and its line of output; checks
+  answer for themselves, each run or shown. The write-up is capped at 500 characters
+  (`WRITEUP_CAP`) and a task needs no write-up guide. What could go wrong after is **Reopen**
+  (`POST /v1/guides/:id/reopen`, for anyone in the team): back to To do with the reason at the top,
+  and whoever finished it is told. Wanting another person's eyes is a request, not a stage: **Ask
+  someone to check** on the guide page makes a follow-up task to them, with the guide as `parent`.
+  Approve, send-back, `ownWork` and the In review column are gone; approve on Done work still
+  answers, for installed CLIs. Migration 0056 finished the hand-ins left waiting.
 - **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
   people can take and answer for separately — one document holding six has one verdict, and "four
   of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is
@@ -399,41 +406,47 @@ change. Its README says how.
   to a reader, in the list and in the report editor both, and `severityTone()`/`severityLabel()`
   in `app/utils/report.ts` are the only copies of that lookup.
 - **The checkout is hosted, the mode is read off the key, and the webhook is what writes a plan.**
-  Both providers hand back a page of their own, because the alternative is this product handling
-  card details — which is also why there is no card form to build and no seat-change screen beyond a
-  number. `modeOf()` derives test-versus-live from the key itself rather than a setting beside it:
-  a flag somebody has to remember to flip is how a product spends three weeks taking payments that
-  were never real, and the hub badges every plan block when any configured key is a test one.
-  `POST /v1/teams/:slug/subscribe` and `PATCH /v1/teams/:slug/seats` are **owner only** and refuse a
-  seat count below the team's current membership — the seat count is what admits the next member, so
-  setting it under the current size is a refusal aimed at whoever joins next rather than at the
-  person doing it. The seats route answers with the **confirmed** count and the pending one, never
-  the asked-for figure: the subscription is the single source for what is paid for, so the hub waits
-  for the webhook rather than showing a number nothing has agreed to. Paystack cannot change
-  quantity on a running subscription at all and says so out loud, which is better than appearing to
-  succeed and quietly billing the old number. Every provider key is an optional binding: without
-  them the tier is unavailable and the hub says so, rather than offering a button that cannot work.
+  Payments go through **Bachs** (docs.bachs.io), a merchant of record — not Stripe, not Paystack,
+  both of which were removed. Bachs hands back a page of its own for checkout and another for
+  billing (`POST /v1/billing/portal`, a fresh link per click, the customer read off the
+  subscription), because the alternative is this product handling card details. Both products are
+  **flat**: Team is $20 a month for up to `TEAM_SEATS` (10) people and Solo is $5, so there is no
+  seat count to change and no seat route; `POST /v1/teams/:slug/subscribe` is **owner only** and
+  refuses a team already over ten, which is set up by hand until a recurring quantity has been
+  proven in the sandbox. `modeOf()` derives test-versus-live — and the host — from the key itself
+  (`sk_sandbox_` against `sk_live_`) rather than a setting beside it: a flag somebody has to
+  remember to flip is how a product spends three weeks taking payments that were never real, and
+  the hub badges every plan block when the key is a sandbox one. Every key is an optional binding:
+  without them the tier is unavailable and the hub says so, rather than offering a button that
+  cannot work.
 - **A billing webhook is the only write in the product that no person authenticates**, so the
-  signature over the **raw** body is the entire credential. `billing.ts` reads it with
-  `c.req.text()` and verifies before anything parses: parse first and you verify a different set of
-  bytes than the one that was signed, which is the classic way this is got wrong. The module
+  signature over the **raw** body is the entire credential. The route reads it with `c.req.text()`
+  and `verifyWebhook()` checks it before anything parses: parse first and you verify a different set
+  of bytes than the one that was signed, which is the classic way this is got wrong. `billing.ts`
   **imports no sibling `.ts` on purpose** — it has to be unit-testable and a value import of a
   sibling is what Node's type stripping cannot resolve, so `eq()` is a local copy of
-  `timingSafeEqual` rather than an import (the same reason `chatCard` lives inside notify.ts). Both
-  providers are here because the first paying teams and the Show HN ones do not reach for the same
-  processor: Stripe signs `${t}.${body}` with HMAC-SHA256 and **the timestamp is checked**, because
-  without a tolerance a captured "subscription is active" replays forever; Paystack signs the body
-  with HMAC-SHA512 and has no timestamp at all, which is survivable only because every event sets a
-  plan to a value rather than moving it by a step. Three rules in the mapping, each of which was a
-  way to get this wrong: `past_due` is **not** lapsed, since downgrading on the first failed
-  attempt makes an overnight bank decline look like a cancellation; an event that carries no seat
-  count leaves seats **untouched**, since writing zero would unseat the whole team on a payment
-  retry; and an event nobody mapped answers **200**, because an endpoint that errors on what it
-  does not care about is one the provider retries all day and then disables, taking the events that
-  do matter with it. The webhook path is public by **prefix**, not by the two exact routes: a
-  webhook aimed at the wrong URL is a real thing that happens during setup, and the middleware
-  answering it with "not signed in — sign in at /hub" sends whoever is reading the provider's
-  delivery log to a screen with nothing to do with the problem.
+  `timingSafeEqual` rather than an import (the same reason `chatCard` lives inside notify.ts). Bachs
+  signs `${t}.${body}` with HMAC-SHA256 in `X-Bachs-Signature-V2: t=…,v1=…`, repeating `v1` once per
+  valid secret during a rotation (any match counts), and **the timestamp is checked**, because
+  without a tolerance a captured "subscription is active" replays forever. Delivery is at-least-once
+  and out of order, so an event older than the one that set the stored plan for the same
+  subscription is dropped (`plan_since` holds Bachs's `created_at`). An event from a *different*
+  subscription than the stored one never ends it — a late lapse is an old subscription ending — and
+  never replaces one still paying: that is a second checkout completed for the same plan, so the
+  stored one stays bound and admins get `billed_twice` to refund the other. Renewing a lapsed plan
+  with a new subscription is applied. Bachs cancels at the end of the period already paid for, so a
+  cancelled plan stays paid and the webhook stores when it stops in `plan_ends` (migration 0055, on
+  account and team; cleared when resumed or lapsed), which the hub states beside the plan — never
+  `plan_until`, which is a gift's end and is enforced by the hourly sweep. Three rules in the mapping, each
+  of which was a way to get this wrong: `past_due` is **not** lapsed, since downgrading on the first
+  failed attempt makes an overnight bank decline look like a cancellation; an event that grants no
+  seats leaves seats **untouched**, since writing zero would unseat the whole team on a lapse; and an
+  event nobody mapped answers **200**, because an endpoint that errors on what it does not care
+  about is one the provider retries all day and then disables, taking the events that do matter
+  with it. The webhook path is public by **prefix**, not by the exact route: a webhook aimed at the
+  wrong URL is a real thing that happens during setup, and the middleware answering it with "not
+  signed in — sign in at /hub" sends whoever is reading the provider's delivery log to a screen with
+  nothing to do with the problem.
 - **A plan belongs to a team, and an account's ceiling is derived from it — never copied onto the
   account.** §11 sells the team, so the decision that follows is that a *free* member of a paid team
   publishes without a ceiling: the seat lifts whoever sits in it, paid for or not. `quota()` asks
@@ -532,8 +545,8 @@ change. Its README says how.
   wordmark beside it as text: images are blocked by default for a sender nobody has replied to.
   Anything a person typed — a title, a verdict's reason — goes through `esc()` on the way in.
 - **Every answer exists in all three places, and every kind has the same ones.** The hub, the MCP
-  tools and the CLI: `take`, `progress`, `hand_in` and `pass` for whoever does the work, approve and
-  send back for whoever reviews it, Ready and Move to Draft, archive. A signal that exists in only
+  tools and the CLI: `take`, `progress`, `hand_in` and `pass` for whoever does the work, reopen for
+  finished work that is not right, Ready and Move to Draft, archive. A signal that exists in only
   two of them is one a third of the product's users cannot send, and the mail that tells someone
   what to do next can only name commands that exist. The reader's old answers — the ack (`take`/
   `pass` meaning "I'll do it"/"not me") and the verdict (`works`/`broken`) — are no longer offered
@@ -541,8 +554,8 @@ change. Its README says how.
   for clients that call them, and `/hub/answer/:id` forwards to the guide's page.
   The hub says each in plain words rather than the command's name, and says them the same way on
   every surface of the hub: `take` is **I'll do this**, `release` is **Stop this agent**, archiving
-  is **Archive** and **Unarchive to Draft**, a hand-in is answered with **Accept** (or **Approve**
-  for a task) and **Ask for changes**. A button whose name cannot say
+  is **Archive** and **Unarchive to Draft**, finishing is **Finish**, and finished work comes back
+  with **Reopen**. A button whose name cannot say
   what it does gets a line of visible text beside it, never a `title` tooltip.
 - **Google Chat gets a card; nothing else does.** Chat cannot unfurl a link — previews there come
   from a Chat app registering URL patterns, and a team connects an incoming webhook — so `chatCard()`
@@ -714,8 +727,9 @@ change. Its README says how.
 - **Admin alerts are notifications for whoever runs Passalong** (`src/alerts.ts`). `alertAdmins()`
   sends one to every `role = 'super'` account and everyone in `ADMIN_ACCOUNTS`: a feed row through
   `notify()`, mailed the first time. Adding one is a kind in `KINDS`, its sentence in `line()`, an
-  entry in `ADMIN_ALERTS` (with its mail subject) and a call where it happens. Today the only one is
-  `signed_up`, on a password signup and on an invite account's first password.
+  entry in `ADMIN_ALERTS` (with its mail subject) and a call where it happens. Today there are two:
+  `signed_up`, on a password signup and on an invite account's first password, and `billed_twice`,
+  when a second subscription starts paying for a plan another already pays for.
 - **Email verification records, it does not gate** (migration 0050). Every signup and every change
   of address sends a single-use link (`email_verify`, sha256 only, a week long, tied to the address
   it was sent to); opening `GET /v1/auth/verify/:code` sets `account.email_verified` and redirects to

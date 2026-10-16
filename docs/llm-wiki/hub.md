@@ -6,13 +6,15 @@ folder documents have a Markdown editor because their purpose is continuing work
 
 ## Home
 
-`/hub` is the overview: the board's five column counts (Draft, To do, In progress, In review, Done),
+`/hub` is the overview: the board's column counts (Draft, To do, In progress, Done),
 the same for everyone in the team; "How Passalong works", open; and the activity feed. A new account
 gets the first-run steps here instead. The counts come from `useWorkLists`, the same composable the
 Work page draws the board with, so the two pages cannot disagree. `/hub` used to be the Work page:
 a link to it carrying `?tab=`, `?q=`, `?follows=` or `?done=` goes on to `/hub/work` with its query.
 
 ## Work
+
+**Go to id** in the header (`HubGoTo`, ⌘K or Ctrl+K) opens a guide by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`guideIdFrom()` in `utils/goto.ts`). Hidden on a phone, where the bar has no room.
 
 `/hub/work` is the team board (`HubBoard`), like any shared task board: every task, handoff and bug
 in scope is a card in one of five columns, and everyone in the team sees the same board. The column
@@ -25,7 +27,12 @@ five fit at about 17rem on a wide screen — and the board scrolls sideways on i
 has it — initials, ⚡ and the agent's name, and a dot for its `health` (working, went quiet, asked a
 question, a person's hold, handed in), with a word when somebody should look — and who it is for,
 which is also the **Give to…** control. Its age is since its holder was last heard from or its last
-edit. Done is faded. **Show only mine** (`?mine=1`, and an old
+edit. Done is faded. In a team it is a Trello board with a list per person: Draft, To do, a
+column per teammate and per group with work waiting, In progress, Done. Waiting work sits in the
+column of whoever it was sent to (the server's `lanes`), or To do; several named people each see it,
+as one guide; dragging it to a column gives it there. **By person** is on by default, and off
+(`?by=stage`) shows the four stages with everyone's work together. The page picks the viewer's team when they have
+only one; "All teams" keeps the plain stage columns. **Show only mine** (`?mine=1`, and an old
 `?tab=needs` link) narrows to cards about you — yours, sent to you or your group, held by you, or
 yours to review — without moving any card. Done shows the newest twenty.
 A round dot at a card's top-left (shown on hover, always on touch, and on every card once one is
@@ -43,10 +50,11 @@ It replaced four tabs (Needs you, Being worked on, Open, Done) worked out per vi
 same guide in different places for different teammates and counted it differently.
 
 **Who may do what on a team guide:** anyone in the team moves it between Draft and Ready, stops an
-agent, gives it to someone else (**Give to…** on every card that is not done), and reviews a hand-in (Approve / Accept / Ask for changes) — except whoever did the work:
-`ownWork()` in claims.ts refuses a review of your own hand-in, and the card wears **Your review**
-(`can_review`) for everyone else. Archiving and deleting stay with its author or a team admin. A
-private guide (no team) is its author's alone, and its author reviews it.
+agent, gives it to someone else (**Give to…** on every card that is not done), and reopens finished
+work with a reason (**Reopen**, on the guide page, the card menu, or dragging it out of Done).
+Finishing is final, so there is no review: a guide page leads a finished guide with what it was
+**Finished with**, and **Ask someone to check** sends a teammate a follow-up task to look at it.
+Archiving and deleting stay with its author or a team admin.
 
 A browser-only person can take an eligible task from its guide page,
 post progress and hand it in there. These holds use the person's account identity and a week-long

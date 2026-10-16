@@ -23,9 +23,18 @@ export const CLIENT_HEADER = "x-passalong-version";
  * deploys on merge, and a floor above what npm hands out refuses every agent with nothing it can
  * install to get past it.
  *
- * 0.16.0 adds agent-first folders and updates the installed MCP and capture instructions. An
+ * 0.19.0, since it went `latest` on 2026-10-16. There is no review stage now: a hand-in is final
+ * and needs proof, and older CLIs tell their agents a hand-in waits for review, describe the write-up
+ * guide a task no longer needs, and have no `reopen`. 0.19.0 says finishing is final and shows proof.
+ *
+ * Before that, 0.18.0, since it went `latest` on 2026-10-14. Every guide is now a draft until a person marks
+ * it Ready, and an older CLI shares a handoff or bug as Ready, which the server refuses with a 409
+ * an agent cannot get past. Older CLIs also answer `take` and `pass` with the retired ack rather
+ * than holding the work. 0.18.0 shares every kind as a draft and takes every kind with a claim.
+ *
+ * Before that, 0.16.0: agent-first folders, and the installed MCP and capture instructions. An
  * older stdio server has no folder tools, and a cached instruction can lead an agent to the old
- * guide rules. Require an install and server restart after 0.16.0 is live on npm.
+ * guide rules.
  *
  * Before that, 0.15.0 since it went `latest` on 2026-10-08. Older CLIs file a bug or task for nobody when no
  * `--to` is given, so a member of a team records issues the team never sees; 0.15.0 sends them to
@@ -40,7 +49,7 @@ export const CLIENT_HEADER = "x-passalong-version";
  * version, and the first whose follow-up note stopped telling agents to publish what they found as
  * a new guide.
  */
-export const MIN_CLIENT = "0.16.0";
+export const MIN_CLIENT = "0.19.0";
 
 /**
  * What a CLI that sends no version is counted as: the last release that did not send one.

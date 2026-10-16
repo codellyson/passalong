@@ -84,14 +84,12 @@ import {
 } from "./auth.js";
 import {
   BillingError,
-  isProvider,
+  fromBachs,
   modeOf,
-  type Provider,
-  parseEvent,
-  setSeats,
+  portalSession,
   startCheckout,
-  verifyPaystack,
-  verifyStripe,
+  TEAM_SEATS,
+  verifyWebhook,
 } from "./billing.js";
 import * as claims from "./claims.js";
 import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
@@ -264,11 +262,10 @@ type Env = MailEnv &
     FREE_SIGNUP?: string;
     /** Billing. Optional, like every other integration here: without them a deployment runs
         exactly as before and every webhook is refused rather than trusted. */
-    STRIPE_WEBHOOK_SECRET?: string;
-    STRIPE_SECRET?: string;
-    STRIPE_PRICE?: string;
-    PAYSTACK_SECRET?: string;
-    PAYSTACK_PLAN?: string;
+    BACHS_SECRET?: string;
+    BACHS_WEBHOOK_SECRET?: string;
+    BACHS_TEAM_PRODUCT?: string;
+    BACHS_SOLO_PRODUCT?: string;
     FREE_SYNC_LIMIT: string;
     /**
      * Who may give a plan away: account ids, comma-separated. Empty — the default — means nobody,
@@ -365,6 +362,8 @@ interface TeamRow {
   seats: number;
   subscription_id: string;
   plan_since: string;
+  /** When a cancelled plan stops; '' when nothing is ending (migration 0055). */
+  plan_ends: string;
 }
 interface GuideRow {
   id: string;
@@ -654,6 +653,25 @@ type BoardClaim = {
   asking: number;
 };
 
+/**
+ * Whose column a guide sits in on the board's by-person view: whoever holds it (account ids), else
+ * whoever it was sent to — one person, a group as `#slug`, or each of several named people. Empty is
+ * Anyone: work sent to the whole team sits once. One guide shown in several columns, never copies.
+ */
+function lanesOf(
+  r: GuideRow,
+  claimRows: BoardClaim[],
+  groups: Map<string, { slug: string }>,
+  members: Map<string, string[]>,
+): string[] {
+  const holders = [...new Set(claimRows.map((k) => k.account_id))];
+  if (holders.length) return holders;
+  if (r.to_account_id) return [r.to_account_id];
+  const slug = groups.get(r.to_group_id)?.slug ?? "";
+  if (slug && !slug.startsWith("~")) return [`#${slug}`];
+  return members.get(r.to_group_id) ?? [];
+}
+
 function boardPlace(r: GuideRow, claimRows: BoardClaim[], me: string, at: string) {
   const review = claimRows.filter((k) => k.state === "review");
   const stage =
@@ -738,6 +756,21 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       ).results,
   );
   for (const g of groupRows) groups.set(g.id, { slug: g.slug, name: g.name.trim() || g.slug });
+  // Who is in each of those groups, for the board's rows by person.
+  const members = new Map<string, string[]>();
+  for (const m of await inSlices(
+    groupIds,
+    0,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(
+          `SELECT group_id, account_id FROM group_member WHERE group_id IN (${marks})`,
+        )
+          .bind(...slice)
+          .all<{ group_id: string; account_id: string }>()
+      ).results,
+  ))
+    members.set(m.group_id, [...(members.get(m.group_id) || []), m.account_id]);
   // Who holds each guide and how far it got, so the board can place it in one column that is the
   // same for everyone who opens it.
   const held = new Map<string, BoardClaim[]>();
@@ -898,6 +931,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       for_me: r.to_account_id === me || (r.to_group_id !== "" && myGroups.has(r.to_group_id)),
       answered_elsewhere: elsewhere.has(r.id),
       ...boardPlace(r, held.get(r.id) || [], me, at),
+      lanes: lanesOf(r, held.get(r.id) || [], groups, members),
       report: r.report_id || "",
       report_title: reportTitles.get(r.report_id) || "",
       parent: r.parent_id || "",
@@ -1816,7 +1850,7 @@ app.delete("/v1/admin/gifts/:id", async (c) => {
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, role, keep_forever FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, plan_ends, role, keep_forever FROM account WHERE id = ?",
   )
     .bind(account)
     .first<
@@ -1825,6 +1859,7 @@ app.get("/v1/me", async (c) => {
         email_verified: string;
         plan: string;
         plan_until: string;
+        plan_ends: string;
         role: string;
         keep_forever: number;
       }
@@ -1860,6 +1895,8 @@ app.get("/v1/me", async (c) => {
     plan: ownPlan,
     // When it stops, and only for a plan that was given: a bought one ends when the provider says.
     plan_until: me?.plan_until || "",
+    // When a bought plan that was cancelled stops — it is paid until then (migration 0055).
+    plan_ends: me?.plan_ends || "",
     // '' for everybody who uses Passalong, 'super' for whoever runs it (migrations/0027_super.sql).
     // The hub draws the operator section from this; the routes check the database, not this field.
     role: (await isAdmin(c.env.DB, c.env.ADMIN_ACCOUNTS, account)) ? "super" : me?.role || "",
@@ -2068,8 +2105,11 @@ app.get("/v1/teams/:slug", async (c) => {
     plan: team.plan,
     // Zero seats on a free plan is not "no room" — seats are simply not what limits that team, so
     // the client reads the plan first. Never the subscription id: it is the provider's handle on a
-    // paying customer and nothing in a browser needs it.
+    // paying customer and nothing in a browser needs it. Whether one exists is enough to offer
+    // the billing page, which a given plan has none of.
     seats: team.seats,
+    subscribed: !!team.subscription_id,
+    plan_ends: team.plan_ends || "",
     members_count: members.length,
   });
 });
@@ -3396,102 +3436,145 @@ app.get("/v1/log", async (c) => {
 
 // ---- billing ----------------------------------------------------------------------------------
 
-// The provider telling us a subscription changed. It is the only write in the product that no
-// person authenticates: the signature over the raw body is the entire credential, which is why
+// Bachs telling us a subscription changed. It is the only write in the product that no person
+// authenticates: the signature over the raw body is the entire credential, which is why
 // `billing.ts` is unit-tested to the edges and why the body is read with `c.req.text()` here —
 // parsing first and verifying second is the classic way to verify a different set of bytes than
 // the one that was signed.
-app.post("/v1/billing/webhook/:provider", async (c) => {
-  const named = c.req.param("provider");
-  if (!isProvider(named)) return err(c, 404, "That billing provider isn't supported.");
-  const provider: Provider = named;
+app.post("/v1/billing/webhook/bachs", async (c) => {
   const raw = await c.req.text();
+  // The V2 header carries every valid signature during a secret rotation; the older pair is the
+  // same signature split in two, accepted so a delivery without V2 is not refused for its shape.
+  const header =
+    c.req.header("x-bachs-signature-v2") ||
+    `t=${c.req.header("x-bachs-timestamp") || ""},v1=${c.req.header("x-bachs-signature") || ""}`;
 
   let event: unknown;
   try {
-    event =
-      provider === "stripe"
-        ? await verifyStripe(
-            raw,
-            c.req.header("stripe-signature") || "",
-            c.env.STRIPE_WEBHOOK_SECRET || "",
-          )
-        : await verifyPaystack(
-            raw,
-            c.req.header("x-paystack-signature") || "",
-            c.env.PAYSTACK_SECRET || "",
-          );
+    event = await verifyWebhook(raw, header, c.env.BACHS_WEBHOOK_SECRET || "");
   } catch (e) {
-    // The provider's own message, which is about our configuration and never about their payload,
-    // so there is nothing here that helps someone guess a secret.
+    // Our own message, which is about the signature and never about their payload, so there is
+    // nothing here that helps someone guess a secret.
     return err(c, 400, e instanceof BillingError ? e.message : "could not read that webhook");
   }
 
-  const change = parseEvent(provider, event);
+  const change = fromBachs(event);
   // 200 for an event we do not act on. A webhook endpoint that errors on anything it has no opinion
   // about is one the provider retries all day and then disables, taking the events that do matter
   // with it.
   if (!change) return c.json({ ok: true, applied: false });
 
-  // By subscription first, then by the team id the provider carried in metadata. The second is how
-  // a *first* subscription is ever matched: the id does not exist when we send someone to a checkout
-  // page, so until this event arrives there is nothing on the team to look it up by.
-  type TeamPlanRow = { id: string; slug: string; plan: string; seats: number };
-  // A Solo subscription belongs to a person, so it is looked up the same two ways and applied to
-  // `account` instead. Checked first only because it is the cheaper query; the two subjects are
-  // mutually exclusive, since the metadata carries exactly one of them.
-  const soloId =
-    change.account_id ||
-    (
-      await c.env.DB.prepare("SELECT id FROM account WHERE subscription_id = ?")
-        .bind(change.subscription_id)
-        .first<{ id: string }>()
-    )?.id ||
-    "";
-  if (soloId && !change.team_id) {
-    const plan = change.plan === "team" ? "solo" : change.plan;
-    // `plan_until` is cleared: a subscription is not a gift, and a date left over from one would
-    // expire a plan somebody is now being charged for. See migrations/0026_gifts.sql.
-    const done = await c.env.DB.prepare(
-      "UPDATE account SET plan = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
+  // Delivery is out of order. An event older than the one that set the stored plan for this same
+  // subscription is history, and applying it would undo what came after — a late `created` turning
+  // a cancelled plan back on. `plan_since` holds Bachs's own time for what it last wrote.
+  const stale = (row: { subscription_id: string; plan_since: string } | null) =>
+    !!row &&
+    !!change.at &&
+    row.subscription_id === change.subscription_id &&
+    row.plan_since > change.at;
+  const since = change.at || now();
+  // An event from a subscription other than the one already stored. A lapse from it is an old
+  // subscription ending — late, or retried — and must not end the one that replaced it. A paying
+  // one while the stored subscription is still paying is a second checkout completed for the same
+  // plan: somebody is charged twice, the stored one stays bound, and whoever runs this is told so
+  // they can refund. Anything else (renewing a lapsed plan) is applied.
+  const elsewhere = async (
+    row: { subscription_id: string; plan: string },
+    subject: string,
+    actor = "",
+  ) => {
+    if (!row.subscription_id || row.subscription_id === change.subscription_id) return false;
+    if (change.plan === "lapsed") return true;
+    if (row.plan !== "team" && row.plan !== "solo") return false;
+    c.executionCtx.waitUntil(
+      alertAdmins(c.env, {
+        kind: "billed_twice",
+        actor_id: actor,
+        note: `${subject} (${row.subscription_id} and ${change.subscription_id})`,
+      }),
+    );
+    return true;
+  };
+
+  // A Solo subscription belongs to a person, so it is looked up the same two ways a team is — by
+  // subscription, then by the account the checkout carried in metadata — and applied to `account`.
+  // The two subjects are mutually exclusive, since the metadata carries exactly one of them.
+  type Held = { id: string; plan: string; subscription_id: string; plan_since: string };
+  if (!change.team_id) {
+    const solo = await c.env.DB.prepare(
+      "SELECT id, plan, subscription_id, plan_since FROM account WHERE subscription_id = ? OR id = ? LIMIT 1",
     )
-      .bind(plan, now(), change.subscription_id, soloId)
-      .run();
-    if (done.meta.changes) {
-      count(c, "plan_changed", { provider, plan, subject: "account" });
+      .bind(change.subscription_id, change.account_id || "")
+      .first<Held>();
+    if (solo) {
+      if (stale(solo) || (await elsewhere(solo, `account ${solo.id}`, solo.id)))
+        return c.json({ ok: true, applied: false });
+      const plan = change.plan === "team" ? "solo" : change.plan;
+      // `plan_until` is cleared: a subscription is not a gift, and a date left over from one would
+      // expire a plan somebody is now being charged for. See migrations/0026_gifts.sql.
+      await c.env.DB.prepare(
+        "UPDATE account SET plan = ?, plan_since = ?, plan_until = '', plan_ends = ?, subscription_id = ? WHERE id = ?",
+      )
+        .bind(plan, since, change.ends, change.subscription_id, solo.id)
+        .run();
+      count(c, "plan_changed", { provider: "bachs", plan, subject: "account" });
       return c.json({ ok: true, applied: true });
     }
   }
 
+  // By subscription first, then by the team id carried in metadata. The second is how a *first*
+  // subscription is ever matched: the id does not exist when we send someone to a checkout page, so
+  // until this event arrives there is nothing on the team to look it up by.
+  type TeamPlanRow = Held & { seats: number };
   let team = await c.env.DB.prepare(
-    "SELECT id, slug, plan, seats FROM team WHERE subscription_id = ?",
+    "SELECT id, plan, seats, subscription_id, plan_since FROM team WHERE subscription_id = ?",
   )
     .bind(change.subscription_id)
     .first<TeamPlanRow>();
   if (!team && change.team_id) {
-    team = await c.env.DB.prepare("SELECT id, slug, plan, seats FROM team WHERE id = ?")
+    team = await c.env.DB.prepare(
+      "SELECT id, plan, seats, subscription_id, plan_since FROM team WHERE id = ?",
+    )
       .bind(change.team_id)
       .first<TeamPlanRow>();
   }
   // Also 200, and deliberately: a subscription we have never heard of is the provider's business,
   // not a failure of ours, and answering 4xx would have them retry something that can never work.
-  if (!team) return c.json({ ok: true, applied: false });
+  if (!team || stale(team) || (await elsewhere(team, `team ${team.id}`)))
+    return c.json({ ok: true, applied: false });
 
-  // Seats only move when the event carried a count. A payment failing says nothing about how many
-  // seats were bought, and writing zero there would silently unseat the whole team.
+  // Seats only move when the event carried a count. A lapse says nothing about how many seats were
+  // bought, and writing zero there would silently unseat the whole team.
   // The subscription id is written here and only here, which is what binds a team to the thing
   // paying for it. Never cleared on a lapse: a lapsed team that renews is the same subscription,
   // and forgetting it would orphan every event that follows.
   // `plan_until` cleared for the same reason as above: what the team is on is now the provider's
   // to end, not a date an operator typed.
   await c.env.DB.prepare(
-    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, plan_until = '', subscription_id = ? WHERE id = ?",
+    "UPDATE team SET plan = ?, seats = ?, plan_since = ?, plan_until = '', plan_ends = ?, subscription_id = ? WHERE id = ?",
   )
-    .bind(change.plan, change.seats ?? team.seats, now(), change.subscription_id, team.id)
+    .bind(
+      change.plan,
+      change.seats ?? team.seats,
+      since,
+      change.ends,
+      change.subscription_id,
+      team.id,
+    )
     .run();
-  count(c, "plan_changed", { provider, plan: change.plan, subject: "team" });
+  count(c, "plan_changed", { provider: "bachs", plan: change.plan, subject: "team" });
   return c.json({ ok: true, applied: true });
 });
+
+/** A refusal from Bachs, or from us about Bachs, in words a person can act on. */
+const billingFailed = (c: Parameters<typeof err>[0], e: unknown) =>
+  err(
+    c,
+    502,
+    e instanceof BillingError
+      ? e.message
+      : "We couldn't reach the payment provider. Try again in a moment.",
+  );
 
 // Buy Solo: a subscription that belongs to this account rather than to a team.
 //
@@ -3499,22 +3582,16 @@ app.post("/v1/billing/webhook/:provider", async (c) => {
 // subscription route was team-scoped and owner-only, so an individual who wanted to pay had to
 // invent a team of one. That is also why `FREE_SIGNUP` could not be closed: there was nowhere for a
 // new account to go.
-//
-// One seat, not a number: the plan is one person by definition, and a quantity field on it would be
-// a way to ask a question with only one answer.
 app.post("/v1/subscribe", async (c) => {
   const account = c.get("account");
-  const { provider } = (await c.req.json().catch(() => ({}))) as { provider?: string };
-  if (!provider || !isProvider(provider))
-    return err(c, 400, "Choose Stripe or Paystack to pay with.");
-
   const me = await c.env.DB.prepare("SELECT email, plan, subscription_id FROM account WHERE id = ?")
     .bind(account)
     .first<{ email: string; plan: string; subscription_id: string }>();
   // Asked of the subscription, not of the plan: somebody on a gifted Solo (0026_gifts.sql) has the
   // plan and pays nothing, and telling them they already have it would leave them no way to buy
-  // the thing before their gift runs out.
-  if (me?.subscription_id) return err(c, 400, "You're already on the Solo plan.");
+  // the thing before their gift runs out. A lapsed one renews through a new checkout.
+  if (me?.subscription_id && me.plan === "solo")
+    return err(c, 400, "You're already on the Solo plan.");
   if (!me?.email)
     return err(
       c,
@@ -3523,51 +3600,39 @@ app.post("/v1/subscribe", async (c) => {
     );
 
   try {
-    const checkout = await startCheckout(provider, c.env, {
+    const checkout = await startCheckout(c.env, {
       subject: { kind: "account", id: account },
-      seats: 1,
       email: me.email,
       returnTo: `${origin(c)}/hub/settings`,
     });
-    count(c, "checkout_started", { provider, mode: checkout.mode, subject: "account" });
+    count(c, "checkout_started", { provider: "bachs", mode: checkout.mode, subject: "account" });
     return c.json(checkout);
   } catch (e) {
-    return err(
-      c,
-      502,
-      e instanceof BillingError
-        ? e.message
-        : "We couldn't reach the payment provider. Try again in a moment.",
-    );
+    return billingFailed(c, e);
   }
 });
 
 // Start paying. Owner only, and it hands back a hosted page rather than taking a card: this product
-// does not touch card details, which is also why there is no form here to build.
+// does not touch card details, which is also why there is no form here to build. The Team product
+// is flat — up to `TEAM_SEATS` people — so there is no quantity to ask for.
 app.post("/v1/teams/:slug/subscribe", async (c) => {
   const team = await teamBySlug(c, c.req.param("slug"));
   if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
   if (team.role !== "owner")
     return err(c, 403, "Only the team's owner can change its plan. Ask them to do it.");
-  const { provider, seats } = (await c.req.json().catch(() => ({}))) as {
-    provider?: string;
-    seats?: number;
-  };
-  if (!provider || !isProvider(provider))
-    return err(c, 400, "Choose Stripe or Paystack to pay with.");
-  const wanted = Math.trunc(Number(seats)) || 0;
-  if (wanted < 1) return err(c, 400, "Choose at least one seat.");
+  if (team.plan === "team" && team.subscription_id)
+    return err(c, 400, `${team.name} is already on the Team plan.`);
 
   const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
     .bind(team.id)
     .first<{ n: number }>();
-  // Buying fewer seats than the team already has would leave it instantly over its own limit, and
-  // the person who finds out is whoever tries to accept the next invite.
-  if (wanted < (members?.n ?? 0))
+  // Paying for ten would leave a bigger team instantly over its own limit, and the person who finds
+  // out is whoever tries to accept the next invite. Bigger teams are arranged by hand for now.
+  if ((members?.n ?? 0) > TEAM_SEATS)
     return err(
       c,
       400,
-      `${team.name} already has ${members?.n} members, so choose at least ${members?.n} seats.`,
+      `The Team plan covers ${TEAM_SEATS} people and ${team.name} has ${members?.n}. Write to support@kreativekorna.com and we'll set it up.`,
     );
 
   const me = await c.env.DB.prepare("SELECT email FROM account WHERE id = ?")
@@ -3581,82 +3646,47 @@ app.post("/v1/teams/:slug/subscribe", async (c) => {
     );
 
   try {
-    const checkout = await startCheckout(provider, c.env, {
+    const checkout = await startCheckout(c.env, {
       subject: { kind: "team", id: team.id },
-      seats: wanted,
       email: me.email,
       returnTo: `${origin(c)}/hub/settings`,
     });
-    count(c, "checkout_started", { provider, mode: checkout.mode, subject: "team" });
+    count(c, "checkout_started", { provider: "bachs", mode: checkout.mode, subject: "team" });
     return c.json(checkout);
   } catch (e) {
-    return err(
-      c,
-      502,
-      e instanceof BillingError
-        ? e.message
-        : "We couldn't reach the payment provider. Try again in a moment.",
-    );
+    return billingFailed(c, e);
   }
 });
 
-// Change how many seats are paid for. Owner only, and never below the number of people already in
-// the team — the seat count is what admits the next member, so setting it under the current size is
-// a refusal aimed at whoever joins next rather than at the person doing it.
-app.patch("/v1/teams/:slug/seats", async (c) => {
-  const team = await teamBySlug(c, c.req.param("slug"));
-  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
-  if (team.role !== "owner")
-    return err(c, 403, "Only the team's owner can change its seats. Ask them to do it.");
-  if (team.plan !== "team")
-    return err(c, 400, `${team.name} isn't on a paid plan, so there are no seats to change.`);
-  if (!team.subscription_id)
-    return err(
-      c,
-      400,
-      `${team.name} has no subscription to change. Choose a plan in Settings first.`,
-    );
-  const { seats } = (await c.req.json().catch(() => ({}))) as { seats?: number };
-  const wanted = Math.trunc(Number(seats)) || 0;
-  if (wanted < 1) return err(c, 400, "Choose at least one seat.");
-  const members = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM membership WHERE team_id = ?")
-    .bind(team.id)
-    .first<{ n: number }>();
-  if (wanted < (members?.n ?? 0))
-    return err(
-      c,
-      400,
-      `${team.name} has ${members?.n} members. Remove someone before dropping to ${wanted} seat${wanted === 1 ? "" : "s"}.`,
-    );
-
-  // Stripe ids are `sub_...`; Paystack's are `SUB_...`. The subscription itself says which provider
-  // it belongs to, so nothing has to be stored twice and the two can never disagree.
-  const provider: Provider = team.subscription_id.startsWith("sub_") ? "stripe" : "paystack";
+// Bachs's own billing page for whoever pays: card, invoices, cancelling. `{ team: slug }` for a
+// team's subscription, which only its owner may open; nothing for your own Solo one. A fresh link
+// per click, because the link is a credential for that customer.
+app.post("/v1/billing/portal", async (c) => {
+  const { team: slug } = (await c.req.json().catch(() => ({}))) as { team?: string };
+  let subscription = "";
+  if (slug) {
+    const team = await teamBySlug(c, slug);
+    if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+    if (team.role !== "owner")
+      return err(c, 403, "Only the team's owner can manage its billing. Ask them to do it.");
+    subscription = team.subscription_id;
+  } else {
+    const me = await c.env.DB.prepare("SELECT subscription_id FROM account WHERE id = ?")
+      .bind(c.get("account"))
+      .first<{ subscription_id: string }>();
+    subscription = me?.subscription_id || "";
+  }
+  if (!subscription) return err(c, 400, "There's no subscription to manage yet.");
   try {
-    await setSeats(provider, c.env, team.subscription_id, wanted);
+    return c.json(await portalSession(c.env, subscription));
   } catch (e) {
-    return err(
-      c,
-      502,
-      e instanceof BillingError
-        ? e.message
-        : "We couldn't reach the payment provider. Try again in a moment.",
-    );
+    return billingFailed(c, e);
   }
-  // The provider's webhook is what writes the number: one source for what is paid for, and it is
-  // the subscription. Answering with the asked-for figure would have the hub show a seat count
-  // nothing has confirmed yet.
-  return c.json({ ok: true, seats: team.seats, pending: wanted });
 });
 
-// What this deployment can take money with, and in which mode. No secrets, only their shape — and
+// Whether this deployment can take money, and in which mode. No secrets, only their shape — and
 // the mode is read off the key, so it cannot disagree with the keys actually in use.
-app.get("/v1/billing", (c) =>
-  c.json({
-    stripe: modeOf(c.env.STRIPE_SECRET || ""),
-    paystack: modeOf(c.env.PAYSTACK_SECRET || ""),
-  }),
-);
+app.get("/v1/billing", (c) => c.json({ mode: modeOf(c.env.BACHS_SECRET || "") }));
 
 // ---- notifications ----------------------------------------------------------------------
 
@@ -4270,40 +4300,6 @@ app.put("/v1/guides/:id", async (c) => {
   const tooBig = sizeProblem(markdown.length, existing?.size ?? 0);
   if (tooBig) return err(c, 413, tooBig);
 
-  // Handed in means the actor's turn is over. A new guide under work its publisher has handed in,
-  // and that is waiting on its author, is refused.
-  //
-  // Every follow-up in real use that nobody asked for came from exactly here: an agent handed in,
-  // was told something about its evidence, and published a second guide to carry what it had
-  // found — "Hand-in evidence: …", six screenshots with Problem and Steps around them. The author
-  // then had two documents to review and one of them was the agent answering itself. Instructions
-  // saying not to were already on hand_in; the note on every `take` said the opposite ("what you
-  // found doing it — publish that"), and an agent follows the text it read last.
-  //
-  // Only new guides: a write-up published before the hand-in can still be corrected. Only the
-  // hand-in's own account, and never the author of the parent, who is the one reviewing it. Only
-  // until the author answers: a send-back or a close deletes the claim, and an approved task is
-  // `consumed` while its claim stays in review, so it is excluded by status.
-  if (parentId && !existing) {
-    const handed = await c.env.DB.prepare(
-      `SELECT 1 FROM claim c JOIN guide g ON g.id = c.guide_id
-        WHERE c.guide_id = ? AND c.account_id = ? AND c.state = 'review' AND g.account_id <> ?
-          AND g.status <> 'consumed'
-        LIMIT 1`,
-    )
-      .bind(parentId, account, account)
-      .first();
-    if (handed)
-      return err(
-        c,
-        409,
-        `You handed ${parentId} in, and it is waiting on its author. What you did and found ` +
-          "belongs on that hand-in — `checks` for what you ran, `writeup` for what you had to " +
-          "adapt — not in a new guide. Nothing more is needed from you: stop, and tell the " +
-          "person it is handed in.",
-      );
-  }
-
   // Frontmatter still round-trips `promoted`, because the document is the record and a guide shared
   // a month ago must re-share today. It cannot be acquired, though: only a guide already carrying
   // the status keeps it, and that is read from the stored row rather than the markdown just sent.
@@ -4461,6 +4457,15 @@ app.put("/v1/guides/:id", async (c) => {
       id,
       url,
       status,
+      // A draft reaches nobody until a person marks it Ready, on its hub page — never the share
+      // page, which runs no script and has no buttons. Said here so an agent hands the person the
+      // page that can do it, over either transport.
+      ...(status === "draft"
+        ? {
+            ready_at: `${base}/hub/g/${id}`,
+            next: `in Draft: ask the person to read it and mark it Ready at ${base}/hub/g/${id}`,
+          }
+        : {}),
       created: !existing,
       team: team?.slug || "",
       to: toAccount?.handle || (toGroup ? `#${toGroup.slug}` : ""),
@@ -4820,7 +4825,7 @@ app.get("/v1/guides/:id/context", async (c) => {
     // What each person who answered showed: a "works" carries screenshots of it working, a
     // "didn't work" the whole report. The summary above has only the latest one-line note.
     c.env.DB.prepare(
-      `SELECT v.ok, v.note, v.detail, v.at, COALESCE(a.handle, '') AS handle,
+      `SELECT v.ok, v.note, v.detail, v.writeup, v.at, COALESCE(a.handle, '') AS handle,
               COALESCE(a.name, '') AS name
          FROM verdict v LEFT JOIN account a ON a.id = v.account_id
         WHERE v.guide_id = ? ORDER BY v.at DESC`,
@@ -4829,6 +4834,7 @@ app.get("/v1/guides/:id/context", async (c) => {
       .all<{
         ok: number;
         note: string;
+        writeup: string;
         detail: string;
         at: string;
         handle: string;
@@ -4918,6 +4924,8 @@ app.get("/v1/guides/:id/context", async (c) => {
       by: { handle: v.handle, name: v.name },
       note: v.note,
       detail: v.detail,
+      // What finishing it took, in the finisher's words: shown under the proof on a Done guide.
+      writeup: v.writeup,
       at: v.at,
     })),
     acks: answered.results.map((k) => ({
@@ -4985,6 +4993,28 @@ app.patch("/v1/guides/:id/status", async (c) => {
     markdown = repo
       ? setField(markdown, "target_context", repo)
       : dropField(markdown, "target_context");
+  }
+  // Archiving lets go of everyone on it. A hand-in left waiting on a guide that is already Done is
+  // one nobody can answer: it sat in Needs you and on the board's In review lists, and 61 were
+  // stuck that way in production (0055_archive_claims.sql). Whoever held it or handed it in hears
+  // it is done with — not "accepted", which closing a hand-in says; nobody reviewed this one.
+  if (status === "consumed") {
+    const { results: held } = await c.env.DB.prepare(
+      "SELECT DISTINCT account_id FROM claim WHERE guide_id = ?",
+    )
+      .bind(found.row.id)
+      .all<{ account_id: string }>();
+    if (held.length) {
+      await c.env.DB.prepare("DELETE FROM claim WHERE guide_id = ?").bind(found.row.id).run();
+      for (const { account_id } of held)
+        await notify(c.env, {
+          to: account_id,
+          kind: "consumed",
+          guide_id: found.row.id,
+          actor_id: c.get("account"),
+          team_id: found.row.team_id,
+        });
+    }
   }
   // Archived by a person, not approved: Done says which (0054_outcome.sql). Leaving Done clears it.
   await c.env.DB.prepare(
@@ -5760,11 +5790,15 @@ app.get("/v1/tasks", async (c) => {
         team: r.task.team_slug,
         // Assigned to you, or to a group you are in: yours to pass on, as well as its author's.
         for_me: Boolean(r.task.for_me),
+        // Several people are an unnamed group (`~…`) nobody can type: said as their `@names`, which is
+        // also an address assign takes, so Give to… can mark it as the current one.
         to: r.task.to_handle
           ? `@${r.task.to_handle}`
-          : r.task.to_group_slug
-            ? `#${r.task.to_group_slug}`
-            : "",
+          : r.task.to_group_slug.startsWith("~")
+            ? r.task.to_group_name.split(/,\s*/).join(" ")
+            : r.task.to_group_slug
+              ? `#${r.task.to_group_slug}`
+              : "",
       };
       if (!v.claim || !r.by) return v;
       const report_url = r.report_key
@@ -5894,9 +5928,10 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
     result.claim.guide_id,
     `${body.evidence ?? ""}\n${body.writeup ?? ""}`,
   );
+  const ended = await claims.complete(c.env.DB, result.claim.guide_id, { account, at: now() });
   count(c, "task_finished", {});
   await taskEvent(c, result.claim.guide_id, "task_finished", "");
-  return c.json({ id: result.claim.guide_id, state: "review" });
+  return c.json({ id: result.claim.guide_id, state: ended.done ? "done" : "working" });
 });
 
 app.post("/v1/tasks/next", async (c) => {
@@ -5967,6 +6002,12 @@ app.post("/v1/tasks/:id/finish", async (c) => {
 // The gate. A person's calls, not an agent's: there is no MCP tool for any of these, because an
 // agent approving work — its own or another's — is the thing the gate exists to stop.
 app.post("/v1/tasks/:id/approve", async (c) => {
+  // Nothing waits for approval now (docs/REVIEW.md): finished work is already Done. An installed
+  // CLI still calls this, so on Done work it succeeds and changes nothing.
+  const done = await c.env.DB.prepare("SELECT 1 FROM guide WHERE id = ? AND status = 'consumed'")
+    .bind(c.req.param("id"))
+    .first();
+  if (done) return c.json({ id: c.req.param("id"), state: "done" });
   const r = await claims.approve(c.env.DB, c.req.param("id"), {
     account: c.get("account"),
     at: now(),
@@ -5990,14 +6031,11 @@ app.post("/v1/guides/:id/mark_done", async (c) => {
     note: typeof body.note === "string" ? body.note : "",
   });
   if ("error" in r) return err(c, r.status, r.error);
-  if (r.state === "done") {
-    count(c, "task_approved", {});
-    await taskEvent(c, id, "task_approved", r.claimant);
-  } else {
-    count(c, "task_finished", {});
-    await taskEvent(c, id, "task_finished", "");
-  }
-  return c.json({ id, state: r.state });
+  // Said done by a person rather than the agent: finished like any hand-in, with nobody after it.
+  if (r.state !== "done") await claims.complete(c.env.DB, id, { account: r.claimant, at: now() });
+  count(c, "task_finished", {});
+  await taskEvent(c, id, "task_finished", "");
+  return c.json({ id, state: "done" });
 });
 
 app.post("/v1/tasks/:id/reject", async (c) => {
@@ -6369,9 +6407,16 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   // reason as the write-up: required, it is "low risk" on every hand-in and says nothing.
   const risk = typeof who.risk === "string" ? who.risk.trim().slice(0, NOTE_MAX) : "";
 
+  if (typeof who.writeup === "string" && who.writeup.trim().length > claims.WRITEUP_CAP)
+    return err(
+      c,
+      400,
+      `Keep \`writeup\` to ${claims.WRITEUP_CAP} characters: what you had to adapt and why. The rest belongs in the diff.`,
+    );
+
   if (found.row.kind === "task") {
+    // No write-up guide is asked for any more; an older client's is still filed (claims.finish).
     const report = typeof who.report === "string" ? who.report.trim() : "";
-    if (!report) return err(c, 400, "send `report`: the id of the transfer guide about this work");
     const done = await claims.finish(c.env.DB, found.row.id, who, {
       at,
       report,
@@ -6385,11 +6430,13 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
     if ("error" in done)
       return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
     await claimEvidenceShots(c, who.account, found.row.id, evidence);
+    // Finishing is final (docs/REVIEW.md): Done, with what was shown kept on the guide.
+    const ended = await claims.complete(c.env.DB, found.row.id, { account: who.account, at });
     count(c, "task_finished", {});
     await taskEvent(c, found.row.id, "task_finished", "");
     return c.json({
       id: found.row.id,
-      state: "review",
+      state: ended.done ? "done" : "working",
       report: done.claim.report_id,
       ...claims.steps("task", "handed_in"),
     });
@@ -6402,11 +6449,12 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
       'Say whether its Verification held: send "ok": true, or "ok": false with a note.',
     );
   if (!who.ok && !note) return err(c, 400, "Say what went wrong, so the author knows what to fix.");
-  if (found.owner) return err(c, 403, "This is your own guide: there is nobody to hand it in to.");
   // Evidence before the verdict is recorded: a refused hand-in must leave nothing behind, or the
   // author is told "it worked" by a call that did not go through. Checks are evidence sorted
   // against the Verification line each one answers, and bringing them is bringing it.
-  const bad = checks.length ? claims.checksProblem(checks) : claims.evidenceProblem(evidence);
+  const bad = checks.length
+    ? claims.checksProblem(checks)
+    : (claims.evidenceProblem(evidence) ?? (who.ok ? claims.proofProblem(evidence, checks) : null));
   if (bad) return err(c, 400, bad);
   // The evidence the agent just sent, on the verdict as well as the claim. This is the correction
   // channel: a hand-in that says it did not hold now carries what was run, and the guide shows it.
@@ -6422,12 +6470,19 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   });
   if ("error" in done)
     return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
-  await recordVerdict(c, found.row, who.ok, note, { stored: true });
+  if (!found.owner) await recordVerdict(c, found.row, who.ok, note, { stored: true });
   await claimEvidenceShots(c, who.account, found.row.id, evidence);
+  // Finished when it held and nobody else still has it; one that did not hold goes back as it was.
+  const ended = await claims.complete(c.env.DB, found.row.id, {
+    account: who.account,
+    at,
+    ok: who.ok,
+  });
   return c.json({
     id: found.row.id,
     ok: who.ok,
     note,
+    state: ended.done ? "done" : "working",
     ...claims.steps(found.row.kind, "handed_in"),
   });
 });
@@ -6761,6 +6816,30 @@ app.post("/v1/guides/:id/recall", async (c) => {
 });
 
 /** Turn one repo's hand-in down, with why: it is open there again, and its taker is told. */
+/**
+ * Reopen finished work (docs/REVIEW.md §4): back to To do with why, for anyone in its team. The
+ * reason is at the top of the guide for whoever takes it next, and whoever finished it is told.
+ */
+app.post("/v1/guides/:id/reopen", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { why?: unknown };
+  const why = typeof body.why === "string" ? body.why : "";
+  const id = c.req.param("id");
+  const r = await claims.reopen(c.env.DB, id, { account: c.get("account"), at: now(), why });
+  if ("error" in r) return err(c, r.status, r.error);
+  const found = await readableGuide(c, id);
+  for (const to of r.finishers)
+    await notify(c.env, {
+      to,
+      kind: "sent_back",
+      guide_id: id,
+      actor_id: c.get("account"),
+      team_id: found?.row.team_id || "",
+      note: why.trim().slice(0, 280),
+    });
+  count(c, "guide_reopened", {});
+  return c.json({ id, state: "ready" });
+});
+
 app.post("/v1/guides/:id/send_back", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { place?: unknown; why?: unknown };
   const why = typeof body.why === "string" ? body.why.trim().slice(0, 1000) : "";

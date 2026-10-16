@@ -467,6 +467,12 @@ usePage({
              <details>, because this page runs no script: the buttons lead into the hub, which signs
              the visitor in if they need it and asks the question there. -->
         <div v-if="!embed" class="pull">
+          <!-- A draft reaches nobody until somebody marks it Ready, and that is done in the hub: this
+               page runs no script, so it can only say where. -->
+          <p v-if="str(meta?.status) === 'draft'" class="mt-0 mb-3 font-ui text-sm text-muted">
+            <b class="text-fg">This is a draft.</b> Nobody can take it until it is marked Ready.
+            <a :href="inHub">Mark it Ready in the hub</a>
+          </p>
           <p v-if="isBug" class="mt-0 mb-3 font-ui text-sm text-muted">
             <b class="text-fg">This is a bug report.</b> The steps under Reproduce show the problem;
             they aren't a fix. Fix what Problem describes, then check Verification.

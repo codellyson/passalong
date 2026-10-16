@@ -32,6 +32,8 @@ export interface Me {
   plan: string;
   /** Set only on a plan that was given rather than bought: when it stops. See apps/api/src/gifts.ts. */
   plan_until?: string;
+  /** Set on a bought plan that was cancelled: when it stops. It is paid until then. */
+  plan_ends?: string;
   /** "" for everybody, "super" for whoever runs Passalong. Draws /admin, and the way to it. */
   role?: string;
   /** Whether this account may make or remove a super — only the deployment's ADMIN_ACCOUNTS may. */
@@ -69,7 +71,7 @@ export interface Guide {
   archives_at?: string;
   status: string;
   /** How it reached Done: approved after review, or archived. '' while it is not done. */
-  outcome?: "approved" | "archived" | "";
+  outcome?: "finished" | "approved" | "archived" | "";
   url: string;
   created: string;
   /** Its last edit or status change. */
@@ -105,6 +107,8 @@ export interface Guide {
   answered_elsewhere?: boolean;
   /** Its column on the team board, worked out by the server the same for everyone. */
   stage?: "draft" | "todo" | "working" | "review" | "done";
+  /** Whose rows it sits in when the board is by person: holders, else who it was sent to. Empty is Anyone. */
+  lanes?: string[];
   /** Who holds it or handed it in. `agent` is empty for a person working it in the browser. */
   held_by?: {
     name: string;
@@ -212,6 +216,10 @@ export interface TeamDetail extends Team {
   guides: number;
   /** How many members the plan is paid for. Zero on a free plan, where seats are not the limit. */
   seats?: number;
+  /** Paid for through Bachs, so there is a billing page to open. A given plan has none. */
+  subscribed?: boolean;
+  /** Set when the team's plan was cancelled: when it stops. It is paid until then. */
+  plan_ends?: string;
   members_count?: number;
   /** How many channels are connected. Never their URLs — those are credentials for rooms. */
   channels?: number;
@@ -412,6 +420,8 @@ export interface GuideContext {
     by: { handle: string; name: string };
     note: string;
     detail: string;
+    /** What finishing took, in the finisher's words. Absent from an older server. */
+    writeup?: string;
     at: string;
   }[];
   /** Each person's standing answer to "are you taking this?", with when they gave it. */

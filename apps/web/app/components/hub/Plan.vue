@@ -1,7 +1,7 @@
 <!--
   What a team's plan is, and the two things its owner can do about it.
 
-  No card form and no pricing table. Both providers hand back a hosted page, which is the whole
+  No card form and no pricing table. Bachs hands back a hosted page, which is the whole
   reason this product never sees a card number — so the control here is a button that leaves, and
   the screen it leaves for is theirs.
 
@@ -22,19 +22,17 @@ import type { TeamDetail } from "~/types/hub";
  */
 const props = defineProps<{ slug: string }>();
 
-const { api, json, refresh, error, signedIn } = useHub();
+const { api, json, error, signedIn } = useHub();
 
-const seats = ref("1");
 const busy = ref(false);
 
 /** Which providers this deployment can take money with. It changes with a deploy, not a click. */
 const { data: modesData } = useQuery({
   queryKey: hubKeys.billing,
-  queryFn: () => api<{ stripe: string; paystack: string }>("/v1/billing"),
+  queryFn: () => api<{ mode: string }>("/v1/billing"),
   enabled: signedIn,
   staleTime: Number.POSITIVE_INFINITY,
 });
-const modes = computed(() => modesData.value ?? null);
 
 /** Shared with the team list and the write form, so each team is fetched once. */
 const { data: teamData, isPending: loadingTeam } = useQuery({
@@ -44,34 +42,22 @@ const { data: teamData, isPending: loadingTeam } = useQuery({
   enabled: signedIn,
 });
 const team = computed(() => teamData.value ?? null);
-// The seat field starts at what the team has, once, and is then the owner's to change.
-const seeded = ref(false);
-watch(
-  team,
-  (t) => {
-    if (t && !seeded.value) {
-      seats.value = String(t.seats || t.members.length || 1);
-      seeded.value = true;
-    }
-  },
-  { immediate: true },
-);
 
-const available = computed(() =>
-  (["stripe", "paystack"] as const).filter((p) => modes.value?.[p] && modes.value[p] !== "unset"),
-);
-/** Any configured key in test mode makes this a test deployment; say so once, loudly. */
-const testing = computed(() => available.value.some((p) => modes.value?.[p] === "test"));
+const available = computed(() => !!modesData.value?.mode && modesData.value.mode !== "unset");
+/** A sandbox key makes this a test deployment; say so once, loudly. */
+const testing = computed(() => modesData.value?.mode === "test");
+/** The Team product is flat: this many people, one price. Bigger teams are set up by hand. */
+const TEAM_SEATS = 10;
 
 const owner = computed(() => team.value?.role === "owner");
+/** When a cancelled plan stops. Said, or a cancelled plan looks like it renews. */
+const ends = computed(() => day(team.value?.plan_ends));
 const members = computed(() => team.value?.members.length ?? 0);
 /** Who to ask, by name, when you are not the one who can change the plan. */
 const ownerName = computed(() => {
   const o = team.value?.members.find((m) => m.role === "owner");
   return o ? o.display || personName(o.name, o.handle) : "";
 });
-/** The provider as its own brand writes it, not the id this app stores it under. */
-const PROVIDER: Record<string, string> = { stripe: "Stripe", paystack: "Paystack" };
 
 interface PlanCopy {
   label: string;
@@ -100,33 +86,14 @@ const PLANS: Record<string, PlanCopy> = {
 };
 const plan = computed<PlanCopy>(() => (team.value ? (PLANS[team.value.plan] ?? FREE) : FREE));
 
-async function subscribe(provider: string) {
+/** Leave for a hosted page: Bachs's checkout, or its billing page for a plan already paid for. */
+async function go(path: string, body: Record<string, string> = {}) {
   busy.value = true;
   try {
-    const out = await api<{ url: string }>(
-      `/v1/teams/${encodeURIComponent(props.slug)}/subscribe`,
-      json("POST", { provider, seats: Number(seats.value) || 1 }),
-    );
+    const out = await api<{ url: string }>(path, json("POST", body));
     // Their page, not ours. Same tab: coming back is what the success URL is for, and a popup is
     // the thing a browser is most likely to swallow.
     if (out?.url) location.href = out.url;
-  } catch (e) {
-    error.value = (e as Error).message;
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function changeSeats() {
-  busy.value = true;
-  try {
-    await api(
-      `/v1/teams/${encodeURIComponent(props.slug)}/seats`,
-      json("PATCH", { seats: Number(seats.value) || 1 }),
-    );
-    // The seat count this shows is the one the provider confirmed, so the page waits for the
-    // webhook rather than displaying the number that was asked for.
-    await refresh(hubKeys.team(props.slug), hubKeys.me);
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -152,46 +119,39 @@ async function changeSeats() {
       >Test mode: no real money is charged</span>
     </div>
 
-    <p class="m-0 font-ui text-sm text-muted">{{ plan.says }}</p>
+    <p class="m-0 font-ui text-sm text-muted">
+      {{ plan.says
+      }}<template v-if="team.plan === 'team' && ends">
+        {{ " " }}It was cancelled, so it ends on {{ ends }} and won't renew. After that the team is
+        read-only until it subscribes again<template v-if="owner">; to keep it, open Manage billing</template>.
+      </template>
+    </p>
 
-    <p v-if="!available.length" class="m-0 font-ui text-sm text-muted">
+    <p v-if="!available" class="m-0 font-ui text-sm text-muted">
       Paid plans aren't available yet. Check back later.
     </p>
 
     <template v-else-if="owner">
-      <div class="flex flex-wrap items-end gap-3">
-        <div>
-          <label class="mb-2 block font-ui text-sm font-medium text-fg" for="plan-seats">Seats</label>
-          <input
-            id="plan-seats"
-            v-model="seats"
-            class="w-24"
-            type="number"
-            min="1"
-            inputmode="numeric"
-          />
-        </div>
-        <template v-if="team.plan === 'team'">
-          <button class="btn primary" :disabled="busy" @click="changeSeats">Change seats</button>
-        </template>
-        <template v-else>
-          <button
-            v-for="p in available"
-            :key="p"
-            class="btn primary"
-            :disabled="busy"
-            @click="subscribe(p)"
-          >
-            {{ team.plan === "lapsed" ? "Renew" : "Subscribe" }} with {{ PROVIDER[p] || p }}
-          </button>
-        </template>
+      <div v-if="team.plan === 'team' && team.subscribed" class="flex flex-wrap items-center gap-3">
+        <button
+          class="btn"
+          :disabled="busy"
+          @click="go('/v1/billing/portal', { team: props.slug })"
+        >Manage billing</button>
+        <span class="font-ui text-sm text-muted">Card, invoices and cancelling.</span>
       </div>
-      <!-- Said before the refusal, because the refusal happens after a round trip and the number
-           that causes it is already on screen. -->
-      <p class="m-0 font-ui text-sm text-muted">
-        A seat for everyone in the team: {{ members }} today. Dropping below that needs someone to
-        leave first.
+      <p v-else-if="members > TEAM_SEATS" class="m-0 font-ui text-sm text-muted">
+        The Team plan covers {{ TEAM_SEATS }} people and {{ team.name }} has {{ members }}. Write to
+        <a href="mailto:support@kreativekorna.com">support@kreativekorna.com</a> and we'll set it up.
       </p>
+      <div v-else class="flex flex-wrap items-center gap-3">
+        <button
+          class="btn primary"
+          :disabled="busy"
+          @click="go(`/v1/teams/${encodeURIComponent(props.slug)}/subscribe`)"
+        >{{ team.plan === "lapsed" ? "Renew the Team plan" : "Subscribe to Team" }}</button>
+        <span class="font-ui text-sm text-muted">$20 a month for up to {{ TEAM_SEATS }} people.</span>
+      </div>
     </template>
 
     <p v-else class="m-0 font-ui text-sm text-muted">

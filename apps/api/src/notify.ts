@@ -79,6 +79,9 @@ export const KINDS = [
   // Alerts for whoever runs Passalong, not for the people using it: see ADMIN_ALERTS in alerts.ts.
   // The actor is the account it is about; the note is what a person needs to recognise it.
   "signed_up",
+  // A second subscription started paying for a plan another one already pays for: two open checkout
+  // tabs, both completed. Somebody is being charged twice and only a refund in Bachs undoes it.
+  "billed_twice",
   // Email in (inbound.ts), both actorless: nobody with an account did them. `emailed` is the guide
   // an email became; `email_sender` is a new sender asking to be allowed, its address in the note.
   "emailed",
@@ -788,6 +791,8 @@ export function line(r: LineFacts): string {
       return `${who} replied to your agent on ${title}${note}`;
     case "signed_up":
       return `${who} signed up${note}`;
+    case "billed_twice":
+      return `Two subscriptions are paying for one plan${note}. Refund one in Bachs`;
     case "emailed":
       return `An email became ${title}${note}`;
     case "hooked":

@@ -78,12 +78,6 @@ export async function share(markdown, { cwd = process.cwd(), to, follows } = {})
   ];
   if (errors.length)
     throw new PassalongError(`guide is not ready to share:\n  - ${errors.join("\n  - ")}`);
-  // Every guide is a draft when it is first shared, whatever its kind: Draft is where it waits
-  // until a person says it is ready — `ready()` — and an agent that writes one over MCP comes
-  // through here too, so publishing on share would let it reach people with nobody reading it.
-  // Sharing *is* putting it in Draft, so a new guide that names no status says so here; one already
-  // published keeps what its document says.
-  if (!guide.meta.status) guide = { ...guide, meta: { ...guide.meta, status: "draft" } };
 
   // The server is where a guide lives; nothing is kept on this machine.
   needsSync("sharing a guide");
@@ -582,6 +576,14 @@ export async function now({ cwd = process.cwd() } = {}) {
   return { held, waiting, needs: review + handed + waiting.inbox, agent: who.agent };
 }
 
+/** Finished work back to To do, with why (docs/REVIEW.md §4). */
+export async function reopen(id, why) {
+  needsSync("reopening work");
+  if (!String(why || "").trim())
+    throw new PassalongError("say why: whoever takes it next reads it");
+  return api.reopen(await resolveId(id), why);
+}
+
 /**
  * The gate, a person's three answers to a task. Approve: the work in review is done. Reject: it
  * goes back to Ready with `why` on it for the next agent. Release: a task an agent holds, live or
@@ -1045,10 +1047,13 @@ export async function planTasks(steps, { cwd = process.cwd() } = {}) {
     ].join("\n");
     // The summary is the step's own, said by whoever planned it: it is what a person reads about the
     // task, and this builds the document without guessing one (the server refuses a task without).
+    // A plan is the case Draft is for: several tasks at once, which a person reads before any of
+    // them runs. Stated here, by the code that knows it is building one.
     const meta = {
       title: step.title,
       summary: step.summary,
       kind: "task",
+      status: "draft",
       target_context: step.target_context ?? repo,
     };
     const after = (step.after || []).map((j) => ids[j]);
@@ -1115,8 +1120,9 @@ export async function work({
       stdio: "inherit",
       env: { ...process.env, PASSALONG_TASK: t.id },
     });
+    // Finishing is final, so a finished task is Done; "review" is a server from before that.
     const state = (await tasks()).find((x) => x.id === t.id)?.state;
-    if (state !== "review")
+    if (state !== "done" && state !== "review")
       return {
         finished,
         stopped: "unfinished",

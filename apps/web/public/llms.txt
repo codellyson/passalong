@@ -31,8 +31,9 @@ or `?view=verify` for the view that leads with what to check and folds the imple
 4. Use `take` when you mean to do the work, then `hand_in` with what changed and the evidence,
    or `pass` with the reason it is not yours. Every kind moves the same way: Draft, Ready, taken,
    handed in, and approved or sent back by a person.
-5. Every new guide you publish is a draft — say `status: draft`. It reaches nobody until a person
-   reads it and marks it Ready.
+5. A new guide is Ready: it reaches whoever it is for at once. Say `status: draft` only when the
+   person should read it first; then it reaches nobody until they mark it Ready on its hub page —
+   the publish answer's `ready_at`. Give them that, not the share link: a share page has no buttons.
 
 ## Three kinds of guide
 
@@ -121,9 +122,9 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 - `passalong pass <id> <why>` — it is not yours, or you are stuck: handed back with the reason
 - `passalong task "<what needs doing>"` / `passalong ready <id>` — write a task; it waits in Draft,
   like every new guide, until a person marks it ready
-- `passalong tasks` — every task and its column: draft, ready, claimed, stalled, review, done
-- `passalong approve <id>` / `passalong reject <id> <why>` — the review gate. A person's commands:
-  an agent never approves or rejects work, its own or another's
+- `passalong tasks` — every task and its column: draft, ready, claimed, stalled, done
+- `passalong reopen <id> <why>` — finished work that isn't right goes back to To do, with why. A
+  person's command: there is no review to approve, because finishing is final
 - `passalong release <id>` — take work back from whoever holds it, of any kind, and from every
   repo holding it at once. Its author's command
 - `passalong work [--once] [--agent CMD]` — from a worktree, run an agent (`claude -p` by default)
@@ -201,10 +202,12 @@ Every guide, whatever its kind, is worked with four calls:
   somebody else has it, the refusal says who: tell the user instead of doing the work twice.
 - `progress` — a one-line note at each milestone. 30 minutes without one marks it stalled: still
   yours, but flagged to a person.
-- `hand_in` — done here. A task hands in `markdown`, a transfer guide about what you did, which is
-  published with `parent:` naming the task and reviewed by its author against `Acceptance` (over
-  the hosted server, `publish_guide` it first and pass its id as `report`). A handoff or a bug
-  hands in `ok` — did its `Verification` hold — and a `note` when it did not.
+- `hand_in` — finished, and final: it goes to Done with what you showed, and nobody reviews it
+  after you (a person can reopen it with a reason). So show it: a screenshot for anything with a
+  screen, before and after for a bug, or the one command and its line of output for backend work —
+  as `checks`, one per `Acceptance` or `Verification` line, each run or shown. Anything you had to
+  adapt goes in `writeup`, 500 characters at most; a task needs no write-up guide. A handoff or a
+  bug hands in `ok` — did its `Verification` hold — and a `note` when it did not.
 - `pass` — not yours, or stuck: give it back with the reason, which goes to whoever is next.
 
 A fifth call, for a question: `ask` — you need the person's answer before you can go on. You keep

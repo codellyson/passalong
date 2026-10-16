@@ -497,7 +497,9 @@ export function stamp(guide, defaults = {}) {
   const meta = { ...guide.meta };
   if (!meta.id) meta.id = newId();
   if (!meta.created) meta.created = new Date().toISOString();
-  if (!meta.status) meta.status = "draft";
+  // Ready unless whoever wrote it said draft: a guide sent to someone is meant to reach them, and
+  // drafts were where addressed work sat forgotten (every draft in production on 2026-10-15).
+  if (!meta.status) meta.status = "published";
   for (const [k, v] of Object.entries(defaults))
     if (meta[k] === undefined || meta[k] === "") meta[k] = v;
   return { meta, body: guide.body };
@@ -525,8 +527,7 @@ export function bugGuide({
   area = "",
   report = "",
   environment = "",
-  // A draft like every new guide: it reaches people when a person marks it Ready.
-  status = "draft",
+  status = "published",
   evidence = [],
 } = {}) {
   /**
@@ -617,7 +618,7 @@ export function template(meta = {}) {
       summary: "",
       author: "",
       source_context: "",
-      status: "draft",
+      status: "published",
       stack_assumptions: [],
       tags: [],
       ...meta,
@@ -655,7 +656,7 @@ function bugTemplate(meta = {}) {
       kind: "bug",
       author: "",
       source_context: "",
-      status: "draft",
+      status: "published",
       severity: "s3",
       stack_assumptions: [],
       tags: ["bug"],
@@ -697,7 +698,7 @@ function taskTemplate(meta = {}) {
       author: "",
       source_context: "",
       target_context: "",
-      status: "draft",
+      status: "published",
       stack_assumptions: [],
       tags: [],
       ...meta,

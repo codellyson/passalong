@@ -429,6 +429,8 @@ export const approveTask = (id) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/approve`, { method: "POST", body: {} });
 export const rejectTask = (id, why) =>
   call(`/v1/tasks/${encodeURIComponent(id)}/reject`, { method: "POST", body: { why } });
+export const reopen = (id, why) =>
+  call(`/v1/guides/${encodeURIComponent(id)}/reopen`, { method: "POST", body: { why } });
 /** A handoff's or bug's approve and send-back. No `place` names the only hand-in there is. */
 export const closeGuide = (id) =>
   call(`/v1/guides/${encodeURIComponent(id)}/close`, { method: "POST", body: {} });

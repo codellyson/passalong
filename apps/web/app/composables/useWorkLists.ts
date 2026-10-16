@@ -15,8 +15,7 @@ export const STAGES = [
   { id: "draft", label: "Draft", hint: "Not ready for anyone yet" },
   { id: "todo", label: "To do", hint: "Ready, nobody has it" },
   { id: "working", label: "In progress", hint: "Held by a person or an agent" },
-  { id: "review", label: "In review", hint: "Handed in, waiting for a review" },
-  { id: "done", label: "Done", hint: "Approved or archived" },
+  { id: "done", label: "Done", hint: "Finished, with what was shown, or archived" },
 ] as const;
 export type Stage = (typeof STAGES)[number]["id"];
 

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { passwordProblem } from "../src/auth.ts";
-import { PAYMENTS_NOT_SET_UP, setSeats, startCheckout } from "../src/billing.ts";
+import { PAYMENTS_NOT_SET_UP, portalSession, startCheckout } from "../src/billing.ts";
 
 const source = () => readFile(new URL("../src/index.ts", import.meta.url), "utf8");
 
@@ -67,13 +67,10 @@ test("a person is named by team name in a refusal, never by slug", async () => {
 });
 
 test("a deployment without payment keys says so in a person's words", async () => {
-  const opts = { subject: { kind: "team", id: "t1" }, seats: 1, email: "a@b.c", returnTo: "x" };
-  await assert.rejects(startCheckout("stripe", {}, opts), { message: PAYMENTS_NOT_SET_UP });
-  await assert.rejects(startCheckout("paystack", {}, opts), { message: PAYMENTS_NOT_SET_UP });
-  await assert.rejects(setSeats("stripe", {}, "sub_1", 2), { message: PAYMENTS_NOT_SET_UP });
+  const opts = { subject: { kind: "team", id: "t1" }, email: "a@b.c", returnTo: "x" };
+  await assert.rejects(startCheckout({}, opts), { message: PAYMENTS_NOT_SET_UP });
+  await assert.rejects(portalSession({}, "sub_1"), { message: PAYMENTS_NOT_SET_UP });
   assert.equal(PAYMENTS_NOT_SET_UP, "Payments aren't set up yet. Try again later.");
-  // Paystack cannot change seats at all, so the refusal says where to go instead.
-  await assert.rejects(setSeats("paystack", {}, "SUB_1", 2), /Cancel it .*Settings/);
 });
 
 test("password refusals are sentences", () => {

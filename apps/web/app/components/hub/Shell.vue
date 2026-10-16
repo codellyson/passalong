@@ -61,13 +61,11 @@ const {
  */
 const { data: billing } = useQuery({
   queryKey: hubKeys.billing,
-  queryFn: () => api<{ stripe: string; paystack: string }>("/v1/billing"),
+  queryFn: () => api<{ mode: string }>("/v1/billing"),
   enabled: signedIn,
   staleTime: Number.POSITIVE_INFINITY,
 });
-const plansOffered = computed(() =>
-  (["stripe", "paystack"] as const).some((p) => billing.value?.[p] && billing.value[p] !== "unset"),
-);
+const plansOffered = computed(() => !!billing.value?.mode && billing.value.mode !== "unset");
 const route = useRoute();
 
 /**
@@ -233,6 +231,7 @@ const active = (to: string) =>
              Signed in on a phone it is in the account menu instead, to keep the bar one row. -->
         <AppThemeToggle :class="signedIn ? 'max-lg:hidden' : ''" />
         <template v-if="signedIn">
+          <HubGoTo />
           <HubNewMenu />
           <HubAccountMenu />
         </template>

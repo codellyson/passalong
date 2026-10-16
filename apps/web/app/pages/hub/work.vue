@@ -1,8 +1,9 @@
 <!--
-  /hub/work: the team board. Every task, handoff and bug in the team is a card in one of five
-  columns — Draft, To do, In progress, In review, Done — and everyone in the team sees the same
-  board. A card's column is the server's (`stage`), so it moves when the work moves and never
-  because of who is looking. "Show only mine" narrows the cards without moving any of them.
+  /hub/work: the team board. Every task, handoff and bug in the team is a card, and everyone in the
+  team sees the same board: in a team, Draft, To do, a column per teammate and group, In progress
+  and Done, like a Trello board with a list per person; across all teams, the four stages. Where a
+  card sits is the server's (`stage`, `lanes`), so it moves when the work moves and never because
+  of who is looking. "Show only mine" narrows the cards without moving any of them.
 
   It used to be four tabs (Needs you, Being worked on, Open, Done) worked out for each viewer, so
   two teammates saw the same work in different places and counted it differently.
@@ -46,6 +47,29 @@ const mineOnly = computed({
       { replace: true },
     ),
 });
+// The board has a column per teammate, so it is one team's: the only one, or the one picked.
+const scope = useState<string>("hub:scope");
+watchEffect(() => {
+  const teams = data.value.me?.teams ?? [];
+  if (!data.value.team && scope.value === "all" && teams.length === 1) scope.value = teams[0]!.slug;
+});
+/** On by default; off (`?by=stage`) snaps the board back to the four stages, everyone's together. */
+const byPerson = computed({
+  get: () => route.query.by !== "stage",
+  set: (on: boolean) =>
+    navigateTo({ query: { ...route.query, by: on ? undefined : "stage" } }, { replace: true }),
+});
+const people = computed(() =>
+  byPerson.value && data.value.team
+    ? data.value.team.members
+        .filter((m) => m.id)
+        .map((m) => ({
+          id: m.id as string,
+          label: m.display || personName(m.name, m.handle, m.id),
+          to: `@${m.handle || m.id}`,
+        }))
+    : null,
+);
 const searching = computed(() => Boolean(q.value.trim() || follows.value || mineOnly.value));
 function clearSearch() {
   q.value = "";
@@ -89,6 +113,10 @@ const empty = computed(() => columns.value.every((c) => !c.cards.length));
             <input v-model="mineOnly" type="checkbox" />
             Show only mine
           </label>
+          <label v-if="data.team" class="flex items-center gap-2 font-ui text-sm">
+            <input v-model="byPerson" type="checkbox" />
+            By person
+          </label>
         </div>
 
         <section
@@ -106,7 +134,7 @@ const empty = computed(() => columns.value.every((c) => !c.cards.length));
                 <span data-label>Copy a prompt for your agent</span>
               </button>
             </p>
-            <HubBoard :columns="columns" />
+            <HubBoard :columns="columns" :people="people" />
             <HubBulkBar />
           </template>
         </section>

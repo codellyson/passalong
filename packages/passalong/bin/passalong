@@ -6,12 +6,11 @@
 //     handed to whoever pulls or starts that guide
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
-//   passalong task "<what needs doing>"  write a task for an agent; it waits in Draft
+//   passalong task "<what needs doing>"  write a task for an agent; Ready at once
 //   passalong ready <id...|--all> guides you have read are ready — whoever they are for may take them now
 //   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
 //   passalong work [--once] [--agent CMD]  run an agent on each ready task here, one after another
-//   passalong approve <id>        the work in review is done, of any kind
-//   passalong reject <id> <why>   not done: back to Ready, and whoever takes it next reads why
+//   passalong reopen <id> <why>   finished work isn't right: back to To do, and whoever takes it next reads why
 //   passalong release <id>        take work back from whoever holds it, of any kind
 //   passalong attach <file>       upload a picture or a file and print the markdown that points at it
 //   passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
@@ -337,9 +336,8 @@ const commands = {
     const id = guide.meta.id;
     console.log(id);
     const target = guide.meta.target_context;
-    console.error(`task "${guide.meta.title}" is in Draft${target ? ` for ${target}` : " (no repo)"}`);
+    console.error(`task "${guide.meta.title}" is Ready${target ? ` for ${target}` : " (no repo)"}`);
     if (guide.meta.team) console.error(`handed to ${guide.meta.team} (team inbox)`);
-    console.error(`when an agent may take it: passalong ready ${id}`);
   },
 
   async tasks() {
@@ -384,16 +382,25 @@ const commands = {
     if (n) console.error("review them with: passalong tasks");
   },
 
-  async approve(f) {
-    const id = f._[0] || die("usage: passalong approve <id>");
-    await passalong.approveTask(id).catch((e) => die(e.message));
-    console.error(`${id} is done`);
+  // Nothing waits for approval now (docs/REVIEW.md): finishing is final. Kept so a script that
+  // calls it is told, not refused.
+  async approve() {
+    console.error(
+      "nothing to approve: finished work is already Done. If it isn't right: passalong reopen <id> <why>",
+    );
+  },
+
+  /** Finished work back to To do, with why at its top; whoever finished it is told. */
+  async reopen(f) {
+    const id = f._[0] || die("usage: passalong reopen <id> <why>");
+    const why = f._.slice(1).join(" ");
+    if (!why) die("say why: passalong reopen <id> <what is wrong>");
+    await passalong.reopen(id, why).catch((e) => die(e.message));
+    console.error(`${id} is back in To do — whoever takes it next reads why`);
   },
 
   async reject(f) {
-    const id = f._[0] || die("usage: passalong reject <id> <why>");
-    await passalong.rejectTask(id, f._.slice(1).join(" ")).catch((e) => die(e.message));
-    console.error(`${id} is back in Ready — the next agent reads why`);
+    return commands.reopen(f);
   },
 
   async release(f) {
