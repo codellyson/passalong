@@ -21,28 +21,47 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 /**
  * What this worktree's agent holds and what is waiting, as a few lines for an agent to read.
  * Empty when there is nothing to say, so a session in an unrelated repo is not told anything.
+ *
+ * `held` is a list: an agent may hold several things, and several sessions in one worktree are one
+ * agent to the queue. So a session is told what the worktree holds, and to carry on only with what
+ * was its own before a restart — never to resume another session's work.
  */
-export function nowText({ held, waiting = {} }) {
-  if (held) {
+export function nowText({ held = [], waiting = {} }) {
+  if (held.length === 1) {
+    const [h] = held;
     const lines = [
       // `kind` is required on what /v1/working sends. The `|| "task"` that used to be here was
       // both dead and wrong — absent has meant transfer since kinds existed, never task.
-      `Passalong: You hold ${held.id} (${held.kind}): ${held.title || held.id}.`,
+      `Passalong: This worktree holds ${h.id} (${h.kind}): ${h.title || h.id}.`,
     ];
-    if (held.note) lines.push(`Last note: "${held.note}".`);
+    if (h.note) lines.push(`Last note: "${h.note}".`);
     // The one thing here that is new information rather than a reminder: the person has written, and
     // nothing else in the session will say so until the agent next checks in.
-    if (held.replies)
+    if (h.replies)
       lines.push(
-        `${plural(held.replies, "message", "messages")} from the person ${held.replies === 1 ? "is" : "are"} ` +
-          `waiting for you: call take ${held.id} to read ${held.replies === 1 ? "it" : "them"} before anything else.`,
+        `${plural(h.replies, "message", "messages")} from the person ${h.replies === 1 ? "is" : "are"} ` +
+          `waiting: call take ${h.id} to read ${h.replies === 1 ? "it" : "them"} before anything else.`,
       );
-    if (held.state === "stalled")
+    if (h.state === "stalled")
       lines.push("It is marked stalled: nobody has heard from its agent in 30 minutes.");
     lines.push(
-      `To carry on, call take ${held.id} (it resumes what you hold), then progress at each ` +
-        "milestone. When it is done, hand_in with evidence — what you ran and what came back — " +
-        "so keep it as you go; if it is not yours or you are stuck, pass with the reason.",
+      `If it was yours before this session restarted, call take ${h.id} to carry on, then ` +
+        "progress at each milestone. When it is done, hand_in with evidence — what you ran and " +
+        "what came back — so keep it as you go; if it is not yours or you are stuck, pass with " +
+        "the reason. If another session here is on it, leave it to that session.",
+    );
+    return lines.join("\n");
+  }
+  if (held.length > 1) {
+    const lines = [`Passalong: This worktree holds ${held.length} things:`];
+    for (const h of held)
+      lines.push(
+        `- ${h.id} (${h.kind}): ${h.title || h.id}${h.state === "stalled" ? " — stalled" : ""}` +
+          `${h.replies ? ` — ${plural(h.replies, "message", "messages")} waiting` : ""}`,
+      );
+    lines.push(
+      "Several sessions may be working here. Carry on only with what was yours before this " +
+        "session restarted (take <id> resumes it) and leave the rest to the sessions on them.",
     );
     return lines.join("\n");
   }
@@ -59,19 +78,22 @@ export function nowText({ held, waiting = {} }) {
  * Whether a session may stop. `input` is what Claude Code sends the Stop hook on stdin. Null lets
  * it stop; an object is the hook's answer, blocking once with what to call. `stop_hook_active`
  * means this stop is already the session continuing because of this hook, and blocking again
- * would leave it no way to end.
+ * would leave it no way to end. The hook cannot tell which session took what, so it names
+ * everything still open here and lets the session settle its own.
  */
-export function stopVerdict({ held, input = {} }) {
+export function stopVerdict({ held = [], input = {} }) {
   // An agent that asked a question was told to stop and wait, so it must be let: blocking it would
   // make the instruction and the hook contradict each other, and the agent would pick one.
-  if (!held || held.asking || input.stop_hook_active) return null;
+  const open = held.filter((h) => !h.asking);
+  if (!open.length || input.stop_hook_active) return null;
+  const ids = open.map((h) => h.id).join(", ");
   return {
     decision: "block",
     reason:
-      `You still hold ${held.id}: ${held.title || held.id}. Before ending, do one of: ` +
-      `hand_in ${held.id} with your evidence if it is done; pass ${held.id} with the reason if ` +
-      `it is not yours or you are stuck; or, if the user is stopping mid-way, progress ${held.id} ` +
-      "with a note saying what is left — then end.",
+      `This worktree still holds ${ids}. For anything there you worked on in this session, do ` +
+      "one of before ending: hand_in it with your evidence if it is done; pass it with the reason " +
+      "if it is not yours or you are stuck; or, if the user is stopping mid-way, progress it with " +
+      "a note saying what is left. Leave what other sessions are on — then end.",
   };
 }
 
@@ -112,15 +134,19 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
  * `needs` counts everything waiting on the person: work handed in for review, agents stuck on
  * them, and guides handed to them.
  */
-export function statusText({ held, needs = 0, ready = 0 }) {
+export function statusText({ held = [], needs = 0, ready = 0 }) {
   const parts = [];
-  if (held) {
-    const said = held.note ? ` "${clip(held.note, 32)}"` : "";
-    parts.push(`▸ ${held.id}${held.state === "stalled" ? " (stalled)" : ""}${said}`);
+  if (held.length === 1) {
+    const [h] = held;
+    const said = h.note ? ` "${clip(h.note, 32)}"` : "";
+    parts.push(`▸ ${h.id}${h.state === "stalled" ? " (stalled)" : ""}${said}`);
+  } else if (held.length > 1) {
+    const stalled = held.filter((h) => h.state === "stalled").length;
+    parts.push(`▸ ${held.length} held${stalled ? ` (${stalled} stalled)` : ""}`);
   } else parts.push("passalong");
   if (needs) parts.push(`${needs} need${needs === 1 ? "s" : ""} you`);
   if (ready) parts.push(`${ready} ready`);
-  if (parts.length === 1 && !held) parts.push("clear");
+  if (parts.length === 1 && !held.length) parts.push("clear");
   return parts.join(" · ");
 }
 

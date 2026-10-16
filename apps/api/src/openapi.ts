@@ -601,7 +601,7 @@ export function openapi(origin: string) {
           summary: "Say you are doing it, and get it: a guide by id, or the next one waiting.",
           description:
             "Any kind. While you hold it nobody else can take it there: a task has one taker, " +
-            "anything else one per repo. You hold one thing at a time — taking what you hold " +
+            "anything else one per repo. You may hold several — taking what you hold " +
             "resumes it. When somebody else has it the 409 names them in `holder`: tell the user " +
             "rather than doing the work twice. With no id, the next ready task for `repo`, or " +
             "`guide: null` and `say` when nothing is waiting.",

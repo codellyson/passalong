@@ -197,7 +197,8 @@ Every guide, whatever its kind, is worked with four calls:
 
 - `take` — say you are doing it, and get it. With an id, that guide; with none, the next thing
   waiting for you. While you hold it nobody else can take it in that repo — a task has one taker,
-  a handoff one per repo — and its sender sees you are on it. You hold one thing at a time. If
+  a handoff one per repo — and its sender sees you are on it. You may hold several at once, and
+  with no id you always get something new; taking what you hold by id resumes it. If
   somebody else has it, the refusal says who: tell the user instead of doing the work twice.
 - `progress` — a one-line note at each milestone. 30 minutes without one marks it stalled: still
   yours, but flagged to a person.

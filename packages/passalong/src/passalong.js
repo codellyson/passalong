@@ -264,7 +264,7 @@ export async function tasks() {
 }
 
 /**
- * Take the next task for this worktree's repo, or get back the one this worktree already holds.
+ * Take the next task for this worktree's repo — always a new one, since an agent may hold several.
  * `null` when there is nothing to do. Written to `.passalong/<id>.md` only when `save` asks.
  */
 export async function nextTask({ cwd = process.cwd(), any = false, save = false } = {}) {
@@ -542,7 +542,7 @@ export async function ask(id, question, { cwd = process.cwd() } = {}) {
 
 /**
  * What this worktree's agent holds right now, and what is waiting for it: what the session-start
- * and stop hooks read (src/hooks.js). `held` is null when it holds nothing. Counts are best effort
+ * and stop hooks read (src/hooks.js). `held` lists everything it holds, empty when nothing. Counts are best effort
  * — a hook must never fail a session over a count.
  */
 export async function now({ cwd = process.cwd() } = {}) {
@@ -557,8 +557,7 @@ export async function now({ cwd = process.cwd() } = {}) {
     api.handedIn(),
   ]);
   if (w.status === "rejected") throw w.reason;
-  const held =
-    (who.agent && w.value.working.find((x) => x.agent === who.agent && x.by?.you)) || null;
+  const held = who.agent ? w.value.working.filter((x) => x.agent === who.agent && x.by?.you) : [];
   const tasks = t.status === "fulfilled" ? t.value.tasks : [];
   const waiting = {
     ready: tasks.filter((x) => x.state === "ready" && x.target === who.repo).length,
@@ -1099,9 +1098,8 @@ export function workPrompt(t) {
  * hand_in land on the claim this took. `agent` is a command the prompt is appended to;
  * `claude -p` by default, or whatever PASSALONG_AGENT says.
  *
- * An agent that exits without finishing stops the loop. Asking for the next task would hand the
- * same one back, since a worktree holds one task at a time, and the loop would run the agent on it
- * forever. The task stays claimed here, for the next run to resume or a person to release.
+ * An agent that exits without finishing stops the loop, rather than piling up half-done work. The
+ * task stays claimed here, for a person to see on the board and resume (take it) or release.
  */
 export async function work({
   cwd = process.cwd(),
@@ -1122,8 +1120,9 @@ export async function work({
       stdio: "inherit",
       env: { ...process.env, PASSALONG_TASK: t.id },
     });
+    // Finishing is final, so a finished task is Done; "review" is a server from before that.
     const state = (await tasks()).find((x) => x.id === t.id)?.state;
-    if (state !== "review")
+    if (state !== "done" && state !== "review")
       return {
         finished,
         stopped: "unfinished",

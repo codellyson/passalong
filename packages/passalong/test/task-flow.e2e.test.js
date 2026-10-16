@@ -1295,10 +1295,10 @@ test("now says what this worktree holds, for the session-start and stop hooks", 
   const { dir } = await readyTask(env, "Held across a restart");
   const took = await p.take(undefined, { cwd: dir });
   const now = await p.now({ cwd: dir });
-  assert.equal(now.held.id, took.guide.id);
-  assert.equal(now.held.kind, "task");
+  assert.equal(now.held[0]?.id, took.guide.id);
+  assert.equal(now.held[0]?.kind, "task");
   await p.pass(took.guide.id, "testing now", { cwd: dir });
-  assert.equal((await p.now({ cwd: dir })).held, null);
+  assert.equal((await p.now({ cwd: dir })).held.length, 0);
 });
 
 test("the hook commands: a session is told what it holds, and stopped once before ending", {
@@ -1320,7 +1320,7 @@ test("the hook commands: a session is told what it holds, and stopped once befor
   assert.equal(started.hookSpecificOutput.hookEventName, "SessionStart");
   assert.match(
     started.hookSpecificOutput.additionalContext,
-    new RegExp(`You hold ${took.guide.id}`),
+    new RegExp(`This worktree holds ${took.guide.id}`),
   );
 
   const stop = JSON.parse(run("stop", JSON.stringify({ stop_hook_active: false })));

@@ -221,16 +221,25 @@ test("the loser of a race moves on to the next task", async () => {
   assert.equal(b.task.id, "t2");
 });
 
-test("an agent holds one task, and asking again hands it back", async () => {
+test("an agent goes wide: asking again hands it the next task, never one it holds", async () => {
+  // Several sessions in one worktree are one agent to the queue. Handing back what it holds gave
+  // the second session the first one's task.
   const db = d1();
   const guide = seed(db);
   guide("t1", { created: T0 });
   guide("t2", { created: later(1) });
   const first = await next(db, A, { at: T0 });
-  const again = await next(db, A, { at: later(60_000) });
-  assert.equal(again.task.id, first.task.id);
-  assert.equal(again.resumed, true);
-  assert.equal(again.claim.lease_until, later(60_000 + LEASE_MS), "asking again renews the lease");
+  const second = await next(db, A, { at: later(60_000) });
+  assert.deepEqual([first.task.id, second.task.id], ["t1", "t2"]);
+  assert.equal(second.resumed, false);
+  assert.equal(await next(db, A, { at: later(60_001) }), null, "nothing left to hand out");
+  const back = await take(db, "t1", A, { at: later(60_000) });
+  assert.equal(back.resumed, true, "its work comes back by id");
+  assert.equal(
+    back.claim.lease_until,
+    later(60_000 + LEASE_MS),
+    "taking it again renews the lease",
+  );
 });
 
 test("a lapsed lease stalls the task and keeps it locked", async () => {
@@ -243,7 +252,7 @@ test("a lapsed lease stalls the task and keeps it locked", async () => {
   assert.equal(row.state, "stalled");
   assert.equal(await next(db, B, { at: after }), null, "nobody else gets a stalled task");
   // The agent that took it can still pick it back up.
-  const back = await next(db, A, { at: after });
+  const back = await take(db, "t1", A, { at: after });
   assert.equal(back.task.id, "t1");
   assert.equal(stateOf({ status: "published" }, back.claim, after), "claimed");
 });
@@ -530,7 +539,7 @@ test("resuming a claim keeps its generation, and progress renews with it", async
   const guide = seed(db);
   guide("t1");
   const first = await next(db, A, { at: T0 });
-  const resumed = await next(db, A, { at: T0 });
+  const resumed = await take(db, "t1", A, { at: T0 });
   assert.equal(resumed.resumed, true);
   assert.equal(resumed.claim.fence, first.claim.fence);
 
@@ -1223,7 +1232,7 @@ test("a task taken by id from the wrong repo is refused, and says which repo", a
   assert.match(wrong.error, /o\/r/);
 });
 
-test("an agent holds one thing at a time, and taking it again resumes it", async () => {
+test("an agent may hold several things, and taking one again resumes it", async () => {
   const db = d1();
   const guide = seed(db);
   guide("t1");
@@ -1232,8 +1241,8 @@ test("an agent holds one thing at a time, and taking it again resumes it", async
   const again = await take(db, "t1", A, { at: later(1) });
   assert.equal(again.resumed, true);
   const other = await take(db, "h1", A, { at: later(2) });
-  assert.equal(other.status, 409);
-  assert.match(other.error, /t1/, "it is told what it already holds");
+  assert.equal(other.claim.guide_id, "h1", "a second thing beside the first");
+  assert.equal((await take(db, "t1", A, { at: later(3) })).resumed, true, "the first is still its");
 });
 
 test("a draft cannot be taken, and neither can a blocked task", async () => {
@@ -2243,20 +2252,16 @@ test("marking done is refused outside the team, and for work nobody holds or alr
   assert.equal((await markDone(db, "t2", { account: "me", at: later(3), note: "" })).state, "done");
 });
 
-test("an agent that went quiet lets its old task go when it asks for another by name", async () => {
+test("a quiet hold stays its agent's when it takes another: the board shows it stalled", async () => {
+  // Going wide means nothing is let go behind a person's back; they stop it from the board.
   const db = d1();
   const guide = seed(db);
   guide("t1");
   guide("t2", { created: later(1) });
-  await take(db, "t1", { ...A, host: "mac", worktree: "shop" }, { at: T0 });
-  const live = await take(db, "t2", A, { at: later(LEASE_MS - 1) });
-  assert.equal(live.status, 409, "held live, it is still refused");
-  assert.match(live.error, /mark it done in the hub/);
+  await take(db, "t1", A, { at: T0 });
   const moved = await take(db, "t2", A, { at: later(LEASE_MS + 1) });
   assert.equal(moved.claim.guide_id, "t2");
-  assert.equal(await stateIn(db, "t1", later(LEASE_MS + 2)), "ready");
-  const md = db.raw.prepare("SELECT markdown FROM guide WHERE id = 't1'").get().markdown;
-  assert.match(md, /released from mac:shop: its agent went quiet and took another task/);
+  assert.equal(await stateIn(db, "t1", later(LEASE_MS + 2)), "stalled");
 });
 
 test("a worktree is shown by its folder's name alone, whichever way the path is written", () => {
