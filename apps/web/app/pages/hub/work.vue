@@ -46,6 +46,29 @@ const mineOnly = computed({
       { replace: true },
     ),
 });
+/** `?by=person`: the board split into a row per teammate. Only in a team, which has teammates. */
+const byPerson = computed({
+  get: () => route.query.by === "person",
+  set: (on: boolean) =>
+    navigateTo({ query: { ...route.query, by: on ? "person" : undefined } }, { replace: true }),
+});
+// Rows by person are one team's people, so it narrows to a team: the only one, or the one picked.
+const scope = useState<string>("hub:scope");
+watchEffect(() => {
+  const teams = data.value.me?.teams ?? [];
+  if (byPerson.value && !data.value.team && teams.length === 1) scope.value = teams[0]!.slug;
+});
+const people = computed(() =>
+  byPerson.value && data.value.team
+    ? data.value.team.members
+        .filter((m) => m.id)
+        .map((m) => ({
+          id: m.id as string,
+          label: m.display || personName(m.name, m.handle, m.id),
+          to: `@${m.handle || m.id}`,
+        }))
+    : null,
+);
 const searching = computed(() => Boolean(q.value.trim() || follows.value || mineOnly.value));
 function clearSearch() {
   q.value = "";
@@ -89,6 +112,13 @@ const empty = computed(() => columns.value.every((c) => !c.cards.length));
             <input v-model="mineOnly" type="checkbox" />
             Show only mine
           </label>
+          <label v-if="hasTeams" class="flex items-center gap-2 font-ui text-sm">
+            <input v-model="byPerson" type="checkbox" />
+            By person
+          </label>
+          <p v-if="byPerson && !people" class="m-0 font-ui text-sm text-muted">
+            Pick a team above to see who has what.
+          </p>
         </div>
 
         <section
@@ -106,7 +136,7 @@ const empty = computed(() => columns.value.every((c) => !c.cards.length));
                 <span data-label>Copy a prompt for your agent</span>
               </button>
             </p>
-            <HubBoard :columns="columns" />
+            <HubBoard :columns="columns" :people="people" />
             <HubBulkBar />
           </template>
         </section>

@@ -27,7 +27,10 @@ five fit at about 17rem on a wide screen — and the board scrolls sideways on i
 has it — initials, ⚡ and the agent's name, and a dot for its `health` (working, went quiet, asked a
 question, a person's hold, handed in), with a word when somebody should look — and who it is for,
 which is also the **Give to…** control. Its age is since its holder was last heard from or its last
-edit. Done is faded. **Show only mine** (`?mine=1`, and an old
+edit. Done is faded. **By person** (`?by=person`) splits the same columns into a row per teammate
+and Anyone, placing each card by the server's `lanes` (holders, else who it was sent to), so shared
+work shows in each person's row as one guide; dragging to another row gives it to them. It narrows
+to a team, picking the viewer's only one. **Show only mine** (`?mine=1`, and an old
 `?tab=needs` link) narrows to cards about you — yours, sent to you or your group, held by you, or
 yours to review — without moving any card. Done shows the newest twenty.
 A round dot at a card's top-left (shown on hover, always on touch, and on every card once one is

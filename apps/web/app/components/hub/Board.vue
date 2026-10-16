@@ -30,6 +30,12 @@
 
   From md the columns are lanes the height of the window, each scrolling its own cards under a
   header that stays put, so the whole lane is somewhere to drop and nothing ends half-way down.
+
+  By person (`people`), the same columns are split into a row per teammate and one for Anyone. A
+  card sits in the rows the server names (`lanes`): whoever holds it, else whoever it was sent to,
+  so work sent to several people or a group shows in each of their rows — one guide, not copies,
+  and it leaves every row when it is done. Work sent to the whole team sits once, in Anyone.
+  Dragging a card to another row gives it to that person (or to everyone, for Anyone).
 -->
 <script setup lang="ts">
 import type { STAGES } from "~/composables/useWorkLists";
@@ -37,6 +43,8 @@ import type { Guide, Task, Working } from "~/types/hub";
 
 const props = defineProps<{
   columns: ((typeof STAGES)[number] & { cards: Guide[] })[];
+  /** Teammates, for the rows by person; absent for one board. `to` is how Give to… names them. */
+  people?: { id: string; label: string; to: string }[] | null;
 }>();
 
 /** Done is most of what exists; the column shows the newest and says how many more. */
@@ -45,12 +53,20 @@ const DONE_SHOWN = 20;
 /** Who it was sent to, in the words the rest of the hub uses. */
 function address(g: Guide) {
   if (g.to) return g.to_name || `@${g.to}`;
-  if (g.to_group) return `#${g.to_group}`;
+  // Several named people are a group nobody named (`~…`): say who they are, not its id.
+  if (g.to_group) return g.to_group.startsWith("~") ? g.to_group_name || "several people" : `#${g.to_group}`;
   if (g.team) return g.team_name || g.team;
   return "Private";
 }
 /** The picker's name for where it is now: `@handle`, `#group`, or "" for the whole team. */
-const addressed = (g: Guide) => (g.to ? `@${g.to}` : g.to_group ? `#${g.to_group}` : "");
+const addressed = (g: Guide) =>
+  g.to
+    ? `@${g.to}`
+    : g.to_group?.startsWith("~")
+      ? (g.to_group_name ?? "").replace(/\s+/g, "")
+      : g.to_group
+        ? `#${g.to_group}`
+        : "";
 /** Anyone in the team can give work to someone else, as they can move it. Done work stays put. */
 const canGive = (g: Guide) => Boolean(g.team) && g.stage !== "done";
 
@@ -137,13 +153,15 @@ function openMenu(g: Guide, e: MouseEvent) {
   };
 }
 
-const { onArchive, onCloseGuide, onReopen, onTaskDraft, onTaskReady, onTakeBack } = useHub();
+const { onArchive, onAssign, onCloseGuide, onReopen, onTaskDraft, onTaskReady, onTakeBack } =
+  useHub();
 /** Finished, not shelved: what Reopen is for. Archived work comes back through Unarchive. */
 const finished = (g: Guide) => g.status === "consumed" && g.outcome !== "archived";
 
-/** The card being dragged, and the column under it. */
+/** The card being dragged, and the row and column under it, as "row|column". */
 const dragging = ref<Guide | null>(null);
 const over = ref("");
+const at = (band: string, col: string) => `${band}|${col}`;
 const holding = (g: Guide) => (g.held_by ?? []).some((h) => h.health !== "review");
 
 /**
@@ -220,10 +238,55 @@ function ready(repo: string) {
   if (g) place(g, "todo", () => onTaskReady({ id: g.id } as Task, repo));
 }
 
+/**
+ * The rows: one unnamed band for the plain board, else a row per teammate and Anyone. A card goes in
+ * every row its `lanes` name, or Anyone when none of them is a teammate here. A card just given to
+ * somebody shows in their row until the board catches up (`given`).
+ */
+const given = ref<Record<string, string>>({});
+const rowsOf = (g: Guide) => {
+  if (given.value[g.id] !== undefined) return [given.value[g.id]];
+  const ids = new Set((props.people ?? []).map((p) => p.id));
+  const mine = (g.lanes ?? []).filter((id) => ids.has(id));
+  return mine.length ? mine : [""];
+};
+const bands = computed(() =>
+  props.people
+    ? [...props.people, { id: "", label: "Anyone", to: "" }].map((p) => ({
+        ...p,
+        columns: view.value.map((c) => ({
+          ...c,
+          cards: c.cards.filter((g) => rowsOf(g).includes(p.id)),
+        })),
+      }))
+    : [{ id: "", label: "", to: "", columns: view.value }],
+);
+watch(
+  () => props.columns,
+  (cols) => {
+    const now = { ...given.value };
+    for (const g of cols.flatMap((c) => c.cards))
+      if (now[g.id] !== undefined && (now[g.id] ? g.lanes?.includes(now[g.id]!) : !g.lanes?.length))
+        delete now[g.id];
+    given.value = now;
+  },
+);
+/** Dropping in another row gives it to that teammate, or to the whole team for Anyone. */
+async function giveTo(g: Guide, band: string) {
+  const to = props.people?.find((p) => p.id === band)?.to ?? "";
+  given.value = { ...given.value, [g.id]: band };
+  if (!(await onAssign(g.id, to))) {
+    const { [g.id]: _, ...rest } = given.value;
+    given.value = rest;
+  }
+}
+
 /** How tall the dragged card is, for the gap that opens where it would land. */
 const gap = ref(0);
-function dragStart(g: Guide, e: DragEvent) {
+const fromBand = ref("");
+function dragStart(g: Guide, band: string, e: DragEvent) {
   dragging.value = g;
+  fromBand.value = band;
   gap.value = (e.currentTarget as HTMLElement).offsetHeight;
   e.dataTransfer?.setData("text/plain", g.title || g.id);
   if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
@@ -232,16 +295,26 @@ function dragEnd() {
   dragging.value = null;
   over.value = "";
 }
-function dragOver(col: string, e: DragEvent) {
-  if (!dragging.value || !moveTo(dragging.value, col)) return;
-  e.preventDefault();
-  over.value = col;
+/** Whether `g` may be dropped at row `band`, column `col`: another row is a give, if it can be given. */
+function canDrop(g: Guide, band: string, col: string) {
+  const regive = band !== fromBand.value;
+  if (regive && !canGive(g)) return false;
+  return regive ? col === g.stage || Boolean(moveTo(g, col)) : Boolean(moveTo(g, col));
 }
-function drop(col: string, e: DragEvent) {
+function dragOver(band: string, col: string, e: DragEvent) {
+  if (!dragging.value || !canDrop(dragging.value, band, col)) return;
+  e.preventDefault();
+  over.value = at(band, col);
+}
+async function drop(band: string, col: string, e: DragEvent) {
   const g = dragging.value;
-  const act = g && moveTo(g, col);
+  const ok = g && canDrop(g, band, col);
+  const regive = band !== fromBand.value;
   dragEnd();
-  if (!g || !act) return;
+  if (!g || !ok) return;
+  if (regive) await giveTo(g, band);
+  const act = moveTo(g, col);
+  if (!act) return;
   if (g.kind === "task" && g.stage === "draft" && col === "todo")
     readying.value = { guide: g, x: e.clientX, y: e.clientY };
   else place(g, col, act);
@@ -255,7 +328,9 @@ const lanes = ref<HTMLElement | null>(null);
 const laneHeight = ref("");
 function measure() {
   const el = lanes.value;
-  if (!el || !window.matchMedia("(min-width: 768px)").matches) return (laneHeight.value = "");
+  // By person, rows stack and the page scrolls: a row the height of the window would hide the next.
+  if (!el || props.people || !window.matchMedia("(min-width: 768px)").matches)
+    return (laneHeight.value = "");
   const top = el.getBoundingClientRect().top + window.scrollY;
   laneHeight.value = `max(24rem, calc(100dvh - ${top}px - 1.5rem))`;
 }
@@ -264,6 +339,7 @@ onMounted(() => {
   window.addEventListener("resize", measure);
 });
 onBeforeUnmount(() => window.removeEventListener("resize", measure));
+watch(() => Boolean(props.people), () => nextTick(measure));
 
 /** The column a phone shows: the first with anything in it, until a tab is picked. */
 const picked = ref("");
@@ -289,33 +365,45 @@ const shown = computed(
       </button>
     </div>
 
+    <div ref="lanes" class="flex flex-col gap-6">
+    <section
+      v-for="band in bands"
+      :key="band.id || 'anyone'"
+      class="flex flex-col gap-2"
+      :aria-labelledby="people ? `row-${band.id || 'anyone'}` : undefined"
+    >
+    <h2 v-if="people" :id="`row-${band.id || 'anyone'}`" class="m-0 flex items-baseline gap-2 px-1 font-ui text-base font-semibold">
+      {{ band.label }}
+      <span class="font-ui text-xs font-normal tabular-nums text-muted">{{
+        band.columns.reduce((n, c) => n + c.cards.length, 0)
+      }}</span>
+    </h2>
     <div
-      ref="lanes"
       class="flex items-start gap-3 md:items-stretch md:gap-2 md:overflow-x-auto md:pb-2"
       :style="laneHeight ? { height: laneHeight } : undefined"
     >
       <section
-        v-for="col in view"
+        v-for="col in band.columns"
         :key="col.id"
         class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 transition-opacity md:min-h-0 md:flex-[1_0_15rem]"
         :class="[
           shown === col.id ? '' : 'max-md:hidden',
-          dragging && dragging.stage !== col.id && !moveTo(dragging, col.id) ? 'opacity-50' : '',
-          over === col.id ? 'ring-2 ring-[var(--accent)]' : '',
+          dragging && !(band.id === fromBand && dragging.stage === col.id) && !canDrop(dragging, band.id, col.id) ? 'opacity-50' : '',
+          over === at(band.id, col.id) ? 'ring-2 ring-[var(--accent)]' : '',
         ]"
-        @dragover="dragOver(col.id, $event)"
-        @drop.prevent="drop(col.id, $event)"
-        :aria-labelledby="`col-${col.id}`"
+        @dragover="dragOver(band.id, col.id, $event)"
+        @drop.prevent="drop(band.id, col.id, $event)"
+        :aria-labelledby="`col-${band.id}-${col.id}`"
       >
         <div class="flex items-baseline gap-2 px-1">
-          <h2 :id="`col-${col.id}`" class="m-0 font-ui text-sm font-semibold">{{ col.label }}</h2>
+          <component :is="people ? 'h3' : 'h2'" :id="`col-${band.id}-${col.id}`" class="m-0 font-ui text-sm font-semibold">{{ col.label }}</component>
           <span class="font-ui text-xs tabular-nums text-muted">{{ col.cards.length }}</span>
         </div>
-        <p v-if="!col.cards.length && over !== col.id" class="m-0 px-1 font-ui text-xs text-muted">{{ col.hint }}</p>
+        <p v-if="!people && !col.cards.length && over !== at(band.id, col.id)" class="m-0 px-1 font-ui text-xs text-muted">{{ col.hint }}</p>
         <!-- The lane's cards scroll inside it, under the header. -->
         <ul class="m-0 -mx-1 flex list-none flex-col gap-2 px-1 pb-1 md:min-h-0 md:flex-1 md:overflow-y-auto">
           <li
-            v-if="over === col.id"
+            v-if="over === at(band.id, col.id)"
             aria-hidden="true"
             class="shrink-0 rounded-2 border-2 border-dashed border-line-strong"
             :style="{ height: `${gap}px` }"
@@ -329,7 +417,7 @@ const shown = computed(
               has(g.id) ? 'ring-2 ring-[var(--accent)]' : '',
             ]"
             :draggable="giving !== g.id"
-            @dragstart="dragStart(g, $event)"
+            @dragstart="dragStart(g, band.id, $event)"
             @dragend="dragEnd"
             @contextmenu.prevent="openMenu(g, $event)"
           >
@@ -410,6 +498,8 @@ const shown = computed(
           and {{ col.cards.length - DONE_SHOWN }} more — search to find one
         </p>
       </section>
+    </div>
+    </section>
     </div>
     <HubCardMenu
       v-if="menu"

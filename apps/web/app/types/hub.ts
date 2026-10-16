@@ -105,6 +105,8 @@ export interface Guide {
   answered_elsewhere?: boolean;
   /** Its column on the team board, worked out by the server the same for everyone. */
   stage?: "draft" | "todo" | "working" | "review" | "done";
+  /** Whose rows it sits in when the board is by person: holders, else who it was sent to. Empty is Anyone. */
+  lanes?: string[];
   /** Who holds it or handed it in. `agent` is empty for a person working it in the browser. */
   held_by?: {
     name: string;

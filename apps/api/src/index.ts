@@ -654,6 +654,18 @@ type BoardClaim = {
   asking: number;
 };
 
+/**
+ * Whose row a guide sits in on the board's by-person view: whoever holds it, else whoever it was
+ * sent to — one person, or each member of a group or of several named people. Empty is Anyone: work
+ * sent to the whole team sits once, not in every row. One guide shown in several rows, never copies.
+ */
+function lanesOf(r: GuideRow, claimRows: BoardClaim[], members: Map<string, string[]>): string[] {
+  const holders = [...new Set(claimRows.map((k) => k.account_id))];
+  if (holders.length) return holders;
+  if (r.to_account_id) return [r.to_account_id];
+  return members.get(r.to_group_id) ?? [];
+}
+
 function boardPlace(r: GuideRow, claimRows: BoardClaim[], me: string, at: string) {
   const review = claimRows.filter((k) => k.state === "review");
   const stage =
@@ -738,6 +750,21 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       ).results,
   );
   for (const g of groupRows) groups.set(g.id, { slug: g.slug, name: g.name.trim() || g.slug });
+  // Who is in each of those groups, for the board's rows by person.
+  const members = new Map<string, string[]>();
+  for (const m of await inSlices(
+    groupIds,
+    0,
+    async (slice, marks) =>
+      (
+        await c.env.DB.prepare(
+          `SELECT group_id, account_id FROM group_member WHERE group_id IN (${marks})`,
+        )
+          .bind(...slice)
+          .all<{ group_id: string; account_id: string }>()
+      ).results,
+  ))
+    members.set(m.group_id, [...(members.get(m.group_id) || []), m.account_id]);
   // Who holds each guide and how far it got, so the board can place it in one column that is the
   // same for everyone who opens it.
   const held = new Map<string, BoardClaim[]>();
@@ -898,6 +925,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       for_me: r.to_account_id === me || (r.to_group_id !== "" && myGroups.has(r.to_group_id)),
       answered_elsewhere: elsewhere.has(r.id),
       ...boardPlace(r, held.get(r.id) || [], me, at),
+      lanes: lanesOf(r, held.get(r.id) || [], members),
       report: r.report_id || "",
       report_title: reportTitles.get(r.report_id) || "",
       parent: r.parent_id || "",
