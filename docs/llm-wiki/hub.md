@@ -30,7 +30,8 @@ which is also the **Give to…** control. Its age is since its holder was last h
 edit. Done is faded. In a team it is a Trello board with a list per person: Draft, To do, a
 column per teammate and per group with work waiting, In progress, Done. Waiting work sits in the
 column of whoever it was sent to (the server's `lanes`), or To do; several named people each see it,
-as one guide; dragging it to a column gives it there. The page picks the viewer's team when they have
+as one guide; dragging it to a column gives it there. **By person** is on by default, and off
+(`?by=stage`) shows the four stages with everyone's work together. The page picks the viewer's team when they have
 only one; "All teams" keeps the plain stage columns. **Show only mine** (`?mine=1`, and an old
 `?tab=needs` link) narrows to cards about you — yours, sent to you or your group, held by you, or
 yours to review — without moving any card. Done shows the newest twenty.

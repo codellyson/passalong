@@ -53,8 +53,14 @@ watchEffect(() => {
   const teams = data.value.me?.teams ?? [];
   if (!data.value.team && scope.value === "all" && teams.length === 1) scope.value = teams[0]!.slug;
 });
+/** On by default; off (`?by=stage`) snaps the board back to the four stages, everyone's together. */
+const byPerson = computed({
+  get: () => route.query.by !== "stage",
+  set: (on: boolean) =>
+    navigateTo({ query: { ...route.query, by: on ? undefined : "stage" } }, { replace: true }),
+});
 const people = computed(() =>
-  data.value.team
+  byPerson.value && data.value.team
     ? data.value.team.members
         .filter((m) => m.id)
         .map((m) => ({
@@ -106,6 +112,10 @@ const empty = computed(() => columns.value.every((c) => !c.cards.length));
           <label class="flex items-center gap-2 font-ui text-sm">
             <input v-model="mineOnly" type="checkbox" />
             Show only mine
+          </label>
+          <label v-if="data.team" class="flex items-center gap-2 font-ui text-sm">
+            <input v-model="byPerson" type="checkbox" />
+            By person
           </label>
         </div>
 

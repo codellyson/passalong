@@ -327,8 +327,9 @@ change. Its README says how.
   in the column of whoever it was sent to (`lanes`, `lanesOf()` in index.ts: a person, `#group`, or
   each of several named people, as one guide shown in each, never copies), or To do when it is for
   nobody in particular; dragging it to a column gives it there. In progress and Done hold everyone's
-  work. Rows per person and a separate by-person view were tried first: crowded, and one more thing
-  to learn. "All teams" has no people, so it keeps the plain stage columns.
+  work. **By person** is on by default; turning it off (`?by=stage`) snaps back to the four stage
+  columns with everyone's work together. Rows per person were tried first and crowded the page.
+  "All teams" has no people, so it keeps the stage columns.
 - **Finishing is final, and needs proof; there is no review stage (2026-10-15, docs/REVIEW.md).**
   In production 64% of hand-ins were archived with nobody answering them and none was ever sent
   back, so the stage cost more than it caught. `hand_in` now ends the work: `complete()` in
