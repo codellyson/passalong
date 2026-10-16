@@ -655,14 +655,21 @@ type BoardClaim = {
 };
 
 /**
- * Whose row a guide sits in on the board's by-person view: whoever holds it, else whoever it was
- * sent to — one person, or each member of a group or of several named people. Empty is Anyone: work
- * sent to the whole team sits once, not in every row. One guide shown in several rows, never copies.
+ * Whose column a guide sits in on the board's by-person view: whoever holds it (account ids), else
+ * whoever it was sent to — one person, a group as `#slug`, or each of several named people. Empty is
+ * Anyone: work sent to the whole team sits once. One guide shown in several columns, never copies.
  */
-function lanesOf(r: GuideRow, claimRows: BoardClaim[], members: Map<string, string[]>): string[] {
+function lanesOf(
+  r: GuideRow,
+  claimRows: BoardClaim[],
+  groups: Map<string, { slug: string }>,
+  members: Map<string, string[]>,
+): string[] {
   const holders = [...new Set(claimRows.map((k) => k.account_id))];
   if (holders.length) return holders;
   if (r.to_account_id) return [r.to_account_id];
+  const slug = groups.get(r.to_group_id)?.slug ?? "";
+  if (slug && !slug.startsWith("~")) return [`#${slug}`];
   return members.get(r.to_group_id) ?? [];
 }
 
@@ -925,7 +932,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       for_me: r.to_account_id === me || (r.to_group_id !== "" && myGroups.has(r.to_group_id)),
       answered_elsewhere: elsewhere.has(r.id),
       ...boardPlace(r, held.get(r.id) || [], me, at),
-      lanes: lanesOf(r, held.get(r.id) || [], members),
+      lanes: lanesOf(r, held.get(r.id) || [], groups, members),
       report: r.report_id || "",
       report_title: reportTitles.get(r.report_id) || "",
       parent: r.parent_id || "",

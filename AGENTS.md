@@ -322,11 +322,12 @@ change. Its README says how.
   someone else ("Give to…" on a card, `POST /v1/guides/:id/assign`) and reopens finished work
   (`MAY_MOVE` in claims.ts). Archiving and deleting stay with the author or a team admin
   (`MAY_DECIDE`). "Show only mine" is a filter, never a different board. **By person**
-  (`?by=person`, 2026-10-16) is the same board split into a row per teammate and Anyone: a card
-  sits in the rows the server names (`lanes`, `lanesOf()` in index.ts — whoever holds it, else whoever
-  it was sent to, each member of a group or of several named people), so shared work shows in each of
-  their rows as one guide, never copies, and leaves every row together. Team-wide work sits once, in
-  Anyone. Dragging a card to another row is Give to….
+  (`?by=person`, 2026-10-16) swaps the stage columns for a column per teammate, per group with work,
+  and Anyone; a card's stage becomes a word on it, and Done leaves. A card sits in the columns the
+  server names (`lanes`, `lanesOf()` in index.ts — whoever holds it, else whoever it was sent to: a
+  person, `#group`, or each of several named people), so shared work shows in each column as one
+  guide, never copies, and leaves them all together. Team-wide work sits once, in Anyone. Dragging a
+  card to another column is Give to…. Rows per person were tried first and crowded the page.
 - **Finishing is final, and needs proof; there is no review stage (2026-10-15, docs/REVIEW.md).**
   In production 64% of hand-ins were archived with nobody answering them and none was ever sent
   back, so the stage cost more than it caught. `hand_in` now ends the work: `complete()` in
