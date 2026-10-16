@@ -1,8 +1,9 @@
 <!--
-  /hub/work: the team board. Every task, handoff and bug in the team is a card in one of five
-  columns — Draft, To do, In progress, In review, Done — and everyone in the team sees the same
-  board. A card's column is the server's (`stage`), so it moves when the work moves and never
-  because of who is looking. "Show only mine" narrows the cards without moving any of them.
+  /hub/work: the team board. Every task, handoff and bug in the team is a card, and everyone in the
+  team sees the same board: in a team, Draft, To do, a column per teammate and group, In progress
+  and Done, like a Trello board with a list per person; across all teams, the four stages. Where a
+  card sits is the server's (`stage`, `lanes`), so it moves when the work moves and never because
+  of who is looking. "Show only mine" narrows the cards without moving any of them.
 
   It used to be four tabs (Needs you, Being worked on, Open, Done) worked out for each viewer, so
   two teammates saw the same work in different places and counted it differently.
@@ -46,20 +47,14 @@ const mineOnly = computed({
       { replace: true },
     ),
 });
-/** `?by=person`: the board split into a row per teammate. Only in a team, which has teammates. */
-const byPerson = computed({
-  get: () => route.query.by === "person",
-  set: (on: boolean) =>
-    navigateTo({ query: { ...route.query, by: on ? "person" : undefined } }, { replace: true }),
-});
-// Rows by person are one team's people, so it narrows to a team: the only one, or the one picked.
+// The board has a column per teammate, so it is one team's: the only one, or the one picked.
 const scope = useState<string>("hub:scope");
 watchEffect(() => {
   const teams = data.value.me?.teams ?? [];
-  if (byPerson.value && !data.value.team && teams.length === 1) scope.value = teams[0]!.slug;
+  if (!data.value.team && scope.value === "all" && teams.length === 1) scope.value = teams[0]!.slug;
 });
 const people = computed(() =>
-  byPerson.value && data.value.team
+  data.value.team
     ? data.value.team.members
         .filter((m) => m.id)
         .map((m) => ({
@@ -112,13 +107,6 @@ const empty = computed(() => columns.value.every((c) => !c.cards.length));
             <input v-model="mineOnly" type="checkbox" />
             Show only mine
           </label>
-          <label v-if="hasTeams" class="flex items-center gap-2 font-ui text-sm">
-            <input v-model="byPerson" type="checkbox" />
-            By person
-          </label>
-          <p v-if="byPerson && !people" class="m-0 font-ui text-sm text-muted">
-            Pick a team above to see who has what.
-          </p>
         </div>
 
         <section

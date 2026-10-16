@@ -322,12 +322,13 @@ change. Its README says how.
   someone else ("Give to…" on a card, `POST /v1/guides/:id/assign`) and reopens finished work
   (`MAY_MOVE` in claims.ts). Archiving and deleting stay with the author or a team admin
   (`MAY_DECIDE`). "Show only mine" is a filter, never a different board. **By person**
-  (`?by=person`, 2026-10-16) swaps the stage columns for a column per teammate, per group with work,
-  and Anyone; a card's stage becomes a word on it, and Done leaves. A card sits in the columns the
-  server names (`lanes`, `lanesOf()` in index.ts — whoever holds it, else whoever it was sent to: a
-  person, `#group`, or each of several named people), so shared work shows in each column as one
-  guide, never copies, and leaves them all together. Team-wide work sits once, in Anyone. Dragging a
-  card to another column is Give to…. Rows per person were tried first and crowded the page.
+  **A team's board is a Trello board with a list per person (2026-10-16):** Draft, To do, a column
+  per teammate and per group with work waiting, In progress, Done. Work waiting to be started sits
+  in the column of whoever it was sent to (`lanes`, `lanesOf()` in index.ts: a person, `#group`, or
+  each of several named people, as one guide shown in each, never copies), or To do when it is for
+  nobody in particular; dragging it to a column gives it there. In progress and Done hold everyone's
+  work. Rows per person and a separate by-person view were tried first: crowded, and one more thing
+  to learn. "All teams" has no people, so it keeps the plain stage columns.
 - **Finishing is final, and needs proof; there is no review stage (2026-10-15, docs/REVIEW.md).**
   In production 64% of hand-ins were archived with nobody answering them and none was ever sent
   back, so the stage cost more than it caught. `hand_in` now ends the work: `complete()` in

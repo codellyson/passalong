@@ -27,11 +27,11 @@ five fit at about 17rem on a wide screen — and the board scrolls sideways on i
 has it — initials, ⚡ and the agent's name, and a dot for its `health` (working, went quiet, asked a
 question, a person's hold, handed in), with a word when somebody should look — and who it is for,
 which is also the **Give to…** control. Its age is since its holder was last heard from or its last
-edit. Done is faded. **By person** (`?by=person`) makes the columns people instead of stages: a
-column per teammate, per group with work, and Anyone, each card placed by the server's `lanes`
-(holders, else who it was sent to) with its stage as a word on it, and Done left out. Shared work
-shows in each column as one guide; dragging to another column gives it to that person or group. It
-narrows to a team, picking the viewer's only one. **Show only mine** (`?mine=1`, and an old
+edit. Done is faded. In a team it is a Trello board with a list per person: Draft, To do, a
+column per teammate and per group with work waiting, In progress, Done. Waiting work sits in the
+column of whoever it was sent to (the server's `lanes`), or To do; several named people each see it,
+as one guide; dragging it to a column gives it there. The page picks the viewer's team when they have
+only one; "All teams" keeps the plain stage columns. **Show only mine** (`?mine=1`, and an old
 `?tab=needs` link) narrows to cards about you — yours, sent to you or your group, held by you, or
 yours to review — without moving any card. Done shows the newest twenty.
 A round dot at a card's top-left (shown on hover, always on touch, and on every card once one is

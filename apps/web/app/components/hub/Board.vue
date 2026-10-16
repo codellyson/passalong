@@ -31,12 +31,12 @@
   From md the columns are lanes the height of the window, each scrolling its own cards under a
   header that stays put, so the whole lane is somewhere to drop and nothing ends half-way down.
 
-  By person (`people`), the columns are people and groups instead of stages: one per teammate, one
-  per group that has work, and Anyone. A card sits in the columns the server names (`lanes`):
-  whoever holds it, else whoever it was sent to — a person, a group, or each of several named
-  people, as one guide shown in each and never copies. Work sent to the whole team sits once, in
-  Anyone. Done work leaves these columns; its stage is a word on the card. Dragging a card to
-  another column gives it to that person or group (or everyone, for Anyone).
+  In a team (`people`), it is a Trello board with a list per person: Draft, To do, a column for each
+  teammate and each group with work waiting, In progress, Done. Work waiting to be started sits in
+  the column of whoever it was sent to (`lanes`, from the server), or To do when nobody in
+  particular; several named people each see it in their column, as one guide. Dragging it to
+  someone's column gives it to them; dragging to In progress, Done or Draft does what those columns
+  always did.
 -->
 <script setup lang="ts">
 import type { STAGES } from "~/composables/useWorkLists";
@@ -231,37 +231,39 @@ async function place(g: Guide, to: string, act: () => Promise<boolean> | boolean
   }
 }
 
-/** What a stage is called, for the word on a card when the columns are people. */
-const STAGE_WORD: Record<string, string> = { draft: "Draft", todo: "To do", working: "In progress" };
-
 /**
- * The columns by person: each teammate, each group that has work, and Anyone. A card goes in every
- * column its `lanes` name, or Anyone when none is here. A card just given somewhere shows there
- * until the board catches up (`given`).
+ * The board with people (`people`): Draft, To do (nobody yet), a column per teammate and per group
+ * with work waiting, In progress, Done — a Trello board with a list per person. Only work waiting to
+ * be started moves between the people: Draft, In progress and Done are where they are for everyone.
+ * A card waiting for several named people shows in each of their columns, as one guide. A card just
+ * given somewhere shows there until the board catches up (`given`).
  */
 const given = ref<Record<string, string>>({});
-function placeOf(g: Guide, known: Set<string>) {
-  if (given.value[g.id] !== undefined) return [given.value[g.id] as string];
-  const in_ = (g.lanes ?? []).filter((k) => known.has(k));
-  return in_.length ? in_ : ["anyone"];
-}
+const isLane = (col: string) => !["draft", "todo", "working", "done"].includes(col);
 const laneColumns = computed(() => {
   if (!props.people) return null;
-  const cards = view.value.filter((c) => c.id !== "done").flatMap((c) => c.cards);
+  const stage = (id: string) => view.value.find((c) => c.id === id)!;
+  const waiting = stage("todo").cards;
   const groups = [
-    ...new Set(cards.flatMap((g) => (g.lanes ?? []).filter((k) => k.startsWith("#")))),
+    ...new Set(waiting.flatMap((g) => (g.lanes ?? []).filter((k) => k.startsWith("#")))),
   ].sort();
-  const cols = [
+  const lanes = [
     ...props.people,
     ...groups.map((k) => ({ id: k, label: k, to: k })),
-    { id: "anyone", label: "Anyone", to: "" },
   ];
-  const known = new Set(cols.map((c) => c.id));
-  return cols.map((c) => ({
-    ...c,
-    hint: "",
-    cards: cards.filter((g) => placeOf(g, known).includes(c.id)),
-  }));
+  const known = new Set(lanes.map((c) => c.id));
+  const whose = (g: Guide) => {
+    if (given.value[g.id] !== undefined) return [given.value[g.id] as string];
+    const in_ = (g.lanes ?? []).filter((k) => known.has(k));
+    return in_.length ? in_ : ["todo"];
+  };
+  return [
+    stage("draft"),
+    { ...stage("todo"), label: "To do", hint: "Ready, for nobody yet", cards: waiting.filter((g) => whose(g).includes("todo")) },
+    ...lanes.map((c) => ({ ...c, hint: "", cards: waiting.filter((g) => whose(g).includes(c.id)) })),
+    stage("working"),
+    stage("done"),
+  ];
 });
 const shownColumns = computed(() => laneColumns.value ?? view.value);
 watch(
@@ -270,28 +272,29 @@ watch(
     const now = { ...given.value };
     for (const g of cols.flatMap((c) => c.cards)) {
       const to = now[g.id];
-      if (to !== undefined && (to === "anyone" ? !g.lanes?.length : g.lanes?.includes(to)))
+      if (to !== undefined && (to === "todo" ? !g.lanes?.length : g.lanes?.includes(to)))
         delete now[g.id];
     }
     given.value = now;
   },
 );
-/** Dropping in another column gives it to that person or group, or to everyone for Anyone. */
+/** Dropping waiting work on a person or group gives it to them; on To do, to nobody in particular. */
 async function giveTo(g: Guide, col: string) {
-  const to = laneColumns.value?.find((c) => c.id === col)?.to ?? "";
+  const to = col === "todo" ? "" : (laneColumns.value?.find((c) => c.id === col) as { to?: string })?.to ?? "";
   given.value = { ...given.value, [g.id]: col };
   if (!(await onAssign(g.id, to))) {
     const { [g.id]: _, ...rest } = given.value;
     given.value = rest;
   }
 }
-/** By person, a column takes a card it is not already in, if the card can be given. */
-function canGiveTo(g: Guide, col: string) {
-  const here = laneColumns.value?.find((c) => c.id === col)?.cards.some((x) => x.id === g.id);
-  return canGive(g) && !here;
+/** Waiting work moving between To do and the people, rather than between stages. */
+function regive(g: Guide, col: string) {
+  if (!laneColumns.value || g.stage !== "todo" || !canGive(g)) return false;
+  const here = laneColumns.value.find((c) => c.id === col)?.cards.some((x) => x.id === g.id);
+  return !here && (isLane(col) || (col === "todo" && Boolean(g.lanes?.length)));
 }
 const allowed = (g: Guide, col: string) =>
-  laneColumns.value ? canGiveTo(g, col) : Boolean(moveTo(g, col));
+  regive(g, col) || (!isLane(col) && Boolean(moveTo(g, col)));
 
 /** The task waiting on its repo before it goes Ready, and where to ask. */
 const readying = ref<{ guide: Guide; x: number; y: number } | null>(null);
@@ -320,12 +323,12 @@ function dragOver(col: string, e: DragEvent) {
 }
 function drop(col: string, e: DragEvent) {
   const g = dragging.value;
-  if (laneColumns.value) {
+  if (g && regive(g, col)) {
     dragEnd();
-    if (g && canGiveTo(g, col)) giveTo(g, col);
+    giveTo(g, col);
     return;
   }
-  const act = g && moveTo(g, col);
+  const act = g && !isLane(col) && moveTo(g, col);
   dragEnd();
   if (!g || !act) return;
   if (g.kind === "task" && g.stage === "draft" && col === "todo")
@@ -390,7 +393,7 @@ const shown = computed(
         class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 transition-opacity md:min-h-0 md:flex-[1_0_15rem]"
         :class="[
           shown === col.id ? '' : 'max-md:hidden',
-          dragging && (people ? !col.cards.some((x) => x.id === dragging!.id) : dragging.stage !== col.id) && !allowed(dragging, col.id) ? 'opacity-50' : '',
+          dragging && !col.cards.some((x) => x.id === dragging!.id) && !allowed(dragging, col.id) ? 'opacity-50' : '',
           over === col.id ? 'ring-2 ring-[var(--accent)]' : '',
         ]"
         @dragover="dragOver(col.id, $event)"
@@ -442,7 +445,6 @@ const shown = computed(
                 class="rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase"
                 :class="kindBadge(g.kind)!.class"
               >{{ kindBadge(g.kind)!.label }}</span>
-              <span v-if="people && STAGE_WORD[g.stage || '']" class="font-ui text-xs text-muted">{{ STAGE_WORD[g.stage || ""] }}</span>
               <span
                 v-if="g.can_review"
                 class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold text-accent"
