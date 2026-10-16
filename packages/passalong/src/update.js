@@ -15,7 +15,31 @@
 // feature would have shipped dead while looking fine in review. So the line is read from a file and
 // the file is refreshed by a process nobody waits for. What a person sees is a day old at worst,
 // which is the right age for "there is a new version".
-import { readConfig, writeConfig } from "./store.js";
+//
+// The answer is kept in its own file, never in config.json. The refresh runs beside whatever
+// command started it, and config.json is read, patched and written whole: a refresh that read it
+// just before `logout` or `use` wrote it, and wrote it back after, put the old accounts and the old
+// default back. This file has one writer, so there is nothing to lose.
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { HOME } from "./store.js";
+
+const FILE = join(HOME, "update.json");
+
+function readUpdate() {
+  try {
+    return JSON.parse(readFileSync(FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeUpdate(held) {
+  if (!existsSync(HOME)) mkdirSync(HOME, { recursive: true, mode: 0o700 });
+  const tmp = `${FILE}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(held)}\n`, { mode: 0o600 });
+  renameSync(tmp, FILE);
+}
 
 /** How long a cached answer lasts before a refresh is worth starting. */
 export const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -70,7 +94,7 @@ export function cachedNotice({
   current,
   now = Date.now(),
   env = process.env,
-  config = readConfig,
+  config = readUpdate,
 }) {
   if (env.PASSALONG_NO_UPDATE_CHECK === "1") return { notice: "", stale: false };
   const held = config();
@@ -90,7 +114,7 @@ export function cachedNotice({
  * trying again — `cachedNotice` reads an empty `update_latest` as a failure and uses the shorter
  * gap.
  */
-export async function refresh({ now = Date.now(), fetchImpl = fetch, save = writeConfig } = {}) {
+export async function refresh({ now = Date.now(), fetchImpl = fetch, save = writeUpdate } = {}) {
   let latest = "";
   try {
     const res = await fetchImpl(REGISTRY, {

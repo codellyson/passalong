@@ -106,10 +106,12 @@ change. Its README says how.
     `git log | head` fails when the first step does; exit 141 (a writer cut short by `head`) is
     the one non-zero it does not count as a failure.
   - `src/update.js` — the "a newer passalong is out" line. The registry is asked, not the API, and
-    **nothing waits for it**: the line is read from `~/.passalong/config.json` and a detached
+    **nothing waits for it**: the line is read from `~/.passalong/update.json` and a detached
     `passalong refresh-update` writes it. The first version awaited the fetch on a 1.5s timeout and
     measuring it killed the design — the registry answers in six to ten seconds, so every check
-    timed out and cached nothing. `PASSALONG_NO_UPDATE_CHECK=1` turns it off.
+    timed out and cached nothing. `PASSALONG_NO_UPDATE_CHECK=1` turns it off. **Never
+    `config.json`**: it is read, patched and written whole, so a refresh landing beside a `logout`
+    or `use` wrote the old accounts and default back (the flaky `accounts.test.js` CLI test).
   - `src/api.js` — client for the hosted API. Everything works with no token; sync is additive.
   - `bin/passalong` — the CLI. Few flags on purpose (see `[[command-style-atomic]]` conventions).
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to
