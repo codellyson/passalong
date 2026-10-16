@@ -110,7 +110,7 @@ test("stamp fills id, created, status, and defaults without overwriting", () => 
   );
   assert.match(g.meta.id, ID_RE);
   assert.ok(g.meta.created);
-  assert.equal(g.meta.status, "draft");
+  assert.equal(g.meta.status, "published", "Ready unless whoever wrote it said draft");
   assert.equal(g.meta.author, "me");
   const kept = stamp(parse(SAMPLE), { author: "someone else" });
   assert.equal(kept.meta.author, "Lukman");

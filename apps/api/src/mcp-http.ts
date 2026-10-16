@@ -428,7 +428,6 @@ const fileBugsOut = z
     issues: z.array(
       z.object({ id: z.string(), url: z.string().optional(), title: z.string() }).passthrough(),
     ),
-    next: z.string().optional(),
   })
   .passthrough();
 
@@ -863,13 +862,16 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "to act. It is what the person sees first in their hub; the document is behind it. A guide " +
         "with no summary is refused.\n" +
         "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
-        "is a spelling that is not one of the three. EVERY NEW GUIDE IS A DRAFT, whatever its kind: " +
-        "say `status: draft`; it reaches nobody until a person reads it and marks it Ready, and " +
-        "every kind then moves the same way — Ready, taken, handed in, approved. " +
+        "is a spelling that is not one of the three. A NEW GUIDE IS READY: it reaches whoever it is " +
+        "for at once. Say `status: draft` only when the person should read it first; a draft " +
+        "reaches nobody until they mark it Ready on its hub page (the publish answer's `ready_at` — " +
+        "never the share link, which has no buttons). Every kind moves the same way — Ready, taken, " +
+        "handed in, approved. " +
         "kind: task is work nobody has done yet. It has no Steps: work out how to " +
         "reach Goal within Constraints, leave Out of scope alone, and treat Acceptance as the " +
-        "definition of done. A proposal awaiting a team decision stays Draft. When Acceptance holds, publish_guide a transfer guide about what you " +
-        "did, then hand_in with its id as `report`.\n" +
+        "definition of done. A proposal awaiting a team decision stays Draft. When Acceptance holds, " +
+        "hand_in: it is final — the task goes to Done with what you showed, and nobody reviews it " +
+        "after you — so show it, and say anything you had to adapt in `writeup` (500 characters).\n" +
         "kind: transfer (or no kind: line) is a finished implementation to repeat here. Follow " +
         "its Steps, adapting anything marked ASSUMES to this codebase; run its Verification, then " +
         "hand_in with ok and, when it failed, a note saying what went wrong.\n" +
@@ -1728,7 +1730,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "session answers something you hold, hand_in that instead, and if the work never left a " +
         "branch the team can see, publish what is still open as a bug or a task rather than a " +
         "write-up of the fix. A transfer guide, a single bug with " +
-        "`kind: bug`, or a task with `kind: task` — every one with `status: draft`, until a person makes it Ready. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
+        "`kind: bug`, or a task with `kind: task`. Ready at once; `status: draft` when the person should read it first. Use file_bugs for more than one bug. Leave `id` out for a new guide — one " +
         "is minted and returned. To change a guide, pass the id it came back with; inventing a " +
         "fresh id to retry or to correct one publishes a second copy, and every copy counts " +
         "against the author's synced limit. Created, author and source_context are filled in. " +
@@ -1943,13 +1945,12 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       annotations: ADDS,
       outputSchema: finishOut,
       description:
-        "Done here, with proof. Every hand-in carries what you ran and what came back. On a TASK " +
+        "Finished here, with proof. IT IS FINAL: the work goes to Done with what you showed, and nobody reviews it after you (anyone can reopen it with a reason). So SHOW IT: a screenshot for anything with a screen — before and after, for a bug — or, for backend work, the one command and the line of its output that shows it works. Every hand-in carries what you ran and what came back. On a TASK " +
         "send `checks`: one entry per Acceptance line, each with that line and the evidence for " +
         "it — that is what its author reads, line against line, instead of hunting through a wall " +
         "of output for the part that answers each one. `evidence` is the same thing as one block, " +
         "for a handoff or a bug, which have no Acceptance lines; send it when you are not sending " +
-        "`checks`. A task also takes `report`, the id of a transfer guide you published about the " +
-        "work (publish_guide it first). A handoff or a bug takes `ok`, whether its Verification " +
+        "`checks`. A task needs no write-up guide any more. A handoff or a bug takes `ok`, whether its Verification " +
         "held, and `note` saying what went wrong when it did not. EVERY CHECK IS RUN OR SHOWN: put the " +
         "command in `cmd` and it is executed here before this hand-in lands, or, when no command " +
         "can settle it, call attach_screenshot and put the line it returns in `ran` — capture it to " +
@@ -2001,9 +2002,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
           .string()
           .optional()
           .describe(
-            "handoff or bug: what you had to adapt to make it work here — a version, a name, a " +
-              "step that needed something the guide does not mention. Optional; leave it out " +
-              "when it worked as written. The next person to open the guide is shown it",
+            "what you had to adapt to make it work here — a version, a name, a step that needed " +
+              "something the guide does not mention. 500 characters at most. Optional; leave it " +
+              "out when it worked as written. The next person to open the guide is shown it",
           ),
         risk: z
           .string()
@@ -2014,7 +2015,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
               "route other clients call. Optional; leave it out when there is nothing specific, " +
               'rather than writing "low risk". Its author reads it before accepting the work',
           ),
-        report: z.string().optional().describe("task: id of the transfer guide about this work"),
+        report: z
+          .string()
+          .optional()
+          .describe("older shape, not needed: say what you adapted in `writeup`"),
         pr: z.string().optional().describe("task: PR or branch link"),
       },
     },
@@ -2224,12 +2228,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         }
         filed.push({ id, url: (JSON.parse(res.text) as { url: string }).url, title: issue.title });
       }
-      // Filed is not sent: every bug is a draft until a person reads it and marks it Ready.
-      const result = {
-        report,
-        issues: filed,
-        next: "all in Draft: ask the user to read them in the hub and mark them Ready",
-      };
+      const result = { report, issues: filed };
       return { ...text(JSON.stringify(result, null, 2)), structuredContent: result };
     },
   );
@@ -2392,8 +2391,7 @@ function bugDocument(issue: {
     `title: ${quote(issue.title)}`,
     `summary: ${quote((issue.summary || "").trim() || issue.title)}`,
     "kind: bug",
-    // A draft like every new guide: it reaches people when a person marks it Ready.
-    "status: draft",
+    "status: published",
     `report: ${issue.report}`,
   ];
   if (issue.area) front.push(`area: ${issue.area}`);

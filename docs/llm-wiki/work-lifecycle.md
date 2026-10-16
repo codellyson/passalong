@@ -35,29 +35,34 @@ the author can approve that hand-in without creating another claim.
 
 Work is not done because whoever did it says so.
 
-- **Every guide, of every kind, enters Draft** (`publishProblem()`), including one published over
-  hosted MCP, by email or webhook, or by `file_bugs`. A person explicitly makes it Ready, and that
-  is when whoever it is addressed to is told. Updating a draft's markdown cannot make it Ready; a
-  proposal awaiting a team decision stays Draft. Unclaimed Ready work can move back to Draft, while
+- **A new guide is Ready unless it says `status: draft`**, whatever its kind: drafts were where
+  addressed work sat forgotten. Draft is for what a person should read first — a plan of tasks,
+  email and webhooks, anything an agent is unsure of — and a person makes it Ready; whoever it is
+  addressed to is told at Ready, never while it is a draft. Updating a draft's markdown cannot make
+  it Ready; a proposal awaiting a team decision stays Draft. Unclaimed Ready work can move back to Draft, while
   held work must first be taken back or reviewed. Ready asks which repo only for a task.
 
-- A **task** handed in goes to *review*: the author approves it (it becomes `consumed`) or rejects it
-  with a reason the next agent reads first — per Acceptance line, in the hub's review pane.
+- **Finishing is final** (2026-10-15, [docs/REVIEW.md](../REVIEW.md)): there is no review stage.
+  `hand_in` needs proof a person can look at — a screenshot, or a command and its line of output —
+  and puts the guide in Done (`outcome = finished`) once nobody else holds it, with what was shown
+  kept as "Finished with" on its page. The write-up is 500 characters at most. **Reopen** puts
+  finished work back in To do with a reason, for anyone in the team; **Ask someone to check** is a
+  follow-up task to a teammate, not a stage.
 - **An archived guide comes back to Draft**, never straight to Ready (`unarchiveProblem()` in
   `guide.ts`; the status route answers 409). `consumed` covers approved as well as shelved, so
   unarchiving one as Ready handed finished work to whoever took it next. Only its author or an
-  admin archives a guide, of any kind.
-- **Done says how it got there** (`outcome`, migration 0054): **Approved** when a person approved
-  it or accepted its hand-in, **Archived** when its author or an admin shelved it. Done cards say
+  admin archives a guide, of any kind. Archiving lets go of everyone on it: its claims are cleared, including a hand-in nobody
+  answered, and whoever held it is told it is done with (migration 0055 cleared the 61 left stuck).
+- **Done says how it got there** (`outcome`, migration 0054): **Finished** with proof, **Approved**
+  from before finishing was final, **Archived** when its author or an admin shelved it. Done cards say
   which. A Ready guide nobody took in 14 days goes back to Draft rather than to Done.
 - **Not for me** is `pass` on work you don't hold, any kind: whoever sent it is told, with the
   reason, and the hub offers it beside I'll do this.
 - **A task's write-up is not work.** The transfer an agent publishes for its hand-in is stored as
   Done and named for its task (`report_of`, migration 0053) once the hand-in names it, and the
   board leaves it out.
-- A **handoff or bug** handed in waits for the author to close it or send that repo's hand-in back.
-- **Handed in means the actor's turn is over.** A new guide whose `parent:` the publisher has handed
-  in is refused (409): what the actor found goes on the hand-in, not in a second guide.
+- A **handoff or bug** handed in with `ok: false` — its Verification did not hold here — is not
+  finished: the claim goes, the guide stays, and its author hears why.
 - **Release** is the author's take-back for any kind, from whoever holds it.
 
 ## History is not kept

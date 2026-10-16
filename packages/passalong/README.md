@@ -28,7 +28,7 @@ codex mcp add passalong -- passalong mcp   # Codex: the same MCP server
 ## Commands
 
 ```
-passalong share [file] [--to team[/handle]]  publish a guide as a draft → id + link; --to addresses it
+passalong share [file] [--to team[/handle]]  publish a guide → id + link, Ready; --to addresses it
 passalong pull <id|link>      print a guide; --save also writes ./.passalong/<id>.md (git-ignored)
 passalong inbox               guides handed to you that you have not pulled yet
 passalong board               waiting on you, in flight, landed, worth keeping
@@ -73,8 +73,8 @@ passalong inbox                         # on Ada's side: what was handed to you
 passalong activity                      # back on your side: it landed, and who pulled it
 ```
 
-Every guide, whatever its kind, moves the same way: it is a draft until a person marks it Ready
-(`passalong ready <id>`), then whoever takes it (`passalong take <id>`) holds it, hands it in with
+Every guide, whatever its kind, moves the same way: it is Ready when shared (or a draft, with
+`status: draft`, until a person runs `passalong ready <id>`), then whoever takes it (`passalong take <id>`) holds it, hands it in with
 the evidence, and a person approves it or sends it back with the reason (`passalong approve` /
 `passalong reject`).
 

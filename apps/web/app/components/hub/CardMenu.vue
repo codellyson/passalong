@@ -13,7 +13,8 @@ import type { Guide, Task, Working } from "~/types/hub";
 
 const props = defineProps<{ guide: Guide; x: number; y: number; canGive: boolean }>();
 const emit = defineEmits<{ close: []; give: []; ready: [] }>();
-const { onArchive, onCloseGuide, onRemove, onTaskDraft, onTaskReady, onTakeBack } = useHub();
+const { onArchive, onCloseGuide, onRemove, onReopen, onTaskDraft, onTaskReady, onTakeBack } =
+  useHub();
 
 const g = computed(() => props.guide);
 const isTask = computed(() => g.value.kind === "task");
@@ -75,6 +76,13 @@ function ready() {
   emit("ready");
   close();
 }
+/** Finished work back to To do, with why. Archived work is Unarchive's. */
+const reopenable = computed(() => archived.value && g.value.outcome !== "archived");
+function reopen() {
+  const why = prompt(`Why reopen "${g.value.title}"? Whoever finished it is told.`)?.trim();
+  if (!why) return close();
+  run(() => onReopen(g.value.id, why));
+}
 function give() {
   emit("give");
   close();
@@ -115,6 +123,7 @@ function copyAndClose(text: string, e: Event) {
       >Move to Draft</button>
       <button v-if="canGive" role="menuitem" class="menu-item" type="button" @click.stop="give">Give to…</button>
       <button v-if="held" role="menuitem" class="menu-item" type="button" @click="stop">Stop this agent</button>
+      <button v-if="reopenable" role="menuitem" class="menu-item" type="button" @click="reopen">Reopen…</button>
       <div class="menu-rule" role="separator" />
       <button role="menuitem" class="menu-item" type="button" @click="copyAndClose(g.url, $event)">
         <AppIcon name="copy" /><span data-label>Copy share link</span>

@@ -67,8 +67,7 @@ machine, another agent session, or a teammate without your branch.
    follow-up gets the guide it came out of, and where that guide has got to — so write it as a
    note on that work rather than as a standalone brief. What you did or found while working on a
    guide belongs in its `hand_in`, not a follow-up.
-6. **Report** the id (and link) and say it is a **draft**: it reaches nobody until the person reads
-   it and marks it Ready (`passalong ready <id>`, or Ready in the hub). Then one line on how to use
+6. **Report** the id (and link). It is Ready and has reached whoever it is for. Then one line on how to use
    it on the other side: `passalong take <id>` in the target repo, or "take passalong <id>" to an
    agent with the Passalong MCP server. `take` rather than `pull` on purpose: it holds the work as
    well as fetching it, and until somebody takes it the sender cannot tell a guide nobody noticed

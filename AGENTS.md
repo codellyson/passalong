@@ -280,20 +280,22 @@ change. Its README says how.
   comes back as a transfer guide. `Acceptance` is required because it is what the work is approved
   against. `blocked_by:` is the one list field only tasks have, so the parser defaults
   `stack_assumptions` and `tags` and nothing else — defaulting it would write `blocked_by: []` into
-  every guide anybody re-shares. A blocker counts as finished when a person approved it, never when
-  an agent finished it.
+  every guide anybody re-shares. A blocker counts as finished when it is Done.
 - **Every guide has a task's states, whatever its kind (2026-10-14).** Draft, Ready, In progress,
-  In review, Done, and the same moves between them. A new guide is always `draft`: `PUT
-  /v1/guides/:id` refuses a new guide, or an edit that changes status, through `publishProblem()`
-  in `guide.ts` — handoffs and bugs used to go out the moment they were shared, so an agent's guide
-  reached people nobody had read it. Only a person's Ready (the status route) sends it on, and that
-  is when whoever it is addressed to is told (`announceGuide()`), never while it was a draft.
+  Done, and the same moves between them (In review went on 2026-10-15: see the next contract). **A new guide is Ready unless whoever wrote it
+  says `status: draft`** (2026-10-15): Draft-first was tried for every kind, and addressed work sat
+  forgotten in it — every draft in production was a task sent to somebody, untouched for over a
+  day. Draft is for what a person should read first: a plan of tasks (`plan_tasks` says so), email
+  and webhooks (nobody wrote them), or anything an agent is unsure of. `publishProblem()` in
+  `guide.ts` refuses a new guide that starts archived, and an edit that changes status. Whoever it
+  is addressed to is told when it is Ready — at publish, or when a person marks a draft Ready on the
+  status route (`announceGuide()`) — never while it is a draft.
   Ready asks which repo only for a task. Anyone in the team moves work between Draft and Ready;
   nothing held moves to Draft until it is taken back or reviewed; only its author or an admin
   archives it; and an archived guide comes back to Draft, never straight to Ready
   (`unarchiveProblem()`), because archived includes approved. A proposal awaiting a team decision
-  stays Draft. Email, webhooks and `file_bugs` file every kind as a draft, and the day-old Draft
-  reminder covers every kind. **A task's write-up is not on the board**: the transfer an agent
+  stays Draft. Email and webhooks file every kind as a draft, and the day-old Draft reminder
+  covers every kind. **A task's write-up is not on the board**: the transfer an agent
   publishes for its hand-in is stored as Done and named for its task (`report_of`, migration
   0053) when the hand-in names it, and `GET /v1/guides` leaves it out; ones approved before then are
   found by timing (published within five minutes before their author's hand-in event). **Done says
@@ -313,30 +315,35 @@ change. Its README says how.
   never gated. The floor is 0.18.0. **Raise `MIN_CLIENT` only after that version is `latest` on npm** — a floor above
   what npm hands out refuses every agent with nothing it can install.
 - **A team's board is one board, and anyone on it moves the work.** Everything in a team is seen by
-  everyone in it, in the same place: `/hub/work` is five columns (Draft, To do, In progress, In
-  review, Done) and a card's column is the server's `stage` (`boardPlace()` in index.ts), never
-  re-derived per viewer — four per-viewer tabs put one guide in different places for different
-  teammates, which is what this replaced. Anyone in the team marks work Ready or Draft, stops an
-  agent, gives it to someone else ("Give to…" on a card, `POST /v1/guides/:id/assign`) and reviews
-  a hand-in (`MAY_MOVE` in claims.ts); **nobody reviews their own work**
-  (`ownWork()`: the account whose agent handed it in cannot approve, accept or send it back, and the
-  hub draws **Your review** from `can_review` for everyone else). Archiving and deleting stay with
-  the author or a team admin (`MAY_DECIDE`). A private guide has no team, so its author is the only
-  one who sees it and the one who reviews it. "Show only mine" is a filter, never a different board.
-- **A hand-in answers the PR template, minus the boxes.** What changed is `writeup`, how it was
-  verified and the evidence are `checks` (run or shown, never ticked), and what it could break is
-  `risk` (migration 0032, on the claim, for the reviewer only) — one line, optional, because a
-  required risk field says "low risk" every time. Ownership is the reviewer's, not the agent's:
-  close and approve on a hub row stay disabled until the evidence has been opened
-  (`HubHandIn`'s `read`). An agent ticking "I verified it" is the self-attestation `checks`
-  exists to replace.
-- **Handed in means the actor's turn is over.** `PUT /v1/guides/:id` refuses a *new* guide whose
-  `parent:` the publisher has handed in and that is waiting on its author (409). Every follow-up
-  nobody asked for came from there: an agent handed in, then published a second guide to carry
-  what it found. What the actor did and found goes on the hand-in, in `checks` and `writeup`.
-  The note on every `take` used to say the opposite ("what you found doing it — publish that"),
-  and an agent follows the text it read last. The author is never refused, and the rule ends when
-  the author answers: send-back and close delete the claim, and an approved task is `consumed`.
+  everyone in it, in the same place: `/hub/work` is four columns (Draft, To do, In progress, Done)
+  and a card's column is the server's `stage` (`boardPlace()` in index.ts), never re-derived per
+  viewer — four per-viewer tabs put one guide in different places for different teammates, which
+  is what this replaced. Anyone in the team marks work Ready or Draft, stops an agent, gives it to
+  someone else ("Give to…" on a card, `POST /v1/guides/:id/assign`) and reopens finished work
+  (`MAY_MOVE` in claims.ts). Archiving and deleting stay with the author or a team admin
+  (`MAY_DECIDE`). "Show only mine" is a filter, never a different board. **By person**
+  **A team's board is a Trello board with a list per person (2026-10-16):** Draft, To do, a column
+  per teammate and per group with work waiting, In progress, Done. Work waiting to be started sits
+  in the column of whoever it was sent to (`lanes`, `lanesOf()` in index.ts: a person, `#group`, or
+  each of several named people, as one guide shown in each, never copies), or To do when it is for
+  nobody in particular; dragging it to a column gives it there. In progress and Done hold everyone's
+  work. **By person** is on by default; turning it off (`?by=stage`) snaps back to the four stage
+  columns with everyone's work together. Rows per person were tried first and crowded the page.
+  "All teams" has no people, so it keeps the stage columns.
+- **Finishing is final, and needs proof; there is no review stage (2026-10-15, docs/REVIEW.md).**
+  In production 64% of hand-ins were archived with nobody answering them and none was ever sent
+  back, so the stage cost more than it caught. `hand_in` now ends the work: `complete()` in
+  claims.ts keeps what was shown as a standing verdict (the guide page leads with it as "Finished
+  with"), lets go of the claim, and puts the guide in Done with `outcome = finished` once nobody
+  else holds it — a handoff held in several repos waits for the last. It is refused without proof a
+  person can look at (`proofProblem()`): a screenshot, or a command and its line of output; checks
+  answer for themselves, each run or shown. The write-up is capped at 500 characters
+  (`WRITEUP_CAP`) and a task needs no write-up guide. What could go wrong after is **Reopen**
+  (`POST /v1/guides/:id/reopen`, for anyone in the team): back to To do with the reason at the top,
+  and whoever finished it is told. Wanting another person's eyes is a request, not a stage: **Ask
+  someone to check** on the guide page makes a follow-up task to them, with the guide as `parent`.
+  Approve, send-back, `ownWork` and the In review column are gone; approve on Done work still
+  answers, for installed CLIs. Migration 0056 finished the hand-ins left waiting.
 - **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
   people can take and answer for separately — one document holding six has one verdict, and "four
   of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is
@@ -538,8 +545,8 @@ change. Its README says how.
   wordmark beside it as text: images are blocked by default for a sender nobody has replied to.
   Anything a person typed — a title, a verdict's reason — goes through `esc()` on the way in.
 - **Every answer exists in all three places, and every kind has the same ones.** The hub, the MCP
-  tools and the CLI: `take`, `progress`, `hand_in` and `pass` for whoever does the work, approve and
-  send back for whoever reviews it, Ready and Move to Draft, archive. A signal that exists in only
+  tools and the CLI: `take`, `progress`, `hand_in` and `pass` for whoever does the work, reopen for
+  finished work that is not right, Ready and Move to Draft, archive. A signal that exists in only
   two of them is one a third of the product's users cannot send, and the mail that tells someone
   what to do next can only name commands that exist. The reader's old answers — the ack (`take`/
   `pass` meaning "I'll do it"/"not me") and the verdict (`works`/`broken`) — are no longer offered
@@ -547,8 +554,8 @@ change. Its README says how.
   for clients that call them, and `/hub/answer/:id` forwards to the guide's page.
   The hub says each in plain words rather than the command's name, and says them the same way on
   every surface of the hub: `take` is **I'll do this**, `release` is **Stop this agent**, archiving
-  is **Archive** and **Unarchive to Draft**, a hand-in is answered with **Accept** (or **Approve**
-  for a task) and **Ask for changes**. A button whose name cannot say
+  is **Archive** and **Unarchive to Draft**, finishing is **Finish**, and finished work comes back
+  with **Reopen**. A button whose name cannot say
   what it does gets a line of visible text beside it, never a `title` tooltip.
 - **Google Chat gets a card; nothing else does.** Chat cannot unfurl a link — previews there come
   from a Chat app registering URL patterns, and a team connects an incoming webhook — so `chatCard()`

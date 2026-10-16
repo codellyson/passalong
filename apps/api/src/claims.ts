@@ -77,6 +77,39 @@ export const EVIDENCE_MAX = 4000;
 export const WRITEUP_MAX = 4000;
 
 /**
+ * The longest write-up a hand-in may send (docs/REVIEW.md §3): what had to be adapted and why, in a
+ * few lines. Hand-ins averaged 5,400 characters and most were never read; anything longer belongs
+ * in the diff or a follow-up. Refused rather than cut, so the agent says it shorter itself.
+ */
+export const WRITEUP_CAP = 500;
+
+/**
+ * Finishing is final, so it has to show something a person can look at (docs/REVIEW.md §3): a
+ * screenshot, a before and after, or the one command and the line of output that decides it.
+ * Checks already answer for themselves — each is run here or shown (checksProblem) — so this is the
+ * rule for evidence sent as one block, where sixteen characters of anything used to pass.
+ */
+export function proofProblem(evidence: string, checks: Check[]): string | null {
+  if (checks.length) return null;
+  const said = String(evidence ?? "");
+  if (/\/v1\/shots\/[a-z0-9]{6,16}/.test(said)) return null;
+  // A command and what it printed: `$ cmd` with a line after it, `cmd → result` on one line, or a
+  // command in backticks with its result after it ("ran `pnpm test`: 12 passed").
+  if (
+    /(^|\n)\s*\$\s*\S[^\n]*\n\s*\S/.test(said) ||
+    /\S\s*(→|->|=>)\s*\S/.test(said) ||
+    /`[^`\n]+`[^\n`]*[A-Za-z0-9]/.test(said)
+  )
+    return null;
+  return (
+    "show it: finishing is final, so it needs one thing a person can look at. For anything with " +
+    "a screen, a screenshot (attach_screenshot, or create_upload) — before and after, for a bug. " +
+    "For backend work, the one command you ran and the line of its output that shows it works: " +
+    '"$ npm test" then "41 pass, 0 fail", or "npm test → 41 pass, 0 fail".'
+  );
+}
+
+/**
  * What a hand-in has to bring, in the words an agent is refused with. See docs/V2.md §11.
  *
  * "Done" is the agent's word for its own work, and a write-up is the agent's word written longer.
@@ -1197,16 +1230,22 @@ export async function finish(
   const said = checks.length ? flatten(checks) : evidence;
   const bad = checks.length ? checksProblem(checks) : evidenceProblem(evidence);
   if (bad) return { status: 400, error: bad };
-  const guide = await db
-    .prepare("SELECT kind FROM guide WHERE id = ? AND account_id = ?")
-    .bind(report, who.account)
-    .first<{ kind: string }>();
+  const proof = proofProblem(evidence, checks);
+  if (proof) return { status: 400, error: proof };
+  // A write-up guide is no longer asked for (docs/REVIEW.md §3): the capped `writeup` says it. One
+  // an older client still sends is checked and filed off the board, as before.
+  const guide = report
+    ? await db
+        .prepare("SELECT kind FROM guide WHERE id = ? AND account_id = ?")
+        .bind(report, who.account)
+        .first<{ kind: string }>()
+    : { kind: "" };
   if (!guide)
     return {
       status: 400,
       error:
-        "report must be the id of a transfer guide you published about this work — " +
-        "publish_guide it first, then finish with its id",
+        "report must be the id of a transfer guide you published about this work — or leave it " +
+        "out: the write-up goes in `writeup` now",
     };
   if (guide.kind === "task")
     return { status: 400, error: "report is a task, not a transfer guide" };
@@ -1259,10 +1298,12 @@ export async function finish(
   }
   // The write-up is the record of this work, not work for anyone: off the board, stored as Done,
   // naming the task it reports on (0053_report_of.sql). It was a draft until now, like every guide.
-  const written = await db
-    .prepare("SELECT markdown FROM guide WHERE id = ?")
-    .bind(report)
-    .first<{ markdown: string }>();
+  const written = report
+    ? await db
+        .prepare("SELECT markdown FROM guide WHERE id = ?")
+        .bind(report)
+        .first<{ markdown: string }>()
+    : null;
   if (written)
     await db
       .prepare(
@@ -1369,6 +1410,8 @@ export async function list(
       team_slug: string;
       to_handle: string;
       to_group_slug: string;
+      /** The group's name: for several people (`~…`), their `@names`. */
+      to_group_name: string;
     };
     claim: ClaimRow | null;
     state: TaskState;
@@ -1386,7 +1429,8 @@ export async function list(
                 ${BLOCKED} AS blocked, COALESCE(t.slug, '') AS team_slug,
                 (g.to_account_id = ?1 OR (g.to_group_id <> '' AND g.to_group_id IN
                   (SELECT group_id FROM group_member WHERE account_id = ?1))) AS for_me,
-                COALESCE(ta.handle, '') AS to_handle, COALESCE(tg.slug, '') AS to_group_slug
+                COALESCE(ta.handle, '') AS to_handle, COALESCE(tg.slug, '') AS to_group_slug,
+                COALESCE(tg.name, '') AS to_group_name
            FROM guide g
            LEFT JOIN team t ON t.id = g.team_id
            LEFT JOIN account ta ON ta.id = g.to_account_id AND g.to_account_id <> ''
@@ -1403,6 +1447,7 @@ export async function list(
           team_slug: string;
           to_handle: string;
           to_group_slug: string;
+          to_group_name: string;
         }
       >(),
     db
@@ -1507,6 +1552,99 @@ export async function approve(
     .run();
   await event(db, id, "approved", { account, at });
   return { state: "done", claimant: t.claim.account_id };
+}
+
+/**
+ * The end of a hand-in, now that nothing reviews it (docs/REVIEW.md): finishing is final.
+ *
+ * What was shown is kept as a standing verdict, so it is still on the guide — first, on its page —
+ * after the claim that carried it is gone. The hand-in's claim is let go, and when nobody else
+ * holds the guide it goes to Done, `outcome = finished`. A handoff held in several repos stays in
+ * progress until the last of them finishes. `ok: false` — a handoff whose Verification did not hold
+ * here — is not finished: its claim goes and the guide stays where it was, for its author to hear.
+ */
+export async function complete(
+  db: D1Database,
+  id: string,
+  { account, at, ok = true }: { account: string; at: string; ok?: boolean },
+): Promise<{ done: boolean }> {
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO verdict (guide_id, account_id, ok, note, detail, checks, writeup, at)
+         SELECT guide_id, account_id, ?, note, evidence, checks, writeup, ? FROM claim
+          WHERE guide_id = ? AND account_id = ? AND state = 'review'
+         ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note,
+           detail = excluded.detail, checks = excluded.checks,
+           writeup = CASE WHEN excluded.writeup <> '' THEN excluded.writeup ELSE verdict.writeup END,
+           at = excluded.at`,
+      )
+      .bind(ok ? 1 : 0, at, id, account),
+    db
+      .prepare("DELETE FROM claim WHERE guide_id = ? AND account_id = ? AND state = 'review'")
+      .bind(id, account),
+  ]);
+  if (!ok) return { done: false };
+  const left = await db.prepare("SELECT 1 FROM claim WHERE guide_id = ? LIMIT 1").bind(id).first();
+  if (left) return { done: false };
+  const g = await db
+    .prepare("SELECT markdown FROM guide WHERE id = ? AND status <> 'consumed'")
+    .bind(id)
+    .first<{ markdown: string }>();
+  if (!g) return { done: false };
+  await db
+    .prepare(
+      "UPDATE guide SET status = 'consumed', outcome = 'finished', markdown = ?, updated = ? WHERE id = ?",
+    )
+    .bind(withStatus(g.markdown, "consumed"), at, id)
+    .run();
+  return { done: true };
+}
+
+/**
+ * Put finished work back in To do, with why (docs/REVIEW.md §4): what Ask for changes was meant to
+ * be, after the fact instead of in front of every piece of work. Anyone in its team may; the reason
+ * goes at the top of the guide for whoever takes it next. Only finished work: an archived guide
+ * comes back through Unarchive, to Draft. Returns who finished it, to tell them.
+ */
+export async function reopen(
+  db: D1Database,
+  id: string,
+  { account, at, why }: { account: string; at: string; why: string },
+): Promise<{ finishers: string[] } | { error: string; status: 400 | 404 | 409 }> {
+  const reason = String(why ?? "")
+    .trim()
+    .slice(0, 1000);
+  if (!reason) return { status: 400, error: "say why: whoever takes it next reads it first" };
+  const g = await db
+    .prepare(`SELECT markdown, status, outcome FROM guide g WHERE id = ?1 AND ${MAY_MOVE}`)
+    .bind(id, account)
+    .first<{ markdown: string; status: string; outcome: string }>();
+  if (!g) return { status: 404, error: "no such guide in your teams" };
+  if (g.status !== "consumed" || g.outcome === "archived")
+    return {
+      status: 409,
+      error:
+        g.status === "consumed"
+          ? "it was archived, not finished: unarchive it instead (it goes to Draft)"
+          : "it isn't finished, so there is nothing to reopen",
+    };
+  const markdown = withStatus(
+    withNote(g.markdown, `${at.slice(0, 10)} reopened: ${reason}`),
+    "published",
+  );
+  await db
+    .prepare(
+      "UPDATE guide SET status = 'published', outcome = '', markdown = ?, updated = ? WHERE id = ?",
+    )
+    .bind(markdown, at, id)
+    .run();
+  const { results } = await db
+    .prepare("SELECT DISTINCT account_id FROM verdict WHERE guide_id = ? AND ok = 1")
+    .bind(id)
+    .all<{ account_id: string }>();
+  await event(db, id, "sent_back", { account, body: reason, at });
+  return { finishers: results.map((r) => r.account_id) };
 }
 
 /**
@@ -1873,7 +2011,11 @@ export async function handIn(
 ): Promise<{ claim: ClaimRow } | { error: string; status: 400 | 409 }> {
   // Checks are evidence, so a hand-in that brings them has brought it — as in finish().
   const said = checks.length ? flatten(checks) : evidence;
-  const bad = person ? null : checks.length ? checksProblem(checks) : evidenceProblem(evidence);
+  const bad = person
+    ? proofProblem(evidence, checks)
+    : checks.length
+      ? checksProblem(checks)
+      : (evidenceProblem(evidence) ?? proofProblem(evidence, checks));
   if (bad) return { status: 400, error: bad };
   const detail = String(evidence ?? "").slice(0, EVIDENCE_MAX);
   const storedChecks = checks.length ? JSON.stringify(checks).slice(0, EVIDENCE_MAX * 2) : "";
@@ -2016,9 +2158,8 @@ export function steps(kind: string, event: StepEvent, replies = 0): { next: Step
       tool: "hand_in",
       when: done,
       why:
-        kind === "task"
-          ? "its author reviews your write-up against Acceptance"
-          : "its author hears whether it worked",
+        "it is finished: it goes to Done with what you showed, and nobody reviews it after you — " +
+        "so show it (a screenshot, or the command and its line of output)",
       // Said on every answer, not only once at take: by the time an agent finishes a long piece
       // of work, the rules it read at the start are the first thing gone. Keep evidence collected
       // as you go, or you are reconstructing it from memory at the end, which is the failure this

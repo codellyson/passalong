@@ -71,7 +71,7 @@ export interface Guide {
   archives_at?: string;
   status: string;
   /** How it reached Done: approved after review, or archived. '' while it is not done. */
-  outcome?: "approved" | "archived" | "";
+  outcome?: "finished" | "approved" | "archived" | "";
   url: string;
   created: string;
   /** Its last edit or status change. */
@@ -107,6 +107,8 @@ export interface Guide {
   answered_elsewhere?: boolean;
   /** Its column on the team board, worked out by the server the same for everyone. */
   stage?: "draft" | "todo" | "working" | "review" | "done";
+  /** Whose rows it sits in when the board is by person: holders, else who it was sent to. Empty is Anyone. */
+  lanes?: string[];
   /** Who holds it or handed it in. `agent` is empty for a person working it in the browser. */
   held_by?: {
     name: string;
@@ -418,6 +420,8 @@ export interface GuideContext {
     by: { handle: string; name: string };
     note: string;
     detail: string;
+    /** What finishing took, in the finisher's words. Absent from an older server. */
+    writeup?: string;
     at: string;
   }[];
   /** Each person's standing answer to "are you taking this?", with when they gave it. */

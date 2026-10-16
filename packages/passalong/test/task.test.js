@@ -53,23 +53,23 @@ test("a task outside any repo is for no repo", () => {
   assert.equal(g.meta.target_context, "");
 });
 
-test("sharing a task leaves it in Draft, and ready moves it on", async () => {
-  const { guide } = await passalong.share(task());
+test("a task said to be a draft waits in Draft, and ready moves it on", async () => {
+  const { guide } = await passalong.share(task({ status: "draft" }));
   assert.equal(guide.meta.status, "draft");
   const next = await passalong.ready(guide.meta.id);
   assert.equal(next.meta.status, "published");
   await assert.rejects(passalong.ready(guide.meta.id), /not in Draft/);
 });
 
-test("every kind is shared as a draft, and ready moves it on", async () => {
+test("every kind is shared Ready unless it says draft", async () => {
   const { guide } = await passalong.share(
     serialize({
       meta: { title: "t", summary: "A summary.", kind: "transfer" },
       body: "Context for whoever picks it up.",
     }),
   );
-  assert.equal(guide.meta.status, "draft", "a handoff waits in Draft like a task");
-  assert.equal((await passalong.ready(guide.meta.id)).meta.status, "published");
+  assert.equal(guide.meta.status, "published", "sent to someone means it reaches them");
+  assert.equal((await passalong.share(task())).guide.meta.status, "published", "a task too");
 });
 
 test("an agent started by work is told to commit what it did, under the task's id", () => {

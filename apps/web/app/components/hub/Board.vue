@@ -30,6 +30,13 @@
 
   From md the columns are lanes the height of the window, each scrolling its own cards under a
   header that stays put, so the whole lane is somewhere to drop and nothing ends half-way down.
+
+  In a team (`people`), it is a Trello board with a list per person: Draft, To do, a column for each
+  teammate and each group with work waiting, In progress, Done. Work waiting to be started sits in
+  the column of whoever it was sent to (`lanes`, from the server), or To do when nobody in
+  particular; several named people each see it in their column, as one guide. Dragging it to
+  someone's column gives it to them; dragging to In progress, Done or Draft does what those columns
+  always did.
 -->
 <script setup lang="ts">
 import type { STAGES } from "~/composables/useWorkLists";
@@ -37,6 +44,8 @@ import type { Guide, Task, Working } from "~/types/hub";
 
 const props = defineProps<{
   columns: ((typeof STAGES)[number] & { cards: Guide[] })[];
+  /** Teammates, for the columns by person; absent for the board by stage. `to` is how Give to… names them. */
+  people?: { id: string; label: string; to: string }[] | null;
 }>();
 
 /** Done is most of what exists; the column shows the newest and says how many more. */
@@ -45,12 +54,21 @@ const DONE_SHOWN = 20;
 /** Who it was sent to, in the words the rest of the hub uses. */
 function address(g: Guide) {
   if (g.to) return g.to_name || `@${g.to}`;
-  if (g.to_group) return `#${g.to_group}`;
+  // Several named people are a group nobody named (`~…`): say who they are, not its id.
+  if (g.to_group)
+    return g.to_group.startsWith("~") ? g.to_group_name || "several people" : `#${g.to_group}`;
   if (g.team) return g.team_name || g.team;
   return "Private";
 }
 /** The picker's name for where it is now: `@handle`, `#group`, or "" for the whole team. */
-const addressed = (g: Guide) => (g.to ? `@${g.to}` : g.to_group ? `#${g.to_group}` : "");
+const addressed = (g: Guide) =>
+  g.to
+    ? `@${g.to}`
+    : g.to_group?.startsWith("~")
+      ? (g.to_group_name ?? "").replace(/\s+/g, "")
+      : g.to_group
+        ? `#${g.to_group}`
+        : "";
 /** Anyone in the team can give work to someone else, as they can move it. Done work stays put. */
 const canGive = (g: Guide) => Boolean(g.team) && g.stage !== "done";
 
@@ -137,7 +155,10 @@ function openMenu(g: Guide, e: MouseEvent) {
   };
 }
 
-const { onArchive, onCloseGuide, onTaskDraft, onTaskReady, onTakeBack } = useHub();
+const { onArchive, onAssign, onCloseGuide, onReopen, onTaskDraft, onTaskReady, onTakeBack } =
+  useHub();
+/** Finished, not shelved: what Reopen is for. Archived work comes back through Unarchive. */
+const finished = (g: Guide) => g.status === "consumed" && g.outcome !== "archived";
 
 /** The card being dragged, and the column under it. */
 const dragging = ref<Guide | null>(null);
@@ -164,7 +185,13 @@ function moveTo(g: Guide, to: string): (() => Promise<boolean> | boolean) | null
       onTakeBack({ id: g.id } as Working);
   if (to === "done" && g.manage && from !== "review" && g.status !== "consumed")
     return () => (task ? onArchive(g, true) : onCloseGuide(g));
-  // Out of Done to Draft, so nobody redoes approved work without a person saying so.
+  // Finished work dragged back to To do is reopened, with why; anything out of Done to Draft is
+  // unarchived, so nobody redoes it without a person saying so.
+  if (from === "done" && to === "todo" && finished(g))
+    return () => {
+      const why = prompt(`Why reopen "${g.title}"? Whoever finished it is told.`)?.trim();
+      return Boolean(why) && onReopen(g.id, why as string);
+    };
   if (from === "done" && to === "draft" && g.manage && g.status === "consumed")
     return () => onArchive(g, false);
   return null;
@@ -204,6 +231,80 @@ async function place(g: Guide, to: string, act: () => Promise<boolean> | boolean
   }
 }
 
+/**
+ * The board with people (`people`): Draft, To do (nobody yet), a column per teammate and per group
+ * with work waiting, In progress, Done — a Trello board with a list per person. Only work waiting to
+ * be started moves between the people: Draft, In progress and Done are where they are for everyone.
+ * A card waiting for several named people shows in each of their columns, as one guide. A card just
+ * given somewhere shows there until the board catches up (`given`).
+ */
+const given = ref<Record<string, string>>({});
+const isLane = (col: string) => !["draft", "todo", "working", "done"].includes(col);
+const laneColumns = computed(() => {
+  if (!props.people) return null;
+  const stage = (id: string) => view.value.find((c) => c.id === id)!;
+  const waiting = stage("todo").cards;
+  const groups = [
+    ...new Set(waiting.flatMap((g) => (g.lanes ?? []).filter((k) => k.startsWith("#")))),
+  ].sort();
+  const lanes = [...props.people, ...groups.map((k) => ({ id: k, label: k, to: k }))];
+  const known = new Set(lanes.map((c) => c.id));
+  const whose = (g: Guide) => {
+    if (given.value[g.id] !== undefined) return [given.value[g.id] as string];
+    const in_ = (g.lanes ?? []).filter((k) => known.has(k));
+    return in_.length ? in_ : ["todo"];
+  };
+  return [
+    stage("draft"),
+    {
+      ...stage("todo"),
+      label: "To do",
+      hint: "Ready, for nobody yet",
+      cards: waiting.filter((g) => whose(g).includes("todo")),
+    },
+    ...lanes.map((c) => ({
+      ...c,
+      hint: "",
+      cards: waiting.filter((g) => whose(g).includes(c.id)),
+    })),
+    stage("working"),
+    stage("done"),
+  ];
+});
+const shownColumns = computed(() => laneColumns.value ?? view.value);
+watch(
+  () => props.columns,
+  (cols) => {
+    const now = { ...given.value };
+    for (const g of cols.flatMap((c) => c.cards)) {
+      const to = now[g.id];
+      if (to !== undefined && (to === "todo" ? !g.lanes?.length : g.lanes?.includes(to)))
+        delete now[g.id];
+    }
+    given.value = now;
+  },
+);
+/** Dropping waiting work on a person or group gives it to them; on To do, to nobody in particular. */
+async function giveTo(g: Guide, col: string) {
+  const to =
+    col === "todo"
+      ? ""
+      : ((laneColumns.value?.find((c) => c.id === col) as { to?: string })?.to ?? "");
+  given.value = { ...given.value, [g.id]: col };
+  if (!(await onAssign(g.id, to))) {
+    const { [g.id]: _, ...rest } = given.value;
+    given.value = rest;
+  }
+}
+/** Waiting work moving between To do and the people, rather than between stages. */
+function regive(g: Guide, col: string) {
+  if (!laneColumns.value || g.stage !== "todo" || !canGive(g)) return false;
+  const here = laneColumns.value.find((c) => c.id === col)?.cards.some((x) => x.id === g.id);
+  return !here && (isLane(col) || (col === "todo" && Boolean(g.lanes?.length)));
+}
+const allowed = (g: Guide, col: string) =>
+  regive(g, col) || (!isLane(col) && Boolean(moveTo(g, col)));
+
 /** The task waiting on its repo before it goes Ready, and where to ask. */
 const readying = ref<{ guide: Guide; x: number; y: number } | null>(null);
 function ready(repo: string) {
@@ -225,13 +326,18 @@ function dragEnd() {
   over.value = "";
 }
 function dragOver(col: string, e: DragEvent) {
-  if (!dragging.value || !moveTo(dragging.value, col)) return;
+  if (!dragging.value || !allowed(dragging.value, col)) return;
   e.preventDefault();
   over.value = col;
 }
 function drop(col: string, e: DragEvent) {
   const g = dragging.value;
-  const act = g && moveTo(g, col);
+  if (g && regive(g, col)) {
+    dragEnd();
+    giveTo(g, col);
+    return;
+  }
+  const act = g && !isLane(col) && moveTo(g, col);
   dragEnd();
   if (!g || !act) return;
   if (g.kind === "task" && g.stage === "draft" && col === "todo")
@@ -260,7 +366,11 @@ onBeforeUnmount(() => window.removeEventListener("resize", measure));
 /** The column a phone shows: the first with anything in it, until a tab is picked. */
 const picked = ref("");
 const shown = computed(
-  () => picked.value || props.columns.find((c) => c.cards.length)?.id || "todo",
+  () =>
+    (shownColumns.value.some((c) => c.id === picked.value) && picked.value) ||
+    shownColumns.value.find((c) => c.cards.length)?.id ||
+    shownColumns.value[0]?.id ||
+    "todo",
 );
 </script>
 
@@ -268,7 +378,7 @@ const shown = computed(
   <div class="flex flex-col gap-3">
     <div role="tablist" aria-label="Board columns" class="flex gap-1 overflow-x-auto [scrollbar-width:none] md:hidden">
       <button
-        v-for="col in view"
+        v-for="col in shownColumns"
         :key="col.id"
         type="button"
         role="tab"
@@ -287,12 +397,12 @@ const shown = computed(
       :style="laneHeight ? { height: laneHeight } : undefined"
     >
       <section
-        v-for="col in view"
+        v-for="col in shownColumns"
         :key="col.id"
         class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 transition-opacity md:min-h-0 md:flex-[1_0_15rem]"
         :class="[
           shown === col.id ? '' : 'max-md:hidden',
-          dragging && dragging.stage !== col.id && !moveTo(dragging, col.id) ? 'opacity-50' : '',
+          dragging && !col.cards.some((x) => x.id === dragging!.id) && !allowed(dragging, col.id) ? 'opacity-50' : '',
           over === col.id ? 'ring-2 ring-[var(--accent)]' : '',
         ]"
         @dragover="dragOver(col.id, $event)"
@@ -303,7 +413,7 @@ const shown = computed(
           <h2 :id="`col-${col.id}`" class="m-0 font-ui text-sm font-semibold">{{ col.label }}</h2>
           <span class="font-ui text-xs tabular-nums text-muted">{{ col.cards.length }}</span>
         </div>
-        <p v-if="!col.cards.length && over !== col.id" class="m-0 px-1 font-ui text-xs text-muted">{{ col.hint }}</p>
+        <p v-if="col.hint && !col.cards.length && over !== col.id" class="m-0 px-1 font-ui text-xs text-muted">{{ col.hint }}</p>
         <!-- The lane's cards scroll inside it, under the header. -->
         <ul class="m-0 -mx-1 flex list-none flex-col gap-2 px-1 pb-1 md:min-h-0 md:flex-1 md:overflow-y-auto">
           <li
@@ -350,7 +460,7 @@ const shown = computed(
               >Your review</span>
               <!-- Done is approved work and archived work; the card says which, in words. -->
               <span v-if="g.stage === 'done' && g.outcome" class="font-ui text-xs text-muted">{{
-                g.outcome === "approved" ? "Approved" : "Archived"
+                { finished: "Finished", approved: "Approved", archived: "Archived" }[g.outcome]
               }}</span>
               <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
             </div>
