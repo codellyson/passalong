@@ -247,10 +247,7 @@ const laneColumns = computed(() => {
   const groups = [
     ...new Set(waiting.flatMap((g) => (g.lanes ?? []).filter((k) => k.startsWith("#")))),
   ].sort();
-  const lanes = [
-    ...props.people,
-    ...groups.map((k) => ({ id: k, label: k, to: k })),
-  ];
+  const lanes = [...props.people, ...groups.map((k) => ({ id: k, label: k, to: k }))];
   const known = new Set(lanes.map((c) => c.id));
   const whose = (g: Guide) => {
     if (given.value[g.id] !== undefined) return [given.value[g.id] as string];
@@ -259,8 +256,17 @@ const laneColumns = computed(() => {
   };
   return [
     stage("draft"),
-    { ...stage("todo"), label: "To do", hint: "Ready, for nobody yet", cards: waiting.filter((g) => whose(g).includes("todo")) },
-    ...lanes.map((c) => ({ ...c, hint: "", cards: waiting.filter((g) => whose(g).includes(c.id)) })),
+    {
+      ...stage("todo"),
+      label: "To do",
+      hint: "Ready, for nobody yet",
+      cards: waiting.filter((g) => whose(g).includes("todo")),
+    },
+    ...lanes.map((c) => ({
+      ...c,
+      hint: "",
+      cards: waiting.filter((g) => whose(g).includes(c.id)),
+    })),
     stage("working"),
     stage("done"),
   ];
@@ -280,7 +286,10 @@ watch(
 );
 /** Dropping waiting work on a person or group gives it to them; on To do, to nobody in particular. */
 async function giveTo(g: Guide, col: string) {
-  const to = col === "todo" ? "" : (laneColumns.value?.find((c) => c.id === col) as { to?: string })?.to ?? "";
+  const to =
+    col === "todo"
+      ? ""
+      : ((laneColumns.value?.find((c) => c.id === col) as { to?: string })?.to ?? "");
   given.value = { ...given.value, [g.id]: col };
   if (!(await onAssign(g.id, to))) {
     const { [g.id]: _, ...rest } = given.value;
