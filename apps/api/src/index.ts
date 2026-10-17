@@ -5443,7 +5443,7 @@ async function asOwner(
 /**
  * Make the guide something sent in, or count it against the open one it repeats. Shared by email
  * and webhooks, so both obey the same rules: published through PUT /v1/guides/:id as the account,
- * a task a Draft until a person marks it Ready, and a repeat one guide with at most one note an
+ * Ready at once so whoever it is for can pick it up, and a repeat one guide with at most one note an
  * hour on its thread. A transfer never merges: each one is its own piece of context.
  */
 async function intake(
@@ -5502,8 +5502,9 @@ async function intake(
   markdown = setField(markdown, "summary", g.summary.slice(0, SUMMARY_MAX));
   // The kind is the one the address or URL named: stated by whoever chose which one to use.
   markdown = setField(markdown, "kind", g.kind);
-  // A draft until a person marks it Ready, like every new guide.
-  markdown = setField(markdown, "status", "draft");
+  // Ready at once, like every new guide: an alert held in Draft reached nobody (2026-10-17). Who
+  // may send is already decided — an email sender has to be allowed, a webhook needs the key.
+  markdown = setField(markdown, "status", "published");
   if (g.kind === "task" && g.target) markdown = setField(markdown, "target_context", g.target);
   if (g.team) markdown = setField(markdown, "team", g.team);
   if (g.team && g.to) markdown = setField(markdown, "to", g.to);
@@ -5593,7 +5594,7 @@ app.post("/v1/in/:key/:kind", async (c) => {
       kind: "hooked",
       guide_id: made.id,
       actor_id: "",
-      note: `${from}, a draft ${kind} until you mark it Ready`,
+      note: `${from}, a ${kind} that is ready to pick up`,
     });
   }
   return c.json({ ok: true, made: made.id || null, merged: Boolean(made.id) && !made.created });
@@ -5664,7 +5665,7 @@ export async function receiveEmail(
         kind: "emailed",
         guide_id: made.id,
         actor_id: "",
-        note: `a draft ${to.kind} until you mark it Ready`,
+        note: `a ${to.kind} that is ready to pick up`,
       });
   } catch (e) {
     console.error("inbound", (e as Error).message);

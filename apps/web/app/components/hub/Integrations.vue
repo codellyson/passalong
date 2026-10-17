@@ -29,7 +29,7 @@ const state = ref<{
 
 /** What each address makes, in the words the rest of the hub uses for them. */
 const KINDS: { id: Kind; label: string; note: string }[] = [
-  { id: "task", label: "Task", note: "work to do; a Draft until you mark it Ready" },
+  { id: "task", label: "Task", note: "work to do, ready to pick up" },
   { id: "bug", label: "Bug", note: "a defect to fix" },
   { id: "transfer", label: "Transfer", note: "context to hand over" },
 ];

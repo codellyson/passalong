@@ -291,8 +291,8 @@ change. Its README says how.
   Done, and the same moves between them (In review went on 2026-10-15: see the next contract). **A new guide is Ready unless whoever wrote it
   says `status: draft`** (2026-10-15): Draft-first was tried for every kind, and addressed work sat
   forgotten in it — every draft in production was a task sent to somebody, untouched for over a
-  day. Draft is for what a person should read first: a plan of tasks (`plan_tasks` says so), email
-  and webhooks (nobody wrote them), or anything an agent is unsure of. `publishProblem()` in
+  day. Draft is for what a person should read first: a plan of tasks (`plan_tasks` says so), or
+  anything an agent is unsure of. `publishProblem()` in
   `guide.ts` refuses a new guide that starts archived, and an edit that changes status. Whoever it
   is addressed to is told when it is Ready — at publish, or when a person marks a draft Ready on the
   status route (`announceGuide()`) — never while it is a draft.
@@ -300,7 +300,8 @@ change. Its README says how.
   nothing held moves to Draft until it is taken back or reviewed; only its author or an admin
   archives it; and an archived guide comes back to Draft, never straight to Ready
   (`unarchiveProblem()`), because archived includes approved. A proposal awaiting a team decision
-  stays Draft. Email and webhooks file every kind as a draft, and the day-old Draft reminder
+  stays Draft. Email and webhooks file every kind Ready (2026-10-17: alerts held in Draft reached
+  nobody; who may send is already gated by the allowed senders and the key), and the day-old Draft reminder
   covers every kind. **A task's write-up is not on the board**: the transfer an agent
   publishes for its hand-in is stored as Done and named for its task (`report_of`, migration
   0053) when the hand-in names it, and `GET /v1/guides` leaves it out; ones approved before then are
