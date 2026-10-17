@@ -182,6 +182,7 @@ const tabs = [
 const active = (to: string) =>
   to === "/hub/work"
     ? route.path === "/hub/work" ||
+      route.path.startsWith("/hub/g/") ||
       route.path.startsWith("/hub/answer") ||
       route.path.startsWith("/hub/report")
     : to === "/hub/folders" || to === "/hub/settings"
