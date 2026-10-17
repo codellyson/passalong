@@ -1836,3 +1836,32 @@ test("the server requires a kind, takes a new task Ready, and never starts one a
   ]);
   assert.ok(env);
 });
+
+test("a webhook URL with ?team= files onto that team's board; a team it can't use still files", {
+  skip,
+}, async () => {
+  // A PostHog alert arrived as a draft only its account could see, and never reached the board.
+  const { account } = await setup();
+  const api = await import("../src/api.js");
+  const team = (await api.createTeam(`hooks-${Date.now()}`)).slug;
+  const key = `e2ehook${Date.now().toString(36)}`;
+  await sql(
+    `INSERT INTO inbound (account_id, key, created) VALUES ('${account}', '${key}', '${new Date().toISOString()}')`,
+  );
+  const hook = (query, title) =>
+    fetch(`${API}/v1/in/${key}/bug${query}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title, id: title }),
+    });
+  assert.equal((await hook(`?team=${team}`, "Team alert")).status, 200);
+  assert.equal((await hook("?team=no-such-team", "Stray alert")).status, 200);
+  const filed = await rows(
+    `SELECT g.title, COALESCE(t.slug, '') AS team, g.status FROM guide g LEFT JOIN team t ON t.id = g.team_id
+      WHERE g.account_id = '${account}' AND g.title IN ('Team alert', 'Stray alert') ORDER BY g.title`,
+  );
+  assert.deepEqual(filed, [
+    { title: "Stray alert", team: "", status: "draft" },
+    { title: "Team alert", team, status: "draft" },
+  ]);
+});

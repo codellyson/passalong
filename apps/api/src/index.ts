@@ -5453,6 +5453,9 @@ async function intake(
     account: string;
     kind: EmailKind;
     target: string;
+    /** The team it is filed in, and who inside it, as the URL said; "" keeps it to the account. */
+    team?: string;
+    to?: string;
     print: string;
     title: string;
     summary: string;
@@ -5502,7 +5505,20 @@ async function intake(
   // A draft until a person marks it Ready, like every new guide.
   markdown = setField(markdown, "status", "draft");
   if (g.kind === "task" && g.target) markdown = setField(markdown, "target_context", g.target);
-  const made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, markdown, "text/markdown");
+  if (g.team) markdown = setField(markdown, "team", g.team);
+  if (g.team && g.to) markdown = setField(markdown, "to", g.to);
+  let made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, markdown, "text/markdown");
+  // A team the URL named that the account cannot file in (a typo, a team it left) must not lose the
+  // alert: it is filed as the account's own, saying why, rather than dropped.
+  if (!made.ok && g.team) {
+    console.error("inbound guide refused for its team", made.status, made.text.slice(0, 200));
+    let mine = dropField(dropField(markdown, "team"), "to");
+    mine = mine.replace(
+      /\n---\n/,
+      `\n---\n\n> Not filed in ${g.team}: ${made.text.slice(0, 200)}\n`,
+    );
+    made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, mine, "text/markdown");
+  }
   if (!made.ok) {
     console.error("inbound guide refused", made.status, made.text.slice(0, 200));
     return { id: "", created: false };
@@ -5559,6 +5575,11 @@ app.post("/v1/in/:key/:kind", async (c) => {
     // `?repo=owner/repo` on the URL: one Sentry or PostHog project per repo, so its tasks arrive
     // already pointed at it. Without it, the repo is chosen when the task is marked Ready.
     target: claims.repoKey(c.req.query("repo") || "").slice(0, 200),
+    // `?team=slug` (and `&to=@handle` or `#group`): onto that team's board. The person who pasted
+    // the URL chose it; without it the guide stays theirs alone, which is how one went missing
+    // from a team's board. A team the account is not in is refused by the publish, as anywhere.
+    team: (c.req.query("team") || "").trim().slice(0, 60),
+    to: (c.req.query("to") || "").trim().slice(0, 200),
     print: hookPrint(kind, hook),
     title: hook.title,
     summary: `Sent in by ${from}: ${hook.title}`,

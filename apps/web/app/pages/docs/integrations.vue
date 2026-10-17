@@ -173,7 +173,8 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api
             task needs one before an agent finds it on its own. Add <code>?repo=owner/repo</code> to
             a task URL — one Sentry or PostHog project per repo — and its tasks arrive pointed at it.
             Otherwise choose the repo when you mark the task Ready: its page suggests the repos your
-            tasks and agents already use. A task with no repo is still taken when an agent is given
+            tasks and agents already use. Add <code>?team=&lt;slug&gt;</code> to any URL to put what
+            arrives on that team's board; without it, it is yours alone. A task with no repo is still taken when an agent is given
             its id.
           </p>
         </div>

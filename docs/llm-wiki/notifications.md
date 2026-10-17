@@ -39,6 +39,11 @@ email is a stranger's text that an agent will read:
   out, guide not archived) adds to `inbound_guide.times`, and leaves at most one note an hour on
   the guide's thread. A transfer never merges.
 
+A webhook URL can also carry `?team=<slug>` (and `&to=`): what arrives is filed in that team, which
+is what puts it on the team's board; without it a guide sent in is the account's own. The hub's copied
+URLs carry the team in view. A team the publish refuses (a typo, a team since left) still files the
+guide as the account's own, with a line saying why, so an alert is never lost.
+
 A task's repo is chosen where it is known. A webhook URL can carry `?repo=owner/repo` (one Sentry or
 PostHog project per repo), and that becomes the task's `target_context`. Otherwise whoever marks the
 task Ready picks the repo on its page (`PATCH /v1/guides/:id/status` with `target`, which the context
