@@ -36,10 +36,38 @@ const KINDS: { id: Kind; label: string; note: string }[] = [
 const busy = ref("");
 const problem = ref("");
 const source = ref<"email" | "sentry" | "posthog" | "code">("email");
-/** Email shows its addresses; every other source posts to its URL. */
-const shown = computed(() =>
-  source.value === "email" ? state.value?.addresses : state.value?.hooks,
+/**
+ * The team a webhook files into, on its URL as `?team=`: the team in view, or the only one. Without
+ * it a guide stays the account's own and never reaches the team's board.
+ */
+const team = computed(
+  () =>
+    data.value.team?.slug ||
+    (data.value.me?.teams?.length === 1 ? data.value.me.teams[0]!.slug : ""),
 );
+const hooks = computed(() =>
+  state.value?.hooks
+    ? (Object.fromEntries(
+        Object.entries(state.value.hooks).map(([k, url]) => [
+          k,
+          team.value ? `${url}?team=${team.value}` : url,
+        ]),
+      ) as Record<Kind, string>)
+    : null,
+);
+/** The addresses with the team in them, `key+bug+team@…`, for the same reason. */
+const addresses = computed(() =>
+  state.value?.addresses
+    ? (Object.fromEntries(
+        Object.entries(state.value.addresses).map(([k, a]) => [
+          k,
+          team.value && a ? a.replace("@", `+${team.value}@`) : a,
+        ]),
+      ) as Record<Kind, string>)
+    : null,
+);
+/** Email shows its addresses; every other source posts to its URL. */
+const shown = computed(() => (source.value === "email" ? addresses.value : hooks.value));
 /** Replacing or removing the addresses breaks whatever uses them, so it asks in place first. */
 const confirming = ref<"" | "new" | "off">("");
 
@@ -151,7 +179,7 @@ const choices = [
             </li>
             <li>
               Repeats of one Sentry issue stay one guide; resolved, assigned and other updates are
-              ignored. For a task URL, add <code>?repo=owner/repo</code> so it arrives pointed at that
+              ignored. For a task URL, add <code>{{ team ? "&" : "?" }}repo=owner/repo</code> so it arrives pointed at that
               repo; otherwise you choose the repo when you mark it Ready.
             </li>
           </ol>
@@ -164,19 +192,28 @@ const choices = [
             <li>
               Use <b class="font-medium text-fg">Test function</b>, then
               <b class="font-medium text-fg">Create &amp; enable</b>. Repeats of one issue stay one guide.
-              A task URL takes <code>?repo=owner/repo</code> too.
+              A task URL takes <code>{{ team ? "&" : "?" }}repo=owner/repo</code> too.
             </li>
           </ol>
           <div v-else class="flex flex-col gap-2 text-muted">
             <p class="m-0">
               POST JSON to a URL above. Only <code>title</code> is required; send the same
               <code>id</code> again and it adds to the open guide instead of making a new one. Add
-              <code>?repo=owner/repo</code> to a task URL to say which repo it is for.
+              <code>{{ team ? "&" : "?" }}repo=owner/repo</code> to a task URL to say which repo it is for.
             </p>
-            <code class="block overflow-x-auto rounded-1 border border-line bg-field px-3 py-2 font-code text-sm whitespace-pre text-fg">curl -X POST {{ state.hooks?.task }} \
+            <code class="block overflow-x-auto rounded-1 border border-line bg-field px-3 py-2 font-code text-sm whitespace-pre text-fg">curl -X POST {{ hooks?.task }} \
   -H 'content-type: application/json' \
   -d '{"title": "Checkout is down", "text": "500s since 09:12", "url": "https://…", "id": "checkout-500"}'</code>
           </div>
+          <p class="m-0 text-muted">
+            <template v-if="team">
+              These {{ source === "email" ? "addresses" : "URLs" }} put what arrives on
+              <b class="font-medium text-fg">{{ team }}</b>'s board.
+              <template v-if="source !== 'email'">Add <code>&amp;to=@handle</code> for one person.</template>
+              One you set up before without the team files only for you: replace it with this one.
+            </template>
+            <template v-else>Pick a team at the top to get {{ source === "email" ? "addresses" : "URLs" }} that file onto its board; without one, what arrives is only yours.</template>
+          </p>
         </fieldset>
 
       </template>

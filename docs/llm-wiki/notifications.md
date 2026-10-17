@@ -21,7 +21,8 @@ the action that caused it — and drops anything addressed to whoever caused it.
 Mail can also come **in** and become a guide of any kind. An account gets one key from Settings
 (`POST /v1/inbound`, migration 0051), shown as three addresses: `key+task@`, `key+bug@`,
 `key+transfer@`. The kind is in the address because a guide's kind is always stated, never
-guessed: whoever picks the address states it, and mail to the bare `key@` is dropped. The
+guessed: whoever picks the address states it, and mail to the bare `key@` is dropped. A third part
+names the team, `key+bug+khaime@`, as `?team=` does on a webhook URL. The
 addresses go wherever work comes from: a tool's notification settings, a BCC in the account's
 own backend, a Gmail forward.
 
@@ -38,6 +39,11 @@ email is a stranger's text that an agent will read:
 - **A task or bug that comes again** (same kind, same sender, same subject with its numbers taken
   out, guide not archived) adds to `inbound_guide.times`, and leaves at most one note an hour on
   the guide's thread. A transfer never merges.
+
+A webhook URL can also carry `?team=<slug>` (and `&to=`): what arrives is filed in that team, which
+is what puts it on the team's board; without it a guide sent in is the account's own. The hub's copied
+URLs carry the team in view. A team the publish refuses (a typo, a team since left) still files the
+guide as the account's own, with a line saying why, so an alert is never lost.
 
 A task's repo is chosen where it is known. A webhook URL can carry `?repo=owner/repo` (one Sentry or
 PostHog project per repo), and that becomes the task's `target_context`. Otherwise whoever marks the

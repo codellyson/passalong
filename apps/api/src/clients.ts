@@ -23,7 +23,13 @@ export const CLIENT_HEADER = "x-passalong-version";
  * deploys on merge, and a floor above what npm hands out refuses every agent with nothing it can
  * install to get past it.
  *
- * 0.19.0, since it went `latest` on 2026-10-16. There is no review stage now: a hand-in is final
+ * 0.20.0, since it went `latest` on 2026-10-16. An agent may hold several things now, and older
+ * CLIs tell it the opposite: their session-start hook steers a new session onto whatever the
+ * worktree holds, their Stop hook blocks it over another session's work, and their instructions
+ * say to check what you hold with a no-id take, which now claims new work. 0.20.0 lists every hold,
+ * says to settle only your own, and checks with board.
+ *
+ * Before that, 0.19.0, since it went `latest` on 2026-10-16. There is no review stage now: a hand-in is final
  * and needs proof, and older CLIs tell their agents a hand-in waits for review, describe the write-up
  * guide a task no longer needs, and have no `reopen`. 0.19.0 says finishing is final and shows proof.
  *
@@ -49,7 +55,7 @@ export const CLIENT_HEADER = "x-passalong-version";
  * version, and the first whose follow-up note stopped telling agents to publish what they found as
  * a new guide.
  */
-export const MIN_CLIENT = "0.19.0";
+export const MIN_CLIENT = "0.20.0";
 
 /**
  * What a CLI that sends no version is counted as: the last release that did not send one.

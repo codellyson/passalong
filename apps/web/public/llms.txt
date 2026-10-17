@@ -332,12 +332,14 @@ An account can turn email and webhooks into guides (Settings → Integrations in
 version at https://passalong.dev/docs/integrations). One key, written two ways, and the kind is in
 the address, never guessed:
 
-- Email: `<key>+task@in.passalong.dev`, `<key>+bug@…`, `<key>+transfer@…`. A sender's first email
-  only asks to be allowed; the account's own confirmed address is allowed from the start.
+- Email: `<key>+task@in.passalong.dev`, `<key>+bug@…`, `<key>+transfer@…`; add the team after the
+  kind, `<key>+bug+<team>@…`, to put it on that team's board. A sender's first email only asks to be
+  allowed; the account's own confirmed address is allowed from the start.
 - Webhooks: `POST https://passalong.dev/v1/in/<key>/<task|bug|transfer>`. Sentry is read from its
   `Sentry-Hook-Resource` header, PostHog from its default `{event, person}` body, and anything else
   as `{"title": "...", "text": "...", "url": "...", "id": "..."}` (only `title` required). Add
-  `?repo=owner/repo` to a task URL to say which repo it is for.
+  `?repo=owner/repo` to a task URL to say which repo it is for, and `?team=<slug>` (with `&to=@handle`
+  or `#group` if you like) to put what arrives on that team's board; without a team it is yours alone.
 
 A task made this way is a Draft until a person marks it Ready (and picks its repo, if it has none);
 a bug or transfer is published. What was sent is quoted under Context or Problem as evidence from
