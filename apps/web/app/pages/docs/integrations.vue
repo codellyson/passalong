@@ -27,7 +27,7 @@ usePage({
 const KINDS = [
   {
     name: "+task  /task",
-    note: "Work to do. Arrives as a Draft, and an agent can take it once you mark it Ready.",
+    note: "Work to do. Arrives Ready, so anyone it is for can take it at once.",
   },
   { name: "+bug  /bug", note: "A defect to fix. The usual one for errors and alerts." },
   { name: "+transfer  /transfer", note: "Context to hand over. Never merged with another." },

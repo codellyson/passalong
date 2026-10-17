@@ -34,8 +34,8 @@ email is a stranger's text that an agent will read:
   Allow or Block it. The account's own verified email is allowed from the start.
 - **An allowed sender's email is published through `PUT /v1/guides/:id`** as the account, written
   by `email`, in its kind's sections. The email sits in a fence, labelled as evidence and not as
-  instructions. A task is a **Draft** and reaches an agent only after a person marks it Ready; a
-  bug or transfer is published. You get an `emailed` notification.
+  instructions. Every kind is **Ready** at once (2026-10-17; it was a Draft until a person marked
+  it, and alerts sat there unseen), so whoever it is for can pick it up. You get an `emailed` notification.
 - **A task or bug that comes again** (same kind, same sender, same subject with its numbers taken
   out, guide not archived) adds to `inbound_guide.times`, and leaves at most one note an hour on
   the guide's thread. A transfer never merges.
@@ -54,7 +54,7 @@ the one-repo-per-account `inbound.target` this replaced.
 
 **Webhooks use the same key.** `POST /v1/in/<key>/<kind>` (public by path; the key is the
 credential, and Sentry's HMAC is not checked yet) turns a webhook into a guide through the same
-`intake()` as email, so the same rules hold: a Draft task, a quoted body, merged repeats.
+`intake()` as email, so the same rules hold: Ready at once, a quoted body, merged repeats.
 `readHook()` in `inbound.ts` reads the sender from the request: **Sentry** by its
 `Sentry-Hook-Resource` header (issue created or unresolved, alert triggered, error created,
 metric alert warning or critical; everything else answers 200 and makes nothing), **PostHog** by

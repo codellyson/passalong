@@ -1861,7 +1861,7 @@ test("a webhook URL with ?team= files onto that team's board; a team it can't us
       WHERE g.account_id = '${account}' AND g.title IN ('Team alert', 'Stray alert') ORDER BY g.title`,
   );
   assert.deepEqual(filed, [
-    { title: "Stray alert", team: "", status: "draft" },
-    { title: "Team alert", team, status: "draft" },
+    { title: "Stray alert", team: "", status: "published" },
+    { title: "Team alert", team, status: "published" },
   ]);
 });
