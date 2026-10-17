@@ -21,7 +21,8 @@ the action that caused it — and drops anything addressed to whoever caused it.
 Mail can also come **in** and become a guide of any kind. An account gets one key from Settings
 (`POST /v1/inbound`, migration 0051), shown as three addresses: `key+task@`, `key+bug@`,
 `key+transfer@`. The kind is in the address because a guide's kind is always stated, never
-guessed: whoever picks the address states it, and mail to the bare `key@` is dropped. The
+guessed: whoever picks the address states it, and mail to the bare `key@` is dropped. A third part
+names the team, `key+bug+khaime@`, as `?team=` does on a webhook URL. The
 addresses go wherever work comes from: a tool's notification settings, a BCC in the account's
 own backend, a Gmail forward.
 

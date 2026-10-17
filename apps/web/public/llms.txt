@@ -332,8 +332,9 @@ An account can turn email and webhooks into guides (Settings → Integrations in
 version at https://passalong.dev/docs/integrations). One key, written two ways, and the kind is in
 the address, never guessed:
 
-- Email: `<key>+task@in.passalong.dev`, `<key>+bug@…`, `<key>+transfer@…`. A sender's first email
-  only asks to be allowed; the account's own confirmed address is allowed from the start.
+- Email: `<key>+task@in.passalong.dev`, `<key>+bug@…`, `<key>+transfer@…`; add the team after the
+  kind, `<key>+bug+<team>@…`, to put it on that team's board. A sender's first email only asks to be
+  allowed; the account's own confirmed address is allowed from the start.
 - Webhooks: `POST https://passalong.dev/v1/in/<key>/<task|bug|transfer>`. Sentry is read from its
   `Sentry-Hook-Resource` header, PostHog from its default `{event, person}` body, and anything else
   as `{"title": "...", "text": "...", "url": "...", "id": "..."}` (only `title` required). Add

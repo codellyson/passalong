@@ -38,14 +38,18 @@ export const KINDS = ["task", "bug", "transfer"] as const;
 export type EmailKind = (typeof KINDS)[number];
 
 /**
- * Whose address this is and which kind it names: `key+bug@domain` is `{ key, kind: "bug" }`.
- * Null when it is not on our domain, or names no kind — the bare `key@` included.
+ * Whose address this is, which kind it names and which team it files into: `key+bug@domain` is
+ * `{ key, kind: "bug", team: "" }`, and `key+bug+khaime@domain` files onto khaime's board. Null when
+ * it is not on our domain, or names no kind — the bare `key@` included.
  */
-export function addressOf(to: string, domain: string): { key: string; kind: EmailKind } | null {
-  const m = /^([^@\s+]+)\+([^@\s]+)@([^@\s]+)$/.exec(to.trim().toLowerCase());
-  if (!m || !domain || m[3] !== domain.toLowerCase()) return null;
+export function addressOf(
+  to: string,
+  domain: string,
+): { key: string; kind: EmailKind; team: string } | null {
+  const m = /^([^@\s+]+)\+([^@\s+]+)(?:\+([^@\s+]+))?@([^@\s]+)$/.exec(to.trim().toLowerCase());
+  if (!m || !domain || m[4] !== domain.toLowerCase()) return null;
   const kind = KINDS.find((k) => k === m[2]);
-  return kind ? { key: m[1] as string, kind } : null;
+  return kind ? { key: m[1] as string, kind, team: m[3] ?? "" } : null;
 }
 
 /** The one line a subject is reduced to: no line breaks or control characters, at most 200 long. */

@@ -55,8 +55,19 @@ const hooks = computed(() =>
       ) as Record<Kind, string>)
     : null,
 );
+/** The addresses with the team in them, `key+bug+team@…`, for the same reason. */
+const addresses = computed(() =>
+  state.value?.addresses
+    ? (Object.fromEntries(
+        Object.entries(state.value.addresses).map(([k, a]) => [
+          k,
+          team.value && a ? a.replace("@", `+${team.value}@`) : a,
+        ]),
+      ) as Record<Kind, string>)
+    : null,
+);
 /** Email shows its addresses; every other source posts to its URL. */
-const shown = computed(() => (source.value === "email" ? state.value?.addresses : hooks.value));
+const shown = computed(() => (source.value === "email" ? addresses.value : hooks.value));
 /** Replacing or removing the addresses breaks whatever uses them, so it asks in place first. */
 const confirming = ref<"" | "new" | "off">("");
 
@@ -194,13 +205,14 @@ const choices = [
   -H 'content-type: application/json' \
   -d '{"title": "Checkout is down", "text": "500s since 09:12", "url": "https://…", "id": "checkout-500"}'</code>
           </div>
-          <p v-if="source !== 'email'" class="m-0 text-muted">
+          <p class="m-0 text-muted">
             <template v-if="team">
-              These URLs put what arrives on <b class="font-medium text-fg">{{ team }}</b>'s board.
-              Add <code>&amp;to=@handle</code> for one person. A URL you pasted before without
-              <code>?team=</code> files only for you: replace it with this one.
+              These {{ source === "email" ? "addresses" : "URLs" }} put what arrives on
+              <b class="font-medium text-fg">{{ team }}</b>'s board.
+              <template v-if="source !== 'email'">Add <code>&amp;to=@handle</code> for one person.</template>
+              One you set up before without the team files only for you: replace it with this one.
             </template>
-            <template v-else>Pick a team at the top to get URLs that file onto its board; without one, what arrives is only yours.</template>
+            <template v-else>Pick a team at the top to get {{ source === "email" ? "addresses" : "URLs" }} that file onto its board; without one, what arrives is only yours.</template>
           </p>
         </fieldset>
 

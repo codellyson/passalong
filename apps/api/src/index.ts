@@ -5649,8 +5649,9 @@ export async function receiveEmail(
     const made = await intake(env, ctx, {
       account: me,
       kind: to.kind,
-      // An email cannot say which repo; whoever marks the task Ready does.
+      // An email cannot say which repo; whoever marks the task Ready does. It can say which team.
       target: "",
+      team: to.team,
       print: fingerprint(to.kind, mail.sender, mail.subject),
       title,
       summary: `Emailed by ${mail.sender}: ${title}`,
