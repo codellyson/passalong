@@ -18,6 +18,44 @@ not activity, it is closure:
 "Nothing left behind" is countable: items with no owner and no movement, getting older. That number
 should be zero, and the product should show it.
 
+## 1a. Three problems, and the author's calls (2026-10-28)
+
+The work is organised by the problem it solves. The author answered each solution in a shared doc
+([Passalong: problems and solutions](https://claude.ai/artifact/X8H9UBRe6vAMwFLw9xEmqa)); this is
+what was decided.
+
+**Problem 1 — support loses track of customers and the issues they reported.** A business problem:
+what is lost is customers. Decided:
+- A customer's messages are **one thread**, as in Freshdesk: replies and a customer writing again
+  continue it, whatever state the request is in.
+- **The agent routes each message to the team that should act** — developers, marketing, and so on
+  — not only "question or bug". Routing is to a team's column; a person can move it.
+- **Evidence a customer sends is never dropped.** Screenshots and attachments on an email reach the
+  request. (Email in keeps only the text today: a gap to close first.)
+- "Tell the customer" when a fix lands is **opt-in** per team, not always on.
+- The reply screen is **redesigned**, not patched. A "who is waiting on us" view, the agent drafting
+  replies a person sends, and the team lead ping are agreed as planned.
+- Open: where customers write besides email (WhatsApp, chat, social, phone).
+
+**Problem 2 — people create Passalongs in ChatGPT and Claude, not on Passalong.** Decided:
+- The box lives on **its own screen**.
+- The reader runs on **strict, tested rules**.
+- **It classifies on its own; there is no confirm step.** This reverses §6 item 4 below. To keep the
+  intent of "a silent default is a fabrication", the guide records that the reader classified it,
+  the person sees the result at once, and changing it is one click.
+- When it is unsure and asks, the question is **impossible to miss** — push and email, not only the
+  feed.
+
+**Problem 3 — work handed to agents stops and nobody notices.** Decided:
+- Untaken work reminds people **every day until someone acts**, not once.
+- The hosted runner takes **only work guaranteed to need no person**: a task carries a mark saying
+  it is safe to run alone, and the runner skips everything else.
+- Open: where the runner runs (a teammate's machine, a cloud sandbox, Passalong itself).
+
+**Order, approved:** 1. the "who is waiting on us" view, as a thread · 2. the reader and its
+screen · 3. the agent drafting replies · 4. the runner. Before 1: keep customer attachments, and
+make the untaken reminder daily.
+
 ## 2. The lens
 
 A bit of Freshdesk (requests come in and get answered), a bit of Linear/Trello (a board of work),
@@ -123,13 +161,13 @@ Still to settle: whether the customer gets a page to check status, or only email
 2. **The customer as a party on a guide.** *Built 2026-10-28* — `key+support@` takes mail from
    anyone, makes a Ready task with the customer and a tracking number on the row (migration 0057),
    answers at once, joins replies that carry the number from the same address (reopening finished
-   work), and a person answers from the guide's Customer panel. Not yet: an agent drafting the reply
+   work), and a person answers on the request's page under the **Support** tab (a table of every request; a row opens the conversation beside the task it became). Not yet: an agent drafting the reply
    for the person to send, and the agent sorting a request into question or bug. Before that, email
    in accepted only senders the account had allowed, and nothing went back to whoever wrote in.
 3. **A parent wakes when its child does.** *Built 2026-10-28* — when a guide made from another
    reaches Done, the parent gets a note on its thread (which its holder and next taker are handed)
    and its author and holders a `child_done` notification; a support request says "tell the
-   customer", and its Customer panel shows what finished since the customer was last answered. It
+   customer", and its Support page shows what finished since the customer was last answered. It
    wakes, it does not close: the parent is done when a person has answered the customer.
 4. **Filing work from the hub, without an agent of your own.** Today a guide is made by an agent
    through MCP or the CLI, or by email in. A support person, a tester or a product manager has
@@ -139,6 +177,8 @@ Still to settle: whether the customer gets a page to check status, or only email
    that kind needs (Acceptance for a task, Reproduce and Verification for a bug). It is not an
    editor and the person writes no structure.
 
+   *Reversed 2026-10-28 (§1a): it classifies on its own, with no confirm step; the guide records that
+   the reader classified it and the person changes it in one click.* As first agreed:
    **The person confirms; the model never decides alone.** It shows back what it understood, in
    plain words — "Something broken. Jane can't export. Done when: the export downloads." — with
    **Looks right** and **Change**. Nothing is stored until the person says it is right, so the kind

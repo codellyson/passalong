@@ -74,12 +74,12 @@ name; their address, name and tracking number (`R-XXXXXX`, `ref`) are columns (m
 share link or an agent never carries them. They are answered at once with the tracking number,
 from "<team> support", Reply-To the same address. A reply carrying the number from the same address
 joins that request (`customer` thread event, `customer_wrote` notification) and reopens it if it was
-finished. A person answers from the guide's page (**Customer** panel, `POST /v1/guides/:id/customer`),
+finished. A person answers on the request's page under the **Support** tab (`/hub/support/:id`, `POST /v1/guides/:id/customer`; the tab is a table of every request, state derived by `supportState()`),
 recorded as `answered`; there is no CLI command or MCP tool for it on purpose, because nothing reaches
 a customer before a person presses Send. A holding agent receives both kinds through `deliver()`.
 Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
 guide made from a request (a bug sent on to development) reaches Done, the request wakes: a
-`child_done` notification saying "tell the customer", and the Customer panel names what finished
+`child_done` notification saying "tell the customer", and the request's Support page names what finished
 since the customer was last answered.
 
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings

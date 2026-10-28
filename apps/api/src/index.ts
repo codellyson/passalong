@@ -167,6 +167,7 @@ import {
   SUPPORT_PER_ACCOUNT,
   SUPPORT_PER_SENDER,
   supportBody,
+  supportState,
   titleOf,
   withoutRef,
 } from "./inbound.js";
@@ -5883,6 +5884,77 @@ async function supportFrom(env: Env, account: string, team: string): Promise<{ n
         .first<{ name: string }>();
   return { name: row?.name ? `${row.name} support` : "Support" };
 }
+
+/**
+ * Every customer request this account can see, for the Support table (docs/LOOP.md §1a): who, what,
+ * where it stands and since when the customer has waited. State is derived on read by
+ * `supportState`, from the conversation and the work made from the request.
+ */
+app.get("/v1/support", async (c) => {
+  const me = c.get("account");
+  const { results } = await c.env.DB.prepare(
+    `SELECT g.id, g.title, g.ref, g.customer, g.customer_name, g.status, g.created, g.updated,
+            (SELECT MAX(at) FROM task_event WHERE guide_id = g.id AND kind = 'answered') AS answered_at,
+            (SELECT kind FROM task_event WHERE guide_id = g.id AND kind IN ('customer', 'answered')
+              ORDER BY id DESC LIMIT 1) AS last_kind,
+            (SELECT body FROM task_event WHERE guide_id = g.id AND kind IN ('customer', 'answered')
+              ORDER BY id DESC LIMIT 1) AS last_body,
+            (SELECT at FROM task_event WHERE guide_id = g.id AND kind IN ('customer', 'answered')
+              ORDER BY id DESC LIMIT 1) AS last_at,
+            (SELECT COUNT(*) FROM guide k WHERE k.parent_id = g.id
+              AND k.status NOT IN ('consumed', 'draft')) AS open_work
+       FROM guide g
+      WHERE g.customer <> ''
+        AND (g.account_id = ?1 OR g.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1))
+      ORDER BY g.updated DESC
+      LIMIT 500`,
+  )
+    .bind(me)
+    .all<{
+      id: string;
+      title: string;
+      ref: string;
+      customer: string;
+      customer_name: string;
+      status: string;
+      created: string;
+      updated: string;
+      answered_at: string | null;
+      last_kind: string | null;
+      last_body: string | null;
+      last_at: string | null;
+      open_work: number;
+    }>();
+  return c.json({
+    requests: results.map((r) => {
+      const lastBy =
+        r.last_kind === "customer" ? "customer" : r.last_kind === "answered" ? "team" : "";
+      const state = supportState({
+        done: r.status === "consumed",
+        lastBy,
+        answered: Boolean(r.answered_at),
+        openWork: Number(r.open_work),
+      });
+      return {
+        id: r.id,
+        title: r.title,
+        ref: r.ref,
+        customer: { name: r.customer_name, email: r.customer },
+        state,
+        // How long the customer has waited on us: only while the next word is ours.
+        waiting_since: state === "new" || state === "needs_reply" ? r.last_at || r.created : "",
+        last: {
+          by: lastBy,
+          line: String(r.last_body || "")
+            .replace(/\s+/g, " ")
+            .slice(0, 160),
+          at: r.last_at || r.created,
+        },
+        updated: r.updated,
+      };
+    }),
+  });
+});
 
 /**
  * A person answers a support request's customer (docs/LOOP.md §4). Only a person: an agent drafts,

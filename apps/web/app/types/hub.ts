@@ -353,6 +353,19 @@ export interface HubData {
 }
 
 /** One line of a guide's thread. See GET /v1/guides/:id/thread and claims.thread(). */
+/** One row of the Support table: a customer's request and where it stands (GET /v1/support). */
+export interface SupportRow {
+  id: string;
+  title: string;
+  ref: string;
+  customer: { name: string; email: string };
+  state: "new" | "needs_reply" | "with_development" | "waiting" | "solved";
+  /** Since when the customer has waited on us; "" when the next word is theirs or it is solved. */
+  waiting_since: string;
+  last: { by: "customer" | "team" | ""; line: string; at: string };
+  updated: string;
+}
+
 export interface ThreadItem {
   id: string;
   kind:

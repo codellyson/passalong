@@ -479,17 +479,11 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">
-        <HubCustomer
-          v-if="ctx.customer"
-          :guide-id="id"
-          :customer="ctx.customer"
-          :finished="
-            ctx.children
-              .filter((ch) => ch.status === 'consumed' && ch.outcome !== 'archived')
-              .map((ch) => ({ id: ch.id, title: ch.title || 'A follow-up', at: ch.updated || '' }))
-          "
-          @sent="queryClient.invalidateQueries({ queryKey: hubKeys.context(id) })"
-        />
+        <!-- A customer's request: the conversation lives on its Support page, not here. -->
+        <p v-if="ctx.customer" class="m-0 font-ui text-sm">
+          This task came from {{ ctx.customer.name || ctx.customer.email }}.
+          <NuxtLink :to="`/hub/support/${id}`">Open the conversation</NuxtLink>
+        </p>
 
         <!-- What came back, above the guide it answers: the write-up is the thing to read on a
              handed-in guide, and it read as a 40-line column in a sidebar. -->

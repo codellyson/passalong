@@ -426,3 +426,26 @@ export const SOURCE_NAMES: Record<Hooked["source"], string> = {
   posthog: "PostHog",
   webhook: "a webhook",
 };
+
+// ---- the Support table ----------------------------------------------------------------------
+
+export type SupportState = "new" | "needs_reply" | "with_development" | "waiting" | "solved";
+
+/**
+ * Where a customer's request stands, from what already happened (docs/LOOP.md §1a): never stored,
+ * so it cannot disagree with the request. Solved is Done. A customer who wrote after our last
+ * answer needs a reply whatever else is going on. Otherwise open work made from it means it is
+ * with development; nothing said to them yet is new; our word last means we wait on them.
+ */
+export function supportState(r: {
+  done: boolean;
+  lastBy: "customer" | "team" | "";
+  answered: boolean;
+  openWork: number;
+}): SupportState {
+  if (r.done) return "solved";
+  if (r.answered && r.lastBy === "customer") return "needs_reply";
+  if (r.openWork > 0) return "with_development";
+  if (!r.answered) return "new";
+  return r.lastBy === "team" ? "waiting" : "needs_reply";
+}

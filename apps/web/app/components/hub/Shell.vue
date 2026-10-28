@@ -86,7 +86,8 @@ const measure = computed(() =>
         route.path === "/hub" ||
         route.path === "/hub/work" ||
         route.path.startsWith("/hub/g/") ||
-        route.path.startsWith("/hub/folders")
+        route.path.startsWith("/hub/folders") ||
+        route.path.startsWith("/hub/support")
       ? "max-w-[70rem]"
       : "max-w-[54rem]",
 );
@@ -173,6 +174,7 @@ const nearLimit = computed(() => {
 const tabs = [
   { to: "/hub", label: "Home" },
   { to: "/hub/work", label: "Work" },
+  { to: "/hub/support", label: "Support" },
   { to: "/hub/folders", label: "Folders" },
   { to: "/hub/log", label: "Activities" },
   { to: "/hub/settings", label: "Settings" },
@@ -185,7 +187,7 @@ const active = (to: string) =>
       route.path.startsWith("/hub/g/") ||
       route.path.startsWith("/hub/answer") ||
       route.path.startsWith("/hub/report")
-    : to === "/hub/folders" || to === "/hub/settings"
+    : to === "/hub/folders" || to === "/hub/settings" || to === "/hub/support"
       ? route.path.startsWith(to)
       : route.path === to;
 </script>
@@ -243,10 +245,10 @@ const active = (to: string) =>
   <!-- Less room above than the 48px every other page gets: those open on a heading with nothing
        over it, and this one opens under a navbar that is already a band of its own. -->
   <!-- The hub's links on a phone: a tab bar at the bottom, in reach of a thumb, with room for all
-       five. `env(safe-area-inset-bottom)` keeps it above the home indicator. -->
+       six. `env(safe-area-inset-bottom)` keeps it above the home indicator. -->
   <nav
     v-if="framed && signedIn"
-    class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+    class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
     aria-label="Hub"
   >
     <NuxtLink
