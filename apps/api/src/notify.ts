@@ -74,6 +74,8 @@ export const KINDS = [
   "requeued",
   "stuck",
   "untaken",
+  // A customer wrote back on a support request (docs/LOOP.md). Actorless: they have no account.
+  "customer_wrote",
   // The conversation. `asked` is the one kind that reaches its own actor: your own agent asking you
   // is the commonest case there is, and the self-drop in notify() would have made it silent.
   "asked",
@@ -187,6 +189,8 @@ export const PUSHED = new Set<Kind>([
   // Work that will be left behind unless a person steps in.
   "stuck",
   "untaken",
+  // A customer waiting on an answer.
+  "customer_wrote",
   // An agent waiting on your answer needs you the way a blocked one does.
   "asked",
   // Something came in by email for you to look at, or a new sender is waiting to be let in.
@@ -767,6 +771,8 @@ export function line(r: LineFacts): string {
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
       return `${title} went back to Draft — nobody took it${note}`;
+    case "customer_wrote":
+      return `The customer wrote again on ${title}${note}`;
     case "requeued":
       return `${title} went quiet, so it is back in the queue for anyone to take${note}`;
     case "stuck":

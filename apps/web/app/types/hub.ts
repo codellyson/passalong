@@ -367,6 +367,8 @@ export interface ThreadItem {
     | "asked"
     | "replied"
     | "noted"
+    | "customer"
+    | "answered"
     | "verdict"
     | "ack";
   at: string;
@@ -408,6 +410,8 @@ export interface GuideContext {
   target?: string;
   /** Repos this account's tasks and agents already use, to pick from when marking a task Ready. */
   repos?: string[];
+  /** A support request's customer and tracking number; null for any other guide. */
+  customer?: { name: string; email: string; ref: string } | null;
   owner: boolean;
   /** The owner of its team, and not its author: may act on it as if they were. */
   admin?: boolean;

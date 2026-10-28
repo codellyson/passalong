@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   addressOf,
+  automated,
   bodyText,
   cleanSubject,
   emailBody,
@@ -11,7 +12,10 @@ import {
   hookPrint,
   parseEmail,
   readHook,
+  refIn,
+  supportBody,
   titleOf,
+  withoutRef,
 } from "../src/inbound.ts";
 import { section } from "../src/sections.ts";
 
@@ -151,6 +155,76 @@ test("a raw message parses to its sender, subject and text", async () => {
   assert.equal(m.sender, "alerts@sentry.io", "the From header, not the bounce address");
   assert.equal(m.subject, "TypeError in checkout");
   assert.equal(m.text, "TypeError: cannot read 'total' of undefined");
+});
+
+// ---- customer support (docs/LOOP.md) -----------------------------------------------------------
+
+test("the support address is its own, with or without a team", () => {
+  const d = "in.passalong.dev";
+  assert.deepEqual(addressOf("k7x2m9qp+support@in.passalong.dev", d), {
+    key: "k7x2m9qp",
+    kind: "support",
+    team: "",
+  });
+  assert.deepEqual(addressOf("k7x2m9qp+Support+acme@in.passalong.dev", d), {
+    key: "k7x2m9qp",
+    kind: "support",
+    team: "acme",
+  });
+});
+
+test("a tracking number is found in a reply's subject, and only one of ours", () => {
+  assert.equal(refIn("Re: [R-K7Q2M9] Re: Export does nothing"), "R-K7Q2M9");
+  assert.equal(refIn("re: [r-k7q2m9] thanks"), "R-K7Q2M9", "a mail client's case does not matter");
+  assert.equal(refIn("Order [R-K7Q2M] is late"), "", "too short is not one");
+  assert.equal(refIn("[R-K7Q2MO] O is not in the alphabet"), "");
+  assert.equal(refIn("Export does nothing"), "");
+  assert.equal(withoutRef("Re: [R-K7Q2M9] Re: Export does nothing"), "Re: Re: Export does nothing");
+});
+
+test("mail from a machine is told apart from mail from a person", () => {
+  const h = (key, value) => [{ key, value }];
+  assert.equal(automated("jane@example.com", []), false);
+  assert.equal(automated("jane@example.com", h("auto-submitted", "no")), false);
+  assert.equal(automated("jane@example.com", h("Auto-Submitted", "auto-replied")), true);
+  assert.equal(automated("jane@example.com", h("precedence", "bulk")), true);
+  assert.equal(automated("jane@example.com", h("list-id", "<news.example.com>")), true);
+  assert.equal(automated("jane@example.com", h("x-autoreply", "yes")), true);
+  assert.equal(automated("mailer-daemon@example.com", []), true);
+  assert.equal(automated("no-reply@example.com", []), true);
+  assert.equal(automated("noreply@example.com", []), true);
+});
+
+test("a customer's request names them by what they called themselves, never by address", () => {
+  const body = supportBody({
+    name: "Jane Doe",
+    at: "2026-10-28T10:00:00Z",
+    text: "Export does nothing",
+  });
+  assert.match(body, /Jane Doe, a customer, wrote in/);
+  assert.doesNotMatch(body, /@/, "no address anywhere in the document");
+  assert.match(section(body, "Acceptance")?.text ?? "", /reply that answers what they asked/);
+  assert.match(section(body, "Constraints")?.text ?? "", /never by an agent/);
+  assert.match(body, /```text\nExport does nothing\n```/, "the message is fenced as evidence");
+  assert.match(supportBody({ name: "", at: "x", text: "" }), /^A customer wrote in/m);
+});
+
+test("a raw message carries the sender's name and says when a machine sent it", async () => {
+  const raw = new TextEncoder().encode(
+    [
+      "From: Jane Doe <Jane@Example.com>",
+      "To: k7x2m9qp+support@in.passalong.dev",
+      "Subject: Out of office",
+      "Auto-Submitted: auto-replied",
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "I am away.",
+      "",
+    ].join("\r\n"),
+  );
+  const m = await parseEmail(raw.buffer, "jane@example.com");
+  assert.equal(m.name, "Jane Doe");
+  assert.equal(m.automated, true);
 });
 
 // ---- webhooks ----------------------------------------------------------------------------------

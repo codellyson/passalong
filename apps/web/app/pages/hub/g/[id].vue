@@ -479,6 +479,13 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">
+        <HubCustomer
+          v-if="ctx.customer"
+          :guide-id="id"
+          :customer="ctx.customer"
+          @sent="queryClient.invalidateQueries({ queryKey: hubKeys.context(id) })"
+        />
+
         <!-- What came back, above the guide it answers: the write-up is the thing to read on a
              handed-in guide, and it read as a 40-line column in a sidebar. -->
         <section

@@ -19,6 +19,7 @@ import {
   checksProblem,
   closeGuide,
   complete,
+  customerEvent,
   DRAFT_NUDGE_MS,
   deliver,
   dropOutside,
@@ -2574,4 +2575,28 @@ test("hand-ins waiting in review on the day this ships are finished, with their 
   assert.deepEqual(row("shared"), { status: "published", outcome: "" }, "still held in o/s");
   assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM claim WHERE state = 'review'").get().n, 0);
   assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM verdict WHERE ok = 1").get().n, 2);
+});
+
+test("an agent holding a support request hears what the customer said and what they were sent", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await customerEvent(db, "t1", "customer", { account: "me", body: "Export does nothing", at: T0 });
+  await take(db, "t1", A, { at: later(1000) });
+  await customerEvent(db, "t1", "answered", {
+    account: "me",
+    body: "Looking now.",
+    at: later(2000),
+  });
+  const heard = await deliver(db, "t1", A);
+  assert.deepEqual(
+    heard.map((r) => [r.by.name, r.body]),
+    [
+      ["The customer", "Export does nothing"],
+      [heard[1].by.name, "Sent to the customer: Looking now."],
+    ],
+    "what the customer wrote before it was taken still reaches whoever takes it",
+  );
+  assert.equal(heard[0].by.you, false);
+  assert.deepEqual(await deliver(db, "t1", A), [], "and each is said once");
 });

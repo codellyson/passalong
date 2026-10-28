@@ -358,6 +358,14 @@ change. Its README says how.
   someone to check** on the guide page makes a follow-up task to them, with the guide as `parent`.
   Approve, send-back, `ownWork` and the In review column are gone; approve on Done work still
   answers, for installed CLIs. Migration 0056 finished the hand-ins left waiting.
+- **A customer is a column, never a field (migration 0057, docs/LOOP.md).** `key+support@` takes
+  mail from anyone and makes a task (`receiveSupport()` in index.ts); who wrote it — address, name,
+  and the tracking number `ref` they were sent — is stored on the guide row, because a field in the
+  document would travel with every share link and every agent. The tracking number is its own value,
+  not the guide id, and a reply joins a request only with the number **and** the address that opened
+  it. Mail to a customer goes out only from `POST /v1/guides/:id/customer`, which has no CLI command
+  or MCP tool and refuses the remote MCP server: nothing reaches a customer until a person presses
+  Send. It is the deliberate exception to every answer existing in all three places.
 - **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
   people can take and answer for separately — one document holding six has one verdict, and "four
   of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is

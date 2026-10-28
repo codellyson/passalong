@@ -5,6 +5,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  ackCopy,
+  answerCopy,
   askedCopy,
   doneCopy,
   FIX_AND_RESEND,
@@ -112,4 +114,20 @@ test("a reply mail says it is waiting for the agent's next check-in, not for the
   const c = repliedCopy({ byName: "Bob", title: TITLE, url: URL_, body: "Settings.", hub: HUB });
   assert.equal(c.subject, `Bob replied to your agent on "${TITLE}"`);
   assert.match(c.text.join("\n"), /next time it checks in/);
+});
+
+test("a customer's mail keeps the tracking number in the subject and is from the team", () => {
+  const ack = ackCopy({ from: "Acme support", title: "Export does nothing", ref: "R-K7Q2M9" });
+  assert.equal(ack.subject, "[R-K7Q2M9] Re: Export does nothing");
+  assert.match(ack.text.join("\n"), /tracking number is R-K7Q2M9/);
+  assert.doesNotMatch(ack.text.join("\n"), /passalong/i, "it is the team's mail, not ours");
+  const answer = answerCopy({
+    from: "Acme support",
+    title: "Export does nothing",
+    ref: "R-K7Q2M9",
+    body: "Fixed in today's release.\nTry again?",
+  });
+  assert.equal(answer.subject, ack.subject, "one thread in the customer's inbox");
+  assert.equal(answer.text[0], "Fixed in today's release.");
+  assert.equal(answer.preview, "Fixed in today's release.");
 });

@@ -164,3 +164,39 @@ export function verdictCopy(o: {
     ],
   };
 }
+
+/**
+ * What a customer gets the moment they write in (docs/LOOP.md §4): that it arrived, the tracking
+ * number, and that replying adds to it. Plain on purpose — it is from the team, not from Passalong,
+ * and it promises nothing about when beyond "when it's sorted".
+ */
+export function ackCopy(o: { from: string; title: string; ref: string }): Copy {
+  return {
+    subject: `[${o.ref}] Re: ${o.title}`,
+    preview: `We've got your message. Your tracking number is ${o.ref}.`,
+    eyebrow: o.from,
+    text: [
+      "Thanks — we've got your message, and we'll write back when it's sorted.",
+      "",
+      `Your tracking number is ${o.ref}. Reply to this email to add anything; keep the number in the subject.`,
+      "",
+      `— ${o.from}`,
+    ],
+  };
+}
+
+/** A person's answer to a customer, with the tracking number kept in the subject for their reply. */
+export function answerCopy(o: { from: string; title: string; ref: string; body: string }): Copy {
+  return {
+    subject: `[${o.ref}] Re: ${o.title}`,
+    preview: o.body.split("\n")[0]?.slice(0, 140) ?? "",
+    eyebrow: o.from,
+    text: [
+      ...o.body.split("\n"),
+      "",
+      `— ${o.from}`,
+      "",
+      `Tracking number ${o.ref}. Reply to this email to write back.`,
+    ],
+  };
+}

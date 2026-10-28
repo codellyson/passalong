@@ -120,9 +120,12 @@ Still to settle: whether the customer gets a page to check status, or only email
    The fix: stalled work goes back to the queue and a second stall tells a person; untaken work is
    escalated to a person rather than shelved; a "dropped" count in metrics. Highest value for the
    least code — every automation added before this just drops work faster.
-2. **The customer as a party on a guide.** Email in today accepts only senders the account has
-   allowed, and nothing goes back to whoever wrote in. The loop needs who asked to be recorded and a
-   reply to reach them by email.
+2. **The customer as a party on a guide.** *Built 2026-10-28* — `key+support@` takes mail from
+   anyone, makes a Ready task with the customer and a tracking number on the row (migration 0057),
+   answers at once, joins replies that carry the number from the same address (reopening finished
+   work), and a person answers from the guide's Customer panel. Not yet: an agent drafting the reply
+   for the person to send, and the agent sorting a request into question or bug. Before that, email
+   in accepted only senders the account had allowed, and nothing went back to whoever wrote in.
 3. **A parent closes when its child does.** `parent:` links exist; nothing yet wakes a parent when
    its child is Done.
 4. **Filing work from the hub, without an agent of your own.** Today a guide is made by an agent

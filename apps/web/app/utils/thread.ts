@@ -79,6 +79,23 @@ export function messageOf(i: ThreadItem): Message {
   let quiet = false;
   let tone: Message["tone"] = "neutral";
   switch (i.kind) {
+    case "customer":
+      // Stored under the guide's author because the customer has no account; it is their words.
+      return {
+        id: i.id,
+        at: i.at,
+        who: "Customer",
+        where: "",
+        mine: false,
+        text: i.body,
+        quiet: false,
+        pictures: false,
+        files: [],
+        tone: "neutral",
+      };
+    case "answered":
+      text = said("To the customer", i.body);
+      break;
     case "taken":
       text = "Taking this.";
       quiet = true;

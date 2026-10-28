@@ -573,7 +573,22 @@ export type EventKind =
   | "closed"
   | "asked"
   | "replied"
-  | "noted";
+  | "noted"
+  // A support request's conversation with its customer (docs/LOOP.md): what the customer wrote,
+  // and what a person sent them. Recorded under the guide's author for `customer`, because the
+  // column must name an account and the customer has none; the hub says it was the customer.
+  | "customer"
+  | "answered";
+
+/** One line of a support request's conversation with its customer. Never throws, as `event`. */
+export async function customerEvent(
+  db: D1Database,
+  id: string,
+  kind: "customer" | "answered",
+  { account, body, at }: { account: string; body: string; at: string },
+): Promise<void> {
+  await event(db, id, kind, { account, body, at });
+}
 
 /**
  * Add one line to a guide's thread. Written after the transition it describes has succeeded, never
@@ -1078,16 +1093,17 @@ export async function deliver(
   }
   const { results } = await db
     .prepare(
-      `SELECT e.id, e.at, e.body, e.account_id, COALESCE(a.name, '') AS name,
+      `SELECT e.id, e.kind, e.at, e.body, e.account_id, COALESCE(a.name, '') AS name,
               COALESCE(a.handle, '') AS handle
          FROM task_event e LEFT JOIN account a ON a.id = e.account_id
-        WHERE e.guide_id = ? AND e.kind IN ('replied', 'noted') AND e.id > ?
-          AND (e.kind = 'noted' OR e.at >= ?)
+        WHERE e.guide_id = ? AND e.kind IN ('replied', 'noted', 'customer', 'answered') AND e.id > ?
+          AND (e.kind <> 'replied' OR e.at >= ?)
         ORDER BY e.id LIMIT 50`,
     )
     .bind(id, from, c.claimed_at)
     .all<{
       id: number;
+      kind: EventKind;
       at: string;
       body: string;
       account_id: string;
@@ -1103,12 +1119,18 @@ export async function deliver(
       )
       .bind(last.id, id, who.agent, who.account)
       .run();
-  return results.map((r) => ({
-    id: r.id,
-    at: r.at,
-    by: { name: r.name, handle: r.handle, you: r.account_id === who.account },
-    body: r.body,
-  }));
+  // The customer has no account, so their words are said to be theirs here, and what a person sent
+  // them says so: an agent answering a support request needs both, and neither is a person's reply.
+  return results.map((r) =>
+    r.kind === "customer"
+      ? { id: r.id, at: r.at, by: { name: "The customer", handle: "", you: false }, body: r.body }
+      : {
+          id: r.id,
+          at: r.at,
+          by: { name: r.name, handle: r.handle, you: r.account_id === who.account },
+          body: r.kind === "answered" ? `Sent to the customer: ${r.body}` : r.body,
+        },
+  );
 }
 
 /**

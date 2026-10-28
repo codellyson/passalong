@@ -65,6 +65,20 @@ else as `{title, text, url, id}`. Repeats merge on the sender's own id when it h
 issue, a PostHog issue or fingerprint), else on the title. A webhook guide notifies as `hooked`.
 Settings shows it on its own page, **Integrations**, one source's addresses and steps at a time.
 
+**Customer support is a fourth address, `key+support@` (2026-10-28, docs/LOOP.md §4).** Anyone may
+write to it — it is the one exception to "a sender's first email asks" — so it has its own guards:
+blocked senders stay blocked, five new requests per sender and two hundred per account a day, and
+mail from a machine (`Auto-Submitted`, `Precedence`, a list, `no-reply@`) makes nothing. A message
+becomes a **task** (`supportBody()`), Ready, whose document names the customer only by their display
+name; their address, name and tracking number (`R-XXXXXX`, `ref`) are columns (migration 0057), so a
+share link or an agent never carries them. They are answered at once with the tracking number,
+from "<team> support", Reply-To the same address. A reply carrying the number from the same address
+joins that request (`customer` thread event, `customer_wrote` notification) and reopens it if it was
+finished. A person answers from the guide's page (**Customer** panel, `POST /v1/guides/:id/customer`),
+recorded as `answered`; there is no CLI command or MCP tool for it on purpose, because nothing reaches
+a customer before a person presses Send. A holding agent receives both kinds through `deliver()`.
+Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts).
+
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings
 says Email in is not set up.
 
@@ -91,6 +105,7 @@ Without `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, Settings sa
 
 ## Sources
 - `apps/api/src/notify.ts` (`notify`, `line`, `PUSHED`, `onPush`), `alerts.ts`, `inbound.ts`, `events.ts`, `webpush.ts`, `email.ts`, `mail-html.ts`
-- Migrations 0003 (notifications), 0033 (event indexes), 0034 (push), 0051 (inbound)
+- Migrations 0003 (notifications), 0033 (event indexes), 0034 (push), 0051 (inbound), 0057 (customer)
+- [docs/LOOP.md](../LOOP.md) §4 (the support experience)
 - `apps/web/app/composables/useLive.ts`, `components/hub/Toasts.vue`, `PushSettings.vue`, `public/sw.js`
 - [AGENTS.md](../../AGENTS.md): "Notifications", "Mail is written twice…", "Google Chat gets a card…", "The hub is live…", "Push reaches a device only for what needs you…"

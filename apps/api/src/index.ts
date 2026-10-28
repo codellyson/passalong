@@ -99,6 +99,7 @@ import {
   sendConsumed,
   sendHandoff,
   sendInvite,
+  sendMail,
   sendPulled,
   sendReplied,
   sendReset,
@@ -160,10 +161,17 @@ import {
   NOTE_EVERY_MS,
   parseEmail,
   readHook,
+  refIn,
   SOURCE_NAMES,
+  SUPPORT,
+  SUPPORT_PER_ACCOUNT,
+  SUPPORT_PER_SENDER,
+  supportBody,
   titleOf,
+  withoutRef,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
+import { ackCopy, answerCopy } from "./mail-copy.js";
 import { handleMcp } from "./mcp-http.js";
 import { newsFor } from "./news.js";
 import {
@@ -398,6 +406,10 @@ interface GuideRow {
   report_of?: string;
   /** How it reached Done: 'approved', 'archived', or '' (0054_outcome.sql). */
   outcome?: string;
+  /** A support request's customer and tracking number, or '' (0057_customer.sql). Never markdown. */
+  customer?: string;
+  customer_name?: string;
+  ref?: string;
 }
 interface ReportRow {
   id: string;
@@ -4887,6 +4899,10 @@ app.get("/v1/guides/:id/context", async (c) => {
     guide: views.get(row.id),
     target: row.target,
     repos,
+    // A support request's customer, for the people who answer them; never in the document.
+    customer: row.customer
+      ? { name: row.customer_name || "", email: row.customer, ref: row.ref || "" }
+      : null,
     owner: found.owner,
     admin: !found.owner && (await ownsTeam(c, row)),
     claims: claimRows.map((k) => ({
@@ -5338,11 +5354,15 @@ const inboundDomain = (env: Env) =>
     .trim()
     .toLowerCase();
 
-/** One address per kind, `key+kind@domain`. Empty when there is no key or no domain. */
+/**
+ * One address per kind, `key+kind@domain`, and the one customers write to, `key+support@domain`.
+ * Empty when there is no key or no domain. Support has an address and no webhook: it is mail from
+ * people, and a webhook has no customer to answer.
+ */
 const addressesOf = (key: string | undefined, domain: string) =>
   Object.fromEntries(
-    EMAIL_KINDS.map((k) => [k, key && domain ? `${key}+${k}@${domain}` : ""]),
-  ) as Record<EmailKind, string>;
+    [...EMAIL_KINDS, SUPPORT].map((k) => [k, key && domain ? `${key}+${k}@${domain}` : ""]),
+  ) as Record<EmailKind | typeof SUPPORT, string>;
 
 /** The webhook URL for each kind, on the same key: `<origin>/v1/in/<key>/<kind>`. */
 const hooksOf = (key: string, base: string) =>
@@ -5615,6 +5635,8 @@ export async function receiveEmail(
     if (!mail.sender) return;
     const me = box.account_id;
     const at = now();
+    if (to.kind === SUPPORT)
+      return await receiveSupport(env, ctx, { account: me, key: to.key, team: to.team }, mail);
 
     // The account's own proven address is allowed from the start: that is a person forwarding one.
     const own = Boolean(box.email_verified) && mail.sender === box.email.trim().toLowerCase();
@@ -5662,6 +5684,191 @@ export async function receiveEmail(
     console.error("inbound", (e as Error).message);
   }
 }
+
+/**
+ * Mail to `key+support@`: a customer writing in (docs/LOOP.md, inbound.ts). A message carrying a
+ * tracking number from the address that request was opened by joins it — reopening it if it was
+ * finished, because a customer writing again means it was not. Anything else from a person opens a
+ * task, Ready, with the customer kept on the row, and is answered at once with the tracking number.
+ */
+async function receiveSupport(
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  box: { account: string; key: string; team: string },
+  mail: Awaited<ReturnType<typeof parseEmail>>,
+): Promise<void> {
+  const me = box.account;
+  const at = now();
+  const blocked = await env.DB.prepare(
+    "SELECT 1 FROM inbound_sender WHERE account_id = ? AND sender = ? AND state = 'blocked'",
+  )
+    .bind(me, mail.sender)
+    .first();
+  if (blocked) return;
+
+  const ref = refIn(mail.subject);
+  if (ref) {
+    const g = await env.DB.prepare(
+      "SELECT id, status, team_id FROM guide WHERE ref = ? AND account_id = ? AND customer = ?",
+    )
+      .bind(ref, me, mail.sender)
+      .first<{ id: string; status: string; team_id: string }>();
+    if (g) {
+      if (g.status === "consumed")
+        await asOwner(
+          env,
+          ctx,
+          me,
+          "POST",
+          `/v1/guides/${g.id}/reopen`,
+          JSON.stringify({ why: "The customer wrote again." }),
+          "application/json",
+        );
+      await claims.customerEvent(env.DB, g.id, "customer", {
+        account: me,
+        body: (mail.text || "(it had no text)").slice(0, 4000),
+        at,
+      });
+      await notify(env, {
+        to: me,
+        kind: "customer_wrote",
+        guide_id: g.id,
+        actor_id: "",
+        team_id: g.team_id,
+      });
+      return;
+    }
+  }
+  // An auto-reply, a bounce or a list makes nothing: answering one is how responders loop.
+  if (mail.automated) return;
+
+  const day = new Date(Date.parse(at) - 24 * 60 * 60 * 1000).toISOString();
+  const counts = await env.DB.prepare(
+    `SELECT COUNT(*) AS everyone, SUM(CASE WHEN customer = ? THEN 1 ELSE 0 END) AS them
+       FROM guide WHERE account_id = ? AND customer <> '' AND created > ?`,
+  )
+    .bind(mail.sender, me, day)
+    .first<{ everyone: number; them: number | null }>();
+  if (
+    Number(counts?.them ?? 0) >= SUPPORT_PER_SENDER ||
+    Number(counts?.everyone ?? 0) >= SUPPORT_PER_ACCOUNT
+  ) {
+    console.error("support", "over the daily ceiling", me);
+    return;
+  }
+
+  const title = titleOf(withoutRef(mail.subject)) || "A message from a customer";
+  const made = await intake(env, ctx, {
+    account: me,
+    // A support request is a task: work nobody has done yet, done when the customer has an answer.
+    kind: "task",
+    target: "",
+    team: box.team,
+    print: fingerprint("task", mail.sender, `support ${mail.subject}`),
+    title,
+    summary: `${mail.name || "A customer"} asks: ${title}`,
+    body: supportBody({ name: mail.name, at, text: mail.text }),
+    again: "The customer sent the same message again",
+  });
+  if (!made.created) return;
+
+  let number = "";
+  for (let i = 0; i < 3 && !number; i++) {
+    const tried = `R-${rand(6, ID_ALPHABET).toUpperCase()}`;
+    const set = await env.DB.prepare(
+      "UPDATE guide SET customer = ?, customer_name = ?, ref = ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM guide WHERE ref = ?)",
+    )
+      .bind(mail.sender, mail.name, tried, made.id, tried)
+      .run();
+    if (set.meta.changes) number = tried;
+  }
+  if (!number) {
+    console.error("support", "no tracking number", made.id);
+    return;
+  }
+  const from = await supportFrom(env, me, box.team);
+  const copy = ackCopy({ from: from.name, title, ref: number });
+  await sendMail(env, mail.sender, copy.subject, copy.text, undefined, {
+    fromName: from.name,
+    replyTo: supportAddress(env, box.key, box.team),
+    headers: { "Auto-Submitted": "auto-replied" },
+  });
+  await notify(env, {
+    to: me,
+    kind: "emailed",
+    guide_id: made.id,
+    actor_id: "",
+    note: "a customer's request that is ready to pick up",
+  });
+}
+
+/** Where a customer's reply goes: the same support address, so it comes back through receiveSupport. */
+const supportAddress = (env: Env, key: string, team: string) => {
+  const domain = inboundDomain(env);
+  return key && domain ? `${key}+${SUPPORT}${team ? `+${team}` : ""}@${domain}` : "";
+};
+
+/** Who mail to a customer is from: the team's name, or the account's, as "<name> support". */
+async function supportFrom(env: Env, account: string, team: string): Promise<{ name: string }> {
+  const row = team
+    ? await env.DB.prepare("SELECT name FROM team WHERE slug = ?")
+        .bind(team)
+        .first<{ name: string }>()
+    : await env.DB.prepare("SELECT name FROM account WHERE id = ?")
+        .bind(account)
+        .first<{ name: string }>();
+  return { name: row?.name ? `${row.name} support` : "Support" };
+}
+
+/**
+ * A person answers a support request's customer (docs/LOOP.md §4). Only a person: an agent drafts,
+ * and nothing reaches a customer until somebody has read it and pressed Send, so this route has no
+ * CLI or MCP tool on purpose — the one exception to every-answer-in-all-three-places, because the
+ * answer is the act of a person by decision. Anyone who can read the guide may send.
+ */
+app.post("/v1/guides/:id/customer", async (c) => {
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const row = found.row;
+  if (!row.customer || !row.ref) return err(c, 409, "This guide has no customer to answer.");
+  // The remote MCP server dispatches through here; an agent there never sends. A token can still
+  // reach this route (the hub signs in with one from `passalong hub`), so the rest is the absence
+  // of any CLI command or tool for it, not a lock.
+  if (c.get("client") === "mcp")
+    return err(
+      c,
+      403,
+      "A reply to a customer is sent by a person, from the guide's page in the hub.",
+    );
+  const body = (await c.req.json().catch(() => ({}))) as { body?: unknown };
+  const text = typeof body.body === "string" ? body.body.trim() : "";
+  if (!text) return err(c, 400, "Write the reply first.");
+  if (text.length > 4000) return err(c, 400, "That is over 4000 characters: keep a reply short.");
+  const team = row.team_id
+    ? ((
+        await c.env.DB.prepare("SELECT slug FROM team WHERE id = ?")
+          .bind(row.team_id)
+          .first<{ slug: string }>()
+      )?.slug ?? "")
+    : "";
+  const box = await c.env.DB.prepare("SELECT key FROM inbound WHERE account_id = ?")
+    .bind(row.account_id)
+    .first<{ key: string }>();
+  const from = await supportFrom(c.env, row.account_id, team);
+  const copy = answerCopy({ from: from.name, title: row.title, ref: row.ref, body: text });
+  const sent = await sendMail(c.env, row.customer, copy.subject, copy.text, undefined, {
+    fromName: from.name,
+    replyTo: box ? supportAddress(c.env, box.key, team) : "",
+  });
+  if (!sent) return err(c, 502, "The reply could not be sent. Nothing was recorded; try again.");
+  await claims.customerEvent(c.env.DB, row.id, "answered", {
+    account: c.get("account"),
+    body: text,
+    at: now(),
+  });
+  count(c, "customer_answered", {});
+  return c.json({ id: row.id, sent: true });
+});
 
 // ---- tasks -------------------------------------------------------------------------------
 
