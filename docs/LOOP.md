@@ -35,7 +35,11 @@ what is lost is customers. Decided:
   in the conversation, other files offered as downloads — and a file that cannot be kept is named.
 - "Tell the customer" when a fix lands is **opt-in** per team, not always on.
 - The reply screen is **redesigned**, not patched. A "who is waiting on us" view, the agent drafting
-  replies a person sends, and the team lead ping are agreed as planned.
+  replies a person sends, and the team lead ping are agreed as planned. *Built 2026-10-28:* the agent
+  drafts the reply (`POST /v1/guides/:id/customer/draft`, `askDraft()` in reader.ts) from the
+  conversation, the task's state and what finished work reported; it appears in the reply box by
+  itself when the customer is waiting on us, labelled until the person changes it, and only a person
+  sends it.
 - Open: where customers write besides email (WhatsApp, chat, social, phone).
 
 **Problem 2 — people create Passalongs in ChatGPT and Claude, not on Passalong.** Decided:

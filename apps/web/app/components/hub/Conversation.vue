@@ -14,6 +14,8 @@ const props = defineProps<{
   name: string;
   /** Guides made from this request that are finished: a fix sent on to development, say. */
   finished?: { id: string; title: string; at: string }[];
+  /** Where the request stands; a draft is started by itself when the next word is ours. */
+  state?: string;
 }>();
 const emit = defineEmits<{ sent: [] }>();
 const { api, json, token } = useHub();
@@ -31,7 +33,6 @@ async function load() {
 }
 onMounted(() => load().catch((e) => (problem.value = (e as Error).message)));
 
-/** Each line with its pictures and files picked out, the way the thread reads every message. */
 /**
  * Each line with its pictures and files picked out, the way the thread reads every message — read as
  * the speaker's own words (the side says who spoke, so no "To the customer:" lead), with emphasis
@@ -67,7 +68,45 @@ const ready = computed(() => {
 
 /** The reply as markdown from the editor; a pasted picture travels in it as a link. */
 const reply = ref("");
-const writer = ref<{ addPicture: (f: File) => Promise<void>; clear: () => void } | null>(null);
+const writer = ref<{
+  addPicture: (f: File) => Promise<void>;
+  clear: () => void;
+  setText: (t: string) => void;
+} | null>(null);
+
+/**
+ * The agent's draft (docs/LOOP.md §1a): written into the box for a person to read, change and send.
+ * Started by itself when the customer is waiting on us and the box is empty; otherwise on asking.
+ * Nothing is sent and nothing stored — Send is still the person's.
+ */
+const drafting = ref(false);
+const drafted = ref("");
+const canDraft = ref(true);
+async function draft(quiet = false) {
+  if (drafting.value) return;
+  drafting.value = true;
+  if (!quiet) problem.value = "";
+  try {
+    const got = await api<{ draft: string }>(
+      `/v1/guides/${props.guideId}/customer/draft`,
+      json("POST", {}),
+    );
+    if (got?.draft) {
+      writer.value?.setText(got.draft);
+      drafted.value = got.draft;
+    }
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (/isn't set up/.test(msg)) canDraft.value = false;
+    else if (!quiet) problem.value = msg;
+  } finally {
+    drafting.value = false;
+  }
+}
+/** Still the agent's words, untouched: the label says so until the person changes them. */
+const untouched = computed(
+  () => Boolean(drafted.value) && reply.value.trim() === drafted.value.trim(),
+);
 const uploading = ref(false);
 async function attach(e: Event) {
   const input = e.target as HTMLInputElement;
@@ -92,6 +131,7 @@ async function send() {
     await api(`/v1/guides/${props.guideId}/customer`, json("POST", { body }));
     writer.value?.clear();
     reply.value = "";
+    drafted.value = "";
     done.value = true;
     await load();
     emit("sent");
@@ -101,6 +141,16 @@ async function send() {
     busy.value = false;
   }
 }
+
+// The next word is ours: have a draft ready rather than an empty box. Once, when the request's state
+// and the conversation are both known and the editor is there.
+let autoDrafted = false;
+watchEffect(() => {
+  if (autoDrafted || !loaded.value || !writer.value || reply.value.trim()) return;
+  if (!["new", "needs_reply"].includes(props.state ?? "") && !ready.value.length) return;
+  autoDrafted = true;
+  draft(true);
+});
 </script>
 
 <template>
@@ -162,10 +212,15 @@ async function send() {
           @problem="problem = $event"
         >
           <template #footer>
-            <label class="btn sm cursor-pointer">
-              <input type="file" accept="image/*" class="sr-only" @change="attach" />
-              {{ uploading ? "Adding…" : "Picture" }}
-            </label>
+            <span class="flex flex-wrap items-center gap-2">
+              <label class="btn sm cursor-pointer">
+                <input type="file" accept="image/*" class="sr-only" @change="attach" />
+                {{ uploading ? "Adding…" : "Picture" }}
+              </label>
+              <button v-if="canDraft" type="button" class="btn sm" :disabled="drafting" @click="draft()">
+                {{ drafting ? "Drafting…" : drafted ? "Draft again" : "Draft a reply" }}
+              </button>
+            </span>
             <span class="flex items-center gap-3">
               <span v-if="done" class="font-ui text-sm text-muted" role="status">Sent</span>
               <button class="btn primary" :disabled="busy || !reply.trim()">{{ busy ? "Sending…" : "Send" }}</button>
@@ -176,6 +231,10 @@ async function send() {
           <div class="writer-shell"><div class="writer" aria-hidden="true" /></div>
         </template>
       </ClientOnly>
+      <p v-if="drafting && !drafted" class="m-0 font-ui text-sm text-muted" role="status">The agent is drafting a reply…</p>
+      <p v-else-if="untouched" class="m-0 font-ui text-sm" role="status">
+        Drafted by the agent from the conversation{{ ready.length ? " and the finished fix" : "" }}. Read it, change anything, then send.
+      </p>
       <span class="font-ui text-xs text-muted">Sent by email with the tracking number. Their answer comes back here.</span>
       <p v-if="problem" class="m-0 font-ui text-sm text-danger" role="alert">{{ problem }}</p>
     </form>

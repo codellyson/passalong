@@ -203,7 +203,20 @@ function clear() {
 function insert(text: string) {
   editor.value?.chain().focus().insertContent(text).run();
 }
-defineExpose({ addPicture, clear, insert });
+/** Replace what is written with plain text — an agent's draft — one paragraph per blank line. */
+function setText(text: string) {
+  editor.value?.commands.setContent(
+    {
+      type: "doc",
+      content: text.split(/\n{2,}/).map((p) => ({
+        type: "paragraph",
+        content: p.trim() ? [{ type: "text", text: p.trim() }] : [],
+      })),
+    },
+    { emitUpdate: true },
+  );
+}
+defineExpose({ addPicture, clear, insert, setText });
 </script>
 
 <template>

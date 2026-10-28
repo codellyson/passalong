@@ -232,7 +232,7 @@ import {
   planNow,
   seatsFull,
 } from "./quota.js";
-import { askReader, readerReady } from "./reader.js";
+import { askDraft, askReader, readerReady } from "./reader.js";
 import { sizeProblem } from "./sections.js";
 import {
   conversationOn,
@@ -6287,6 +6287,67 @@ app.get("/v1/support", async (c) => {
       };
     }),
   });
+});
+
+/**
+ * The agent drafts a reply to a request's customer (docs/LOOP.md §1a): from the conversation, where
+ * the task stands, and what finished work made from it reported. Only ever shown to a person, who
+ * edits it and presses Send — this route sends nothing and stores nothing.
+ */
+app.post("/v1/guides/:id/customer/draft", async (c) => {
+  if (!readerReady(c.env)) return err(c, 501, "Drafting replies isn't set up on this server yet.");
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  const row = found.row;
+  if (!row.customer) return err(c, 409, "This guide has no customer to answer.");
+  const { results: said } = await c.env.DB.prepare(
+    "SELECT kind, body FROM task_event WHERE guide_id = ? AND kind IN ('customer', 'answered') ORDER BY id",
+  )
+    .bind(row.id)
+    .all<{ kind: string; body: string }>();
+  const { results: kids } = await c.env.DB.prepare(
+    `SELECT g.title, g.status, g.outcome,
+            (SELECT note FROM verdict v WHERE v.guide_id = g.id ORDER BY v.at DESC LIMIT 1) AS note
+       FROM guide g WHERE g.parent_id = ? AND g.status <> 'draft'`,
+  )
+    .bind(row.id)
+    .all<{ title: string; status: string; outcome: string; note: string | null }>();
+  const team = row.team_id
+    ? ((
+        await c.env.DB.prepare("SELECT slug FROM team WHERE id = ?")
+          .bind(row.team_id)
+          .first<{ slug: string }>()
+      )?.slug ?? "")
+    : "";
+  const from = await supportFrom(c.env, row.account_id, team);
+  const open = kids.filter((k) => k.status !== "consumed").length;
+  const draft = await askDraft(c.env, {
+    customer: row.customer_name || "",
+    from: from.name,
+    conversation: said.map((m) => ({
+      by: m.kind === "customer" ? "customer" : "team",
+      // Pictures and files are named, not linked: the model needs to know they were sent, not where.
+      text: m.body
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, "[picture: $1]")
+        .replace(/\[([^\]]*)\]\([^)]*\/v1\/attachments\/[^)]*\)/g, "[file: $1]"),
+    })),
+    task: {
+      title: row.title,
+      summary: row.summary || "",
+      state:
+        row.status === "consumed"
+          ? "done"
+          : open
+            ? `being worked on (${open} piece${open === 1 ? "" : "s"} of work still open)`
+            : "not started",
+    },
+    finished: kids
+      .filter((k) => k.status === "consumed" && k.outcome !== "archived")
+      .map((k) => ({ title: k.title, note: k.note || "" })),
+  });
+  if (!draft)
+    return err(c, 502, "A draft couldn't be written just now. Try again, or write it yourself.");
+  return c.json({ draft });
 });
 
 /**

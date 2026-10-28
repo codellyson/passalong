@@ -385,7 +385,10 @@ change. Its README says how.
   the reader is unsure nothing is filed until its question is answered there. Its input is TipTap
   directly (`components/hub/Writer.vue`), not Nuxt UI, so it keeps the hub's look and policy:
   TipTap's injected stylesheet is off (`injectCSS: false`; the hub allows styles from its own
-  stylesheet only) and its rules are `.writer` in styles.css; it renders inside `<ClientOnly>`. This reverses "the
+  stylesheet only) and its rules are `.writer` in styles.css; it renders inside `<ClientOnly>`.
+  The same reader drafts replies to customers (`askDraft()`, `POST /v1/guides/:id/customer/draft`):
+  written into the reply box for a person to edit and send, never sent and never stored, and checked
+  by `readDraft()` (length, no contact details, no tracking number of its own). This reverses "the
   hub has no editor" for writing from scratch, by the author's decision (docs/LOOP.md §1a).
 - **A finished child wakes its parent, from one place (docs/LOOP.md step 3).** A middleware after
   every write to `/v1/guides/:id/*` and `/v1/tasks/:id/*` calls `wakeFrom()`: when that guide is now
