@@ -67,7 +67,11 @@ what is lost is customers. Decided:
   feed and the phone hear it daily; the email goes the first time only.
 - The hosted runner takes **only work guaranteed to need no person**: a task carries a mark saying
   it is safe to run alone, and the runner skips everything else.
-- Open: where the runner runs (a teammate's machine, a cloud sandbox, Passalong itself).
+- *Decided and built 2026-10-29:* the runner runs on any always-on machine with the repo checked out:
+  `passalong work --watch [--every SECS]`. A person ticks **Safe to run alone** on a task's page
+  (`PUT /v1/guides/:id/alone`, column `alone`, migration 0058; the CLI and MCP are refused); the
+  runner asks the queue for marked work only, waits when there is none, and keeps going past a task
+  its agent did not finish, which the sweep puts back and reports stuck the second time.
 
 **Order, approved:** 1. the "who is waiting on us" view, as a thread · 2. the reader and its
 screen · 3. the agent drafting replies · 4. the runner. Before 1: keep customer attachments, and

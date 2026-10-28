@@ -488,10 +488,11 @@ const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN guide x ON x.id = b.blo
 export async function next(
   db: D1Database,
   who: Agent,
-  { at, any = false }: { at: string; any?: boolean },
+  { at, any = false, alone = false }: { at: string; any?: boolean; alone?: boolean },
 ): Promise<{ task: TaskRow; claim: ClaimRow; resumed: boolean } | null> {
   const repo = repoKey(who.repo);
-  const where = any ? "" : "AND g.target = ?2";
+  // `alone`: the runner, with nobody watching, takes only what a person marked safe to run alone.
+  const where = `${any ? "" : "AND g.target = ?2"}${alone ? " AND g.alone = 1" : ""}`;
   const { results } = await db
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created

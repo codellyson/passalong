@@ -413,6 +413,8 @@ interface GuideRow {
   report_of?: string;
   /** How it reached Done: 'approved', 'archived', or '' (0054_outcome.sql). */
   outcome?: string;
+  /** A person marked this task safe to run with nobody watching (0058_alone.sql). */
+  alone?: number;
   /** A support request's customer and tracking number, or '' (0057_customer.sql). Never markdown. */
   customer?: string;
   customer_name?: string;
@@ -4970,6 +4972,8 @@ app.get("/v1/guides/:id/context", async (c) => {
     guide: views.get(row.id),
     target: row.target,
     repos,
+    // Marked safe for the runner to take with nobody watching (0058_alone.sql).
+    alone: Boolean(row.alone),
     // A support request's customer, for the people who answer them; never in the document.
     customer: row.customer
       ? { name: row.customer_name || "", email: row.customer, ref: row.ref || "" }
@@ -6685,11 +6689,36 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
   return c.json({ id: result.claim.guide_id, state: ended.done ? "done" : "working" });
 });
 
+/**
+ * A person marks a task safe to run with nobody watching, or takes the mark off (docs/LOOP.md §1a).
+ * The runner (`passalong work --watch`) takes only marked work. People only: the CLI and both MCP
+ * servers are refused by name — work marking itself safe for the agent about to do it is the one
+ * thing the mark exists to prevent. Anyone in the task's team may set it, as anyone moves work.
+ */
+app.put("/v1/guides/:id/alone", async (c) => {
+  const client = String(c.get("client") || "");
+  if (client === "mcp" || client.startsWith("cli@"))
+    return err(c, 403, "Only a person marks work safe to run alone, from its page in the hub.");
+  const found = await readableGuide(c, c.req.param("id"));
+  if (!found) return err(c, 404, GUIDE_GONE);
+  if (found.row.kind !== "task") return err(c, 409, "Only a task can run alone.");
+  const body = (await c.req.json().catch(() => ({}))) as { on?: unknown };
+  const on = body.on === true;
+  await c.env.DB.prepare("UPDATE guide SET alone = ?, alone_by = ? WHERE id = ?")
+    .bind(on ? 1 : 0, on ? c.get("account") : "", found.row.id)
+    .run();
+  return c.json({ id: found.row.id, alone: on });
+});
+
 app.post("/v1/tasks/next", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
   const at = now();
-  const got = await claims.next(c.env.DB, who, { at, any: who.any === true });
+  const got = await claims.next(c.env.DB, who, {
+    at,
+    any: who.any === true,
+    alone: who.alone === true,
+  });
   if (!got) return c.json({ task: null, ...claims.steps("", "nothing") });
   count(c, "task_claimed", { resumed: got.resumed });
   if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);

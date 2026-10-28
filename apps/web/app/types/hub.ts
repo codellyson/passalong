@@ -423,6 +423,8 @@ export interface GuideContext {
   target?: string;
   /** Repos this account's tasks and agents already use, to pick from when marking a task Ready. */
   repos?: string[];
+  /** A person marked this task safe for the runner to take with nobody watching. */
+  alone?: boolean;
   /** A support request's customer and tracking number; null for any other guide. */
   customer?: { name: string; email: string; ref: string } | null;
   owner: boolean;

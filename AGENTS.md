@@ -390,6 +390,13 @@ change. Its README says how.
   written into the reply box for a person to edit and send, never sent and never stored, and checked
   by `readDraft()` (length, no contact details, no tracking number of its own). This reverses "the
   hub has no editor" for writing from scratch, by the author's decision (docs/LOOP.md §1a).
+- **The runner takes only what a person marked (migration 0058, docs/LOOP.md §1a).** `passalong work
+  --watch` on an always-on machine asks `/v1/tasks/next` with `alone: true`, so `next()` hands out only
+  tasks with `guide.alone = 1`; it waits when there is none and keeps going past an unfinished task
+  (the requeue and `stuck` handle that one). The mark is a column a person sets from the task page
+  (`PUT /v1/guides/:id/alone`), never frontmatter, and the route refuses the CLI and both MCP servers
+  by name: work marking itself safe for the agent about to run it is what the mark exists to stop.
+  Plain `passalong work` is unchanged — a person running it takes any ready work.
 - **A finished child wakes its parent, from one place (docs/LOOP.md step 3).** A middleware after
   every write to `/v1/guides/:id/*` and `/v1/tasks/:id/*` calls `wakeFrom()`: when that guide is now
   Done and its `parent:` is not, the parent gets a `noted` thread line (handed to its holder and next

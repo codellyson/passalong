@@ -169,6 +169,22 @@ const reviewTask = computed(() =>
 
 // ---- acting on it --------------------------------------------------------------------------
 
+/** Mark or unmark the task as safe for the runner (PUT /v1/guides/:id/alone). */
+const markingAlone = ref(false);
+async function markAlone(on: boolean) {
+  markingAlone.value = true;
+  try {
+    await api(`/v1/guides/${id.value}/alone`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ on }),
+    });
+    await queryClient.invalidateQueries({ queryKey: hubKeys.context(id.value) });
+  } finally {
+    markingAlone.value = false;
+  }
+}
+
 /** Accept is held until the evidence has been opened, as it is on the review rows. */
 const read = ref(new Set<string>());
 const busy = ref("");
@@ -370,6 +386,23 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           :class="expiry.soon ? 'text-warn' : 'text-muted'"
         >{{ expiry.text }}</p>
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
+        <!-- The runner (`passalong work --watch`) takes only tasks a person marked here. -->
+        <label
+          v-if="isTask && g.status !== 'consumed'"
+          class="flex items-start gap-2 font-ui text-sm"
+        >
+          <input
+            type="checkbox"
+            class="mt-1"
+            :checked="ctx.alone"
+            :disabled="markingAlone"
+            @change="markAlone(($event.target as HTMLInputElement).checked)"
+          />
+          <span>
+            <b class="font-medium">Safe to run alone</b>
+            <span class="block text-muted">The runner may take this with nobody watching. Only mark work that needs no decision, secret or permission from a person.</span>
+          </span>
+        </label>
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <form
             v-if="mayAct && g.status === 'draft'"
