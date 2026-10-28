@@ -115,3 +115,27 @@ test("any OpenAI-compatible provider: the call, and every way it can fail", asyn
   };
   assert.equal(await askReader(env, { subject: "", text: "", groups: [] }, thrown), null);
 });
+
+test("a teammate's writing may be a handover; a customer's may not", () => {
+  const t = {
+    ...bug,
+    kind: "transfer",
+    context: "Where the export lives and what is half done.",
+  };
+  assert.equal(readVerdict(t, GROUPS), null, "customer kinds by default: task or bug");
+  assert.equal(readVerdict(t, GROUPS, ["task", "bug", "transfer"])?.kind, "transfer");
+  assert.equal(
+    readVerdict({ ...t, context: "" }, GROUPS, ["task", "bug", "transfer"]),
+    null,
+    "a handover needs its context",
+  );
+  const [system] = readerMessages({
+    subject: "",
+    text: "x",
+    groups: [],
+    from: "team",
+    kinds: ["task", "bug", "transfer"],
+  });
+  assert.match(system.content, /"transfer"/);
+  assert.doesNotMatch(system.content, /customers/);
+});

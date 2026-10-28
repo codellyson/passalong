@@ -1,8 +1,8 @@
 <!--
   How a guide gets made, offered from every hub page.
 
-  Passalong is agent first: the agent that has the context writes the guide, so there is no form
-  here. Each item copies the sentence to say to it (app/utils/asks.ts). The CLI is the other way,
+  Passalong is agent first: the agent that has the context writes the guide. Without one, "Write it
+  down here" opens /hub/new, where the reader shapes what a person wrote (docs/LOOP.md §1a). Each item copies the sentence to say to it (app/utils/asks.ts). The CLI is the other way,
   for a terminal without an agent.
 -->
 <script setup lang="ts">
@@ -41,7 +41,14 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
       <AppIcon name="reveal" class="max-sm:hidden" />
     </button>
     <div v-if="open" class="menu w-80 max-sm:fixed max-sm:inset-x-4 max-sm:top-14 max-sm:w-auto" role="menu">
-      <p class="menu-note mt-0 mb-1">Ask your agent. Click one to copy what to say:</p>
+      <NuxtLink to="/hub/new" class="menu-item items-start no-underline" role="menuitem" @click="open = false">
+        <AppIcon name="open" class="mt-0.5 shrink-0 text-muted" />
+        <span class="flex min-w-0 flex-col">
+          <span class="font-medium text-fg">Write it down here</span>
+          <span class="text-xs text-muted">Say it in your own words; it becomes a task, bug or handover.</span>
+        </span>
+      </NuxtLink>
+      <p class="menu-note mt-2 mb-1">Or ask your agent. Click one to copy what to say:</p>
       <button
         v-for="item in ITEMS"
         :key="item.label"

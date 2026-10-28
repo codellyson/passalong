@@ -379,7 +379,14 @@ change. Its README says how.
   from the list, a group that exists, lengths capped, each kind's required sections, no contact
   details — never patched. The customer's own words are quoted into the guide by code, not by the
   model. Its reason goes on the thread as a note; when it is unsure, the author and team owners get
-  `reader_unsure`, pushed and mailed, with its one question.
+  `reader_unsure`, pushed and mailed, with its one question. The same reader is the hub's box
+  (`/hub/new`, `POST /v1/compose`): a teammate's own words become a task, bug or handover, filed at
+  once as theirs with no confirm step; the page offers move (`assign`) and undo (delete), and when
+  the reader is unsure nothing is filed until its question is answered there. Its input is TipTap
+  directly (`components/hub/Writer.vue`), not Nuxt UI, so it keeps the hub's look and policy:
+  TipTap's injected stylesheet is off (`injectCSS: false`; the hub allows styles from its own
+  stylesheet only) and its rules are `.writer` in styles.css; it renders inside `<ClientOnly>`. This reverses "the
+  hub has no editor" for writing from scratch, by the author's decision (docs/LOOP.md §1a).
 - **A finished child wakes its parent, from one place (docs/LOOP.md step 3).** A middleware after
   every write to `/v1/guides/:id/*` and `/v1/tasks/:id/*` calls `wakeFrom()`: when that guide is now
   Done and its `parent:` is not, the parent gets a `noted` thread line (handed to its holder and next

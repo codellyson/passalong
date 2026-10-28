@@ -2643,3 +2643,65 @@ table.rows tr.run td {
 table.rows thead th {
   white-space: nowrap;
 }
+
+/* ---- the box's editor (components/hub/Writer.vue) ------------------------------------------
+   TipTap's own stylesheet is off: the hub allows styles from this file only. These are the rules
+   it needs, drawn as a field like a textarea. */
+.writer-shell {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-3);
+  background: var(--field);
+  transition:
+    border-color var(--motion) ease,
+    box-shadow var(--motion) ease;
+}
+.writer-shell:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.writer {
+  font: 1rem / 1.55 var(--font-sans);
+  min-height: 12rem;
+  padding: var(--s-4) var(--s-5);
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  outline: none;
+}
+.writer > * + * {
+  margin-top: var(--s-2);
+}
+.writer p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--muted);
+  pointer-events: none;
+}
+.writer img {
+  display: block;
+  max-width: 100%;
+  max-height: 20rem;
+  border-radius: var(--r-1);
+}
+.writer img.ProseMirror-selectednode {
+  outline: 2px solid var(--fg);
+}
+.writer pre {
+  margin: 0;
+  padding: var(--s-3);
+  border-radius: var(--r-1);
+  background: var(--surface-raised);
+  font: 0.8125rem / 1.5 var(--font-mono);
+  white-space: pre-wrap;
+}
+.writer ul,
+.writer ol {
+  padding-left: var(--s-5);
+}
+.writer .writer-mention {
+  border-radius: var(--r-1);
+  padding: 0 2px;
+  background: var(--surface-raised);
+  font-weight: 500;
+}

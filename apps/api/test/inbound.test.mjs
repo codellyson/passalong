@@ -379,9 +379,9 @@ test("a request the reader sorted keeps the customer's words, quoted by code", (
     verification: ["Invoices are listed"],
   };
   const body = readerBody(sorted, {
-    name: "Sam",
-    at: "2026-10-28T09:00:00Z",
+    intro: "Sam, a customer, wrote in.",
     text: "White screen on Invoices",
+    customer: true,
   });
   assert.match(section(body, "Problem")?.text ?? "", /renders nothing/);
   assert.match(
@@ -398,8 +398,24 @@ test("a request the reader sorted keeps the customer's words, quoted by code", (
       goal: "Change the billing email.",
       acceptance: ["The customer has a reply"],
     },
-    { name: "", at: "x", text: "new email please" },
+    { intro: "A customer wrote in.", text: "new email please", customer: true },
   );
   assert.match(section(asked, "Acceptance")?.text ?? "", /customer has a reply/);
   assert.match(section(asked, "Constraints")?.text ?? "", /never by an agent/);
+
+  // Written by a teammate in the hub: no customer rules, and a handover is context.
+  const mine = readerBody(
+    { ...sorted, kind: "task", goal: "Add CSV export.", acceptance: ["Reports export to CSV"] },
+    { intro: "Ada wrote this in the hub.", text: "we need csv export on reports" },
+  );
+  assert.doesNotMatch(mine, /customer/i);
+  const handover = readerBody(
+    {
+      ...sorted,
+      kind: "transfer",
+      context: "The export runs from reports.ts; flags live in config.",
+    },
+    { intro: "Ada wrote this in the hub.", text: "notes on export" },
+  );
+  assert.match(section(handover, "Context")?.text ?? "", /reports\.ts/);
 });

@@ -84,7 +84,8 @@ a customer before a person presses Send. A holding agent receives both kinds thr
 set — any OpenAI-compatible provider: the kind (task or bug), title, summary and sections, and the
 team group by name (`to: #group`). Its answer is used whole or not at all (`readVerdict()`), the
 customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for
-the whole team and sends `reader_unsure` (pushed, mailed) with its question. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
+the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the
+hub's box, `/hub/new` (`POST /v1/compose`), for writing a task, bug or handover in your own words. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
 guide made from a request (a bug sent on to development) reaches Done, the request wakes: a
 `child_done` notification saying "tell the customer", and the request's Support page names what finished
 since the customer was last answered.
