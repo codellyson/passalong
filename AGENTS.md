@@ -366,6 +366,13 @@ change. Its README says how.
   it. Mail to a customer goes out only from `POST /v1/guides/:id/customer`, which has no CLI command
   or MCP tool and refuses the remote MCP server: nothing reaches a customer until a person presses
   Send. It is the deliberate exception to every answer existing in all three places.
+- **A finished child wakes its parent, from one place (docs/LOOP.md step 3).** A middleware after
+  every write to `/v1/guides/:id/*` and `/v1/tasks/:id/*` calls `wakeFrom()`: when that guide is now
+  Done and its `parent:` is not, the parent gets a `noted` thread line (handed to its holder and next
+  taker by `deliver()`) and its author and holders a `child_done` notification. One place, not six
+  routes, because a new way to finish would otherwise be a parent that never hears; `wakeParent()`
+  writes once per child (the child's id is in the line). A hand-in write-up (`report_of`) wakes
+  nothing. It wakes and never closes: what the parent still needs is someone's call.
 - **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
   people can take and answer for separately — one document holding six has one verdict, and "four
   of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is

@@ -14,6 +14,7 @@ test("only what needs you is pushed; the rest stays in the feed and the toasts",
   assert.deepEqual([...PUSHED].sort(), [
     "asked",
     "blocked",
+    "child_done",
     "customer_wrote",
     "email_sender",
     "emailed",

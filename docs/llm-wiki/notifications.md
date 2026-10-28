@@ -77,7 +77,10 @@ joins that request (`customer` thread event, `customer_wrote` notification) and 
 finished. A person answers from the guide's page (**Customer** panel, `POST /v1/guides/:id/customer`),
 recorded as `answered`; there is no CLI command or MCP tool for it on purpose, because nothing reaches
 a customer before a person presses Send. A holding agent receives both kinds through `deliver()`.
-Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts).
+Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
+guide made from a request (a bug sent on to development) reaches Done, the request wakes: a
+`child_done` notification saying "tell the customer", and the Customer panel names what finished
+since the customer was last answered.
 
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings
 says Email in is not set up.

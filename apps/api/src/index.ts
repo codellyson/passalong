@@ -1197,6 +1197,70 @@ app.use("/v1/*", async (c, next) => {
   return err(c, 401, "You're not signed in. Sign in to carry on, or use a token from your hub.");
 });
 
+/**
+ * A guide made from another reached Done, so the one it came from wakes up (docs/LOOP.md step 3).
+ * After every write to one guide, rather than in each of the six routes that can finish one: a new
+ * way to finish would otherwise be a parent that never hears. `wakeParent` writes once per child.
+ */
+app.use("/v1/guides/:id/*", async (c, next) => {
+  await next();
+  if (c.req.method === "GET" || !c.res.ok) return;
+  await wakeFrom(c.env, c.req.param("id") || "", c.get("account") || "");
+});
+app.use("/v1/tasks/:id/*", async (c, next) => {
+  await next();
+  if (c.req.method === "GET" || !c.res.ok) return;
+  await wakeFrom(c.env, c.req.param("id") || "", c.get("account") || "");
+});
+
+/**
+ * When `id` is Done and was made from another guide that is not, tell that parent: a note on its
+ * thread, and its author and holders in the feed. A support request is told to tell its customer.
+ * A hand-in write-up (`report_of`) is a child of its task but is the task's own record, not work it
+ * waited on, so it wakes nothing. Never throws: it must not fail the write that finished the child.
+ */
+async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
+  try {
+    if (!id || !account) return;
+    const child = await env.DB.prepare(
+      `SELECT g.id, g.parent_id, g.title, g.outcome, p.account_id AS author, p.team_id, p.customer
+         FROM guide g JOIN guide p ON p.id = g.parent_id
+        WHERE g.id = ? AND g.status = 'consumed' AND COALESCE(g.report_of, '') = ''
+          AND p.status <> 'consumed'`,
+    )
+      .bind(id)
+      .first<{
+        id: string;
+        parent_id: string;
+        title: string;
+        outcome: string;
+        author: string;
+        team_id: string;
+        customer: string;
+      }>();
+    if (!child) return;
+    if (!(await claims.wakeParent(env.DB, child, { account, at: now() }))) return;
+    const { results: holders } = await env.DB.prepare(
+      "SELECT DISTINCT account_id FROM claim WHERE guide_id = ?",
+    )
+      .bind(child.parent_id)
+      .all<{ account_id: string }>();
+    const done = child.outcome === "archived" ? "was closed without being done" : "is done";
+    const note = `"${child.title}" ${done}${child.customer && child.outcome !== "archived" ? " — tell the customer" : ""}`;
+    for (const to of new Set([child.author, ...holders.map((h) => h.account_id)]))
+      await notify(env, {
+        to,
+        kind: "child_done",
+        guide_id: child.parent_id,
+        actor_id: "",
+        team_id: child.team_id,
+        note,
+      });
+  } catch (e) {
+    console.error("wake parent", (e as Error).message);
+  }
+}
+
 async function startSession(c: Ctx, account: string): Promise<string> {
   const sid = rand(40);
   await db(c)

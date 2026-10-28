@@ -126,8 +126,11 @@ Still to settle: whether the customer gets a page to check status, or only email
    work), and a person answers from the guide's Customer panel. Not yet: an agent drafting the reply
    for the person to send, and the agent sorting a request into question or bug. Before that, email
    in accepted only senders the account had allowed, and nothing went back to whoever wrote in.
-3. **A parent closes when its child does.** `parent:` links exist; nothing yet wakes a parent when
-   its child is Done.
+3. **A parent wakes when its child does.** *Built 2026-10-28* — when a guide made from another
+   reaches Done, the parent gets a note on its thread (which its holder and next taker are handed)
+   and its author and holders a `child_done` notification; a support request says "tell the
+   customer", and its Customer panel shows what finished since the customer was last answered. It
+   wakes, it does not close: the parent is done when a person has answered the customer.
 4. **Filing work from the hub, without an agent of your own.** Today a guide is made by an agent
    through MCP or the CLI, or by email in. A support person, a tester or a product manager has
    neither. The hub gets one box: the person writes or pastes whatever they have — a sentence, a

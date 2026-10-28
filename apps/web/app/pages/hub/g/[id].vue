@@ -483,6 +483,11 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           v-if="ctx.customer"
           :guide-id="id"
           :customer="ctx.customer"
+          :finished="
+            ctx.children
+              .filter((ch) => ch.status === 'consumed' && ch.outcome !== 'archived')
+              .map((ch) => ({ id: ch.id, title: ch.title || 'A follow-up', at: ch.updated || '' }))
+          "
           @sent="queryClient.invalidateQueries({ queryKey: hubKeys.context(id) })"
         />
 

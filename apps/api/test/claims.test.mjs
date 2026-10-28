@@ -54,6 +54,7 @@ import {
   thread,
   UNTAKEN_MS,
   untaken,
+  wakeParent,
   working,
 } from "../src/claims.ts";
 import { feed, line, markRead, notify, unreadCount } from "../src/notify.ts";
@@ -2599,4 +2600,41 @@ test("an agent holding a support request hears what the customer said and what t
   );
   assert.equal(heard[0].by.you, false);
   assert.deepEqual(await deliver(db, "t1", A), [], "and each is said once");
+});
+
+test("a finished child wakes its parent once, and says when it was closed undone instead", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("parent");
+  guide("fix");
+  const child = { id: "fix", parent_id: "parent", title: "Fix export", outcome: "finished" };
+  assert.equal(await wakeParent(db, child, { account: "me", at: T0 }), true);
+  assert.equal(
+    await wakeParent(db, child, { account: "me", at: later(1000) }),
+    false,
+    "a second route ending the same child says nothing new",
+  );
+  const notes = db.raw
+    .prepare("SELECT body FROM task_event WHERE guide_id = 'parent' AND kind = 'noted'")
+    .all();
+  assert.deepEqual(
+    notes.map((n) => n.body),
+    ['"Fix export" (fix), made from this, is done.'],
+  );
+
+  guide("dropped");
+  await wakeParent(
+    db,
+    { id: "dropped", parent_id: "parent", title: "Try a workaround", outcome: "archived" },
+    { account: "me", at: T0 },
+  );
+  // Whoever takes the parent next is handed both, the way any note reaches a taker.
+  await take(db, "parent", A, { at: later(2000) });
+  assert.deepEqual(
+    (await deliver(db, "parent", A)).map((r) => r.body),
+    [
+      '"Fix export" (fix), made from this, is done.',
+      '"Try a workaround" (dropped), made from this, was closed without being done.',
+    ],
+  );
 });

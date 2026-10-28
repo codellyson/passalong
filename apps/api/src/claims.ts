@@ -580,6 +580,38 @@ export type EventKind =
   | "customer"
   | "answered";
 
+/**
+ * Tell a parent that a guide made from it reached Done (docs/LOOP.md step 3): a note on its thread,
+ * which `deliver()` hands to whoever holds it and to whoever takes it next. Once per child — the
+ * child's id is in the line and a second call finds it — because several routes can end the same
+ * guide in one act (mark done, then complete). Returns whether it wrote. Never throws.
+ */
+export async function wakeParent(
+  db: D1Database,
+  child: { id: string; parent_id: string; title: string; outcome: string },
+  { account, at }: { account: string; at: string },
+): Promise<boolean> {
+  try {
+    const mark = `(${child.id})`;
+    const seen = await db
+      .prepare(
+        "SELECT 1 FROM task_event WHERE guide_id = ? AND kind = 'noted' AND instr(body, ?) > 0",
+      )
+      .bind(child.parent_id, mark)
+      .first();
+    if (seen) return false;
+    const how = child.outcome === "archived" ? "was closed without being done" : "is done";
+    await event(db, child.parent_id, "noted", {
+      account,
+      body: `"${child.title}" ${mark}, made from this, ${how}.`,
+      at,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** One line of a support request's conversation with its customer. Never throws, as `event`. */
 export async function customerEvent(
   db: D1Database,

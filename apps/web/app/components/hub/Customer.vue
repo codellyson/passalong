@@ -9,6 +9,8 @@ import type { ThreadItem } from "~/types/hub";
 const props = defineProps<{
   guideId: string;
   customer: { name: string; email: string; ref: string };
+  /** Guides made from this request that are finished: a fix sent on to development, say. */
+  finished?: { id: string; title: string; at: string }[];
 }>();
 const emit = defineEmits<{ sent: [] }>();
 const { api, json } = useHub();
@@ -23,6 +25,17 @@ async function load() {
   said.value = (t?.thread ?? []).filter((i) => i.kind === "customer" || i.kind === "answered");
 }
 onMounted(() => load().catch((e) => (problem.value = (e as Error).message)));
+
+/**
+ * What finished since the customer was last answered (docs/LOOP.md step 3): the fix is in, so the
+ * one thing left is telling them. Nothing is drafted for the person — they write it.
+ */
+const ready = computed(() => {
+  const answered = said.value
+    .filter((m) => m.kind === "answered")
+    .reduce((last, m) => (m.at > last ? m.at : last), "");
+  return (props.finished ?? []).filter((f) => f.at > answered);
+});
 
 async function send(e: Event) {
   const form = e.currentTarget as HTMLFormElement;
@@ -54,6 +67,15 @@ async function send(e: Event) {
       <b class="font-medium">{{ customer.name || customer.email }}</b>
       <span v-if="customer.name" class="text-muted">{{ customer.email }}</span>
       <span class="font-code text-xs text-muted">· {{ customer.ref }}</span>
+    </p>
+    <p
+      v-for="f in ready"
+      :key="f.id"
+      class="m-0 rounded-2 border border-line px-3 py-2 font-ui text-sm"
+      role="status"
+    >
+      <NuxtLink :to="`/hub/g/${f.id}`">{{ f.title }}</NuxtLink> is done — tell
+      {{ customer.name || "the customer" }}.
     </p>
     <ol v-if="said.length" class="m-0 flex list-none flex-col gap-3 p-0">
       <li v-for="m in said" :key="m.id" class="flex flex-col gap-1 font-ui text-sm">
