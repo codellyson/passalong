@@ -353,7 +353,8 @@ test("a webhook's guide says where it came from and is still evidence", () => {
 });
 
 test("a request's place in the Support table comes from what happened to it", () => {
-  const st = (o) => supportState({ done: false, lastBy: "customer", answered: false, openWork: 0, ...o });
+  const st = (o) =>
+    supportState({ done: false, lastBy: "customer", answered: false, openWork: 0, ...o });
   assert.equal(st({}), "new", "the customer wrote and nobody has answered");
   assert.equal(st({ openWork: 1 }), "with_development", "work made from it is open");
   assert.equal(st({ answered: true, lastBy: "team" }), "waiting", "our word was last");
