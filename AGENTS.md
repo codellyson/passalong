@@ -130,7 +130,11 @@ change. Its README says how.
   - `src/og.ts` reads its fonts through the `ASSETS` binding, which is **apps/web's** assets now.
   - `src/claims.ts` — the task queue (`docs/V2.md`): claim, lease, gate, `blocked_by`. Imports no
     sibling so `test/claims.test.mjs` can run it against real SQLite with every migration. The lock
-    is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked. Each
+    is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked — until
+    the hourly sweep puts it back in the queue `REQUEUE_AFTER_MS` (two hours) later
+    (`requeueStalled()`), unless its agent is waiting on a person's answer. The author hears the
+    first time; the second time for the same guide is `stuck`, mailed (`alertPeople()` in
+    alerts.ts), because whoever picks it up is not getting it done (docs/LOOP.md). Each
     claim also carries a generation from `claim_fence` (migration 0029): `take` hands it out, the
     CLI keeps it in `.passalong/held.json`, and `progress`, `hand_in` and `pass` send it back, so
     the same agent's write from a claim that was since released and re-taken is refused. It is
@@ -308,8 +312,11 @@ change. Its README says how.
   found by timing (published within five minutes before their author's hand-in event). **Done says
   how it got there**: `outcome` (migration 0054) is `approved` (approve, accepting a hand-in, an
   author's mark-done) or `archived` (the status route, closing with nothing handed in), and is
-  cleared when it leaves Done. **Ready work nobody took for a fortnight goes back to Draft**
-  (`backToDraft`), never to Done, which is finished work. **Not for me** is `pass` on work you do
+  cleared when it leaves Done. **Ready work nobody took stays Ready, and a person is told**
+  (2026-10-28, docs/LOOP.md): after `UNTAKEN_MS` (three days) the author and the team's owners are
+  mailed once (`untaken()`, kind `untaken`). It used to go back to Draft after a fortnight, and a
+  draft reaches nobody — the product shelving work itself. Tasks are not counted: a task for nobody
+  in particular is a backlog. **Not for me** is `pass` on work you do
   not hold, for any kind: the sender is told why.
 - **A CLI too old for the server's rules is refused, not warned.** Every CLI call carries
   `x-passalong-version` (`VERSION` in `src/api.js`), and the token branch of the auth middleware

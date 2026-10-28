@@ -875,20 +875,13 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       ).results,
   );
   for (const row of childRows) childCounts.set(row.parent_id, Number(row.n));
-  // When a guide will be tidied away by itself, for the ones that will: its proof screenshots, or
-  // the guide itself being archived. Both come from the conditions the sweeps delete on.
+  // When a guide's proof screenshots will be tidied away by themselves, from the conditions the
+  // sweep deletes on.
   const proofEnds = new Map<string, string>(
     await inSlices(
       rows.map((r) => r.id),
       0,
       async (slice) => [...(await proofExpiry(c.env.DB, slice))],
-    ),
-  );
-  const archiveAt = new Map<string, string>(
-    await inSlices(
-      rows.map((r) => r.id),
-      0,
-      async (slice) => [...(await claims.archivesAt(c.env.DB, slice))],
     ),
   );
   return rows.map((r) => {
@@ -947,10 +940,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       // What it says to a person: the line a list shows in place of the document.
       summary: r.summary || "",
       preview_image: image,
-      // When it is tidied away by itself, or "": its proof screenshots are deleted at
-      // `proof_expires`, and a sent guide nobody touches is archived at `archives_at`.
+      // When its proof screenshots are deleted by themselves, or "".
       proof_expires: proofEnds.get(r.id) || "",
-      archives_at: archiveAt.get(r.id) || "",
       // Which release wrote it, for tracing a malformed guide back. Empty from before 0035.
       client: r.client || "",
       verdict: latest

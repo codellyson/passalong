@@ -8,7 +8,9 @@ the action that caused it — and drops anything addressed to whoever caused it.
 - **Coalesced.** One row per (recipient, kind, guide, actor): a repeat bumps `at` and `times`.
 - **One sentence.** `line()` in `notify.ts` is the only place wording lives; CLI, MCP, hub, toasts and
   push all print it.
-- **Actorless events.** `stalled` (a lease ran out), `shelved` (nobody took it for a fortnight, so it went back to Draft),
+- **Actorless events.** `stalled` (a lease ran out), `requeued` (a quiet hold went back in the queue), `stuck` (it went back a second time; mailed),
+  `untaken` (sent and nobody took it in three days; mailed to the author and team owners), `shelved`
+  (old rows only: work nobody took used to go back to Draft),
   `still_draft` (a task untouched in Draft for a day, once per quiet day, feed only),
   `blocked` (an agent is stuck on you), and your own agent's `task_finished` are sent without an actor,
   so they reach you even when "you" caused them.

@@ -2407,51 +2407,124 @@ export async function closeGuide(
 }
 
 /**
- * Guides sent to somebody that nothing has happened to, for something on a clock to put back.
+ * Holds that went quiet and stayed quiet, put back in the queue for anyone to take.
+ *
+ * `stalled` only says a lease ran out; the card stays held, so work an agent walked away from sat
+ * locked until a person noticed and released it — and nothing made sure anyone would. Work being
+ * left behind by design is what docs/LOOP.md exists to end, so the clock lets go: once a lease has
+ * been out for REQUEUE_AFTER_MS, the hold is deleted exactly as a release deletes it, the task says
+ * where the work was left, and the thread records it as a release of the holder's own claim carrying
+ * REQUEUED — `task_event.account_id` must name an account, and the holder is whose claim went.
+ *
+ * Not a claim whose agent asked a question nobody has answered: that one is waiting on a person,
+ * not gone quiet, and putting it back would hand the question's context to a stranger. Its lease
+ * runs out after a day like anything else and the author is told it stalled.
+ *
+ * The delete checks the lease it read, so an agent that came back between the read and the write
+ * keeps its work. `times` counts how often the clock has let go of this guide, this one included:
+ * a second time means the work is not getting done by whoever picks it up, and a person is told.
+ */
+export const REQUEUE_AFTER_MS = 2 * 60 * 60 * 1000;
+
+/** The thread's line for a hold the clock let go, and how a requeue is told from a person's release. */
+export const REQUEUED = "went quiet; back in the queue";
+
+export async function requeueStalled(
+  db: D1Database,
+  at: string,
+  before: string,
+): Promise<{ guide_id: string; title: string; author: string; team_id: string; times: number }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.guide_id, c.place, c.account_id, c.agent_id, c.host, c.worktree, c.note,
+              c.lease_until, g.title, g.kind, g.account_id AS author, g.team_id
+         FROM claim c JOIN guide g ON g.id = c.guide_id
+        WHERE c.state = 'claimed' AND c.lease_until <= ? AND ${ASKING} IS NULL
+        ORDER BY c.lease_until ASC
+        LIMIT 100`,
+    )
+    .bind(before)
+    .all<ClaimRow & { title: string; kind: string; author: string; team_id: string }>();
+  const out = [];
+  for (const c of results) {
+    const res = await db
+      .prepare(
+        `DELETE FROM claim WHERE guide_id = ? AND place = ? AND account_id = ?
+            AND state = 'claimed' AND lease_until = ?`,
+      )
+      .bind(c.guide_id, c.place, c.account_id, c.lease_until)
+      .run();
+    if (res.meta.changes !== 1) continue;
+    const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
+    if (c.kind === "task") {
+      const g = await db
+        .prepare("SELECT markdown FROM guide WHERE id = ?")
+        .bind(c.guide_id)
+        .first<{ markdown: string }>();
+      const said = c.note ? `; last progress: "${c.note}"` : "";
+      if (g)
+        await db
+          .prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?")
+          .bind(
+            withNote(
+              g.markdown,
+              `${at.slice(0, 10)} went quiet at ${where}${said}; back in the queue`,
+            ),
+            at,
+            c.guide_id,
+          )
+          .run();
+    }
+    await event(db, c.guide_id, "released", {
+      account: c.account_id,
+      agent: c.agent_id,
+      host: c.host,
+      body: REQUEUED,
+      at,
+    });
+    const n = await db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM task_event WHERE guide_id = ? AND kind = 'released' AND body = ?",
+      )
+      .bind(c.guide_id, REQUEUED)
+      .first<{ n: number }>();
+    out.push({
+      guide_id: c.guide_id,
+      title: c.title,
+      author: c.author,
+      team_id: c.team_id,
+      times: Number(n?.n ?? 1),
+    });
+  }
+  return out;
+}
+
+/**
+ * Guides sent to somebody that nothing has happened to, for something on a clock to escalate.
  *
  * "Nothing" is meant strictly: nobody pulled it, nobody said they were taking it, nobody holds it,
- * nobody gave a verdict. A guide with any of those is a conversation in progress, however slow,
- * and moving it would be taking it off somebody's list while they are still on it.
+ * nobody gave a verdict. A guide with any of those is a conversation in progress, however slow.
  *
- * They go back to Draft (`backToDraft`), not to Done. Done is finished work, approved or archived
- * by a person; a guide nobody took is neither, it stopped waiting on somebody who is not coming.
- * From Draft its author marks it Ready again, to the same person or another, or archives it.
- */
-export async function backToDraft(db: D1Database, id: string): Promise<boolean> {
-  const g = await db
-    .prepare("SELECT markdown FROM guide WHERE id = ? AND status = 'published'")
-    .bind(id)
-    .first<{ markdown: string }>();
-  if (!g) return false;
-  // `updated` is left alone: nothing happened to the work, and moving it is not news a day later
-  // from the Draft reminder too.
-  await db
-    .prepare(
-      "UPDATE guide SET status = 'draft', markdown = ? WHERE id = ? AND status = 'published'",
-    )
-    .bind(withStatus(g.markdown, "draft"), id)
-    .run();
-  return true;
-}
-/**
- * How long a sent guide may sit with nothing happening to it before the clock shelves it.
+ * It stays Ready. It used to go back to Draft after a fortnight (`backToDraft`), and a draft reaches
+ * nobody: work nobody took was shelved by the product itself, which is the one thing docs/LOOP.md
+ * says must never happen. Now a person hears instead — its author and the team's owners, once —
+ * and decides: give it to someone else, take it, or archive it.
  *
- * A fortnight, because the thing being measured is a person not getting to something, and people
- * are away for a week. Short enough that a board is not carrying a month of guides nobody opened;
- * long enough that "I was on leave" does not lose you your work — and it is reversible anyway.
+ * `since` makes it an announcement rather than a nag, as in `stalled`: each guide crosses UNTAKEN_MS
+ * in exactly one run. Pass a window wider than the gap between runs.
  */
-export const STALE_SENT_MS = 14 * 24 * 60 * 60 * 1000;
+export const UNTAKEN_MS = 3 * 24 * 60 * 60 * 1000;
 
-export async function staleSent(
+export async function untaken(
   db: D1Database,
   before: string,
+  since: string,
 ): Promise<{ id: string; account_id: string; title: string; team_id: string; to: string }[]> {
   const { results } = await db
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.team_id, g.to_account_id AS to_id, g.to_group_id
-         FROM guide g JOIN account au ON au.id = g.account_id
-        WHERE g.kind <> 'task' AND g.status = 'published' AND g.updated <= ?
-          AND au.keep_forever = 0
+         FROM guide g
+        WHERE g.kind <> 'task' AND g.status = 'published' AND g.updated <= ?1 AND g.updated > ?2
           AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
           AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
           AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
@@ -2460,7 +2533,7 @@ export async function staleSent(
         ORDER BY g.updated ASC
         LIMIT 100`,
     )
-    .bind(before)
+    .bind(before, since)
     .all<{
       id: string;
       account_id: string;
@@ -2505,34 +2578,6 @@ export async function staleDrafts(
     .bind(before, since)
     .all<{ id: string; account_id: string; team_id: string }>();
   return results;
-}
-
-/**
- * When each of these guides will be archived for want of anybody touching it, for the ones that
- * will. The same conditions staleSent archives on, minus the clock, so a date shown here is a date
- * that happens: `updated` plus STALE_SENT_MS, any pull, answer, hold or verdict restarts it by
- * taking the guide out of this list, and an author who has asked to keep everything is never on it.
- * At most one slice of bound ids per call (D1 takes 100).
- */
-export async function archivesAt(db: D1Database, ids: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (!ids.length) return out;
-  const { results } = await db
-    .prepare(
-      `SELECT g.id, g.updated FROM guide g JOIN account au ON au.id = g.account_id
-        WHERE g.id IN (${ids.map(() => "?").join(",")})
-          AND g.kind <> 'task' AND g.status = 'published' AND au.keep_forever = 0
-          AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
-          AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
-          AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
-          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
-          AND NOT EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id)`,
-    )
-    .bind(...ids)
-    .all<{ id: string; updated: string }>();
-  for (const r of results)
-    out.set(r.id, new Date(Date.parse(r.updated) + STALE_SENT_MS).toISOString());
-  return out;
 }
 
 /**

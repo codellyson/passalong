@@ -93,7 +93,11 @@ export function messageOf(i: ThreadItem): Message {
       tone = "bad";
       break;
     case "released":
-      text = "Took this back.";
+      // REQUEUED in apps/api/src/claims.ts: the clock let go of a quiet hold, nobody took it back.
+      text =
+        i.body === "went quiet; back in the queue"
+          ? "Went quiet, so this is back in the queue for anyone to take."
+          : "Took this back.";
       quiet = true;
       break;
     case "approved":

@@ -107,7 +107,11 @@ Still to settle: whether the customer gets a page to check status, or only email
 
 ## 6. What is missing, in order
 
-1. **Stop the leaks, and count what drops.** Today work can be left behind by design:
+1. **Stop the leaks, and count what drops.** *Built 2026-10-28* — stalled holds go back in the
+   queue two hours after their lease lapses (`requeueStalled`), a second time mails the author
+   (`stuck`); sent work nobody took stays Ready and mails its author and the team's owners after
+   three days (`untaken`); `scripts/metrics.mjs` opens with "Left behind — right now". Before that,
+   work could be left behind by design:
    - A stalled claim stays locked until a person releases it (`claims.ts`); nothing re-queues it.
    - Ready work nobody takes for a fortnight goes back to Draft (`backToDraft`), where it reaches
      nobody.

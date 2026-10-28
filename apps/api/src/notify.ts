@@ -68,6 +68,12 @@ export const KINDS = [
   // Also actorless: a guide left in Draft for a day. Draft is where every guide starts, and nothing
   // else says it never reached anyone.
   "still_draft",
+  // Actorless, all three, and what keeps work from being left behind (docs/LOOP.md): a hold that
+  // stayed quiet went back in the queue; it went back a second time, so a person must step in; a
+  // guide sent to somebody nobody took, so a person must decide. `shelved` above is for old rows.
+  "requeued",
+  "stuck",
+  "untaken",
   // The conversation. `asked` is the one kind that reaches its own actor: your own agent asking you
   // is the commonest case there is, and the self-drop in notify() would have made it silent.
   "asked",
@@ -178,6 +184,9 @@ export const PUSHED = new Set<Kind>([
   "sent_back",
   "stalled",
   "blocked",
+  // Work that will be left behind unless a person steps in.
+  "stuck",
+  "untaken",
   // An agent waiting on your answer needs you the way a blocked one does.
   "asked",
   // Something came in by email for you to look at, or a new sender is waiting to be let in.
@@ -758,6 +767,12 @@ export function line(r: LineFacts): string {
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
       return `${title} went back to Draft — nobody took it${note}`;
+    case "requeued":
+      return `${title} went quiet, so it is back in the queue for anyone to take${note}`;
+    case "stuck":
+      return `${title} has gone quiet more than once — it needs a person to step in${note}`;
+    case "untaken":
+      return `Nobody has taken ${title} — give it to someone, take it, or archive it${note}`;
     case "still_draft":
       return `${title} is still a draft — nobody can take it until you mark it Ready`;
     case "stalled":

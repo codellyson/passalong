@@ -21,9 +21,11 @@ test("only what needs you is pushed; the rest stays in the feed and the toasts",
     "hooked",
     "sent_back",
     "stalled",
+    "stuck",
     "taken",
     "task_finished",
     "task_rejected",
+    "untaken",
     "verified",
   ]);
   for (const quiet of ["pulled", "joined", "shared", "consumed", "task_claimed"])
