@@ -5844,9 +5844,9 @@ async function receiveSupport(
   const title = verdict?.title || titleOf(withoutRef(mail.subject)) || "A message from a customer";
   const made = await intake(env, ctx, {
     account: me,
-    // A support request is a task — work nobody has done yet, done when the customer has an answer —
-    // unless the reader says it is a bug.
-    kind: verdict?.kind ?? "task",
+    // The reader states the kind when it sorted the message; without it, the fixed rule builds a
+    // support request, which is a task — work nobody has done yet, done when the customer is answered.
+    kind: verdict ? verdict.kind : SUPPORT_REQUEST_KIND,
     target: "",
     team: box.team,
     to: verdict?.route ? `#${verdict.route}` : "",
@@ -5994,6 +5994,9 @@ async function keepCustomerFiles(
   }
   return lines;
 }
+
+/** What the fixed rule builds from a customer's message: a task, stated where it is made. */
+const SUPPORT_REQUEST_KIND = "task" as const;
 
 /** Where a customer's reply goes: the same support address, so it comes back through receiveSupport. */
 const supportAddress = (env: Env, key: string, team: string) => {
