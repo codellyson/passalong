@@ -32,7 +32,22 @@ async function load() {
 onMounted(() => load().catch((e) => (problem.value = (e as Error).message)));
 
 /** Each line with its pictures and files picked out, the way the thread reads every message. */
-const lines = computed(() => said.value.map((m) => ({ m, msg: messageOf(m) })));
+/**
+ * Each line with its pictures and files picked out, the way the thread reads every message — read as
+ * the speaker's own words (the side says who spoke, so no "To the customer:" lead), with emphasis
+ * marks dropped the way the customer's plain-text email drops them.
+ */
+const plain = (t: string) =>
+  t
+    .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/`([^`\n]+)`/g, "$1")
+    .replace(/\\([\\`*_[\]])/g, "$1");
+const lines = computed(() =>
+  said.value.map((m) => {
+    const msg = messageOf({ ...m, kind: "customer" });
+    return { m, msg: { ...msg, text: plain(msg.text) } };
+  }),
+);
 
 async function save(f: { name: string; url: string }) {
   problem.value = "";
@@ -50,16 +65,33 @@ const ready = computed(() => {
   return (props.finished ?? []).filter((f) => f.at > answered);
 });
 
-async function send(e: Event) {
-  const form = e.currentTarget as HTMLFormElement;
-  const body = field(form, "reply").trim();
+/** The reply as markdown from the editor; a pasted picture travels in it as a link. */
+const reply = ref("");
+const writer = ref<{ addPicture: (f: File) => Promise<void>; clear: () => void } | null>(null);
+const uploading = ref(false);
+async function attach(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const f = input.files?.[0];
+  input.value = "";
+  if (!f) return;
+  uploading.value = true;
+  try {
+    await writer.value?.addPicture(f);
+  } finally {
+    uploading.value = false;
+  }
+}
+
+async function send() {
+  const body = reply.value.trim();
   if (!body || busy.value) return;
   busy.value = true;
   problem.value = "";
   done.value = false;
   try {
     await api(`/v1/guides/${props.guideId}/customer`, json("POST", { body }));
-    form.reset();
+    writer.value?.clear();
+    reply.value = "";
     done.value = true;
     await load();
     emit("sent");
@@ -88,7 +120,7 @@ async function send(e: Event) {
         <div
           v-if="msg.text"
           class="rounded-3 px-4 py-3 font-ui text-sm whitespace-pre-wrap"
-          :class="m.kind === 'answered' ? 'bg-ink text-on-ink' : 'bg-field shadow-edge'"
+          :class="m.kind === 'answered' ? 'bg-raised shadow-edge' : 'bg-field shadow-edge'"
         >
           <!-- Their screenshots are drawn, through the renderer that only fetches our own. -->
           <HubEvidence v-if="msg.pictures" :text="msg.text" prose label="A message with pictures" class="!mt-0" />
@@ -119,22 +151,32 @@ async function send(e: Event) {
     </p>
 
     <form class="flex flex-col gap-2" @submit.prevent="send">
-      <label class="sr-only" for="customer-reply">Reply to {{ name }}</label>
-      <textarea
-        id="customer-reply"
-        name="reply"
-        required
-        maxlength="4000"
-        rows="4"
-        :placeholder="`Reply to ${name}`"
-      />
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <span class="font-ui text-xs text-muted">Sent by email with the tracking number. Their answer comes back here.</span>
-        <span class="flex items-center gap-3">
-          <span v-if="done" class="font-ui text-sm text-muted" role="status">Sent</span>
-          <button class="btn primary" :disabled="busy">{{ busy ? "Sending…" : "Send" }}</button>
-        </span>
-      </div>
+      <!-- The same editor as the box, without @ and #: a customer has no use for the team's names. -->
+      <ClientOnly>
+        <HubWriter
+          ref="writer"
+          :placeholder="`Reply to ${name}. Paste a screenshot or a link if it helps.`"
+          :people="[]"
+          :groups="[]"
+          @change="reply = $event"
+          @problem="problem = $event"
+        >
+          <template #footer>
+            <label class="btn sm cursor-pointer">
+              <input type="file" accept="image/*" class="sr-only" @change="attach" />
+              {{ uploading ? "Adding…" : "Picture" }}
+            </label>
+            <span class="flex items-center gap-3">
+              <span v-if="done" class="font-ui text-sm text-muted" role="status">Sent</span>
+              <button class="btn primary" :disabled="busy || !reply.trim()">{{ busy ? "Sending…" : "Send" }}</button>
+            </span>
+          </template>
+        </HubWriter>
+        <template #fallback>
+          <div class="writer-shell"><div class="writer" aria-hidden="true" /></div>
+        </template>
+      </ClientOnly>
+      <span class="font-ui text-xs text-muted">Sent by email with the tracking number. Their answer comes back here.</span>
       <p v-if="problem" class="m-0 font-ui text-sm text-danger" role="alert">{{ problem }}</p>
     </form>
   </section>
