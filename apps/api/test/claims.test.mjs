@@ -42,6 +42,7 @@ import {
   release,
   renew,
   reopen,
+  reopenForCustomer,
   reply,
   repoKey,
   requeueStalled,
@@ -2637,4 +2638,24 @@ test("a finished child wakes its parent once, and says when it was closed undone
       '"Try a workaround" (dropped), made from this, was closed without being done.',
     ],
   );
+});
+
+test("a customer writing again puts their request back in Ready, even from archived", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("req", { status: "consumed" });
+  guide("plain", { status: "consumed" });
+  db.raw.exec(`UPDATE guide SET outcome = 'archived' WHERE id IN ('req', 'plain');
+    UPDATE guide SET customer = 'jane@example.com', ref = 'R-K7Q2M9' WHERE id = 'req';`);
+  assert.equal(await reopenForCustomer(db, "req", { account: "me", at: T0 }), true);
+  const row = db.raw.prepare("SELECT status, outcome, markdown FROM guide WHERE id = 'req'").get();
+  assert.equal(row.status, "published", "Ready, not Draft: a draft reaches nobody");
+  assert.equal(row.outcome, "");
+  assert.match(row.markdown, /reopened: The customer wrote again/);
+  assert.equal(
+    await reopenForCustomer(db, "plain", { account: "me", at: T0 }),
+    false,
+    "only a guide with a customer: everything else unarchives to Draft as before",
+  );
+  assert.equal(await reopenForCustomer(db, "req", { account: "me", at: T0 }), false, "once");
 });

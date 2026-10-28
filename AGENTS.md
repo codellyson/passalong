@@ -366,6 +366,10 @@ change. Its README says how.
   it. Mail to a customer goes out only from `POST /v1/guides/:id/customer`, which has no CLI command
   or MCP tool and refuses the remote MCP server: nothing reaches a customer until a person presses
   Send. It is the deliberate exception to every answer existing in all three places.
+  A customer writing again on a request that is Done puts it straight back in Ready
+  (`reopenForCustomer()`), even when it was archived: the one exception to an archived guide
+  coming back to Draft, because a Draft reaches nobody and a waiting customer must not be left
+  behind. Their first message is a `customer` thread line too, so the panel starts where they did.
 - **A finished child wakes its parent, from one place (docs/LOOP.md step 3).** A middleware after
   every write to `/v1/guides/:id/*` and `/v1/tasks/:id/*` calls `wakeFrom()`: when that guide is now
   Done and its `parent:` is not, the parent gets a `noted` thread line (handed to its holder and next

@@ -5778,16 +5778,9 @@ async function receiveSupport(
       .bind(ref, me, mail.sender)
       .first<{ id: string; status: string; team_id: string }>();
     if (g) {
+      // Finished or archived, it is not done any more: the customer is waiting again.
       if (g.status === "consumed")
-        await asOwner(
-          env,
-          ctx,
-          me,
-          "POST",
-          `/v1/guides/${g.id}/reopen`,
-          JSON.stringify({ why: "The customer wrote again." }),
-          "application/json",
-        );
+        await claims.reopenForCustomer(env.DB, g.id, { account: me, at });
       await claims.customerEvent(env.DB, g.id, "customer", {
         account: me,
         body: (mail.text || "(it had no text)").slice(0, 4000),
@@ -5850,6 +5843,13 @@ async function receiveSupport(
     console.error("support", "no tracking number", made.id);
     return;
   }
+  // The first message is the conversation's first line too, so the Customer panel and an agent's
+  // thread start where the customer did; the document quotes it as evidence for the work.
+  await claims.customerEvent(env.DB, made.id, "customer", {
+    account: me,
+    body: (mail.text || "(it had no text)").slice(0, 4000),
+    at,
+  });
   const from = await supportFrom(env, me, box.team);
   const copy = ackCopy({ from: from.name, title, ref: number });
   await sendMail(env, mail.sender, copy.subject, copy.text, undefined, {

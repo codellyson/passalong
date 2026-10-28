@@ -612,6 +612,38 @@ export async function wakeParent(
   }
 }
 
+/**
+ * A customer wrote again on a support request that is Done, so it is not (docs/LOOP.md): back to
+ * Ready, however it reached Done. This is the one way an archived guide goes straight to Ready
+ * rather than to Draft (`unarchiveProblem`): a Draft reaches nobody, and a customer waiting on an
+ * answer is exactly the work that must not be left behind. Only for a guide with a customer — the
+ * caller has matched the tracking number and the sender. Returns whether it moved.
+ */
+export async function reopenForCustomer(
+  db: D1Database,
+  id: string,
+  { account, at }: { account: string; at: string },
+): Promise<boolean> {
+  const g = await db
+    .prepare("SELECT markdown FROM guide WHERE id = ? AND status = 'consumed' AND customer <> ''")
+    .bind(id)
+    .first<{ markdown: string }>();
+  if (!g) return false;
+  const reason = "The customer wrote again.";
+  await db
+    .prepare(
+      "UPDATE guide SET status = 'published', outcome = '', markdown = ?, updated = ? WHERE id = ?",
+    )
+    .bind(
+      withStatus(withNote(g.markdown, `${at.slice(0, 10)} reopened: ${reason}`), "published"),
+      at,
+      id,
+    )
+    .run();
+  await event(db, id, "sent_back", { account, body: reason, at });
+  return true;
+}
+
 /** One line of a support request's conversation with its customer. Never throws, as `event`. */
 export async function customerEvent(
   db: D1Database,
