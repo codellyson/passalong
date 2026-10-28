@@ -76,6 +76,9 @@ export const KINDS = [
   "untaken",
   // A customer wrote back on a support request (docs/LOOP.md). Actorless: they have no account.
   "customer_wrote",
+  // The reader could not tell what a customer's request is or who should act; the note is its one
+  // question. Actorless, pushed and mailed, because it is rare and must not be missed.
+  "reader_unsure",
   // A guide made from yours reached Done, so yours can move (docs/LOOP.md step 3). Actorless,
   // because the one who finished it is most often your own agent. The note names the child, and on
   // a support request says to tell the customer.
@@ -195,6 +198,7 @@ export const PUSHED = new Set<Kind>([
   "untaken",
   // A customer waiting on an answer.
   "customer_wrote",
+  "reader_unsure",
   // What you were waiting on is finished.
   "child_done",
   // An agent waiting on your answer needs you the way a blocked one does.
@@ -777,6 +781,8 @@ export function line(r: LineFacts): string {
       // Also actorless. "Someone is done with X" would name a person for something a clock did,
       // and the person it would name is whoever never opened it.
       return `${title} went back to Draft — nobody took it${note}`;
+    case "reader_unsure":
+      return `Passalong couldn't sort ${title} by itself${note}`;
     case "child_done":
       // The note says how it ended — done, or closed without being done — so this does not.
       return `Work made from ${title} has ended${note}`;

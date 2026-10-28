@@ -644,6 +644,15 @@ export async function reopenForCustomer(
   return true;
 }
 
+/** A note on a guide's thread, handed to its holder and next taker. Never throws, as `event`. */
+export async function noteOn(
+  db: D1Database,
+  id: string,
+  { account, body, at }: { account: string; body: string; at: string },
+): Promise<void> {
+  await event(db, id, "noted", { account, body, at });
+}
+
 /** One line of a support request's conversation with its customer. Never throws, as `event`. */
 export async function customerEvent(
   db: D1Database,

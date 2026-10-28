@@ -56,7 +56,7 @@
 // `/g/**` routes that stayed because a crawler and an agent fetch them, not a browser — and
 // because `workers-og` is ~1.7MB of wasm that only the card should ever pay for.
 import { Hono } from "hono";
-import { alertAdmins } from "./alerts.js";
+import { alertAdmins, alertPeople } from "./alerts.js";
 import { type AnalyticsEnv, type Props, track } from "./analytics.js";
 import {
   ATTACH_MAX,
@@ -160,6 +160,7 @@ import {
   hookPrint,
   NOTE_EVERY_MS,
   parseEmail,
+  readerBody,
   readHook,
   refIn,
   SOURCE_NAMES,
@@ -231,6 +232,7 @@ import {
   planNow,
   seatsFull,
 } from "./quota.js";
+import { askReader } from "./reader.js";
 import { sizeProblem } from "./sections.js";
 import {
   conversationOn,
@@ -298,6 +300,10 @@ type Env = MailEnv &
     PUBLIC_ORIGIN?: string;
     /** The domain Email Routing sends guides to (inbound.ts). Unset: Settings says it is not set up. */
     INBOUND_DOMAIN?: string;
+    /** The reader (reader.ts): an OpenAI-compatible endpoint, its key (a secret) and the model. */
+    READER_URL?: string;
+    READER_KEY?: string;
+    READER_MODEL?: string;
   };
 /** `client` is what the credential says wrote this request — see `writtenBy` in clients.ts. */
 type Vars = { account: string; client: string };
@@ -5819,17 +5825,38 @@ async function receiveSupport(
     return;
   }
 
-  const title = titleOf(withoutRef(mail.subject)) || "A message from a customer";
+  // The reader sorts it — kind, title, summary, sections, and the team's group that should act — when
+  // one is configured and its answer passes every check (reader.ts). Otherwise the fixed rule: a task.
+  const groups = box.team
+    ? (
+        await env.DB.prepare(
+          `SELECT g.slug, g.name FROM team_group g JOIN team t ON t.id = g.team_id WHERE t.slug = ?`,
+        )
+          .bind(box.team)
+          .all<{ slug: string; name: string }>()
+      ).results
+    : [];
+  const verdict = await askReader(env, {
+    subject: withoutRef(mail.subject),
+    text: mail.text,
+    groups,
+  });
+  const title = verdict?.title || titleOf(withoutRef(mail.subject)) || "A message from a customer";
   const made = await intake(env, ctx, {
     account: me,
-    // A support request is a task: work nobody has done yet, done when the customer has an answer.
-    kind: "task",
+    // A support request is a task — work nobody has done yet, done when the customer has an answer —
+    // unless the reader says it is a bug.
+    kind: verdict?.kind ?? "task",
     target: "",
     team: box.team,
+    to: verdict?.route ? `#${verdict.route}` : "",
+    // Keyed on what the customer sent, not on how it was sorted, so a repeat merges either way.
     print: fingerprint("task", mail.sender, `support ${mail.subject}`),
     title,
-    summary: `${mail.name || "A customer"} asks: ${title}`,
-    body: supportBody({ name: mail.name, at, text: mail.text }),
+    summary: verdict?.summary || `${mail.name || "A customer"} asks: ${title}`,
+    body: verdict
+      ? readerBody(verdict, { name: mail.name, at, text: mail.text })
+      : supportBody({ name: mail.name, at, text: mail.text }),
     again: "The customer sent the same message again",
   });
   if (!made.created) return;
@@ -5872,6 +5899,48 @@ async function receiveSupport(
     actor_id: "",
     note: "a customer's request that is ready to pick up",
   });
+  if (!verdict) return;
+  // Why it was sorted this way, on the request's thread: a person can see the reader decided it, and
+  // move it if it is wrong. Handed to whoever takes the task, as any note is.
+  const where = verdict.route
+    ? `sent to ${groups.find((g) => g.slug === verdict.route)?.name || `#${verdict.route}`}`
+    : "for the whole team";
+  await claims.noteOn(env.DB, made.id, {
+    account: me,
+    body: `Sorted by the reader as a ${verdict.kind}, ${where}${verdict.reason ? `: ${verdict.reason}` : "."}`,
+    at,
+  });
+  // Unsure is rare, and it must not be missed: the author and the team's owners hear it by push and
+  // by mail, with the one question that would settle it.
+  if (!verdict.sure) {
+    const team = box.team
+      ? await env.DB.prepare("SELECT id FROM team WHERE slug = ?")
+          .bind(box.team)
+          .first<{ id: string }>()
+      : null;
+    const owners = team
+      ? (
+          await env.DB.prepare(
+            "SELECT account_id FROM membership WHERE team_id = ? AND role = 'owner'",
+          )
+            .bind(team.id)
+            .all<{ account_id: string }>()
+        ).results.map((o) => o.account_id)
+      : [];
+    await alertPeople(
+      env,
+      [me, ...owners],
+      {
+        kind: "reader_unsure",
+        guide_id: made.id,
+        actor_id: "",
+        team_id: team?.id || "",
+        note: verdict.question,
+      },
+      "A customer's request needs you",
+      title,
+    );
+  }
 }
 
 /**

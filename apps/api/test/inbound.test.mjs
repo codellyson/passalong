@@ -11,6 +11,7 @@ import {
   fromPosthog,
   hookPrint,
   parseEmail,
+  readerBody,
   readHook,
   refIn,
   supportBody,
@@ -365,4 +366,40 @@ test("a request's place in the Support table comes from what happened to it", ()
   );
   assert.equal(st({ answered: true, lastBy: "team", openWork: 1 }), "with_development");
   assert.equal(st({ done: true, lastBy: "customer", answered: true }), "solved");
+});
+
+test("a request the reader sorted keeps the customer's words, quoted by code", () => {
+  const sorted = {
+    kind: "bug",
+    goal: "",
+    acceptance: [],
+    constraints: [],
+    problem: "The Invoices page renders nothing.",
+    reproduce: ["Open Invoices"],
+    verification: ["Invoices are listed"],
+  };
+  const body = readerBody(sorted, {
+    name: "Sam",
+    at: "2026-10-28T09:00:00Z",
+    text: "White screen on Invoices",
+  });
+  assert.match(section(body, "Problem")?.text ?? "", /renders nothing/);
+  assert.match(
+    body,
+    /```text\nWhite screen on Invoices\n```/,
+    "the message is evidence, as it came",
+  );
+  assert.match(section(body, "Reproduce")?.text ?? "", /1\. Open Invoices/);
+  assert.equal(section(body, "Steps"), null, "a bug never carries Steps");
+  const asked = readerBody(
+    {
+      ...sorted,
+      kind: "task",
+      goal: "Change the billing email.",
+      acceptance: ["The customer has a reply"],
+    },
+    { name: "", at: "x", text: "new email please" },
+  );
+  assert.match(section(asked, "Acceptance")?.text ?? "", /customer has a reply/);
+  assert.match(section(asked, "Constraints")?.text ?? "", /never by an agent/);
 });

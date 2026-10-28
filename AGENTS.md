@@ -371,6 +371,15 @@ change. Its README says how.
   (`reopenForCustomer()`), even when it was archived: the one exception to an archived guide
   coming back to Draft, because a Draft reaches nobody and a waiting customer must not be left
   behind. Their first message is a `customer` thread line too, so the panel starts where they did.
+- **The reader is provider-agnostic, and only fills fields (reader.ts, docs/LOOP.md §1a).** It turns a
+  customer's message into a task or a bug, with title, summary and sections, and routes it to one of
+  the team's groups. It speaks the OpenAI-compatible Chat Completions API, so any provider serving it
+  works: `READER_URL`, `READER_KEY` (a secret) and `READER_MODEL` on the web Worker; without them,
+  intake keeps its fixed rule. Every answer passes `readVerdict()` or is thrown away whole — a kind
+  from the list, a group that exists, lengths capped, each kind's required sections, no contact
+  details — never patched. The customer's own words are quoted into the guide by code, not by the
+  model. Its reason goes on the thread as a note; when it is unsure, the author and team owners get
+  `reader_unsure`, pushed and mailed, with its one question.
 - **A finished child wakes its parent, from one place (docs/LOOP.md step 3).** A middleware after
   every write to `/v1/guides/:id/*` and `/v1/tasks/:id/*` calls `wakeFrom()`: when that guide is now
   Done and its `parent:` is not, the parent gets a `noted` thread line (handed to its holder and next
