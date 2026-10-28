@@ -18,6 +18,11 @@ page it belongs to, and into [decisions.md](decisions.md).
   asking someone to check is a follow-up addressed to them. Open in §9: recordings, what backend proof
   looks like, and who hears about a reopen.
 
+- **The loop** — [docs/LOOP.md](../LOOP.md) (direction recorded 2026-10-28): every customer request
+  closes, from inbox to fix to reply, with Passalong as the rule-keeper rather than a manager agent.
+  Nothing built. First step proposed: stop stalled and untaken work being left behind, and count
+  what drops. Then the customer as a party on a guide, and a parent waking when its child is Done.
+
 ## Known gaps
 
 - **Hold history.** A claim is deleted on approve, release and pass, so Progress cannot show a hold that
@@ -32,3 +37,4 @@ page it belongs to, and into [decisions.md](decisions.md).
 ## Sources
 - [docs/PUBLISH.md](../PUBLISH.md), the PR descriptions for #60–#64
 - [docs/REVIEW.md](../REVIEW.md)
+- [docs/LOOP.md](../LOOP.md)
