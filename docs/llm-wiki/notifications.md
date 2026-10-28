@@ -68,7 +68,10 @@ Settings shows it on its own page, **Integrations**, one source's addresses and 
 **Customer support is a fourth address, `key+support@` (2026-10-28, docs/LOOP.md §4).** Anyone may
 write to it — it is the one exception to "a sender's first email asks" — so it has its own guards:
 blocked senders stay blocked, five new requests per sender and two hundred per account a day, and
-mail from a machine (`Auto-Submitted`, `Precedence`, a list, `no-reply@`) makes nothing. A message
+mail from a machine (`Auto-Submitted`, `Precedence`, a list, `no-reply@`) makes nothing. Up to
+five files on a customer's message are kept, claimed by the request (`keepCustomerFiles()`): pictures
+as screenshots drawn in the conversation, other files as attachments typed by their bytes; a support
+message may be up to 15 MB where other mail in is capped at 1 MB. A message
 becomes a **task** (`supportBody()`), Ready, whose document names the customer only by their display
 name; their address, name and tracking number (`R-XXXXXX`, `ref`) are columns (migration 0057), so a
 share link or an agent never carries them. They are answered at once with the tracking number,

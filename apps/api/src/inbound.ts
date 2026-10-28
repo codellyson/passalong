@@ -198,7 +198,12 @@ export interface Received {
   text: string;
   /** Sent by a machine — an auto-reply, a bounce, a mailing list — rather than a person. */
   automated: boolean;
+  /** Files on the message, as they came. What is kept of them is decided where they are stored. */
+  files: { name: string; type: string; bytes: Uint8Array }[];
 }
+
+/** The most files one customer message keeps; a reply to a person, not a folder. */
+export const MAIL_FILES_MAX = 5;
 
 /**
  * Mail no person wrote: RFC 3834's Auto-Submitted, the older Precedence, a list, a bounce. Answering
@@ -234,6 +239,14 @@ export async function parseEmail(
     subject: cleanSubject(email.subject || ""),
     text: bodyText(email),
     automated: automated(sender, email.headers ?? []),
+    files: (email.attachments ?? []).slice(0, MAIL_FILES_MAX).map((a) => ({
+      name: cleanSubject(a.filename || "").slice(0, 120),
+      type: String(a.mimeType || "").toLowerCase(),
+      bytes:
+        typeof a.content === "string"
+          ? new TextEncoder().encode(a.content)
+          : new Uint8Array(a.content as ArrayBuffer),
+    })),
   };
 }
 

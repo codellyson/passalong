@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts">
 import type { ThreadItem } from "~/types/hub";
+import { messageOf } from "~/utils/thread";
 
 const props = defineProps<{
   guideId: string;
@@ -15,7 +16,7 @@ const props = defineProps<{
   finished?: { id: string; title: string; at: string }[];
 }>();
 const emit = defineEmits<{ sent: [] }>();
-const { api, json } = useHub();
+const { api, json, token } = useHub();
 const busy = ref(false);
 const problem = ref("");
 const done = ref(false);
@@ -29,6 +30,18 @@ async function load() {
   loaded.value = true;
 }
 onMounted(() => load().catch((e) => (problem.value = (e as Error).message)));
+
+/** Each line with its pictures and files picked out, the way the thread reads every message. */
+const lines = computed(() => said.value.map((m) => ({ m, msg: messageOf(m) })));
+
+async function save(f: { name: string; url: string }) {
+  problem.value = "";
+  try {
+    await downloadFile(f, token.value);
+  } catch (e) {
+    problem.value = e instanceof Error ? e.message : "That file didn't download. Try again.";
+  }
+}
 
 const ready = computed(() => {
   const answered = said.value
@@ -64,7 +77,7 @@ async function send(e: Event) {
     <p v-else-if="!said.length" class="m-0 font-ui text-sm text-muted">Nothing has been said yet.</p>
     <ol v-else class="m-0 flex list-none flex-col gap-4 p-0">
       <li
-        v-for="m in said"
+        v-for="{ m, msg } in lines"
         :key="m.id"
         class="flex max-w-[36rem] flex-col gap-1"
         :class="m.kind === 'answered' ? 'self-end items-end' : 'self-start'"
@@ -72,10 +85,27 @@ async function send(e: Event) {
         <span class="px-1 font-ui text-xs text-muted">
           {{ m.kind === "customer" ? name : m.by.you ? "You" : m.by.name || "Your team" }} · {{ rel(m.at) }}
         </span>
-        <p
-          class="m-0 rounded-3 px-4 py-3 font-ui text-sm whitespace-pre-wrap"
+        <div
+          v-if="msg.text"
+          class="rounded-3 px-4 py-3 font-ui text-sm whitespace-pre-wrap"
           :class="m.kind === 'answered' ? 'bg-ink text-on-ink' : 'bg-field shadow-edge'"
-        >{{ m.body }}</p>
+        >
+          <!-- Their screenshots are drawn, through the renderer that only fetches our own. -->
+          <HubEvidence v-if="msg.pictures" :text="msg.text" prose label="A message with pictures" class="!mt-0" />
+          <template v-else>{{ msg.text }}</template>
+        </div>
+        <ul v-if="msg.files.length" class="m-0 flex list-none flex-wrap gap-2 p-0">
+          <li v-for="f in msg.files" :key="f.url">
+            <button
+              type="button"
+              class="inline-flex max-w-56 items-center gap-2 rounded-1 border-0 bg-raised px-3 py-2 font-ui text-xs text-fg shadow-edge hover:text-accent"
+              @click="save(f)"
+            >
+              <span class="truncate">{{ f.name }}</span>
+              <span class="shrink-0 text-muted">download</span>
+            </button>
+          </li>
+        </ul>
       </li>
     </ol>
 

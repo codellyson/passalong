@@ -20,6 +20,7 @@ import {
   closeGuide,
   complete,
   customerEvent,
+  DAY_MS,
   DRAFT_NUDGE_MS,
   deliver,
   dropOutside,
@@ -849,7 +850,7 @@ test("a guide left in Draft a day is returned once, in the run it crosses", asyn
   );
 });
 
-test("a sent guide nothing happened to is found once by the clock; one in play is not", async () => {
+test("a sent guide nothing happened to is found each day by the clock; one in play is not", async () => {
   // It stays Ready and a person is told. It used to go back to Draft, where it reached nobody.
   const db = d1();
   const guide = seed(db);
@@ -885,9 +886,8 @@ test("a sent guide nothing happened to is found once by the clock; one in play i
     .prepare("INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES (?, ?, 1, '', ?)")
     .run("judged", "other", T0);
 
-  const cutoff = new Date(Date.parse(T0) - UNTAKEN_MS).toISOString();
-  const since = new Date(Date.parse(cutoff) - 90 * 60 * 1000).toISOString();
-  const left = await untaken(db, cutoff, since);
+  const HOUR = 60 * 60 * 1000;
+  const left = await untaken(db, T0, HOUR);
   assert.deepEqual(
     left.map((g) => g.id).sort(),
     ["untouched"],
@@ -896,10 +896,15 @@ test("a sent guide nothing happened to is found once by the clock; one in play i
   assert.equal(left[0].to, "other", "and it knows who it was for");
   assert.equal(left[0].title, "task untouched", "and what it is called, for the mail");
 
-  // Once: a later run's window has moved past it, so nobody is told twice.
-  const nextDay = new Date(Date.parse(cutoff) + 24 * 3600 * 1000).toISOString();
-  const nextSince = new Date(Date.parse(nextDay) - 90 * 60 * 1000).toISOString();
-  assert.deepEqual(await untaken(db, nextDay, nextSince), [], "announced in one run only");
+  // Again the next day at the same hour, and not in between: a daily reminder, not an hourly one.
+  const day = (n, extra = 0) => new Date(Date.parse(T0) + n * DAY_MS + extra).toISOString();
+  assert.deepEqual(
+    (await untaken(db, day(1), HOUR)).map((g) => g.id),
+    ["untouched"],
+    "next day",
+  );
+  assert.deepEqual(await untaken(db, day(0, 2 * HOUR), HOUR), [], "not two hours later");
+  assert.deepEqual(await untaken(db, day(5), HOUR), await untaken(db, day(1), HOUR), "every day");
   const status = db.raw.prepare("SELECT status FROM guide WHERE id = 'untouched'").get();
   assert.equal(status.status, "published", "and it is still Ready, not shelved");
 });

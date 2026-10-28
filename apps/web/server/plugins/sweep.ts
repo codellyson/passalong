@@ -17,7 +17,6 @@ import {
   requeueStalled,
   staleDrafts,
   stalled,
-  UNTAKEN_MS,
   untaken,
 } from "#api/claims";
 import { notify } from "#api/notify";
@@ -172,13 +171,12 @@ export default defineNitroPlugin((nitro) => {
     /**
      * Guides sent to somebody that nothing ever happened to. They stay Ready — they used to go back
      * to Draft after a fortnight, where they reached nobody — and the people who can move them are
-     * told once, by mail: the author and the team's owners. Each guide crosses UNTAKEN_MS in one run.
+     * told every day until someone acts: the author and the team's owners (mailed the first time).
      */
     try {
-      const now = Date.now();
-      const before = new Date(now - UNTAKEN_MS).toISOString();
-      const since = new Date(now - UNTAKEN_MS - STALL_WINDOW_MS).toISOString();
-      const left = await untaken(env.DB as D1Database, before, since);
+      // Exactly the gap between ticks: a wider window would remind twice some days, and a reminder
+      // that repeats daily can afford to miss the day a deploy ate.
+      const left = await untaken(env.DB as D1Database, new Date().toISOString(), 60 * 60 * 1000);
       for (const g of left) {
         const { results: owners } = g.team_id
           ? await (env.DB as D1Database)

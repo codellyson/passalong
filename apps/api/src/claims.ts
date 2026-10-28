@@ -2596,30 +2596,37 @@ export async function requeueStalled(
  * says must never happen. Now a person hears instead — its author and the team's owners, once —
  * and decides: give it to someone else, take it, or archive it.
  *
- * `since` makes it an announcement rather than a nag, as in `stalled`: each guide crosses UNTAKEN_MS
- * in exactly one run. Pass a window wider than the gap between runs.
+ * It repeats every day until someone acts (the author's call, docs/LOOP.md §1a): a guide is returned
+ * in the one run each day that its age crosses UNTAKEN_MS plus a whole number of days. `window` is
+ * that run's width; pass one wider than the gap between runs, as `stalled` does. The feed and the
+ * phone hear it each day; the mail goes once, because a row coalesces and mail is only its first.
  */
 export const UNTAKEN_MS = 3 * 24 * 60 * 60 * 1000;
 
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
 export async function untaken(
   db: D1Database,
-  before: string,
-  since: string,
+  at: string,
+  window: number,
 ): Promise<{ id: string; account_id: string; title: string; team_id: string; to: string }[]> {
+  const now = Date.parse(at);
+  const before = new Date(now - UNTAKEN_MS).toISOString();
   const { results } = await db
     .prepare(
-      `SELECT g.id, g.account_id, g.title, g.team_id, g.to_account_id AS to_id, g.to_group_id
+      `SELECT g.id, g.account_id, g.title, g.team_id, g.to_account_id AS to_id, g.to_group_id,
+              g.updated
          FROM guide g
-        WHERE g.kind <> 'task' AND g.status = 'published' AND g.updated <= ?1 AND g.updated > ?2
+        WHERE g.kind <> 'task' AND g.status = 'published' AND g.updated <= ?1
           AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
           AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
           AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
           AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
           AND NOT EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id)
         ORDER BY g.updated ASC
-        LIMIT 100`,
+        LIMIT 500`,
     )
-    .bind(before, since)
+    .bind(before)
     .all<{
       id: string;
       account_id: string;
@@ -2627,14 +2634,19 @@ export async function untaken(
       team_id: string;
       to_id: string;
       to_group_id: string;
+      updated: string;
     }>();
-  return results.map((r) => ({
-    id: r.id,
-    account_id: r.account_id,
-    title: r.title,
-    team_id: r.team_id,
-    to: r.to_id,
-  }));
+  // The run, each day, in which this guide's age crossed the threshold plus whole days.
+  const due = (updated: string) => (now - Date.parse(updated) - UNTAKEN_MS) % DAY_MS < window;
+  return results
+    .filter((r) => due(r.updated))
+    .map((r) => ({
+      id: r.id,
+      account_id: r.account_id,
+      title: r.title,
+      team_id: r.team_id,
+      to: r.to_id,
+    }));
 }
 
 /**

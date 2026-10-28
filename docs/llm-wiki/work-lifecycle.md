@@ -64,7 +64,7 @@ Work is not done because whoever did it says so.
 - **Done says how it got there** (`outcome`, migration 0054): **Finished** with proof, **Approved**
   from before finishing was final, **Archived** when its author or an admin shelved it. Done cards say
   which. A Ready guide nobody took stays Ready; after three days its author and the team's owners are
-  mailed once (`untaken`). It used to go back to Draft after 14 days, where it reached nobody.
+  told every day until someone acts (`untaken`; mailed the first time). It used to go back to Draft after 14 days, where it reached nobody.
 - **A finished child wakes its parent** (2026-10-28): when a guide made from another reaches Done,
   the parent gets a note on its thread — handed to whoever holds it or takes it next — and its author
   and holders are told (`child_done`). It wakes the parent and never closes it (docs/LOOP.md step 3).

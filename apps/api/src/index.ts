@@ -5687,8 +5687,9 @@ export async function receiveEmail(
 ): Promise<void> {
   try {
     const to = addressOf(message.to, inboundDomain(env));
-    // shortcut: a message over 1 MB is dropped unread; alerts and notes are small, raise it if not.
-    if (!to || message.rawSize > 1024 * 1024) return;
+    // Alerts and notes are small; a customer's message may carry their screenshots, so it gets more.
+    const cap = to?.kind === SUPPORT ? 15 * 1024 * 1024 : 1024 * 1024;
+    if (!to || message.rawSize > cap) return;
     const box = await env.DB.prepare(
       `SELECT i.account_id, a.email, a.email_verified FROM inbound i
          JOIN account a ON a.id = i.account_id WHERE i.key = ?`,
@@ -5782,9 +5783,12 @@ async function receiveSupport(
       // Finished or archived, it is not done any more: the customer is waiting again.
       if (g.status === "consumed")
         await claims.reopenForCustomer(env.DB, g.id, { account: me, at });
+      const kept = await keepCustomerFiles(env, me, g.id, mail.files);
       await claims.customerEvent(env.DB, g.id, "customer", {
         account: me,
-        body: (mail.text || "(it had no text)").slice(0, 4000),
+        body: [(mail.text || (kept.length ? "" : "(it had no text)")).slice(0, 4000), ...kept]
+          .filter(Boolean)
+          .join("\n"),
         at,
       });
       await notify(env, {
@@ -5846,9 +5850,12 @@ async function receiveSupport(
   }
   // The first message is the conversation's first line too, so the Customer panel and an agent's
   // thread start where the customer did; the document quotes it as evidence for the work.
+  const kept = await keepCustomerFiles(env, me, made.id, mail.files);
   await claims.customerEvent(env.DB, made.id, "customer", {
     account: me,
-    body: (mail.text || "(it had no text)").slice(0, 4000),
+    body: [(mail.text || (kept.length ? "" : "(it had no text)")).slice(0, 4000), ...kept]
+      .filter(Boolean)
+      .join("\n"),
     at,
   });
   const from = await supportFrom(env, me, box.team);
@@ -5865,6 +5872,54 @@ async function receiveSupport(
     actor_id: "",
     note: "a customer's request that is ready to pick up",
   });
+}
+
+/**
+ * Keep the files a customer sent, claimed by their request at once (docs/LOOP.md §1a: evidence is
+ * never dropped). A picture is a screenshot, drawn in the conversation; anything else is an
+ * attachment, only ever downloaded, its type decided by its bytes as every upload's is. A file this
+ * product would refuse from a person is refused here too, and said so in the line rather than
+ * silently lost. Returns the markdown lines the customer's message carries, the way a reply does,
+ * which is also what keeps the sweeps away from them (`conversationOn`).
+ */
+async function keepCustomerFiles(
+  env: Env,
+  account: string,
+  guide: string,
+  files: { name: string; type: string; bytes: Uint8Array }[],
+): Promise<string[]> {
+  const bucket = env.SHOTS;
+  if (!bucket || !files.length) return [];
+  const base = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
+  const lines: string[] = [];
+  for (const f of files) {
+    const body = f.bytes.slice().buffer as ArrayBuffer;
+    const id = rid(12);
+    if (SHOT_TYPES[f.type] && body.byteLength <= SHOT_MAX) {
+      await bucket.put(shotKey(id, f.type), body, { httpMetadata: { contentType: f.type } });
+      await env.DB.prepare(
+        "INSERT INTO shot (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+        .bind(id, account, guide, f.name, f.type, body.byteLength, now())
+        .run();
+      lines.push(`![${f.name.replace(/[\][()]/g, "") || "screenshot"}](${base}/v1/shots/${id})`);
+      continue;
+    }
+    const type = body.byteLength <= ATTACH_MAX ? sniffAttachment(f.bytes, f.type, f.name) : null;
+    if (!type) {
+      lines.push(`(${f.name || "a file"} was not kept: that kind or size of file isn't stored)`);
+      continue;
+    }
+    const name = safeName(f.name, type);
+    await bucket.put(attachmentKey(id, type), body, { httpMetadata: { contentType: type } });
+    await env.DB.prepare(
+      "INSERT INTO attachment (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+      .bind(id, account, guide, name, type, body.byteLength, now())
+      .run();
+    lines.push(`[${name.replace(/[\][()]/g, "")}](${base}/v1/attachments/${id})`);
+  }
+  return lines;
 }
 
 /** Where a customer's reply goes: the same support address, so it comes back through receiveSupport. */

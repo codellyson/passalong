@@ -314,7 +314,8 @@ change. Its README says how.
   author's mark-done) or `archived` (the status route, closing with nothing handed in), and is
   cleared when it leaves Done. **Ready work nobody took stays Ready, and a person is told**
   (2026-10-28, docs/LOOP.md): after `UNTAKEN_MS` (three days) the author and the team's owners are
-  mailed once (`untaken()`, kind `untaken`). It used to go back to Draft after a fortnight, and a
+  reminded every day until someone acts (`untaken()`, kind `untaken`; mailed the first time, feed and
+  push each day after). It used to go back to Draft after a fortnight, and a
   draft reaches nobody — the product shelving work itself. Tasks are not counted: a task for nobody
   in particular is a backlog. **Not for me** is `pass` on work you do
   not hold, for any kind: the sender is told why.

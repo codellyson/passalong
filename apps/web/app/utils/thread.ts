@@ -70,29 +70,22 @@ const said = (lead: string, body: string) => (body ? `${lead}: ${body}` : lead);
 
 export function messageOf(i: ThreadItem): Message {
   const { by } = i;
-  const who = by.agent
-    ? "Agent"
-    : by.you
-      ? "You"
-      : by.name.trim() || (by.handle ? `@${by.handle}` : "Someone");
+  const who =
+    i.kind === "customer"
+      ? "Customer"
+      : by.agent
+        ? "Agent"
+        : by.you
+          ? "You"
+          : by.name.trim() || (by.handle ? `@${by.handle}` : "Someone");
   let text = i.body;
   let quiet = false;
   let tone: Message["tone"] = "neutral";
   switch (i.kind) {
     case "customer":
-      // Stored under the guide's author because the customer has no account; it is their words.
-      return {
-        id: i.id,
-        at: i.at,
-        who: "Customer",
-        where: "",
-        mine: false,
-        text: i.body,
-        quiet: false,
-        pictures: false,
-        files: [],
-        tone: "neutral",
-      };
+      // Stored under the guide's author because the customer has no account; it is their words,
+      // and the files they sent are drawn and offered the way anyone's are.
+      break;
     case "answered":
       text = said("To the customer", i.body);
       break;
@@ -163,7 +156,7 @@ export function messageOf(i: ThreadItem): Message {
     at: i.at,
     who,
     where: by.agent ? by.host : "",
-    mine: by.you && !by.agent,
+    mine: i.kind !== "customer" && by.you && !by.agent,
     text,
     files,
     pictures: SHOT.test(text),

@@ -31,7 +31,8 @@ what is lost is customers. Decided:
 - **The agent routes each message to the team that should act** — developers, marketing, and so on
   — not only "question or bug". Routing is to a team's column; a person can move it.
 - **Evidence a customer sends is never dropped.** Screenshots and attachments on an email reach the
-  request. (Email in keeps only the text today: a gap to close first.)
+  request. *Built 2026-10-28:* up to five files per message are kept on the request — pictures drawn
+  in the conversation, other files offered as downloads — and a file that cannot be kept is named.
 - "Tell the customer" when a fix lands is **opt-in** per team, not always on.
 - The reply screen is **redesigned**, not patched. A "who is waiting on us" view, the agent drafting
   replies a person sends, and the team lead ping are agreed as planned.
@@ -47,7 +48,8 @@ what is lost is customers. Decided:
   feed.
 
 **Problem 3 — work handed to agents stops and nobody notices.** Decided:
-- Untaken work reminds people **every day until someone acts**, not once.
+- Untaken work reminds people **every day until someone acts**, not once. *Built 2026-10-28:* the
+  feed and the phone hear it daily; the email goes the first time only.
 - The hosted runner takes **only work guaranteed to need no person**: a task carries a mark saying
   it is safe to run alone, and the runner skips everything else.
 - Open: where the runner runs (a teammate's machine, a cloud sandbox, Passalong itself).
