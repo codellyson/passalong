@@ -1,0 +1,275 @@
+---
+name: Passalong hub
+description: The signed-in hub, drawn as a register of what moved and who must act, on cream with an ink rail.
+colors:
+  cream-ground: "#fffcfa"
+  deeper-cream: "#f7f2ed"
+  recessed-cream: "#f2ebe3"
+  field-white: "#fffefe"
+  ink: "#252522"
+  muted-ink: "#6e6c68"
+  hairline: "#efe6dc"
+  rule: "#e0d4c7"
+  coral: "#f2805d"
+  coral-text: "#b8481f"
+  rail-ink: "#252522"
+  on-rail: "#f4efe9"
+  on-rail-muted: "#aaa59d"
+  project-amber: "#b07a12"
+  project-green: "#3f7d52"
+  project-blue: "#3e6fa6"
+  project-violet: "#7a5bb0"
+  project-teal: "#2f8582"
+  project-stone: "#7b6e5f"
+  ok: "#3a7a2a"
+  warn: "#86750f"
+  danger: "#b8322a"
+  danger-soft: "#fbe3de"
+typography:
+  headline:
+    fontFamily: "Onest, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "1.5rem"
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: "-0.025em"
+  title:
+    fontFamily: "Onest, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1.125rem"
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: "-0.015em"
+  row-title:
+    fontFamily: "Onest, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 500
+    lineHeight: 1.25rem
+  body:
+    fontFamily: "Onest, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 400
+    lineHeight: 1.25rem
+  meta:
+    fontFamily: "Onest, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.8125rem"
+    fontWeight: 400
+    fontFeature: "tnum"
+  label:
+    fontFamily: "Onest, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.6875rem"
+    fontWeight: 500
+    letterSpacing: "0.05em"
+  code:
+    fontFamily: "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace"
+    fontSize: "0.8125rem"
+    fontWeight: 500
+rounded:
+  mark: "1px"
+  r-1: "2px"
+  r-2: "3px"
+  r-3: "4px"
+  dot: "999px"
+spacing:
+  s-1: "4px"
+  s-2: "8px"
+  s-3: "12px"
+  s-4: "16px"
+  s-5: "24px"
+  s-6: "32px"
+  s-7: "48px"
+  s-8: "64px"
+  s-9: "96px"
+components:
+  button:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.r-3}"
+    height: "40px"
+    padding: "0 20px"
+  button-hover:
+    backgroundColor: "{colors.recessed-cream}"
+  button-sm:
+    textColor: "{colors.ink}"
+    rounded: "{rounded.r-3}"
+    height: "32px"
+    padding: "0 14px"
+  button-primary:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.cream-ground}"
+    rounded: "{rounded.r-3}"
+    height: "40px"
+    padding: "0 20px"
+  button-rail-new:
+    backgroundColor: "{colors.on-rail}"
+    textColor: "{colors.rail-ink}"
+    rounded: "{rounded.r-3}"
+    height: "40px"
+  input:
+    backgroundColor: "{colors.field-white}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.r-2}"
+    height: "40px"
+  rail:
+    backgroundColor: "{colors.rail-ink}"
+    textColor: "{colors.on-rail}"
+    width: "240px"
+    padding: "16px 12px 12px"
+  rail-item:
+    textColor: "{colors.on-rail-muted}"
+    typography: "{typography.body}"
+    rounded: "{rounded.r-1}"
+    height: "32px"
+    padding: "4px 12px"
+  register-row:
+    textColor: "{colors.ink}"
+    typography: "{typography.row-title}"
+    padding: "12px 0 12px 16px"
+  panel:
+    backgroundColor: "{colors.deeper-cream}"
+    rounded: "{rounded.r-3}"
+    padding: "12px 16px 4px"
+  project-mark:
+    backgroundColor: "{colors.project-blue}"
+    rounded: "{rounded.mark}"
+    width: "3px"
+    height: "14px"
+  change-mark:
+    backgroundColor: "{colors.coral}"
+    width: "3px"
+---
+
+# Design System: Passalong hub
+
+## Overview
+
+**Creative North Star: "The Drawing Set"**
+
+The hub is a register of what moved and who must act. It keeps Passalong's cream ground, ink and coral, and draws them with a drawing set's discipline: a solid ink rail down the left, one-pixel rules where other products put soft cards, corners of two to four pixels, a grotesque for every piece of chrome, and figures that line up in columns. Hierarchy comes from an ink rule over a list and a deeper cream behind a panel, never from shadow or fill colour.
+
+Coral means one thing here: changed since you last looked. It is a 3px bar at a row's left edge with a label naming what changed, and a dot beside a project on the rail, and it stays until the work is opened. Each project owns a line colour from a fixed set of six, shown as a short vertical mark wherever the project is named, so a project reads the same in the rail, in a register row and in a side panel.
+
+This world covers every signed-in screen under `/hub`: `.hub-app` on `<body>` restates the root tokens. The landing, the blog and the share pages keep the root tokens (24px cards, pill buttons, the serif as an editorial accent) and are not part of this system.
+
+**Key Characteristics:**
+- Solid ink rail, 240px, in both themes; light-on-dark project marks on it.
+- Registers, not cards: rows divided by hairlines under an ink rule, with column labels once at the top.
+- Square-ish geometry (2, 3, 4px); nothing round but a dot.
+- Onest for everything, JetBrains Mono for machine strings, no serif.
+- Coral reserved for unseen change; six project line colours, none near coral.
+- Tabular figures wherever a count or an age stands in a column.
+
+## Colors
+
+Warm cream and ink carry the whole interface; coral and the six project lines are marks, never fills of text blocks or buttons. Every colour except coral is a `light-dark()` pair; the frontmatter holds the light half and the sidecar holds the pair.
+
+### Primary
+- **Ink** (`ink`): text, the primary button's fill, the rule over a register or a panel heading. The highest-contrast thing on the page is the one to press.
+- **Change Coral** (`coral`): the change mark (3px bar), the rail's unseen-change dot, the brand mark. At 2.6:1 on cream it is never used as text.
+- **Coral Text** (`coral-text`): the same hue at a readable 5:1, for the "Changed · …" label beside a row's title.
+
+### Secondary
+- **Project line colours** (`project-amber`, `project-green`, `project-blue`, `project-violet`, `project-teal`, `project-stone`): one per project, shown as a 3×14px mark. A folder with its own colour keeps it; otherwise one is picked from its id, the same every time. On the rail they take their dark-theme halves, because they sit on ink in both themes.
+
+### Neutral
+- **Cream Ground** (`cream-ground`): the page.
+- **Deeper Cream** (`deeper-cream`): side panels (Closed by the agent, Waiting on customers), so the ground has something against it.
+- **Recessed Cream** (`recessed-cream`): a button's hover fill, code wells, tags.
+- **Field White** (`field-white`): inputs and menus, the one near-white surface.
+- **Muted Ink** (`muted-ink`): second lines, column labels, meta.
+- **Hairline** (`hairline`): the rule between register rows and panel rows.
+- **Rule** (`rule`): a panel's or a button's 1px edge.
+- **Rail Ink / On Rail / On Rail Muted** (`rail-ink`, `on-rail`, `on-rail-muted`): the sidebar. Current and hover rows are white at 11% and 6% over the rail; its foot is divided by white at 10%.
+- **Status** (`ok`, `warn`, `danger`, `danger-soft`): meaning only. A load failure is a danger-bordered danger-soft callout; a standing notice is a warn dot on a hairline row.
+
+### Named Rules
+**The One Meaning Rule.** Coral in the hub says "changed since you last looked" and nothing else. It appears as the left-edge bar, the "Changed" label and the rail dot, and it clears when the work is opened or marked seen.
+
+**The Line Colour Rule.** A project's colour is one of six and never coral or near it; a folder someone coloured coral is drawn stone.
+
+## Typography
+
+**Display Font:** none in the hub.
+**Body Font:** Onest (with ui-sans-serif, system-ui)
+**Label/Mono Font:** JetBrains Mono, for ids, tags and commands
+
+**Character:** One soft grotesque at low weights carries every heading, label and row; the mono marks what a machine wrote. The hub maps `--font-serif` to the sans, so nothing in the app falls back into Newsreader.
+
+### Hierarchy
+- **Headline** (500, 1.5rem, 1.3): a page's heading ("Needs you"), with a one-line muted summary under it.
+- **Title** (500, 1.125rem, 1.4): an empty state's statement ("Nothing needs you.").
+- **Row title** (500, 0.875rem): a register row's link; a panel heading is the same size at 550.
+- **Body** (400, 0.875rem, 1.25rem): rail items, summaries, quoted customer words.
+- **Meta** (400, 0.8125rem, tabular figures): ages, counts, "by agent-dev1", "Changed · …".
+- **Label** (500, 0.6875rem, 0.05em, uppercase): column headers over a register and the rail's Projects group. Labels name a column or a group; they never sit above a heading as a kicker.
+
+### Named Rules
+**The Tabular Column Rule.** A count or an age that stands in a column (12m, 5h, 3d, 6w) takes `tabular-nums`; prose keeps proportional figures.
+
+**The No Serif Rule.** No serif anywhere in the app chrome. Weight stays at or below 550.
+
+## Layout
+
+A two-column shell: the 240px ink rail is sticky and full height from 768px up; below that it is a drawer over the page behind a 56px top bar holding the menu, the mark and New. The page's measure depends on what it holds: Needs you reads at 78rem, project, guide, support and settings pages at 70rem, the board takes the full width, everything else 54rem.
+
+Needs you is a register beside a side column (18rem from 1280px up). The register becomes a five-column grid when its own container passes 42rem: work, project (8.5rem), with (8rem), waiting (3.5rem, right-aligned), action (4.75rem). Below that each row wraps into a title, its second line, and a single muted fact line separated by middots.
+
+Spacing is the 4px scale and the relationship picks the step: 8px between a label and its control, 12px between rows, 16px between blocks, 32px between sections, 12px of vertical padding inside a register row with 16px on its left for the change mark.
+
+## Elevation & Depth
+
+The hub is flat. A raised surface's edge is a one-pixel ring in the stronger rule colour, and side panels are a deeper cream with a 1px hairline border. The only shadow is the lift under a floating menu, because it sits over the page.
+
+### Shadow Vocabulary
+- **Edge** (`box-shadow: 0 0 0 1px var(--line-strong)`; hover `#cbbcab` light, `#57524b` dark): the edge of a card-like surface.
+- **Menu lift** (`box-shadow: 0 0 0 1px var(--edge-ring), 0 6px 24px rgb(0 0 0 / 0.05)`): menus and popovers only.
+
+### Named Rules
+**The Hairline Rule.** Structure is drawn with 1px rules: ink over a register or under a panel's heading, hairline between rows. No in-page surface carries a soft shadow.
+
+## Shapes
+
+Square-ish throughout: 2px for a rail item or a small control, 3px for a field or a callout, 4px for a panel and every button (the hub redefines the pill radius as 4px, so no control is a pill). The project mark is a 3×14px bar at 1px. The only round shapes are dots: the coral change dot and a status dot.
+
+## Components
+
+### Buttons
+Precise and quiet; the shape says "control" by its edge, not its roundness.
+- **Shape:** 4px corners.
+- **Default (ghost):** transparent with a 1px rule edge, ink text, 40px tall with 20px sides; `sm` is 32px with 14px sides and is the size inside a row.
+- **Primary:** ink fill, cream text; one per view. Hover drops to 90% opacity, press to 80%.
+- **Rail New:** the primary inverted on the rail: on-rail fill, rail-ink text.
+- **States:** every button presses to `scale(0.96)` over 0.15s; outline danger for a retry inside a danger callout.
+
+### Inputs / Fields
+- **Style:** field-white fill, 1px rule border, 3px corners, 40px tall (32px inside a row's inline form).
+- **Focus:** inherited from the root stylesheet and not yet redrawn for this world; it is not a rule of this system.
+
+### Navigation
+The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px; the current one is on-rail text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
+
+### Register row
+The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in coral text, a second muted line (a state such as "Went quiet" in ink, then the customer's own words in quotes), the project with its mark (or "Not sorted yet" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
+
+### Change mark
+A 3px coral bar the full height of a row at its left edge, with the "Changed" label in coral text beside the title. Used in the register and in side-panel rows; persists until the row is opened.
+
+### Side panel
+Deeper cream, 4px corners, 1px hairline border, 12px 16px padding; a 14px heading at 550 over an ink rule; rows divided by hairlines, the last without one. Each closed item carries its age and a small Reopen that opens an inline reason field.
+
+## Do's and Don'ts
+
+### Do:
+- **Do** reserve coral for change since you last looked: the 3px left-edge bar, the "Changed · …" label, the rail dot.
+- **Do** show a project by its 3×14px line mark in one of the six tones, wherever it is named.
+- **Do** draw structure with 1px rules: ink over a list's head, hairline between rows.
+- **Do** keep corners at 2, 3 or 4px; only dots are round.
+- **Do** set ages and counts in a column with tabular figures, in the one unit that reads at a glance (12m, 5h, 3d, 6w).
+- **Do** give a row one verb, at `sm` size, in its last column.
+
+### Don't:
+- **Don't** use coral for a project, a selected state, a primary button or an emphasis.
+- **Don't** give an in-page surface a soft shadow; only floating menus lift.
+- **Don't** use pill shapes or 24px card corners in the hub; those belong to the landing and share pages.
+- **Don't** set any hub text in the serif, or a heading above 550.
+- **Don't** put an uppercase label above a heading as a kicker; uppercase labels head columns and groups only.
+- **Don't** build a page of counter tiles; the count lives in the heading's summary line and beside the rail item.

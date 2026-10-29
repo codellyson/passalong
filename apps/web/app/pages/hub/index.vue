@@ -180,7 +180,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             <li
               v-for="r in rows"
               :key="r.id"
-              class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid"
+              class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline"
               :class="cols"
             >
               <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
@@ -198,17 +198,17 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
               <NuxtLink :to="href(r)" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">
                 {{ VERB[r.reason] }}
               </NuxtLink>
-              <span class="order-2 flex min-w-0 items-center gap-2 font-ui text-xs @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:pt-0.5 @2xl:text-sm">
+              <span class="order-2 flex min-w-0 items-baseline gap-2 font-ui text-xs @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:text-sm">
                 <template v-if="r.project">
-                  <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
+                  <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
                   <span class="min-w-0 break-words">{{ r.project.title }}</span>
                 </template>
                 <span v-else class="text-muted">Not sorted yet</span>
               </span>
-              <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:pt-0.5 @2xl:text-sm @2xl:text-fg">
+              <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">
                 <span class="@2xl:hidden" aria-hidden="true">· </span>{{ r.with || "Nobody" }}
               </span>
-              <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:pt-0.5 @2xl:text-right @2xl:text-sm @2xl:text-fg">
+              <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
                 <span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(r.since, now) }}
               </span>
             </li>
