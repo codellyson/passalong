@@ -363,8 +363,11 @@ change. Its README says how.
   mail from anyone and makes a task (`receiveSupport()` in index.ts); who wrote it — address, name,
   and the tracking number `ref` they were sent — is stored on the guide row, because a field in the
   document would travel with every share link and every agent. The tracking number is its own value,
-  not the guide id, and a reply joins a request only with the number **and** the address that opened
-  it. Mail to a customer goes out only from `POST /v1/guides/:id/customer`, which has no CLI command
+  not the guide id, and a reply joins a request only from the address that opened it, **and** with
+  the number in its subject or a Message-ID of theirs in its References. Mail to a customer answers
+  the subject they wrote under (`customerSubject()`, number at the end) and names their messages in
+  `In-Reply-To`/`References` (`customer_subject`, `customer_mids`, migration 0060), so it is one
+  conversation in their inbox. Mail to a customer goes out only from `POST /v1/guides/:id/customer`, which has no CLI command
   or MCP tool and refuses the remote MCP server: nothing reaches a customer until a person presses
   Send. It is the deliberate exception to every answer existing in all three places.
   A customer writing again on a request that is Done puts it straight back in Ready

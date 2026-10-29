@@ -169,7 +169,9 @@ import {
   SUPPORT_PER_SENDER,
   supportBody,
   supportState,
+  threadHeaders,
   titleOf,
+  withMid,
   withoutRef,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
@@ -420,6 +422,9 @@ interface GuideRow {
   customer?: string;
   customer_name?: string;
   ref?: string;
+  /** The subject they wrote under and their Message-IDs, for one conversation (0060). */
+  customer_subject?: string;
+  customer_mids?: string;
 }
 interface ReportRow {
   id: string;
@@ -5787,34 +5792,50 @@ async function receiveSupport(
     .first();
   if (blocked) return;
 
+  // A message joins the request it answers: by the tracking number in its subject, or by naming a
+  // message of theirs we kept (their mail client's References) — always from the address that
+  // opened it. Either alone from anyone else opens a new request.
   const ref = refIn(mail.subject);
-  if (ref) {
-    const g = await env.DB.prepare(
-      "SELECT id, status, team_id FROM guide WHERE ref = ? AND account_id = ? AND customer = ?",
+  type Joined = { id: string; status: string; team_id: string; customer_mids: string };
+  let g: Joined | null = ref
+    ? await env.DB.prepare(
+        "SELECT id, status, team_id, customer_mids FROM guide WHERE ref = ? AND account_id = ? AND customer = ?",
+      )
+        .bind(ref, me, mail.sender)
+        .first<Joined>()
+    : null;
+  for (const m of [...mail.refs].reverse()) {
+    if (g) break;
+    g = await env.DB.prepare(
+      `SELECT id, status, team_id, customer_mids FROM guide
+        WHERE account_id = ? AND customer = ? AND instr(customer_mids, ?) > 0
+        ORDER BY created DESC LIMIT 1`,
     )
-      .bind(ref, me, mail.sender)
-      .first<{ id: string; status: string; team_id: string }>();
-    if (g) {
-      // Finished or archived, it is not done any more: the customer is waiting again.
-      if (g.status === "consumed")
-        await claims.reopenForCustomer(env.DB, g.id, { account: me, at });
-      const kept = await keepCustomerFiles(env, me, g.id, mail.files);
-      await claims.customerEvent(env.DB, g.id, "customer", {
-        account: me,
-        body: [(mail.text || (kept.length ? "" : "(it had no text)")).slice(0, 4000), ...kept]
-          .filter(Boolean)
-          .join("\n"),
-        at,
-      });
-      await notify(env, {
-        to: me,
-        kind: "customer_wrote",
-        guide_id: g.id,
-        actor_id: "",
-        team_id: g.team_id,
-      });
-      return;
-    }
+      .bind(me, mail.sender, m)
+      .first<Joined>();
+  }
+  if (g) {
+    await env.DB.prepare("UPDATE guide SET customer_mids = ? WHERE id = ?")
+      .bind(withMid(g.customer_mids, mail.mid), g.id)
+      .run();
+    // Finished or archived, it is not done any more: the customer is waiting again.
+    if (g.status === "consumed") await claims.reopenForCustomer(env.DB, g.id, { account: me, at });
+    const kept = await keepCustomerFiles(env, me, g.id, mail.files);
+    await claims.customerEvent(env.DB, g.id, "customer", {
+      account: me,
+      body: [(mail.text || (kept.length ? "" : "(it had no text)")).slice(0, 4000), ...kept]
+        .filter(Boolean)
+        .join("\n"),
+      at,
+    });
+    await notify(env, {
+      to: me,
+      kind: "customer_wrote",
+      guide_id: g.id,
+      actor_id: "",
+      team_id: g.team_id,
+    });
+    return;
   }
   // An auto-reply, a bounce or a list makes nothing: answering one is how responders loop.
   if (mail.automated) return;
@@ -5878,9 +5899,10 @@ async function receiveSupport(
   for (let i = 0; i < 3 && !number; i++) {
     const tried = `R-${rand(6, ID_ALPHABET).toUpperCase()}`;
     const set = await env.DB.prepare(
-      "UPDATE guide SET customer = ?, customer_name = ?, ref = ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM guide WHERE ref = ?)",
+      `UPDATE guide SET customer = ?, customer_name = ?, ref = ?, customer_subject = ?, customer_mids = ?
+        WHERE id = ? AND NOT EXISTS (SELECT 1 FROM guide WHERE ref = ?)`,
     )
-      .bind(mail.sender, mail.name, tried, made.id, tried)
+      .bind(mail.sender, mail.name, tried, withoutRef(mail.subject), mail.mid, made.id, tried)
       .run();
     if (set.meta.changes) number = tried;
   }
@@ -5899,11 +5921,15 @@ async function receiveSupport(
     at,
   });
   const from = await supportFrom(env, me, box.team);
-  const copy = ackCopy({ from: from.name, title, ref: number });
+  const copy = ackCopy({
+    from: from.name,
+    subject: withoutRef(mail.subject) || title,
+    ref: number,
+  });
   await sendMail(env, mail.sender, copy.subject, copy.text, undefined, {
     fromName: from.name,
     replyTo: supportAddress(env, box.key, box.team),
-    headers: { "Auto-Submitted": "auto-replied" },
+    headers: { "Auto-Submitted": "auto-replied", ...threadHeaders(mail.mid) },
   });
   await notify(env, {
     to: me,
@@ -6424,10 +6450,17 @@ app.post("/v1/guides/:id/customer", async (c) => {
     .bind(row.account_id)
     .first<{ key: string }>();
   const from = await supportFrom(c.env, row.account_id, team);
-  const copy = answerCopy({ from: from.name, title: row.title, ref: row.ref, body: text });
+  const copy = answerCopy({
+    from: from.name,
+    // Requests from before 0060 kept no subject: their title is the nearest line to answer.
+    subject: row.customer_subject || row.title,
+    ref: row.ref,
+    body: text,
+  });
   const sent = await sendMail(c.env, row.customer, copy.subject, copy.text, undefined, {
     fromName: from.name,
     replyTo: box ? supportAddress(c.env, box.key, team) : "",
+    headers: threadHeaders(row.customer_mids ?? ""),
   });
   if (!sent) return err(c, 502, "The reply could not be sent. Nothing was recorded; try again.");
   await claims.customerEvent(c.env.DB, row.id, "answered", {

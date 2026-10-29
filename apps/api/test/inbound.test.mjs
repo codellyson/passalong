@@ -10,13 +10,16 @@ import {
   fingerprint,
   fromPosthog,
   hookPrint,
+  mids,
   parseEmail,
   readerBody,
   readHook,
   refIn,
   supportBody,
   supportState,
+  threadHeaders,
   titleOf,
+  withMid,
   withoutRef,
 } from "../src/inbound.ts";
 import { section } from "../src/sections.ts";
@@ -418,4 +421,34 @@ test("a request the reader sorted keeps the customer's words, quoted by code", (
     { intro: "Ada wrote this in the hub.", text: "notes on export" },
   );
   assert.match(section(handover, "Context")?.text ?? "", /reports\.ts/);
+});
+
+test("a customer's conversation: their Message-IDs kept, named back in our mail, read off theirs", async () => {
+  assert.deepEqual(mids("<a@x> <b@y>\n <c@z> junk <bad id>"), ["<a@x>", "<b@y>", "<c@z>"]);
+  assert.equal(withMid("", "<a@x>"), "<a@x>");
+  assert.equal(withMid("<a@x>", "<b@y>"), "<a@x> <b@y>", "newest last");
+  assert.equal(withMid("<a@x> <b@y>", "<a@x>"), "<b@y> <a@x>", "no repeats");
+  assert.equal(withMid("<a@x>", ""), "<a@x>", "a message with none adds none");
+  const long = Array.from({ length: 60 }, (_, i) => `<${"m".repeat(40)}${i}@example.com>`).join(" ");
+  const kept = withMid(long, "<new@example.com>");
+  assert.ok(kept.length <= 2000, "within what a References header may carry");
+  assert.ok(kept.endsWith("<new@example.com>"), "the oldest go first");
+  assert.deepEqual(threadHeaders(""), {});
+  assert.deepEqual(threadHeaders("<a@x> <b@y>"), { "In-Reply-To": "<b@y>", References: "<a@x> <b@y>" });
+
+  const raw = new TextEncoder().encode(
+    [
+      "From: Jane <jane@example.com>",
+      "To: k+support@in.example.com",
+      "Subject: Re: Export does nothing [R-K7Q2M9]",
+      "Message-ID: <reply-2@mail.example.com>",
+      "In-Reply-To: <ours-1@passalong.dev>",
+      "References: <first-1@mail.example.com> <ours-1@passalong.dev>",
+      "",
+      "Still broken.",
+    ].join("\r\n"),
+  );
+  const m = await parseEmail(raw.buffer, "jane@example.com");
+  assert.equal(m.mid, "<reply-2@mail.example.com>");
+  assert.ok(m.refs.includes("<first-1@mail.example.com>"), "their first message, which we kept");
 });
