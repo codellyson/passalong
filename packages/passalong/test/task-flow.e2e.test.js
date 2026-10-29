@@ -1,4 +1,4 @@
-// The task queue end to end, through the CLI's own operations against a running server.
+// Work end to end, through the CLI's own operations against a running server.
 //
 // Skipped unless PASSALONG_E2E_API names one, so `npm test` stays offline:
 //
@@ -54,27 +54,39 @@ async function proof() {
   return `![it works](${shot.url})`;
 }
 
-/** Share a guide so it reaches whoever it is for: Ready, the default for every kind. */
-async function send(p, md, opts) {
-  return p.share(md, opts);
+/** Work as markdown: a title, a summary, and plain text. Ready unless `extra` says otherwise. */
+const work = (serialize, title, extra = {}, body = "The hub follows the OS setting.") =>
+  serialize({ meta: { title, summary: "Said to a person for the test.", ...extra }, body });
+
+/** A request to the API as the signed-in account, for routes no CLI command calls. */
+async function call(method, path, body) {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
+      "x-passalong-version": VERSION,
+      "content-type": "application/json",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return { status: res.status, ...(await res.json()) };
 }
 
-/** A fresh worktree of this account's own repo, and a ready task for it. */
+/** What the signed-in account has been told, newest first, as text. */
+const heard = async () =>
+  (await call("GET", "/v1/notifications?limit=50")).notifications.map((n) => n.text).join("\n");
+
+/** A state on the board, by id. */
+const stateOf = async (id) =>
+  (await call("GET", "/v1/tasks")).tasks.find((t) => t.id === id)?.state;
+
+/** A fresh worktree of this account's own repo, and ready work for it. */
 async function readyTask({ account, p, serialize }, title) {
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
   execFileSync("git", ["init", "-q", dir]);
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:e2e/${account}.git`]);
-  const task = serialize({
-    meta: {
-      title,
-      summary: "Said to a person for the test.",
-      kind: "task",
-      status: "draft",
-      target_context: `e2e/${account}`,
-    },
-    body: "## Goal\nDark mode.\n\n## Acceptance\n- the hub follows the OS setting",
-  });
-  const id = (await p.share(task, { cwd: dir })).guide.meta.id;
+  const md = work(serialize, title, { status: "draft", target_context: `e2e/${account}` });
+  const id = (await p.publish(md, { cwd: dir })).guide.meta.id;
   await p.ready(id);
   return { id, dir };
 }
@@ -182,11 +194,11 @@ test("a folder's share link opens it and what is inside it, and nothing else", {
   writeFileSync(file, PNG);
   const { asset } = await api.addFolderAsset(inner.id, file);
 
-  const { url } = await api.shareFolder(root.id);
+  const { url } = await call("POST", `/v1/folders/${root.id}/share`);
   const [, id, key] = new URL(url).pathname.match(/^\/f\/([a-z0-9]+)\/([a-z0-9]+)$/) || [];
   assert.equal(id, root.id);
   // Asking again returns the same link rather than breaking the one already sent.
-  assert.equal((await api.shareFolder(root.id)).url, url);
+  assert.equal((await call("POST", `/v1/folders/${root.id}/share`)).url, url);
 
   const read = (path) => fetch(`${API}${path}`);
   const page = await (await read(`/api/folder/${id}/${key}`)).json();
@@ -222,7 +234,7 @@ test("a folder's share link opens it and what is inside it, and nothing else", {
   assert.equal(stopped.status, 200);
   assert.equal((await read(`/api/folder/${id}/${key}`)).status, 404);
   assert.equal((await read(`/f/${id}/${key}/files/${asset.id}`)).status, 404);
-  assert.notEqual((await api.shareFolder(root.id)).url, url);
+  assert.notEqual((await call("POST", `/v1/folders/${root.id}/share`)).url, url);
 });
 
 test("a document moves between folders with its history, and only within its space", {
@@ -235,7 +247,7 @@ test("a document moves between folders with its history, and only within its spa
   const { document } = await api.createFolderDocument(from.id, "Script", "v1");
   await api.saveFolderDocument(from.id, document.id, 1, "v2");
 
-  const moved = await api.moveFolderDocument(from.id, document.id, to.id);
+  const moved = await api.patchFolderDocument(from.id, document.id, { folder: to.id });
   assert.equal(moved.document.id, document.id);
   assert.equal((await api.folder(from.id)).documents.length, 0);
   assert.deepEqual(
@@ -249,37 +261,37 @@ test("a document moves between folders with its history, and only within its spa
   );
 
   // Back again under a new name; and a name the target already has is refused.
-  await api.moveFolderDocument(to.id, document.id, from.id, "Script, rough");
+  await api.patchFolderDocument(to.id, document.id, { folder: from.id, name: "Script, rough" });
   assert.equal((await api.folder(from.id)).documents[0].name, "Script, rough");
   await api.createFolderDocument(to.id, "Script, rough", "");
   await assert.rejects(
-    api.moveFolderDocument(from.id, document.id, to.id),
+    api.patchFolderDocument(from.id, document.id, { folder: to.id }),
     /already in the folder/,
   );
   // A folder this account cannot see is refused the same way as one that does not exist.
   await assert.rejects(
-    api.moveFolderDocument(from.id, document.id, "nosuchfolder"),
+    api.patchFolderDocument(from.id, document.id, { folder: "nosuchfolder" }),
     /isn't available/,
   );
 });
 
-test("an agent finds folders by words and by guide, renames, recovers and removes", {
+test("an agent finds projects by words, renames, recovers and removes", {
   skip,
 }, async () => {
-  const ctx = await setup();
+  await setup();
   const api = await import("../src/api.js");
   const { folder } = await api.createFolder("Checkout research", "Payments notes");
   const { document } = await api.createFolderDocument(folder.id, "Notes", "The 50%_off coupon");
 
   // Words in a document's text find its folder and name the document; LIKE's own wildcards in the
   // words are taken literally, so "0%_o" matches only the text that says exactly that.
-  const found = (await api.folders("all", { query: "0%_o" })).folders;
+  const found = (await api.folders("all", "0%_o")).folders;
   assert.deepEqual(
     found.map((f) => f.id),
     [folder.id],
   );
   assert.deepEqual(found[0].matches, [{ id: document.id, name: "Notes" }]);
-  assert.equal((await api.folders("all", { query: "50xxoff" })).folders.length, 0);
+  assert.equal((await api.folders("all", "50xxoff")).folders.length, 0);
 
   // A bad edit is put back from history.
   await api.saveFolderDocument(folder.id, document.id, 1, "Rewritten by mistake");
@@ -296,79 +308,22 @@ test("an agent finds folders by words and by guide, renames, recovers and remove
   );
 
   // A rename keeps the id and history, and refuses a name the folder already has.
-  const renamed = await api.renameFolderDocument(folder.id, document.id, "Coupon notes");
+  const renamed = await api.patchFolderDocument(folder.id, document.id, { name: "Coupon notes" });
   assert.equal(renamed.document.id, document.id);
   assert.equal(renamed.document.name, "Coupon notes");
   await api.createFolderDocument(folder.id, "Other", "");
-  await assert.rejects(api.renameFolderDocument(folder.id, document.id, "Other"), /already/);
-
-  // A guide's folders: from list_folders, and on the guide's own context for the hub.
-  // A transfer, not a task: a Ready task would sit in this repo's queue and be taken by the next test.
-  const { id } = (
-    await ctx.p.share(
-      ctx.serialize({
-        meta: {
-          title: "Folder-linked notes",
-          summary: "Said to a person for the test.",
-          kind: "transfer",
-        },
-        body: "Context for the folder test.",
-      }),
-    )
-  ).guide.meta;
-  await api.linkFolderGuide(folder.id, id);
-  assert.deepEqual(
-    (await api.folders("all", { guide: id })).folders.map((f) => f.id),
-    [folder.id],
-  );
-  const context = await (
-    await fetch(`${API}/v1/guides/${id}/context`, {
-      headers: {
-        "x-passalong-version": VERSION,
-        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-      },
-    })
-  ).json();
-  assert.deepEqual(
-    context.folders.map((f) => f.id),
-    [folder.id],
+  await assert.rejects(
+    api.patchFolderDocument(folder.id, document.id, { name: "Other" }),
+    /already/,
   );
 
-  // And out again: unlinking leaves the guide, deleting a document takes it for good.
-  await api.unlinkFolderGuide(folder.id, id);
-  assert.equal((await api.folders("all", { guide: id })).folders.length, 0);
   await api.deleteFolderDocument(folder.id, document.id);
   await assert.rejects(api.folderDocument(folder.id, document.id), /isn't in this folder/);
 });
 
-test("finishing with the write-up publishes it as the task's report", { skip }, async () => {
+test("work goes round: taken, taken back, done, reopened", { skip }, async () => {
   const env = await setup();
-  const { p, parse } = env;
-  const { id, dir } = await readyTask(env, "Report on finish");
-  assert.equal((await p.nextTask({ cwd: dir })).id, id);
-  const md =
-    "---\ntitle: Dark mode, done\nsummary: Said to a person for the test.\n---\n\n## Problem\np\n\n## Steps\n1. tokens\n";
-  const done = await p.finishTask(id, {
-    markdown: md,
-    evidence: PROOF,
-    pr: "https://github.com/e2e/x/pull/1",
-    cwd: dir,
-  });
-  const row = (await p.tasks()).find((t) => t.id === id);
-  assert.equal(row.state, "review");
-  assert.equal(row.claim.report, done.report);
-  assert.equal(row.claim.report_title, "Dark mode, done", "the board names what came back");
-  // Both links a reviewer follows: the task, and what came back for it.
-  assert.match(row.url, new RegExp(`/g/${id}/[a-z0-9]+$`));
-  assert.match(row.claim.report_url, new RegExp(`/g/${done.report}/[a-z0-9]+$`));
-  const report = parse((await p.pull(done.report, { write: false })).markdown).meta;
-  assert.equal(report.title, "Dark mode, done");
-  assert.equal(report.parent, id, "the write-up says which task it answers");
-});
-
-test("a task goes round: reject, release, approve", { skip }, async () => {
-  const env = await setup();
-  const { account, p, parse, serialize } = env;
+  const { account, p } = env;
   const worktree = () => {
     const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
     execFileSync("git", ["init", "-q", dir]);
@@ -383,110 +338,56 @@ test("a task goes round: reject, release, approve", { skip }, async () => {
     return dir;
   };
   const [a, b] = [worktree(), worktree()];
-  const report = async (cwd) =>
-    (
-      await p.share(
-        `---\ntitle: what I did\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n`,
-        { cwd },
-      )
-    ).guide.meta.id;
+  const { id } = await readyTask(env, "Add dark mode");
 
-  const task = serialize({
-    meta: {
-      title: "Add dark mode",
-      summary: "Said to a person for the test.",
-      kind: "task",
-      status: "draft",
-      target_context: `e2e/${account}`,
-    },
-    body: "## Goal\nDark mode.\n\n## Acceptance\n- the hub follows the OS setting",
-  });
-  const id = (await p.share(task, { cwd: a })).guide.meta.id;
-  await p.ready(id);
-  const state = async () => (await p.tasks()).find((t) => t.id === id)?.state;
-
-  // Taken, finished, turned down: back in the queue with the reason on it.
-  assert.equal((await p.nextTask({ cwd: a })).id, id);
-  await p.finishTask(id, { report: await report(a), evidence: PROOF, cwd: a });
-  assert.equal(await state(), "review");
-  await p.rejectTask(id, "toggle does nothing on Safari");
-  assert.equal(await state(), "ready");
-
-  // Another worktree takes it and reads why; then it is taken back from them.
-  const second = await p.nextTask({ cwd: b });
-  assert.equal(second.id, id);
-  assert.match(second.markdown, /toggle does nothing on Safari/);
-  await p.taskProgress(id, "safari fix in progress", { cwd: b });
+  // One worktree takes it, says where it is, and it is taken back from it.
+  assert.equal((await p.take(id, { cwd: a })).guide.id, id);
+  await p.progress(id, "safari fix in progress", { cwd: a });
   await p.release(id);
-  assert.equal(await state(), "ready");
-  await assert.rejects(p.taskProgress(id, "still going", { cwd: b }), (e) => e.status === 409);
+  assert.equal(await stateOf(id), "ready");
+  await assert.rejects(p.progress(id, "still going", { cwd: a }), (e) => e.status === 409);
 
-  // The first worktree picks it up with a pointer to what was left, finishes, and it is approved.
-  const third = await p.nextTask({ cwd: a });
-  assert.match(third.markdown, /safari fix in progress/);
-  await p.finishTask(id, { report: await report(a), evidence: PROOF, cwd: a });
-  await p.approveTask(id);
-  assert.equal(await state(), "done");
-  assert.equal(parse((await p.pull(id, { write: false })).markdown).meta.status, "consumed");
+  // Another picks it up with a pointer to where it was left, and finishes: Done at once.
+  const second = await p.take(id, { cwd: b });
+  assert.match(second.guide.markdown, /safari fix in progress/);
+  await p.handIn(id, { note: "Dark mode works.", evidence: PROOF, cwd: b });
+  assert.equal(await stateOf(id), "done");
+
+  // It is not right after all: back in To do with why, for whoever takes it next.
+  await p.reopen(id, "toggle does nothing on Safari");
+  assert.equal(await stateOf(id), "ready");
+  assert.match((await p.take(id, { cwd: a })).guide.markdown, /toggle does nothing on Safari/);
+  await p.pass(id, "testing the round", { cwd: a });
 });
 
-test("blocked_by in a task's frontmatter holds it until its blocker is approved", {
-  skip,
-}, async () => {
+test("blocked_by holds work until what it waits on is Done", { skip }, async () => {
   const env = await setup();
   const { p, serialize, account } = env;
   const first = await readyTask(env, "Schema first");
-  const waits = serialize({
-    meta: {
-      title: "API on the schema",
-      summary: "Said to a person for the test.",
-      kind: "task",
-      status: "draft",
-      target_context: `e2e/${account}`,
-      blocked_by: [first.id],
-    },
-    body: "## Goal\nAPI.\n\n## Acceptance\n- it answers",
+  const waits = work(serialize, "API on the schema", {
+    status: "draft",
+    target_context: `e2e/${account}`,
+    blocked_by: [first.id],
   });
-  const second = (await p.share(waits, { cwd: first.dir })).guide.meta.id;
+  const second = (await p.publish(waits, { cwd: first.dir })).guide.meta.id;
   await p.ready(second);
-  const state = async (id) => (await p.tasks()).find((t) => t.id === id)?.state;
-  assert.equal(await state(second), "blocked");
+  assert.equal(await stateOf(second), "blocked");
 
-  assert.equal((await p.nextTask({ cwd: first.dir })).id, first.id);
-  await p.finishTask(first.id, {
-    markdown:
-      "---\ntitle: schema\nsummary: Said to a person for the test.\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
-    evidence: PROOF,
-    cwd: first.dir,
-  });
-  assert.equal(await state(second), "blocked", "finished is not approved");
-  await p.approveTask(first.id);
-  assert.equal(await state(second), "ready");
+  await p.take(first.id, { cwd: first.dir });
+  await p.handIn(first.id, { note: "The table is there.", evidence: PROOF, cwd: first.dir });
+  assert.equal(await stateOf(second), "ready");
 });
 
 test("every draft you wrote can be made ready at once", { skip }, async () => {
   const env = await setup();
   const { p, serialize, account } = env;
   const draft = async (title) =>
-    (
-      await p.share(
-        serialize({
-          meta: {
-            title,
-            summary: "Said to a person for the test.",
-            kind: "task",
-            status: "draft",
-            target_context: `e2e/${account}`,
-          },
-          body: "## Goal\ng\n\n## Acceptance\n- a",
-        }),
-      )
-    ).guide.meta.id;
+    (await p.publish(work(serialize, title, { status: "draft", target_context: `e2e/${account}` })))
+      .guide.meta.id;
   const ids = [await draft("Plan step one"), await draft("Plan step two")];
   const made = await p.readyDrafts();
   for (const id of ids) assert.ok(made.includes(id), `${id} was made ready`);
-  const states = (await p.tasks()).filter((t) => ids.includes(t.id)).map((t) => t.state);
-  assert.deepEqual(states, ["ready", "ready"]);
+  assert.deepEqual([await stateOf(ids[0]), await stateOf(ids[1])], ["ready", "ready"]);
   assert.deepEqual(await p.readyDrafts(), [], "nothing left in Draft");
 });
 
@@ -806,8 +707,6 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
   await p.take(id, { cwd: dir });
   await p.handIn(id, {
     note: "Done, and it holds.",
-    markdown:
-      "---\ntitle: Per line, done\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     // A real command, run here by the CLI's own runner before the hand-in leaves this process:
     // its exit code decides the check and what it printed is recorded. It used to be a command
     // pasted into `ran`, which is the agent typing a string that looks like a run — indistinguishable
@@ -820,9 +719,8 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
     ],
     cwd: dir,
   });
-  // Finishing is final: Done, and what was run stays on the guide as what it was finished with.
-  const row = (await p.tasks()).find((t) => t.id === id);
-  assert.equal(row.state, "done");
+  // Finishing is final: Done, and what was run stays on the work as what it was finished with.
+  assert.equal(await stateOf(id), "done");
   const ctx = await (
     await fetch(`${API}/v1/guides/${id}/context`, {
       headers: {
@@ -844,8 +742,6 @@ test("a check with nothing behind it is refused, like any other claim", { skip }
   await assert.rejects(
     p.handIn(id, {
       note: "Done.",
-      markdown:
-        "---\ntitle: x\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       checks: [{ check: "the hub follows the OS setting", ran: "it works" }],
       cwd: dir,
     }),
@@ -864,8 +760,6 @@ test("a check answered in words is refused, however much it says", { skip }, asy
   await assert.rejects(
     p.handIn(id, {
       note: "Done.",
-      markdown:
-        "---\ntitle: x\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
       checks: [
         {
           check: "the PDF renders with the store's brand colour",
@@ -878,36 +772,25 @@ test("a check answered in words is refused, however much it says", { skip }, asy
   );
 });
 
-test("a follow-up is never handed over alone: the guide it came out of comes with it", {
-  skip,
-}, async () => {
-  const { p } = await setup();
+test("work is never handed over alone: what it came out of comes with it", { skip }, async () => {
+  const { p, serialize } = await setup();
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
-  const doc = (title) =>
-    `---\ntitle: ${title}\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. open/close per day\n`;
-  const parent = (await send(p, doc("Store Hours UI"), { cwd: dir })).guide.meta.id;
-  const child = (await send(p, doc("Confirmation email"), { cwd: dir, follows: parent })).guide.meta
-    .id;
+  const parent = (
+    await p.publish(work(serialize, "Store Hours UI", {}, "open/close per day"), { cwd: dir })
+  ).guide.meta.id;
+  const child = (await p.publish(work(serialize, "Confirmation email"), { cwd: dir, parent })).guide
+    .meta.id;
 
-  const lead = await p.parentGuide({ id: child, parent });
-  assert.match(lead, new RegExp(`^THIS IS A FOLLOW-UP TO ${parent}: Store Hours UI — open\\.`));
-  assert.match(lead, /open\/close per day/, "the parent's own document comes with it");
+  const lead = await p.parentWork({ id: child, parent });
+  assert.match(lead, new RegExp(`^THIS CAME OUT OF ${parent}: Store Hours UI — open\\.`));
+  assert.match(lead, /open\/close per day/, "the parent's own text comes with it");
 
   // Where the parent has got to, because that is what says whether this can be acted on.
-  const agent = { agent: "e2e-parent-aaaa", repo: "e2e/parent" };
-  await fetch(`${API}/v1/take`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-      "x-passalong-version": VERSION,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ ...agent, id: parent }),
-  });
-  assert.match(await p.parentGuide({ id: child, parent }), /— held/);
+  await call("POST", "/v1/take", { agent: "e2e-parent-aaaa", repo: "e2e/parent", id: parent });
+  assert.match(await p.parentWork({ id: child, parent }), /— held/);
 
-  // A guide that follows nothing hands over nothing.
-  assert.equal(await p.parentGuide({ id: parent }), "");
+  // Work that came out of nothing hands over nothing.
+  assert.equal(await p.parentWork({ id: parent }), "");
 });
 
 test("a screenshot handed in as evidence belongs to the guide, so the nightly sweep leaves it", {
@@ -937,8 +820,6 @@ test("a screenshot handed in as evidence belongs to the guide, so the nightly sw
   await p.take(id, { cwd: dir });
   await p.handIn(id, {
     note: "Done, and it holds.",
-    markdown:
-      "---\ntitle: Picture, done\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     evidence: `$ npm test\n> 3 pass, 0 fail\n\n![the refusal](${shot.url})`,
     cwd: dir,
   });
@@ -951,7 +832,7 @@ test("a screenshot handed in as evidence belongs to the guide, so the nightly sw
   ]);
 });
 
-test("in a team, each side hears what the other did to a task — and anyone in it moves it", {
+test("in a team, each side hears what the other did to work — and anyone in it moves it", {
   skip,
 }, async () => {
   const env = await setup();
@@ -971,109 +852,54 @@ test("in a team, each side hears what the other did to a task — and anyone in 
   await api.updateMe({ handle: `mate${Date.now().toString(36)}` });
 
   as(owner);
-  const task = (body) =>
-    serialize({
-      meta: {
-        title: body,
-        summary: "Said to a person for the test.",
-        kind: "task",
-        status: "draft",
-        target_context: `e2e/${account}`,
-      },
-      body: `## Goal\n${body}\n\n## Acceptance\n- a`,
-    });
-  const id = (await p.share(task("Team task"), { to: team.slug })).guide.meta.id;
+  const md = (title) =>
+    work(serialize, title, { status: "draft", target_context: `e2e/${account}` });
+  const id = (await p.publish(md("Team work"), { to: team.slug })).guide.meta.id;
   await p.ready(id);
-  const draft = (await p.share(task("Still a draft"), { to: team.slug })).guide.meta.id;
-  await p.activity(); // clears what was unread before this test
+  const draft = (await p.publish(md("Still a draft"), { to: team.slug })).guide.meta.id;
 
-  // The teammate can take it, but cannot archive the task by status: that is its author's or an
-  // admin's, and finishing goes through the review.
+  // The teammate can take it, but cannot archive it by status: that is its author's or an admin's.
   as(mate.token);
   await assert.rejects(api.setStatus(id, "consumed"), (e) => e.status === 403);
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
   execFileSync("git", ["init", "-q", dir]);
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:e2e/${account}.git`]);
-  assert.equal((await p.nextTask({ cwd: dir })).id, id);
-  await p.finishTask(id, {
-    markdown:
-      "---\ntitle: team done\nsummary: Said to a person for the test.\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
-    evidence: PROOF,
-    cwd: dir,
-  });
+  await p.take(id, { cwd: dir });
+  await p.handIn(id, { note: "It is done.", evidence: PROOF, cwd: dir });
   // A team's board is anyone's in it to move: the teammate can mark the owner's draft ready.
   await p.ready(draft);
 
   as(owner);
-  const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
-  assert.match(heard, /agent took the task "Team task"/);
-  assert.match(heard, /agent finished "Team task", and it is waiting for your review/);
-  await p.rejectTask(id, "needs a test");
+  const told = await heard();
+  assert.match(told, /agent took "Team work"/);
+  assert.match(told, /agent finished "Team work"/);
+  await p.reopen(id, "needs a test");
 
   as(mate.token);
-  const told = (await p.activity()).notifications.map((n) => n.text).join("\n");
-  assert.match(told, /sent "Team task" back: needs a test/);
+  assert.match(await heard(), /reopened "Team work": needs a test/);
   as(owner);
 });
 
-test("a plan becomes draft tasks, each waiting on the steps it names", { skip }, async () => {
+test("a plan becomes draft work, each piece waiting on the ones it names", { skip }, async () => {
   const env = await setup();
   const { p, account } = env;
-  const target = `e2e/${account}`;
-  const ids = await p.planTasks([
-    {
-      title: "Plan: schema",
-      summary: "Said to a person for the test.",
-      goal: "A theme table.",
-      acceptance: "- migration applies",
-      target_context: target,
-    },
-    {
-      title: "Plan: API",
-      summary: "Said to a person for the test.",
-      goal: "Read the theme.",
-      acceptance: "- GET /theme answers",
-      target_context: target,
-      after: [0],
-    },
-    {
-      title: "Plan: UI",
-      summary: "Said to a person for the test.",
-      goal: "Use it.",
-      acceptance: "- the hub switches",
-      target_context: target,
-      after: [0, 1],
-    },
-  ]);
-  assert.equal(ids.length, 3);
-  const byId = async () => new Map((await p.tasks()).map((t) => [t.id, t.state]));
-  let states = await byId();
+  const repo = `e2e/${account}`;
+  const made = await p.createWork(
+    [
+      { title: "Plan: schema", summary: "Said to a person for the test.", repo },
+      { title: "Plan: API", summary: "Said to a person for the test.", repo, after: [0] },
+      { title: "Plan: UI", summary: "Said to a person for the test.", repo, after: [0, 1] },
+    ],
+    { draft: true },
+  );
+  const ids = made.map((m) => m.id);
   assert.deepEqual(
-    ids.map((id) => states.get(id)),
+    await Promise.all(ids.map(stateOf)),
     ["draft", "draft", "draft"],
     "a plan is read before it runs",
   );
-
   await p.readyDrafts();
-  states = await byId();
-  assert.deepEqual(
-    ids.map((id) => states.get(id)),
-    ["ready", "blocked", "blocked"],
-  );
-
-  await assert.rejects(
-    p.planTasks([
-      {
-        title: "x",
-        summary: "Said to a person for the test.",
-        goal: "g",
-        acceptance: "- a",
-        after: [0],
-      },
-    ]),
-    /earlier step/,
-    "a step can only wait on one before it, so a plan cannot loop",
-  );
+  assert.deepEqual(await Promise.all(ids.map(stateOf)), ["ready", "blocked", "blocked"]);
 });
 
 test("work takes tasks one after another until the queue is empty", { skip }, async () => {
@@ -1083,37 +909,21 @@ test("work takes tasks one after another until the queue is empty", { skip }, as
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
   execFileSync("git", ["init", "-q", dir]);
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:${repo}.git`]);
-  const ids = await p.planTasks(
-    [
-      {
-        title: "Work: one",
-        summary: "Said to a person for the test.",
-        goal: "g",
-        acceptance: "- a",
-        target_context: repo,
-      },
-      {
-        title: "Work: two",
-        summary: "Said to a person for the test.",
-        goal: "g",
-        acceptance: "- a",
-        target_context: repo,
-        after: [],
-      },
-    ],
-    { cwd: dir },
-  );
-  for (const id of ids) await p.ready(id);
+  const ids = (
+    await p.createWork(
+      [
+        { title: "Work: one", summary: "Said to a person for the test.", repo },
+        { title: "Work: two", summary: "Said to a person for the test.", repo },
+      ],
+      { cwd: dir },
+    )
+  ).map((m) => m.id);
   const agent = `node ${join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "fake-agent.mjs")}`;
 
   const run = await p.work({ cwd: dir, agent });
   assert.deepEqual(run.finished, ids);
   assert.equal(run.stopped, "empty");
-  const states = new Map((await p.tasks()).map((t) => [t.id, t.state]));
-  assert.deepEqual(
-    ids.map((id) => states.get(id)),
-    ["review", "review"],
-  );
+  assert.deepEqual(await Promise.all(ids.map(stateOf)), ["done", "done"]);
 });
 
 test("work stops when an agent exits without finishing, instead of looping on it", {
@@ -1125,19 +935,10 @@ test("work stops when an agent exits without finishing, instead of looping on it
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
   execFileSync("git", ["init", "-q", dir]);
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:${repo}.git`]);
-  const [id] = await p.planTasks(
-    [
-      {
-        title: "Work: quits",
-        summary: "Said to a person for the test.",
-        goal: "g",
-        acceptance: "- a",
-        target_context: repo,
-      },
-    ],
+  const [{ id }] = await p.createWork(
+    [{ title: "Work: quits", summary: "Said to a person for the test.", repo }],
     { cwd: dir },
   );
-  await p.ready(id);
   const agent = `node ${join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "fake-agent.mjs")}`;
   process.env.FAKE_AGENT_GIVES_UP = "1";
   try {
@@ -1148,56 +949,20 @@ test("work stops when an agent exits without finishing, instead of looping on it
   } finally {
     delete process.env.FAKE_AGENT_GIVES_UP;
   }
-  assert.equal(
-    (await p.tasks()).find((t) => t.id === id).state,
-    "claimed",
-    "still this worktree's",
-  );
+  assert.equal(await stateOf(id), "claimed", "still this worktree's");
 });
 
-test("a task is answered with the task tools, and the guide ones say so", { skip }, async () => {
-  const env = await setup();
-  const { p } = env;
-  const api = await import("../src/api.js");
-  const { id } = await readyTask(env, "Answered the wrong way");
-  // A verdict or an ack on a task would be an answer nobody reads: its author reviews it from the
-  // queue. Both are refused, and the refusal names the tools that do the job.
-  const task = /take[^.]*hand_in|hand_in[^.]*take/;
-  await assert.rejects(
-    api.verdict(id, true, "it works"),
-    (e) => e.status === 400 && task.test(e.message),
-  );
-  await assert.rejects(api.ack(id, true, ""), (e) => e.status === 400 && task.test(e.message));
-});
-
-test("one set of verbs for every kind: take, progress, hand_in, pass, each saying what is next", {
+test("one set of verbs for all work: take, progress, hand_in, pass, each saying what is next", {
   skip,
 }, async () => {
-  const { p } = await setup();
-  const call = async (method, path, body) => {
-    const res = await fetch(`${API}${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-        "x-passalong-version": VERSION,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    return { status: res.status, ...(await res.json()) };
-  };
-  const h = (
-    await send(
-      p,
-      "---\ntitle: Stream the PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
-    )
-  ).guide.meta.id;
+  const { p, serialize } = await setup();
+  const h = (await p.publish(work(serialize, "Stream the PDF"))).guide.meta.id;
   const a = { agent: "e2e-agent-aaaa", repo: "e2e/one", host: "mac", worktree: "/w/a" };
   const b = { agent: "e2e-agent-bbbb", repo: "e2e/one" };
   const c = { agent: "e2e-agent-cccc", repo: "e2e/two" };
 
   const took = await call("POST", "/v1/take", { ...a, id: h });
-  assert.equal(took.guide.kind, "transfer");
+  assert.equal(took.guide.kind, undefined, "work has no kind");
   assert.match(took.guide.markdown, /Stream the PDF/);
   assert.deepEqual(
     took.next.map((s) => s.tool),
@@ -1211,15 +976,19 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
     "a",
     "the refusal says who has it, by its folder's name and not its whole path",
   );
-  assert.equal((await call("POST", "/v1/take", { ...c, id: h })).guide.repo, "e2e/two");
+  assert.equal(
+    (await call("POST", "/v1/take", { ...c, id: h })).status,
+    409,
+    "one holder at a time, whatever the repo",
+  );
 
   const said = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "halfway" });
   assert.equal(said.note, "halfway");
   assert.ok(said.next.length);
 
-  // Your own guide can be finished too — nothing reviews it — but never without proof.
+  // Your own work can be finished too — nothing reviews it — but never without proof.
   assert.equal(
-    (await call("POST", `/v1/guides/${h}/hand_in`, { ...a, ok: true, note: "Done." })).status,
+    (await call("POST", `/v1/guides/${h}/hand_in`, { ...a, note: "Done." })).status,
     400,
   );
   const passed = await call("POST", `/v1/guides/${h}/pass`, { ...a, why: "wrong repo after all" });
@@ -1233,18 +1002,15 @@ test("one set of verbs for every kind: take, progress, hand_in, pass, each sayin
   assert.equal((await call("POST", "/v1/take", { ...b, id: h })).guide.agent, b.agent);
 });
 
-test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handoff alike", {
-  skip,
-}, async () => {
+test("the CLI's verbs: take, progress, hand_in and pass", { skip }, async () => {
   const env = await setup();
-  const { p } = env;
-  const { dir } = await readyTask(env, "Verbs on a task");
+  const { p, serialize } = env;
+  const { dir } = await readyTask(env, "Verbs on work");
 
-  // No id: the next thing waiting in this repo — oldest first, so maybe a task an earlier test
-  // left ready. The document comes back in the answer; asked to, it is saved where a pull would.
+  // No id: the next thing waiting in this repo — oldest first, so maybe work an earlier test left
+  // ready. The document comes back in the answer; asked to, it is saved in the worktree.
   const took = await p.take(undefined, { cwd: dir, save: true });
   const id = took.guide.id;
-  assert.equal(took.guide.kind, "task");
   assert.match(readFileSync(took.path, "utf8"), new RegExp(took.guide.title));
   assert.deepEqual(
     took.next.map((s) => s.tool),
@@ -1252,34 +1018,21 @@ test("the CLI's verbs: take, progress, hand_in and pass, for a task and a handof
   );
 
   assert.equal((await p.progress(id, "halfway", { cwd: dir })).note, "halfway");
-  const md =
-    "---\ntitle: Verbs, done\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
   await assert.rejects(
-    p.handIn(id, { markdown: md, cwd: dir }),
+    p.handIn(id, { note: "Done.", cwd: dir }),
     /what you ran and what came back/,
     "a hand-in with no evidence is refused",
   );
-  const handed = await p.handIn(id, {
-    note: "Done, and it holds.",
-    markdown: md,
-    evidence: "npm test -w apps/api → 285 pass, 0 fail",
-    cwd: dir,
-  });
+  const handed = await p.handIn(id, { note: "Done, and it holds.", evidence: PROOF, cwd: dir });
   assert.equal(handed.state, "done", "finishing is final");
   assert.deepEqual(
     handed.next.map((s) => s.tool),
     ["take"],
   );
 
-  // A handoff by id: taken, then passed with the reason, and free for the next agent.
-  const h = (
-    await send(
-      p,
-      "---\ntitle: A handoff\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
-      { cwd: dir },
-    )
-  ).guide.meta.id;
-  assert.equal((await p.take(h, { cwd: dir })).guide.kind, "transfer");
+  // Another by id: taken, then passed with the reason, and free for the next agent.
+  const h = (await p.publish(work(serialize, "Another"), { cwd: dir })).guide.meta.id;
+  assert.equal((await p.take(h, { cwd: dir })).guide.id, h);
   await assert.rejects(p.pass(h, "", { cwd: dir }), /why/);
   assert.deepEqual(
     (await p.pass(h, "not mine", { cwd: dir })).next.map((s) => s.tool),
@@ -1296,7 +1049,6 @@ test("now says what this worktree holds, for the session-start and stop hooks", 
   const took = await p.take(undefined, { cwd: dir });
   const now = await p.now({ cwd: dir });
   assert.equal(now.held[0]?.id, took.guide.id);
-  assert.equal(now.held[0]?.kind, "task");
   await p.pass(took.guide.id, "testing now", { cwd: dir });
   assert.equal((await p.now({ cwd: dir })).held.length, 0);
 });
@@ -1340,81 +1092,8 @@ test("the hook commands: a session is told what it holds, and stopped once befor
   assert.equal(existsSync(join(bare, ".passalong")), false);
 });
 
-test("a handoff in the browser: taking it holds it, saying it worked hands it in, and someone else closes it", {
-  skip,
-}, async () => {
-  const env = await setup();
-  const { p } = env;
-  const api = await import("../src/api.js");
-  const owner = process.env.PASSALONG_TOKEN;
-  const as = (token) => {
-    process.env.PASSALONG_TOKEN = token;
-  };
-  const call = async (method, path, body) => {
-    const res = await fetch(`${API}${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-        "x-passalong-version": VERSION,
-        "content-type": "application/json",
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    return { status: res.status, ...(await res.json()) };
-  };
-
-  const team = await api.createTeam(`handoffs ${Date.now()}`);
-  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
-  const { code } = await api.invite(team.slug);
-  const mate = await secondAccount();
-  as(mate.token);
-  await api.join(code);
-
-  as(owner);
-  const md =
-    "---\ntitle: Stream the invoice PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const id = (await send(p, md, { to: team.slug })).guide.meta.id;
-
-  // The teammate takes it the way the browser does, and shows in Working now as a person.
-  as(mate.token);
-  await api.ack(id, true, "");
-  as(owner);
-  const held = (await call("GET", "/v1/working")).working.find((w) => w.id === id);
-  assert.match(held.agent, /^person-/);
-  assert.equal(held.state, "claimed");
-
-  // "It worked" from the browser hands it in: out of working, into the author's list.
-  as(mate.token);
-  await api.verdict(id, true, "streams fine now", await proof());
-  as(owner);
-  assert.equal(
-    (await call("GET", "/v1/working")).working.find((w) => w.id === id),
-    undefined,
-  );
-  const [waiting] = (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id);
-  assert.equal(waiting.note, "streams fine now");
-
-  // The teammate handed it in, so somebody else accepts it: nobody approves their own work. The
-  // author closes it, which archives it and tells the teammate.
-  as(mate.token);
-  assert.equal((await call("POST", `/v1/guides/${id}/close`)).status, 409);
-  await p.activity();
-  as(owner);
-  assert.equal((await call("POST", `/v1/guides/${id}/close`)).state, "done");
-  assert.deepEqual(
-    (await call("GET", "/v1/handed_in")).handed_in.filter((h) => h.id === id),
-    [],
-  );
-  as(mate.token);
-  const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
-  assert.match(heard, /accepted your work on "Stream the invoice PDF"/);
-  as(owner);
-});
-
-test("an agent cannot hand in a handoff it does not hold or send its author a false verdict", {
-  skip,
-}, async () => {
-  const { p } = await setup();
+test("an agent cannot hand in work it does not hold", { skip }, async () => {
+  const { p, serialize } = await setup();
   const api = await import("../src/api.js");
   const owner = process.env.PASSALONG_TOKEN;
   const team = await api.createTeam(`agent hand-in ${Date.now()}`);
@@ -1424,51 +1103,32 @@ test("an agent cannot hand in a handoff it does not hold or send its author a fa
   process.env.PASSALONG_TOKEN = mate.token;
   await api.join(code);
   process.env.PASSALONG_TOKEN = owner;
-  const id = (
-    await send(
-      p,
-      "---\ntitle: Check the invoice PDF\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
-      { to: team.slug },
-    )
-  ).guide.meta.id;
-  const call = async (path, body) => {
-    const res = await fetch(`${API}${path}`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${mate.token}`,
-        "x-passalong-version": VERSION,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    return { status: res.status, ...(await res.json()) };
-  };
-  const agent = { agent: "e2e-hand-in-agent", repo: "e2e/hand-in" };
-  const answer = (who) =>
-    call(`/v1/guides/${id}/hand_in`, {
-      ...who,
-      ok: true,
-      evidence: PROOF,
-      note: "Done, it holds.",
-    });
-  const verdicts = () => rows(`SELECT ok FROM verdict WHERE guide_id = '${id}'`);
+  const id = (await p.publish(work(serialize, "Check the invoice PDF"), { to: team.slug })).guide
+    .meta.id;
+  process.env.PASSALONG_TOKEN = mate.token;
+  try {
+    const agent = { agent: "e2e-hand-in-agent", repo: "e2e/hand-in" };
+    const answer = (who) =>
+      call("POST", `/v1/guides/${id}/hand_in`, {
+        ...who,
+        evidence: PROOF,
+        note: "Done, it holds.",
+      });
+    const verdicts = () => rows(`SELECT ok FROM verdict WHERE guide_id = '${id}'`);
 
-  assert.equal((await answer(agent)).status, 409);
-  assert.deepEqual(await verdicts(), []);
-  assert.deepEqual(
-    await rows(`SELECT id FROM notification WHERE guide_id = '${id}' AND kind = 'verified'`),
-    [],
-    "the author hears no verdict from a refused hand-in",
-  );
+    assert.equal((await answer(agent)).status, 409);
+    assert.deepEqual(await verdicts(), []);
 
-  assert.equal((await call("/v1/take", { ...agent, id })).status, 200);
-  assert.equal((await answer({ ...agent, agent: "e2e-other-agent" })).status, 409);
-  assert.deepEqual(await verdicts(), []);
+    assert.equal((await call("POST", "/v1/take", { ...agent, id })).status, 200);
+    assert.equal((await answer({ ...agent, agent: "e2e-other-agent" })).status, 409);
+    assert.deepEqual(await verdicts(), []);
 
-  assert.equal((await answer(agent)).status, 200);
-  assert.deepEqual(await verdicts(), [{ ok: 1 }]);
-  assert.equal((await answer(agent)).status, 409);
-  assert.deepEqual(await verdicts(), [{ ok: 1 }]);
+    assert.equal((await answer(agent)).status, 200);
+    assert.deepEqual(await verdicts(), [{ ok: 1 }], "what it was finished with stays on it");
+    assert.equal((await answer(agent)).status, 409);
+  } finally {
+    process.env.PASSALONG_TOKEN = owner;
+  }
 });
 
 test("a CLI below the server's floor is refused with what to run; the rest are served", {
@@ -1507,7 +1167,7 @@ test("the status line shows what this worktree holds, from a cache it refreshes 
   await p.pass(took.guide.id, "testing the status line", { cwd: dir });
 });
 
-test("reassigning a task: only the assignee's agents get it, and whoever is left out is told", {
+test("reassigning work: only the assignee's agents get it, and whoever is left out is told", {
   skip,
 }, async () => {
   const env = await setup();
@@ -1541,17 +1201,11 @@ test("reassigning a task: only the assignee's agents get it, and whoever is left
   await api.updateMe({ handle });
 
   as(owner);
-  const task = serialize({
-    meta: {
-      title: "Assigned work",
-      summary: "Said to a person for the test.",
-      kind: "task",
-      status: "draft",
-      target_context: `e2e/${account}`,
-    },
-    body: "## Goal\nx\n\n## Acceptance\n- a",
+  const task = work(serialize, "Assigned work", {
+    status: "draft",
+    target_context: `e2e/${account}`,
   });
-  const id = (await p.share(task, { to: team.slug })).guide.meta.id;
+  const id = (await p.publish(task, { to: team.slug })).guide.meta.id;
   await p.ready(id);
   assert.equal((await p.assign(id, `@${handle}`)).to, `@${handle}`);
 
@@ -1566,7 +1220,6 @@ test("reassigning a task: only the assignee's agents get it, and whoever is left
   as(mate.token);
   const theirs = worktree();
   assert.equal((await p.take(id, { cwd: theirs })).guide.id, id);
-  await p.activity();
 
   // To the whole team: nobody is left out, so the mate keeps it.
   as(owner);
@@ -1579,8 +1232,7 @@ test("reassigning a task: only the assignee's agents get it, and whoever is left
   assert.equal(back.taken_back, 1);
   await assert.rejects(p.assign(id, "@nobody-here"), (e) => e.status === 400);
   as(mate.token);
-  const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
-  assert.match(heard, /gave "Assigned work" to someone else/);
+  assert.match(await heard(), /gave "Assigned work" to someone else/);
   as(owner);
 });
 
@@ -1611,20 +1263,13 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
   await api.join(code2);
 
   as(owner);
-  const task = serialize({
-    meta: {
-      title: "Delegated work",
-      summary: "Said to a person for the test.",
-      kind: "task",
-      status: "draft",
-      target_context: `e2e/${account}`,
-    },
-    body: "## Goal\nx\n\n## Acceptance\n- a",
+  const task = work(serialize, "Delegated work", {
+    status: "draft",
+    target_context: `e2e/${account}`,
   });
-  const id = (await p.share(task, { to: team.slug })).guide.meta.id;
+  const id = (await p.publish(task, { to: team.slug })).guide.meta.id;
   await p.ready(id);
   await p.assign(id, `@${handle}`);
-  await p.activity();
 
   // Ada, the assignee, passes it on to the teammate with no @name.
   as(ada.token);
@@ -1634,103 +1279,16 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
   // The author hears who it went to. Ada is still in the team, so she can still move it: a team's
   // board is anyone's in it to move.
   as(owner);
-  const heard = (await p.activity()).notifications.map((n) => n.text).join("\n");
-  assert.match(heard, /gave "Delegated work" to someone else/);
+  assert.match(await heard(), /gave "Delegated work" to someone else/);
   as(ada.token);
   assert.equal((await p.assign(id, `@${handle}`)).to, `@${handle}`);
-  as(owner);
-});
-
-test("a team's guide one teammate said worked stops asking the others, so nobody redoes it", {
-  skip,
-}, async () => {
-  const env = await setup();
-  const { p } = env;
-  const api = await import("../src/api.js");
-  const owner = process.env.PASSALONG_TOKEN;
-  const as = (token) => {
-    process.env.PASSALONG_TOKEN = token;
-  };
-  const team = await api.createTeam(`nodouble ${Date.now()}`);
-  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
-  const joinTeam = async () => {
-    as(owner);
-    const { code } = await api.invite(team.slug);
-    const who = await secondAccount();
-    as(who.token);
-    await api.join(code);
-    return who;
-  };
-  const ada = await joinTeam();
-  const bo = await joinTeam();
-
-  as(owner);
-  const md =
-    "---\ntitle: Fix the invoice total\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const id = (await send(p, md, { to: team.slug })).guide.meta.id;
-
-  // Both see it waiting. Ada does it and says it worked — without saying "on it" first.
-  as(bo.token);
-  assert.ok(
-    (await api.inbox()).guides.some((g) => g.id === id),
-    "Bo sees it before anyone answers",
-  );
-  as(ada.token);
-  await api.verdict(id, true, "totals match now", await proof());
-
-  // Bo is no longer asked, and Bo's agent is told Ada did it rather than doing it again.
-  as(bo.token);
-  assert.ok(!(await api.inbox()).guides.some((g) => g.id === id), "not waiting on Bo any more");
-  const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
-  execFileSync("git", ["init", "-q", dir]);
-  await assert.rejects(p.take(id, { cwd: dir }), /already said it worked/);
-  as(owner);
-});
-
-test("taken, then given to someone else: it stops being yours", { skip }, async () => {
-  const env = await setup();
-  const { p } = env;
-  const api = await import("../src/api.js");
-  const owner = process.env.PASSALONG_TOKEN;
-  const as = (token) => {
-    process.env.PASSALONG_TOKEN = token;
-  };
-  const team = await api.createTeam(`regive ${Date.now()}`);
-  await sql(`UPDATE team SET plan = 'team', seats = 5 WHERE slug = '${team.slug}'`);
-  const joinTeam = async (handle) => {
-    as(owner);
-    const { code } = await api.invite(team.slug);
-    const who = await secondAccount();
-    as(who.token);
-    await api.join(code);
-    await api.updateMe({ handle });
-    return who;
-  };
-  const stamp = Date.now().toString(36);
-  const me = await joinTeam(`me${stamp}`);
-  await joinTeam(`bami${stamp}`);
-
-  as(owner);
-  const md =
-    "---\ntitle: Ship-to address\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const id = (await send(p, md, { to: `${team.slug}/@me${stamp}` })).guide.meta.id;
-
-  // I take it, then give it to Bami.
-  as(me.token);
-  await api.ack(id, true, "");
-  await p.assign(id, `@bami${stamp}`);
-
-  // My "on it" went with it: the guide no longer says I am taking it.
-  const mine = (await api.list("", "all")).guides.find((g) => g.id === id);
-  assert.equal(mine.my_ack, null, "my answer was taken back with the work");
-  assert.ok(!mine.for_me);
   as(owner);
 });
 
 test("an image held as bytes attaches, and answers the check it was taken for", {
   skip,
 }, async () => {
-  // The door that was missing. attach_screenshot took a path on this machine, so an agent whose
+  // The door that was missing. Uploads took a path on this machine, so an agent whose
   // browser hands images back inline and never writes a file had no way to show anything — and,
   // refused for describing what it saw, it swapped to grep checks and put the observation in
   // `writeup`: "a grep proves the code changed, not that the screen renders right."
@@ -1751,90 +1309,43 @@ test("an image held as bytes attaches, and answers the check it was taken for", 
   await p.take(id, { cwd: dir });
   await p.handIn(id, {
     note: "Done, and it holds.",
-    markdown:
-      "---\ntitle: Shown, done\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n## Problem\np\n\n## Steps\n1. x\n",
     checks: [{ check: "the header renders in the brand colour", ran: `here it is: ${shot.url}` }],
     cwd: dir,
   });
-  const row = (await p.tasks()).find((t) => t.id === id);
-  assert.equal(row.state, "done", "a shown check is proof, and finishing is final");
+  assert.equal(await stateOf(id), "done", "a shown check is proof, and finishing is final");
 });
 
-test("the server requires a kind, takes a new task Ready, and never starts one archived", {
+test("the server refuses a kind, takes new work Ready, and never starts it archived", {
   skip,
 }, async () => {
-  // The load-bearing half. The CLI parser no longer seeds `transfer`, but a client on any older
-  // version still publishes documents with no `kind:` line — and the row used to coerce whatever
-  // arrived into transfer. That is how 162 of 200 real guides were stored as transfers while their
-  // titles were tasks and bug reports, with publish_guide's own description promising the default
-  // was task. Enforcement belongs where every client reaches it, whatever version it is on.
-  const env = await setup();
-  const body = "\n\n## Problem\np\n\n## Steps\n1. x\n";
+  await setup();
   const rid = () => `k${Math.random().toString(36).slice(2, 9)}`;
-  const put = (md) =>
-    fetch(`${API}/v1/guides/${rid()}`, {
-      method: "PUT",
-      headers: {
-        authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-        "x-passalong-version": VERSION,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ markdown: md }),
-    });
+  const put = (md, id = rid()) => call("PUT", `/v1/guides/${id}`, { markdown: md });
+  const front = (extra) =>
+    `---\ntitle: Some work\nsummary: Said to a person for the test.\n${extra}---\n\nFix it.\n`;
 
-  const absent = await put(
-    `---\ntitle: Never says\nsummary: Said to a person for the test.\n---${body}`,
-  );
-  assert.equal(absent.status, 400, "an unstated kind is refused");
-  assert.match((await absent.json()).message, /say what this is/);
+  const kinded = await put(front("kind: task\n"));
+  assert.equal(kinded.status, 400, "a kind is refused by name: work has none");
+  assert.match(kinded.message, /kind/);
 
-  const wrong = await put(
-    `---\ntitle: Says wrongly\nsummary: Said to a person for the test.\nkind: buggy\n---${body}`,
-  );
-  assert.equal(wrong.status, 400, "and so is a spelling that is not a kind");
-  assert.match((await wrong.json()).message, /is not a kind/);
-
-  const sentAtOnce = await put(
-    `---\ntitle: Sent at once\nsummary: Said to a person for the test.\nkind: task\nstatus: published\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
-  );
-  assert.equal(sentAtOnce.status, 201, "a new task is Ready when its author says so, the default");
-  const shelved = await put(
-    `---\ntitle: Born done\nsummary: Said to a person for the test.\nkind: task\nstatus: consumed\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
-  );
+  assert.equal((await put(front(""))).status, 201, "new work is Ready unless it says draft");
+  const shelved = await put(front("status: consumed\n"));
   assert.equal(shelved.status, 409, "but it cannot start archived");
-  assert.match((await shelved.json()).message, /can't start archived/);
+  assert.match(shelved.message, /can't start archived/);
 
-  // And a stated task is stored exactly as stated, then a person moves it to Ready.
+  // A draft is stored as one, then a person moves it to Ready.
   const id = rid();
-  const ok = await fetch(`${API}/v1/guides/${id}`, {
-    method: "PUT",
-    headers: {
-      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-      "x-passalong-version": VERSION,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      markdown: `---\ntitle: Says so\nsummary: Said to a person for the test.\nkind: task\nstatus: draft\n---\n\n## Goal\ng\n\n## Acceptance\n- it holds\n`,
-    }),
-  });
-  assert.equal(ok.status, 201);
-  assert.deepEqual(await rows(`SELECT kind, status FROM guide WHERE id = '${id}'`), [
-    { kind: "task", status: "draft" },
+  assert.equal((await put(front("status: draft\n"), id)).status, 201);
+  assert.deepEqual(await rows(`SELECT status FROM guide WHERE id = '${id}'`), [
+    { status: "draft" },
   ]);
-  const ready = await fetch(`${API}/v1/guides/${id}/status`, {
-    method: "PATCH",
-    headers: {
-      authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
-      "x-passalong-version": VERSION,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ status: "published" }),
-  });
-  assert.equal(ready.status, 200);
-  assert.deepEqual(await rows(`SELECT kind, status FROM guide WHERE id = '${id}'`), [
-    { kind: "task", status: "published" },
+  assert.equal(
+    (await call("PATCH", `/v1/guides/${id}/status`, { status: "published" })).status,
+    200,
+  );
+  assert.deepEqual(await rows(`SELECT status FROM guide WHERE id = '${id}'`), [
+    { status: "published" },
   ]);
-  assert.ok(env);
 });
 
 test("a webhook URL with ?team= files onto that team's board; a team it can't use still files", {
@@ -1849,7 +1360,7 @@ test("a webhook URL with ?team= files onto that team's board; a team it can't us
     `INSERT INTO inbound (account_id, key, created) VALUES ('${account}', '${key}', '${new Date().toISOString()}')`,
   );
   const hook = (query, title) =>
-    fetch(`${API}/v1/in/${key}/bug${query}`, {
+    fetch(`${API}/v1/in/${key}${query}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title, id: title }),

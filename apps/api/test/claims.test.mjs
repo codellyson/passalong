@@ -1423,7 +1423,7 @@ test("a write-up is never what a hand-in is refused for", async () => {
 
 test("a check is run or shown, and prose about a picture is neither", async () => {
   // The asymmetry this closes: an image the USER showed an agent has been mandatory before
-  // publish_guide and file_bugs for as long as those existed — "a screenshot you described instead
+  // writing work down for as long as that existed — "a screenshot you described instead
   // of attaching is the most useful thing in the report, thrown away" — while an image that is the
   // only possible proof of the agent's OWN claim was never asked for once. So "a Sales Order PDF
   // renders with the store's brand colour" came back as "opened SO-00026, the header bar is
@@ -1433,11 +1433,11 @@ test("a check is run or shown, and prose about a picture is neither", async () =
     { check: visual, ran: "Opened SO-00026 in the viewer and the header bar is #1f6feb." },
   ]);
   assert.match(described || "", /Run it or show it/);
-  assert.match(described || "", /attach_screenshot/, "and it says how");
+  assert.match(described || "", /add_file/, "and it says how");
   assert.match(described || "", /writeup/, "and where a check that is neither belongs");
 
-  // Shown: attach_screenshot and create_upload both end at the same address, so one pattern answers
-  // for both, and it is the URL that counts rather than the words around it.
+  // Shown: add_file ends at the same address however the bytes came, so one pattern answers for
+  // all of them, and it is the URL that counts rather than the words around it.
   assert.equal(
     checksProblem([
       { check: visual, ran: "the header bar is #1f6feb — http://localhost/v1/shots/ab12cd34" },

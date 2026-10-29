@@ -155,12 +155,6 @@ test("a defaulted field is defaulted in one place", () => {
 /** Where kinds used to be decided, and must not come back. */
 const NO_KINDS = ["packages/passalong/src/guide.js", "apps/api/src", "apps/web/server"];
 
-/**
- * The agent tools, rewritten with the CLI's (docs/WORK.md, "Agent tools: 17"). Take each out of
- * here as it lands; this list is a deadline, not an exemption.
- */
-const TOOLS_PENDING = ["apps/api/src/mcp-http.ts"];
-
 test("work has no kinds: both boundaries refuse the field, and nothing reads one", () => {
   const js = readFileSync(join(root, "packages/passalong/src/guide.js"), "utf8");
   const ts = readFileSync(join(root, "apps/api/src/guide.ts"), "utf8");
@@ -175,7 +169,6 @@ test("work has no kinds: both boundaries refuse the field, and nothing reads one
   for (const dir of NO_KINDS) {
     const paths = dir.endsWith(".js") ? [join(root, dir)] : files(dir);
     for (const file of paths) {
-      if (TOOLS_PENDING.includes(relative(root, file))) continue;
       const src = code(readFileSync(file, "utf8"));
       for (const m of src.matchAll(/kind\b[^\n]{0,40}["'`](transfer|bug|task)["'`]/g)) {
         const line = src.slice(0, m.index).split("\n").length;

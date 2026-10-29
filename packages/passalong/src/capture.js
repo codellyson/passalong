@@ -1,9 +1,8 @@
-// Fallback capture when no agent wrote a draft: scaffold one from the working directory so the
-// developer starts from "what changed" instead of a blank page. The Claude Code skill in
-// skills/passalong-capture does the real distillation from a session transcript.
+// What can be learned about where a command runs, without reading any session: the repo, its
+// branch, who is committing. Work written from inside a repo is for that repo.
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
-import { template } from "./guide.js";
+import { serialize } from "./guide.js";
 
 function git(cwd, ...args) {
   try {
@@ -40,59 +39,24 @@ export function context(cwd = process.cwd()) {
   const name = basename(root || cwd);
   const branch = root ? git(cwd, "rev-parse", "--abbrev-ref", "HEAD") : "";
   const author = git(cwd, "config", "user.name");
-  const commits = root ? git(cwd, "log", "--oneline", "-8").split("\n").filter(Boolean) : [];
-  const changed = root
-    ? git(cwd, "diff", "--stat", "HEAD~5..HEAD").split("\n").filter(Boolean).slice(-1)[0] || ""
-    : "";
-  const files = root
-    ? git(cwd, "diff", "--name-only", "HEAD~5..HEAD").split("\n").filter(Boolean)
-    : [];
   // The repo as the task queue names it: its remote when it has one, because two worktrees of one
   // repo have two folder names and one remote. The folder name when there is no remote.
   const repo = root ? repoKey(git(cwd, "remote", "get-url", "origin") || name) : "";
-  return { root, name, repo, branch, author, commits, changed, files };
+  return { root, name, repo, branch, author };
 }
 
 /**
- * A task draft from one sentence: the sentence as the title and the Goal, the rest left to fill.
+ * A piece of work from one sentence: the sentence is its title, what it says to a person, and its
+ * text, for whoever wrote it to add to before it goes.
  *
- * `target_context` defaults to the repo this runs in, because that is the likeliest repo a task
- * written from inside one is for — and it is in the editor, in the frontmatter, for the author
- * to change before it goes anywhere. Outside a repo it stays empty, which is a task for no repo.
+ * `target_context` is the repo this runs in, because that is the likeliest repo work written from
+ * inside one is for — and it is in the frontmatter, for the author to change before it goes
+ * anywhere. Outside a repo it stays empty, which is work for no repo.
  */
-export function taskScaffold(sentence, cwd = process.cwd()) {
-  const c = context(cwd);
-  const md = template({
-    kind: "task",
-    title: sentence,
-    // The person typed this sentence, so it is theirs to say to a person as well as to name the task.
-    summary: String(sentence).slice(0, 400),
-    author: c.author,
-    source_context: c.branch && c.branch !== "HEAD" ? `${c.name}@${c.branch}` : c.name,
-    target_context: c.repo,
+export function workScaffold(sentence, cwd = process.cwd()) {
+  const said = String(sentence).trim();
+  return serialize({
+    meta: { title: said, summary: said.slice(0, 400), target_context: context(cwd).repo },
+    body: `${said}\n`,
   });
-  return md.replace(/^## Goal\n/m, `## Goal\n${sentence}\n`);
-}
-
-/** A draft pre-filled with repo facts. Recent activity is appended as a comment for reference. */
-export function scaffold(cwd = process.cwd()) {
-  const c = context(cwd);
-  let md = template({
-    kind: "transfer",
-    title: "",
-    author: c.author,
-    source_context: c.branch && c.branch !== "HEAD" ? `${c.name}@${c.branch}` : c.name,
-  });
-  if (c.commits.length) {
-    md += [
-      "",
-      "<!-- passalong: recent activity in this repo, for reference while you write. Delete when done.",
-      ...c.commits.map((l) => `  ${l}`),
-      c.changed ? `  ${c.changed}` : "",
-      ...c.files.slice(0, 30).map((f) => `  ${f}`),
-      "-->",
-      "",
-    ].join("\n");
-  }
-  return md;
 }

@@ -4044,7 +4044,7 @@ app.put("/v1/guides/:id", async (c) => {
       c,
       400,
       `An image in this guide (${unreachable[0]}) is on your computer, so nobody else can see it. ` +
-        "Upload it first, then use the link you get back. Agents: use the attach_screenshot tool.",
+        "Upload it first, then use the link you get back. Agents: use the add_file tool.",
     );
 
   const existing = await c.env.DB.prepare(

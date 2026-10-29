@@ -82,21 +82,21 @@ export function section(markdown: string, name: string): { heading: string; text
   };
 }
 
-/** What a guide's author is told when it is on the large side. */
+/** What the author of a piece of work is told when it is on the large side. */
 export function sizeWarning(chars: number): string | null {
   return chars > GUIDE_WARN
-    ? `this guide is ${chars.toLocaleString("en")} characters, and over ${GUIDE_WARN.toLocaleString("en")} ` +
-        "it is read by outline first. Put logs, dumps and long output in a file (attach_file) and " +
-        "link it; keep the guide to what the next agent has to act on."
+    ? `this is ${chars.toLocaleString("en")} characters, and over ${GUIDE_WARN.toLocaleString("en")} ` +
+        "it is read by outline first. Put logs, dumps and long output in a file (add_file) and " +
+        "link it; keep the text to what the next agent has to act on."
     : null;
 }
 
-/** Why a new guide of this size is refused, or null. `was` is the size already stored for the id. */
+/** Why new work of this size is refused, or null. `was` is the size already stored for the id. */
 export function sizeProblem(chars: number, was = 0): string | null {
   if (chars <= Math.max(GUIDE_MAX, was)) return null;
   return (
-    `This guide is ${chars.toLocaleString("en")} characters; the limit is ` +
+    `This is ${chars.toLocaleString("en")} characters; the limit is ` +
     `${GUIDE_MAX.toLocaleString("en")}. Put logs, dumps and long output in a file (agents: ` +
-    "attach_file), link it in the guide, and keep the guide to what the next agent has to act on."
+    "add_file), link it in the text, and keep the text to what the next agent has to act on."
   );
 }

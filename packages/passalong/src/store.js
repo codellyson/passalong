@@ -11,7 +11,6 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -175,15 +174,6 @@ export function list() {
     .map((f) => parse(readFileSync(join(GUIDES, f), "utf8")))
     .filter((g) => g.meta.id)
     .sort((a, b) => (b.meta.created || "").localeCompare(a.meta.created || ""));
-}
-
-/** Draft files, newest first. */
-export function drafts() {
-  ensure();
-  return readdirSync(DRAFTS)
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => join(DRAFTS, f))
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
 }
 
 export function draftPath(name) {

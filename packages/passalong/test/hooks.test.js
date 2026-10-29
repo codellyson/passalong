@@ -15,31 +15,27 @@ import {
 const HELD = {
   id: "k3mq2xa7",
   title: "Rate-limit token creation",
-  kind: "task",
   state: "claimed",
   note: "429 in place, writing the test",
   lease_until: "2026-09-22T10:30:00.000Z",
 };
 
 test("a session starts knowing what this worktree holds, and what to do about it", () => {
-  const said = nowText({ held: [HELD], waiting: { ready: 2, inbox: 1 } });
-  assert.match(said, /This worktree holds k3mq2xa7 \(task\): Rate-limit token creation/);
+  const said = nowText({ held: [HELD], ready: 2 });
+  assert.match(said, /This worktree holds k3mq2xa7: Rate-limit token creation/);
   assert.match(said, /429 in place, writing the test/);
   assert.match(said, /take k3mq2xa7/, "carry on by taking it again, which resumes it");
   assert.match(said, /hand_in|pass/);
 });
 
 test("with nothing held it says what is waiting, and with nothing at all it says nothing", () => {
-  assert.match(
-    nowText({ held: [], waiting: { ready: 2, inbox: 1 } }),
-    /2 ready tasks for this repo/,
-  );
-  assert.match(nowText({ held: [], waiting: { ready: 2, inbox: 1 } }), /1 guide handed to you/);
-  assert.equal(nowText({ held: [], waiting: { ready: 0, inbox: 0 } }), "");
+  assert.match(nowText({ held: [], ready: 2 }), /2 pieces of work are ready for this repo/);
+  assert.match(nowText({ held: [], ready: 1 }), /1 piece of work is ready/);
+  assert.equal(nowText({ held: [], ready: 0 }), "");
 });
 
 test("a stalled hold says it went quiet, so the agent knows to report before anything else", () => {
-  assert.match(nowText({ held: [{ ...HELD, state: "stalled" }], waiting: {} }), /stalled/);
+  assert.match(nowText({ held: [{ ...HELD, state: "stalled" }] }), /stalled/);
 });
 
 test("a session holding work is stopped once, told what to call, then let go", () => {
@@ -114,7 +110,7 @@ test("an agent that asked a question is allowed to stop and wait", () => {
 });
 
 test("the session-start line says when the person has written, because nothing else will", () => {
-  const base = { id: "k3mq2xa7", kind: "task", title: "T", state: "claimed" };
+  const base = { id: "k3mq2xa7", title: "T", state: "claimed" };
   assert.doesNotMatch(nowText({ held: [base] }), /waiting/);
   assert.match(
     nowText({ held: [{ ...base, replies: 1 }] }),
@@ -130,7 +126,7 @@ test("several held: a session is shown them all and told to carry on only with i
   const two = [HELD, { ...HELD, id: "t2", title: "Other", state: "stalled" }];
   const said = nowText({ held: two });
   assert.match(said, /holds 2 things/);
-  assert.match(said, /t2 \(task\): Other — stalled/);
+  assert.match(said, /t2: Other — stalled/);
   assert.match(said, /leave the rest to the sessions on them/);
   assert.match(stopVerdict({ held: two, input: {} }).reason, new RegExp(`${HELD.id}, t2`));
   assert.equal(stopVerdict({ held: [{ ...HELD, asking: "?" }], input: {} }), null);

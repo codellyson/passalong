@@ -1,6 +1,6 @@
 // A stand-in for the API, for tests of operations that now need one: nothing is kept on the
-// machine, so a share has to land somewhere. It holds published guides by id and answers the few
-// routes those operations call. Call before importing the modules, so they read the token.
+// machine, so work sent has to land somewhere. It holds work by id and answers the few routes those
+// operations call. Call before importing the modules, so they read the token.
 import { parse, serialize } from "../src/guide.js";
 
 export function fakeServer() {
@@ -28,6 +28,11 @@ export function fakeServer() {
         next: page.length === 2 ? page[1] : "",
       });
     }
+    if (u.pathname === "/v1/take" && method === "POST") {
+      const id = JSON.parse(init.body).id;
+      if (!guides.has(id)) return json({ message: "no such work" }, 404);
+      return json({ guide: { id, markdown: guides.get(id), fence: 1 }, next: [] });
+    }
     const [, id, sub] = u.pathname.match(/^\/v1\/guides\/(\w+)(?:\/(\w+))?$/) || [];
     if (id && method === "PUT" && !sub) {
       guides.set(id, init.body);
@@ -40,7 +45,7 @@ export function fakeServer() {
       return json({ ok: true });
     }
     if (id && method === "GET" && !sub && guides.has(id)) return new Response(guides.get(id));
-    return json({ message: "no such guide" }, 404);
+    return json({ message: "no such work" }, 404);
   };
   return { guides, asked };
 }

@@ -75,7 +75,7 @@ test("the hosted MCP's copy answers the same too", () => {
 
 test("a new guide over the limit is refused, and one stored larger before keeps its size", () => {
   assert.equal(api.sizeProblem(api.GUIDE_MAX), null);
-  assert.match(api.sizeProblem(api.GUIDE_MAX + 1) || "", /attach_file/);
+  assert.match(api.sizeProblem(api.GUIDE_MAX + 1) || "", /add_file/);
   assert.equal(api.sizeProblem(354_338, 354_338), null, "a guide already that big may be re-saved");
   assert.ok(api.sizeProblem(354_339, 354_338), "but not made bigger");
   assert.equal(api.sizeWarning(api.GUIDE_WARN), null);

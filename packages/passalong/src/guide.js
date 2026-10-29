@@ -315,8 +315,8 @@ export function validate({ meta, body }) {
   for (const field of RETIRED)
     if (meta[field] !== undefined)
       errors.push(`\`${field}:\` is gone — work has no kinds; remove the line`);
-  // An agent that has a file id but never called attach_screenshot writes the id as if it were a
-  // link. It publishes, and stores a guide whose screenshot was never uploaded anywhere.
+  // An agent that has a file id but never called add_file writes the id as if it were a link. It
+  // publishes, and stores work whose screenshot was never uploaded anywhere.
   for (const target of unreachableImages(body))
     errors.push(
       `${target} is not a URL a reader can load — attach the image first and use the URL it returns`,
@@ -401,12 +401,12 @@ export function section(markdown, name) {
   };
 }
 
-/** What a guide's author is told when it is on the large side. */
+/** What the author of a piece of work is told when it is on the large side. */
 export function sizeWarning(chars) {
   return chars > GUIDE_WARN
-    ? `this guide is ${chars.toLocaleString("en")} characters, and over ${GUIDE_WARN.toLocaleString("en")} ` +
-        "it is read by outline first. Put logs, dumps and long output in a file (attach_file) and " +
-        "link it; keep the guide to what the next agent has to act on."
+    ? `this is ${chars.toLocaleString("en")} characters, and over ${GUIDE_WARN.toLocaleString("en")} ` +
+        "it is read by outline first. Put logs, dumps and long output in a file (add_file) and " +
+        "link it; keep the text to what the next agent has to act on."
     : null;
 }
 
@@ -428,7 +428,7 @@ export function outlineText(markdown, { id = "", path = "" } = {}) {
     "Sections:",
     ...rows,
     "",
-    `Read one with get_guide ref=${id} section="<heading>", or the whole thing with full=true.` +
+    `Read one with find_work id=${id} section="<heading>", or the whole thing with full=true.` +
       (path ? ` The full text is also on disk at ${path}, if you only need to search it.` : ""),
   ]
     .filter((l, i, a) => l !== "" || a[i - 1] !== "")

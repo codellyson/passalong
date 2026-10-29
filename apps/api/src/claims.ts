@@ -101,7 +101,7 @@ export function proofProblem(evidence: string, checks: Check[]): string | null {
     return null;
   return (
     "show it: finishing is final, so it needs one thing a person can look at. For anything with " +
-    "a screen, a screenshot (attach_screenshot, or create_upload) — before and after, for a bug. " +
+    "a screen, a screenshot (add_file) — before and after, for a bug. " +
     "For backend work, the one command you ran and the line of its output that shows it works: " +
     '"$ npm test" then "41 pass, 0 fail", or "npm test → 41 pass, 0 fail".'
   );
@@ -169,8 +169,8 @@ const verified = (c: Check): boolean =>
   Boolean(c?.cmd) && (typeof c?.exit === "number" || c?.exit === null);
 
 /**
- * A screenshot or an upload, in text. Both `attach_screenshot` and `create_upload` end at the same
- * address, so one pattern answers for both.
+ * A screenshot or an upload, in text. `add_file` ends at the same address whichever way the
+ * bytes came, so one pattern answers for all of them.
  *
  * Written out here rather than imported from guide.ts, which owns the same regex: this module
  * takes no sibling `.ts` import on purpose — see the note at the top — because it is tested against
@@ -219,14 +219,14 @@ export function checksProblem(checks: Check[]): string | null {
     // nothing in the system had looked at anything.
     //
     // The asymmetry this removes: an image the USER showed the agent has been mandatory before
-    // publish_guide and file_bugs for as long as those have existed, while an image that is the
-    // only possible proof of the agent's OWN claim was never asked for once.
+    // writing work down for as long as that has existed, while an image that is the only
+    // possible proof of the agent's OWN claim was never asked for once.
     if (!shown(c)) {
       const line = String(c.check).trim().slice(0, 60);
       return (
         `"${line}" was answered in words. Run it or show it. Run it: send ` +
         `{"check": "${line}", "cmd": "<the command that settles it>"} — it runs here and its ` +
-        "output is recorded as the evidence. Show it, when no command can settle it: attach_screenshot, then " +
+        "output is recorded as the evidence. Show it, when no command can settle it: add_file, then " +
         `{"check": "${line}", "ran": "<the line it returns>"}. Typing a command into \`ran\` is ` +
         "still you typing, and a check that can be neither run nor shown goes in `writeup`."
       );
