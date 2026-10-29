@@ -22,7 +22,7 @@ const myEmail = computed(() => data.value.me?.email || "your account's email");
 type Kind = "task" | "bug" | "transfer";
 const state = ref<{
   available: boolean;
-  addresses: Record<Kind | "support", string> | null;
+  addresses: (Record<Kind | "support", string> & { new?: string }) | null;
   hooks: Record<Kind, string> | null;
   senders: Sender[];
 } | null>(null);
@@ -42,7 +42,20 @@ const SUPPORT_ROW = {
   label: "Customer support",
   note: "anyone can write; they get a tracking number, and you answer from the guide",
 };
-const rows = computed(() => (source.value === "email" ? [...KINDS, SUPPORT_ROW] : KINDS));
+/**
+ * The address for anything, sorted by the agent as the box sorts writing: offered when the server
+ * has a reader. On an iPhone, which cannot share to a website, Share then Mail sends a screenshot.
+ */
+const ANYTHING_ROW = {
+  id: "new" as const,
+  label: "Anything",
+  note: "the agent sorts it and reads its pictures; on a phone, share a screenshot to Mail and send it here",
+};
+const rows = computed(() =>
+  source.value === "email"
+    ? [...(state.value?.addresses?.new ? [ANYTHING_ROW] : []), ...KINDS, SUPPORT_ROW]
+    : KINDS,
+);
 const busy = ref("");
 const problem = ref("");
 const source = ref<"email" | "sentry" | "posthog" | "code">("email");
@@ -73,7 +86,7 @@ const addresses = computed(() =>
           k,
           team.value && a ? a.replace("@", `+${team.value}@`) : a,
         ]),
-      ) as Record<Kind | "support", string>)
+      ) as Record<string, string>)
     : null,
 );
 /** Email shows its addresses; every other source posts to its URL. */

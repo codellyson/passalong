@@ -23,8 +23,10 @@ never `'unsafe-inline'`.
 
 The hub runs script and holds a token, so it shows a guide by framing its share page (`?embed=1`) in a
 sandboxed same-origin iframe with no `allow-scripts`. Its policy gains `frame-src 'self'` and nothing
-wider. Inside the frame every link opens a new tab, so nothing can navigate it. The service worker has
-no fetch handler, so the pages it controls load exactly as without it.
+wider. Inside the frame every link opens a new tab, so nothing can navigate it. The service worker
+answers one request only, the phone's share (`POST /hub/share`), and keeps what was shared in the
+browser for the signed-in box to upload; every other request it leaves alone, so the pages it
+controls load exactly as without it.
 
 ## What else is load-bearing
 

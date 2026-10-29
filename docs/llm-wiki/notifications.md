@@ -56,6 +56,12 @@ route offers from repos the account's tasks and agents already use). An agent's 
 offers tasks for its own repo, so a task Ready with no repo is taken by id. Migration 0052 dropped
 the one-repo-per-account `inbound.target` this replaced.
 
+**Anything, sorted for you: `key+new@` (2026-10-29).** Shown when the server has a reader. Mail to it
+from an allowed sender is filed exactly as the hub's box files writing (`receiveAnything()` through
+`POST /v1/compose`): the reader states the kind and the group and reads up to three pictures, which
+are kept as screenshots. It is the iPhone's way in — Share, Mail — since an iPhone cannot share to a
+website; Android shares to the installed app directly (`share_target`, see security-model).
+
 **Webhooks use the same key.** `POST /v1/in/<key>/<kind>` (public by path; the key is the
 credential, and Sentry's HMAC is not checked yet) turns a webhook into a guide through the same
 `intake()` as email, so the same rules hold: Ready at once, a quoted body, merged repeats.

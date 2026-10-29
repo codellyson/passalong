@@ -48,6 +48,12 @@ test("an address names whose it is and which kind; without a kind it is nobody's
     team: "khaime",
   });
   assert.equal(addressOf("k7x2m9qp+khaime+bug@in.passalong.dev", d), null, "the kind comes first");
+  // `+new` names no kind on purpose: the reader states it, as in the hub's box.
+  assert.deepEqual(addressOf("k7x2m9qp+new+acme@in.passalong.dev", d), {
+    key: "k7x2m9qp",
+    kind: "new",
+    team: "acme",
+  });
   // A guide's kind is stated or refused, never guessed: the bare address states none.
   assert.equal(addressOf("k7x2m9qp@in.passalong.dev", d), null);
   assert.equal(addressOf("k7x2m9qp+feature@in.passalong.dev", d), null);

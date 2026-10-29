@@ -168,6 +168,40 @@ const loadRecent = () =>
     .catch(() => {});
 onMounted(loadRecent);
 
+/**
+ * What a phone shared to Passalong (`share_target` in site.webmanifest): the service worker keeps
+ * it in this browser and sends the page here with `?shared=1`; once the editor is up, the words go
+ * in and each picture uploads as if pasted, and the kept copy is emptied.
+ */
+const route = useRoute();
+const router = useRouter();
+const stopShared = watch(writer, async (w) => {
+  if (!w || route.query.shared !== "1" || !("caches" in window)) return;
+  stopShared();
+  const cache = await caches.open("passalong-shared");
+  const words = await (await cache.match("/shared/text"))?.text();
+  if (words) w.insert(`${words} `);
+  uploading.value = true;
+  try {
+    for (const key of await cache.keys()) {
+      if (!new URL(key.url).pathname.startsWith("/shared/file/")) continue;
+      const res = await cache.match(key);
+      if (!res) continue;
+      const name = decodeURIComponent(res.headers.get("x-name") || "picture");
+      await w.addPicture(
+        new File([await res.blob()], name, {
+          type: res.headers.get("content-type") || "image/png",
+        }),
+      );
+    }
+  } finally {
+    uploading.value = false;
+    await caches.delete("passalong-shared");
+    const { shared: _, ...rest } = route.query;
+    router.replace({ query: rest });
+  }
+});
+
 async function file() {
   if (!text.value.trim() || busy.value) return;
   busy.value = true;
