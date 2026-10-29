@@ -97,12 +97,12 @@ function readerModel(env: ReaderEnv, doFetch: typeof fetch): LanguageModel {
 
 /**
  * One call to the model: its text, or null on no reader, an error or a timeout. The prompts ask for
- * one JSON object and the callers check whatever comes back, so the answer is read as text.
+ * one JSON object and the callers check whatever comes back, so the answer is read as text. No
+ * temperature: current models ignore it or refuse it, and the checks do the work it would.
  */
 async function ask(
   env: ReaderEnv,
   messages: { role: string; content: string }[],
-  temperature: number,
   doFetch: typeof fetch,
   what: string,
 ): Promise<string | null> {
@@ -112,7 +112,6 @@ async function ask(
       model: readerModel(env, doFetch),
       system: messages[0]?.content,
       prompt: messages[1]?.content ?? "",
-      temperature,
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(20_000),
     });
@@ -235,7 +234,7 @@ export async function askReader(
   input: ReaderInput,
   doFetch: typeof fetch = fetch,
 ): Promise<Verdict | null> {
-  const text = await ask(env, readerMessages(input), 0, doFetch, "reader");
+  const text = await ask(env, readerMessages(input), doFetch, "reader");
   return text === null ? null : readVerdict(text, input.groups, input.kinds);
 }
 
@@ -326,6 +325,6 @@ export async function askDraft(
   input: DraftInput,
   doFetch: typeof fetch = fetch,
 ): Promise<string | null> {
-  const text = await ask(env, draftMessages(input), 0.3, doFetch, "draft");
+  const text = await ask(env, draftMessages(input), doFetch, "draft");
   return text === null ? null : readDraft(text);
 }
