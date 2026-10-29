@@ -47,6 +47,13 @@ export type EmailKind = (typeof KINDS)[number];
 /** The address customers write to. Not a kind: what it makes is a task, said where it is made. */
 export const SUPPORT = "support";
 
+/**
+ * The address for anything at all, `key+new@`: the reader states the kind, as in the hub's box,
+ * and the pictures on it are read and kept. It is how a phone without a Share target for the web
+ * (an iPhone) sends a screenshot in two taps: Share, Mail. Only senders the account allowed.
+ */
+export const ANYTHING = "new";
+
 /** How many new requests one customer may open in a day, and one account may receive. */
 export const SUPPORT_PER_SENDER = 5;
 export const SUPPORT_PER_ACCOUNT = 200;
@@ -59,10 +66,10 @@ export const SUPPORT_PER_ACCOUNT = 200;
 export function addressOf(
   to: string,
   domain: string,
-): { key: string; kind: EmailKind | typeof SUPPORT; team: string } | null {
+): { key: string; kind: EmailKind | typeof SUPPORT | typeof ANYTHING; team: string } | null {
   const m = /^([^@\s+]+)\+([^@\s+]+)(?:\+([^@\s+]+))?@([^@\s]+)$/.exec(to.trim().toLowerCase());
   if (!m || !domain || m[4] !== domain.toLowerCase()) return null;
-  const kind = m[2] === SUPPORT ? SUPPORT : KINDS.find((k) => k === m[2]);
+  const kind = m[2] === SUPPORT || m[2] === ANYTHING ? m[2] : KINDS.find((k) => k === m[2]);
   return kind ? { key: m[1] as string, kind, team: m[3] ?? "" } : null;
 }
 

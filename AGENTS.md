@@ -395,7 +395,9 @@ change. Its README says how.
   `reader_unsure`, pushed and mailed, with its one question. The same reader is the hub's box
   (`/hub/new`, `POST /v1/compose`): a teammate's own words become a task, bug or handover, filed at
   once as theirs with no confirm step; the page offers move (`assign`) and undo (delete), and when
-  the reader is unsure nothing is filed until its question is answered there. Its input is TipTap
+  the reader is unsure it files its best reading anyway, with its question on the thread and on the
+  page as "Worth checking" (2026-10-29: asking first made people fill in a form for work the agent
+  was there to shape). Its input is TipTap
   directly (`components/hub/Writer.vue`), not Nuxt UI, so it keeps the hub's look and policy:
   TipTap's injected stylesheet is off (`injectCSS: false`; the hub allows styles from its own
   stylesheet only) and its rules are `.writer` in styles.css; it renders inside `<ClientOnly>`.
@@ -791,8 +793,15 @@ change. Its README says how.
   phone that buzzes for every open gets muted. Devices are `push_subscription` rows (migration
   0034), one per browser, turned on from Settings — permission is asked on the button, never on
   load, because a refused prompt cannot be asked again. `private` is per device, since a lock screen
-  is. A 404/410 from the push service deletes the row. `public/sw.js` has **no fetch handler**, so
-  the pages it controls, guide pages included, load exactly as without it. Two events had no way to
+  is. A 404/410 from the push service deletes the row. `public/sw.js` answers **one request only**,
+  the `POST /hub/share` a phone's Share menu sends (`share_target` in `site.webmanifest`), and leaves
+  every other request unanswered, so the pages it controls, guide pages included, load exactly as
+  without it. A share carries no credential, so the worker uploads nothing: it keeps the pictures and
+  words in the browser's cache and sends the page to `/hub/new?shared=1`, where the signed-in box
+  uploads them as a paste. The hub registers the worker on load (registering asks nothing; push
+  permission is still asked only on its button). iPhones cannot share to a website, so they use mail:
+  `key+new@` (`ANYTHING` in inbound.ts) files through `POST /v1/compose` as the box does, reader and
+  pictures included, from allowed senders only, written by `email`. Two events had no way to
   reach you and now do: `blocked` (a progress note starting `BLOCKED:`, first time only) and your
   own agent's `task_finished`, both sent without an actor so `notify()` does not drop them as
   self-inflicted. Keys: `node scripts/vapid-keys.mjs`; without `VAPID_*` the hub says push is not

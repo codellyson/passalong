@@ -56,6 +56,12 @@ route offers from repos the account's tasks and agents already use). An agent's 
 offers tasks for its own repo, so a task Ready with no repo is taken by id. Migration 0052 dropped
 the one-repo-per-account `inbound.target` this replaced.
 
+**Anything, sorted for you: `key+new@` (2026-10-29).** Shown when the server has a reader. Mail to it
+from an allowed sender is filed exactly as the hub's box files writing (`receiveAnything()` through
+`POST /v1/compose`): the reader states the kind and the group and reads up to three pictures, which
+are kept as screenshots. It is the iPhone's way in — Share, Mail — since an iPhone cannot share to a
+website; Android shares to the installed app directly (`share_target`, see security-model).
+
 **Webhooks use the same key.** `POST /v1/in/<key>/<kind>` (public by path; the key is the
 credential, and Sentry's HMAC is not checked yet) turns a webhook into a guide through the same
 `intake()` as email, so the same rules hold: Ready at once, a quoted body, merged repeats.
@@ -91,7 +97,8 @@ team group by name (`to: #group`). It looks at pictures too — up to three on t
 the box — because a screenshot of an error is often the whole report. Its answer is used whole or not at all (`readVerdict()`), the
 customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for
 the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the
-hub's box, `/hub/new` (`POST /v1/compose`), for writing a task, bug or handover in your own words. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
+hub's box, `/hub/new` (`POST /v1/compose`), for writing a task, bug or handover in your own words;
+there, when unsure, it files its best reading anyway and puts its question on the thread. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
 guide made from a request (a bug sent on to development) reaches Done, the request wakes: a
 `child_done` notification, and — when the team turned the reminder on (`team.tell_customer`, migration
 0059, set by an owner on the Support page; off by default) — it says "tell the customer" and the

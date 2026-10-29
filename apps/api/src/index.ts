@@ -151,6 +151,7 @@ import {
 import { guidePreview } from "./guide-preview.js";
 import { mintOrigin } from "./hosts.js";
 import {
+  ANYTHING,
   addressOf,
   KINDS as EMAIL_KINDS,
   type EmailKind,
@@ -5440,14 +5441,18 @@ const inboundDomain = (env: Env) =>
     .toLowerCase();
 
 /**
- * One address per kind, `key+kind@domain`, and the one customers write to, `key+support@domain`.
- * Empty when there is no key or no domain. Support has an address and no webhook: it is mail from
- * people, and a webhook has no customer to answer.
+ * One address per kind, `key+kind@domain`, the one customers write to, `key+support@domain`, and
+ * the one for anything, `key+new@domain`, when there is a reader to sort it. Empty when there is no
+ * key or no domain. Support has an address and no webhook: it is mail from people, and a webhook has
+ * no customer to answer.
  */
-const addressesOf = (key: string | undefined, domain: string) =>
+const addressesOf = (key: string | undefined, domain: string, sorted: boolean) =>
   Object.fromEntries(
-    [...EMAIL_KINDS, SUPPORT].map((k) => [k, key && domain ? `${key}+${k}@${domain}` : ""]),
-  ) as Record<EmailKind | typeof SUPPORT, string>;
+    [...EMAIL_KINDS, SUPPORT, ...(sorted ? [ANYTHING] : [])].map((k) => [
+      k,
+      key && domain ? `${key}+${k}@${domain}` : "",
+    ]),
+  ) as Record<EmailKind | typeof SUPPORT | typeof ANYTHING, string>;
 
 /** The webhook URL for each kind, on the same key: `<origin>/v1/in/<key>/<kind>`. */
 const hooksOf = (key: string, base: string) =>
@@ -5471,7 +5476,7 @@ app.get("/v1/inbound", async (c) => {
     .all();
   return c.json({
     available: Boolean(domain),
-    addresses: box ? addressesOf(box.key, domain) : null,
+    addresses: box ? addressesOf(box.key, domain, readerReady(c.env)) : null,
     hooks: box ? hooksOf(box.key, origin(c)) : null,
     senders: results,
   });
@@ -5489,7 +5494,10 @@ app.post("/v1/inbound", async (c) => {
     .bind(c.get("account"), key, now())
     .run();
   count(c, "inbound_address");
-  return c.json({ addresses: addressesOf(key, domain), hooks: hooksOf(key, origin(c)) });
+  return c.json({
+    addresses: addressesOf(key, domain, readerReady(c.env)),
+    hooks: hooksOf(key, origin(c)),
+  });
 });
 
 /** Turn it off. Senders are kept, so turning it back on does not ask about them again. */
@@ -5708,7 +5716,7 @@ export async function receiveEmail(
   try {
     const to = addressOf(message.to, inboundDomain(env));
     // Alerts and notes are small; a customer's message may carry their screenshots, so it gets more.
-    const cap = to?.kind === SUPPORT ? 15 * 1024 * 1024 : 1024 * 1024;
+    const cap = to?.kind === SUPPORT || to?.kind === ANYTHING ? 15 * 1024 * 1024 : 1024 * 1024;
     if (!to || message.rawSize > cap) return;
     const box = await env.DB.prepare(
       `SELECT i.account_id, a.email, a.email_verified FROM inbound i
@@ -5744,6 +5752,7 @@ export async function receiveEmail(
       }
       if (seen?.state !== "allowed") return;
     }
+    if (to.kind === ANYTHING) return await receiveAnything(env, ctx, me, to.team, mail);
 
     const title = titleOf(mail.subject) || `Email from ${mail.sender}`;
     const made = await intake(env, ctx, {
@@ -5769,6 +5778,45 @@ export async function receiveEmail(
   } catch (e) {
     console.error("inbound", (e as Error).message);
   }
+}
+
+/**
+ * Mail to `key+new@` from an allowed sender: filed exactly as the hub's box files writing, by the
+ * same route, so the reader, its routing and its note are the box's. Pictures are stored as the
+ * account's screenshots first, which is what the box does with a paste. Without a reader the address
+ * is not offered, and mail to it is dropped.
+ */
+async function receiveAnything(
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  me: string,
+  team: string,
+  mail: Awaited<ReturnType<typeof parseEmail>>,
+): Promise<void> {
+  if (!readerReady(env)) return;
+  const base = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
+  const call = (path: string, init: RequestInit) =>
+    app.fetch(asAccount(new Request(`${base}${path}`, init), me, "email"), env, ctx);
+  const pictures: string[] = [];
+  for (const f of mail.files.filter((f) => SHOT_TYPES[f.type]).slice(0, READER_IMAGES)) {
+    const res = await call("/v1/shots", {
+      method: "POST",
+      headers: { "content-type": f.type, "x-shot-name": f.name.slice(0, 120) },
+      body: new Uint8Array(f.bytes).buffer,
+    });
+    if (res.ok) pictures.push(((await res.json()) as { shot: { url: string } }).shot.url);
+  }
+  const subject = titleOf(mail.subject);
+  const text =
+    [subject, mail.text.trim()].filter(Boolean).join("\n\n") ||
+    (pictures.length ? "See the picture." : "");
+  if (!text) return;
+  const res = await call("/v1/compose", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: text.slice(0, 8000), team, pictures }),
+  });
+  if (!res.ok) console.error("anything", res.status, (await res.text()).slice(0, 200));
 }
 
 /**
@@ -6057,8 +6105,9 @@ async function supportFrom(env: Env, account: string, team: string): Promise<{ n
  * reader turns it into a guide — task, bug or handover, with its sections, routed to a group of the
  * team — and it is filed at once, as theirs. No confirm step, by the author's decision: the guide
  * records that the reader sorted it (a note with its reason), and moving or undoing it is one click
- * on the page that answers. When the reader is unsure nothing is filed; its question comes back, and
- * the next call carries the answer. Their words are quoted into the guide by code, as written.
+ * on the page that answers. When the reader is unsure it still files its best reading, and its
+ * question goes on the thread and back to the page: asking first made people fill in a form for
+ * work the agent was there to shape. Their words are quoted into the guide by code, as written.
  */
 /** The team someone is writing for, if they are in it, and its groups the reader may route to. */
 async function composeTeam(c: Ctx, me: string, slug: string) {
@@ -6183,8 +6232,6 @@ app.post("/v1/compose", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as {
     text?: unknown;
     team?: unknown;
-    question?: unknown;
-    answer?: unknown;
     pictures?: unknown;
   };
   const raw = typeof body.text === "string" ? body.text : "";
@@ -6203,13 +6250,9 @@ app.post("/v1/compose", async (c) => {
   const slug = typeof body.team === "string" ? body.team.trim() : "";
   const { team, groups } = await composeTeam(c, me, slug);
   if (slug && !team) return err(c, 404, "You aren't in that team.");
-  // An answer to the reader's question travels with the text it was about.
-  const question = typeof body.question === "string" ? body.question.trim().slice(0, 200) : "";
-  const answer = typeof body.answer === "string" ? body.answer.trim().slice(0, 1000) : "";
-  const full = question && answer ? `${text}\n\nAsked: ${question}\nAnswer: ${answer}` : text;
   const verdict = await askReader(c.env, {
     subject: "",
-    text: full,
+    text,
     groups,
     from: "team",
     kinds: ["task", "bug", "transfer"],
@@ -6221,7 +6264,7 @@ app.post("/v1/compose", async (c) => {
       502,
       "That couldn't be sorted just now. Try again, or say a little more about it.",
     );
-  if (!verdict.sure) return c.json({ question: verdict.question });
+  const unsure = verdict.sure ? "" : verdict.question;
 
   const who = await c.env.DB.prepare("SELECT name, handle FROM account WHERE id = ?")
     .bind(me)
@@ -6233,8 +6276,8 @@ app.post("/v1/compose", async (c) => {
     .slice(0, 5)
     .map((u, i) => `![picture ${i + 1}](${u})`);
   let markdown = readerBody(verdict, {
-    intro: `${name} wrote this in the hub; it is below as they wrote it.`,
-    text: full,
+    intro: `${name} ${c.get("client") === "email" ? "emailed this" : "wrote this in the hub"}; it is below as they wrote it.`,
+    text,
   });
   if (pictures.length) markdown = `${markdown.trimEnd()}\n\n${pictures.join("\n")}\n`;
   markdown = setField(markdown, "title", verdict.title);
@@ -6252,7 +6295,8 @@ app.post("/v1/compose", async (c) => {
         body: markdown,
       }),
       me,
-      "hub",
+      // The box in the hub, or mail to `key+new@` filed through it.
+      c.get("client") === "email" ? "email" : "hub",
     ),
     c.env,
     (() => {
@@ -6267,7 +6311,7 @@ app.post("/v1/compose", async (c) => {
   const routed = verdict.route ? groups.find((g) => g.slug === verdict.route) : undefined;
   await claims.noteOn(c.env.DB, id, {
     account: me,
-    body: `Sorted by the reader as a ${verdict.kind}${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${verdict.reason ? `: ${verdict.reason}` : "."}`,
+    body: `Sorted by the reader as a ${verdict.kind}${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${verdict.reason ? `: ${verdict.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
     at: now(),
   });
   count(c, "composed", { kind: verdict.kind });
@@ -6279,6 +6323,7 @@ app.post("/v1/compose", async (c) => {
       summary: verdict.summary,
       route: routed ? { slug: routed.slug, name: routed.name } : null,
       reason: verdict.reason,
+      unsure,
       groups,
     },
     201,

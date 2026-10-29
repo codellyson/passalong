@@ -3,8 +3,8 @@
   your own. Write or paste anything; the agent — the reader — gives it its shape (task, bug or
   handover, with its sections), sends it to one of the team's groups and files it, with no confirm
   step. Its work is on the page the whole time: the panel beside the editor says, as you write, what
-  this is, where it goes, what it has drafted and what already looks like it. Unsure, it asks there
-  and files nothing until answered. Filed, the panel says where it went, with move and undo.
+  this is, where it goes, what it has drafted and what already looks like it. Unsure, it still files
+  its best reading and says what it would check. Filed, the panel says where it went, with move and undo.
 -->
 <script setup lang="ts">
 usePage({
@@ -30,9 +30,6 @@ const writer = ref<{
 const busy = ref(false);
 const uploading = ref(false);
 const problem = ref("");
-/** The reader's question, when it could not tell, and the answer being written to it. */
-const question = ref("");
-const answer = ref("");
 
 const STARTERS = [
   { label: "Something's broken", text: "Something's broken: " },
@@ -48,6 +45,8 @@ interface Filed {
   summary: string;
   route: { slug: string; name: string } | null;
   reason: string;
+  /** What the reader was not sure of, filed anyway; "" when it was sure. */
+  unsure: string;
   groups: { slug: string; name: string }[];
 }
 const filed = ref<Filed | null>(null);
@@ -152,13 +151,11 @@ const evidence = computed(() =>
 const state = computed(() =>
   filed.value
     ? { label: "Filed", tone: "ok" }
-    : question.value
-      ? { label: "Needs one answer", tone: "ask" }
-      : reading.value
-        ? { label: "Reading…", tone: "quiet" }
-        : preview.value
-          ? { label: "Ready to file", tone: "ok" }
-          : { label: "Waiting for you", tone: "quiet" },
+    : reading.value
+      ? { label: "Reading…", tone: "quiet" }
+      : preview.value
+        ? { label: "Ready to file", tone: "ok" }
+        : { label: "Waiting for you", tone: "quiet" },
 );
 
 /** What the agent filed for this account here, newest first. */
@@ -171,27 +168,51 @@ const loadRecent = () =>
     .catch(() => {});
 onMounted(loadRecent);
 
+/**
+ * What a phone shared to Passalong (`share_target` in site.webmanifest): the service worker keeps
+ * it in this browser and sends the page here with `?shared=1`; once the editor is up, the words go
+ * in and each picture uploads as if pasted, and the kept copy is emptied.
+ */
+const route = useRoute();
+const router = useRouter();
+const stopShared = watch(writer, async (w) => {
+  if (!w || route.query.shared !== "1" || !("caches" in window)) return;
+  stopShared();
+  const cache = await caches.open("passalong-shared");
+  const words = await (await cache.match("/shared/text"))?.text();
+  if (words) w.insert(`${words} `);
+  uploading.value = true;
+  try {
+    for (const key of await cache.keys()) {
+      if (!new URL(key.url).pathname.startsWith("/shared/file/")) continue;
+      const res = await cache.match(key);
+      if (!res) continue;
+      const name = decodeURIComponent(res.headers.get("x-name") || "picture");
+      await w.addPicture(
+        new File([await res.blob()], name, {
+          type: res.headers.get("content-type") || "image/png",
+        }),
+      );
+    }
+  } finally {
+    uploading.value = false;
+    await caches.delete("passalong-shared");
+    const { shared: _, ...rest } = route.query;
+    router.replace({ query: rest });
+  }
+});
+
 async function file() {
   if (!text.value.trim() || busy.value) return;
   busy.value = true;
   problem.value = "";
   try {
-    const got = await api<Filed & { question?: string }>(
+    const got = await api<Filed>(
       "/v1/compose",
-      json("POST", {
-        text: text.value,
-        team: team.value,
-        ...(question.value ? { question: question.value, answer: answer.value } : {}),
-      }),
+      json("POST", { text: text.value, team: team.value }),
     );
-    if (got?.question) {
-      question.value = got.question;
-      answer.value = "";
-      return;
-    }
     if (got) {
       filed.value = got;
-      question.value = "";
       loadRecent();
     }
   } catch (err) {
@@ -229,7 +250,6 @@ async function undo() {
 
 function again() {
   filed.value = null;
-  question.value = "";
   preview.value = null;
   related.value = [];
   writer.value?.clear();
@@ -239,7 +259,6 @@ function again() {
 const groupName = (g: { slug: string; name: string }) => g.name || `#${g.slug}`;
 const toneDot: Record<string, string> = {
   ok: "bg-[var(--ok)]",
-  ask: "bg-[var(--coral)]",
   quiet: "bg-[var(--line-strong)]",
 };
 </script>
@@ -274,7 +293,7 @@ const toneDot: Record<string, string> = {
               placeholder="Write it however it comes. Paste a screenshot, an error or a link."
               :people="people"
               :groups="groups"
-              :disabled="Boolean(question) || Boolean(filed)"
+              :disabled="Boolean(filed)"
               @change="text = $event"
               @problem="problem = $event"
             >
@@ -288,7 +307,7 @@ const toneDot: Record<string, string> = {
                   <button type="button" class="btn sm" :disabled="Boolean(filed)" @mousedown.prevent @click="writer?.insert('#')"># group</button>
                 </span>
                 <button
-                  v-if="!filed && !question"
+                  v-if="!filed"
                   class="btn primary"
                   :disabled="busy || !text.trim()"
                 >{{ busy ? "Filing…" : "File it" }}</button>
@@ -334,6 +353,9 @@ const toneDot: Record<string, string> = {
                 <b class="font-medium">{{ filed.route ? groupName(filed.route) : "The whole team" }}</b>
               </span>
             </div>
+            <p v-if="filed.unsure" class="m-0 font-ui text-sm">
+              <span class="text-muted">Worth checking:</span> {{ filed.unsure }}
+            </p>
             <div class="flex flex-wrap gap-2">
               <NuxtLink :to="`/hub/g/${filed.id}`" class="btn primary sm no-underline">Open it</NuxtLink>
               <button v-if="filed.groups.length" type="button" class="btn sm" :aria-expanded="moving" @click="moving = !moving">Send elsewhere</button>
@@ -352,13 +374,6 @@ const toneDot: Record<string, string> = {
               <button type="button" class="btn sm" :class="!filed.route ? 'primary' : ''" @click="move('')">The whole team</button>
             </div>
           </template>
-
-          <!-- Unsure: its one question, answered here; nothing is filed until then. -->
-          <form v-else-if="question" class="flex flex-col gap-3" @submit.prevent="file">
-            <label class="font-ui text-base" for="agent-answer">{{ question }}</label>
-            <input id="agent-answer" v-model="answer" type="text" required maxlength="1000" />
-            <button class="btn primary self-start" :disabled="busy || !answer.trim()">{{ busy ? "Filing…" : "Answer and file" }}</button>
-          </form>
 
           <!-- Reading: what it has made of the writing so far. -->
           <template v-else-if="preview">
@@ -388,7 +403,7 @@ const toneDot: Record<string, string> = {
                 </li>
               </ul>
             </div>
-            <p v-if="preview.question" class="m-0 font-ui text-sm">Not sure yet: {{ preview.question }}</p>
+            <p v-if="preview.question" class="m-0 font-ui text-sm">Not sure yet, will file anyway: {{ preview.question }}</p>
             <p v-if="related.length" class="m-0 border-t border-line pt-3 font-ui text-sm text-muted">
               Already on the board:
               <template v-for="(r, i) in related" :key="r.id"
@@ -403,7 +418,7 @@ const toneDot: Record<string, string> = {
             <li>Works out whether it's a task, a bug or a handover</li>
             <li>Sends it to the team that should act</li>
             <li>Drafts what it needs, so nobody starts cold</li>
-            <li>Asks you when it isn't sure</li>
+            <li>Files it anyway when unsure, and says what to check</li>
           </ul>
         </aside>
       </div>

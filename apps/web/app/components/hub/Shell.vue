@@ -136,6 +136,9 @@ const live = useLive();
 onMounted(() => {
   live.start();
   adoptToken();
+  // The worker is what puts Passalong in an installed phone app's Share menu; registering asks
+  // nothing of the person (push permission is still asked only on its button in Settings).
+  navigator.serviceWorker?.register("/sw.js").catch(() => {});
   // Moving between hub pages remounts this shell. That must not refetch: the queries are shared
   // and cached, and calling `load()` here invalidated all of them on every navigation, which
   // restarted every retry — so a server that was failing kept the page on its skeleton forever and
