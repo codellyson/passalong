@@ -54,29 +54,29 @@ bugs the string templates could not have.
 
 ## Server-first
 
-Every guide lives on the server, and the CLI keeps no copy of one unless asked: `pull --save`
-writes `./.passalong/<id>.md`, and `passalong export` writes every guide you can read as plain
-markdown, which is how guides survive the service. Sharing needs an account; an agent does not
-work without the network anyway, and local copies only went stale and piled up.
+All work lives on the server, and the CLI keeps no copy unless asked: `take --save` writes
+`./.passalong/<id>.md`, and `passalong export` writes everything you can read as plain markdown,
+which is how work survives the service. Writing work needs an account; an agent does not work
+without the network anyway, and local copies only went stale and piled up.
 
 ## Where the same knowledge lives twice
 
-The guide format is implemented on both sides — `packages/passalong/src/guide.js` and
-`apps/api/src/guide.ts`. That is deliberate: the CLI validates before publishing so a bad guide
-never leaves the machine, and the Worker validates because it cannot trust a client. The section
-list and the status list must stay in step; both are tested.
+The work format is implemented on both sides — `packages/passalong/src/guide.js` and
+`apps/api/src/guide.ts`. That is deliberate: the CLI validates before sending so bad work never
+leaves the machine, and the Worker validates because it cannot trust a client. The status list,
+the retired fields and the tag rules must stay in step; `fixtures/guides/` tests both.
 
 ## The two ends
 
 The product is not "a place to put documents". It is a loop with two ends, and most design
 decisions fall out of which end is being served:
 
-- **The author end** wants publishing to cost nothing, or it will not happen at the moment the
-  work is finished — which is the only moment the knowledge is complete.
-- **The receiver end** wants to know what to check before it wants to know how it was built. That
-  is why guide pages have a `?view=verify` that leads with `Verification` and folds the rest away,
-  and why a guide with no `Verification` section is flagged to the reader rather than quietly
-  rendered.
+- **The sending end** wants writing work down to cost nothing, or it will not happen at the moment
+  it is noticed. So the box, email and webhooks take it in any shape, and the reader names it.
+- **The doing end** wants to know what is asked and to say where it got to. So there are no kinds
+  to choose between: the agent reads the work and works out what done means, and `take`,
+  `progress`, `hand_in`, `pass` and `ask` are the same for everything.
 
-The verdict (`works` / `broken`) closes the loop. It is the only signal that says whether a guide
-was any good, so the CLI, the MCP server, the hub and the guide page all offer it.
+A hand-in with its evidence closes the loop: it is final, the work goes to Done with what was
+shown, and **Reopen** is how a person says it is not right. What was learned goes into the
+project's documents rather than into a one-off note for one person (docs/LOOP.md §0).

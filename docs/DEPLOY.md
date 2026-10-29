@@ -40,7 +40,7 @@ credential — but two things must be true, or every send fails silently:
    account. On any plan you may mail addresses verified as Email Routing destinations, free.
 
 Nothing else depends on this: every mail is a delivery of a `notification` row that exists either
-way, so with mail off the hub, `passalong activity` and the MCP `activity` tool still work.
+way, so with mail off the hub's feed still works.
 
 **Migration 0005 rewrote how identity works** and runs against live data. It was tested locally
 against a seeded pre-auth database: accounts, guides, teams, memberships and notifications all
@@ -58,10 +58,9 @@ straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no b
 deliberately. See the rule about what may go in a prop in AGENTS.md before adding an event.
 
 **The free tier is open.** `FREE_SIGNUP` is `"1"` in `apps/web/wrangler.jsonc` (reopened 2026-10-08), so a new
-account may keep `FREE_SYNC_LIMIT` guides synced without a plan; archived guides do not count. It had
+account may keep `FREE_SYNC_LIMIT` pieces of work without a plan; archived work does not count. It had
 been `"0"`, which refused a new account's first task. Set it to `"0"` to close it again: accounts
-carrying `grandfathered` (migration 0016) keep their ceiling either way, and the local store is
-untouched — `passalong share` writes to the machine with no account and no ceiling.
+carrying `grandfathered` (migration 0016) keep their ceiling either way.
 
 **Billing.** Payments go through [Bachs](https://docs.bachs.io), a merchant of record. Four Worker
 secrets, all optional: without them the paid tier is simply unavailable and every webhook is
@@ -108,6 +107,44 @@ pnpm -C apps/web build          # the dry run needs the build output to exist
 pnpm -C apps/web deploy:check   # wrangler dry run: bindings, assets, routes
 ```
 
+## Cutover: one thing, work (migrations 0061–0062, passalong 0.22.0)
+
+This release removes kinds, report sets, write-up guides and about forty-five agent tools
+(docs/WORK.md), and the old CLIs cannot work against it. Do it in this order, by hand, not through
+an unattended CI push:
+
+1. **Bookmark the database.** D1 Time Travel restores to any minute in the last 30 days, but a
+   bookmark taken now is the exact point to go back to:
+
+   ```sh
+   cd apps/web && npx wrangler d1 time-travel info passalong   # note the bookmark it prints
+   ```
+
+2. **Migrate.** `pnpm -C apps/api db:migrate:remote` applies 0061 (strips `kind:` from every
+   document, turns report sets into parent work, rebuilds `claim` and `claim_fence` on one holder,
+   drops `kind`, `report_of`, `report_id`, `area`, `severity` and the `report` table) and 0062
+   (moves old verdicts and acks into the thread). Check it:
+
+   ```sh
+   npx wrangler d1 execute passalong --remote --command \
+     "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 2"   # 0062_one_thread, 0061_one_thing
+   npx wrangler d1 execute passalong --remote --command \
+     "SELECT COUNT(*) AS n FROM pragma_table_info('guide') WHERE name = 'kind'"   # 0
+   ```
+
+3. **Deploy the Worker** (`pnpm -C apps/web build && pnpm -C apps/web run deploy`) and run the
+   checks under "Verify" below. Installed CLIs below 0.22.0 still pass the floor and get the new
+   rules' refusals; that window should be minutes.
+4. **Publish the CLI.** `passalong` 0.22.0 to npm (section 2), approve the staged version, and
+   check `npx -y passalong@latest version` prints 0.22.0.
+5. **Raise the floor.** Set `MIN_CLIENT` in `apps/api/src/clients.ts` to `"0.22.0"`, commit, and
+   deploy again. Every older CLI now gets the 426 with the install command. Never before step 4:
+   a floor above what npm hands out refuses every agent with nothing it can install.
+
+To undo before step 5: `npx wrangler rollback` in `apps/web` and
+`npx wrangler d1 time-travel restore passalong --bookmark=<bookmark>`. A restore discards every
+write since the bookmark, so after real use, write a forward migration instead.
+
 ## 1. Worker
 
 **One-time, before the first deploy that carries them:** the R2 bucket must exist, or wrangler
@@ -142,22 +179,21 @@ curl -sI https://www.passalong.dev/ | head -1        # 308 to the apex
 ```
 
 Both halves now live in one Worker, so `/health` passing no longer implies the pages render. Check
-a page, and check that guide pages still carry the CSP that makes them safe:
+a page, and check that share pages still carry the CSP that makes them safe:
 
 ```sh
 sh apps/web/scripts/probe.sh https://passalong.dev
 sh apps/web/scripts/probe.sh https://passalong.dev /g/<id>/<key>
 ```
 
-If either probe fails, **stop and roll back** — a guide page that ships script has lost the one
+If either probe fails, **stop and roll back** — a share page that ships script has lost the one
 property that makes rendering someone else's markdown safe. Rolling back is
 `npx wrangler rollback` in `apps/web`.
 
 Then switch your own machine from the local Worker to production:
 
 ```sh
-passalong login            # mints a production account; prints the token for other machines
-passalong share ~/.passalong/guides/<id>.md --no-edit   # re-share anything you want synced
+passalong login            # approve this machine in the signed-in hub
 ```
 
 Rollback: `wrangler rollback` in `apps/api`, or `wrangler deployments list` to pick a version.
@@ -267,7 +303,7 @@ pnpm -C apps/api exec wrangler d1 execute passalong --remote \
   --command "UPDATE account SET sync_limit = 200 WHERE handle = 'someone'"
 ```
 
-Put it back on the default with `sync_limit = 0`. Only guides that are `published` or `promoted`
+Put it back on the default with `sync_limit = 0`. Only work that is `published` or `promoted`
 count against it, so archiving in the hub is what makes room — see `COUNTED` in
 `apps/api/src/quota.ts`, which is the one definition both the warning and the refusal read.
 
@@ -342,4 +378,4 @@ tagged or published, so the shipped history is `0.1.0` then `0.2.2`.
   constant, and `homepage` in the package together. `passalong.kreativekorna.com` is kept routed
   rather than redirected: share keys live in the URL, so links handed out under it must keep
   resolving. It no longer mints anything, though — `origin()` in `src/index.ts` returns
-  `PUBLIC_ORIGIN` when it is set, so both hosts name the apex and one guide keeps one link.
+  `PUBLIC_ORIGIN` when it is set, so both hosts name the apex and one piece of work keeps one link.

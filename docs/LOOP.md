@@ -71,9 +71,10 @@ Data is migrated, never silently dropped.
 **Build order.** Each step lands whole. The first two answer what hurts in the live product today
 (2026-10-29): agents publishing a handover nobody reads after finishing a task, which sits on the
 board until someone archives it by hand; and finished work nobody moved to Done.
-1. **One thing: work**: guides, kinds, sections, handovers and hand-in write-up guides go in one
-   overhaul, with the 17 tools; an agent's explanation goes in its hand-in or the project's
-   documents. Existing handovers are migrated (knowledge into documents, the rest archived).
+1. **One thing: work** — **built 2026-10-29** ([WORK.md](WORK.md)): guides, kinds, sections,
+   handovers and hand-in write-up guides went in one overhaul, with the 17 tools; an agent's
+   explanation goes in its hand-in or the project's documents. Existing handovers stay as plain
+   work (their `kind:` stripped); moving their knowledge into documents waits for step 4.
 2. **The agent tidies the board**: a daily review of quiet work closes what is finished, archives
    what is abandoned and nudges what is still going; every hand-in is judged against what the task
    asked for and closed or reopened with what is missing. The proof gate on `hand_in`

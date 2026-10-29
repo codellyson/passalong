@@ -85,7 +85,7 @@ different response is an account-existence oracle.
 | Bearer token | yes | yes | yes | yes |
 | Session cookie | yes | yes | yes | yes |
 
-There is no read-only credential. A share link is the closest thing, and it is per guide.
+There is no read-only credential. A share link is the closest thing, and it is per piece of work.
 
 ## Email verification
 

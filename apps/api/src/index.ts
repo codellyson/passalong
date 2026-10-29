@@ -782,7 +782,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       id: r.id,
       title: r.title,
       status: r.status,
-      // How it reached Done: approved after review, or archived. '' while it is not done.
+      // How it reached Done: finished (a hand-in), approved (before 0061), or archived. '' while not done.
       outcome: r.outcome || "",
       created: r.created,
       updated: r.updated,

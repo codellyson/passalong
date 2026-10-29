@@ -1,9 +1,10 @@
 # One thing: work
 
-**Status:** being built, 2026-10-29. The design for step 1 of [LOOP.md §0](LOOP.md): guides, kinds,
-sections, handovers and hand-in write-up guides go in one overhaul. This file is the contract every
-part of that change is built against. When it lands, AGENTS.md and the llm-wiki are rewritten to
-match and this file stays as the record of why.
+**Status:** built, 2026-10-29 (commits 5a833a6 to the docs that followed them; migrations 0061 and
+0062; CLI 0.22.0, not yet published). The design for step 1 of [LOOP.md §0](LOOP.md): guides,
+kinds, sections, handovers and hand-in write-up guides went in one overhaul. AGENTS.md, llms.txt and
+the llm-wiki describe what is built; this file stays as the record of why. Where the build differs
+from the plan below, **Deviations** at the end says so.
 
 ## Why
 
@@ -136,3 +137,29 @@ style) before it runs on production, and production gets a D1 Time Travel bookma
 
 Publish the new CLI to npm, deploy, then raise `MIN_CLIENT` to that version at once. Old CLIs get
 the 426 with the install command. Share links keep working.
+
+## Deviations
+
+- **16 tools over HTTP.** `/v1/mcp` has every tool but `accounts`: there the bearer token is the
+  account, so there is nothing to list or switch. Stdio has all 17.
+- **`key+new@` without a reader** files by the fixed rule: titled by its subject, the mail quoted as
+  it came, sent to the team without a group. The reader is a deployment's configuration
+  (`READER_*`), not something every install has.
+- **Report sets.** A set whose bugs were all Done became Done parent work (`outcome = finished`), so
+  the untaken reminder does not chase it; every other set became Ready parent work.
+- **Existing handovers and write-ups** were not moved into documents: 0061 strips `kind:` and they
+  stay as work in whatever state they were — mostly Done or archived. A write-up that was hidden
+  from the board by `report_of` is now an ordinary Done piece of work. Moving knowledge into
+  project documents waits for projects (LOOP.md step 4).
+- **The thread.** Migration 0062 (not in the plan) moved old verdicts and acks into `task_event`
+  and renamed the kinds nobody writes any more, so the thread reads one table. The `verdict` table
+  stays as a hand-in's standing record ("Finished with"); `ack` stays as the decline that keeps work
+  off the decliner's list. `/v1/inbox`, `/v1/guides/:id/children` and `/v1/guides/:id/mark_done`
+  went with nothing calling them; `/v1/board`, `/v1/log`, `/v1/notifications`, recall and the
+  folder link, unlink and share routes stay because the hub calls them.
+- **CLI 0.22.0** has `new` (replacing `share` and `task`), `board`, `take [--save]`, `progress`,
+  `hand-in`, `pass`, `ask`, `reply`, `assign`, `release`, `reopen`, `ready`, `archive`, `rm`,
+  `attach`, `work`; `inbox`, `activity`, `log`, `pull`, `start`, `tasks`, `recall`, `approve`,
+  `reject` and `done` went. `MIN_CLIENT` is raised to 0.22.0 at the cutover (docs/DEPLOY.md).
+- **Public pages.** `/docs/guide-format` became `/docs/work-format` (the old path redirects). The
+  `/learn` articles still teach kinds and are next.
