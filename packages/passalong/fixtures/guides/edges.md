@@ -1,8 +1,7 @@
 ---
 id: edgyid12
 title: "A title: with a colon, a comma, and [brackets]"
-summary: "A guide whose title needs quoting, kept to prove the format round-trips awkward text."
-kind: transfer
+summary: "Work whose title needs quoting, kept to prove the format round-trips awkward text."
 created: "2026-07-01T00:00:00.000Z"
 author: ""
 source_context: "repo@feature/branch-with-slash"

@@ -7,6 +7,7 @@ import {
   dropField,
   parseMeta,
   publishProblem,
+  retiredFields,
   SETTABLE,
   STATUSES,
   setField,
@@ -39,25 +40,16 @@ test("parseMeta mirrors the CLI parser for strings and lists", () => {
   assert.equal(m.title, "Add Paystack webhook: verify signature");
   assert.deepEqual(m.stack_assumptions, ["Next.js 15", "Postgres"]);
   assert.deepEqual(m.tags, ["paystack", "webhooks"]);
-  // A kind as well, on this path too: a document with no frontmatter returns early, and the two
-  // parsers have to leave it in the same state there. The shared corpus caught them disagreeing
-  // about exactly this.
-  //
-  // Empty, not "transfer". A silent default told 162 of 200 real guides they were transfers when
-  // their titles were tasks and bug reports — while publish_guide's own description promised
-  // "kind: task (the default)". Absent is now absent, and validate() refuses it by name.
-  assert.deepEqual(parseMeta("no frontmatter"), {
-    tags: [],
-    stack_assumptions: [],
-    kind: "",
-  });
+  // A document with no frontmatter returns early, and the two parsers have to leave it in the same
+  // state there. The shared corpus caught them disagreeing about exactly this.
+  assert.deepEqual(parseMeta("no frontmatter"), { tags: [], stack_assumptions: [] });
 });
 
 test("a new guide is Ready or a draft, never archived, and an edit leaves status alone", () => {
   assert.equal(publishProblem("published"), "", "Ready is the default");
   assert.match(publishProblem("consumed"), /can't start archived/);
-  assert.match(publishProblem("published", "draft"), /separate action/);
-  assert.match(publishProblem("published", "consumed"), /separate action/);
+  assert.match(publishProblem("published", "draft"), /its own action/);
+  assert.match(publishProblem("published", "consumed"), /its own action/);
   assert.equal(publishProblem("draft"), "");
   assert.equal(publishProblem("published", "published"), "", "a re-share keeps what it has");
 });
@@ -279,18 +271,8 @@ test("a correction is a verdict with room, shown on the guide", async () => {
   // authoritative to the next reader — and `note` is capped at 280 characters, the width of the
   // row it was written for. Between them, the only way to warn anyone was to publish a second
   // guide titled "Correction: …" and hope they followed the link.
-  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
-  const at = src.indexOf("async function recordVerdict");
-  const fn = src.slice(at, at + 1400);
-  assert.match(fn, /detail = ""/, "a verdict carries why, at the length that takes");
-  assert.match(fn, /checks = ""/, "sorted against the line each part answers");
-  assert.match(fn, /INSERT INTO verdict[\s\S]*detail, checks/, "and stores both");
-
-  // A failing hand-in already collected the evidence; it lands on the verdict now, not only the
-  // claim, which is what makes the guide able to show it.
-  const handIn = src.slice(src.indexOf('app.post("/v1/guides/:id/hand_in"'));
-  const route = handIn.slice(0, handIn.indexOf("\napp."));
-  assert.match(route, /claims\.handIn\([\s\S]*evidence,[\s\S]*verdict: \{ ok: who\.ok \}/);
+  // A hand-in's evidence lands on the verdict that finishing keeps, not only on the claim it goes
+  // with, which is what makes the guide able to show it.
   const claims = await readFile(new URL("../src/claims.ts", import.meta.url), "utf8");
   assert.match(claims, /INSERT INTO verdict[\s\S]*detail, checks, writeup/);
 
@@ -318,23 +300,14 @@ test("nothing a stranger does to your guide happens in silence", async () => {
     assert.ok(at > 0, `${needle} should still exist`);
     return src.slice(at, at + len);
   };
-  // The verdict and the first word back live in one function each, shared by every route that
-  // records them, so each function is held to the rule and each route to calling it.
-  for (const [fn, kind] of [
-    ["async function recordVerdict", /kind: ok \? "verified" : "failed"/],
-    ["async function recordAck", /kind,/],
-  ]) {
-    const body = block(fn);
-    assert.match(body, /await notify\(c\.env/, `${fn} must tell the author something happened`);
-    assert.match(body, kind, `${fn} must tell them what`);
-  }
-  for (const [route, calls] of [
-    ["/v1/guides/:id/verdict", /recordVerdict\(/],
-    ["/v1/guides/:id/ack", /recordAck\(/],
-    ["/v1/guides/:id/hand_in", /recordVerdict\(/],
-    ["/v1/guides/:id/pass", /recordAck\(/],
-  ])
-    assert.match(block(`"${route}"`, 4000), calls, `${route} must tell the author`);
+  // "Not for me" lives in one function, held to the rule, and the route that says it calls it.
+  const decline = block("async function recordDecline");
+  assert.match(decline, /await notify\(c\.env/, "a decline must tell the author");
+  assert.match(decline, /kind: "declined"/);
+  assert.match(block('"/v1/guides/:id/pass"'), /recordDecline\(/);
+  // Finishing, taking and passing tell the author through taskEvent.
+  for (const route of ["/v1/guides/:id/hand_in", "/v1/take", "/v1/guides/:id/pass"])
+    assert.match(block(`"${route}"`, 6000), /taskEvent\(c,/, `${route} must tell the author`);
   for (const kind of [/kind: "reopened"/, /kind: "consumed"/]) {
     const body = block('"/v1/guides/:id/status"', 7000);
     assert.match(body, /await notify\(c\.env/);
@@ -420,14 +393,12 @@ test("an image a reader cannot load is caught, and an ordinary one is not", () =
   assert.deepEqual(unreachableImages("[see](attachment://file_1)"), []);
 });
 
-test("the API description covers what an agent does with a task, and not the review gate", async () => {
+test("the API description covers what an agent does with work, and not a person's calls", async () => {
   const { openapi } = await import("../src/openapi.ts");
   const doc = openapi("https://passalong.dev");
   for (const [path, method] of [
     ["/v1/tasks", "get"],
     ["/v1/tasks/next", "post"],
-    ["/v1/tasks/{id}/progress", "put"],
-    ["/v1/tasks/{id}/finish", "post"],
     ["/v1/take", "post"],
     ["/v1/guides/{id}/progress", "put"],
     ["/v1/guides/{id}/hand_in", "post"],
@@ -440,14 +411,21 @@ test("the API description covers what an agent does with a task, and not the rev
     assert.ok(doc.paths[path]?.[method], `${method.toUpperCase()} ${path} is described`);
   // Every verb's answer says what to call next; a client generated from the spec should see it.
   assert.ok(doc.components.schemas.Next, "the next-step shape is described");
-  // Approve, reject and release are a person's calls. Describing them would invite a model to make
-  // them, which is the one thing the review gate exists to stop, so they stay out, like the
-  // account routes do.
-  for (const gate of ["approve", "reject", "release"])
-    assert.equal(doc.paths[`/v1/tasks/{id}/${gate}`], undefined, `${gate} is not described`);
-  // A task is answered with the task routes: ack and verdict say they refuse one.
-  for (const path of ["/v1/guides/{id}/ack", "/v1/guides/{id}/verdict"])
-    assert.match(doc.paths[path].put.responses[400].description, /task/i, path);
+  // Release and reopen are a person's calls. Describing them would invite a model to make them, so
+  // they stay out, like the account routes do.
+  for (const call of ["release", "reopen"])
+    assert.equal(doc.paths[`/v1/guides/{id}/${call}`], undefined, `${call} is not described`);
+  // The routes that went with kinds, review and report sets are gone from the description too.
+  for (const gone of [
+    "/v1/guides/{id}/ack",
+    "/v1/guides/{id}/verdict",
+    "/v1/tasks/{id}/progress",
+    "/v1/tasks/{id}/finish",
+    "/v1/reports",
+    "/v1/reports/{id}",
+  ])
+    assert.equal(doc.paths[gone], undefined, `${gone} is not described`);
+  assert.doesNotMatch(JSON.stringify(doc), /"transfer"|transfer guide|Acceptance|Reproduce/);
 });
 
 test("the API description says null the way OpenAPI 3.1 does", async () => {
@@ -475,14 +453,12 @@ test("a guide that worked with changes says so, on itself", async () => {
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   const handIn = src.slice(src.indexOf('app.post("/v1/guides/:id/hand_in"'));
   const route = handIn.slice(0, handIn.indexOf("\napp."));
-  assert.match(route, /claims\.handIn\([\s\S]*writeup,[\s\S]*verdict: \{ ok: who\.ok \}/);
-  assert.match(route, /claims\.handIn\([\s\S]*writeup,/, "and the claim, for the author's row");
+  assert.match(route, /claims\.handIn\([\s\S]*writeup,/, "on the claim, and so the verdict");
 
   // A later hand-in with nothing to add must not erase what an earlier one wrote: a verdict is one
   // row per account, and silence is not a retraction.
-  const at = src.indexOf("async function recordVerdict");
-  const fn = src.slice(at, at + 1400);
-  assert.match(fn, /writeup = CASE WHEN excluded\.writeup <> ''/);
+  const claims = await readFile(new URL("../src/claims.ts", import.meta.url), "utf8");
+  assert.match(claims, /writeup = CASE WHEN excluded\.writeup <> ''/);
 
   const page = await readFile(
     new URL("../../web/server/api/guide/[id]/[key].get.ts", import.meta.url),
@@ -536,17 +512,14 @@ test("what ran outranks what was said about it, on the guide", async () => {
 
 test("a hand-in says what it did in a sentence, before anything behind it is read", async () => {
   // The route is not importable from a test (see hosts.ts), so the rule is pinned in the source:
-  // `note` is refused when empty and the refusal comes before either kind's branch runs.
+  // `note` is refused when empty, before anything is handed in.
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   const at = src.indexOf('app.post("/v1/guides/:id/hand_in"');
   const route = src.slice(at, src.indexOf("\napp.", at));
   const refusal = route.indexOf("if (!note) return err(c, 400");
   assert.ok(refusal > 0, "an empty note is refused");
-  assert.ok(refusal < route.indexOf('found.row.kind === "task"'), "for a task and a handoff alike");
-  // The legacy finish route stays lenient: an installed CLI still calls it and sends none, and the
-  // thread has a plain sentence for a hand-in with no words of its own.
-  const finish = src.slice(src.indexOf('app.post("/v1/tasks/:id/finish"'));
-  assert.doesNotMatch(finish.slice(0, finish.indexOf("\napp.")), /if \(!note\)/);
+  assert.ok(refusal < route.indexOf("claims.handIn("), "before anything is handed in");
+  assert.equal(src.indexOf('"/v1/tasks/:id/finish"'), -1, "and the old finish route is gone");
 });
 
 test("a question and a reply each tell the person waiting on them", async () => {
@@ -590,4 +563,21 @@ test("a new guide says what it is to a person, and an old one is let through as 
     "before anything is written",
   );
   assert.match(src, /summary=excluded\.summary/);
+});
+
+test("a document that says what kind it is is refused at the boundary every client goes through", async () => {
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf('app.put("/v1/guides/:id"');
+  const route = src.slice(at, src.indexOf("\napp.", at));
+  const refusal = route.indexOf("if (retiredFields(markdown).length)");
+  assert.ok(refusal > 0, "PUT /v1/guides/:id refuses kind:");
+  assert.ok(refusal < route.indexOf("parseMeta(markdown)"), "before anything reads the document");
+  assert.doesNotMatch(route, /setField\(markdown, "kind"/, "and never writes one back");
+  assert.deepEqual(retiredFields("---\ntitle: t\nkind: task\n---\n\nb"), ["kind"]);
+  assert.deepEqual(
+    retiredFields("---\ntitle: t\n---\n\nkind: task"),
+    [],
+    "a body line is not the field",
+  );
+  assert.deepEqual(retiredFields("no frontmatter"), []);
 });

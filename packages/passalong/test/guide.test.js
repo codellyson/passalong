@@ -1,26 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { scaffold } from "../src/capture.js";
-import {
-  bugGuide,
-  ID_RE,
-  newId,
-  parse,
-  SUMMARY_MAX,
-  sections,
-  serialize,
-  stamp,
-  stripPlaceholders,
-  TASK_SECTIONS,
-  template,
-  validate,
-} from "../src/guide.js";
+import { ID_RE, newId, parse, SUMMARY_MAX, serialize, stamp, validate } from "../src/guide.js";
 
 const SAMPLE = `---
 id: k3mq2xa7
 title: "Add Paystack webhook: verify signature"
 summary: Webhook signatures are now checked before anything is stored. Done and working.
-kind: transfer
 created: 2026-09-03T10:00:00.000Z
 author: Lukman
 source_context: monieplan@main
@@ -79,22 +64,10 @@ test("a block list parses flush with its key", () => {
   assert.deepEqual(g.meta.tags, ["paystack", "webhooks"]);
 });
 
-test("sections keys on ## headings", () => {
-  const s = sections(parse(SAMPLE).body);
-  assert.deepEqual(Object.keys(s), ["Problem", "Steps", "Verification"]);
-  assert.match(s.Verification, /401/);
-});
-
-test("validate rejects an untouched template and accepts a filled one", () => {
-  const t = parse(template({ kind: "transfer", title: "x", summary: "A summary." }));
-  assert.ok(validate(t).some((e) => /placeholders/.test(e)));
-  const stripped = { meta: t.meta, body: stripPlaceholders(t.body) };
-  // A transfer with nothing under its headings is accepted: context exchange has no required
-  // shape, and demanding one is what padded 599-word follow-ups nobody opened.
-  assert.deepEqual(validate(stripped), []);
-  // A task still has to carry the list its hand-in answers line by line.
-  const bare = parse(template({ kind: "task", title: "x", summary: "A summary." }));
-  assert.ok(validate({ meta: bare.meta, body: "## Goal\ng\n" }).some((e) => /Acceptance/.test(e)));
+test("validate asks for a title and a summary, and nothing of the body", () => {
+  // The body is free markdown: no heading is required or refused, whatever the work is.
+  for (const body of ["", "The upload button does nothing.", "## Steps\n1. x", "## Goal\ng"])
+    assert.deepEqual(validate({ meta: { title: "t", summary: "A summary." }, body }), [], body);
   assert.deepEqual(validate(parse(SAMPLE)), []);
   assert.deepEqual(validate(parse(SAMPLE.replace("title:", "x_title:"))), [
     "frontmatter needs a title",
@@ -120,136 +93,6 @@ test("ids are short, unambiguous, and unique enough", () => {
   const ids = new Set(Array.from({ length: 500 }, () => newId()));
   assert.equal(ids.size, 500);
   for (const id of ids) assert.match(id, /^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
-});
-
-test("a new guide is a task unless it says otherwise", () => {
-  // Most guides assign work. Every template writes its kind out, because a guide with no kind:
-  // line means a transfer to every client already installed.
-  assert.equal(parse(template({ title: "x" })).meta.kind, "task");
-  assert.equal(
-    parse(template({ kind: "transfer", title: "x", summary: "A summary." })).meta.kind,
-    "transfer",
-  );
-  assert.match(
-    template({ kind: "transfer", title: "x", summary: "A summary." }),
-    /^kind: transfer$/m,
-  );
-  assert.match(scaffold(), /^kind: transfer$/m, "capturing finished work is a transfer");
-});
-
-test("a bug keeps its repro out of Steps", () => {
-  const bug = parse(
-    template({
-      kind: "bug",
-      title: "Undo kills the drag handle",
-      summary: "Undo breaks dragging.",
-    }),
-  );
-  assert.equal(bug.meta.kind, "bug");
-  // `Steps` is what the MCP server tells an agent to follow. A repro under that heading is an
-  // agent reproducing the defect and then reporting the guide as broken.
-  assert.ok(!/^## Steps/m.test(bug.body), "a bug template must not contain a Steps section");
-  assert.match(bug.body, /^## Reproduce/m);
-
-  const filed = {
-    meta: { title: "t", summary: "A summary.", kind: "bug" },
-    body: "## Problem\np\n## Reproduce\n1. do the thing",
-  };
-  assert.deepEqual(validate(filed), []);
-
-  const mislabelled = {
-    meta: { title: "t", summary: "A summary.", kind: "bug" },
-    body: "## Problem\np\n## Reproduce\n1. x\n## Steps\n1. x",
-  };
-  assert.ok(validate(mislabelled).some((e) => /Reproduce", not "## Steps/.test(e)));
-});
-
-test("a task is a brief with Acceptance and no Steps", () => {
-  const task = parse(template({ kind: "task", title: "Add dark mode" }));
-  assert.equal(task.meta.kind, "task");
-  assert.deepEqual(Object.keys(sections(task.body)), TASK_SECTIONS);
-  assert.ok(!/^## Steps/m.test(task.body), "a task template must not contain a Steps section");
-  // Left empty rather than defaulted: a task written in one repo is often for another.
-  assert.equal(task.meta.target_context, "");
-
-  const written = {
-    meta: { title: "t", summary: "A summary.", kind: "task", target_context: "owner/repo" },
-    body: "## Goal\ng\n## Acceptance\n- it works",
-  };
-  assert.deepEqual(validate(written), []);
-  assert.equal(parse(serialize(written)).meta.target_context, "owner/repo");
-
-  // Acceptance is what the work is approved against, so a task cannot go out without one.
-  const open = {
-    meta: { title: "t", summary: "Said to a person for the test.", kind: "task" },
-    body: "## Goal\ng",
-  };
-  assert.ok(validate(open).some((e) => /## Acceptance/.test(e)));
-});
-
-test("a guide with no kind is refused, not read as a transfer guide", () => {
-  // This test used to assert the opposite, and the opposite was the bug. Seeding `transfer` for an
-  // unstated kind, while publish_guide's own description promised "kind: task (the default)",
-  // stored 162 of 200 real guides as transfers when their titles were tasks and bug reports. A
-  // transfer has no states, so nothing showed as in progress; it demands Problem and Steps, so
-  // short corrections were padded into six sections; and there is nowhere to report into one, so
-  // agents published a second guide to carry what they found.
-  const unsaid = SAMPLE.replace("kind: transfer\n", "");
-  assert.equal(parse(unsaid).meta.kind, "", "absent is absent");
-  assert.ok(
-    validate(parse(unsaid)).some((e) => /say what this is/.test(e)),
-    "and the author is asked which of the three it is",
-  );
-  // A bug still has to say how to see it. That requirement is kept where the section is read
-  // mechanically; a transfer's was dropped, because context has no fixed shape.
-  assert.ok(
-    validate({
-      meta: { title: "t", summary: "A summary.", kind: "bug" },
-      body: "## Problem\np\n",
-    }).some((e) => /## Reproduce/.test(e)),
-  );
-});
-
-test("bugGuide files a document the reader's rules accept", () => {
-  const md = bugGuide({
-    title: "Undo leaves section drag handles dead",
-    problem: "Every handle in the column stops responding.",
-    reproduce: "1. Drag a section\n2. Press undo",
-    verification: "Undo restores the order and the section stays draggable.",
-    severity: "s1",
-    area: "storefront",
-    report: "k4m2xq9a",
-    environment: "staging",
-  });
-  const g = parse(md);
-  assert.equal(g.meta.kind, "bug");
-  assert.equal(g.meta.report, "k4m2xq9a");
-  assert.equal(g.meta.area, "storefront");
-  assert.deepEqual(g.meta.tags, ["bug", "staging", "storefront"]);
-  assert.deepEqual(validate(g), []);
-  // The whole point: what an agent is told to execute is not in here.
-  assert.ok(!/^## Steps/m.test(g.body));
-  assert.match(g.body, /^## Reproduce/m);
-});
-
-test("bugGuide leaves out the sections it has nothing for", () => {
-  const g = parse(bugGuide({ title: "t", problem: "p", reproduce: "1. x" }));
-  // An empty Verification is worse than none — it reads as "nobody knows what fixed looks like".
-  assert.ok(!/## Verification/.test(g.body));
-  assert.ok(!/## Gotchas/.test(g.body));
-  assert.deepEqual(validate(g), []);
-});
-
-test("a bug says what it is inside the document", () => {
-  const md = bugGuide({ title: "t", problem: "p", reproduce: "1. x" });
-  // Not added by the route that serves it: `api.byLink` fetches share links through the .md
-  // endpoint and re-serialises what it gets, so anything decorated on there would be written to
-  // disk and published back on the next share. In the body it survives the round trip.
-  assert.match(md, /^> \*\*Bug report\.\*\*/m);
-  assert.ok(md.indexOf("Bug report.") < md.indexOf("## Problem"));
-  const roundTripped = serialize(parse(md));
-  assert.match(roundTripped, /^> \*\*Bug report\.\*\*/m);
-  assert.deepEqual(validate(parse(md)), []);
 });
 
 test("tags are one style at both ends of the module", () => {
@@ -302,17 +145,14 @@ test("a parent survives the round trip and sits with the provenance fields", () 
   });
   assert.match(doc, /^parent: zx9y8w42$/m);
   assert.equal(parse(doc).meta.parent, "zx9y8w42");
-  // Lineage is where a guide came from, so it is written next to the other answer to that —
-  // not down with `report`, which is the set a bug was filed into and a different question.
+  // Lineage is where work came from, so it is written next to the other answer to that.
   assert.ok(doc.indexOf("source_context") < doc.indexOf("parent"));
   assert.ok(doc.indexOf("parent") < doc.indexOf("status"));
 });
 
 test("a parent is optional, and a malformed one is caught before publish", () => {
   const guide = {
-    // Built by hand rather than parsed, so it says its kind: nothing reaches validate() without
-    // one unless code left it out, and that is what the rule is for.
-    meta: { id: "k3mq2xa7", title: "One", summary: "One thing.", kind: "transfer", tags: [] },
+    meta: { id: "k3mq2xa7", title: "One", summary: "One thing.", tags: [] },
     body: "## Problem\nx\n\n## Steps\ny",
   };
   assert.deepEqual(validate(guide), [], "no parent at all is the ordinary case");
@@ -325,7 +165,7 @@ test("a parent is optional, and a malformed one is caught before publish", () =>
     "a guide shared before lineage existed still re-shares",
   );
   assert.deepEqual(validate({ ...guide, meta: { ...guide.meta, parent: "k3mq2xa7" } }), [
-    "a guide cannot follow itself",
+    "work cannot come out of itself",
   ]);
 });
 
@@ -335,43 +175,14 @@ test("a guide that never named blockers does not grow a blocked_by line", () => 
   );
   assert.ok(!/blocked_by/.test(out), out);
   const task = parse(
-    "---\ntitle: t\nsummary: Said to a person for the test.\nkind: task\nblocked_by: [abc12345, def67890]\n---\n\n## Goal\ng",
+    "---\ntitle: t\nsummary: Said to a person for the test.\nblocked_by: [abc12345, def67890]\n---\n\n## Goal\ng",
   );
   assert.deepEqual(task.meta.blocked_by, ["abc12345", "def67890"]);
 });
 
-test("a bug carries its evidence in the document, where a fixer reads first", () => {
-  const md = bugGuide({
-    title: "Button does nothing",
-    problem: "Clicking Save does not save.",
-    reproduce: "1. Click Save.",
-    evidence: [
-      "https://passalong.dev/v1/shots/abc123",
-      "![shot.png](https://passalong.dev/v1/shots/def456)",
-    ],
-  });
-  // Under Problem, before Reproduce: for a visual defect the picture is the problem statement, and
-  // a seventh heading would change the shape every reader keys on.
-  const body = sections(md.split("---\n").slice(2).join("---\n"));
-  assert.match(body.Problem, /!\[evidence\]\(https:\/\/passalong\.dev\/v1\/shots\/abc123\)/);
-  // A caller holding the line attach_screenshot returned passes it through whole rather than
-  // having it wrapped a second time.
-  assert.match(body.Problem, /!\[shot\.png\]\(https:\/\/passalong\.dev\/v1\/shots\/def456\)/);
-  assert.doesNotMatch(body.Problem, /!\[evidence\]\(!\[/);
-  assert.equal(body.Reproduce, "1. Click Save.");
-  assert.deepEqual(validate(parse(md)), []);
-});
-
-test("no evidence leaves a bug byte-for-byte what it was", () => {
-  const args = { title: "T", problem: "P", reproduce: "R" };
-  assert.equal(bugGuide(args), bugGuide({ ...args, evidence: [] }));
-  assert.equal(bugGuide(args), bugGuide({ ...args, evidence: ["", "  "] }));
-  assert.doesNotMatch(bugGuide(args), /!\[/);
-});
-
 test("every guide says what it is to a person, and is refused when it does not", () => {
   const guide = (summary) => ({
-    meta: { title: "t", summary, kind: "transfer" },
+    meta: { title: "t", summary },
     body: "## Problem\np",
   });
   assert.deepEqual(validate(guide("What this is, for a person.")), []);
@@ -384,19 +195,19 @@ test("every guide says what it is to a person, and is refused when it does not",
   assert.deepEqual(validate(guide("x".repeat(SUMMARY_MAX))), [], "the limit itself is allowed");
   // It is the document's first fact after the title, and it round-trips like any string.
   const md = serialize(guide("A colon: and a comma, kept."));
-  assert.match(md, /^title: t\nsummary: "A colon: and a comma, kept\."\nkind: transfer$/m);
+  assert.match(md, /^title: t\nsummary: "A colon: and a comma, kept\."$/m);
   assert.equal(parse(md).meta.summary, "A colon: and a comma, kept.");
 });
 
-test("a bug filed with no summary says its title, which is the author's own words", () => {
-  const md = bugGuide({ title: "Undo kills the drag handle", problem: "p", reproduce: "r" });
-  assert.equal(parse(md).meta.summary, "Undo kills the drag handle");
-  const said = bugGuide({
-    title: "Undo kills the drag handle",
-    summary: "Dragging stops working after you undo.",
-    problem: "p",
-    reproduce: "r",
-  });
-  assert.equal(parse(said).meta.summary, "Dragging stops working after you undo.");
-  assert.deepEqual(validate(parse(md)), []);
+test("a document that says what kind it is, is refused by name", () => {
+  // Work has no kinds (docs/WORK.md). An old export or an old client still writes the line, and
+  // carrying it would put back an answer nothing reads, so the author is told to take it out.
+  for (const k of ["task", "bug", "transfer", ""]) {
+    const errors = validate(parse(SAMPLE.replace("status:", `kind: ${k}\nstatus:`)));
+    assert.ok(
+      errors.some((e) => /`kind:` is gone/.test(e)),
+      `kind: ${k} -> ${errors}`,
+    );
+  }
+  assert.deepEqual(validate(parse(SAMPLE)), [], "and without it the same document is fine");
 });

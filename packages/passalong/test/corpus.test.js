@@ -12,7 +12,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { parse, sections, serialize, tag, tagList, validate } from "../src/guide.js";
+import { parse, serialize, tag, tagList, validate } from "../src/guide.js";
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "guides");
 const NAMES = readdirSync(DIR)
@@ -58,8 +58,8 @@ test("reading and writing settles after one pass, for every fixture", () => {
 const NORMALISED = [
   {
     why: "frontmatter comes back in META_ORDER, whatever order it was written in",
-    from: "---\ntitle: T\nid: aaaaaaaa\nstatus: draft\nkind: transfer\n---\n\n## Problem\np\n",
-    to: "---\nid: aaaaaaaa\ntitle: T\nkind: transfer\nstatus: draft\nstack_assumptions: []\ntags: []\n---\n\n## Problem\np\n",
+    from: "---\ntitle: T\nid: aaaaaaaa\nstatus: draft\nsummary: S\n---\n\n## Problem\np\n",
+    to: "---\nid: aaaaaaaa\ntitle: T\nsummary: S\nstatus: draft\nstack_assumptions: []\ntags: []\n---\n\n## Problem\np\n",
   },
   {
     why: "a key the format does not know keeps its place after the ones it does",
@@ -106,8 +106,8 @@ for (const { why, from, to } of NORMALISED)
 
 test("every guide comes back with the two lists every guide has", () => {
   // `stack_assumptions` and `tags` are seeded on read, so they appear in every normalised form
-  // above. `blocked_by` is deliberately not: it belongs to a task, and defaulting it would write
-  // an empty one into every guide anybody re-shares.
+  // above. `blocked_by` is deliberately not: it is optional, and defaulting it would write an
+  // empty one into every document anybody re-shares.
   const { meta } = parse("## Problem\np\n");
   assert.deepEqual(meta.stack_assumptions, []);
   assert.deepEqual(meta.tags, []);
@@ -123,11 +123,6 @@ test("a tag is one word, and two spellings of it are one tag", () => {
   assert.deepEqual(tagList(["a_b", "a b", "A-B", ""]), ["a-b"]);
 });
 
-test("a heading written twice adds to its section rather than replacing it", () => {
-  // This is the first thing the corpus caught. guide.js reset the section on every heading, so a
-  // guide with two `## Verification` blocks was validated against the second alone, while
-  // splitSections() in apps/api/src/guide.ts — which the web view reads — kept both.
-  assert.deepEqual(sections("## Steps\nfirst\n\n## Steps\nsecond\n"), {
-    Steps: "first\n\nsecond",
-  });
+test("no fixture says what kind it is, because work has none", () => {
+  for (const name of NAMES) assert.doesNotMatch(read(name), /^kind:/m, name);
 });

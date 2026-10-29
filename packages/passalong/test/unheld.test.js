@@ -16,7 +16,6 @@ const { share } = await import("../src/passalong.js");
 const DESIGN = `---
 title: Supabase design system
 summary: Said to a person for the test.
-kind: transfer
 colors:
   primary: "#3ECF8E"
 typography:
@@ -43,7 +42,7 @@ test("share refuses frontmatter it would empty, naming each field, and stores no
 });
 
 test("the same content moved into the body shares, and keeps every line", async () => {
-  const md = `---\ntitle: Supabase design system\nsummary: Said to a person for the test.\nkind: transfer\n---\n\n\`\`\`yaml\ncolors:\n  primary: "#3ECF8E"\n\`\`\`\n`;
+  const md = `---\ntitle: Supabase design system\nsummary: Said to a person for the test.\n---\n\n\`\`\`yaml\ncolors:\n  primary: "#3ECF8E"\n\`\`\`\n`;
   const { guide } = await share(md);
   assert.match(guide.body, /primary: "#3ECF8E"/);
 });

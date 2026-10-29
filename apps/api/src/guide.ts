@@ -5,7 +5,7 @@
 /**
  * A guide is a draft or it is published, and `consumed` is the author's shelf — off the board, out
  * of the free tier's count, reversible. `promoted` is the one true legacy: an author lifecycle laid
- * over a transfer that already reports itself, since a pull count says how travelled a guide is
+ * over work that already reports itself, since a pull count says how travelled a guide is
  * without anyone having to grade it.
  *
  * This list is what is **accepted**, and it is not what may be **set** — that is `SETTABLE` below.
@@ -30,112 +30,59 @@ export type Status = (typeof STATUSES)[number];
 export const SETTABLE = ["draft", "published", "consumed"] as const;
 
 /**
- * A new guide is Ready unless whoever wrote it said `status: draft`, whatever its kind. Draft-first
+ * New work is Ready unless whoever wrote it said `status: draft`. Draft-first
  * was tried and addressed work sat forgotten in it: on 2026-10-15 every draft in production was a
  * task sent to somebody, untouched for over a day. Draft is for what a person should read first —
- * a plan of tasks, an email or a webhook nobody wrote — and anyone can move work back to it.
+ * a plan, or anything an agent is unsure of — and anyone can move work back to it.
  * What a new guide cannot be is archived, and an edit cannot change status: that is the person's
  * separate action, as it always was.
  */
 export function publishProblem(status: string, previousStatus?: string): string {
   if (!previousStatus && status === "consumed")
-    return "A new guide can't start archived. Publish it Ready, or with `status: draft` for the person to read first.";
+    return "New work can't start archived. Create it Ready, or with `status: draft` for the person to read first.";
   if (previousStatus && status !== previousStatus)
-    return "Changing a guide's status needs a separate action from the person. Keep its current status in the document, then use Ready, Move to Draft, or the review controls in the hub.";
+    return "Changing the status of work is its own action. Keep its current status in the document, then use Ready, Move to Draft or Archive.";
   return "";
 }
 export type Settable = (typeof SETTABLE)[number];
 
 /**
- * An archived guide comes back to Draft, never straight to Ready. Archived covers approved as well
+ * Archived work comes back to Draft, never straight to Ready. Archived covers approved as well
  * as shelved, so putting one back as Ready handed finished work to whoever takes it next. From
  * Draft a person decides, with Ready, whether it is wanted.
  */
 export function unarchiveProblem(from: string, to: string): string {
   if (from === "consumed" && to === "published")
-    return "An archived guide comes back to Draft, not straight to Ready: set it to draft, then mark it Ready if it is still wanted.";
+    return "Archived work comes back to Draft, not straight to Ready: set it to draft, then mark it Ready if it is still wanted.";
   return "";
 }
 
 /**
- * The longest `summary:` a guide may carry. Mirrors SUMMARY_MAX in packages/passalong/src/guide.js,
- * which says why a guide has one: it is what a person reads, and the document is the agent's form.
+ * The longest `summary:` work may carry. Mirrors SUMMARY_MAX in packages/passalong/src/guide.js,
+ * which says why work has one: it is what a person reads, and the document is the agent's form.
  */
 export const SUMMARY_MAX = 400;
 
 export interface Meta {
   id?: string;
   title?: string;
-  /** What this says to a person, in a sentence or two. Required of every new guide. */
+  /** What this says to a person, in a sentence or two. Required of all new work. */
   summary?: string;
   status?: string;
   source_context?: string;
   url?: string;
   /**
-   * What this guide is for: "bug", "task" or "transfer". The receiving agent behaves differently
-   * for each — see KINDS in packages/passalong/src/guide.js.
-   *
-   * Not optional. `parseMeta` seeds it on every path, including the early return for a document
-   * with no frontmatter, so a Meta that came from a document always says what it is. The type is
-   * where that guarantee is kept: leaving it optional invited every caller to answer `undefined`
-   * for itself, which is the whole of what went wrong.
-   */
-  kind: string;
-  /**
-   * The guide this one came out of — see migrations/0015_lineage.sql. A chain, not a set: the
-   * parent is an ordinary guide somebody pulled, and this is what they learned doing it.
+   * The work this came out of — see migrations/0015_lineage.sql: a customer request, a bigger
+   * piece of work, or the set a group of bugs was filed under (migration 0061).
    */
   parent?: string;
-  /** Tasks only: the repo it is for. See migrations/0021_claims.sql. */
+  /** The repo it is for. See migrations/0021_claims.sql. */
   target_context?: string;
-  /** Tasks only: ids of the tasks it waits for. See migrations/0022_blocks.sql. */
+  /** Ids of the work it waits for. See migrations/0022_blocks.sql. */
   blocked_by?: string[];
-  /** The report this guide is one issue of — see migrations/0006_reports.sql. */
-  report?: string;
-  /** Where the issue is, inside its report. Free text on purpose; see `AREAS`. */
-  area?: string;
-  severity?: string;
   tags: string[];
   stack_assumptions: string[];
   [key: string]: string | string[] | undefined;
-}
-
-/**
- * The product areas a bug report offers, and the order it offers them in.
- *
- * Offered, not enforced. The server stores whatever slug an issue carries, the same way it
- * *accepts* statuses it no longer produces: a team that ships a sixth surface should be able to
- * file against it that afternoon, not after a deploy. This list is what the browser puts in a
- * menu, and what turns a slug back into words.
- */
-export const AREAS = [
-  { slug: "web", label: "Web App", code: "WEB" },
-  { slug: "mobile", label: "Mobile App", code: "MOB" },
-  { slug: "storefront", label: "Storefront Editor", code: "SFE" },
-  { slug: "landing", label: "Landing Page", code: "LND" },
-  { slug: "auth", label: "Auth Page", code: "AUTH" },
-] as const;
-
-/**
- * How badly it is broken. Four, because a fifth is always an argument about the fourth.
- *
- * This is the reporter's judgement and it stays theirs — unlike a verdict, which belongs to
- * whoever tried the fix. Same accept-anything rule as `AREAS`.
- */
-export const SEVERITIES = [
-  { slug: "s1", label: "Blocker", note: "nobody can get past it" },
-  { slug: "s2", label: "Major", note: "a real task cannot be finished" },
-  { slug: "s3", label: "Minor", note: "wrong, with a way around it" },
-  { slug: "s4", label: "Cosmetic", note: "it looks wrong" },
-] as const;
-
-/** A slug we are willing to store: short, lowercase, no punctuation to smuggle. */
-export function slug(raw: unknown, max = 32): string {
-  return String(raw ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, "")
-    .slice(0, max);
 }
 
 /**
@@ -264,10 +211,9 @@ export function split(markdown: string): { front: string; body: string } | null 
 }
 
 export function parseMeta(markdown: string): Meta {
-  // Seeded here and not only at the end: a document with no frontmatter, or an unterminated one,
-  // returns early, and guide.js's parse() seeds it on that path too. The corpus caught the pair
-  // disagreeing about exactly that.
-  const meta: Meta = { tags: [], stack_assumptions: [], kind: "" };
+  // Seeded here so a document with no frontmatter, or an unterminated one, returns the same shape
+  // guide.js's parse() does on that path. The corpus caught the pair disagreeing about exactly that.
+  const meta: Meta = { tags: [], stack_assumptions: [] };
   const parts = split(markdown);
   if (!parts) return meta;
   let listKey: string | null = null;
@@ -299,21 +245,6 @@ export function parseMeta(markdown: string): Meta {
   // there was a rule are still stored as they were typed, and re-spelling them in the document is
   // something only their author can do — every surface that reads one shows one style meanwhile.
   meta.tags = tagList(meta.tags);
-  // Absent is absent. It is NOT a transfer guide.
-  //
-  // This line, and the sentence publish_guide tells every agent — "kind: task (the default)" —
-  // disagreed for thirteen days. An agent that left `kind:` off, believing what it had been told,
-  // got a transfer guide. 162 of 200 guides in real use are labelled transfer; their titles are
-  // tasks and bug reports. Everything downstream followed from that: a transfer has no states, so
-  // nothing could show as in progress; it demands Problem and Steps, so a two-line correction was
-  // padded to six sections; and there is nowhere to report into one, so agents published a second
-  // guide to carry what they had found.
-  //
-  // So it stays empty and validate() refuses it by name. The back-compat this default protected
-  // is a guide written before kinds existed being re-shared; that guide is re-shared once with an
-  // explicit `kind: transfer`, which is a sentence its author can write, unlike thirteen days of
-  // mislabelled work nobody could see.
-  meta.kind = String(meta.kind ?? "").trim();
   return meta;
 }
 
@@ -344,6 +275,21 @@ export function unheldFields(markdown: string): string[] {
     out.add(key ?? line.trim());
   }
   return [...out];
+}
+
+/**
+ * Fields this format no longer has, refused by name. `kind` split work into task, bug and transfer,
+ * each with its own sections, and every rule that turned on it is gone (docs/WORK.md); migration
+ * 0061 stripped it from every stored document, so one arriving now is an old export or an old
+ * client, and storing it would put back an answer nothing reads. Mirrors `RETIRED` in
+ * packages/passalong/src/guide.js.
+ */
+const RETIRED = ["kind"];
+
+export function retiredFields(markdown: string): string[] {
+  const parts = split(markdown);
+  if (!parts) return [];
+  return RETIRED.filter((k) => new RegExp(`^${k}:`, "m").test(parts.front));
 }
 
 function quote(v: string): string {
@@ -406,66 +352,6 @@ export function setList(markdown: string, key: string, values: string[]): string
 /** Everything after the frontmatter, for rendering. */
 export function body(markdown: string): string {
   return split(markdown)?.body ?? markdown;
-}
-
-/**
- * Split a body into its `## ` sections, keeping the author's order and anything written before
- * the first heading. Deliberately not a mirror of `sections()` in packages/passalong/src/guide.js:
- * that one is for validation and drops the preamble, which is fine when you are asking "is
- * Problem present" and not fine when you are re-composing a page — nothing may be lost.
- */
-export function splitSections(body: string): {
-  intro: string;
-  order: string[];
-  by: Record<string, string>;
-} {
-  const by: Record<string, string> = {};
-  const order: string[] = [];
-  let intro = "";
-  let current: string | null = null;
-  for (const line of body.split(/\r?\n/)) {
-    const h = /^##\s+(.+?)\s*$/.exec(line);
-    if (h) {
-      current = h[1] as string;
-      if (!(current in by)) {
-        by[current] = "";
-        order.push(current);
-      }
-      continue;
-    }
-    if (current) by[current] += `${line}\n`;
-    else intro += `${line}\n`;
-  }
-  for (const k of order) by[k] = (by[k] as string).trim();
-  return { intro: intro.trim(), order, by };
-}
-
-/**
- * A guide is written by the person who did the work, in the order they did it: problem, approach,
- * decisions, steps, then how to check. Whoever verifies it reads for a different question — "does
- * it do what it claims?" — so for them the last sections are the point and the steps are
- * background. This decides what leads and what folds; turning it into HTML is render.ts's job.
- *
- * Everything folds rather than disappears. No view of a guide may lose part of it.
- */
-export const VERIFY_LEAD = ["Problem", "Verification", "Gotchas"];
-
-export function verifyLayout(body: string): {
-  intro: string;
-  lead: string[];
-  folded: string[];
-  by: Record<string, string>;
-  hasVerification: boolean;
-} {
-  const { intro, order, by } = splitSections(body);
-  const lead = VERIFY_LEAD.filter((s) => by[s]);
-  return {
-    intro,
-    lead,
-    folded: order.filter((s) => !lead.includes(s)),
-    by,
-    hasVerification: Boolean(by.Verification),
-  };
 }
 
 /**

@@ -1,14 +1,13 @@
 ---
 id: m1n1m4l0
-title: The smallest thing that is still a guide
-summary: The smallest valid guide. It exists to prove a bare guide still reads and writes back unchanged.
-kind: transfer
+title: The smallest thing that is still work
+summary: The smallest valid work. It exists to prove a bare document still reads and writes back unchanged.
 stack_assumptions: []
 tags: []
 ---
 
 ## Problem
-A guide written before `kind:` existed has no `kind:`, and still has to re-share today.
+A document with nothing in its frontmatter but what it must have still has to re-share.
 
 ## Steps
 1. Nothing. It is here to be read and written back unchanged.

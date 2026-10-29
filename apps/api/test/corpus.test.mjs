@@ -43,15 +43,6 @@ for (const name of NAMES) {
     assert.equal(ts.split(raw)?.body.trim(), js.parse(raw).body, `${name}: split disagrees`);
   });
 
-  test(`${name}: both parsers agree on the sections it has`, () => {
-    // `splitSections` keeps the preamble and the author's order, which `sections` does not — that
-    // is written down in guide.ts and is deliberate. What must not differ is the headings found
-    // and the text under each.
-    const mine = js.sections(js.parse(read(name)).body);
-    const theirs = ts.splitSections(ts.body(read(name))).by;
-    assert.deepEqual(theirs, mine, `${name}: the sections differ`);
-  });
-
   test(`${name}: both parsers agree on which images are unreachable`, () => {
     const raw = read(name);
     assert.deepEqual(ts.unreachableImages(raw), js.unreachableImages(raw), name);
@@ -82,6 +73,17 @@ test("both normalise a tag to the same string", () => {
   for (const raw of ["Rate_Limit", "  spaced  out  ", "#hash!marks?", "--edges--", "", "A-B"])
     assert.equal(ts.tag(raw), js.tag(raw), `tag(${JSON.stringify(raw)})`);
   assert.deepEqual(ts.tagList(["a_b", "a b", "A-B", ""]), js.tagList(["a_b", "a b", "A-B", ""]));
+});
+
+test("both refuse a document that says what kind it is, and only that field", () => {
+  const doc = (front) => `---\ntitle: t\nsummary: s\n${front}---\n\nb\n`;
+  for (const k of ["task", "bug", "transfer"]) {
+    assert.deepEqual(ts.retiredFields(doc(`kind: ${k}\n`)), ["kind"]);
+    assert.ok(js.validate(js.parse(doc(`kind: ${k}\n`))).some((e) => /`kind:` is gone/.test(e)));
+  }
+  // A word in the body, or a field that merely starts with the letters, is not the field.
+  assert.deepEqual(ts.retiredFields(doc("kindness: yes\n").replace("\nb\n", "\nkind: bug\n")), []);
+  for (const name of NAMES) assert.deepEqual(ts.retiredFields(read(name)), [], name);
 });
 
 test("both find the same unreachable images, and leave the same ones alone", () => {

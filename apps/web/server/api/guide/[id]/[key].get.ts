@@ -79,8 +79,8 @@ export default defineEventHandler(async (event) => {
    * keeping the most recently opened. Columns are drawn in the order the follow-ups were added.
    *
    * Each is rendered by the same renderer as the guide. Its heading ids are prefixed with its own
-   * id: every guide has a "problem" and a "steps", and side by side the contents links would jump
-   * to whichever column happened to come first.
+   * id: two documents often share a heading, and side by side the contents links would jump to
+   * whichever column happened to come first.
    */
   const listed = new Set((children ?? []).map((c) => c.id));
   // `?with=all` opens the first few without naming them. The hub links here that way: a row that
@@ -114,7 +114,7 @@ export default defineEventHandler(async (event) => {
     : [];
   const docked = dockedRows.map((d) => {
     const prefix = `f-${d.id}-`;
-    const html = renderBody(bodyOf(d.markdown), "guide")
+    const html = renderBody(bodyOf(d.markdown))
       .html.replace(/\bid="([^"]+)"/g, `id="${prefix}$1"`)
       .replace(/\bhref="#([^"]+)"/g, `href="#${prefix}$1"`);
     return {
@@ -127,15 +127,12 @@ export default defineEventHandler(async (event) => {
     };
   });
 
-  const view = getQuery(event).view === "verify" ? "verify" : "guide";
-
   // Sent from here, never the browser. A share link carries its key in the URL and every web
   // analytics SDK reports the page URL, so a client-side integration would have posted users'
   // share keys to a third party — and loosening the CSP to load one would trade the product's one
-  // real security property for a chart. Event names and categorical props only: `view` is one of
-  // two literals, and nothing identifying goes near it.
+  // real security property for a chart. Event names only, and nothing identifying goes near them.
   const env = (event.context.cloudflare as { env?: Record<string, string> } | undefined)?.env;
-  if (env) event.waitUntil(track(env, "guide_viewed", { view }));
+  if (env) event.waitUntil(track(env, "guide_viewed"));
 
   /**
    * Standing verdicts that say this does not hold, and the report behind each.
@@ -235,7 +232,7 @@ export default defineEventHandler(async (event) => {
     .sort((a, b) => b.ran.length - a.ran.length);
 
   const body = bodyOf(row.markdown);
-  const { html, outline, rest, cut } = renderBody(body, view);
+  const { html, outline } = renderBody(body);
   return {
     adapted,
     failing,
@@ -243,12 +240,9 @@ export default defineEventHandler(async (event) => {
     meta: parseMeta(row.markdown),
     html,
     outline,
-    rest,
-    cut,
     description: summarize(body),
     shareKey: row.share_key,
     pulls: row.pulls,
-    view,
     followUps: (children ?? []).map((c) => ({
       id: c.id,
       title: c.title,

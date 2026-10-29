@@ -6,50 +6,18 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { STATUSES, VERIFY_LEAD } from "../src/guide.ts";
+import { STATUSES } from "../src/guide.ts";
 
 // llms.txt moved to apps/web with the rest of what a browser or a crawler fetches; the test stays
-// here because what it pins llms.txt against — STATUSES and VERIFY_LEAD — is defined here.
+// here because what it pins llms.txt against — STATUSES — is defined here.
 const llms = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web", "public", "llms.txt"),
   "utf8",
 );
 
-// Kept in step with packages/passalong/src/guide.js, which is the other half of this format.
-const SECTIONS = [
-  "Problem",
-  "Solution shape",
-  "Decisions and rationale",
-  "Steps",
-  "Verification",
-  "Gotchas",
-];
-
-test("every guide section is documented, spelled the way the parser expects", () => {
-  for (const s of SECTIONS) {
-    assert.ok(llms.includes(`## ${s}`), `llms.txt does not document the "${s}" section`);
-  }
-});
-
-test("the sections are listed in the order a guide presents them", () => {
-  const positions = SECTIONS.map((s) => llms.indexOf(`## ${s}`));
-  assert.deepEqual(
-    positions,
-    [...positions].sort((a, b) => a - b),
-    "llms.txt lists the sections out of order",
-  );
-});
-
 test("every status is documented", () => {
   for (const s of STATUSES) {
     assert.ok(llms.includes(`\`${s}\``), `llms.txt does not mention the "${s}" status`);
-  }
-});
-
-test("the sections the verify view leads with are the ones a reader is told to read first", () => {
-  // If VERIFY_LEAD changes, the "Verification is what done means" guidance needs to change too.
-  for (const s of VERIFY_LEAD) {
-    assert.ok(llms.includes(s), `llms.txt does not mention "${s}", which the verify view leads on`);
   }
 });
 

@@ -2,17 +2,13 @@
 id: bugg1des
 title: The 429 arrives without a Retry-After
 summary: "Rate-limited responses do not say when to retry, so clients hammer the API. A header is missing; nothing is lost."
-kind: bug
 created: "2026-06-20T11:02:00.000Z"
 author: sam
 source_context: "passalong@master"
-parent: tr4nsf3r
+parent: rep0rt1d
 status: published
 stack_assumptions: []
 tags: [rate-limit]
-report: rep0rt1d
-area: api
-severity: minor
 ---
 
 ## Problem
