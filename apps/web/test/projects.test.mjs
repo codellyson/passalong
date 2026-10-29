@@ -4,7 +4,7 @@ import { age, projectsFrom, toneOf } from "../app/utils/projects.ts";
 
 test("a project keeps its folder's colour, never coral, and is stable without one", () => {
   assert.equal(toneOf({ id: "a", color: "blue" }), "blue");
-  assert.equal(toneOf({ id: "a", color: "coral" }), "plum");
+  assert.equal(toneOf({ id: "a", color: "coral" }), "slate");
   assert.equal(toneOf({ id: "abc", color: "" }), toneOf({ id: "abc", color: "" }));
   assert.notEqual(toneOf({ id: "abc", color: "" }), "coral");
 });

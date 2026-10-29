@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { changeWords, needs } from "../src/needs.ts";
+import { KINDS } from "../src/notify.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
@@ -83,7 +84,8 @@ test("the register ranks customers, questions, stalls, untaken work and work tha
   const { db, guide, ev, claim } = world();
   // Two customers waiting; the older one first. A third was answered after they last wrote.
   guide("c1", { customer: "a@x.com", customer_name: "Ann", created: ago(30) });
-  ev("c1", "customer", ago(26));
+  ev("c1", "customer", ago(30), "bo", "First message");
+  ev("c1", "customer", ago(26), "bo", "Still   broken,\n  please help");
   guide("c2", { customer: "b@x.com", created: ago(3) });
   guide("c3", { customer: "c@x.com", created: ago(40) });
   ev("c3", "customer", ago(40));
@@ -130,6 +132,7 @@ test("the register ranks customers, questions, stalls, untaken work and work tha
   const by = Object.fromEntries(rows.map((r) => [r.id, r]));
   assert.equal(by.c1.with, "Ann");
   assert.equal(by.c1.since, ago(26));
+  assert.equal(by.c1.said, "Still broken, please help", "their latest words, on one line");
   assert.equal(by.c2.with, "b@x.com", "no name, so the address");
   assert.equal(by.q1.said, "Which database?");
   assert.equal(by.q1.with, "agent-7");
@@ -171,12 +174,9 @@ test("customers and recent closes come beside the register", async () => {
   guide("f3", { status: "consumed", outcome: "finished", updated: ago(24 * 9) });
   const { customers, closed } = await needs(db, "ada", NOW);
   assert.deepEqual(
-    customers.map((c) => [c.id, c.ours]),
-    [
-      ["c2", true],
-      ["c1", false],
-    ],
-    "ours first",
+    customers.map((c) => [c.id, c.since]),
+    [["c1", ago(29)]],
+    "only those waiting on the customer, since we answered: the others are rows",
   );
   assert.deepEqual(
     closed.map((c) => [c.id, c.by]),
@@ -185,7 +185,9 @@ test("customers and recent closes come beside the register", async () => {
   );
 });
 
-test("an unnamed kind still marks the row", () => {
-  assert.equal(changeWords("pulled"), "Updated");
+test("every kind names what changed, and an unknown one still marks the row", () => {
+  assert.equal(changeWords("pulled"), "Opened");
+  assert.equal(changeWords("something_new"), "Changed");
+  for (const k of KINDS) assert.notEqual(changeWords(k), "Changed", `${k} has words`);
   assert.equal(changeWords(""), "");
 });

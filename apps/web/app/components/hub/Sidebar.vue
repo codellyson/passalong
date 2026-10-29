@@ -15,7 +15,7 @@ const waiting = computed(() => needsQ.data.value?.rows.length ?? 0);
 const projects = computed(() => projectsFrom(projectsQ.data.value?.folders ?? []));
 
 const item =
-  "flex min-h-9 items-center gap-3 rounded-1 px-3 py-1.5 font-ui text-sm no-underline transition-colors";
+  "flex min-h-8 items-center gap-3 rounded-1 px-3 py-1.5 font-ui text-sm leading-5 no-underline transition-colors";
 const tone = (on: boolean) =>
   on
     ? "bg-rail-current font-medium text-on-rail"
@@ -60,14 +60,14 @@ const isProject = (id: string) => route.path === `/hub/folders/${id}`;
         >
           Projects
         </NuxtLink>
-        <ul v-if="projects.length" class="m-0 flex min-h-0 list-none flex-col gap-0.5 overflow-y-auto p-0 [scrollbar-width:thin]">
+        <ul v-if="projects.length" class="m-0 flex min-h-0 list-none flex-col gap-0 overflow-y-auto p-0 [scrollbar-width:thin]">
           <li v-for="p in projects" :key="p.id">
             <NuxtLink
               :to="`/hub/folders/${p.id}`"
               :class="[item, tone(isProject(p.id))]"
               :aria-current="isProject(p.id) ? 'page' : undefined"
             >
-              <span class="project-mark size-2.5 shrink-0 rounded-[1px]" :data-tone="p.tone" aria-hidden="true" />
+              <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="p.tone" aria-hidden="true" />
               <span class="min-w-0 grow break-words">{{ p.title }}</span>
               <span v-if="p.changed" class="size-1.5 shrink-0 rounded-full bg-coral" role="img" aria-label="Changed since you last looked" />
               <span v-if="p.open" class="text-xs tabular-nums">{{ p.open }}</span>
@@ -79,7 +79,7 @@ const isProject = (id: string) => route.path === `/hub/folders/${id}`;
         </p>
       </section>
 
-      <ul class="m-0 flex list-none flex-col gap-0.5 p-0">
+      <ul class="m-0 flex list-none flex-col gap-0 p-0">
         <li>
           <NuxtLink to="/hub/work" :class="[item, tone(at.work.value)]" :aria-current="at.work.value ? 'page' : undefined">
             <AppIcon name="board" />
@@ -104,7 +104,7 @@ const isProject = (id: string) => route.path === `/hub/folders/${id}`;
       </NuxtLink>
     </nav>
 
-    <div class="flex flex-col gap-0.5 border-t border-rail-line pt-3">
+    <div class="flex flex-col gap-0 border-t border-rail-line pt-3">
       <NuxtLink to="/hub/settings" :class="[item, tone(at.settings.value)]" :aria-current="at.settings.value ? 'page' : undefined">
         <AppIcon name="gear" />
         <span class="grow">Settings</span>

@@ -28,12 +28,12 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
   <div ref="root" class="relative" @keydown.esc="open = false">
     <button
       type="button"
-      class="flex min-h-9 w-full cursor-pointer items-center gap-3 rounded-1 border-0 bg-transparent px-3 py-1.5 text-left font-ui text-sm text-on-rail-muted transition-colors hover:bg-rail-hover hover:text-on-rail"
+      class="flex h-9 w-full cursor-pointer items-center gap-3 rounded-1 border-0 bg-transparent px-3 text-left font-ui text-sm text-on-rail-muted transition-colors hover:bg-rail-hover hover:text-on-rail"
       :aria-expanded="open"
       aria-haspopup="menu"
       @click="open = !open"
     >
-      <span class="grid size-6 shrink-0 place-items-center rounded-1 bg-rail-current text-xs font-semibold text-on-rail" aria-hidden="true">{{ initials }}</span>
+      <span class="grid size-5 shrink-0 place-items-center rounded-1 bg-rail-current text-xs font-semibold text-on-rail" aria-hidden="true">{{ initials }}</span>
       <span class="min-w-0 grow break-words">{{ label }}</span>
       <AppIcon name="reveal" class="shrink-0" />
     </button>

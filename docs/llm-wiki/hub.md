@@ -10,10 +10,12 @@ document or file, never guide.
 
 `/hub` is Needs you: what waits on the signed-in person, ranked by the server (`GET /v1/needs`,
 `apps/api/src/needs.ts`) — customers waiting on us, an agent's question, a hold gone quiet, work
-sent to you or your group that nobody took, your work that came back. Each row has a title, its
-summary (or the question asked), a fact strip (project · with · state · waiting) and one action.
-Beside it: customers waiting, and work finished this week with **Reopen** (which asks why). A
-coral bar and a "Changed" line mark work with an unread notification on it; opening the work
+sent to you or your group that nobody took, your work that came back. It is a register: columns
+(Work, Project, With, Waiting) labelled once above unboxed rows; a row has its title with
+"Changed · what" after it, a line under it (the customer's own latest words, the question asked, or
+the state where the action does not already say it), and one action on the title's line. Beside
+it: work finished this week with **Reopen** (which asks why), then requests waiting on the customer.
+A coral bar marks work with an unread notification on it; opening the work
 (`markSeen`) clears it, and **Mark all seen** clears everything. Empty, it says nothing needs you
 and lists what closed in the last day. A new account gets the first-run steps here instead. The old
 Home (counter tiles, "How Passalong works", the activity feed) and the Activities page are gone.

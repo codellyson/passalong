@@ -5176,7 +5176,11 @@ async function receiveSupport(
     // Keyed on what the customer sent, not on how it was sorted, so a repeat merges either way.
     print: fingerprint(mail.sender, `support ${mail.subject}`),
     title,
-    summary: verdict?.summary || `${mail.name || "A customer"} asks: ${title}`,
+    // Without the reader, their own first words: "<name> asks: <title>" only said the title again.
+    summary:
+      verdict?.summary ||
+      mail.text.replace(/\s+/g, " ").trim().slice(0, 300) ||
+      `${mail.name || "A customer"} wrote with no message.`,
     body: supportBody({ name: mail.name, at, text: mail.text }),
     tags: verdict?.tag ? [verdict.tag] : [],
     again: "The customer sent the same message again",

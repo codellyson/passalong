@@ -436,14 +436,19 @@ Its input is TipTap
   coral bar at a row's left edge with a "Changed" line naming what changed, and a coral dot on a
   project in the rail. It is held until the work is opened (`markSeen` in useHub posts
   `/v1/notifications/read` with `{ guide }`), and "changed" is an unread notification on that
-  work. Never use coral or `--accent` for a state that is not a change: "waiting on us" is ink.
+  work. Never use coral or `--accent` for a state that is not a change: "waiting on us" is ink. The
+  "Changed · what" words sit on the title's line, after the title, and every notification kind
+  has its words (`CHANGE_WORDS` in needs.ts, held to `KINDS` by its test).
   `--coral` is 2.6:1 on the canvas, so it stays a mark; `--accent` is the readable 5:1 for the
   word "Changed". The rail is solid ink (`--rail`) in both themes. Each project owns one line
   colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the folder's own colour,
-  a folder coloured coral drawn plum, and one derived from its id when it has none.
+  a folder coloured coral drawn slate (nothing near coral), and one derived from its id when it has
+  none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.
 - **A surface's edge is a one-pixel rule.** In the hub `--edge-shadow` is a 1px ring of
-  `--line-strong` and a raised surface (`--surface-raised`) is near-white on the cream, so cards,
-  lists and panels that take `shadow-edge` read as ruled sheets, not soft cards. Prefer a real
+  `--line-strong` and a raised surface keeps the deeper cream (`--surface-raised`) against the pale
+  ground, so cards, lists and panels read as ruled sheets, not soft cards. A register is not a pile
+  of cards: unboxed cells in columns across rows, the column labels stated once above it, a 1px rule
+  between rows and nothing around each cell (Needs you). Prefer a real
   `border` / `border-b border-line` on new work; a heading's rule is `border-fg`. Only what floats
   (a menu, a toast, the thread drawer) keeps a lift shadow. A row inside a list sits flush, so it
   rounds its ends to the list's own radius; nested surfaces nest their radii. Every `.btn` presses

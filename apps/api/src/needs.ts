@@ -64,30 +64,53 @@ const CHANGED = `COALESCE((SELECT n.kind FROM notification n
   WHERE n.account_id = ?1 AND n.guide_id = g.id AND n.read_at = ''
   ORDER BY n.at DESC LIMIT 1), '')`;
 
-/** A few words for the change mark. Kinds not named here still mark the row, as "Updated". */
+/**
+ * A few words for the change mark, one per notification kind, so the mark always names what
+ * changed. A kind added to notify.ts later and not here still marks the row, as "Changed".
+ */
 const CHANGE_WORDS: Record<string, string> = {
-  asked: "New question",
-  replied: "New reply",
-  customer_wrote: "Customer wrote",
-  customer_waiting: "Customer waiting",
-  task_finished: "Finished",
-  child_done: "Follow-up finished",
+  handoff: "Sent to you",
+  shared: "Shared",
+  declined: "Passed back",
+  pulled: "Opened",
+  consumed: "Archived",
+  reopened: "Reopened",
+  joined: "Someone joined",
+  promoted: "Promoted",
+  removed: "Removed",
   task_claimed: "Taken",
+  task_finished: "Finished",
   task_released: "Let go",
   sent_back: "Reopened",
-  reopened: "Reopened",
-  declined: "Passed back",
-  stalled: "Went quiet",
-  stuck: "Stuck",
-  blocked: "Blocked",
-  untaken: "Nobody took it",
-  handoff: "Sent to you",
   reassigned: "Given to you",
-  emailed: "Came in by email",
-  hooked: "Came in from an alert",
+  stalled: "Went quiet",
+  shelved: "Moved to Draft",
+  still_draft: "Still a draft",
+  requeued: "Back in the queue",
+  stuck: "Stuck",
+  untaken: "Nobody took it",
+  customer_wrote: "Customer wrote",
   reader_unsure: "Needs a look",
+  customer_waiting: "Customer waiting",
+  child_done: "Follow-up finished",
+  asked: "New question",
+  replied: "New reply",
+  blocked: "Blocked",
+  signed_up: "Signed up",
+  billed_twice: "Billed twice",
+  emailed: "Came in by email",
+  email_sender: "New sender",
+  hooked: "Came in from an alert",
 };
-export const changeWords = (kind: string) => (kind ? CHANGE_WORDS[kind] || "Updated" : "");
+export const changeWords = (kind: string) => (kind ? CHANGE_WORDS[kind] || "Changed" : "");
+
+/** A customer's message on one line, cut at a word past 160 characters. */
+const words = (text: string) => {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (flat.length <= 160) return flat;
+  const cut = flat.slice(0, 160);
+  return `${cut.slice(0, cut.lastIndexOf(" ") > 100 ? cut.lastIndexOf(" ") : 160)}…`;
+};
 
 const person = (name: string, handle: string, id: string) =>
   name.trim() || (handle ? `@${handle}` : id ? `@${id}` : "");
@@ -110,10 +133,20 @@ export async function needs(
   type Base = { id: string; title: string; summary: string; changed: string };
   const [customers, held, untaken, back, closed] = await Promise.all([
     // Open customer requests. Ours to answer when nothing was answered since they last wrote.
-    q<Base & { customer: string; customer_name: string; wrote: string; answered: string }>(
+    q<
+      Base & {
+        customer: string;
+        customer_name: string;
+        wrote: string;
+        answered: string;
+        words: string;
+      }
+    >(
       `SELECT g.id, g.title, g.summary, g.customer, g.customer_name, ${CHANGED} AS changed,
               COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'customer'), g.created) AS wrote,
-              COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'answered'), '') AS answered
+              COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'answered'), '') AS answered,
+              COALESCE((SELECT e.body FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'customer'
+                         ORDER BY e.id DESC LIMIT 1), '') AS words
          FROM guide g
         WHERE g.customer <> '' AND g.status = 'published' AND ${VISIBLE}`,
       account,
@@ -236,7 +269,8 @@ export async function needs(
       reason: "customer",
       with: r.customer_name || r.customer,
       since: r.wrote,
-      said: "",
+      // Their own latest words, not the title said again.
+      said: words(r.words),
     });
   const holder = (r: (typeof held)[number]) =>
     r.agent_id.startsWith("person-") ? person(r.by_name, r.by_handle, r.holder) : r.agent_id;
@@ -261,18 +295,19 @@ export async function needs(
 
   return {
     rows,
+    // Only the requests waiting on the customer: the ones waiting on us are rows already.
     customers: customers
+      .filter((r) => r.answered && r.answered >= r.wrote)
       .map((r) => ({
         id: r.id,
         title: r.title,
         customer: r.customer_name || r.customer,
-        ours: !r.answered || r.answered < r.wrote,
-        since: r.wrote,
+        ours: false,
+        since: r.answered,
         project: projectOf(r.id),
         changed: changeWords(r.changed),
       }))
-      // Ours first, then the longest wait.
-      .sort((a, b) => Number(b.ours) - Number(a.ours) || a.since.localeCompare(b.since))
+      .sort((a, b) => a.since.localeCompare(b.since))
       .slice(0, 8),
     closed: closed.map((r) => ({
       id: r.id,

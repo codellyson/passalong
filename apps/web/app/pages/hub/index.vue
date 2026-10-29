@@ -49,17 +49,32 @@ const changedCount = computed(
     (needs.value?.closed ?? []).filter((c) => c.changed).length,
 );
 const customerCount = computed(() => rows.value.filter((r) => r.reason === "customer").length);
+/** Finished in the last day: what the empty state says happened overnight. */
+const overnight = computed(() =>
+  (needs.value?.closed ?? []).filter((c) => now.value - Date.parse(c.at) < 864e5),
+);
+/** Each thing said once: the customer count only when it is not the whole list. */
 const summary = computed(() => {
-  const parts = rows.value.length ? [`${rows.value.length} waiting on you`] : [];
-  if (customerCount.value)
-    parts.push(`${customerCount.value} customer${customerCount.value === 1 ? "" : "s"}`);
+  const n = rows.value.length;
+  const c = customerCount.value;
+  const parts: string[] = [];
+  if (n)
+    parts.push(
+      c === n
+        ? `${n} waiting on you, ${n === 1 ? "a customer" : "all customers"}`
+        : c
+          ? `${n} waiting on you · ${c} customer${c === 1 ? "" : "s"}`
+          : `${n} waiting on you`,
+    );
   if (changedCount.value) parts.push(`${changedCount.value} changed since you last looked`);
-  return parts.join(" · ") || "Nothing waiting on you";
+  return parts.join(" · ");
 });
 
-const STATE: Record<NeedRow["reason"], string> = {
-  customer: "Needs a reply",
-  asking: "Asking you",
+/**
+ * What the row's state says, only where the action does not already say it: Reply means it needs
+ * a reply, and Answer means someone is asking.
+ */
+const STATE: Partial<Record<NeedRow["reason"], string>> = {
   stuck: "Went quiet",
   untaken: "Nobody took it",
   came_back: "Came back",
@@ -71,13 +86,20 @@ const VERB: Record<NeedRow["reason"], string> = {
   untaken: "Open",
   came_back: "Open",
 };
+const plainWords = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+/** The line under a title: what was said, or the summary unless it only restates the title. */
+function secondLine(r: NeedRow): string {
+  if (r.said) return r.said;
+  const s = plainWords(r.summary);
+  const t = plainWords(r.title);
+  return !s || s.includes(t) || t.includes(s) ? "" : r.summary;
+}
 const href = (r: { id: string; reason?: NeedRow["reason"] }) =>
   r.reason === "customer" ? `/hub/support/${r.id}` : `/hub/g/${r.id}`;
-
-/** Finished in the last day: what the empty state says happened overnight. */
-const overnight = computed(() =>
-  (needs.value?.closed ?? []).filter((c) => now.value - Date.parse(c.at) < 864e5),
-);
 
 const reopening = ref("");
 const reopenBusy = ref(false);
@@ -94,30 +116,32 @@ async function sendReopen(id: string, form: HTMLFormElement) {
 }
 
 const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
+/** The register's columns, stated once and shared by its header and every row. */
+const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
 </script>
 
 <template>
   <HubShell :heading="first ? 'Get started' : ''">
     <HubFirstRun v-if="first" />
 
-    <div v-else class="grid items-start gap-x-10 gap-y-12 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <section aria-labelledby="needs-h" class="min-w-0">
-        <header class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-b border-fg pb-3">
+    <div v-else class="grid items-start gap-x-10 gap-y-12 xl:grid-cols-[minmax(0,1fr)_18rem]">
+      <section aria-labelledby="needs-h" class="@container min-w-0">
+        <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 pb-4">
           <div class="min-w-0">
             <h1 id="needs-h" class="m-0 text-h2 font-medium tracking-tight">Needs you</h1>
-            <p v-if="needs" class="m-0 mt-1 font-ui text-sm text-muted">{{ summary }}</p>
+            <p v-if="needs && summary" class="m-0 mt-1 font-ui text-sm text-muted">{{ summary }}</p>
           </div>
           <button v-if="changedCount" type="button" class="btn sm" @click="readAll()">
             Mark all seen
           </button>
-        </header>
+        </div>
 
-        <HubSkeleton v-if="needsQ.isPending.value" :rows="4" label="Loading what needs you" class="mt-4" />
+        <HubSkeleton v-if="needsQ.isPending.value" :rows="6" label="Loading what needs you" />
 
         <div
           v-else-if="needsQ.isError.value && !needs"
           role="alert"
-          class="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3"
+          class="flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3"
         >
           <div class="min-w-0 grow basis-64">
             <p class="m-0 font-ui text-sm font-semibold text-danger">This list didn't load</p>
@@ -126,7 +150,7 @@ const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted up
           <button class="btn outline danger sm" type="button" @click="needsQ.refetch()">Try again</button>
         </div>
 
-        <div v-else-if="!rows.length" class="flex flex-col gap-4 py-10">
+        <div v-else-if="!rows.length" class="flex flex-col gap-4 border-t border-fg py-10">
           <p class="m-0 text-h3 font-medium">Nothing needs you.</p>
           <p class="m-0 max-w-[36rem] font-ui text-sm text-muted">
             A customer waiting on an answer, an agent's question, work sent to you that nobody took,
@@ -143,89 +167,62 @@ const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted up
           </div>
         </div>
 
-        <ol v-else class="m-0 list-none p-0">
-          <li
-            v-for="r in rows"
-            :key="r.id"
-            class="relative flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-line py-4 pr-1 pl-5"
+        <template v-else>
+          <!-- The column labels, once, over the register. -->
+          <div
+            aria-hidden="true"
+            class="hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid"
+            :class="[cols, label]"
           >
-            <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
-            <div class="flex min-w-0 grow basis-[28rem] flex-col gap-1">
-              <p v-if="r.changed" class="m-0 font-ui text-xs font-medium text-accent">
-                Changed<span class="text-muted"> · {{ r.changed }}</span>
-              </p>
-              <NuxtLink :to="href(r)" class="font-ui text-base font-medium text-fg no-underline hover:underline">
-                {{ r.title }}
+            <span>Work</span><span>Project</span><span>With</span><span class="text-right">Waiting</span><span />
+          </div>
+          <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
+            <li
+              v-for="r in rows"
+              :key="r.id"
+              class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid"
+              :class="cols"
+            >
+              <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+              <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
+                <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
+                  <NuxtLink :to="href(r)" class="font-medium text-fg no-underline hover:underline">{{ r.title }}</NuxtLink>
+                  <span v-if="r.changed" class="text-xs font-medium text-accent">Changed · {{ r.changed }}</span>
+                </p>
+                <p v-if="STATE[r.reason] || secondLine(r)" class="m-0 mt-0.5 font-ui text-xs text-muted">
+                  <span v-if="STATE[r.reason]" class="font-medium text-fg">{{ STATE[r.reason] }}</span>
+                  <template v-if="STATE[r.reason] && secondLine(r)"> · </template>
+                  <template v-if="secondLine(r)">{{ r.said ? `“${secondLine(r)}”` : secondLine(r) }}</template>
+                </p>
+              </div>
+              <NuxtLink :to="href(r)" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">
+                {{ VERB[r.reason] }}
               </NuxtLink>
-              <p v-if="r.said || r.summary" class="m-0 max-w-[65ch] font-ui text-sm text-muted">
-                <template v-if="r.said">“{{ r.said }}”</template>
-                <template v-else>{{ r.summary }}</template>
-              </p>
-              <dl class="m-0 mt-2 grid grid-cols-2 gap-px overflow-hidden rounded-1 border border-line bg-line sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_minmax(0,1fr)_4.5rem]">
-                <div class="flex min-w-0 flex-col gap-0.5 bg-bg px-3 py-1.5">
-                  <dt :class="label">Project</dt>
-                  <dd class="m-0 flex min-w-0 items-center gap-2 font-ui text-sm">
-                    <template v-if="r.project">
-                      <span class="project-mark size-2 shrink-0 rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
-                      <span class="min-w-0 break-words">{{ r.project.title }}</span>
-                    </template>
-                    <span v-else class="text-muted">None</span>
-                  </dd>
-                </div>
-                <div class="flex min-w-0 flex-col gap-0.5 bg-bg px-3 py-1.5">
-                  <dt :class="label">With</dt>
-                  <dd class="m-0 min-w-0 font-ui text-sm break-words">{{ r.with || "Nobody" }}</dd>
-                </div>
-                <div class="flex min-w-0 flex-col gap-0.5 bg-bg px-3 py-1.5">
-                  <dt :class="label">State</dt>
-                  <dd class="m-0 font-ui text-sm">{{ STATE[r.reason] }}</dd>
-                </div>
-                <div class="flex min-w-0 flex-col gap-0.5 bg-bg px-3 py-1.5">
-                  <dt :class="label">Waiting</dt>
-                  <dd class="m-0 font-ui text-sm tabular-nums">{{ age(r.since, now) }}</dd>
-                </div>
-              </dl>
-            </div>
-            <NuxtLink :to="href(r)" class="btn sm shrink-0">
-              {{ VERB[r.reason] }}
-            </NuxtLink>
-          </li>
-        </ol>
+              <span class="order-2 flex min-w-0 items-center gap-2 font-ui text-xs @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:pt-0.5 @2xl:text-sm">
+                <template v-if="r.project">
+                  <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
+                  <span class="min-w-0 break-words">{{ r.project.title }}</span>
+                </template>
+                <span v-else class="text-muted">Not sorted yet</span>
+              </span>
+              <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:pt-0.5 @2xl:text-sm @2xl:text-fg">
+                <span class="@2xl:hidden" aria-hidden="true">· </span>{{ r.with || "Nobody" }}
+              </span>
+              <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:pt-0.5 @2xl:text-right @2xl:text-sm @2xl:text-fg">
+                <span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(r.since, now) }}
+              </span>
+            </li>
+          </ol>
+        </template>
       </section>
 
-      <aside class="flex min-w-0 flex-col gap-10" aria-label="Customers and closed work">
-        <section aria-labelledby="cust-h" class="flex flex-col">
-          <div class="flex items-baseline justify-between border-b border-fg pb-2">
-            <h2 id="cust-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Customers waiting</h2>
-            <NuxtLink to="/hub/support" class="font-ui text-xs text-muted">All</NuxtLink>
-          </div>
-          <HubSkeleton v-if="needsQ.isPending.value" variant="lines" :rows="3" label="Loading customers" class="mt-3" />
-          <p v-else-if="!needs?.customers.length" class="m-0 py-3 font-ui text-sm text-muted">No customer is waiting.</p>
-          <ul v-else class="m-0 flex list-none flex-col p-0">
-            <li v-for="c in needs.customers" :key="c.id" class="relative border-b border-line py-3 pl-3">
-              <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
-              <NuxtLink :to="`/hub/support/${c.id}`" class="flex flex-col gap-0.5 no-underline">
-                <span class="flex items-baseline gap-3">
-                  <span class="min-w-0 grow font-ui text-sm font-medium break-words text-fg">{{ c.customer }}</span>
-                  <span class="shrink-0 font-ui text-xs tabular-nums" :class="c.ours ? 'text-fg' : 'text-muted'">{{ age(c.since, now) }}</span>
-                </span>
-                <span class="font-ui text-xs break-words text-muted">{{ c.title }}</span>
-                <span class="font-ui text-xs" :class="c.ours ? 'font-medium text-fg' : 'text-muted'">
-                  {{ c.ours ? "Waiting on us" : "Waiting on them" }}
-                </span>
-              </NuxtLink>
-            </li>
-          </ul>
-        </section>
-
-        <section aria-labelledby="closed-h" class="flex flex-col">
-          <div class="border-b border-fg pb-2">
-            <h2 id="closed-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Closed by the agent</h2>
-          </div>
-          <HubSkeleton v-if="needsQ.isPending.value" variant="lines" :rows="3" label="Loading closed work" class="mt-3" />
+      <aside class="flex min-w-0 flex-col gap-6" aria-label="Closed work and customers">
+        <section aria-labelledby="closed-h" class="flex flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
+          <h2 id="closed-h" class="m-0 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">Closed by the agent</h2>
+          <HubSkeleton v-if="needsQ.isPending.value" variant="lines" :rows="3" label="Loading closed work" class="my-3" />
           <p v-else-if="!needs?.closed.length" class="m-0 py-3 font-ui text-sm text-muted">Nothing was finished this week.</p>
           <ul v-else class="m-0 flex list-none flex-col p-0">
-            <li v-for="c in needs.closed" :key="c.id" class="relative flex flex-col gap-1 border-b border-line py-3 pl-3">
+            <li v-for="c in needs.closed" :key="c.id" class="relative flex flex-col gap-1 border-b border-line py-3 pl-3 last:border-b-0">
               <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
               <span class="flex items-baseline gap-3">
                 <NuxtLink :to="`/hub/g/${c.id}`" class="min-w-0 grow font-ui text-sm font-medium break-words text-fg no-underline hover:underline">{{ c.title }}</NuxtLink>
@@ -233,7 +230,7 @@ const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted up
               </span>
               <span class="flex items-center gap-2 font-ui text-xs text-muted">
                 <template v-if="c.project">
-                  <span class="project-mark size-2 shrink-0 rounded-[1px]" :data-tone="toneOf(c.project)" aria-hidden="true" />
+                  <span class="project-mark h-3 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneOf(c.project)" aria-hidden="true" />
                   <span class="min-w-0 break-words">{{ c.project.title }}</span>
                   <span aria-hidden="true">·</span>
                 </template>
@@ -258,6 +255,26 @@ const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted up
                   {{ reopenBusy ? "Reopening…" : "Reopen" }}
                 </button>
               </form>
+            </li>
+          </ul>
+        </section>
+
+        <!-- Only the requests waiting on the customer: the ones waiting on us are rows already. -->
+        <section v-if="needs?.customers.length" aria-labelledby="cust-h" class="flex flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
+          <div class="flex items-baseline justify-between border-b border-fg pb-2">
+            <h2 id="cust-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Waiting on customers</h2>
+            <NuxtLink to="/hub/support" class="font-ui text-xs text-muted">All requests</NuxtLink>
+          </div>
+          <ul class="m-0 flex list-none flex-col p-0">
+            <li v-for="c in needs.customers" :key="c.id" class="relative border-b border-line py-3 pl-3 last:border-b-0">
+              <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+              <NuxtLink :to="`/hub/support/${c.id}`" class="flex flex-col gap-0.5 no-underline">
+                <span class="flex items-baseline gap-3">
+                  <span class="min-w-0 grow font-ui text-sm font-medium break-words text-fg">{{ c.customer }}</span>
+                  <span class="shrink-0 font-ui text-xs text-muted tabular-nums">{{ age(c.since, now) }}</span>
+                </span>
+                <span class="font-ui text-xs break-words text-muted">{{ c.title }}</span>
+              </NuxtLink>
             </li>
           </ul>
         </section>

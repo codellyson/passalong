@@ -225,7 +225,8 @@
 
 /* ---- the hub's tokens ----------------------------------------------------------------------
    The signed-in screens keep the palette and draw it tighter: square-ish corners (2, 3, 4px and
-   nothing round but a dot), a one-pixel rule where a raised surface used to have a soft edge, the
+   nothing round but a dot), a one-pixel rule where a raised surface used to have a soft edge (the
+   deeper cream of a raised surface stays, so the ground has something against it), the
    grotesque for everything (no serif in the app). Counts and ages take `tabular-nums` where they
    stand in a column; prose keeps proportional figures, where tabular ones read as "1 1". Set on
    <body> by the hub's shell, so what it teleports to the body inherits it too. The landing and the
@@ -233,7 +234,7 @@
    custom property resolves where it is declared and overriding a part here would change nothing.
 
    Coral keeps one meaning in here: changed since you last looked. A project's line colour is one of
-   the six below and never coral. The sidebar is a solid ink rail in both themes; in dark it sits
+   the six below and never coral or anything near it. The sidebar is a solid ink rail in both themes; in dark it sits
    below the page rather than above it. */
 .hub-app {
   --r-1: 0.125rem;
@@ -243,7 +244,6 @@
   --font-serif: var(--font-sans);
   --edge-shadow: 0 0 0 1px var(--line-strong);
   --edge-shadow-hover: 0 0 0 1px light-dark(#cbbcab, #57524b);
-  --surface-raised: light-dark(#fffefd, #201e1b);
 
   --rail: light-dark(#252522, #11100e);
   --on-rail: #f4efe9;
@@ -257,7 +257,7 @@
   --project-blue: light-dark(#3e6fa6, #7aa4d8);
   --project-violet: light-dark(#7a5bb0, #a68ad8);
   --project-teal: light-dark(#2f8582, #5fb3ae);
-  --project-plum: light-dark(#9a4d74, #cc7ea6);
+  --project-slate: light-dark(#56687c, #9fb0c2);
 }
 /* On the rail the marks sit on ink in both themes, so they take their light-on-dark half. */
 .rail {
@@ -266,7 +266,7 @@
   --project-blue: #7aa4d8;
   --project-violet: #a68ad8;
   --project-teal: #5fb3ae;
-  --project-plum: #cc7ea6;
+  --project-slate: #9fb0c2;
 }
 .project-mark {
   background: var(--muted);
@@ -286,8 +286,8 @@
 .project-mark[data-tone="teal"] {
   background: var(--project-teal);
 }
-.project-mark[data-tone="plum"] {
-  background: var(--project-plum);
+.project-mark[data-tone="slate"] {
+  background: var(--project-slate);
 }
 
 *,

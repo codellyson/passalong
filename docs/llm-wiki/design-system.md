@@ -8,13 +8,13 @@ near-white surface is the thing you act on. Hierarchy comes from fill, not outli
 - **Canvas** `--bg` (#fffcfa), **field** `--field` (#fffefe) for inputs, menus and command wells.
   Dark mode is a matching warm charcoal.
 - **Ink** is the primary action. Outside the hub a card is a deeper cream at 24px and every button
-  is a pill; inside it (`.hub-app` on `<body>`) corners are 2–4px, nothing but a dot is round, a
-  surface's edge is a one-pixel rule, and a card is near-white on the cream.
+  is a pill; inside it (`.hub-app` on `<body>`) corners are 2–4px, nothing but a dot is round, and a
+  surface's edge is a one-pixel rule; a card keeps the deeper cream.
 - **Coral** `--coral` (#f2805d) is 2.6:1 on the canvas, so it is only ever a mark. In the hub it
   means one thing: changed since you last looked (a 3px bar at a row's left edge, a dot on a
   project). `--accent` is the same hue at a readable 5:1 for the word "Changed".
 - **The rail** (`--rail`) is solid ink in both themes. **Project colours** are six line colours
-  (`--project-*`; `toneOf()` in `app/utils/projects.ts`), never coral.
+  (`--project-*`; `toneOf()` in `app/utils/projects.ts`), drawn as 3px lines, never coral or near it.
 - Status colours (`--ok`, `--warn`, `--danger`) are separate from the brand and carry meaning.
 
 ## Type
