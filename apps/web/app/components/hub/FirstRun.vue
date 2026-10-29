@@ -57,7 +57,7 @@ const step =
   <div>
     <ol class="m-0 list-none p-0">
       <li class="relative pb-8 pl-10">
-        <span :class="[step, claimed ? 'bg-ok text-bg' : 'bg-accent text-accent-fg']">
+        <span :class="[step, claimed ? 'bg-ok text-bg' : 'bg-ink text-on-ink']">
           <AppIcon v-if="claimed" name="check" /><template v-else>1</template>
         </span>
         <span class="absolute top-8 bottom-0 left-[13px] w-px bg-line" />
@@ -120,7 +120,7 @@ const step =
            task prompt. Everybody needs it, so it is a step. -->
       <li class="relative pb-8 pl-10" :class="claimed ? '' : 'opacity-60'">
         <span
-          :class="[step, 'border', claimed ? 'border-accent bg-accent text-accent-fg' : 'border-line-strong text-muted']"
+          :class="[step, 'border', claimed ? 'border-ink bg-ink text-on-ink' : 'border-line-strong text-muted']"
         >2</span>
         <span class="absolute top-8 bottom-0 left-[13px] w-px bg-line" />
 
@@ -142,7 +142,7 @@ const step =
 
       <li class="relative pl-10" :class="claimed ? '' : 'opacity-60'">
         <span
-          :class="[step, 'border', claimed ? 'border-accent bg-accent text-accent-fg' : 'border-line-strong text-muted']"
+          :class="[step, 'border', claimed ? 'border-ink bg-ink text-on-ink' : 'border-line-strong text-muted']"
         >3</span>
 
         <template v-if="team">

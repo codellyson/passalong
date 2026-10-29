@@ -436,7 +436,12 @@ Its input is TipTap
   coral bar at a row's left edge with a "Changed" line naming what changed, and a coral dot on a
   project in the rail. It is held until the work is opened (`markSeen` in useHub posts
   `/v1/notifications/read` with `{ guide }`), and "changed" is an unread notification on that
-  work. Never use coral or `--accent` for a state that is not a change: "waiting on us" is ink. The
+  work. Never use coral or `--accent` for a state that is not a change: "waiting on us" is ink, and
+  so is everything else the landing marks in coral. Global rules the two worlds share read intent
+  tokens — `--focus`/`--focus-halo` (the ring and a focused field), `--chosen` (a checked control),
+  `--link-hover`, `--emphasis` (`.linkish`, a toneless tonal/outline button) — which `:root` sets to
+  coral and `.hub-app` to ink. A chosen chip is an ink fill with on-ink text, a selected card an ink
+  ring, the current tab an ink bar. The
   "Changed · what" words sit on the title's line, after the title, and every notification kind
   has its words (`CHANGE_WORDS` in needs.ts, held to `KINDS` by its test).
   `--coral` is 2.6:1 on the canvas, so it stays a mark; `--accent` is the readable 5:1 for the

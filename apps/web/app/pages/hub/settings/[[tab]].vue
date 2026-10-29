@@ -149,7 +149,7 @@ const noteTone: Record<string, string> = {
             :key="t.id"
             :to="t.path"
             class="flex shrink-0 items-baseline justify-between gap-2 rounded-1 border border-line px-2.5 py-1.5 font-ui text-sm whitespace-nowrap text-fg no-underline hover:bg-surface md:border-transparent"
-            :class="tab === t.id ? 'bg-surface font-medium md:shadow-[inset_2px_0_0_var(--accent)]' : ''"
+            :class="tab === t.id ? 'bg-surface font-medium md:shadow-[inset_2px_0_0_var(--ink)]' : ''"
             :aria-current="tab === t.id ? 'page' : undefined"
           >
             {{ t.label }}

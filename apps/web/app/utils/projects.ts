@@ -8,10 +8,16 @@
 export const TONES = ["amber", "green", "blue", "violet", "teal", "stone"] as const;
 export type Tone = (typeof TONES)[number];
 
+/** A folder's stored colour as a line colour, or "" when it has none. Older folders stored coral. */
+export function storedTone(color?: string | null): Tone | "" {
+  if (color === "coral") return "stone";
+  return (TONES as readonly string[]).includes(color || "") ? (color as Tone) : "";
+}
+
 /** The folder's own colour when it has one; otherwise one picked from its id, the same every time. */
 export function toneOf(p: { id: string; color?: string | null }): Tone {
-  if (p.color === "coral") return "stone";
-  if ((TONES as readonly string[]).includes(p.color || "")) return p.color as Tone;
+  const own = storedTone(p.color);
+  if (own) return own;
   let h = 0;
   for (const ch of p.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return TONES[h % TONES.length] as Tone;

@@ -63,10 +63,10 @@ const head =
   <div>
     <!-- The only moment in the product where the interface holds something the server cannot give
          back. It says so where the value is, not in a line underneath it. -->
-    <div v-if="fresh" class="mb-4 rounded-2 border border-accent bg-accent-soft p-3">
+    <div v-if="fresh" class="mb-4 rounded-2 border border-fg bg-raised p-3">
       <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <b class="font-ui text-sm text-fg">Your new token</b>
-        <span class="font-ui text-sm text-accent">Copy it now. You won't be able to see it again.</span>
+        <span class="font-ui text-sm font-medium text-fg">Copy it now. You won't be able to see it again.</span>
       </div>
       <!-- The well and its buttons share one height, the control height, so the row is one line. -->
       <div class="flex flex-wrap items-center gap-2">

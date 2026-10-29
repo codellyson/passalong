@@ -33,11 +33,12 @@ const DOT: Record<string, string> = {
         :key="t.key"
         class="pointer-events-auto flex items-start gap-3 rounded-2 bg-field px-4 py-3 font-ui text-sm shadow-[0_0_0_1px_var(--edge-ring),var(--shadow-2)]"
       >
+        <!-- A toast is news you have not looked at yet, so a kind with no status colour is coral. -->
         <span class="mt-1.5 size-2 shrink-0 rounded-pill" :class="DOT[t.kind] || 'bg-coral'" aria-hidden="true" />
         <NuxtLink
           v-if="t.guide"
           :to="`/hub/g/${t.guide}`"
-          class="min-w-0 flex-1 text-fg no-underline hover:text-accent"
+          class="min-w-0 flex-1 text-fg no-underline hover:underline"
           @click="dismiss(t.key)"
         >{{ t.text }}</NuxtLink>
         <span v-else class="min-w-0 flex-1 text-muted">{{ t.text }}</span>

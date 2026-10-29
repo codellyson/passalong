@@ -19,7 +19,7 @@ const { on, has, toggle } = useSelection();
   >
     <input
       type="checkbox"
-      class="size-4 accent-[var(--accent)]"
+      class="size-4"
       :checked="has(props.id)"
       :disabled="!props.allowed"
       :aria-label="props.allowed ? `Select ${props.title || props.id}` : `You cannot archive or delete ${props.title || props.id}`"

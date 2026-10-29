@@ -17,7 +17,7 @@ const needed = computed(() => Boolean(data.value.me) && !data.value.me?.has_pass
 /**
  * On the board this is a notice first and a form only when asked for: the same one-line band
  * Settings shows, so the state reads one way wherever it appears. It used to be the whole form in
- * an accent-ringed panel, half the page, above the work the page is for.
+ * a ringed panel, half the page, above the work the page is for.
  */
 const open = ref(false);
 /**

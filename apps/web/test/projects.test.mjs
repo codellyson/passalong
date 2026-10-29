@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { age, projectsFrom, toneOf } from "../app/utils/projects.ts";
+import { age, projectsFrom, storedTone, toneOf } from "../app/utils/projects.ts";
 
 test("a project keeps its folder's colour, never coral, and is stable without one", () => {
   assert.equal(toneOf({ id: "a", color: "blue" }), "blue");
   assert.equal(toneOf({ id: "a", color: "coral" }), "stone");
   assert.equal(toneOf({ id: "abc", color: "" }), toneOf({ id: "abc", color: "" }));
   assert.notEqual(toneOf({ id: "abc", color: "" }), "coral");
+  assert.equal(storedTone("coral"), "stone");
+  assert.equal(storedTone(""), "");
+  assert.equal(storedTone("violet"), "violet");
 });
 
 test("projects are the top folders, counting everything beneath them", () => {

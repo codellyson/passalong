@@ -9,7 +9,7 @@
  */
 import type { GuideContext } from "~/types/hub";
 
-export type BeatTone = "plain" | "accent" | "ok" | "danger" | "warn";
+export type BeatTone = "plain" | "held" | "ok" | "danger" | "warn";
 
 export interface Beat {
   at: string;
@@ -54,7 +54,7 @@ export function progressOf(ctx: GuideContext): Beat[] {
       at: k.claimed_at,
       who: nameOf(k.by),
       what: where ? `took it in ${where}` : "took it",
-      tone: "accent",
+      tone: "held",
     });
     if (k.note)
       beats.push({
@@ -90,7 +90,7 @@ export function progressOf(ctx: GuideContext): Beat[] {
 /** The dot for each tone, as utility classes. */
 export const BEAT_DOT: Record<BeatTone, string> = {
   plain: "bg-line-strong",
-  accent: "bg-coral",
+  held: "bg-fg",
   ok: "bg-ok",
   danger: "bg-danger",
   warn: "bg-warn",

@@ -156,7 +156,7 @@ async function submit() {
     <!-- Whether you run Passalong, and by which of the two routes — because they differ in what
          they permit, and the only signal until now was an Admin item quietly appearing in a menu. -->
     <p v-if="bare && me?.role === 'super'" class="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-line pt-4 font-ui text-sm text-muted">
-      <span class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold tracking-wide text-accent uppercase">
+      <span class="rounded-pill bg-surface px-2 py-0.5 font-ui text-xs font-semibold tracking-wide text-fg uppercase">
         admin
       </span>
       <span class="min-w-0 grow">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Folder } from "~/types/folder";
+import { storedTone } from "~/utils/projects";
 
 usePage({
   title: "Folders · Passalong",
@@ -15,7 +16,6 @@ const moveMenu = ref<HTMLElement | null>(null);
 const actionBusy = ref(false);
 const colorChoices = [
   { value: "", label: "Neutral" },
-  { value: "coral", label: "Coral" },
   { value: "amber", label: "Amber" },
   { value: "green", label: "Green" },
   { value: "blue", label: "Blue" },
@@ -301,7 +301,7 @@ async function deleteSelected() {
     <p v-if="busy" class="empty">Loading folders…</p>
     <template v-else-if="!trouble">
       <div v-if="folders.length" class="folder-list overflow-hidden rounded-3 bg-surface-raised shadow-edge" :class="{ picking: selected.length }">
-        <div v-for="({ folder, depth, color, childCount }, index) in visibleRows" :key="folder.id" class="folder-row flex items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0, 'is-selected': selected.includes(folder.id), 'is-working': working.includes(folder.id) }" :style="{ '--folder-depth': depth, '--folder-hue': color ? `var(--folder-${color})` : 'var(--muted)' }">
+        <div v-for="({ folder, depth, color, childCount }, index) in visibleRows" :key="folder.id" class="folder-row flex items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0, 'is-selected': selected.includes(folder.id), 'is-working': working.includes(folder.id) }" :style="{ '--folder-depth': depth, '--folder-hue': storedTone(color) ? `var(--project-${storedTone(color)})` : 'var(--muted)' }">
           <span v-if="depth" class="folder-rails shrink-0" aria-hidden="true" />
           <button v-if="childCount" class="folder-toggle flex size-6 shrink-0 items-center justify-center rounded-1 text-muted hover:bg-field hover:text-fg" type="button" :aria-expanded="expanded.has(folder.id)" :aria-label="`${expanded.has(folder.id) ? 'Hide' : 'Show'} subfolders of ${folder.title}`" @click="toggleOpen(folder.id)">
             <svg class="folder-toggle-chevron size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -309,7 +309,7 @@ async function deleteSelected() {
           <span v-else class="size-6 shrink-0" aria-hidden="true" />
           <span class="folder-slot relative grid size-5 shrink-0 place-items-center">
             <svg class="folder-icon size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
-            <label class="folder-pick absolute inset-0 grid place-items-center"><input class="size-4 accent-[var(--accent)]" type="checkbox" :checked="selected.includes(folder.id)" :aria-label="`Select ${folder.title}`" @change="toggle(folder.id)" /></label>
+            <label class="folder-pick absolute inset-0 grid place-items-center"><input class="size-4" type="checkbox" :checked="selected.includes(folder.id)" :aria-label="`Select ${folder.title}`" @change="toggle(folder.id)" /></label>
           </span>
           <NuxtLink :to="`/hub/folders/${folder.id}`" class="folder-row-link flex min-w-0 flex-1 items-center gap-3 text-fg no-underline">
             <span class="min-w-0 flex-1"><span class="block truncate font-ui text-sm font-medium">{{ folder.title }}</span><span v-if="folder.description" class="block truncate font-ui text-xs text-muted">{{ folder.description }}</span></span>
@@ -377,13 +377,6 @@ async function deleteSelected() {
 </template>
 
 <style scoped>
-.folder-row, .folder-color-choice {
-  --folder-coral: #e87260;
-  --folder-amber: #d99c35;
-  --folder-green: #53a77c;
-  --folder-blue: #669bd8;
-  --folder-violet: #a585d6;
-}
 .folder-row { position: relative; }
 /* One rail per level, 16px apart, under the chevron of each ancestor: depth reads as lines, not as a slant. */
 .folder-rails {
@@ -414,14 +407,13 @@ async function deleteSelected() {
   .folder-pick { opacity: 1; }
   .folder-icon { opacity: 0; }
 }
-.folder-row-link:hover { color: var(--accent); }
+.folder-row-link:hover { text-decoration: underline; }
 .folder-icon { color: var(--folder-hue); }
 .folder-color-choice { border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--line-strong); background: var(--folder-hue); cursor: pointer; }
 .folder-color-choice:hover { scale: 1.12; }
 .folder-color-choice[data-color="neutral"] { --folder-hue: var(--muted); }
-.folder-color-choice[data-color="coral"] { --folder-hue: var(--folder-coral); }
-.folder-color-choice[data-color="amber"] { --folder-hue: var(--folder-amber); }
-.folder-color-choice[data-color="green"] { --folder-hue: var(--folder-green); }
-.folder-color-choice[data-color="blue"] { --folder-hue: var(--folder-blue); }
-.folder-color-choice[data-color="violet"] { --folder-hue: var(--folder-violet); }
+.folder-color-choice[data-color="amber"] { --folder-hue: var(--project-amber); }
+.folder-color-choice[data-color="green"] { --folder-hue: var(--project-green); }
+.folder-color-choice[data-color="blue"] { --folder-hue: var(--project-blue); }
+.folder-color-choice[data-color="violet"] { --folder-hue: var(--project-violet); }
 </style>

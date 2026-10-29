@@ -155,7 +155,7 @@ async function drop(g: Group) {
             v-for="h in handles"
             :key="h"
             class="flex cursor-pointer items-center gap-2 rounded-pill border border-line px-3 py-1 font-ui text-sm"
-            :class="picked.has(h) ? 'border-accent bg-accent-soft text-accent' : 'text-muted'"
+            :class="picked.has(h) ? 'border-ink bg-ink text-on-ink accent-[var(--on-ink)]' : 'text-muted'"
           >
             <input
               type="checkbox"

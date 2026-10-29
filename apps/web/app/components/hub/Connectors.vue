@@ -188,7 +188,7 @@ const tone = {
           >
             <span
               class="grid size-8 place-items-center rounded-1 border"
-              :class="a.id === connect.app ? 'border-transparent bg-accent-soft text-accent' : 'border-line bg-surface text-fg'"
+              :class="a.id === connect.app ? 'border-transparent bg-ink text-on-ink' : 'border-line bg-surface text-fg'"
             >
               <AppMark :name="a.mark" :size="18" />
             </span>
@@ -295,10 +295,10 @@ const tone = {
         </details>
 
         <!-- Shown once, like a new token: the page holds something the server cannot give back. -->
-        <div v-if="fresh" class="rounded-2 border border-accent bg-accent-soft p-3">
+        <div v-if="fresh" class="rounded-2 border border-fg bg-raised p-3">
           <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
             <b class="font-ui text-sm text-fg">Client ID<template v-if="fresh.secret"> and secret · shown once</template></b>
-            <span class="font-ui text-sm text-accent">Paste into {{ app.id === "other" ? "the app" : app.name }}</span>
+            <span class="font-ui text-sm font-medium text-fg">Paste into {{ app.id === "other" ? "the app" : app.name }}</span>
           </div>
           <div class="flex flex-col gap-2">
             <code class="overflow-x-auto rounded-1 border border-line-strong bg-raised px-3 py-2 font-code text-sm whitespace-nowrap text-fg">{{ fresh.id }}</code>
@@ -324,7 +324,7 @@ const tone = {
               <span class="block h-1 overflow-hidden rounded-pill bg-line">
                 <span
                   class="block h-full rounded-pill transition-[width] duration-300"
-                  :class="stageState(i) === 'done' ? 'w-full bg-ok' : stageState(i) === 'now' ? 'w-1/2 bg-accent motion-safe:animate-pulse' : 'w-0'"
+                  :class="stageState(i) === 'done' ? 'w-full bg-ok' : stageState(i) === 'now' ? 'w-1/2 bg-fg motion-safe:animate-pulse' : 'w-0'"
                 />
               </span>
               {{ s }}

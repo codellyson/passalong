@@ -191,7 +191,7 @@ function guides(t: TeamDetail) {
           :aria-controls="`panel-${t.slug}-${tab.id}`"
           :tabindex="current(t) === tab.id ? 0 : -1"
           class="-mb-px cursor-pointer border-0 border-b-2 bg-transparent px-2.5 py-2.5 font-ui text-sm whitespace-nowrap"
-          :class="current(t) === tab.id ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
+          :class="current(t) === tab.id ? 'border-fg font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
           @click="pick(t.slug, tab.id)"
         >
           {{ tab.label }}

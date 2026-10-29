@@ -183,7 +183,7 @@ watchEffect(() => {
           <li v-for="f in msg.files" :key="f.url">
             <button
               type="button"
-              class="inline-flex max-w-56 items-center gap-2 rounded-1 border-0 bg-raised px-3 py-2 font-ui text-xs text-fg shadow-edge hover:text-accent"
+              class="inline-flex max-w-56 items-center gap-2 rounded-1 border-0 bg-raised px-3 py-2 font-ui text-xs text-fg shadow-edge hover:underline"
               @click="save(f)"
             >
               <span class="truncate">{{ f.name }}</span>

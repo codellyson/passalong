@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Folder, FolderAsset, FolderDocument, FolderGuide } from "~/types/folder";
 import { renderFolderMarkdown } from "~/utils/folder-markdown";
+import { storedTone } from "~/utils/projects";
 
 usePage({
   title: "Folder · Passalong",
@@ -531,7 +532,7 @@ watch([signedIn, id], load, { immediate: true });
       <header class="folder-page-header">
         <div class="folder-heading-row flex flex-wrap items-center justify-between gap-4">
           <div class="flex min-w-0 items-start gap-3">
-            <span class="folder-title-icon flex size-10 shrink-0 items-center justify-center rounded-2" :data-color="displayColor || 'neutral'">
+            <span class="folder-title-icon flex size-10 shrink-0 items-center justify-center rounded-2" :data-color="storedTone(displayColor) || 'neutral'">
               <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
             </span>
             <form v-if="renamingFolder" class="flex min-w-0 flex-1 flex-col gap-2" @submit.prevent="renameFolder" @keydown.esc="renamingFolder = false">
@@ -590,7 +591,7 @@ watch([signedIn, id], load, { immediate: true });
               @click="openDocument(doc.id)"
             >{{ doc.name }}</button>
             <NuxtLink v-for="child in children" :key="child.id" :to="`/hub/folders/${child.id}`" class="folder-tree-item flex items-center gap-2 py-2 pl-4 pr-2 font-ui text-sm no-underline">
-              <svg class="folder-heading-icon size-4 shrink-0" :data-color="child.color || displayColor || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg><span class="truncate">{{ child.title }}</span>
+              <svg class="folder-heading-icon size-4 shrink-0" :data-color="storedTone(child.color || displayColor) || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg><span class="truncate">{{ child.title }}</span>
             </NuxtLink>
             <NuxtLink v-for="guide in guides" :key="guide.id" :to="`/hub/g/${guide.id}`" class="folder-tree-item flex items-center gap-2 py-2 pl-4 pr-2 font-ui text-sm no-underline">
               <span class="truncate">{{ guide.title || "Untitled" }}</span>
@@ -698,7 +699,7 @@ watch([signedIn, id], load, { immediate: true });
               <ul class="m-0 list-none overflow-hidden rounded-2 bg-surface-raised p-0 shadow-edge">
                 <li v-for="(child, index) in children" :key="child.id" :class="{ 'border-t border-line': index > 0 }">
                   <NuxtLink :to="`/hub/folders/${child.id}`" class="flex items-start gap-3 px-4 py-3 text-fg no-underline hover:bg-field">
-                    <svg class="folder-heading-icon mt-0.5 size-5 shrink-0" :data-color="child.color || displayColor || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
+                    <svg class="folder-heading-icon mt-0.5 size-5 shrink-0" :data-color="storedTone(child.color || displayColor) || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
                     <span class="min-w-0 flex-1">
                       <span class="block font-ui text-sm font-medium">{{ child.title }}</span>
                       <span v-if="child.description" class="block font-ui text-xs text-muted">{{ child.description }}</span>
@@ -764,11 +765,12 @@ watch([signedIn, id], load, { immediate: true });
   margin-bottom: 0;
 }
 .folder-title-icon[data-color="neutral"] { color: var(--muted); background: var(--field); }
-.folder-title-icon[data-color="coral"] { color: #e87260; background: #e872601a; }
-.folder-title-icon[data-color="amber"] { color: #d99c35; background: #d99c351a; }
-.folder-title-icon[data-color="green"] { color: #53a77c; background: #53a77c1a; }
-.folder-title-icon[data-color="blue"] { color: #669bd8; background: #669bd81a; }
-.folder-title-icon[data-color="violet"] { color: #a585d6; background: #a585d61a; }
+.folder-title-icon[data-color="amber"] { --hue: var(--project-amber); }
+.folder-title-icon[data-color="green"] { --hue: var(--project-green); }
+.folder-title-icon[data-color="blue"] { --hue: var(--project-blue); }
+.folder-title-icon[data-color="violet"] { --hue: var(--project-violet); }
+.folder-title-icon[data-color="stone"] { --hue: var(--project-stone); }
+.folder-title-icon:not([data-color="neutral"]) { color: var(--hue); background: color-mix(in oklab, var(--hue) 10%, transparent); }
 .folder-delete {
   border: 0;
   background: transparent;
@@ -787,11 +789,11 @@ watch([signedIn, id], load, { immediate: true });
   background: var(--bg);
 }
 .folder-heading-icon[data-color="neutral"] { color: var(--muted); }
-.folder-heading-icon[data-color="coral"] { color: #e87260; }
-.folder-heading-icon[data-color="amber"] { color: #d99c35; }
-.folder-heading-icon[data-color="green"] { color: #53a77c; }
-.folder-heading-icon[data-color="blue"] { color: #669bd8; }
-.folder-heading-icon[data-color="violet"] { color: #a585d6; }
+.folder-heading-icon[data-color="amber"] { color: var(--project-amber); }
+.folder-heading-icon[data-color="green"] { color: var(--project-green); }
+.folder-heading-icon[data-color="blue"] { color: var(--project-blue); }
+.folder-heading-icon[data-color="violet"] { color: var(--project-violet); }
+.folder-heading-icon[data-color="stone"] { color: var(--project-stone); }
 .folder-supplement {
   display: flex;
   flex-direction: column;
@@ -888,7 +890,6 @@ watch([signedIn, id], load, { immediate: true });
   width: 1rem;
   height: 1rem;
   margin: 0;
-  accent-color: var(--accent);
 }
 .folder-document :deep(.footnotes) {
   margin-top: var(--s-8);

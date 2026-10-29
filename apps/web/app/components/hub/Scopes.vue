@@ -58,7 +58,7 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
         :aria-checked="scope === o.value"
         @click="pick(o.value)"
       >
-        <span class="w-4 shrink-0 text-accent">{{ scope === o.value ? "✓" : "" }}</span>
+        <span class="w-4 shrink-0 text-fg">{{ scope === o.value ? "✓" : "" }}</span>
         {{ o.label }}
       </button>
     </div>

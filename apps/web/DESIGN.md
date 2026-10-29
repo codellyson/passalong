@@ -109,6 +109,14 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.r-2}"
     height: "40px"
+  input-focus:
+    backgroundColor: "{colors.field-white}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.r-2}"
+  chip-chosen:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.cream-ground}"
+    rounded: "{rounded.r-3}"
   rail:
     backgroundColor: "{colors.rail-ink}"
     textColor: "{colors.on-rail}"
@@ -184,7 +192,11 @@ Warm cream and ink carry the whole interface; coral and the six project lines ar
 ### Named Rules
 **The One Meaning Rule.** Coral in the hub says "changed since you last looked" and nothing else. It appears as the left-edge bar, the "Changed" label and the rail dot, and it clears when the work is opened or marked seen.
 
-**The Line Colour Rule.** A project's colour is one of six and never coral or near it; a folder someone coloured coral is drawn stone.
+**The Line Colour Rule.** A project's colour is one of six and never coral or near it; a folder someone coloured coral is drawn stone, and the folder colour picker does not offer coral.
+
+**The Ink Focus Rule.** Keyboard focus is a 2px ink ring at a 2px offset (on the rail, the same ring in on-rail cream). A focused field takes an ink border and a 3px ink halo at 14%. Both are `--focus` and `--focus-halo`, which the root defines as coral for the landing and `.hub-app` redefines as ink.
+
+**The Chosen Rule.** A thing someone picked is ink: a chosen chip or tile is an ink fill with cream text (a checkbox inside it takes the cream as its accent), a checked checkbox or radio is ink (`--chosen`), a selected or drop-target card has a 2px ink ring, the current tab is a 2px ink bar (under it in a tab row, beside it in a side list), and a menu's chosen item is an ink check.
 
 ## Typography
 
@@ -238,11 +250,17 @@ Precise and quiet; the shape says "control" by its edge, not its roundness.
 - **Default (ghost):** transparent with a 1px rule edge, ink text, 40px tall with 20px sides; `sm` is 32px with 14px sides and is the size inside a row.
 - **Primary:** ink fill, cream text; one per view. Hover drops to 90% opacity, press to 80%.
 - **Rail New:** the primary inverted on the rail: on-rail fill, rail-ink text.
-- **States:** every button presses to `scale(0.96)` over 0.15s; outline danger for a retry inside a danger callout.
+- **States:** every button presses to `scale(0.96)` over 0.15s; outline danger for a retry inside a danger callout. A tonal or outline button with no status tone is ink (`--emphasis`). Focus is the 2px ink ring.
+
+### Chosen chips
+Ink fill, cream text, 4px corners; unchosen is a 1px hairline edge with muted text. Used for an app picked in Connections and the people picked for a group.
+
+### Shown-once callout
+A secret the server cannot give back (a new token, a client secret, an admin's credentials) sits in a deeper-cream box with a 1px ink border, and the "Copy it now" line is ink at 500.
 
 ### Inputs / Fields
 - **Style:** field-white fill, 1px rule border, 3px corners, 40px tall (32px inside a row's inline form).
-- **Focus:** inherited from the root stylesheet and not yet redrawn for this world; it is not a rule of this system.
+- **Focus:** an ink border and a 3px ink halo at 14% (`--focus`, `--focus-halo`); see the Ink Focus Rule.
 
 ### Navigation
 The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px; the current one is on-rail text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
@@ -265,9 +283,10 @@ Deeper cream, 4px corners, 1px hairline border, 12px 16px padding; a 14px headin
 - **Do** keep corners at 2, 3 or 4px; only dots are round.
 - **Do** set ages and counts in a column with tabular figures, in the one unit that reads at a glance (12m, 5h, 3d, 6w).
 - **Do** give a row one verb, at `sm` size, in its last column.
+- **Do** draw focus, a chosen state, a current tab and an emphasised link in ink.
 
 ### Don't:
-- **Don't** use coral for a project, a selected state, a primary button or an emphasis.
+- **Don't** use coral for a project, a selected or current state, a focus ring, a link, a primary button, a progress fill or an emphasis. The one coral outside a change mark is the dot on a toast with no status colour, because a toast is news you have not looked at yet.
 - **Don't** give an in-page surface a soft shadow; only floating menus lift.
 - **Don't** use pill shapes or 24px card corners in the hub; those belong to the landing and share pages.
 - **Don't** set any hub text in the serif, or a heading above 550.

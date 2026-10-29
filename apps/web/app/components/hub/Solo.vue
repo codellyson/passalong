@@ -121,7 +121,7 @@ async function go(path: string) {
               ? 'bg-danger'
               : (data.me?.guides ?? 0) >= (data.me?.limit ?? 1) * 0.8
                 ? 'bg-warn'
-                : 'bg-accent'
+                : 'bg-fg'
           "
           :style="{ width: `${Math.min(100, ((data.me?.guides ?? 0) / Math.max(1, data.me?.limit ?? 1)) * 100)}%` }"
         />

@@ -190,7 +190,7 @@ async function send() {
         </p>
         <p
           class="m-0 line-clamp-4 max-w-[85%] rounded-3 px-3 py-2 text-sm leading-snug break-words whitespace-pre-line"
-          :class="mine ? 'bg-accent-soft text-fg' : 'bg-surface text-fg shadow-edge'"
+          :class="mine ? 'bg-field text-fg shadow-edge' : 'bg-surface text-fg shadow-edge'"
         >{{ summary.trim() }}</p>
       </li>
       <li v-if="!items.length" class="m-0 text-sm text-muted">
@@ -217,7 +217,7 @@ async function send() {
               : m.tone === 'bad'
                 ? 'bg-danger-soft text-fg'
                 : m.mine
-                  ? 'bg-accent-soft text-fg'
+                  ? 'bg-field text-fg shadow-edge'
                   : 'bg-surface text-fg shadow-edge'
           "
         >
@@ -231,7 +231,7 @@ async function send() {
             <li v-for="f in m.files" :key="f.url">
               <button
                 type="button"
-                class="inline-flex max-w-56 items-center gap-2 rounded-1 border-0 bg-raised px-3 py-2 text-xs text-fg shadow-edge hover:text-accent"
+                class="inline-flex max-w-56 items-center gap-2 rounded-1 border-0 bg-raised px-3 py-2 text-xs text-fg shadow-edge hover:underline"
                 :title="`Download ${f.name}`"
                 @click="download(f)"
               >

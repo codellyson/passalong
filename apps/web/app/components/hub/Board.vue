@@ -386,7 +386,7 @@ const shown = computed(
         :class="[
           shown === col.id ? '' : 'max-md:hidden',
           dragging && !col.cards.some((x) => x.id === dragging!.id) && !allowed(dragging, col.id) ? 'opacity-50' : '',
-          over === col.id ? 'ring-2 ring-[var(--accent)]' : '',
+          over === col.id ? 'ring-2 ring-ink' : '',
         ]"
         @dragover="dragOver(col.id, $event)"
         @drop.prevent="drop(col.id)"
@@ -411,7 +411,7 @@ const shown = computed(
             class="group relative flex shrink-0 flex-col rounded-2 bg-raised shadow-edge transition-transform has-[a:active]:scale-[0.96]"
             :class="[
               dragging?.id === g.id ? 'opacity-40' : col.id === 'done' ? 'opacity-70' : '',
-              has(g.id) ? 'ring-2 ring-[var(--accent)]' : '',
+              has(g.id) ? 'ring-2 ring-ink' : '',
             ]"
             :draggable="giving !== g.id"
             @dragstart="dragStart(g, $event)"
@@ -426,7 +426,7 @@ const shown = computed(
               <input
                 v-if="g.manage"
                 type="checkbox"
-                class="relative z-10 my-0 ml-0 -mr-2 h-4 w-0 shrink-0 cursor-pointer appearance-none rounded-pill border-0 border-line-strong bg-field opacity-0 transition-[width,margin,opacity] duration-150 checked:border-[var(--accent)] checked:bg-[var(--accent)] checked:shadow-[inset_0_0_0_3px_var(--field)] focus-visible:mr-0 focus-visible:w-4 focus-visible:border focus-visible:opacity-100 group-hover:mr-0 group-hover:w-4 group-hover:border group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:mr-0 [@media(hover:none)]:w-4 [@media(hover:none)]:border [@media(hover:none)]:opacity-100"
+                class="relative z-10 my-0 ml-0 -mr-2 h-4 w-0 shrink-0 cursor-pointer appearance-none rounded-pill border-0 border-line-strong bg-field opacity-0 transition-[width,margin,opacity] duration-150 checked:border-ink checked:bg-ink checked:shadow-[inset_0_0_0_3px_var(--field)] focus-visible:mr-0 focus-visible:w-4 focus-visible:border focus-visible:opacity-100 group-hover:mr-0 group-hover:w-4 group-hover:border group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:mr-0 [@media(hover:none)]:w-4 [@media(hover:none)]:border [@media(hover:none)]:opacity-100"
                 :class="selected.length ? '!mr-0 !w-4 !border !opacity-100' : ''"
                 :checked="has(g.id)"
                 :aria-label="`Select ${g.title || 'this work'}`"
@@ -443,7 +443,7 @@ const shown = computed(
                  opens it; the dot and the footer's control sit above that layer. -->
             <NuxtLink
               :to="`/hub/g/${g.id}`"
-              class="line-clamp-2 px-3 pt-2 pb-1 font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 focus-visible:after:outline-2 focus-visible:after:outline-[var(--accent)] focus-visible:after:outline-solid"
+              class="line-clamp-2 px-3 pt-2 pb-1 font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 focus-visible:after:outline-2 focus-visible:after:outline-[var(--focus)] focus-visible:after:outline-solid"
             >{{ g.title || "Untitled" }}</NuxtLink>
             <!-- The footer sits beside the link, not inside it: a button inside an <a> is invalid
                  and would open the page. -->

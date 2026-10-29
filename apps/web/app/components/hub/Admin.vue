@@ -310,10 +310,10 @@ const head =
 
       <!-- The second place in the product holding something the server cannot give back, and it
            says so where the values are rather than underneath them. -->
-      <div v-if="made" class="rounded-2 border border-accent bg-accent-soft p-3">
+      <div v-if="made" class="rounded-2 border border-fg bg-raised p-3">
         <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <b class="font-ui text-sm text-fg">{{ made.email }} is an admin</b>
-          <span class="font-ui text-sm text-accent">Copy both now. Neither is shown again.</span>
+          <span class="font-ui text-sm font-medium text-fg">Copy both now. Neither is shown again.</span>
         </div>
         <dl class="m-0 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-2">
           <dt class="font-ui text-xs text-muted">Token</dt>

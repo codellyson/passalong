@@ -75,7 +75,7 @@ const frame = computed(() => {
 const who = (by: { handle: string; name: string }) => personName(by.name, by.handle) || "someone";
 const where = (k: ContextClaim) => [k.repo, k.host].filter(Boolean).join(" on ");
 const STATE: Record<ContextClaim["state"], { label: string; tone: string }> = {
-  claimed: { label: "working", tone: "bg-accent-soft text-accent" },
+  claimed: { label: "working", tone: "bg-surface text-fg" },
   stalled: { label: "gone quiet", tone: "bg-warn-soft text-warn" },
 };
 
@@ -436,7 +436,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 
         <aside class="flex flex-col gap-4">
           <!-- Progress: what happened to it, in order, ending on where it is now. A rule runs down
-               the left and each beat is a dot on it in its tone; "now" is the coral diamond. -->
+               the left and each beat is a dot on it in its tone; "now" is the ink diamond. -->
           <section :class="card" class="flex flex-col gap-4" aria-labelledby="progress-h">
             <h2 id="progress-h" :class="label">Progress</h2>
             <ol class="relative m-0 flex list-none flex-col gap-5 p-0">
@@ -459,7 +459,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               </li>
               <li class="relative flex gap-3">
                 <span
-                  class="relative z-10 mt-1.5 size-2.5 shrink-0 rotate-45 rounded-[2px] bg-coral ring-4 ring-raised"
+                  class="relative z-10 mt-1.5 size-2.5 shrink-0 rotate-45 rounded-[2px] bg-fg ring-4 ring-raised"
                   aria-hidden="true"
                 />
                 <p class="m-0 font-ui text-sm font-medium">Now — {{ standing }}</p>
