@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { age, docsChanged, projectsFrom, storedTone, toneOf } from "../app/utils/projects.ts";
+import { age, byLine, projectsFrom, storedTone, toneOf } from "../app/utils/projects.ts";
 
 test("a project keeps its folder's colour, never coral, and is stable without one", () => {
   assert.equal(toneOf({ id: "a", color: "blue" }), "blue");
@@ -22,8 +22,8 @@ test("projects are the top folders, counting everything beneath them", () => {
   assert.deepEqual(
     got.map((p) => [p.id, p.open, p.changed]),
     [
-      ["a", 0, false],
-      ["w", 6, true],
+      ["a", 0, ""],
+      ["w", 6, "something"],
     ],
   );
 });
@@ -36,7 +36,7 @@ test("age reads in one unit", () => {
   assert.equal(age("2026-09-01T09:00:00Z", now), "8w");
 });
 
-test("a project rolls up documents and its latest change, and a document change is news after the last look", () => {
+test("a project rolls up documents, its last change and what changed in it", () => {
   const folders = [
     {
       id: "w",
@@ -45,7 +45,8 @@ test("a project rolls up documents and its latest change, and a document change 
       parent_id: "",
       documents: 2,
       updated: "2026-10-01",
-      docs_changed: "",
+      last_change: { name: "README", by: "Ada", at: "2026-10-01" },
+      changed: 0,
     },
     {
       id: "p",
@@ -54,14 +55,16 @@ test("a project rolls up documents and its latest change, and a document change 
       parent_id: "w",
       documents: 3,
       updated: "2026-10-20",
-      docs_changed: "2026-10-20",
+      last_change: { name: "Pricing", by: "Bola", at: "2026-10-20" },
+      changed: 1,
+      changed_what: "Pricing",
     },
   ];
-  const [w] = projectsFrom(folders, () => "2026-10-21");
+  const [w] = projectsFrom(folders);
   assert.equal(w.documents, 5);
   assert.equal(w.updated, "2026-10-20");
-  assert.equal(w.changed, false, "looked at after the change");
-  assert.equal(projectsFrom(folders, () => "2026-10-10")[0].changed, true);
-  assert.equal(projectsFrom(folders)[0].changed, true, "never looked at");
-  assert.equal(docsChanged("", ""), false);
+  assert.deepEqual(w.last, { name: "Pricing", by: "Bola", at: "2026-10-20" });
+  assert.equal(w.changed, "Pricing");
+  assert.equal(byLine("Bola", "agent"), "Bola, an agent");
+  assert.equal(byLine("Ada", "person"), "Ada");
 });

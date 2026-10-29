@@ -219,6 +219,7 @@ import {
 import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
+import { seeAllDocuments } from "./project.js";
 import {
   acceptsNewWork,
   type Ceiling,
@@ -3629,6 +3630,8 @@ app.post("/v1/notifications/read", async (c) => {
       return c.json({ read: 0, unread: await unreadCount(c.env, c.get("account"), scope) });
   }
   const read = await markRead(c.env, c.get("account"), clean, scope);
+  // "Mark all seen" clears the documents' marks too: they are the same coral.
+  if (!clean.length && !guide) await seeAllDocuments(c.env.DB, c.get("account"), now());
   return c.json({ read, unread: await unreadCount(c.env, c.get("account"), scope) });
 });
 

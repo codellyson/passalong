@@ -72,7 +72,10 @@ each row opening its work page, and its documents and finished work are one Hist
 /v1/folders/:folder/guides`, "Add existing work"); agents have no tool for it, since work will live
 in its project (step 4). "New work" opens the box pre-set to the project, which links what it files.
 Each saved version records what saved it (`folder_document_revision.client`, migration 0063): `hub`
-is a person, `mcp` and `cli@…` an agent, `api` and '' unknown — never guessed. A work page lists its
+is a person, `mcp` and `cli@…` an agent, `api` and '' unknown — never guessed. Who has seen which
+version is `folder_document_seen` (migration 0064): opening a document in the hub writes the row, a
+save writes it for the saver, and a version someone else saved after it marks the document changed
+for that account. A work page lists its
 projects under "Tied to".
 
 A folder can be shared the way work is: a secret link, `/f/<id>/<key>` (migration 0048,
@@ -86,6 +89,6 @@ script and is never indexed, like a share page; files are downloads, never shown
 ## Sources
 
 - `apps/api/migrations/0046_folders.sql`, `apps/api/migrations/0047_folder_hierarchy.sql`, `apps/api/src/folders.ts`, `apps/api/src/folder-tree.ts`
-- `apps/api/migrations/0063_document_client.sql`, `apps/api/src/project.ts`
+- `apps/api/migrations/0063_document_client.sql`, `apps/api/migrations/0064_document_seen.sql`, `apps/api/src/project.ts`
 - `apps/web/app/pages/hub/projects/`, `apps/web/app/components/hub/ProjectDocument.vue`, `apps/web/app/components/hub/Shell.vue`
 - `apps/api/src/mcp-http.ts`, `packages/passalong/src/mcp.js`

@@ -200,7 +200,9 @@ change. Its README says how.
     with Documents, Work and History tabs; the hub never says "folder"), and its Work and History are
     one read, `GET /v1/folders/:id/project` (`src/project.ts`, imports no sibling, tested against
     SQLite). Each document version records what saved it (`client`, migration 0063): `hub` is a
-    person, `mcp`/`cli@…` an agent, `api` and '' unknown. The hub leads creation with an agent prompt
+    person, `mcp`/`cli@…` an agent, `api` and '' unknown. A document's change mark is
+    `folder_document_seen` (migration 0064), written when the hub opens it (`PUT
+    …/documents/:id/seen`, never on an agent's read), on a save for the saver, and by "Mark all seen". The hub leads creation with an agent prompt
     and keeps a plain form and its editor for corrections. It fetches private images with its credential and draws blob URLs, which is why the
     hub CSP permits `img-src blob:`.
   - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running

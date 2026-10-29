@@ -34,8 +34,12 @@ export interface HistoryItem {
   by: string;
   /** "agent" or "person" when known; "" for document saves from before it was recorded. */
   via: "agent" | "person" | "";
-  /** Done by the account reading it: never news to them. */
-  mine: boolean;
+  /**
+   * Changed since the reader last looked. Finished work: the raw notification kind, as on work rows.
+   * A document version: "version 3 by Bola" when someone else saved it after the reader last opened
+   * that document; "" otherwise.
+   */
+  changed: string;
   /** Finished work: the guide; a document version: the document. */
   id: string;
   title: string;
@@ -59,6 +63,45 @@ const HISTORY_MAX = 100;
  */
 export const viaOf = (client: string): HistoryItem["via"] =>
   client === "hub" ? "person" : client === "mcp" || client.startsWith("cli@") ? "agent" : "";
+
+/** Who saved version `r`, as person() says it: a name, else @handle, else @id. */
+export const SAVER = `COALESCE(NULLIF(a.name, ''), '@' || NULLIF(a.handle, ''), '@' || r.saved_by)`;
+
+/**
+ * SQL for what changed in document `d` since account `acc` (a bound parameter, e.g. "?1") last
+ * opened it: "version 3 by Bola" for the newest version someone else saved after that, or ''. The
+ * one definition of a changed document, read by the folder list, a folder's read and its history.
+ */
+export const docChange = (acc: string) => `COALESCE((
+  SELECT 'version ' || r.version || ' by ' || ${SAVER}
+    FROM folder_document_revision r LEFT JOIN account a ON a.id = r.saved_by
+   WHERE r.document_id = d.id AND r.saved_by <> ${acc}
+     AND r.saved_at > COALESCE((SELECT s.at FROM folder_document_seen s
+                                 WHERE s.account_id = ${acc} AND s.document_id = d.id), '')
+   ORDER BY r.version DESC LIMIT 1), '')`;
+
+/** Opening a document, or saving it, is looking at it: its mark clears for that account. */
+export const seeDocument = (db: D1Database, account: string, document: string, at: string) =>
+  db
+    .prepare(
+      `INSERT INTO folder_document_seen (account_id, document_id, at) VALUES (?, ?, ?)
+       ON CONFLICT(account_id, document_id) DO UPDATE SET at = excluded.at`,
+    )
+    .bind(account, document, at)
+    .run();
+
+/** "Mark all seen": every document the account can read counts as looked at now. */
+export const seeAllDocuments = (db: D1Database, account: string, at: string) =>
+  db
+    .prepare(
+      `INSERT INTO folder_document_seen (account_id, document_id, at)
+       SELECT ?1, d.id, ?2 FROM folder_document d JOIN folder f ON f.id = d.folder_id
+        WHERE (f.team_id = '' AND f.created_by = ?1)
+           OR f.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)
+       ON CONFLICT(account_id, document_id) DO UPDATE SET at = excluded.at`,
+    )
+    .bind(account, at)
+    .run();
 
 const person = (name: string, handle: string, id: string) =>
   name.trim() || (handle ? `@${handle}` : id ? `@${id}` : "");
@@ -150,9 +193,12 @@ export async function projectView(
       note: string;
       detail: string;
       checks: string;
+      changed: string;
     }>(
       `${SUBTREE}
-       SELECT g.id, g.title, COALESCE(e.at, g.updated) AS at, COALESCE(e.agent_id, '') AS agent_id,
+       SELECT g.id, g.title, COALESCE(e.at, g.updated) AS at,
+              COALESCE((SELECT n.kind FROM notification n WHERE n.account_id = ?1 AND n.guide_id = g.id
+                         AND n.read_at = '' ORDER BY n.at DESC LIMIT 1), '') AS changed, COALESCE(e.agent_id, '') AS agent_id,
               COALESCE(e.account_id, '') AS by_id, COALESCE(a.name, '') AS by_name,
               COALESCE(a.handle, '') AS by_handle, COALESCE(NULLIF(v.writeup, ''), v.note, e.body, '') AS note,
               COALESCE(v.detail, '') AS detail, COALESCE(v.checks, '') AS checks
@@ -179,10 +225,13 @@ export async function projectView(
       saved_by: string;
       by_name: string;
       by_handle: string;
+      seen_at: string;
     }>(
       `${SUBTREE}
        SELECT d.id, d.name, d.folder_id, r.version, r.saved_at, r.client, r.saved_by,
-              COALESCE(a.name, '') AS by_name, COALESCE(a.handle, '') AS by_handle
+              COALESCE(a.name, '') AS by_name, COALESCE(a.handle, '') AS by_handle,
+              COALESCE((SELECT s.at FROM folder_document_seen s
+                         WHERE s.account_id = ?1 AND s.document_id = d.id), '') AS seen_at
          FROM folder_document_revision r
          JOIN folder_document d ON d.id = r.document_id
          LEFT JOIN account a ON a.id = r.saved_by
@@ -264,7 +313,7 @@ export async function projectView(
             ? f.agent_id
             : person(f.by_name, f.by_handle, f.by_id),
         via: !f.agent_id ? "" : f.agent_id.startsWith("person-") ? "person" : "agent",
-        mine: f.by_id === account,
+        changed: f.changed,
         id: f.id,
         title: f.title,
         folder: "",
@@ -284,7 +333,10 @@ export async function projectView(
         at: d.saved_at,
         by: person(d.by_name, d.by_handle, d.saved_by),
         via: viaOf(d.client),
-        mine: d.saved_by === account,
+        changed:
+          d.saved_by !== account && d.saved_at > d.seen_at
+            ? `version ${d.version} by ${person(d.by_name, d.by_handle, d.saved_by) || "someone"}`
+            : "",
         id: d.id,
         title: d.name,
         folder: d.folder_id,

@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { projectView, viaOf } from "../src/project.ts";
+import { docChange, projectView, seeAllDocuments, seeDocument, viaOf } from "../src/project.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
@@ -164,8 +164,9 @@ test("history merges finished work and document versions, newest first, saying p
   assert.equal(fin.checks, 1);
   assert.equal(history[0].folder, "p");
   assert.deepEqual(
-    history.map((h) => h.mine),
-    [true, false, false],
+    history.map((h) => h.changed),
+    ["", "", "version 1 by @bo"],
+    "your own save is never news; Bo's, never opened, is; finished work's news is its notification",
   );
 });
 
@@ -175,4 +176,41 @@ test("a save is a person's from the hub, an agent's from MCP or the CLI, and oth
   assert.equal(viaOf("cli@0.31.0"), "agent");
   assert.equal(viaOf("api"), "");
   assert.equal(viaOf(""), "");
+});
+
+test("a document is changed for you until you open it, and only by someone else's save", async () => {
+  const { db, x } = world();
+  x(`INSERT INTO folder_document (id, folder_id, name, body, version, updated_by, created, updated) VALUES
+       ('price', 'p', 'Pricing', 'v3', 3, 'bo', '${ago(10)}', '${ago(1)}'),
+       ('mine', 'p', 'Setup', 'v1', 1, 'ada', '${ago(10)}', '${ago(5)}'),
+       ('priv', 'sub', 'Notes', 'v1', 1, 'bo', '${ago(10)}', '${ago(5)}');
+     INSERT INTO folder_document_revision (document_id, version, body, saved_by, saved_at, client) VALUES
+       ('price', 1, 'v1', 'ada', '${ago(10)}', 'hub'),
+       ('price', 2, 'v2', 'bo', '${ago(4)}', 'mcp'),
+       ('price', 3, 'v3', 'bo', '${ago(1)}', 'mcp'),
+       ('mine', 1, 'v1', 'ada', '${ago(5)}', 'hub'),
+       ('priv', 1, 'v1', 'bo', '${ago(5)}', 'mcp');`);
+  const changed = () =>
+    db
+      .prepare(`SELECT d.id, ${docChange("?1")} AS changed FROM folder_document d ORDER BY d.id`)
+      .bind("ada")
+      .all()
+      .then((r) => Object.fromEntries(r.results.map((row) => [row.id, row.changed])));
+
+  assert.deepEqual(await changed(), {
+    mine: "",
+    price: "version 3 by @bo",
+    priv: "version 1 by @bo",
+  });
+  await seeDocument(db, "ada", "price", ago(2));
+  assert.equal((await changed()).price, "version 3 by @bo", "looked before Bo's newest version");
+  await seeDocument(db, "ada", "price", NOW);
+  assert.equal((await changed()).price, "", "opening it clears it");
+  await seeAllDocuments(db, "ada", NOW);
+  assert.equal((await changed()).priv, "", "Mark all seen clears every document Ada can read");
+  const { history } = await projectView(db, "ada", "p", NOW);
+  assert.ok(
+    history.every((h) => !h.changed),
+    "and History agrees",
+  );
 });

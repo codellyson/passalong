@@ -32,9 +32,18 @@ export interface ProjectFolder {
   updated?: string;
   documents?: number;
   open?: number;
+  /** Unread news on its work, or a document someone else saved since you last opened it. */
   changed?: number | boolean;
-  /** When someone else last changed a document in it; '' when nobody has. */
-  docs_changed?: string;
+  /** What changed: the document's name, else the work's title. */
+  changed_what?: string;
+  /** The last document version saved in it. */
+  last_change?: LastChange | null;
+}
+
+export interface LastChange {
+  name: string;
+  by: string;
+  at: string;
 }
 
 export interface SidebarProject {
@@ -48,18 +57,14 @@ export interface SidebarProject {
   documents: number;
   /** The latest change anywhere inside it. */
   updated: string;
-  /** Something in it changed since you last looked. */
-  changed: boolean;
+  /** The last document version saved anywhere inside it, or null when none was. */
+  last: LastChange | null;
+  /** Something in it changed since you last looked, and what: '' when nothing. */
+  changed: string;
 }
 
-/**
- * The top folders, each counting what is linked into it and every folder beneath it. A document
- * someone else changed after `seen(project)` marks it changed, as unread news on its work does.
- */
-export function projectsFrom(
-  folders: ProjectFolder[],
-  seen: (id: string) => string = () => "",
-): SidebarProject[] {
+/** The top folders, each counting what is linked into it and every folder beneath it. */
+export function projectsFrom(folders: ProjectFolder[]): SidebarProject[] {
   const byId = new Map(folders.map((f) => [f.id, f]));
   const rootOf = (f: ProjectFolder) => {
     let at = f;
@@ -78,7 +83,8 @@ export function projectsFrom(
       open: 0,
       documents: 0,
       updated: "",
-      changed: false,
+      last: null,
+      changed: "",
     });
   }
   for (const f of folders) {
@@ -87,40 +93,10 @@ export function projectsFrom(
     p.open += Number(f.open || 0);
     p.documents += Number(f.documents || 0);
     if ((f.updated || "") > p.updated) p.updated = f.updated || "";
-    p.changed ||= Boolean(f.changed) || docsChanged(f.docs_changed, seen(p.id));
+    if (f.last_change && f.last_change.at > (p.last?.at || "")) p.last = f.last_change;
+    if (f.changed && !p.changed) p.changed = f.changed_what || "something";
   }
   return [...out.values()].sort((a, b) => a.title.localeCompare(b.title));
-}
-
-/** A document change counts as news only after the last look; never looked, it is news. */
-export const docsChanged = (changedAt: string | undefined, seenAt: string) =>
-  Boolean(changedAt) && (!seenAt || (changedAt as string) > seenAt);
-
-// When you last looked at each project, kept in this browser.
-// shortcut: per browser, not per account across devices; upgrade to a server-side seen row when
-// people read one project on two machines.
-const SEEN_KEY = "passalong.projectsSeen";
-function seenMap(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(SEEN_KEY) || "{}") as Record<string, string>;
-  } catch {
-    return {};
-  }
-}
-/** When this browser last showed the project; '' when never, or when storage is unavailable. */
-export const seenAt = (id: string): string =>
-  typeof localStorage === "undefined" ? "" : seenMap()[id] || "";
-/** Remember a look at the project now, and say when the one before it was. */
-export function markProjectSeen(id: string, at = new Date().toISOString()): string {
-  const map = seenMap();
-  const before = map[id] || "";
-  map[id] = at;
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(map));
-  } catch {
-    // Storage refused (a private window): the marks just never clear here.
-  }
-  return before;
 }
 
 /** How long since `iso`, in the one unit that reads at a glance: 12m, 5h, 3d, 6w. */
@@ -138,3 +114,7 @@ export function age(iso: string, now = Date.now()): string {
 /** What saved a document, as apps/api/src/project.ts says it: a person, an agent, or unknown (""). */
 export const viaOf = (client?: string): "person" | "agent" | "" =>
   client === "hub" ? "person" : client === "mcp" || client?.startsWith("cli@") ? "agent" : "";
+
+/** Who did something, said the one way the hub says it: "Bola", or "Bola, an agent". */
+export const byLine = (name: string, via?: string) =>
+  `${name || "someone"}${via === "agent" ? ", an agent" : ""}`;

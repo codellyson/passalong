@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import type { Folder, FolderDocument } from "~/types/folder";
 import { renderFolderMarkdown } from "~/utils/folder-markdown";
-import { age, viaOf } from "~/utils/projects";
+import { age, byLine, viaOf } from "~/utils/projects";
 
 const props = defineProps<{
   /** The project the document is in. */
@@ -39,7 +39,14 @@ const versions = ref<{ version: number; saved_at: string }[]>([]);
 const now = ref(Date.now());
 
 const base = computed(() => `/v1/folders/${props.folder}/documents/${props.doc}`);
-const shown = computed(() => (earlier.value ? earlier.value.body : current.value?.body || ""));
+/** What is read, without a first heading that only repeats the document's name above it. */
+const shown = computed(() => {
+  const body = earlier.value ? earlier.value.body : current.value?.body || "";
+  const first = body.match(/^\s*#\s+(.+)\n?/);
+  return first && first[1]?.trim().toLowerCase() === current.value?.name.trim().toLowerCase()
+    ? body.slice(first[0].length)
+    : body;
+});
 const rendered = computed(() => renderFolderMarkdown(shown.value));
 const docLink = (v?: number) => ({
   query: { tab: "documents", doc: props.doc, ...(v ? { v } : {}) },
@@ -61,6 +68,11 @@ async function load() {
     }
     draft.value = current.value?.body || "";
     editing.value = Boolean(props.startEditing) && !earlier.value;
+    // Opened is looked at: its change mark clears, on the server, for this account only.
+    if (current.value && props.row?.changed) {
+      await api(`${base.value}/seen`, { method: "PUT" }).catch(() => null);
+      emit("changed");
+    }
   } catch (err) {
     problem.value = (err as Error).message;
   } finally {
@@ -182,12 +194,10 @@ function onDocClick(e: MouseEvent) {
 onMounted(() => document.addEventListener("click", onDocClick));
 onBeforeUnmount(() => document.removeEventListener("click", onDocClick));
 
+/** Delete asks in place, saying what goes. */
+const confirmingDelete = ref(false);
 async function remove() {
-  if (
-    !current.value ||
-    !confirm(`Delete ${current.value.name} and every version of it? This cannot be undone.`)
-  )
-    return;
+  if (!current.value) return;
   try {
     await api(base.value, { method: "DELETE" });
     emit("gone", `Deleted ${current.value.name}.`);
@@ -228,11 +238,10 @@ function cancel() {
           <button class="btn sm" type="button" @click="renaming = false">Cancel</button>
         </form>
         <div v-else class="min-w-0">
-          <h2 class="m-0 text-h2 font-medium tracking-tight">{{ current.name }}</h2>
-          <p class="m-0 mt-1 font-ui text-xs text-muted tabular-nums">
-            Version {{ current.version }}
-            <template v-if="row?.editor"> · saved by {{ row.editor }}<template v-if="viaOf(row.client)"> ({{ viaOf(row.client) }})</template></template>
-            · {{ age(current.updated, now) }} ago
+          <h2 class="m-0 text-h3 font-medium tracking-tight">{{ current.name }}</h2>
+          <p class="m-0 mt-1 font-ui text-xs text-muted">
+            Version {{ current.version }}<template v-if="row?.editor"> by {{ byLine(row.editor, viaOf(row.client)) }}</template>
+            · <span class="tabular-nums">{{ age(current.updated, now) }}</span> ago
           </p>
         </div>
         <div v-if="!renaming && !editing && !earlier" class="flex flex-wrap gap-2">
@@ -248,8 +257,13 @@ function cancel() {
               <p v-if="!targets.length" class="menu-note">No other project in this space yet.</p>
             </div>
           </div>
-          <button class="btn sm outline danger" type="button" @click="remove">Delete</button>
+          <button class="btn sm outline danger" type="button" :aria-expanded="confirmingDelete" @click="confirmingDelete = true">Delete…</button>
         </div>
+      </div>
+      <div v-if="confirmingDelete" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line pb-3" role="alert">
+        <p class="m-0 min-w-0 grow font-ui text-sm">Delete {{ current.name }} and all {{ current.version }} of its versions? This cannot be undone.</p>
+        <button class="btn sm outline danger" type="button" @click="remove">Delete</button>
+        <button class="btn sm" type="button" @click="confirmingDelete = false">Keep it</button>
       </div>
 
       <p v-if="notice" role="status" class="m-0 font-ui text-sm">{{ notice }}</p>
@@ -298,10 +312,21 @@ function cancel() {
   font-size: 0.9375rem;
   line-height: 1.65;
 }
+/* Below the page's own headings, in order: the same scale as the README panel. */
 .project-doc :deep(h1) {
-  margin: 0 0 var(--s-4);
-  font: 500 1.5rem / 1.3 var(--font-sans);
-  letter-spacing: -0.025em;
+  margin: 0 0 var(--s-3);
+  font: 500 1.125rem / 1.4 var(--font-sans);
+  letter-spacing: -0.015em;
+}
+.project-doc :deep(h2) {
+  margin: var(--s-5) 0 var(--s-2);
+  font: 550 1rem / 1.4 var(--font-sans);
+  letter-spacing: -0.01em;
+}
+.project-doc :deep(h3) {
+  margin: var(--s-4) 0 var(--s-2);
+  font: 550 0.875rem / 1.4 var(--font-sans);
+  letter-spacing: 0;
 }
 .project-doc :deep(table) {
   border-collapse: collapse;

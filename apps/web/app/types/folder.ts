@@ -30,6 +30,8 @@ export interface FolderDocument {
   editor?: string;
   /** What saved it last: "hub" is a person, anything else an agent, "" from before it was kept. */
   client?: string;
+  /** "version 3 by Bola" when someone else saved it since you last opened it; "" otherwise. */
+  changed?: string;
   created: string;
   updated: string;
 }
@@ -73,7 +75,8 @@ export interface ProjectHistoryItem {
   at: string;
   by: string;
   via: "agent" | "person" | "";
-  mine: boolean;
+  /** What changed since you last looked, in words; "" when nothing. */
+  changed: string;
   id: string;
   title: string;
   folder: string;

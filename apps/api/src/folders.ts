@@ -5,7 +5,7 @@ import { type Folder, findVisible, moveProblem } from "./folder-tree.js";
 import { tagList } from "./guide.js";
 import { mintOrigin } from "./hosts.js";
 import { changeWords } from "./needs.js";
-import { projectView } from "./project.js";
+import { docChange, projectView, SAVER, seeDocument } from "./project.js";
 import { planNow } from "./quota.js";
 
 type Env = { DB: D1Database; SHOTS?: R2Bucket; PUBLIC_ORIGIN?: string };
@@ -111,21 +111,33 @@ routes.get("/", async (c) => {
             (SELECT COUNT(*) FROM folder_guide g WHERE g.folder_id = f.id) AS guides,
             (SELECT COUNT(*) FROM folder_guide l JOIN guide w ON w.id = l.guide_id
               WHERE l.folder_id = f.id AND w.status <> 'consumed') AS open,
-            EXISTS (SELECT 1 FROM folder_guide l JOIN notification n ON n.guide_id = l.guide_id
-              WHERE l.folder_id = f.id AND n.account_id = ? AND n.read_at = '') AS changed,
-            COALESCE((SELECT MAX(d.updated) FROM folder_document d
-              WHERE d.folder_id = f.id AND d.updated_by <> ?), '') AS docs_changed${
-                words
-                  ? `,
+            -- Changed since you last looked: unread news on its work, or a document someone else
+            -- saved after you last opened it (project.ts, docChange). What changed is named.
+            (EXISTS (SELECT 1 FROM folder_guide l JOIN notification n ON n.guide_id = l.guide_id
+              WHERE l.folder_id = f.id AND n.account_id = ? AND n.read_at = '')
+             OR EXISTS (SELECT 1 FROM folder_document d WHERE d.folder_id = f.id AND ${docChange("?")} <> '')) AS changed,
+            COALESCE((SELECT d.name FROM folder_document d WHERE d.folder_id = f.id AND ${docChange("?")} <> ''
+                       ORDER BY d.updated DESC LIMIT 1),
+                     (SELECT w.title FROM folder_guide l JOIN guide w ON w.id = l.guide_id
+                        JOIN notification n ON n.guide_id = w.id
+                       WHERE l.folder_id = f.id AND n.account_id = ? AND n.read_at = ''
+                       ORDER BY n.at DESC LIMIT 1), '') AS changed_what,
+            -- The last document version saved in it, by whom: the list's "Last change".
+            COALESCE((SELECT json_object('name', d.name, 'by', ${SAVER}, 'at', r.saved_at)
+                FROM folder_document_revision r JOIN folder_document d ON d.id = r.document_id
+                LEFT JOIN account a ON a.id = r.saved_by
+               WHERE d.folder_id = f.id ORDER BY r.saved_at DESC LIMIT 1), '') AS last_change${
+                 words
+                   ? `,
             (SELECT json_group_array(json_object('id', d.id, 'name', d.name)) FROM folder_document d
               WHERE d.folder_id = f.id AND (d.name LIKE ? ESCAPE '\\' OR d.body LIKE ? ESCAPE '\\')) AS matches`
-                  : ""
-              }
+                   : ""
+}
        FROM folder f LEFT JOIN team t ON t.id = f.team_id
       WHERE ${where}
       ORDER BY f.updated DESC`,
   )
-    .bind(me, me, me, me, ...(words ? [like, like] : []), ...values)
+    .bind(...Array(8).fill(me), ...(words ? [like, like] : []), ...values)
     .all<
       Folder & {
         team_name: string;
@@ -135,14 +147,18 @@ routes.get("/", async (c) => {
         guides: number;
         open: number;
         changed: number;
+        changed_what: string;
+        last_change: string;
         matches?: string;
       }
     >();
   // With words, each folder also names the documents that matched, so the next call can open one.
   return c.json({
-    folders: words
-      ? results.map((f) => ({ ...f, matches: JSON.parse(f.matches || "[]") }))
-      : results,
+    folders: results.map((f) => ({
+      ...f,
+      last_change: f.last_change ? JSON.parse(f.last_change) : null,
+      ...(words ? { matches: JSON.parse(f.matches || "[]") } : {}),
+    })),
   });
 });
 
@@ -332,11 +348,12 @@ routes.get("/:folder", async (c) => {
       `SELECT d.id, d.name, d.version, d.updated_by, d.created, d.updated,
               COALESCE(NULLIF(a.name, ''), CASE WHEN a.handle <> '' THEN '@' || a.handle END, '') AS editor,
               COALESCE((SELECT r.client FROM folder_document_revision r WHERE r.document_id = d.id
-                         ORDER BY r.version DESC LIMIT 1), '') AS client
+                         ORDER BY r.version DESC LIMIT 1), '') AS client,
+              ${docChange("?2")} AS changed
          FROM folder_document d LEFT JOIN account a ON a.id = d.updated_by
-        WHERE d.folder_id = ? ORDER BY d.updated DESC`,
+        WHERE d.folder_id = ?1 ORDER BY d.updated DESC`,
     )
-      .bind(folder.id)
+      .bind(folder.id, c.get("account"))
       .all(),
     c.env.DB.prepare("SELECT * FROM folder_asset WHERE folder_id = ? ORDER BY created DESC")
       .bind(folder.id)
@@ -393,7 +410,12 @@ routes.get("/:folder/project", async (c) => {
     ...r,
     changed: changeWords(r.changed),
   });
-  return c.json({ open: view.open.map(words), done: view.done.map(words), history: view.history });
+  return c.json({
+    open: view.open.map(words),
+    done: view.done.map(words),
+    // A document's change is already in words; finished work's is a notification kind.
+    history: view.history.map((h) => (h.kind === "finished" ? words(h) : h)),
+  });
 });
 
 routes.post("/:folder/documents", async (c) => {
@@ -450,6 +472,17 @@ routes.get("/:folder/documents/:document", async (c) => {
   return document ? c.json({ document }) : message(c, 404, "That document isn't in this project.");
 });
 
+// The hub opening a document: its change mark clears for this account. A route of its own rather
+// than a side effect of reading, because an agent reading the page is not the person looking at it.
+routes.put("/:folder/documents/:document/seen", async (c) => {
+  const folder = await visible(c, c.req.param("folder"));
+  if (!folder) return message(c, 404, "That project isn't available to you.");
+  const document = await documentIn(c, folder.id, c.req.param("document"));
+  if (!document) return message(c, 404, "That document isn't in this project.");
+  await seeDocument(c.env.DB, c.get("account"), document.id, now());
+  return c.json({ seen: true });
+});
+
 routes.put("/:folder/documents/:document", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
   if (!folder) return message(c, 404, "That project isn't available to you.");
@@ -491,6 +524,8 @@ routes.put("/:folder/documents/:document", async (c) => {
   }
   const result = await documentIn(c, folder.id, documentId);
   await c.env.DB.prepare("UPDATE folder SET updated = ? WHERE id = ?").bind(at, folder.id).run();
+  // Whoever saved it has seen it: the version they just wrote is not news to them.
+  await seeDocument(c.env.DB, c.get("account"), documentId, at);
   return c.json({ document: result });
 });
 

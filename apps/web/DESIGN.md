@@ -275,7 +275,16 @@ under it, the rest muted until hovered. A count beside a tab is muted, tabular. 
 never coral.
 
 ### Change mark
-A 3px coral bar the full height of a row at its left edge, with the "Changed" label in coral text beside the title. Used in the register and in side-panel rows; persists until the row is opened.
+A 3px coral bar the full height of a row at its left edge, with the label "Changed · <what>" in coral text beside the title: what changed on work ("Changed · Finished"), on a document ("Changed · version 3 by Bola"), in a project ("Changed · Pricing"). One wording everywhere; never "New" or "Changed" alone. Used in the register and in side-panel rows; persists until that thing is opened. Whether something changed is always the server's answer (unread notifications for work, `folder_document_seen` for documents), never kept in the browser.
+
+### Danger
+A destructive control is never a peer of the everyday ones. It sits alone at the foot of the form that edits the thing (a project's Delete at the foot of Edit), or in a row's own place for a row (a file's Delete), outline danger, and pressing it asks in place: a line naming what goes and what stays ("Delete Billing app and its 3 documents and 1 file? Work in it is kept."), then Delete and Keep it. No browser `confirm()`.
+
+### README panel
+A project's Documents tab opens on its README in a deeper-cream panel under a "README" heading over an ink rule, with its last edit and Open. Only the opening section shows, up to the first second-level heading, with "Read all" for the rest, so the documents register below is in the first screen. A document's headings sit below the page's: h1 1.125rem/500 (dropped when it repeats the project's name), h2 1rem/550, h3 0.875rem/550.
+
+### Who did it
+A person is named plainly ("by Bola"); an agent is named with what it is ("by Bola, an agent"). Unknown provenance is named plainly too, never guessed, and "(person)" is never written.
 
 ### Side panel
 Deeper cream, 4px corners, 1px hairline border, 12px 16px padding; a 14px heading at 550 over an ink rule; rows divided by hairlines, the last without one. Each closed item carries its age and a small Reopen that opens an inline reason field.

@@ -6,9 +6,9 @@
   shaped like Needs you's. History is one time-ordered list of work finished and document versions
   saved, by a person or an agent; it owns no table (apps/api/src/project.ts) and shows no counts.
 
-  Coral means one thing: changed since you last looked. Work keeps it until opened (unread news on
-  it); a document or a history line someone else saved after your last visit carries it for this
-  visit, and the visit itself is the look (`markProjectSeen`).
+  Coral means one thing: changed since you last looked, said as "Changed · <what>". Work keeps it
+  until opened (unread news on it); a document keeps it until you open that document (the server's
+  `folder_document_seen`, project.ts). Both are the server's answer; nothing is kept in the browser.
 
   A project is a folder; folders inside it are listed quietly under Documents, and open as projects.
 -->
@@ -22,7 +22,7 @@ import type {
 } from "~/types/folder";
 import { readmeAsk } from "~/utils/asks";
 import { renderFolderMarkdown } from "~/utils/folder-markdown";
-import { age, docsChanged, markProjectSeen, TONES, toneOf } from "~/utils/projects";
+import { age, byLine, TONES, toneOf, viaOf } from "~/utils/projects";
 
 usePage({
   title: "Project · Passalong",
@@ -43,7 +43,6 @@ const tab = computed(() =>
 );
 const docId = computed(() => (typeof route.query.doc === "string" ? route.query.doc : ""));
 const version = computed(() => Number(route.query.v) || undefined);
-const me = computed(() => data.value.me?.account || "");
 const now = ref(Date.now());
 
 // ---- the project itself -------------------------------------------------------------------------
@@ -119,31 +118,29 @@ async function loadView() {
   }
 }
 
-/** When you last looked, before this visit: what is newer, and not yours, is marked. */
-const lastLook = ref("");
-let looked = "";
+let shown = "";
 watch(
   [signedIn, id],
   async ([on, now_id]) => {
     if (!on || !now_id) return;
-    if (now_id !== looked) {
-      looked = now_id;
+    if (now_id !== shown) {
+      shown = now_id;
       loading.value = true;
       viewLoading.value = true;
       folder.value = null;
-      lastLook.value = markProjectSeen(now_id);
+      readAll.value = false;
+      confirmingDelete.value = false;
     }
     await Promise.all([load(), loadView()]);
-    // The project it sits in counts as looked at too, so the rail's mark clears.
-    const root = breadcrumbs.value[0]?.id;
-    if (root && root !== now_id) markProjectSeen(root);
-    projectsQ.refetch();
   },
   { immediate: true },
 );
+/** Something here changed on the server (a save, a document opened): every view of it follows. */
+async function changed() {
+  await Promise.all([load(), loadView()]);
+  projectsQ.refetch();
+}
 const refresh = () => Promise.all([load(), loadView()]);
-
-const newSince = (at: string, by: string) => by !== me.value && docsChanged(at, lastLook.value);
 
 // ---- documents ----------------------------------------------------------------------------------
 const isReadme = (d: { name: string }) => /^readme(\.md)?$/i.test(d.name.trim());
@@ -164,12 +161,31 @@ async function loadReadme() {
   );
   readme.value = got?.document ?? null;
 }
-const readmeHtml = computed(() => renderFolderMarkdown(readme.value?.body || ""));
+/**
+ * The README's opening section: its first heading dropped when it only repeats the project's name,
+ * and everything from the first second-level heading on behind "Read all", so the documents
+ * register is still in the first screen.
+ */
+const readAll = ref(false);
+const readmeParts = computed(() => {
+  let body = readme.value?.body || "";
+  const first = body.match(/^\s*#\s+(.+)\n?/);
+  if (first && first[1]?.trim().toLowerCase() === folder.value?.title.trim().toLowerCase())
+    body = body.slice(first[0].length);
+  const cut = body.search(/^##\s/m);
+  return cut > 0 && body.slice(0, cut).trim()
+    ? { opening: body.slice(0, cut), rest: true, all: body }
+    : { opening: body, rest: false, all: body };
+});
+const readmeHtml = computed(() =>
+  renderFolderMarkdown(readAll.value ? readmeParts.value.all : readmeParts.value.opening),
+);
 const ask = computed(() =>
   folder.value ? readmeAsk({ id: folder.value.id, title: folder.value.title }) : "",
 );
-const editorOf = (d: FolderDocument) =>
-  `${d.editor || "Someone"}${viaOf(d.client) ? ` (${viaOf(d.client)})` : ""}`;
+/** "Version 3 by Bola, an agent": the one way a document's last save is said. */
+const lastEdit = (d: FolderDocument) =>
+  `Version ${d.version} by ${byLine(d.editor || "", viaOf(d.client))}`;
 
 const addingDoc = ref(false);
 const busy = ref(false);
@@ -199,7 +215,7 @@ const writeReadme = () =>
 
 async function onDocGone(message: string) {
   notice.value = message;
-  await load();
+  await changed();
   await navigateTo({ query: { tab: "documents" } });
 }
 
@@ -251,10 +267,13 @@ async function download(a: FolderAsset) {
     problem.value = (err as Error).message;
   }
 }
+/** The file whose Delete was pressed: its row asks before anything goes. */
+const confirmingFile = ref("");
 async function removeAsset(a: FolderAsset) {
-  if (!confirm(`Delete ${a.name} from this project?`)) return;
   try {
     await api(`/v1/folders/${id.value}/assets/${a.id}`, { method: "DELETE" });
+    confirmingFile.value = "";
+    notice.value = `Deleted ${a.name}.`;
     await load();
   } catch (err) {
     problem.value = (err as Error).message;
@@ -322,15 +341,22 @@ async function stopSharing() {
   }
 }
 const deleting = ref(false);
+/** Delete asks in place, at the foot of Edit, saying what goes with it and what stays. */
+const confirmingDelete = ref(false);
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+const deleteWhat = computed(() => {
+  const parts = [
+    documents.value.length && plural(documents.value.length, "document", "documents"),
+    assets.value.length && plural(assets.value.length, "file", "files"),
+    children.value.length &&
+      plural(children.value.length, "project inside it", "projects inside it"),
+  ].filter(Boolean) as string[];
+  const what = parts.length ? ` and its ${parts.join(", ").replace(/, ([^,]*)$/, " and $1")}` : "";
+  return `Delete ${folder.value?.title}${what}? Work in it is kept. This cannot be undone.`;
+});
 async function remove() {
   const f = folder.value;
-  if (
-    !f?.manage ||
-    !confirm(
-      `Delete ${f.title}, everything inside it, and its documents and files? Its work stays where it is. This cannot be undone.`,
-    )
-  )
-    return;
+  if (!f?.manage) return;
   deleting.value = true;
   try {
     await api(`/v1/folders/${id.value}`, { method: "DELETE" });
@@ -396,15 +422,15 @@ async function link() {
 }
 
 // ---- history ------------------------------------------------------------------------------------
-const via = (h: ProjectHistoryItem) => (h.via ? ` (${h.via})` : "");
+/** The quiet line under a history row: what kind of thing happened, and what was shown. */
 function historyLine(h: ProjectHistoryItem): string {
   if (h.kind === "document")
-    return `${h.version === 1 ? "Written" : `Version ${h.version}, changed`} by ${h.by || "someone"}${via(h)}`;
+    return h.version === 1 ? "Document · written" : `Document · version ${h.version}`;
   const shown = [
-    h.shots && `${h.shots} screenshot${h.shots === 1 ? "" : "s"}`,
-    h.checks && `${h.checks} check${h.checks === 1 ? "" : "s"}`,
+    h.shots && plural(h.shots, "screenshot", "screenshots"),
+    h.checks && plural(h.checks, "check", "checks"),
   ].filter(Boolean);
-  return `Finished by ${h.by || "someone"}${via(h)}${shown.length ? ` · shown with ${shown.join(" and ")}` : ""}`;
+  return `Finished work${shown.length ? ` · shown with ${shown.join(" and ")}` : ""}`;
 }
 const historyHref = (h: ProjectHistoryItem) =>
   h.kind === "finished"
@@ -413,6 +439,7 @@ const historyHref = (h: ProjectHistoryItem) =>
 
 const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
 const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
+const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
 </script>
 
 <template>
@@ -432,18 +459,17 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
       <div class="flex flex-col gap-3">
         <NuxtLink v-if="parent" :to="`/hub/projects/${parent.id}`" class="self-start font-ui text-sm text-muted no-underline hover:text-fg">Inside {{ parent.title }}</NuxtLink>
         <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-          <div class="flex min-w-0 items-stretch gap-3">
-            <span class="project-mark w-[3px] shrink-0 rounded-[1px]" :data-tone="tone" aria-hidden="true" />
-            <div class="min-w-0">
-              <h1 class="m-0 text-h2 font-medium tracking-tight">{{ folder.title }}</h1>
-              <p v-if="folder.description" class="m-0 mt-1 max-w-[44rem] font-ui text-sm text-muted">{{ folder.description }}</p>
-              <p class="m-0 mt-1 font-ui text-xs text-muted">{{ space }}</p>
-            </div>
+          <div class="min-w-0">
+            <h1 class="m-0 flex items-center gap-3 text-h2 font-medium tracking-tight">
+              <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="tone" aria-hidden="true" />
+              <span class="min-w-0 break-words">{{ folder.title }}</span>
+            </h1>
+            <p v-if="folder.description" class="m-0 mt-1 max-w-[44rem] pl-[15px] font-ui text-sm text-muted">{{ folder.description }}</p>
+            <p class="m-0 mt-1 pl-[15px] font-ui text-xs text-muted">{{ space }}</p>
           </div>
           <div v-if="!editing" class="flex flex-wrap gap-2">
             <button class="btn sm" type="button" @click="editing = true">Edit</button>
             <button v-if="!folder.share_url" class="btn sm" type="button" :disabled="sharing" @click="share">{{ sharing ? "Sharing…" : "Share" }}</button>
-            <button v-if="folder.manage" class="btn sm outline danger" type="button" :disabled="deleting" @click="remove">{{ deleting ? "Deleting…" : "Delete" }}</button>
           </div>
         </div>
 
@@ -472,7 +498,16 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
           </fieldset>
           <div class="flex gap-2">
             <button class="btn primary sm" type="submit" :disabled="busy">Save</button>
-            <button class="btn sm" type="button" @click="editing = false">Cancel</button>
+            <button class="btn sm" type="button" @click="editing = false; confirmingDelete = false">Cancel</button>
+          </div>
+          <!-- The one danger here, at the foot, asking in place and saying what goes. -->
+          <div v-if="folder.manage" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-3">
+            <button v-if="!confirmingDelete" class="btn sm outline danger" type="button" @click="confirmingDelete = true">Delete project…</button>
+            <template v-else>
+              <p class="m-0 min-w-0 grow font-ui text-sm" role="alert">{{ deleteWhat }}</p>
+              <button class="btn sm outline danger" type="button" :disabled="deleting" @click="remove">{{ deleting ? "Deleting…" : "Delete" }}</button>
+              <button class="btn sm" type="button" @click="confirmingDelete = false">Keep it</button>
+            </template>
           </div>
         </form>
 
@@ -515,13 +550,13 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
           :row="documents.find((d) => d.id === docId)"
           :version="version"
           :start-editing="route.query.edit === '1'"
-          @changed="load"
+          @changed="changed"
           @gone="onDocGone"
         />
 
         <template v-else>
           <!-- Nothing written down yet: the agent writes it, or you do. -->
-          <section v-if="!documents.length" class="flex flex-col gap-4 border-t border-fg py-8" aria-labelledby="nodocs-h">
+          <section v-if="!documents.length" class="flex flex-col gap-4 pt-2 pb-8" aria-labelledby="nodocs-h">
             <p id="nodocs-h" class="m-0 text-h3 font-medium">Nothing written down yet.</p>
             <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">
               Start with the README: what this product is, who uses it, the words the team uses and how
@@ -540,15 +575,18 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
               <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fg pb-2">
                 <h2 id="readme-h" class="m-0 flex items-baseline gap-2 font-ui text-sm font-semibold tracking-normal">
                   README
-                  <span v-if="newSince(readme.updated, readme.updated_by)" class="text-xs font-medium text-accent">Changed</span>
+                  <span v-if="readmeRow?.changed" class="text-xs font-medium text-accent">Changed · {{ readmeRow.changed }}</span>
                 </h2>
-                <span class="flex items-baseline gap-3 font-ui text-xs text-muted tabular-nums">
-                  <span>{{ editorOf(readmeRow || readme) }} · {{ age(readme.updated, now) }}</span>
+                <span class="flex items-baseline gap-3 font-ui text-xs text-muted">
+                  <span v-if="readmeRow">{{ lastEdit(readmeRow) }} · <span class="tabular-nums">{{ age(readmeRow.updated, now) }}</span></span>
                   <NuxtLink :to="{ query: { tab: 'documents', doc: readme.id } }" class="btn sm">Open</NuxtLink>
                 </span>
               </div>
               <!-- Sanitised by renderFolderMarkdown before it reaches v-html. -->
-              <div v-if="readme.body.trim()" class="overflow-x-auto"><div class="prose project-readme" v-html="readmeHtml" /></div>
+              <template v-if="readmeParts.all.trim()">
+                <div class="overflow-x-auto"><div class="prose project-prose" v-html="readmeHtml" /></div>
+                <button v-if="readmeParts.rest" class="btn sm self-start" type="button" :aria-expanded="readAll" @click="readAll = !readAll">{{ readAll ? "Show less" : "Read all" }}</button>
+              </template>
               <p v-else class="m-0 font-ui text-sm text-muted">The README is empty. Open it to write what this product is.</p>
             </section>
             <section v-else class="flex flex-wrap items-center gap-3 rounded-3 border border-line bg-raised px-4 py-3" aria-label="No README yet">
@@ -568,17 +606,17 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
                 <button class="btn primary" type="submit" :disabled="busy">Add</button>
                 <button class="btn" type="button" @click="addingDoc = false">Cancel</button>
               </form>
-              <div v-if="others.length" aria-hidden="true" class="hidden grid-cols-[minmax(0,1fr)_12rem_3.5rem] gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="label">
-                <span>Document</span><span>Last edited by</span><span class="text-right">When</span>
+              <div v-if="others.length" aria-hidden="true" class="hidden grid-cols-[minmax(0,1fr)_16rem_3.5rem] gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="label">
+                <span>Document</span><span>Last edit</span><span class="text-right">When</span>
               </div>
               <ol v-if="others.length" class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
-                <li v-for="d in others" :key="d.id" class="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]">
-                  <span v-if="newSince(d.updated, d.updated_by)" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+                <li v-for="d in others" :key="d.id" class="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_16rem_3.5rem]">
+                  <span v-if="d.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
                   <p class="m-0 flex min-w-0 grow basis-full flex-wrap items-baseline gap-x-2 font-ui text-sm @2xl:basis-auto">
                     <NuxtLink :to="{ query: { tab: 'documents', doc: d.id } }" class="font-medium break-words text-fg no-underline hover:underline">{{ d.name }}</NuxtLink>
-                    <span v-if="newSince(d.updated, d.updated_by)" class="text-xs font-medium text-accent">Changed</span>
+                    <span v-if="d.changed" class="text-xs font-medium text-accent">Changed · {{ d.changed }}</span>
                   </p>
-                  <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ editorOf(d) }}</span>
+                  <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ lastEdit(d) }}</span>
                   <span class="font-ui text-xs text-muted tabular-nums @2xl:text-right @2xl:text-sm @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(d.updated, now) }}</span>
                 </li>
               </ol>
@@ -604,14 +642,21 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
             </div>
             <input ref="fileInput" class="sr-only" type="file" tabindex="-1" aria-hidden="true" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="upload" />
             <ul v-if="assets.length" class="m-0 list-none p-0">
-              <li v-for="a in assets" :key="a.id" class="flex items-center gap-3 border-b border-line py-2">
+              <template v-for="a in assets" :key="a.id">
+              <li class="flex items-center gap-3 border-b border-line py-2">
                 <HubFolderAssetPreview :folder="id" :asset="a.id" :type="a.type" :name="a.name" />
                 <div class="min-w-0 grow">
                   <button class="max-w-full cursor-pointer border-0 bg-transparent p-0 text-left font-ui text-sm break-all text-fg underline" type="button" @click="download(a)">{{ a.name }}</button>
                   <span class="block font-ui text-xs text-muted tabular-nums">{{ size(a.bytes) }} · {{ age(a.created, now) }}</span>
                 </div>
-                <button class="btn sm" type="button" :aria-label="`Delete ${a.name}`" @click="removeAsset(a)">Delete</button>
+                <button v-if="confirmingFile !== a.id" class="btn sm" type="button" :aria-label="`Delete ${a.name}`" @click="confirmingFile = a.id">Delete</button>
               </li>
+              <li v-if="confirmingFile === a.id" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-2" role="alert">
+                <p class="m-0 min-w-0 grow font-ui text-sm">Delete {{ a.name }} from this project? It cannot be brought back.</p>
+                <button class="btn sm outline danger" type="button" @click="removeAsset(a)">Delete</button>
+                <button class="btn sm" type="button" @click="confirmingFile = ''">Keep it</button>
+              </li>
+              </template>
             </ul>
             <p v-else class="m-0 py-3 font-ui text-sm text-muted">Screenshots, references and source files, up to 10 MB each.</p>
           </section>
@@ -688,24 +733,30 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
           </div>
           <button class="btn outline danger sm" type="button" @click="loadView">Try again</button>
         </div>
-        <div v-else-if="!history.length" class="flex flex-col gap-2 border-t border-fg py-6">
+        <div v-else-if="!history.length" class="flex flex-col gap-2 pt-2 pb-6">
           <p class="m-0 text-h3 font-medium">Nothing has happened here yet.</p>
           <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">Work finished in this project and every version of its documents land here, newest first, with who did it.</p>
         </div>
-        <ol v-else class="m-0 list-none p-0">
-          <li v-for="h in history" :key="`${h.kind}-${h.id}-${h.version}`" class="relative flex items-baseline gap-3 border-b border-line py-3 pl-4">
-            <span v-if="!h.mine && docsChanged(h.at, lastLook)" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
-            <div class="min-w-0 grow">
-              <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
-                <NuxtLink :to="historyHref(h)" class="font-medium break-words text-fg no-underline hover:underline">{{ h.title || "Untitled" }}</NuxtLink>
-                <span v-if="!h.mine && docsChanged(h.at, lastLook)" class="text-xs font-medium text-accent">New since you looked</span>
-              </p>
-              <p class="m-0 mt-0.5 font-ui text-xs text-muted">{{ historyLine(h) }}</p>
-              <p v-if="h.note" class="m-0 mt-0.5 font-ui text-xs text-muted">“{{ h.note }}”</p>
-            </div>
-            <span class="shrink-0 font-ui text-xs text-muted tabular-nums">{{ age(h.at, now) }}</span>
-          </li>
-        </ol>
+        <div v-else class="@container">
+          <div aria-hidden="true" class="hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="[hcols, label]">
+            <span>What</span><span>By</span><span class="text-right">Age</span>
+          </div>
+          <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
+            <li v-for="h in history" :key="`${h.kind}-${h.id}-${h.version}`" class="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid" :class="hcols">
+              <span v-if="h.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+              <div class="min-w-0 grow basis-full @2xl:basis-auto">
+                <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
+                  <NuxtLink :to="historyHref(h)" class="font-medium break-words text-fg no-underline hover:underline">{{ h.title || "Untitled" }}</NuxtLink>
+                  <span v-if="h.changed" class="text-xs font-medium text-accent">Changed · {{ h.changed }}</span>
+                </p>
+                <p class="m-0 mt-0.5 font-ui text-xs text-muted">{{ historyLine(h) }}</p>
+                <p v-if="h.note" class="m-0 mt-0.5 font-ui text-xs text-muted">“{{ h.note }}”</p>
+              </div>
+              <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ byLine(h.by, h.via) }}</span>
+              <span class="font-ui text-xs text-muted tabular-nums @2xl:text-right @2xl:text-sm @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(h.at, now) }}</span>
+            </li>
+          </ol>
+        </div>
       </section>
     </div>
   </HubShell>
@@ -737,15 +788,30 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
-.project-readme {
+/* A document's headings sit below the page's own, in order. */
+.project-prose {
   max-width: 46rem;
   font-family: var(--font-sans);
   font-size: 0.9375rem;
   line-height: 1.65;
 }
-.project-readme :deep(h1) {
+.project-prose :deep(h1) {
   margin: 0 0 var(--s-3);
-  font: 500 1.25rem / 1.3 var(--font-sans);
-  letter-spacing: -0.02em;
+  font: 500 1.125rem / 1.4 var(--font-sans);
+  letter-spacing: -0.015em;
+}
+.project-prose :deep(h2) {
+  margin: var(--s-5) 0 var(--s-2);
+  font: 550 1rem / 1.4 var(--font-sans);
+  letter-spacing: -0.01em;
+}
+.project-prose :deep(h3) {
+  margin: var(--s-4) 0 var(--s-2);
+  font: 550 0.875rem / 1.4 var(--font-sans);
+  letter-spacing: 0;
+}
+.project-prose :deep(h2:first-child),
+.project-prose :deep(h3:first-child) {
+  margin-top: 0;
 }
 </style>

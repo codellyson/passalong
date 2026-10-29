@@ -114,9 +114,12 @@ opens the box with `?project=`, which files into that project's team and links i
 newest first, with no counts. Work and History come from one read, `GET /v1/folders/:id/project`
 (`apps/api/src/project.ts`), which owns no table.
 
-Coral on a project: unread news on its work (the server's `changed`), or a document someone else
-saved after this browser last opened the project (`docs_changed` on the folder list against
-`markProjectSeen()` in localStorage — per browser, not per account). There is no `/hub/folders`:
+Coral on a project, a document or a History line is the server's answer, said one way, "Changed ·
+<what>": unread news on its work, or a document version someone else saved after you last opened
+that document (`folder_document_seen`, migration 0064, `docChange()` in project.ts). Opening the
+document clears it (`PUT /v1/folders/:id/documents/:doc/seen`); "Mark all seen" on Needs you clears
+documents too. Nothing is kept in the browser. Deleting a project or a file asks in place at the foot
+of Edit or on the file's row, naming what goes. There is no `/hub/folders`:
 nothing outside the hub linked to it. See [folders.md](folders.md).
 
 ## Live

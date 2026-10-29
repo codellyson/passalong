@@ -4,12 +4,12 @@
   project is a top-level folder; folders inside it count towards it and are reached from its page.
 
   Coral is the one meaning it has in the hub: something in the project changed since you last
-  looked — news on its work, or a document someone else saved after your last visit.
+  looked — news on its work, or a document someone else saved since you last opened it.
 -->
 <script setup lang="ts">
 import type { Folder } from "~/types/folder";
 import { newProjectAsk } from "~/utils/asks";
-import { age, projectsFrom, seenAt } from "~/utils/projects";
+import { age, projectsFrom } from "~/utils/projects";
 
 usePage({
   title: "Projects · Passalong",
@@ -20,7 +20,7 @@ usePage({
 const { api, json, data, projectsQ } = useHub();
 const route = useRoute();
 
-const projects = computed(() => projectsFrom(projectsQ.data.value?.folders ?? [], seenAt));
+const projects = computed(() => projectsFrom(projectsQ.data.value?.folders ?? []));
 const teams = computed(() => data.value.me?.teams ?? []);
 const changedCount = computed(() => projects.value.filter((p) => p.changed).length);
 const openCount = computed(() => projects.value.reduce((n, p) => n + p.open, 0));
@@ -72,7 +72,7 @@ async function create(form: HTMLFormElement) {
 }
 
 const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
-const cols = "@2xl:grid-cols-[minmax(0,1fr)_6rem_6rem_5.5rem_4.75rem]";
+const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,14rem)_4.75rem]";
 </script>
 
 <template>
@@ -162,7 +162,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_6rem_6rem_5.5rem_4.75rem]";
 
       <template v-else>
         <div aria-hidden="true" class="hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="[cols, label]">
-          <span>Project</span><span class="text-right">Open work</span><span class="text-right">Documents</span><span class="text-right">Last change</span><span />
+          <span>Project</span><span class="text-right">Open work</span><span class="text-right">Documents</span><span>Last change</span><span />
         </div>
         <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
           <li
@@ -176,7 +176,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_6rem_6rem_5.5rem_4.75rem]";
               <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="p.tone" aria-hidden="true" />
                 <NuxtLink :to="`/hub/projects/${p.id}`" class="font-medium text-fg no-underline hover:underline">{{ p.title }}</NuxtLink>
-                <span v-if="p.changed" class="text-xs font-medium text-accent">Changed</span>
+                <span v-if="p.changed" class="text-xs font-medium text-accent">Changed · {{ p.changed }}</span>
               </p>
               <p v-if="p.description" class="m-0 mt-0.5 pl-[11px] font-ui text-xs text-muted">{{ p.description }}</p>
             </div>
@@ -187,8 +187,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_6rem_6rem_5.5rem_4.75rem]";
             <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
               <span class="@2xl:hidden" aria-hidden="true">· </span>{{ p.documents }}<span class="@2xl:hidden"> {{ p.documents === 1 ? "document" : "documents" }}</span>
             </span>
-            <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
-              <span class="@2xl:hidden" aria-hidden="true">· changed </span>{{ p.updated ? age(p.updated, now) : "—" }}
+            <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">
+              <span class="@2xl:hidden" aria-hidden="true">· </span><template v-if="p.last">{{ p.last.name }}, by {{ p.last.by }} · <span class="tabular-nums">{{ age(p.last.at, now) }}</span></template><template v-else-if="p.updated"><span class="tabular-nums">{{ age(p.updated, now) }}</span></template><template v-else>—</template>
             </span>
           </li>
         </ol>
