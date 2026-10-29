@@ -142,7 +142,7 @@ stays the size you asked for.
 ## Bug reports in Passalong
 
 In [Passalong](/), a bug is one of the three kinds of guide, in nearly this shape
-([the format](/docs/guide-format)): Expected is called Verification, the evidence sits under
+([the format](/docs/work-format)): Expected is called Verification, the evidence sits under
 Problem, and severity is a field rather than a section, with the same four names. A bug that puts
 its reproduction under Steps is refused, for the reason above.
 

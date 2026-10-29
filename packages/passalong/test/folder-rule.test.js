@@ -28,8 +28,9 @@ for (const [name, src] of Object.entries(SOURCES)) {
   });
 }
 
-// llms.txt is apps/web's, and still says it with the old nouns until the docs catch up.
+// llms.txt is apps/web's, and says it in the same words for an agent reading the site.
 test("llms.txt states the same rule", () => {
-  assert.match(LLMS, /A folder is a place; its documents are what to know; guides are what to do/);
+  assert.match(LLMS, /A project is a place; its documents are what to know; work is what to do/);
+  assert.match(LLMS, /open work recorded only as a document is lost/);
   assert.match(LLMS, /`space` field/);
 });

@@ -133,7 +133,7 @@ stopped. Not written down, it starts from zero.
 ## Running several agents with Passalong
 
 [Passalong](/) is built for this. Work is a set of guides: tasks, bugs and handoffs
-([the format](/docs/guide-format)), and each is claimed before it is worked.
+([the format](/docs/work-format)), and each is claimed before it is worked.
 
 - **One agent per job.** An agent takes a task before starting. Nobody else can take it while it is
   held, and everyone can see who has what.

@@ -114,6 +114,8 @@ export default defineNuxtConfig({
     // There is no writer in the browser: the agent that has the context writes the guide
     // (docs/V2.md §11). Old links and bookmarks land on the hub, whose New menu says what to ask.
     "/hub/write": { redirect: "/hub" },
+    // Work has no kinds (docs/WORK.md), so the format page is the work format; old links follow.
+    "/docs/guide-format": { redirect: "/docs/work-format" },
     // Guide pages render markdown a stranger wrote, and the CSP is what makes that safe rather
     // than a sanitiser. `noScripts` drops the entry script, the import map, the inlined payload
     // and the JS resource hints, so the page can be served with no `script-src` at all. It also

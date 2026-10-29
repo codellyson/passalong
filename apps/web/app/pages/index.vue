@@ -2,7 +2,7 @@
   The landing page.
 
   What it does not have any more is a drawn browser window — three traffic-light dots, a fake
-  address bar, and a guide by a person who does not exist. A picture of software that was never
+  address bar, and a document by a person who does not exist. A picture of software that was never
   photographed is the tell of a template, and it was the loudest thing on the page.
 
   What replaces it is the artifact itself. Passalong's output is a markdown file, so the page shows
@@ -29,7 +29,7 @@ usePage({
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:
-    "Give your coding agents tasks, bugs and handoffs. One agent per job, progress you can see, and a write-up to approve before it counts.",
+    "Give your coding agents work in plain words. One agent per job, progress you can see, and evidence on every hand-in.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
   // switches on the moment there is something to show. The apex rather than the serving host, so
@@ -39,8 +39,8 @@ usePage({
 });
 
 /**
- * How to reach sales. The page states no price: what is paid for is the crossing — the queue, the
- * claims and the hub — and the CLI that never leaves the machine stays free, with no account.
+ * How to reach sales. The page states no price: what is paid for is the team — the board, who holds
+ * what, and the hub — and a free account is enough to try it.
  */
 const PRICING = {
   /** Plain mailto: this page runs no script and its CSP allows none, so a form is not an option. */
@@ -83,15 +83,15 @@ const STRUCTURED = {
       name: "Passalong",
       url: `${APEX}/`,
       description:
-        "Hand work to AI coding agents — a task, a bug, or finished work to repeat — and get back what they did and how they checked it, with one agent on each piece of work and everyone able to see who has what. A CLI, an MCP server and a sync service.",
+        "Hand work to AI coding agents in plain words and get back what they did and how they checked it, with one agent on each piece of work, everyone able to see who has what, and project documents the agents keep current. A CLI, an MCP server and a hub.",
       applicationCategory: "DeveloperApplication",
       operatingSystem: "macOS, Linux, Windows",
       publisher: { "@id": `${APEX}/#organization` },
       offers: [
         {
           "@type": "Offer",
-          name: "Local",
-          description: "The CLI against a local store, with no account.",
+          name: "Free",
+          description: "A free account, holding up to 25 pieces of work.",
           price: 0,
           priceCurrency: "USD",
         },
@@ -104,18 +104,16 @@ useHead({ script: [{ type: "application/ld+json", innerHTML: JSON.stringify(STRU
 /**
  * The specimen: one piece of work, going out and coming back, side by side.
  *
- * It used to be a single finished handoff, which told the old story — Passalong as a way to write
- * up what you did. The product now leads with handing work to an agent, so the page shows both
- * halves of that: the task as it was handed out (what done looks like, what to leave alone) and
- * what the agent handed back against it (what it decided, how it checked each line of done). The
- * checks on the right are the lines on the left, one for one, which is the whole point of a review.
+ * The left is the work as it was written down — plain words and a line saying what done means; the
+ * right is what the agent handed in against it, with how it checked each line. The checks on the
+ * right are the lines on the left, one for one.
  *
- * Built from the devices the guide page uses — the fact row, the sectioning — so it is a real
+ * Built from the devices the share page uses — the fact row, the sectioning — so it is a real
  * surface of this product rather than a drawing of one. Nothing claims to be a screenshot.
  */
 const SPECIMEN = {
   out: {
-    label: "The task you handed out",
+    label: "The work you wrote down",
     title: "Backfill order totals without locking the table",
     facts: [
       { label: "For", value: "orders-api" },
@@ -123,11 +121,11 @@ const SPECIMEN = {
     ],
     sections: [
       {
-        h: "Goal",
-        p: "Every order has a stored total, so checkout stops computing it per request.",
+        h: "Why",
+        p: "Every order should have a stored total, so checkout stops computing it per request.",
       },
       {
-        h: "Constraints",
+        h: "Careful",
         p: "No lock that stalls checkout. Postgres 16, in production, during trading hours.",
       },
     ],
@@ -146,12 +144,8 @@ const SPECIMEN = {
     ],
     sections: [
       {
-        h: "Decisions",
-        p: "Chunked by primary key rather than one statement: the lock is the cost here, not the work. Nullable first and NOT NULL last, so nothing waits on a rewrite.",
-      },
-      {
-        h: "Gotchas",
-        p: "Chunks under 1,000 ran slower, not faster: the planner stopped using the index and each pass read the table.",
+        h: "What it changed",
+        p: "Chunked by primary key rather than one statement: the lock is the cost here, not the work. Nullable first and NOT NULL last, so nothing waits on a rewrite. Chunks under 1,000 ran slower, so it uses 5,000.",
       },
     ],
     checked: [
@@ -165,7 +159,7 @@ const SPECIMEN = {
 /**
  * A number from real use, for the proof line under the specimen — and nothing until there is one.
  * The page states no figure it cannot stand behind: set this from the dogfooding metric in
- * docs/V2.md §7 (the share of tasks approved the first time they come back) once it exists.
+ * docs/V2.md §7 once it exists.
  */
 const PROOF = null as { figure: string; says: string } | null;
 </script>
@@ -183,9 +177,9 @@ const PROOF = null as { figure: string; says: string } | null;
         <span class="turn">start from zero.</span>
       </h1>
       <p class="lede">
-        Tell your agent what you need. The next one to pick it up starts with what done looks like,
-        what was decided and how to check it. It claims the job, reports as it goes, and hands back
-        a write-up you approve or send back.
+        Say what you need in plain words. The agent that picks it up reads it, and what your
+        project's documents say about the product, and works out what done means. It takes the job,
+        reports as it goes, and hands it in with the evidence.
       </p>
       <!-- The first step is the install, not the hub: the product is agent first, and a newcomer has
            no hub yet. No copy button — this page runs no script — so the command is set to select
@@ -201,19 +195,18 @@ const PROOF = null as { figure: string; says: string } | null;
     </header>
 
     <!--
-      A guide, as it arrives — not as a file.
+      Work, as it arrives — not as a file.
 
       This block has been two wrong things. It was a drawn browser window, which was a picture of
       software nobody photographed. Then it was the markdown source, which is the aesthetic of a
       config file and argues that what this product makes is a text file.
 
-      What it makes is the document at `/g/:id/:key`: the reasoning, the decisions, the steps, how to
-      check it and what went wrong — set so a person can read it and shaped so an agent can act on
-      it. That is a real surface of this product, built here from the same devices that page uses:
+      What it makes is the page at `/g/:id/:key`: what needs doing and how to know it is done — set
+      so a person can read it and shaped so an agent can act on it. That is a real surface of this product, built here from the same devices that page uses:
       the fact row, the tags, the sectioning. Nothing is invented and nothing claims to be a
       screenshot.
     -->
-    <section class="specimen pair" aria-label="A task as it was handed out, and what the agent handed back">
+    <section class="specimen pair" aria-label="Work as it was written down, and what the agent handed back">
       <article v-for="side in [SPECIMEN.out, SPECIMEN.back]" :key="side.label">
         <p class="side">{{ side.label }}</p>
         <h2>{{ side.title }}</h2>
@@ -226,7 +219,7 @@ const PROOF = null as { figure: string; says: string } | null;
         </dl>
 
         <!-- The lines of done first, on both sides, so each check sits level with the line it
-             answers: that comparison is the review. -->
+             answers. -->
         <div class="sec">
           <h3>{{ "acceptance" in side ? "Done when" : "How it checked each line" }}</h3>
           <ul class="checks" :class="{ met: !('acceptance' in side) }">
@@ -243,16 +236,14 @@ const PROOF = null as { figure: string; says: string } | null;
       </article>
     </section>
     <p class="under">
-      What you asked for, beside what it says it checked, one line for one line — so a write-up that
-      skips a line shows. Underneath both is plain markdown: in your repo, in your hub, and yours to
-      export whenever you want out.
+      What you asked for, beside what it says it checked, one line for one line — so a hand-in that
+      skips a line shows, and anyone can reopen it with why. Underneath both is plain markdown, in
+      your hub and yours to export whenever you want out.
     </p>
     <p v-if="PROOF" class="proof"><b>{{ PROOF.figure }}</b> {{ PROOF.says }}</p>
 
     <!--
-      One loop, whatever the work is. Tasks and handoffs used to be told as two products with two
-      sets of steps; they are one thing — work handed from one context to another — so the page
-      tells it once (docs/V2.md §11). Told as what a person does, not as the flags that do it, and
+      One loop, because work is one thing (docs/WORK.md). Told as what a person does, not as the flags that do it, and
       every sentence is something the product does today.
 
       Agent first: nothing here is typed into a form. You say it to your agent, and it writes it.
@@ -262,18 +253,18 @@ const PROOF = null as { figure: string; says: string } | null;
         <p class="n">01</p>
         <h2>Say what you need</h2>
         <p>
-          <em>“Add a Passalong task: dark mode in settings.”</em> <em>“Plan this into tasks.”</em>
-          <em>“Pass this along.”</em> Your agent writes the brief from the code and the
-          conversation, and nothing runs until you’ve read it.
+          <em>“Add to Passalong: dark mode in settings.”</em> A line in the hub’s box, a forwarded
+          email, a customer writing in. It reaches whoever it is for at once, and an agent says
+          <em>“pass this along”</em> to write what it learned into the project’s documents.
         </p>
       </article>
       <article>
         <p class="n">02</p>
         <h2>An agent claims it</h2>
         <p>
-          One of yours, in any repo, or a teammate’s. Only one agent can hold a job, and a task waits
-          for the ones it depends on. Run <code>passalong work</code> and your agents work through
-          the queue on their own.
+          One of yours, in any repo, or a teammate’s. Only one agent can hold a job, and work waits
+          for what it depends on. Run <code>passalong work</code> and your agents work through the
+          queue on their own.
         </p>
       </article>
       <article>
@@ -287,10 +278,10 @@ const PROOF = null as { figure: string; says: string } | null;
       </article>
       <article>
         <p class="n">04</p>
-        <h2>You decide it’s done</h2>
+        <h2>It comes back done</h2>
         <p>
-          It hands back what it did and how it checked each line of done. Approve it, or send it
-          back with a reason the next agent reads first.
+          It hands in what it did and how it checked, and the work goes to Done. If it is not right,
+          reopen it with a reason the next agent reads first.
         </p>
       </article>
     </section>
@@ -322,12 +313,12 @@ const PROOF = null as { figure: string; says: string } | null;
         <div>
           <dt>Why not Linear or GitHub Issues?</dt>
           <dd>
-            A ticket says what to do. A Passalong task says what done looks like, and comes back
-            with how it was checked, for you to approve.
+            A ticket waits for a person. Passalong work is taken by an agent, comes back with how it
+            was checked, and the agents keep each project’s documents current as they go.
           </dd>
         </div>
         <div>
-          <dt>What if two agents grab the same task?</dt>
+          <dt>What if two agents grab the same work?</dt>
           <dd>Only one can take it. The other is told who has it.</dd>
         </div>
         <div>
@@ -344,8 +335,8 @@ const PROOF = null as { figure: string; says: string } | null;
         <span class="turn">Paid when your agents share the work.</span>
       </h2>
       <p class="note">
-        The CLI writes and keeps guides locally, with no account. A free account syncs up to 25 of
-        them to your hub, so you can watch a task move before you decide anything.
+        A free account holds up to 25 pieces of work in your hub, so you can watch one move before
+        you decide anything.
       </p>
 
       <!-- One card, and the way to it. -->
@@ -378,7 +369,7 @@ const PROOF = null as { figure: string; says: string } | null;
            install; reading what comes back takes nothing at all, and that asymmetry is the product. -->
       <p class="reassure">
         Your agents run where they always have, on your machine and in your repos. Passalong holds
-        the brief, the claim and the write-up. Reading a guide needs nothing installed.
+        the work, who has it and what came back. Reading a share link needs nothing installed.
         <template v-if="docsPublished"><a href="/docs">The docs</a> cover the rest.</template>
       </p>
     </section>

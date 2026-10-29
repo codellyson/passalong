@@ -83,4 +83,4 @@ npm i -g passalong
 passalong setup
 ```
 
-[Connect your tools](/connect), or see the [guide format](/docs/guide-format).
+[Connect your tools](/connect), or see the [guide format](/docs/work-format).

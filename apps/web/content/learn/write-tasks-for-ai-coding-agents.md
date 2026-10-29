@@ -205,7 +205,7 @@ Read the task once as if you had never seen the project:
 ## Writing tasks with Passalong
 
 [Passalong](/) uses exactly this shape. A task is a guide with Goal, Context, Constraints,
-Acceptance and Out of scope ([the format](/docs/guide-format)), and Acceptance is required: a task
+Acceptance and Out of scope ([the format](/docs/work-format)), and Acceptance is required: a task
 without it is refused. When an agent hands the work in, it attaches evidence against each
 Acceptance line, and you review line by line, sending back only the lines that are not met.
 

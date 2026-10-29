@@ -160,5 +160,5 @@ npm i -g passalong
 passalong setup
 ```
 
-[Connect your tools](/connect), or read the [guide format](/docs/guide-format) to see how the
+[Connect your tools](/connect), or read the [guide format](/docs/work-format) to see how the
 sections compare to a HANDOFF.md.

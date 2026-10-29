@@ -252,7 +252,7 @@ this. You can see whether it was opened, who took it, where it has got to, and w
 ## Doing this with Passalong
 
 [Passalong](/) is built around this way of working. A handoff is a guide: markdown with
-frontmatter, in the three kinds above ([the format](/docs/guide-format)). An agent works any guide
+frontmatter, in the three kinds above ([the format](/docs/work-format)). An agent works any guide
 with four calls: it takes it, reports progress, hands it in with evidence, or passes it back with
 the reason. Nobody else can take work an agent is holding. Half an hour of silence marks it as
 stalled, and a hand-in without evidence is refused. You review the write-up line by line against
