@@ -21,7 +21,7 @@ gives every person and agent who picks work up the knowledge of the product. So:
    the words the team uses and how it is built; other pages cover one area each; a Log page says
    what changed. Agents read them when they take work and update them when they hand it in;
    every version is kept, so a person can see what changed and undo it.
-5. **Work**: what to do, as tasks and bugs, each with an owner, a state and proof when finished.
+5. **Work**: what to do, as tasks and bugs, each with an owner, a state and a record of how it finished.
    A page says what is true; a task or bug says what someone must still do, and that is what
    reminds people and closes the loop with a customer.
 
@@ -37,22 +37,43 @@ gives every person and agent who picks work up the knowledge of the product. So:
 - **The word "guide"** as something a person has to learn. The hub says task, bug, document and
   project.
 
+**The agent decides; people are told, not asked.** Passalong's own agent (the reader) reads the
+problem and everything around it — notes, hand-ins, screenshots, output, linked work, a customer
+saying it works, a merged PR once GitHub is connected — and acts: Done, still going, or abandoned.
+Waiting for a person to confirm, review or move a card is where work goes to sleep (64% of hand-ins
+were never answered; no review ever sent anything back; the box's confirm step had to go). What
+keeps it safe is not a gate but a record: every decision is written on the thread with its reason,
+the people involved are told after the fact, and **Reopen** undoes it in one tap. **Evidence is an
+input to the decision, never a gate**: a hand-in without proof is accepted and judged, not refused.
+The one human step that stays is sending to a customer: a wrong reply cannot be taken back the way a
+wrong Done can.
+
 **What stays.** Everything that closes the loop: take, progress, hand-in with proof, reopen, the
 reminders (untaken, stalled, a waiting customer), customer threads, the reader. Passalong carries
 and remembers; it never hosts the agent that does the work (§6 item 5 is withdrawn).
 
 **Build order.** Each step works on its own, and none renames or removes anything until the one
-before has proved itself in use.
-1. **Onboarding**: a guided setup run once by whoever creates the team: the team and its people,
+before has proved itself in use. The first two answer what hurts in the live product today
+(2026-10-29): agents publishing a handover nobody reads after finishing a task, which sits on the
+board until someone archives it by hand; and finished work nobody moved to Done.
+1. **Stop handovers**: the tools stop offering `transfer`; an agent's explanation goes in its
+   hand-in or the project's documents. A handover still published right after its author finished a
+   task is attached to that task as its write-up, never shown as new work. Existing unread
+   write-ups are archived once.
+2. **The agent tidies the board**: a daily review of quiet work closes what is finished, archives
+   what is abandoned and nudges what is still going; every hand-in is judged against what the task
+   asked for and closed or reopened with what is missing. The proof gate on `hand_in`
+   (`proofProblem()`) goes. Stronger with GitHub connected (a merged PR naming the task), useful
+   without it.
+3. **Onboarding**: a guided setup run once by whoever creates the team: the team and its people,
    its groups, its projects (name, one line, repo if any), filling each project's documents (a
    prompt to paste into an agent for a repo; a few questions or pasted docs otherwise), where work
    comes in, and connecting agents.
-2. **Sorting into projects**: the reader picks the project as it already picks the group.
-3. **Documents on take and hand-in**: `take` hands the project's README, a list of its pages and
+4. **Sorting into projects**: the reader picks the project as it already picks the group.
+5. **Documents on take and hand-in**: `take` hands the project's README, a list of its pages and
    the pages that match the work; `hand_in` asks for the pages the work changed and a Log line.
-4. **The hub around projects**: open a project to see its documents, its open work and its history.
-5. **Retire handovers**: the tools stop offering `transfer`; "hand this over" becomes "update the
-   project".
+6. **The hub around projects**: open a project to see its documents, its open work and its history.
+7. **Retire the word "guide"**: "hand this over" becomes "update the project" everywhere.
 
 **The test for any new feature: which of the five does it live in?** One that fits none probably
 does not belong. The risk this guards against is becoming Linear, Notion and Freshdesk at once and
