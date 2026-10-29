@@ -77,6 +77,7 @@ test("every kind renders a sentence naming who did what", () => {
     'Nobody has taken "Add Paystack webhook verification" — give it to someone, take it, or archive it',
     'The customer wrote again on "Add Paystack webhook verification"',
     'Passalong couldn\'t sort "Add Paystack webhook verification" by itself',
+    'A customer has waited four hours on "Add Paystack webhook verification" and nobody has picked it up',
     'Work made from "Add Paystack webhook verification" has ended',
     '@bob\'s agent has a question about "Add Paystack webhook verification"',
     '@bob replied to your agent on "Add Paystack webhook verification"',

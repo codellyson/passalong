@@ -364,6 +364,14 @@ export interface SupportRow {
   waiting_since: string;
   last: { by: "customer" | "team" | ""; line: string; at: string };
   updated: string;
+  /** Whether the request's team asked to be reminded to tell the customer a fix is done. */
+  tell: boolean;
+}
+
+/** `GET /v1/support`: the requests, and the teams whose reminder the viewer (an owner) can set. */
+export interface SupportList {
+  requests: SupportRow[];
+  teams: { slug: string; name: string; tell: boolean }[];
 }
 
 export interface ThreadItem {

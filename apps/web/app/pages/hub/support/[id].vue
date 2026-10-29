@@ -6,7 +6,7 @@
 -->
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { GuideContext, SupportRow } from "~/types/hub";
+import type { GuideContext, SupportList, SupportRow } from "~/types/hub";
 
 const route = useRoute();
 const id = computed(() => String(route.params.id));
@@ -22,10 +22,10 @@ const { data: ctx, error } = useQuery({
 });
 const { data: rows } = useQuery({
   queryKey: ["support"],
-  queryFn: async () => (await api<{ requests: SupportRow[] }>("/v1/support"))?.requests ?? [],
+  queryFn: async () => (await api<SupportList>("/v1/support")) ?? { requests: [], teams: [] },
   enabled: signedIn,
 });
-const row = computed(() => rows.value?.find((r) => r.id === id.value) ?? null);
+const row = computed(() => rows.value?.requests.find((r) => r.id === id.value) ?? null);
 const g = computed(() => ctx.value?.guide ?? null);
 const customer = computed(() => ctx.value?.customer ?? null);
 const name = computed(() => customer.value?.name || customer.value?.email || "the customer");
@@ -95,7 +95,7 @@ const refresh = () => {
       </header>
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <HubConversation :guide-id="id" :name="name" :finished="finished" :state="row?.state" @sent="refresh" />
+        <HubConversation :guide-id="id" :name="name" :finished="finished" :state="row?.state" :tell="row?.tell" @sent="refresh" />
 
         <aside class="flex flex-col gap-4 rounded-3 bg-raised px-4 py-3 shadow-edge" aria-labelledby="task-h">
           <h2 id="task-h" class="m-0 font-ui text-base font-medium">The task</h2>

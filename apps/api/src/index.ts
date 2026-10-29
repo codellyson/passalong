@@ -1224,7 +1224,8 @@ app.use("/v1/tasks/:id/*", async (c, next) => {
 
 /**
  * When `id` is Done and was made from another guide that is not, tell that parent: a note on its
- * thread, and its author and holders in the feed. A support request is told to tell its customer.
+ * thread, and its author and holders in the feed. A support request is told to tell its customer
+ * when its team asked to be (`team.tell_customer`, migration 0059).
  * A hand-in write-up (`report_of`) is a child of its task but is the task's own record, not work it
  * waited on, so it wakes nothing. Never throws: it must not fail the write that finished the child.
  */
@@ -1232,8 +1233,10 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
   try {
     if (!id || !account) return;
     const child = await env.DB.prepare(
-      `SELECT g.id, g.parent_id, g.title, g.outcome, p.account_id AS author, p.team_id, p.customer
+      `SELECT g.id, g.parent_id, g.title, g.outcome, p.account_id AS author, p.team_id, p.customer,
+              COALESCE(t.tell_customer, 0) AS tell
          FROM guide g JOIN guide p ON p.id = g.parent_id
+         LEFT JOIN team t ON t.id = p.team_id
         WHERE g.id = ? AND g.status = 'consumed' AND COALESCE(g.report_of, '') = ''
           AND p.status <> 'consumed'`,
     )
@@ -1246,6 +1249,7 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
         author: string;
         team_id: string;
         customer: string;
+        tell: number;
       }>();
     if (!child) return;
     if (!(await claims.wakeParent(env.DB, child, { account, at: now() }))) return;
@@ -1255,7 +1259,7 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
       .bind(child.parent_id)
       .all<{ account_id: string }>();
     const done = child.outcome === "archived" ? "was closed without being done" : "is done";
-    const note = `"${child.title}" ${done}${child.customer && child.outcome !== "archived" ? " — tell the customer" : ""}`;
+    const note = `"${child.title}" ${done}${child.customer && child.tell && child.outcome !== "archived" ? " — tell the customer" : ""}`;
     for (const to of new Set([child.author, ...holders.map((h) => h.account_id)]))
       await notify(env, {
         to,
@@ -6239,8 +6243,9 @@ app.get("/v1/support", async (c) => {
             (SELECT at FROM task_event WHERE guide_id = g.id AND kind IN ('customer', 'answered')
               ORDER BY id DESC LIMIT 1) AS last_at,
             (SELECT COUNT(*) FROM guide k WHERE k.parent_id = g.id
-              AND k.status NOT IN ('consumed', 'draft')) AS open_work
-       FROM guide g
+              AND k.status NOT IN ('consumed', 'draft')) AS open_work,
+            COALESCE(t.tell_customer, 0) AS tell
+       FROM guide g LEFT JOIN team t ON t.id = g.team_id
       WHERE g.customer <> ''
         AND (g.account_id = ?1 OR g.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1))
       ORDER BY g.updated DESC
@@ -6261,8 +6266,18 @@ app.get("/v1/support", async (c) => {
       last_body: string | null;
       last_at: string | null;
       open_work: number;
+      tell: number;
     }>();
+  // The teams whose owner may turn the reminder on or off, beside the requests it applies to.
+  const { results: teams } = await c.env.DB.prepare(
+    `SELECT t.slug, t.name, t.tell_customer AS tell FROM team t
+       JOIN membership m ON m.team_id = t.id AND m.account_id = ? AND m.role = 'owner'
+      ORDER BY t.name`,
+  )
+    .bind(me)
+    .all<{ slug: string; name: string; tell: number }>();
   return c.json({
+    teams: teams.map((t) => ({ slug: t.slug, name: t.name, tell: Boolean(t.tell) })),
     requests: results.map((r) => {
       const lastBy =
         r.last_kind === "customer" ? "customer" : r.last_kind === "answered" ? "team" : "";
@@ -6288,9 +6303,28 @@ app.get("/v1/support", async (c) => {
           at: r.last_at || r.created,
         },
         updated: r.updated,
+        // Whether this request's team asked to be reminded to tell the customer a fix is done.
+        tell: Boolean(r.tell),
       };
     }),
   });
+});
+
+/**
+ * Turn a team's "tell the customer" reminder on or off (docs/LOOP.md §1a: opt-in per team). Set
+ * from the Support page, not Settings, by the team's owner.
+ */
+app.put("/v1/teams/:slug/tell-customer", async (c) => {
+  const team = await teamBySlug(c, c.req.param("slug"));
+  if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
+  if (team.role !== "owner")
+    return err(c, 403, "Only the team's owner can change this. Ask them to do it.");
+  const body = await c.req.json<{ on?: unknown }>().catch(() => ({}) as { on?: unknown });
+  if (typeof body.on !== "boolean") return err(c, 400, "Say on: true or on: false.");
+  await c.env.DB.prepare("UPDATE team SET tell_customer = ? WHERE id = ?")
+    .bind(body.on ? 1 : 0, team.id)
+    .run();
+  return c.json({ ok: true, tell: body.on });
 });
 
 /**

@@ -176,7 +176,8 @@ const tabs = [
   { to: "/hub/work", label: "Work" },
   { to: "/hub/support", label: "Support" },
   { to: "/hub/folders", label: "Folders" },
-  { to: "/hub/log", label: "Activities" },
+  // Six tabs share a phone's width, so the bottom bar says it in fewer letters.
+  { to: "/hub/log", label: "Activities", short: "Activity" },
   { to: "/hub/settings", label: "Settings" },
 ];
 
@@ -264,7 +265,7 @@ const active = (to: string) =>
         class="size-1 rounded-pill"
         :class="active(t.to) ? 'bg-[var(--coral)]' : 'bg-transparent'"
       />
-      <span class="max-w-full truncate">{{ t.label }}</span>
+      <span class="max-w-full truncate">{{ t.short ?? t.label }}</span>
     </NuxtLink>
   </nav>
 

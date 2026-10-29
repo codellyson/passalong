@@ -371,6 +371,11 @@ change. Its README says how.
   (`reopenForCustomer()`), even when it was archived: the one exception to an archived guide
   coming back to Draft, because a Draft reaches nobody and a waiting customer must not be left
   behind. Their first message is a `customer` thread line too, so the panel starts where they did.
+  A customer left `CUSTOMER_WAIT_MS` (four hours) with no answer and nobody holding the request is
+  `customer_waiting` to the author and the team's owners, pushed and mailed, once per wait
+  (`customersWaiting()`, hourly sweep). Being reminded to tell the customer a fix is done is opt-in
+  per team (`team.tell_customer`, migration 0059), set by an owner on the Support page and never in
+  Settings; off, a finished fix wakes the request without those words, line or automatic draft.
 - **The reader is provider-agnostic, and only fills fields (reader.ts, docs/LOOP.md §1a).** It turns a
   customer's message into a task or a bug, with title, summary and sections, and routes it to one of
   the team's groups. It speaks the OpenAI-compatible Chat Completions API, so any provider serving it

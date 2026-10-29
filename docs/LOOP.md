@@ -33,13 +33,18 @@ what is lost is customers. Decided:
 - **Evidence a customer sends is never dropped.** Screenshots and attachments on an email reach the
   request. *Built 2026-10-28:* up to five files per message are kept on the request — pictures drawn
   in the conversation, other files offered as downloads — and a file that cannot be kept is named.
-- "Tell the customer" when a fix lands is **opt-in** per team, not always on.
+- "Tell the customer" when a fix lands is **opt-in** per team, not always on. *Built 2026-10-29:*
+  `team.tell_customer` (migration 0059), off by default, set by a team owner on the Support page
+  (`PUT /v1/teams/:slug/tell-customer`). It gates the "tell the customer" words on `child_done`, the
+  "is done. Tell them." line in the conversation, and the draft that starts by itself on a finished fix.
 - The reply screen is **redesigned**, not patched. A "who is waiting on us" view, the agent drafting
   replies a person sends, and the team lead ping are agreed as planned. *Built 2026-10-28:* the agent
   drafts the reply (`POST /v1/guides/:id/customer/draft`, `askDraft()` in reader.ts) from the
   conversation, the task's state and what finished work reported; it appears in the reply box by
   itself when the customer is waiting on us, labelled until the person changes it, and only a person
-  sends it.
+  sends it. *Built 2026-10-29:* the team lead ping — a customer waiting four hours (`CUSTOMER_WAIT_MS`)
+  with no answer and nobody holding the request sends `customer_waiting` to its author and the team's
+  owners, pushed and mailed, once per wait (`customersWaiting()` in claims.ts, the hourly sweep).
 - Open: where customers write besides email (WhatsApp, chat, social, phone).
 
 **Problem 2 — people create Passalongs in ChatGPT and Claude, not on Passalong.** Decided:

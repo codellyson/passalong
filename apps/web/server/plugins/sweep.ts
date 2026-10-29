@@ -12,6 +12,8 @@
 import { alertPeople } from "#api/alerts";
 import { sweepAttachments } from "#api/attachments";
 import {
+  CUSTOMER_WAIT_MS,
+  customersWaiting,
   DRAFT_NUDGE_MS,
   REQUEUE_AFTER_MS,
   requeueStalled,
@@ -195,6 +197,35 @@ export default defineNitroPlugin((nitro) => {
       if (left.length) console.log(`told about ${left.length} guide(s) nobody took`);
     } catch (err) {
       console.error("untaken notice failed", err);
+    }
+
+    // Customers left about four hours with no answer and nobody on their request: the author and
+    // the team's owners hear it, by push and mail, once per wait (docs/LOOP.md §4).
+    try {
+      const now = Date.now();
+      const waiting = await customersWaiting(
+        env.DB as D1Database,
+        new Date(now - CUSTOMER_WAIT_MS).toISOString(),
+        new Date(now - CUSTOMER_WAIT_MS - STALL_WINDOW_MS).toISOString(),
+      );
+      for (const g of waiting) {
+        const { results: owners } = g.team_id
+          ? await (env.DB as D1Database)
+              .prepare("SELECT account_id FROM membership WHERE team_id = ? AND role = 'owner'")
+              .bind(g.team_id)
+              .all<{ account_id: string }>()
+          : { results: [] };
+        await alertPeople(
+          env as Parameters<typeof alertPeople>[0],
+          [g.account_id, ...owners.map((o) => o.account_id)],
+          { kind: "customer_waiting", guide_id: g.id, actor_id: "", team_id: g.team_id },
+          "A customer is waiting",
+          g.title,
+        );
+      }
+      if (waiting.length) console.log(`told about ${waiting.length} customer(s) left waiting`);
+    } catch (err) {
+      console.error("customer wait notice failed", err);
     }
   });
 });

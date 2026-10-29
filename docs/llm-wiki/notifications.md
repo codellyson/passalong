@@ -9,7 +9,9 @@ the action that caused it — and drops anything addressed to whoever caused it.
 - **One sentence.** `line()` in `notify.ts` is the only place wording lives; CLI, MCP, hub, toasts and
   push all print it.
 - **Actorless events.** `stalled` (a lease ran out), `requeued` (a quiet hold went back in the queue), `stuck` (it went back a second time; mailed),
-  `untaken` (sent and nobody took it in three days; mailed to the author and team owners), `shelved`
+  `untaken` (sent and nobody took it in three days; mailed to the author and team owners),
+  `customer_waiting` (a customer four hours unanswered with nobody on it; pushed and mailed to the
+  author and team owners, once per wait), `shelved`
   (old rows only: work nobody took used to go back to Draft),
   `still_draft` (a task untouched in Draft for a day, once per quiet day, feed only),
   `blocked` (an agent is stuck on you), and your own agent's `task_finished` are sent without an actor,
@@ -87,8 +89,9 @@ customer's words are quoted by code, its reason is a note on the thread, and whe
 the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the
 hub's box, `/hub/new` (`POST /v1/compose`), for writing a task, bug or handover in your own words. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
 guide made from a request (a bug sent on to development) reaches Done, the request wakes: a
-`child_done` notification saying "tell the customer", and the request's Support page names what finished
-since the customer was last answered.
+`child_done` notification, and — when the team turned the reminder on (`team.tell_customer`, migration
+0059, set by an owner on the Support page; off by default) — it says "tell the customer" and the
+request's Support page names what finished since the customer was last answered.
 
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings
 says Email in is not set up.

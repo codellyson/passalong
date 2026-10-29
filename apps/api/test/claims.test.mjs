@@ -16,10 +16,12 @@ import {
   approve,
   ask,
   blockOn,
+  CUSTOMER_WAIT_MS,
   checksProblem,
   closeGuide,
   complete,
   customerEvent,
+  customersWaiting,
   DAY_MS,
   DRAFT_NUDGE_MS,
   deliver,
@@ -2677,4 +2679,32 @@ test("the runner is handed only tasks a person marked safe to run alone", async 
   assert.equal(await next(db, runner, { at: T0, alone: true }), null, "nothing else is safe");
   const person = { account: "me", agent: "agent-person", repo: "o/r" };
   assert.equal((await next(db, person, { at: T0 }))?.task.id, "plain", "a person still gets any");
+});
+
+test("a customer left four hours with no answer is found once; answered or held is not", async () => {
+  const db = d1();
+  const guide = seed(db);
+  for (const id of ["wait", "done", "held", "plain"]) guide(id);
+  db.raw.prepare("UPDATE guide SET customer = 'c@x.test' WHERE id <> 'plain'").run();
+  for (const id of ["wait", "done", "held"])
+    await customerEvent(db, id, "customer", { account: "me", body: "Help", at: T0 });
+  await customerEvent(db, "done", "answered", { account: "me", body: "On it", at: later(1000) });
+  await take(db, "held", A, { at: later(1000) });
+  const at = (ms) => {
+    const now = Date.parse(T0) + ms;
+    return [
+      new Date(now - CUSTOMER_WAIT_MS).toISOString(),
+      new Date(now - CUSTOMER_WAIT_MS - 60 * 60 * 1000).toISOString(),
+    ];
+  };
+  const ids = async (ms) => (await customersWaiting(db, ...at(ms))).map((g) => g.id);
+  assert.deepEqual(await ids(CUSTOMER_WAIT_MS - 1000), [], "not before four hours");
+  assert.deepEqual(await ids(CUSTOMER_WAIT_MS + 1000), ["wait"]);
+  assert.deepEqual(await ids(CUSTOMER_WAIT_MS + 2 * 60 * 60 * 1000), [], "once per wait");
+  await customerEvent(db, "wait", "customer", {
+    account: "me",
+    body: "Hello?",
+    at: later(5 * 3600e3),
+  });
+  assert.deepEqual(await ids(9 * 3600e3 + 1000), ["wait"], "writing again starts a new wait");
 });

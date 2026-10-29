@@ -4,21 +4,38 @@
   the request's own page, where the conversation happens and the task it became is shown.
 -->
 <script setup lang="ts">
-import { useQuery } from "@tanstack/vue-query";
-import type { SupportRow } from "~/types/hub";
+import { useQuery, useQueryClient } from "@tanstack/vue-query";
+import type { SupportList, SupportRow } from "~/types/hub";
 
 usePage({
   title: "Support · Passalong",
   description: "Every customer request and where it stands.",
   noindex: true,
 });
-const { api, signedIn } = useHub();
+const { api, json, signedIn } = useHub();
 const { data, isPending, error } = useQuery({
   queryKey: ["support"],
-  queryFn: async () => (await api<{ requests: SupportRow[] }>("/v1/support"))?.requests ?? [],
+  queryFn: async () => (await api<SupportList>("/v1/support")) ?? { requests: [], teams: [] },
   enabled: signedIn,
 });
-const rows = computed(() => data.value ?? []);
+const rows = computed(() => data.value?.requests ?? []);
+
+/** An owner's switch: remind the team to tell a customer when a fix made from their request is done. */
+const queryClient = useQueryClient();
+const setting = ref("");
+const tellProblem = ref("");
+async function setTell(slug: string, on: boolean) {
+  setting.value = slug;
+  tellProblem.value = "";
+  try {
+    await api(`/v1/teams/${encodeURIComponent(slug)}/tell-customer`, json("PUT", { on }));
+    await queryClient.invalidateQueries({ queryKey: ["support"] });
+  } catch (e) {
+    tellProblem.value = (e as Error).message;
+  } finally {
+    setting.value = "";
+  }
+}
 
 const STATES: { id: SupportRow["state"]; label: string }[] = [
   { id: "new", label: "New" },
@@ -131,6 +148,26 @@ const cell = "border-0 border-b border-b-line px-3 py-3 align-top font-ui text-s
           </tbody>
         </table>
       </div>
+      <section
+        v-if="data?.teams.length"
+        class="flex flex-col gap-2 border-0 border-t border-t-line pt-4"
+        aria-label="Reminders"
+      >
+        <label v-for="t in data.teams" :key="t.slug" class="flex items-start gap-2 font-ui text-sm">
+          <input
+            type="checkbox"
+            class="mt-1"
+            :checked="t.tell"
+            :disabled="setting === t.slug"
+            @change="setTell(t.slug, ($event.target as HTMLInputElement).checked)"
+          />
+          <span>
+            Remind {{ data.teams.length > 1 ? t.name : "us" }} to tell the customer when a fix for their request is done
+            <span class="block text-xs text-muted">The request's page shows the reminder and the agent drafts the message. You still press Send.</span>
+          </span>
+        </label>
+        <p v-if="tellProblem" class="m-0 font-ui text-sm text-danger" role="alert">{{ tellProblem }}</p>
+      </section>
     </div>
   </HubShell>
 </template>

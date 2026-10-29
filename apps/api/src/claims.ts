@@ -2596,6 +2596,38 @@ export async function requeueStalled(
 }
 
 /**
+ * Customers left waiting (docs/LOOP.md §4: the team lead is pinged after about four untouched
+ * hours). A request is waiting untouched when the customer's latest message has had no answer since
+ * and nobody holds the request. Returned in the one run its wait crosses CUSTOMER_WAIT_MS, as
+ * `stalled` is, so the team lead hears it once per wait, and again only if the customer writes again
+ * and is left again. A request from before customer lines were recorded counts from when it arrived.
+ */
+export const CUSTOMER_WAIT_MS = 4 * 60 * 60 * 1000;
+
+export async function customersWaiting(
+  db: D1Database,
+  before: string,
+  since: string,
+): Promise<{ id: string; title: string; account_id: string; team_id: string }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, title, account_id, team_id FROM (
+         SELECT g.id, g.title, g.account_id, g.team_id,
+                COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'customer'), g.created) AS wrote
+           FROM guide g
+          WHERE g.customer <> '' AND g.status = 'published'
+            AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
+       ) w
+       WHERE w.wrote <= ?1 AND w.wrote > ?2
+         AND NOT EXISTS (SELECT 1 FROM task_event a WHERE a.guide_id = w.id AND a.kind = 'answered' AND a.at >= w.wrote)
+       LIMIT 200`,
+    )
+    .bind(before, since)
+    .all<{ id: string; title: string; account_id: string; team_id: string }>();
+  return results;
+}
+
+/**
  * Guides sent to somebody that nothing has happened to, for something on a clock to escalate.
  *
  * "Nothing" is meant strictly: nobody pulled it, nobody said they were taking it, nobody holds it,

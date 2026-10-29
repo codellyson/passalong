@@ -2,7 +2,8 @@
   The conversation with a customer, and the one way to answer them (docs/LOOP.md §1a): their words
   on the left, ours on the right, the reply box under it. A person presses Send — nothing reaches a
   customer before somebody has read it. Above the box, any fix made from the request that finished
-  since the customer was last answered, because telling them is the one thing left.
+  since the customer was last answered, because telling them is the one thing left — when the team
+  asked for that reminder (opt-in per team, on the Support page).
 -->
 <script setup lang="ts">
 import type { ThreadItem } from "~/types/hub";
@@ -16,6 +17,8 @@ const props = defineProps<{
   finished?: { id: string; title: string; at: string }[];
   /** Where the request stands; a draft is started by itself when the next word is ours. */
   state?: string;
+  /** Whether the team asked to be reminded to tell the customer when a fix is done. */
+  tell?: boolean;
 }>();
 const emit = defineEmits<{ sent: [] }>();
 const { api, json, token } = useHub();
@@ -63,7 +66,7 @@ const ready = computed(() => {
   const answered = said.value
     .filter((m) => m.kind === "answered")
     .reduce((last, m) => (m.at > last ? m.at : last), "");
-  return (props.finished ?? []).filter((f) => f.at > answered);
+  return props.tell ? (props.finished ?? []).filter((f) => f.at > answered) : [];
 });
 
 /** The reply as markdown from the editor; a pasted picture travels in it as a link. */
