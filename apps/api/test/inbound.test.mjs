@@ -429,12 +429,17 @@ test("a customer's conversation: their Message-IDs kept, named back in our mail,
   assert.equal(withMid("<a@x>", "<b@y>"), "<a@x> <b@y>", "newest last");
   assert.equal(withMid("<a@x> <b@y>", "<a@x>"), "<b@y> <a@x>", "no repeats");
   assert.equal(withMid("<a@x>", ""), "<a@x>", "a message with none adds none");
-  const long = Array.from({ length: 60 }, (_, i) => `<${"m".repeat(40)}${i}@example.com>`).join(" ");
+  const long = Array.from({ length: 60 }, (_, i) => `<${"m".repeat(40)}${i}@example.com>`).join(
+    " ",
+  );
   const kept = withMid(long, "<new@example.com>");
   assert.ok(kept.length <= 2000, "within what a References header may carry");
   assert.ok(kept.endsWith("<new@example.com>"), "the oldest go first");
   assert.deepEqual(threadHeaders(""), {});
-  assert.deepEqual(threadHeaders("<a@x> <b@y>"), { "In-Reply-To": "<b@y>", References: "<a@x> <b@y>" });
+  assert.deepEqual(threadHeaders("<a@x> <b@y>"), {
+    "In-Reply-To": "<b@y>",
+    References: "<a@x> <b@y>",
+  });
 
   const raw = new TextEncoder().encode(
     [
