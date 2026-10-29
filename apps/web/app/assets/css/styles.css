@@ -257,7 +257,7 @@
   --project-blue: light-dark(#3e6fa6, #7aa4d8);
   --project-violet: light-dark(#7a5bb0, #a68ad8);
   --project-teal: light-dark(#2f8582, #5fb3ae);
-  --project-slate: light-dark(#56687c, #9fb0c2);
+  --project-stone: light-dark(#7b6e5f, #b8aa98);
 }
 /* On the rail the marks sit on ink in both themes, so they take their light-on-dark half. */
 .rail {
@@ -266,7 +266,7 @@
   --project-blue: #7aa4d8;
   --project-violet: #a68ad8;
   --project-teal: #5fb3ae;
-  --project-slate: #9fb0c2;
+  --project-stone: #b8aa98;
 }
 .project-mark {
   background: var(--muted);
@@ -286,8 +286,8 @@
 .project-mark[data-tone="teal"] {
   background: var(--project-teal);
 }
-.project-mark[data-tone="slate"] {
-  background: var(--project-slate);
+.project-mark[data-tone="stone"] {
+  background: var(--project-stone);
 }
 
 *,

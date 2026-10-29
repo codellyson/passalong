@@ -15,7 +15,7 @@ const waiting = computed(() => needsQ.data.value?.rows.length ?? 0);
 const projects = computed(() => projectsFrom(projectsQ.data.value?.folders ?? []));
 
 const item =
-  "flex min-h-8 items-center gap-3 rounded-1 px-3 py-1.5 font-ui text-sm leading-5 no-underline transition-colors";
+  "flex min-h-8 items-center gap-3 rounded-1 px-3 py-1 font-ui text-sm leading-5 no-underline transition-colors";
 const tone = (on: boolean) =>
   on
     ? "bg-rail-current font-medium text-on-rail"
@@ -61,7 +61,7 @@ const isProject = (id: string) => route.path === `/hub/folders/${id}`;
           Projects
         </NuxtLink>
         <ul v-if="projects.length" class="m-0 flex min-h-0 list-none flex-col gap-0 overflow-y-auto p-0 [scrollbar-width:thin]">
-          <li v-for="p in projects" :key="p.id">
+          <li v-for="p in projects" :key="p.id" class="m-0">
             <NuxtLink
               :to="`/hub/folders/${p.id}`"
               :class="[item, tone(isProject(p.id))]"
@@ -80,13 +80,13 @@ const isProject = (id: string) => route.path === `/hub/folders/${id}`;
       </section>
 
       <ul class="m-0 flex list-none flex-col gap-0 p-0">
-        <li>
+        <li class="m-0">
           <NuxtLink to="/hub/work" :class="[item, tone(at.work.value)]" :aria-current="at.work.value ? 'page' : undefined">
             <AppIcon name="board" />
             <span class="grow">Work</span>
           </NuxtLink>
         </li>
-        <li>
+        <li class="m-0">
           <NuxtLink to="/hub/support" :class="[item, tone(at.support.value)]" :aria-current="at.support.value ? 'page' : undefined">
             <AppIcon name="support" />
             <span class="grow">Support</span>

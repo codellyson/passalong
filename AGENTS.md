@@ -442,7 +442,7 @@ Its input is TipTap
   `--coral` is 2.6:1 on the canvas, so it stays a mark; `--accent` is the readable 5:1 for the
   word "Changed". The rail is solid ink (`--rail`) in both themes. Each project owns one line
   colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the folder's own colour,
-  a folder coloured coral drawn slate (nothing near coral), and one derived from its id when it has
+  a folder coloured coral drawn stone (nothing near coral or blue), and one derived from its id when it has
   none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.
 - **A surface's edge is a one-pixel rule.** In the hub `--edge-shadow` is a 1px ring of
   `--line-strong` and a raised surface keeps the deeper cream (`--surface-raised`) against the pale

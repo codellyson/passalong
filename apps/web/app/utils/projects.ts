@@ -3,14 +3,14 @@
 //
 // A project is a top-level folder for now (docs/LOOP.md §0). Each owns one line colour, shown as a
 // mark wherever the project appears. Coral is not one of them: in the hub coral means only "changed
-// since you last looked", so a folder someone coloured coral is drawn slate.
+// since you last looked", so a folder someone coloured coral is drawn stone.
 
-export const TONES = ["amber", "green", "blue", "violet", "teal", "slate"] as const;
+export const TONES = ["amber", "green", "blue", "violet", "teal", "stone"] as const;
 export type Tone = (typeof TONES)[number];
 
 /** The folder's own colour when it has one; otherwise one picked from its id, the same every time. */
 export function toneOf(p: { id: string; color?: string | null }): Tone {
-  if (p.color === "coral") return "slate";
+  if (p.color === "coral") return "stone";
   if ((TONES as readonly string[]).includes(p.color || "")) return p.color as Tone;
   let h = 0;
   for (const ch of p.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
