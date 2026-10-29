@@ -167,24 +167,11 @@ async function attach(file: File | undefined) {
   }
 }
 
-/**
- * Save a file from the thread. Fetched with the credential and handed to the browser as a download,
- * rather than linked to: a link carries no bearer token, so a hub signed in with a pasted token could
- * not follow it, and the file is private.
- */
+/** Save a file from the thread (utils/download.ts says why it is fetched, not linked). */
 async function download(f: { name: string; url: string }) {
   trouble.value = "";
   try {
-    const res = await fetch(f.url, {
-      headers: token.value ? { authorization: `Bearer ${token.value}` } : {},
-    });
-    if (!res.ok) throw new Error("That file is no longer there.");
-    const href = URL.createObjectURL(await res.blob());
-    const a = document.createElement("a");
-    a.href = href;
-    a.download = f.name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(href), 1000);
+    await downloadFile(f, token.value);
   } catch (e) {
     trouble.value = e instanceof Error ? e.message : "That file didn't download. Try again.";
   }

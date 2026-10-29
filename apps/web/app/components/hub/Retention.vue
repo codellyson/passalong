@@ -44,10 +44,8 @@ async function flip(next: boolean) {
       <span>
         <b>Clean up automatically</b>
         <span class="mt-1 block text-muted">
-          Screenshots that proved a finished guide are deleted 5 days after it is closed, and a
-          guide you sent that nobody has taken goes back to Draft after 14 days, for you to mark
-          Ready again. Deleting a screenshot cannot be undone. Turn this off to keep both as they
-          are.
+          Screenshots that proved a finished guide are deleted 5 days after it is closed. This
+          cannot be undone. Turn this off to keep them.
         </span>
       </span>
     </label>

@@ -70,15 +70,25 @@ const said = (lead: string, body: string) => (body ? `${lead}: ${body}` : lead);
 
 export function messageOf(i: ThreadItem): Message {
   const { by } = i;
-  const who = by.agent
-    ? "Agent"
-    : by.you
-      ? "You"
-      : by.name.trim() || (by.handle ? `@${by.handle}` : "Someone");
+  const who =
+    i.kind === "customer"
+      ? "Customer"
+      : by.agent
+        ? "Agent"
+        : by.you
+          ? "You"
+          : by.name.trim() || (by.handle ? `@${by.handle}` : "Someone");
   let text = i.body;
   let quiet = false;
   let tone: Message["tone"] = "neutral";
   switch (i.kind) {
+    case "customer":
+      // Stored under the guide's author because the customer has no account; it is their words,
+      // and the files they sent are drawn and offered the way anyone's are.
+      break;
+    case "answered":
+      text = said("To the customer", i.body);
+      break;
     case "taken":
       text = "Taking this.";
       quiet = true;
@@ -93,7 +103,11 @@ export function messageOf(i: ThreadItem): Message {
       tone = "bad";
       break;
     case "released":
-      text = "Took this back.";
+      // REQUEUED in apps/api/src/claims.ts: the clock let go of a quiet hold, nobody took it back.
+      text =
+        i.body === "went quiet; back in the queue"
+          ? "Went quiet, so this is back in the queue for anyone to take."
+          : "Took this back.";
       quiet = true;
       break;
     case "approved":
@@ -142,7 +156,7 @@ export function messageOf(i: ThreadItem): Message {
     at: i.at,
     who,
     where: by.agent ? by.host : "",
-    mine: by.you && !by.agent,
+    mine: i.kind !== "customer" && by.you && !by.agent,
     text,
     files,
     pictures: SHOT.test(text),

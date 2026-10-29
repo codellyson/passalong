@@ -30,7 +30,10 @@ and the Stop hook names them all once. A quiet hold is never let go behind a per
 stalled on the board for them to resume or stop.
 
 - **Lease.** 30 minutes from the last call. A lapsed lease is **stalled** — derived on read, still
-  locked — and the cron tells the author once.
+  locked — and the cron tells the author once. Two hours later the cron puts it back in the queue
+  for anyone to take (`requeueStalled`), unless its agent asked a question nobody has answered; the
+  second time for one guide, the author is mailed that it is stuck. Before 2026-10-28 a stalled
+  hold stayed locked until a person released it, which is how work was left behind (docs/LOOP.md).
 - **Fence.** Each claim carries a generation (`claim_fence`, migration 0029). A write from a claim
   since released and re-taken is refused, so a stale session cannot overwrite the new one.
 - **Blocked.** A progress note starting `BLOCKED:` means the agent is waiting on the author. The hub
@@ -60,7 +63,11 @@ Work is not done because whoever did it says so.
   answered, and whoever held it is told it is done with (migration 0055 cleared the 61 left stuck).
 - **Done says how it got there** (`outcome`, migration 0054): **Finished** with proof, **Approved**
   from before finishing was final, **Archived** when its author or an admin shelved it. Done cards say
-  which. A Ready guide nobody took in 14 days goes back to Draft rather than to Done.
+  which. A Ready guide nobody took stays Ready; after three days its author and the team's owners are
+  told every day until someone acts (`untaken`; mailed the first time). It used to go back to Draft after 14 days, where it reached nobody.
+- **A finished child wakes its parent** (2026-10-28): when a guide made from another reaches Done,
+  the parent gets a note on its thread — handed to whoever holds it or takes it next — and its author
+  and holders are told (`child_done`). It wakes the parent and never closes it (docs/LOOP.md step 3).
 - **Not for me** is `pass` on work you don't hold, any kind: whoever sent it is told, with the
   reason, and the hub offers it beside I'll do this.
 - **A task's write-up is not work.** The transfer an agent publishes for its hand-in is stored as

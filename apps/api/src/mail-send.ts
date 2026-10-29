@@ -19,6 +19,8 @@ export interface SendEmail {
     subject: string;
     text: string;
     html?: string;
+    replyTo?: string;
+    headers?: Record<string, string>;
   }): Promise<unknown>;
 }
 
@@ -61,15 +63,22 @@ export async function sendMail(
   subject: string,
   lines: string[],
   html?: string,
+  /**
+   * For mail to a customer (docs/LOOP.md): the name it is from, where their reply goes, and the
+   * header that stops an auto-responder answering it. Everything else here is mail to our own users.
+   */
+  opts: { fromName?: string; replyTo?: string; headers?: Record<string, string> } = {},
 ): Promise<boolean> {
   if (!env.EMAIL || !to) return false;
   const address = env.EMAIL_FROM || DEFAULT_FROM;
-  const named = fromLine(address, env.EMAIL_FROM_NAME ?? DEFAULT_FROM_NAME);
+  const named = fromLine(address, opts.fromName ?? env.EMAIL_FROM_NAME ?? DEFAULT_FROM_NAME);
   const message = {
     to,
     subject,
     text: lines.join("\n"),
     ...(html ? { html } : {}),
+    ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
+    ...(opts.headers ? { headers: opts.headers } : {}),
   };
   try {
     await env.EMAIL.send({ from: named, ...message });

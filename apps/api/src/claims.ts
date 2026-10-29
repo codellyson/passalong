@@ -488,10 +488,11 @@ const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN guide x ON x.id = b.blo
 export async function next(
   db: D1Database,
   who: Agent,
-  { at, any = false }: { at: string; any?: boolean },
+  { at, any = false, alone = false }: { at: string; any?: boolean; alone?: boolean },
 ): Promise<{ task: TaskRow; claim: ClaimRow; resumed: boolean } | null> {
   const repo = repoKey(who.repo);
-  const where = any ? "" : "AND g.target = ?2";
+  // `alone`: the runner, with nobody watching, takes only what a person marked safe to run alone.
+  const where = `${any ? "" : "AND g.target = ?2"}${alone ? " AND g.alone = 1" : ""}`;
   const { results } = await db
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created
@@ -573,7 +574,95 @@ export type EventKind =
   | "closed"
   | "asked"
   | "replied"
-  | "noted";
+  | "noted"
+  // A support request's conversation with its customer (docs/LOOP.md): what the customer wrote,
+  // and what a person sent them. Recorded under the guide's author for `customer`, because the
+  // column must name an account and the customer has none; the hub says it was the customer.
+  | "customer"
+  | "answered";
+
+/**
+ * Tell a parent that a guide made from it reached Done (docs/LOOP.md step 3): a note on its thread,
+ * which `deliver()` hands to whoever holds it and to whoever takes it next. Once per child — the
+ * child's id is in the line and a second call finds it — because several routes can end the same
+ * guide in one act (mark done, then complete). Returns whether it wrote. Never throws.
+ */
+export async function wakeParent(
+  db: D1Database,
+  child: { id: string; parent_id: string; title: string; outcome: string },
+  { account, at }: { account: string; at: string },
+): Promise<boolean> {
+  try {
+    const mark = `(${child.id})`;
+    const seen = await db
+      .prepare(
+        "SELECT 1 FROM task_event WHERE guide_id = ? AND kind = 'noted' AND instr(body, ?) > 0",
+      )
+      .bind(child.parent_id, mark)
+      .first();
+    if (seen) return false;
+    const how = child.outcome === "archived" ? "was closed without being done" : "is done";
+    await event(db, child.parent_id, "noted", {
+      account,
+      body: `"${child.title}" ${mark}, made from this, ${how}.`,
+      at,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A customer wrote again on a support request that is Done, so it is not (docs/LOOP.md): back to
+ * Ready, however it reached Done. This is the one way an archived guide goes straight to Ready
+ * rather than to Draft (`unarchiveProblem`): a Draft reaches nobody, and a customer waiting on an
+ * answer is exactly the work that must not be left behind. Only for a guide with a customer — the
+ * caller has matched the tracking number and the sender. Returns whether it moved.
+ */
+export async function reopenForCustomer(
+  db: D1Database,
+  id: string,
+  { account, at }: { account: string; at: string },
+): Promise<boolean> {
+  const g = await db
+    .prepare("SELECT markdown FROM guide WHERE id = ? AND status = 'consumed' AND customer <> ''")
+    .bind(id)
+    .first<{ markdown: string }>();
+  if (!g) return false;
+  const reason = "The customer wrote again.";
+  await db
+    .prepare(
+      "UPDATE guide SET status = 'published', outcome = '', markdown = ?, updated = ? WHERE id = ?",
+    )
+    .bind(
+      withStatus(withNote(g.markdown, `${at.slice(0, 10)} reopened: ${reason}`), "published"),
+      at,
+      id,
+    )
+    .run();
+  await event(db, id, "sent_back", { account, body: reason, at });
+  return true;
+}
+
+/** A note on a guide's thread, handed to its holder and next taker. Never throws, as `event`. */
+export async function noteOn(
+  db: D1Database,
+  id: string,
+  { account, body, at }: { account: string; body: string; at: string },
+): Promise<void> {
+  await event(db, id, "noted", { account, body, at });
+}
+
+/** One line of a support request's conversation with its customer. Never throws, as `event`. */
+export async function customerEvent(
+  db: D1Database,
+  id: string,
+  kind: "customer" | "answered",
+  { account, body, at }: { account: string; body: string; at: string },
+): Promise<void> {
+  await event(db, id, kind, { account, body, at });
+}
 
 /**
  * Add one line to a guide's thread. Written after the transition it describes has succeeded, never
@@ -1078,16 +1167,17 @@ export async function deliver(
   }
   const { results } = await db
     .prepare(
-      `SELECT e.id, e.at, e.body, e.account_id, COALESCE(a.name, '') AS name,
+      `SELECT e.id, e.kind, e.at, e.body, e.account_id, COALESCE(a.name, '') AS name,
               COALESCE(a.handle, '') AS handle
          FROM task_event e LEFT JOIN account a ON a.id = e.account_id
-        WHERE e.guide_id = ? AND e.kind IN ('replied', 'noted') AND e.id > ?
-          AND (e.kind = 'noted' OR e.at >= ?)
+        WHERE e.guide_id = ? AND e.kind IN ('replied', 'noted', 'customer', 'answered') AND e.id > ?
+          AND (e.kind <> 'replied' OR e.at >= ?)
         ORDER BY e.id LIMIT 50`,
     )
     .bind(id, from, c.claimed_at)
     .all<{
       id: number;
+      kind: EventKind;
       at: string;
       body: string;
       account_id: string;
@@ -1103,12 +1193,18 @@ export async function deliver(
       )
       .bind(last.id, id, who.agent, who.account)
       .run();
-  return results.map((r) => ({
-    id: r.id,
-    at: r.at,
-    by: { name: r.name, handle: r.handle, you: r.account_id === who.account },
-    body: r.body,
-  }));
+  // The customer has no account, so their words are said to be theirs here, and what a person sent
+  // them says so: an agent answering a support request needs both, and neither is a person's reply.
+  return results.map((r) =>
+    r.kind === "customer"
+      ? { id: r.id, at: r.at, by: { name: "The customer", handle: "", you: false }, body: r.body }
+      : {
+          id: r.id,
+          at: r.at,
+          by: { name: r.name, handle: r.handle, you: r.account_id === who.account },
+          body: r.kind === "answered" ? `Sent to the customer: ${r.body}` : r.body,
+        },
+  );
 }
 
 /**
@@ -2407,58 +2503,170 @@ export async function closeGuide(
 }
 
 /**
- * Guides sent to somebody that nothing has happened to, for something on a clock to put back.
+ * Holds that went quiet and stayed quiet, put back in the queue for anyone to take.
  *
- * "Nothing" is meant strictly: nobody pulled it, nobody said they were taking it, nobody holds it,
- * nobody gave a verdict. A guide with any of those is a conversation in progress, however slow,
- * and moving it would be taking it off somebody's list while they are still on it.
+ * `stalled` only says a lease ran out; the card stays held, so work an agent walked away from sat
+ * locked until a person noticed and released it — and nothing made sure anyone would. Work being
+ * left behind by design is what docs/LOOP.md exists to end, so the clock lets go: once a lease has
+ * been out for REQUEUE_AFTER_MS, the hold is deleted exactly as a release deletes it, the task says
+ * where the work was left, and the thread records it as a release of the holder's own claim carrying
+ * REQUEUED — `task_event.account_id` must name an account, and the holder is whose claim went.
  *
- * They go back to Draft (`backToDraft`), not to Done. Done is finished work, approved or archived
- * by a person; a guide nobody took is neither, it stopped waiting on somebody who is not coming.
- * From Draft its author marks it Ready again, to the same person or another, or archives it.
+ * Not a claim whose agent asked a question nobody has answered: that one is waiting on a person,
+ * not gone quiet, and putting it back would hand the question's context to a stranger. Its lease
+ * runs out after a day like anything else and the author is told it stalled.
+ *
+ * The delete checks the lease it read, so an agent that came back between the read and the write
+ * keeps its work. `times` counts how often the clock has let go of this guide, this one included:
+ * a second time means the work is not getting done by whoever picks it up, and a person is told.
  */
-export async function backToDraft(db: D1Database, id: string): Promise<boolean> {
-  const g = await db
-    .prepare("SELECT markdown FROM guide WHERE id = ? AND status = 'published'")
-    .bind(id)
-    .first<{ markdown: string }>();
-  if (!g) return false;
-  // `updated` is left alone: nothing happened to the work, and moving it is not news a day later
-  // from the Draft reminder too.
-  await db
-    .prepare(
-      "UPDATE guide SET status = 'draft', markdown = ? WHERE id = ? AND status = 'published'",
-    )
-    .bind(withStatus(g.markdown, "draft"), id)
-    .run();
-  return true;
-}
-/**
- * How long a sent guide may sit with nothing happening to it before the clock shelves it.
- *
- * A fortnight, because the thing being measured is a person not getting to something, and people
- * are away for a week. Short enough that a board is not carrying a month of guides nobody opened;
- * long enough that "I was on leave" does not lose you your work — and it is reversible anyway.
- */
-export const STALE_SENT_MS = 14 * 24 * 60 * 60 * 1000;
+export const REQUEUE_AFTER_MS = 2 * 60 * 60 * 1000;
 
-export async function staleSent(
+/** The thread's line for a hold the clock let go, and how a requeue is told from a person's release. */
+export const REQUEUED = "went quiet; back in the queue";
+
+export async function requeueStalled(
   db: D1Database,
+  at: string,
   before: string,
-): Promise<{ id: string; account_id: string; title: string; team_id: string; to: string }[]> {
+): Promise<{ guide_id: string; title: string; author: string; team_id: string; times: number }[]> {
   const { results } = await db
     .prepare(
-      `SELECT g.id, g.account_id, g.title, g.team_id, g.to_account_id AS to_id, g.to_group_id
-         FROM guide g JOIN account au ON au.id = g.account_id
-        WHERE g.kind <> 'task' AND g.status = 'published' AND g.updated <= ?
-          AND au.keep_forever = 0
+      `SELECT c.guide_id, c.place, c.account_id, c.agent_id, c.host, c.worktree, c.note,
+              c.lease_until, g.title, g.kind, g.account_id AS author, g.team_id
+         FROM claim c JOIN guide g ON g.id = c.guide_id
+        WHERE c.state = 'claimed' AND c.lease_until <= ? AND ${ASKING} IS NULL
+        ORDER BY c.lease_until ASC
+        LIMIT 100`,
+    )
+    .bind(before)
+    .all<ClaimRow & { title: string; kind: string; author: string; team_id: string }>();
+  const out = [];
+  for (const c of results) {
+    const res = await db
+      .prepare(
+        `DELETE FROM claim WHERE guide_id = ? AND place = ? AND account_id = ?
+            AND state = 'claimed' AND lease_until = ?`,
+      )
+      .bind(c.guide_id, c.place, c.account_id, c.lease_until)
+      .run();
+    if (res.meta.changes !== 1) continue;
+    const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
+    if (c.kind === "task") {
+      const g = await db
+        .prepare("SELECT markdown FROM guide WHERE id = ?")
+        .bind(c.guide_id)
+        .first<{ markdown: string }>();
+      const said = c.note ? `; last progress: "${c.note}"` : "";
+      if (g)
+        await db
+          .prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?")
+          .bind(
+            withNote(
+              g.markdown,
+              `${at.slice(0, 10)} went quiet at ${where}${said}; back in the queue`,
+            ),
+            at,
+            c.guide_id,
+          )
+          .run();
+    }
+    await event(db, c.guide_id, "released", {
+      account: c.account_id,
+      agent: c.agent_id,
+      host: c.host,
+      body: REQUEUED,
+      at,
+    });
+    const n = await db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM task_event WHERE guide_id = ? AND kind = 'released' AND body = ?",
+      )
+      .bind(c.guide_id, REQUEUED)
+      .first<{ n: number }>();
+    out.push({
+      guide_id: c.guide_id,
+      title: c.title,
+      author: c.author,
+      team_id: c.team_id,
+      times: Number(n?.n ?? 1),
+    });
+  }
+  return out;
+}
+
+/**
+ * Customers left waiting (docs/LOOP.md §4: the team lead is pinged after about four untouched
+ * hours). A request is waiting untouched when the customer's latest message has had no answer since
+ * and nobody holds the request. Returned in the one run its wait crosses CUSTOMER_WAIT_MS, as
+ * `stalled` is, so the team lead hears it once per wait, and again only if the customer writes again
+ * and is left again. A request from before customer lines were recorded counts from when it arrived.
+ */
+export const CUSTOMER_WAIT_MS = 4 * 60 * 60 * 1000;
+
+export async function customersWaiting(
+  db: D1Database,
+  before: string,
+  since: string,
+): Promise<{ id: string; title: string; account_id: string; team_id: string }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, title, account_id, team_id FROM (
+         SELECT g.id, g.title, g.account_id, g.team_id,
+                COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'customer'), g.created) AS wrote
+           FROM guide g
+          WHERE g.customer <> '' AND g.status = 'published'
+            AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
+       ) w
+       WHERE w.wrote <= ?1 AND w.wrote > ?2
+         AND NOT EXISTS (SELECT 1 FROM task_event a WHERE a.guide_id = w.id AND a.kind = 'answered' AND a.at >= w.wrote)
+       LIMIT 200`,
+    )
+    .bind(before, since)
+    .all<{ id: string; title: string; account_id: string; team_id: string }>();
+  return results;
+}
+
+/**
+ * Guides sent to somebody that nothing has happened to, for something on a clock to escalate.
+ *
+ * "Nothing" is meant strictly: nobody pulled it, nobody said they were taking it, nobody holds it,
+ * nobody gave a verdict. A guide with any of those is a conversation in progress, however slow.
+ *
+ * It stays Ready. It used to go back to Draft after a fortnight (`backToDraft`), and a draft reaches
+ * nobody: work nobody took was shelved by the product itself, which is the one thing docs/LOOP.md
+ * says must never happen. Now a person hears instead — its author and the team's owners, once —
+ * and decides: give it to someone else, take it, or archive it.
+ *
+ * It repeats every day until someone acts (the author's call, docs/LOOP.md §1a): a guide is returned
+ * in the one run each day that its age crosses UNTAKEN_MS plus a whole number of days. `window` is
+ * that run's width; pass one wider than the gap between runs, as `stalled` does. The feed and the
+ * phone hear it each day; the mail goes once, because a row coalesces and mail is only its first.
+ */
+export const UNTAKEN_MS = 3 * 24 * 60 * 60 * 1000;
+
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+export async function untaken(
+  db: D1Database,
+  at: string,
+  window: number,
+): Promise<{ id: string; account_id: string; title: string; team_id: string; to: string }[]> {
+  const now = Date.parse(at);
+  const before = new Date(now - UNTAKEN_MS).toISOString();
+  const { results } = await db
+    .prepare(
+      `SELECT g.id, g.account_id, g.title, g.team_id, g.to_account_id AS to_id, g.to_group_id,
+              g.updated
+         FROM guide g
+        WHERE g.kind <> 'task' AND g.status = 'published' AND g.updated <= ?1
           AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
           AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
           AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
           AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
           AND NOT EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id)
         ORDER BY g.updated ASC
-        LIMIT 100`,
+        LIMIT 500`,
     )
     .bind(before)
     .all<{
@@ -2468,14 +2676,19 @@ export async function staleSent(
       team_id: string;
       to_id: string;
       to_group_id: string;
+      updated: string;
     }>();
-  return results.map((r) => ({
-    id: r.id,
-    account_id: r.account_id,
-    title: r.title,
-    team_id: r.team_id,
-    to: r.to_id,
-  }));
+  // The run, each day, in which this guide's age crossed the threshold plus whole days.
+  const due = (updated: string) => (now - Date.parse(updated) - UNTAKEN_MS) % DAY_MS < window;
+  return results
+    .filter((r) => due(r.updated))
+    .map((r) => ({
+      id: r.id,
+      account_id: r.account_id,
+      title: r.title,
+      team_id: r.team_id,
+      to: r.to_id,
+    }));
 }
 
 /**
@@ -2505,34 +2718,6 @@ export async function staleDrafts(
     .bind(before, since)
     .all<{ id: string; account_id: string; team_id: string }>();
   return results;
-}
-
-/**
- * When each of these guides will be archived for want of anybody touching it, for the ones that
- * will. The same conditions staleSent archives on, minus the clock, so a date shown here is a date
- * that happens: `updated` plus STALE_SENT_MS, any pull, answer, hold or verdict restarts it by
- * taking the guide out of this list, and an author who has asked to keep everything is never on it.
- * At most one slice of bound ids per call (D1 takes 100).
- */
-export async function archivesAt(db: D1Database, ids: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (!ids.length) return out;
-  const { results } = await db
-    .prepare(
-      `SELECT g.id, g.updated FROM guide g JOIN account au ON au.id = g.account_id
-        WHERE g.id IN (${ids.map(() => "?").join(",")})
-          AND g.kind <> 'task' AND g.status = 'published' AND au.keep_forever = 0
-          AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
-          AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
-          AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
-          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
-          AND NOT EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id)`,
-    )
-    .bind(...ids)
-    .all<{ id: string; updated: string }>();
-  for (const r of results)
-    out.set(r.id, new Date(Date.parse(r.updated) + STALE_SENT_MS).toISOString());
-  return out;
 }
 
 /**

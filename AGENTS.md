@@ -130,7 +130,11 @@ change. Its README says how.
   - `src/og.ts` reads its fonts through the `ASSETS` binding, which is **apps/web's** assets now.
   - `src/claims.ts` — the task queue (`docs/V2.md`): claim, lease, gate, `blocked_by`. Imports no
     sibling so `test/claims.test.mjs` can run it against real SQLite with every migration. The lock
-    is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked. Each
+    is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked — until
+    the hourly sweep puts it back in the queue `REQUEUE_AFTER_MS` (two hours) later
+    (`requeueStalled()`), unless its agent is waiting on a person's answer. The author hears the
+    first time; the second time for the same guide is `stuck`, mailed (`alertPeople()` in
+    alerts.ts), because whoever picks it up is not getting it done (docs/LOOP.md). Each
     claim also carries a generation from `claim_fence` (migration 0029): `take` hands it out, the
     CLI keeps it in `.passalong/held.json`, and `progress`, `hand_in` and `pass` send it back, so
     the same agent's write from a claim that was since released and re-taken is refused. It is
@@ -308,8 +312,12 @@ change. Its README says how.
   found by timing (published within five minutes before their author's hand-in event). **Done says
   how it got there**: `outcome` (migration 0054) is `approved` (approve, accepting a hand-in, an
   author's mark-done) or `archived` (the status route, closing with nothing handed in), and is
-  cleared when it leaves Done. **Ready work nobody took for a fortnight goes back to Draft**
-  (`backToDraft`), never to Done, which is finished work. **Not for me** is `pass` on work you do
+  cleared when it leaves Done. **Ready work nobody took stays Ready, and a person is told**
+  (2026-10-28, docs/LOOP.md): after `UNTAKEN_MS` (three days) the author and the team's owners are
+  reminded every day until someone acts (`untaken()`, kind `untaken`; mailed the first time, feed and
+  push each day after). It used to go back to Draft after a fortnight, and a
+  draft reaches nobody — the product shelving work itself. Tasks are not counted: a task for nobody
+  in particular is a backlog. **Not for me** is `pass` on work you do
   not hold, for any kind: the sender is told why.
 - **A CLI too old for the server's rules is refused, not warned.** Every CLI call carries
   `x-passalong-version` (`VERSION` in `src/api.js`), and the token branch of the auth middleware
@@ -351,6 +359,58 @@ change. Its README says how.
   someone to check** on the guide page makes a follow-up task to them, with the guide as `parent`.
   Approve, send-back, `ownWork` and the In review column are gone; approve on Done work still
   answers, for installed CLIs. Migration 0056 finished the hand-ins left waiting.
+- **A customer is a column, never a field (migration 0057, docs/LOOP.md).** `key+support@` takes
+  mail from anyone and makes a task (`receiveSupport()` in index.ts); who wrote it — address, name,
+  and the tracking number `ref` they were sent — is stored on the guide row, because a field in the
+  document would travel with every share link and every agent. The tracking number is its own value,
+  not the guide id, and a reply joins a request only with the number **and** the address that opened
+  it. Mail to a customer goes out only from `POST /v1/guides/:id/customer`, which has no CLI command
+  or MCP tool and refuses the remote MCP server: nothing reaches a customer until a person presses
+  Send. It is the deliberate exception to every answer existing in all three places.
+  A customer writing again on a request that is Done puts it straight back in Ready
+  (`reopenForCustomer()`), even when it was archived: the one exception to an archived guide
+  coming back to Draft, because a Draft reaches nobody and a waiting customer must not be left
+  behind. Their first message is a `customer` thread line too, so the panel starts where they did.
+  A customer left `CUSTOMER_WAIT_MS` (four hours) with no answer and nobody holding the request is
+  `customer_waiting` to the author and the team's owners, pushed and mailed, once per wait
+  (`customersWaiting()`, hourly sweep). Being reminded to tell the customer a fix is done is opt-in
+  per team (`team.tell_customer`, migration 0059), set by an owner on the Support page and never in
+  Settings; off, a finished fix wakes the request without those words, line or automatic draft.
+- **The reader is provider-agnostic, and only fills fields (reader.ts, docs/LOOP.md §1a).** It turns a
+  customer's message into a task or a bug, with title, summary and sections, and routes it to one of
+  the team's groups. It calls the model through the AI SDK (`ai`) and each provider's own package:
+  `READER_PROVIDER` (`anthropic`, `openai`, `google`, or `openai-compatible` for OpenRouter, Groq,
+  Ollama and the like, which also needs `READER_URL`), `READER_KEY` (a secret) and `READER_MODEL` on
+  the web Worker; without them, intake keeps its fixed rule. A raw fetch to one vendor's API shape
+  was the first version, and only OpenAI spoke it natively. Every answer passes `readVerdict()` or is thrown away whole — a kind
+  from the list, a group that exists, lengths capped, each kind's required sections, no contact
+  details — never patched. The customer's own words are quoted into the guide by code, not by the
+  model. Its reason goes on the thread as a note; when it is unsure, the author and team owners get
+  `reader_unsure`, pushed and mailed, with its one question. The same reader is the hub's box
+  (`/hub/new`, `POST /v1/compose`): a teammate's own words become a task, bug or handover, filed at
+  once as theirs with no confirm step; the page offers move (`assign`) and undo (delete), and when
+  the reader is unsure nothing is filed until its question is answered there. Its input is TipTap
+  directly (`components/hub/Writer.vue`), not Nuxt UI, so it keeps the hub's look and policy:
+  TipTap's injected stylesheet is off (`injectCSS: false`; the hub allows styles from its own
+  stylesheet only) and its rules are `.writer` in styles.css; it renders inside `<ClientOnly>`.
+  The same reader drafts replies to customers (`askDraft()`, `POST /v1/guides/:id/customer/draft`):
+  written into the reply box for a person to edit and send, never sent and never stored, and checked
+  by `readDraft()` (length, no contact details, no tracking number of its own). This reverses "the
+  hub has no editor" for writing from scratch, by the author's decision (docs/LOOP.md §1a).
+- **The runner takes only what a person marked (migration 0058, docs/LOOP.md §1a).** `passalong work
+  --watch` on an always-on machine asks `/v1/tasks/next` with `alone: true`, so `next()` hands out only
+  tasks with `guide.alone = 1`; it waits when there is none and keeps going past an unfinished task
+  (the requeue and `stuck` handle that one). The mark is a column a person sets from the task page
+  (`PUT /v1/guides/:id/alone`), never frontmatter, and the route refuses the CLI and both MCP servers
+  by name: work marking itself safe for the agent about to run it is what the mark exists to stop.
+  Plain `passalong work` is unchanged — a person running it takes any ready work.
+- **A finished child wakes its parent, from one place (docs/LOOP.md step 3).** A middleware after
+  every write to `/v1/guides/:id/*` and `/v1/tasks/:id/*` calls `wakeFrom()`: when that guide is now
+  Done and its `parent:` is not, the parent gets a `noted` thread line (handed to its holder and next
+  taker by `deliver()`) and its author and holders a `child_done` notification. One place, not six
+  routes, because a new way to finish would otherwise be a parent that never hears; `wakeParent()`
+  writes once per child (the child's id is in the line). A hand-in write-up (`report_of`) wakes
+  nothing. It wakes and never closes: what the parent still needs is someone's call.
 - **An issue is a guide; a report is only a parent.** Six bugs handed over are six things three
   people can take and answer for separately — one document holding six has one verdict, and "four
   of these are fixed" has no way to be said. Product area is a column, not a table: the grouping is

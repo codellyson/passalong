@@ -8,7 +8,11 @@ the action that caused it — and drops anything addressed to whoever caused it.
 - **Coalesced.** One row per (recipient, kind, guide, actor): a repeat bumps `at` and `times`.
 - **One sentence.** `line()` in `notify.ts` is the only place wording lives; CLI, MCP, hub, toasts and
   push all print it.
-- **Actorless events.** `stalled` (a lease ran out), `shelved` (nobody took it for a fortnight, so it went back to Draft),
+- **Actorless events.** `stalled` (a lease ran out), `requeued` (a quiet hold went back in the queue), `stuck` (it went back a second time; mailed),
+  `untaken` (sent and nobody took it in three days; mailed to the author and team owners),
+  `customer_waiting` (a customer four hours unanswered with nobody on it; pushed and mailed to the
+  author and team owners, once per wait), `shelved`
+  (old rows only: work nobody took used to go back to Draft),
   `still_draft` (a task untouched in Draft for a day, once per quiet day, feed only),
   `blocked` (an agent is stuck on you), and your own agent's `task_finished` are sent without an actor,
   so they reach you even when "you" caused them.
@@ -63,6 +67,33 @@ else as `{title, text, url, id}`. Repeats merge on the sender's own id when it h
 issue, a PostHog issue or fingerprint), else on the title. A webhook guide notifies as `hooked`.
 Settings shows it on its own page, **Integrations**, one source's addresses and steps at a time.
 
+**Customer support is a fourth address, `key+support@` (2026-10-28, docs/LOOP.md §4).** Anyone may
+write to it — it is the one exception to "a sender's first email asks" — so it has its own guards:
+blocked senders stay blocked, five new requests per sender and two hundred per account a day, and
+mail from a machine (`Auto-Submitted`, `Precedence`, a list, `no-reply@`) makes nothing. Up to
+five files on a customer's message are kept, claimed by the request (`keepCustomerFiles()`): pictures
+as screenshots drawn in the conversation, other files as attachments typed by their bytes; a support
+message may be up to 15 MB where other mail in is capped at 1 MB. A message
+becomes a **task** (`supportBody()`), Ready, whose document names the customer only by their display
+name; their address, name and tracking number (`R-XXXXXX`, `ref`) are columns (migration 0057), so a
+share link or an agent never carries them. They are answered at once with the tracking number,
+from "<team> support", Reply-To the same address. A reply carrying the number from the same address
+joins that request (`customer` thread event, `customer_wrote` notification) and reopens it if it was
+finished. A person answers on the request's page under the **Support** tab (`/hub/support/:id`, `POST /v1/guides/:id/customer`; the tab is a table of every request, state derived by `supportState()`),
+recorded as `answered`; there is no CLI command or MCP tool for it on purpose, because nothing reaches
+a customer before a person presses Send. A holding agent receives both kinds through `deliver()`.
+**The reader** (`reader.ts`) sorts each request when `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` are
+set — Anthropic, OpenAI or Google through their own AI SDK packages, or any OpenAI-compatible provider
+with `READER_URL`: the kind (task or bug), title, summary and sections, and the
+team group by name (`to: #group`). Its answer is used whole or not at all (`readVerdict()`), the
+customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for
+the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the
+hub's box, `/hub/new` (`POST /v1/compose`), for writing a task, bug or handover in your own words. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
+guide made from a request (a bug sent on to development) reaches Done, the request wakes: a
+`child_done` notification, and — when the team turned the reminder on (`team.tell_customer`, migration
+0059, set by an owner on the Support page; off by default) — it says "tell the customer" and the
+request's Support page names what finished since the customer was last answered.
+
 Nothing bounces, since a bounce would confirm the address exists. Without `INBOUND_DOMAIN`, Settings
 says Email in is not set up.
 
@@ -89,6 +120,7 @@ Without `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, Settings sa
 
 ## Sources
 - `apps/api/src/notify.ts` (`notify`, `line`, `PUSHED`, `onPush`), `alerts.ts`, `inbound.ts`, `events.ts`, `webpush.ts`, `email.ts`, `mail-html.ts`
-- Migrations 0003 (notifications), 0033 (event indexes), 0034 (push), 0051 (inbound)
+- Migrations 0003 (notifications), 0033 (event indexes), 0034 (push), 0051 (inbound), 0057 (customer)
+- [docs/LOOP.md](../LOOP.md) §4 (the support experience)
 - `apps/web/app/composables/useLive.ts`, `components/hub/Toasts.vue`, `PushSettings.vue`, `public/sw.js`
 - [AGENTS.md](../../AGENTS.md): "Notifications", "Mail is written twice…", "Google Chat gets a card…", "The hub is live…", "Push reaches a device only for what needs you…"

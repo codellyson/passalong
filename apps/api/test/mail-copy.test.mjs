@@ -5,12 +5,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  ackCopy,
+  answerCopy,
   askedCopy,
   doneCopy,
   FIX_AND_RESEND,
   handoffCopy,
   hubUrl,
   openedCopy,
+  plainForCustomer,
   repliedCopy,
   verdictCopy,
 } from "../src/mail-copy.ts";
@@ -112,4 +115,47 @@ test("a reply mail says it is waiting for the agent's next check-in, not for the
   const c = repliedCopy({ byName: "Bob", title: TITLE, url: URL_, body: "Settings.", hub: HUB });
   assert.equal(c.subject, `Bob replied to your agent on "${TITLE}"`);
   assert.match(c.text.join("\n"), /next time it checks in/);
+});
+
+test("a customer's mail keeps the tracking number in the subject and is from the team", () => {
+  const ack = ackCopy({ from: "Acme support", title: "Export does nothing", ref: "R-K7Q2M9" });
+  assert.equal(ack.subject, "[R-K7Q2M9] Re: Export does nothing");
+  assert.match(ack.text.join("\n"), /tracking number is R-K7Q2M9/);
+  assert.doesNotMatch(ack.text.join("\n"), /passalong/i, "it is the team's mail, not ours");
+  const answer = answerCopy({
+    from: "Acme support",
+    title: "Export does nothing",
+    ref: "R-K7Q2M9",
+    body: "Fixed in today's release.\nTry again?",
+  });
+  assert.equal(answer.subject, ack.subject, "one thread in the customer's inbox");
+  assert.equal(answer.text[0], "Fixed in today's release.");
+  assert.equal(answer.preview, "Fixed in today's release.");
+});
+
+test("a reply from the editor reaches the customer as plain text", () => {
+  const md = [
+    "Hi **Sam**, it's _fixed_ now. See [the status page](https://status.example.com).",
+    "",
+    "![after the fix](https://passalong.dev/v1/shots/abc123def456)",
+    "",
+    "```",
+    "export ok",
+    "```",
+    "Use `Download PDF` meanwhile \\[if needed\\].",
+  ].join("\n");
+  assert.equal(
+    plainForCustomer(md),
+    [
+      "Hi Sam, it's fixed now. See the status page (https://status.example.com).",
+      "",
+      "after the fix: https://passalong.dev/v1/shots/abc123def456",
+      "",
+      "export ok",
+      "",
+      "Use Download PDF meanwhile [if needed].",
+    ].join("\n"),
+  );
+  const a = answerCopy({ from: "Acme support", title: "x", ref: "R-K7Q2M9", body: "**Done**" });
+  assert.equal(a.text[0], "Done", "the email is the flattened text");
 });

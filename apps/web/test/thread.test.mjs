@@ -29,6 +29,12 @@ test("what has no words of its own gets a sentence, and is quiet", () => {
   assert.equal(messageOf(item("taken", { by: by({ agent: true }) })).text, "Taking this.");
   assert.equal(messageOf(item("taken", { by: by({ agent: true }) })).quiet, true);
   assert.equal(messageOf(item("released", { by: by({ you: true }) })).text, "Took this back.");
+  assert.equal(
+    messageOf(item("released", { by: by({ agent: true }), body: "went quiet; back in the queue" }))
+      .text,
+    "Went quiet, so this is back in the queue for anyone to take.",
+    "the clock letting go is not somebody taking it back",
+  );
 });
 
 test("a refusal carries its reason and reads as a refusal", () => {

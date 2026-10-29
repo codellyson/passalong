@@ -10,6 +10,7 @@
 //   passalong ready <id...|--all> guides you have read are ready — whoever they are for may take them now
 //   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
 //   passalong work [--once] [--agent CMD]  run an agent on each ready task here, one after another
+//   passalong work --watch [--every SECS]  the runner: keep taking work marked safe to run alone
 //   passalong reopen <id> <why>   finished work isn't right: back to To do, and whoever takes it next reads why
 //   passalong release <id>        take work back from whoever holds it, of any kind
 //   passalong attach <file>       upload a picture or a file and print the markdown that points at it
@@ -362,12 +363,30 @@ const commands = {
    * files without asking — which is yours to decide, not this command's.
    */
   async work(f) {
+    // The runner: only work a person marked safe to run alone, waiting for more when there is none.
+    const watch = Boolean(f.watch);
+    let idle = false;
+    if (watch)
+      console.error("Runner: taking only work marked safe to run alone. Stop it with Ctrl-C.");
     const run = await passalong
       .work({
         agent: typeof f.agent === "string" ? f.agent : undefined,
         once: Boolean(f.once),
         any: Boolean(f.any),
-        onTask: (t) => console.error(`\n→ ${t.id}  ${t.title}${t.resumed ? "  (resuming)" : ""}`),
+        watch,
+        every: Number(f.every) || 60,
+        onTask: (t) => {
+          idle = false;
+          console.error(`\n→ ${t.id}  ${t.title}${t.resumed ? "  (resuming)" : ""}`);
+        },
+        onIdle: () => {
+          if (!idle) console.error("waiting for work marked safe to run alone…");
+          idle = true;
+        },
+        onUnfinished: (t, state) =>
+          console.error(
+            `✗ ${t.id} is still ${state || "open"}: left held here; the sweep puts it back if it goes quiet`,
+          ),
       })
       .catch((e) => die(e.message));
     for (const id of run.finished) console.log(id);

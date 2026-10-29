@@ -267,9 +267,14 @@ export async function tasks() {
  * Take the next task for this worktree's repo — always a new one, since an agent may hold several.
  * `null` when there is nothing to do. Written to `.passalong/<id>.md` only when `save` asks.
  */
-export async function nextTask({ cwd = process.cwd(), any = false, save = false } = {}) {
+export async function nextTask({
+  cwd = process.cwd(),
+  any = false,
+  alone = false,
+  save = false,
+} = {}) {
   needsSync("taking a task");
-  const { task } = await api.nextTask({ ...agent(cwd), any });
+  const { task } = await api.nextTask({ ...agent(cwd), any, ...(alone ? { alone: true } : {}) });
   if (!task) return null;
   return { ...task, path: save ? saveTo(agent(cwd).worktree, task.id, task.markdown) : null };
 }
@@ -1100,19 +1105,35 @@ export function workPrompt(t) {
  *
  * An agent that exits without finishing stops the loop, rather than piling up half-done work. The
  * task stays claimed here, for a person to see on the board and resume (take it) or release.
+ *
+ * `watch` is the runner (docs/LOOP.md §1a, problem 3): left running on an always-on machine with the
+ * repo checked out, it takes only tasks a person marked safe to run alone, waits `every` seconds when
+ * there are none, and keeps going past a task its agent did not finish — that one stays held here,
+ * the sweep puts it back in the queue once it goes quiet, and a second time a person is told it is
+ * stuck. Nobody is watching, so nothing stops for a person.
  */
 export async function work({
   cwd = process.cwd(),
   agent = process.env.PASSALONG_AGENT || "claude -p",
   any = false,
   once = false,
+  watch = false,
+  every = 60,
   onTask = () => {},
+  onIdle = () => {},
+  onUnfinished = () => {},
+  sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
 } = {}) {
   needsSync("working the queue");
   const [command, ...args] = agent.trim().split(/\s+/);
   const finished = [];
   for (;;) {
-    const t = await nextTask({ cwd, any });
+    const t = await nextTask({ cwd, any, alone: watch });
+    if (!t && watch) {
+      onIdle();
+      await sleep(Math.max(10, every) * 1000);
+      continue;
+    }
     if (!t) return { finished, stopped: "empty" };
     onTask(t);
     const run = spawnSync(command, [...args, workPrompt(t)], {
@@ -1122,6 +1143,10 @@ export async function work({
     });
     // Finishing is final, so a finished task is Done; "review" is a server from before that.
     const state = (await tasks()).find((x) => x.id === t.id)?.state;
+    if (state !== "done" && state !== "review" && watch) {
+      onUnfinished(t, state, run.status ?? run.error?.message);
+      continue;
+    }
     if (state !== "done" && state !== "review")
       return {
         finished,

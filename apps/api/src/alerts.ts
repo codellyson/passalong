@@ -33,10 +33,42 @@ export async function alertAdmins(env: AlertEnv, e: Omit<Event, "to" | "mail">):
       .map((s) => s.trim())
       .filter(Boolean);
     const { results } = await env.DB.prepare(
-      `SELECT id, email FROM account
+      `SELECT id FROM account
        WHERE role = 'super' OR id IN (SELECT value FROM json_each(?))`,
     )
       .bind(JSON.stringify(owners))
+      .all<{ id: string }>();
+    await alertPeople(
+      env,
+      results.map((r) => r.id),
+      e,
+      subject,
+    );
+  } catch (err) {
+    console.error("alert", e.kind, (err as Error).message);
+  }
+}
+
+/**
+ * The same notice for named accounts: a feed row each, mailed the first time. For what a person has
+ * to act on or it is left behind — work that keeps going quiet, work nobody took — where the feed
+ * alone is a place it can sit unread. The mail opens the guide when there is one, the admin page
+ * when there is not. Never throws.
+ */
+export async function alertPeople(
+  env: AlertEnv,
+  to: string[],
+  e: Omit<Event, "to" | "mail">,
+  subject: string,
+  title = "",
+): Promise<void> {
+  try {
+    const ids = [...new Set(to.filter(Boolean))];
+    if (!ids.length) return;
+    const { results } = await env.DB.prepare(
+      "SELECT id, email FROM account WHERE id IN (SELECT value FROM json_each(?))",
+    )
+      .bind(JSON.stringify(ids))
       .all<{ id: string; email: string }>();
     const who = e.actor_id
       ? await env.DB.prepare("SELECT handle, name FROM account WHERE id = ?")
@@ -46,7 +78,7 @@ export async function alertAdmins(env: AlertEnv, e: Omit<Event, "to" | "mail">):
     // The same sentence the feed shows, so the mail and the hub never say it two ways.
     const facts: LineFacts = {
       kind: e.kind,
-      title: "",
+      title,
       times: 1,
       note: e.note || "",
       actor_id: e.actor_id || "",
@@ -54,23 +86,25 @@ export async function alertAdmins(env: AlertEnv, e: Omit<Event, "to" | "mail">):
       actor_real: who?.name || "",
     };
     const text = line(facts);
-    const url = `${(env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "")}/admin`;
-    for (const admin of results)
+    const origin = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
+    const url = e.guide_id ? `${origin}/hub/g/${e.guide_id}` : `${origin}/admin`;
+    const label = e.guide_id ? "Open it" : "Open the admin page";
+    for (const person of results)
       await notify(env, {
         ...e,
-        to: admin.id,
-        mail: admin.email
+        to: person.id,
+        mail: person.email
           ? () =>
               sendMail(
                 env,
-                admin.email,
+                person.email,
                 subject,
                 [text, "", `  ${url}`],
                 shell({
                   origin: env.PUBLIC_ORIGIN,
                   preview: text,
                   heading: subject,
-                  body: [p(esc(text)), button("Open the admin page", url)],
+                  body: [p(esc(text)), button(label, url)],
                 }),
               )
           : undefined,

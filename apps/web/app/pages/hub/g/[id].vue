@@ -169,6 +169,22 @@ const reviewTask = computed(() =>
 
 // ---- acting on it --------------------------------------------------------------------------
 
+/** Mark or unmark the task as safe for the runner (PUT /v1/guides/:id/alone). */
+const markingAlone = ref(false);
+async function markAlone(on: boolean) {
+  markingAlone.value = true;
+  try {
+    await api(`/v1/guides/${id.value}/alone`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ on }),
+    });
+    await queryClient.invalidateQueries({ queryKey: hubKeys.context(id.value) });
+  } finally {
+    markingAlone.value = false;
+  }
+}
+
 /** Accept is held until the evidence has been opened, as it is on the review rows. */
 const read = ref(new Set<string>());
 const busy = ref("");
@@ -370,6 +386,23 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           :class="expiry.soon ? 'text-warn' : 'text-muted'"
         >{{ expiry.text }}</p>
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
+        <!-- The runner (`passalong work --watch`) takes only tasks a person marked here. -->
+        <label
+          v-if="isTask && g.status !== 'consumed'"
+          class="flex items-start gap-2 font-ui text-sm"
+        >
+          <input
+            type="checkbox"
+            class="mt-1"
+            :checked="ctx.alone"
+            :disabled="markingAlone"
+            @change="markAlone(($event.target as HTMLInputElement).checked)"
+          />
+          <span>
+            <b class="font-medium">Safe to run alone</b>
+            <span class="block text-muted">The runner may take this with nobody watching. Only mark work that needs no decision, secret or permission from a person.</span>
+          </span>
+        </label>
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <form
             v-if="mayAct && g.status === 'draft'"
@@ -479,6 +512,12 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">
+        <!-- A customer's request: the conversation lives on its Support page, not here. -->
+        <p v-if="ctx.customer" class="m-0 font-ui text-sm">
+          This task came from {{ ctx.customer.name || ctx.customer.email }}.
+          <NuxtLink :to="`/hub/support/${id}`">Open the conversation</NuxtLink>
+        </p>
+
         <!-- What came back, above the guide it answers: the write-up is the thing to read on a
              handed-in guide, and it read as a 40-line column in a sidebar. -->
         <section

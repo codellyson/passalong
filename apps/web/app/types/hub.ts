@@ -67,8 +67,6 @@ export interface Guide {
   preview_image?: { url: string; alt: string } | null;
   /** When its proof screenshots are deleted, or "". Only on a closed guide that has some. */
   proof_expires?: string;
-  /** When it goes back to Draft for want of anybody taking it, or "". Only on a sent guide nobody has. */
-  archives_at?: string;
   status: string;
   /** How it reached Done: approved after review, or archived. '' while it is not done. */
   outcome?: "finished" | "approved" | "archived" | "";
@@ -355,6 +353,27 @@ export interface HubData {
 }
 
 /** One line of a guide's thread. See GET /v1/guides/:id/thread and claims.thread(). */
+/** One row of the Support table: a customer's request and where it stands (GET /v1/support). */
+export interface SupportRow {
+  id: string;
+  title: string;
+  ref: string;
+  customer: { name: string; email: string };
+  state: "new" | "needs_reply" | "with_development" | "waiting" | "solved";
+  /** Since when the customer has waited on us; "" when the next word is theirs or it is solved. */
+  waiting_since: string;
+  last: { by: "customer" | "team" | ""; line: string; at: string };
+  updated: string;
+  /** Whether the request's team asked to be reminded to tell the customer a fix is done. */
+  tell: boolean;
+}
+
+/** `GET /v1/support`: the requests, and the teams whose reminder the viewer (an owner) can set. */
+export interface SupportList {
+  requests: SupportRow[];
+  teams: { slug: string; name: string; tell: boolean }[];
+}
+
 export interface ThreadItem {
   id: string;
   kind:
@@ -369,6 +388,8 @@ export interface ThreadItem {
     | "asked"
     | "replied"
     | "noted"
+    | "customer"
+    | "answered"
     | "verdict"
     | "ack";
   at: string;
@@ -410,6 +431,10 @@ export interface GuideContext {
   target?: string;
   /** Repos this account's tasks and agents already use, to pick from when marking a task Ready. */
   repos?: string[];
+  /** A person marked this task safe for the runner to take with nobody watching. */
+  alone?: boolean;
+  /** A support request's customer and tracking number; null for any other guide. */
+  customer?: { name: string; email: string; ref: string } | null;
   owner: boolean;
   /** The owner of its team, and not its author: may act on it as if they were. */
   admin?: boolean;

@@ -14,13 +14,15 @@ import {
   ASK_LEASE_MS,
   answeredBinds,
   approve,
-  archivesAt,
   ask,
-  backToDraft,
   blockOn,
+  CUSTOMER_WAIT_MS,
   checksProblem,
   closeGuide,
   complete,
+  customerEvent,
+  customersWaiting,
+  DAY_MS,
   DRAFT_NUDGE_MS,
   deliver,
   dropOutside,
@@ -37,21 +39,26 @@ import {
   PERSON_LEASE_MS,
   pass,
   proofProblem,
+  REQUEUE_AFTER_MS,
+  REQUEUED,
   reject,
   release,
   renew,
   reopen,
+  reopenForCustomer,
   reply,
   repoKey,
-  STALE_SENT_MS,
+  requeueStalled,
   sendBackHandedIn,
   staleDrafts,
-  staleSent,
   stalled,
   stateOf,
   steps,
   take,
   thread,
+  UNTAKEN_MS,
+  untaken,
+  wakeParent,
   working,
 } from "../src/claims.ts";
 import { feed, line, markRead, notify, unreadCount } from "../src/notify.ts";
@@ -845,13 +852,11 @@ test("a guide left in Draft a day is returned once, in the run it crosses", asyn
   );
 });
 
-test("a sent guide nothing happened to is closed by the clock; one in play is not", async () => {
-  // Leaving `Open` needs the receiver to open it and say it worked. When they never do, the author
-  // is the one person who knows the work is finished and has no verb for it, so the board fills
-  // with guides sent weeks ago and the free plan fills with them too.
+test("a sent guide nothing happened to is found each day by the clock; one in play is not", async () => {
+  // It stays Ready and a person is told. It used to go back to Draft, where it reached nobody.
   const db = d1();
   const guide = seed(db);
-  const old = new Date(Date.parse(T0) - STALE_SENT_MS - 60_000).toISOString();
+  const old = new Date(Date.parse(T0) - UNTAKEN_MS - 60_000).toISOString();
   const sent = (id, over = {}) => {
     guide(id, { kind: "transfer", target: "", created: old, ...over });
     db.raw
@@ -873,8 +878,6 @@ test("a sent guide nothing happened to is closed by the clock; one in play is no
   db.raw
     .prepare("INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES (?, ?, 1, '', ?)")
     .run("acked", "other", T0);
-  // The claim written straight in: `take` would refuse, because a guide with no team is not
-  // visible to anyone but its author, and what is being tested here is the query and not take().
   db.raw
     .prepare(
       `INSERT INTO claim (guide_id, place, account_id, agent_id, state, claimed_at, lease_until, updated)
@@ -885,18 +888,92 @@ test("a sent guide nothing happened to is closed by the clock; one in play is no
     .prepare("INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES (?, ?, 1, '', ?)")
     .run("judged", "other", T0);
 
-  const stale = await staleSent(db, T0);
+  const HOUR = 60 * 60 * 1000;
+  const left = await untaken(db, T0, HOUR);
   assert.deepEqual(
-    stale.map((g) => g.id).sort(),
+    left.map((g) => g.id).sort(),
     ["untouched"],
     "only the one nobody pulled, acked, took or judged — the rest are conversations in progress",
   );
-  assert.equal(stale[0].to, "other", "and it knows who to tell");
+  assert.equal(left[0].to, "other", "and it knows who it was for");
+  assert.equal(left[0].title, "task untouched", "and what it is called, for the mail");
 
-  // Recent silence is not stale silence: the cutoff is a fortnight back, and a guide touched
-  // since then is inside it.
-  const earlier = new Date(Date.parse(old) - 1000).toISOString();
-  assert.deepEqual(await staleSent(db, earlier), [], "nothing is older than a cutoff before it");
+  // Again the next day at the same hour, and not in between: a daily reminder, not an hourly one.
+  const day = (n, extra = 0) => new Date(Date.parse(T0) + n * DAY_MS + extra).toISOString();
+  assert.deepEqual(
+    (await untaken(db, day(1), HOUR)).map((g) => g.id),
+    ["untouched"],
+    "next day",
+  );
+  assert.deepEqual(await untaken(db, day(0, 2 * HOUR), HOUR), [], "not two hours later");
+  assert.deepEqual(await untaken(db, day(5), HOUR), await untaken(db, day(1), HOUR), "every day");
+  const status = db.raw.prepare("SELECT status FROM guide WHERE id = 'untouched'").get();
+  assert.equal(status.status, "published", "and it is still Ready, not shelved");
+});
+
+test("a hold that stayed quiet goes back in the queue; a second time says it needs a person", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await take(db, "t1", A, { at: T0 });
+  await renew(db, "t1", A, { at: T0, note: "halfway" });
+
+  const lapsed = later(LEASE_MS + 1);
+  assert.deepEqual(
+    await requeueStalled(db, lapsed, new Date(Date.parse(lapsed) - REQUEUE_AFTER_MS).toISOString()),
+    [],
+    "a lease only just out is left alone: the agent may still come back",
+  );
+
+  const at1 = later(LEASE_MS + REQUEUE_AFTER_MS + 1);
+  const first = await requeueStalled(
+    db,
+    at1,
+    new Date(Date.parse(at1) - REQUEUE_AFTER_MS).toISOString(),
+  );
+  assert.equal(first.length, 1);
+  assert.equal(first[0].author, "me");
+  assert.equal(first[0].times, 1);
+  assert.equal(
+    db.raw.prepare("SELECT COUNT(*) AS n FROM claim WHERE guide_id = 't1'").get().n,
+    0,
+    "the hold is gone, so anyone may take it",
+  );
+  const doc = db.raw.prepare("SELECT markdown FROM guide WHERE id = 't1'").get().markdown;
+  assert.match(doc, /went quiet at .*last progress: "halfway"; back in the queue/);
+  assert.equal(
+    db.raw.prepare("SELECT body FROM task_event WHERE guide_id = 't1' AND kind = 'released'").get()
+      .body,
+    REQUEUED,
+    "the thread says the clock did it",
+  );
+
+  // Somebody else takes it and goes quiet too.
+  const B = { account: "me", agent: "agent-b", repo: "o/r" };
+  const T1 = later(LEASE_MS + REQUEUE_AFTER_MS + 2);
+  await take(db, "t1", B, { at: T1 });
+  const at2 = new Date(Date.parse(T1) + LEASE_MS + REQUEUE_AFTER_MS + 1).toISOString();
+  const second = await requeueStalled(
+    db,
+    at2,
+    new Date(Date.parse(at2) - REQUEUE_AFTER_MS).toISOString(),
+  );
+  assert.equal(second[0].times, 2, "the second time is the one a person is mailed about");
+});
+
+test("a hold waiting on a person's answer is not put back in the queue", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await take(db, "t1", A, { at: T0 });
+  await ask(db, "t1", A, { at: later(1000), question: "Settings or the header?" });
+  const at = later(ASK_LEASE_MS + REQUEUE_AFTER_MS + 2000);
+  assert.deepEqual(
+    await requeueStalled(db, at, new Date(Date.parse(at) - REQUEUE_AFTER_MS).toISOString()),
+    [],
+    "the question would go to a stranger",
+  );
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM claim WHERE guide_id = 't1'").get().n, 1);
 });
 
 test("the author closes a guide nobody ever handed in", async () => {
@@ -2313,40 +2390,6 @@ test("migration 0042 cuts stored worktrees to the folder's name, and leaves the 
   );
 });
 
-test("a sent guide shows when it will be archived, and an author who keeps everything is left alone", async () => {
-  const db = d1();
-  const guide = seed(db);
-  const old = new Date(Date.parse(T0) - 60_000).toISOString();
-  const sent = (id) => {
-    guide(id, { kind: "transfer", target: "", created: old });
-    db.raw
-      .prepare("UPDATE guide SET updated = ?, to_account_id = 'other' WHERE id = ?")
-      .run(old, id);
-  };
-  sent("quiet");
-  sent("pulled");
-  db.raw
-    .prepare(
-      "INSERT INTO pull (guide_id, account_id, via, at) VALUES ('pulled', 'other', 'cli', ?)",
-    )
-    .run(T0);
-
-  const due = await archivesAt(db, ["quiet", "pulled"]);
-  assert.deepEqual([...due.keys()], ["quiet"], "a guide somebody opened is not on the clock");
-  assert.equal(due.get("quiet"), new Date(Date.parse(old) + STALE_SENT_MS).toISOString());
-
-  db.raw.prepare("UPDATE account SET keep_forever = 1 WHERE id = 'me'").run();
-  assert.equal((await archivesAt(db, ["quiet"])).size, 0, "keep_forever takes it off the clock");
-  const cutoff = new Date(Date.parse(old) + STALE_SENT_MS + 1000).toISOString();
-  assert.deepEqual(await staleSent(db, cutoff), [], "and the sweep leaves it where it is");
-  db.raw.prepare("UPDATE account SET keep_forever = 0 WHERE id = 'me'").run();
-  assert.equal((await staleSent(db, cutoff)).length, 1, "put back, it is archived as before");
-});
-
-// A guide sent to a group asks one of its members. Every member sees it and may take it, and once
-// one of them answers it stops waiting on the rest — on the inbox and on every guide row alike,
-// because both read ANSWERED_ELSEWHERE. A teammate's agent taking it counts: `take` writes a claim
-// and no ack, which is the case the hub's own copy of the rule used to miss.
 test("group members see one answer the same way, and the whole team sees the group's task", async () => {
   const db = d1();
   const guide = seed(db);
@@ -2392,19 +2435,6 @@ test("group members see one answer the same way, and the whole team sees the gro
   assert.equal(Boolean((await t1("bo")).task.for_me), true);
   assert.equal(Boolean((await t1("cy")).task.for_me), true);
   assert.equal(Boolean((await t1("other")).task.for_me), false, "on the board, not for them");
-});
-
-test("a guide nobody took goes back to Draft, not to Done, and keeps its age", async () => {
-  const db = d1();
-  const guide = seed(db);
-  guide("sent", { kind: "transfer", target: "" });
-  guide("drafted", { kind: "transfer", target: "", status: "draft" });
-  assert.equal(await backToDraft(db, "sent"), true);
-  assert.equal(await backToDraft(db, "drafted"), false, "only Ready work moves");
-  const row = db.raw.prepare("SELECT status, outcome, updated FROM guide WHERE id = 'sent'").get();
-  assert.equal(row.status, "draft");
-  assert.equal(row.outcome, "", "not Done: nobody finished or shelved it");
-  assert.equal(row.updated, T0, "nothing happened to the work, so its age stands");
 });
 
 test("the backfills: old write-ups leave the board, and old Done says how it got there", () => {
@@ -2554,4 +2584,127 @@ test("hand-ins waiting in review on the day this ships are finished, with their 
   assert.deepEqual(row("shared"), { status: "published", outcome: "" }, "still held in o/s");
   assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM claim WHERE state = 'review'").get().n, 0);
   assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM verdict WHERE ok = 1").get().n, 2);
+});
+
+test("an agent holding a support request hears what the customer said and what they were sent", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("t1");
+  await customerEvent(db, "t1", "customer", { account: "me", body: "Export does nothing", at: T0 });
+  await take(db, "t1", A, { at: later(1000) });
+  await customerEvent(db, "t1", "answered", {
+    account: "me",
+    body: "Looking now.",
+    at: later(2000),
+  });
+  const heard = await deliver(db, "t1", A);
+  assert.deepEqual(
+    heard.map((r) => [r.by.name, r.body]),
+    [
+      ["The customer", "Export does nothing"],
+      [heard[1].by.name, "Sent to the customer: Looking now."],
+    ],
+    "what the customer wrote before it was taken still reaches whoever takes it",
+  );
+  assert.equal(heard[0].by.you, false);
+  assert.deepEqual(await deliver(db, "t1", A), [], "and each is said once");
+});
+
+test("a finished child wakes its parent once, and says when it was closed undone instead", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("parent");
+  guide("fix");
+  const child = { id: "fix", parent_id: "parent", title: "Fix export", outcome: "finished" };
+  assert.equal(await wakeParent(db, child, { account: "me", at: T0 }), true);
+  assert.equal(
+    await wakeParent(db, child, { account: "me", at: later(1000) }),
+    false,
+    "a second route ending the same child says nothing new",
+  );
+  const notes = db.raw
+    .prepare("SELECT body FROM task_event WHERE guide_id = 'parent' AND kind = 'noted'")
+    .all();
+  assert.deepEqual(
+    notes.map((n) => n.body),
+    ['"Fix export" (fix), made from this, is done.'],
+  );
+
+  guide("dropped");
+  await wakeParent(
+    db,
+    { id: "dropped", parent_id: "parent", title: "Try a workaround", outcome: "archived" },
+    { account: "me", at: T0 },
+  );
+  // Whoever takes the parent next is handed both, the way any note reaches a taker.
+  await take(db, "parent", A, { at: later(2000) });
+  assert.deepEqual(
+    (await deliver(db, "parent", A)).map((r) => r.body),
+    [
+      '"Fix export" (fix), made from this, is done.',
+      '"Try a workaround" (dropped), made from this, was closed without being done.',
+    ],
+  );
+});
+
+test("a customer writing again puts their request back in Ready, even from archived", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("req", { status: "consumed" });
+  guide("plain", { status: "consumed" });
+  db.raw.exec(`UPDATE guide SET outcome = 'archived' WHERE id IN ('req', 'plain');
+    UPDATE guide SET customer = 'jane@example.com', ref = 'R-K7Q2M9' WHERE id = 'req';`);
+  assert.equal(await reopenForCustomer(db, "req", { account: "me", at: T0 }), true);
+  const row = db.raw.prepare("SELECT status, outcome, markdown FROM guide WHERE id = 'req'").get();
+  assert.equal(row.status, "published", "Ready, not Draft: a draft reaches nobody");
+  assert.equal(row.outcome, "");
+  assert.match(row.markdown, /reopened: The customer wrote again/);
+  assert.equal(
+    await reopenForCustomer(db, "plain", { account: "me", at: T0 }),
+    false,
+    "only a guide with a customer: everything else unarchives to Draft as before",
+  );
+  assert.equal(await reopenForCustomer(db, "req", { account: "me", at: T0 }), false, "once");
+});
+
+test("the runner is handed only tasks a person marked safe to run alone", async () => {
+  const db = d1();
+  const guide = seed(db);
+  guide("plain");
+  guide("marked");
+  db.raw.prepare("UPDATE guide SET alone = 1 WHERE id = 'marked'").run();
+  const runner = { account: "me", agent: "agent-runner", repo: "o/r" };
+  const got = await next(db, runner, { at: T0, alone: true });
+  assert.equal(got?.task.id, "marked");
+  assert.equal(await next(db, runner, { at: T0, alone: true }), null, "nothing else is safe");
+  const person = { account: "me", agent: "agent-person", repo: "o/r" };
+  assert.equal((await next(db, person, { at: T0 }))?.task.id, "plain", "a person still gets any");
+});
+
+test("a customer left four hours with no answer is found once; answered or held is not", async () => {
+  const db = d1();
+  const guide = seed(db);
+  for (const id of ["wait", "done", "held", "plain"]) guide(id);
+  db.raw.prepare("UPDATE guide SET customer = 'c@x.test' WHERE id <> 'plain'").run();
+  for (const id of ["wait", "done", "held"])
+    await customerEvent(db, id, "customer", { account: "me", body: "Help", at: T0 });
+  await customerEvent(db, "done", "answered", { account: "me", body: "On it", at: later(1000) });
+  await take(db, "held", A, { at: later(1000) });
+  const at = (ms) => {
+    const now = Date.parse(T0) + ms;
+    return [
+      new Date(now - CUSTOMER_WAIT_MS).toISOString(),
+      new Date(now - CUSTOMER_WAIT_MS - 60 * 60 * 1000).toISOString(),
+    ];
+  };
+  const ids = async (ms) => (await customersWaiting(db, ...at(ms))).map((g) => g.id);
+  assert.deepEqual(await ids(CUSTOMER_WAIT_MS - 1000), [], "not before four hours");
+  assert.deepEqual(await ids(CUSTOMER_WAIT_MS + 1000), ["wait"]);
+  assert.deepEqual(await ids(CUSTOMER_WAIT_MS + 2 * 60 * 60 * 1000), [], "once per wait");
+  await customerEvent(db, "wait", "customer", {
+    account: "me",
+    body: "Hello?",
+    at: later(5 * 3600e3),
+  });
+  assert.deepEqual(await ids(9 * 3600e3 + 1000), ["wait"], "writing again starts a new wait");
 });

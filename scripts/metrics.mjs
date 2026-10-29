@@ -24,6 +24,9 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
+// REQUEUED in apps/api/src/claims.ts: the thread line that marks a hold the clock let go.
+const REQUEUED = "went quiet; back in the queue";
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const die = (msg) => {
@@ -157,6 +160,33 @@ const QUERIES = {
       FROM pull p
       JOIN guide g ON g.id = p.guide_id`,
 
+  // Not §14: docs/LOOP.md's number. What is being left behind right now, which should be zero.
+  //
+  // `quiet` is every hold whose lease has run out, any kind — the hourly sweep puts one back in
+  // the queue two hours after its lease lapses, unless its agent is waiting on a person's answer,
+  // so what stays here long is a question nobody answered. `untaken` is a guide sent to somebody
+  // that nobody pulled, took, acked or judged in three days (`untaken()` in claims.ts, which tells
+  // a person once and leaves it Ready). `requeued` and `stuck` are cumulative: how often the clock
+  // let go of quiet work, and how many unfinished guides it has let go of more than once.
+  left: `
+    SELECT
+      (SELECT COUNT(*) FROM claim c JOIN guide g ON g.id = c.guide_id
+        WHERE g.status = 'published' AND c.state = 'claimed'
+          AND c.lease_until <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) AS quiet,
+      (SELECT COUNT(*) FROM guide g
+        WHERE g.kind <> 'task' AND g.status = 'published'
+          AND g.updated <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 days')
+          AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
+          AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
+          AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id)) AS untaken,
+      (SELECT COUNT(*) FROM task_event WHERE kind = 'released' AND body = '${REQUEUED}') AS requeued,
+      (SELECT COUNT(*) FROM (
+         SELECT e.guide_id FROM task_event e JOIN guide g ON g.id = e.guide_id
+          WHERE e.kind = 'released' AND e.body = '${REQUEUED}' AND g.status <> 'consumed'
+          GROUP BY e.guide_id HAVING COUNT(*) >= 2)) AS stuck`,
+
   // Not a §14 figure: which releases are writing guides now, so a malformed one can be traced to
   // the client that produced it. `client` is migration 0035, and "" is every row from before it.
   clients: `
@@ -223,6 +253,19 @@ const rule = (title) => {
 const caveat = (text) => console.log(`  ⚠ ${text}`);
 
 function report(read) {
+  const [l] = read(QUERIES.left);
+  rule("Left behind — right now (docs/LOOP.md: should be zero)");
+  console.log(
+    `  ${plural(l.quiet, "hold")} gone quiet · ${plural(l.untaken, "guide")} sent and untaken for 3+ days`,
+  );
+  console.log(
+    `  ${l.requeued} put back in the queue by the clock so far · ${l.stuck} unfinished put back more than once`,
+  );
+  caveat(
+    "Tasks nobody took are not counted: a task for nobody in particular is a backlog, not a\n" +
+      "    drop. Requeues start at zero on 2026-10-28, when the clock began letting go.",
+  );
+
   const [act] = read(QUERIES.activation);
   rule("Activation");
   console.log(

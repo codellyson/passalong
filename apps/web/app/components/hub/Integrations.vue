@@ -22,17 +22,27 @@ const myEmail = computed(() => data.value.me?.email || "your account's email");
 type Kind = "task" | "bug" | "transfer";
 const state = ref<{
   available: boolean;
-  addresses: Record<Kind, string> | null;
+  addresses: Record<Kind | "support", string> | null;
   hooks: Record<Kind, string> | null;
   senders: Sender[];
 } | null>(null);
 
 /** What each address makes, in the words the rest of the hub uses for them. */
-const KINDS: { id: Kind; label: string; note: string }[] = [
+const KINDS: { id: Kind | "support"; label: string; note: string }[] = [
   { id: "task", label: "Task", note: "work to do, ready to pick up" },
   { id: "bug", label: "Bug", note: "a defect to fix" },
   { id: "transfer", label: "Transfer", note: "context to hand over" },
 ];
+/**
+ * The address customers write to (docs/LOOP.md): email only, since a webhook has no customer to
+ * answer, and unlike the others anyone may write to it.
+ */
+const SUPPORT_ROW = {
+  id: "support" as const,
+  label: "Customer support",
+  note: "anyone can write; they get a tracking number, and you answer from the guide",
+};
+const rows = computed(() => (source.value === "email" ? [...KINDS, SUPPORT_ROW] : KINDS));
 const busy = ref("");
 const problem = ref("");
 const source = ref<"email" | "sentry" | "posthog" | "code">("email");
@@ -63,11 +73,13 @@ const addresses = computed(() =>
           k,
           team.value && a ? a.replace("@", `+${team.value}@`) : a,
         ]),
-      ) as Record<Kind, string>)
+      ) as Record<Kind | "support", string>)
     : null,
 );
 /** Email shows its addresses; every other source posts to its URL. */
-const shown = computed(() => (source.value === "email" ? addresses.value : hooks.value));
+const shown = computed<Record<string, string> | null>(() =>
+  source.value === "email" ? addresses.value : hooks.value,
+);
 /** Replacing or removing the addresses breaks whatever uses them, so it asks in place first. */
 const confirming = ref<"" | "new" | "off">("");
 
@@ -141,13 +153,13 @@ const choices = [
           </div>
 
           <ul v-if="shown" class="m-0 flex list-none flex-col gap-3 p-0">
-            <li v-for="k in KINDS" :key="k.id" class="flex flex-col gap-2">
+            <li v-for="k in rows" :key="k.id" class="flex flex-col gap-2">
               <span><b class="font-medium text-fg">{{ k.label }}</b> <span class="text-muted">· {{ k.note }}</span></span>
               <div class="flex flex-wrap items-center gap-2">
                 <code
                   class="flex h-[var(--control-h)] min-w-0 flex-1 items-center overflow-x-auto rounded-1 border border-line-strong bg-field px-3 font-code text-sm whitespace-nowrap text-fg"
                 >{{ shown[k.id] }}</code>
-                <button class="btn" type="button" @click="copy(shown[k.id], $event.currentTarget)">
+                <button class="btn" type="button" @click="copy(shown[k.id] ?? '', $event.currentTarget)">
                   <AppIcon name="copy" /><span data-label>Copy</span>
                 </button>
               </div>
@@ -159,6 +171,10 @@ const choices = [
               Give an address to anything that sends email — an uptime monitor, a form, a colleague —
               or add it as a BCC where your backend sends mail. A sender's first email asks to be
               allowed below. To pass on one email, forward it from {{ myEmail }}.
+            </p>
+            <p class="m-0">
+              Customer support is different: forward your support inbox to it, and every customer who
+              writes gets a request on the board and an email with a tracking number.
             </p>
             <p class="m-0">
               For mail you can't change, forward it from Gmail: Settings, then
