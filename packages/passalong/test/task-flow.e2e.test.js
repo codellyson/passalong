@@ -266,7 +266,7 @@ test("a document moves between folders with its history, and only within its spa
   await api.createFolderDocument(to.id, "Script, rough", "");
   await assert.rejects(
     api.patchFolderDocument(from.id, document.id, { folder: to.id }),
-    /already in the folder/,
+    /already in the project/,
   );
   // A folder this account cannot see is refused the same way as one that does not exist.
   await assert.rejects(
@@ -318,7 +318,7 @@ test("an agent finds projects by words, renames, recovers and removes", {
   );
 
   await api.deleteFolderDocument(folder.id, document.id);
-  await assert.rejects(api.folderDocument(folder.id, document.id), /isn't in this folder/);
+  await assert.rejects(api.folderDocument(folder.id, document.id), /isn't in this project/);
 });
 
 test("work goes round: taken, taken back, done, reopened", { skip }, async () => {

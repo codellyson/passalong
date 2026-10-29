@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { age, projectsFrom, storedTone, toneOf } from "../app/utils/projects.ts";
+import { age, docsChanged, projectsFrom, storedTone, toneOf } from "../app/utils/projects.ts";
 
 test("a project keeps its folder's colour, never coral, and is stable without one", () => {
   assert.equal(toneOf({ id: "a", color: "blue" }), "blue");
@@ -34,4 +34,34 @@ test("age reads in one unit", () => {
   assert.equal(age("2026-10-28T07:00:00Z", now), "26h");
   assert.equal(age("2026-10-25T09:00:00Z", now), "4d");
   assert.equal(age("2026-09-01T09:00:00Z", now), "8w");
+});
+
+test("a project rolls up documents and its latest change, and a document change is news after the last look", () => {
+  const folders = [
+    {
+      id: "w",
+      title: "Website",
+      color: "",
+      parent_id: "",
+      documents: 2,
+      updated: "2026-10-01",
+      docs_changed: "",
+    },
+    {
+      id: "p",
+      title: "Pages",
+      color: "",
+      parent_id: "w",
+      documents: 3,
+      updated: "2026-10-20",
+      docs_changed: "2026-10-20",
+    },
+  ];
+  const [w] = projectsFrom(folders, () => "2026-10-21");
+  assert.equal(w.documents, 5);
+  assert.equal(w.updated, "2026-10-20");
+  assert.equal(w.changed, false, "looked at after the change");
+  assert.equal(projectsFrom(folders, () => "2026-10-10")[0].changed, true);
+  assert.equal(projectsFrom(folders)[0].changed, true, "never looked at");
+  assert.equal(docsChanged("", ""), false);
 });

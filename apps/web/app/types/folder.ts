@@ -26,6 +26,10 @@ export interface FolderDocument {
   body: string;
   version: number;
   updated_by: string;
+  /** Who last saved it, by name or @handle. Only on a folder's read. */
+  editor?: string;
+  /** What saved it last: "hub" is a person, anything else an agent, "" from before it was kept. */
+  client?: string;
   created: string;
   updated: string;
 }
@@ -46,4 +50,35 @@ export interface FolderGuide {
   status: string;
   /** The label its agent gave it; the first is shown. */
   tags: string[];
+}
+
+/** A project's work as a register row (apps/api/src/project.ts). */
+export interface ProjectWork {
+  id: string;
+  title: string;
+  summary: string;
+  tags: string[];
+  stage: "draft" | "todo" | "working" | "done";
+  health: "" | "asking" | "quiet" | "working";
+  with: string;
+  since: string;
+  outcome: string;
+  /** What changed since you last looked, in words; "" when nothing. */
+  changed: string;
+}
+
+/** One line of a project's history: work finished, or a document version saved. */
+export interface ProjectHistoryItem {
+  kind: "finished" | "document";
+  at: string;
+  by: string;
+  via: "agent" | "person" | "";
+  mine: boolean;
+  id: string;
+  title: string;
+  folder: string;
+  version: number;
+  note: string;
+  shots: number;
+  checks: number;
 }

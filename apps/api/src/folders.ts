@@ -4,10 +4,12 @@ import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
 import { type Folder, findVisible, moveProblem } from "./folder-tree.js";
 import { tagList } from "./guide.js";
 import { mintOrigin } from "./hosts.js";
+import { changeWords } from "./needs.js";
+import { projectView } from "./project.js";
 import { planNow } from "./quota.js";
 
 type Env = { DB: D1Database; SHOTS?: R2Bucket; PUBLIC_ORIGIN?: string };
-type Vars = { account: string };
+type Vars = { account: string; client?: string };
 type Context = { Bindings: Env; Variables: Vars };
 type Document = {
   id: string;
@@ -43,7 +45,7 @@ const message = (
 ) => c.json({ message: text }, status);
 const titleOf = (value: unknown, limit = 100) =>
   typeof value === "string" ? value.trim().slice(0, limit) : "";
-const COLORS = new Set(["", "coral", "amber", "green", "blue", "violet"]);
+const COLORS = new Set(["", "coral", "amber", "green", "blue", "violet", "teal", "stone"]);
 const colorOf = (value: unknown) => (typeof value === "string" && COLORS.has(value) ? value : null);
 const assetKey = (folder: string, asset: string) => `folders/${folder}/${asset}`;
 
@@ -110,7 +112,9 @@ routes.get("/", async (c) => {
             (SELECT COUNT(*) FROM folder_guide l JOIN guide w ON w.id = l.guide_id
               WHERE l.folder_id = f.id AND w.status <> 'consumed') AS open,
             EXISTS (SELECT 1 FROM folder_guide l JOIN notification n ON n.guide_id = l.guide_id
-              WHERE l.folder_id = f.id AND n.account_id = ? AND n.read_at = '') AS changed${
+              WHERE l.folder_id = f.id AND n.account_id = ? AND n.read_at = '') AS changed,
+            COALESCE((SELECT MAX(d.updated) FROM folder_document d
+              WHERE d.folder_id = f.id AND d.updated_by <> ?), '') AS docs_changed${
                 words
                   ? `,
             (SELECT json_group_array(json_object('id', d.id, 'name', d.name)) FROM folder_document d
@@ -121,7 +125,7 @@ routes.get("/", async (c) => {
       WHERE ${where}
       ORDER BY f.updated DESC`,
   )
-    .bind(me, me, me, ...(words ? [like, like] : []), ...values)
+    .bind(me, me, me, me, ...(words ? [like, like] : []), ...values)
     .all<
       Folder & {
         team_name: string;
@@ -153,24 +157,24 @@ routes.post("/", async (c) => {
     }>()
     .catch(() => null);
   const title = titleOf(input?.title);
-  if (!title) return message(c, 400, "Give the folder a name.");
+  if (!title) return message(c, 400, "Give the project a name.");
   if (input && Object.hasOwn(input, "parent") && typeof input.parent !== "string")
-    return message(c, 400, "Choose a parent folder by id.");
+    return message(c, 400, "Choose the project it goes inside by id.");
   const description = titleOf(input?.description, 400);
   const count = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM folder WHERE created_by = ?")
     .bind(c.get("account"))
     .first<{ n: number }>();
   if ((count?.n || 0) >= 100)
-    return message(c, 409, "You have 100 folders already. Use one of those for this project.");
+    return message(c, 409, "You have 100 projects already. Use one of those for this.");
   const parentId = titleOf(input?.parent, 32);
   const teamSlug = titleOf(input?.team, 40);
   let teamId = "";
   let parent: Folder | null = null;
   if (parentId) {
     parent = await visible(c, parentId);
-    if (!parent) return message(c, 404, "That parent folder isn't available to you.");
+    if (!parent) return message(c, 404, "The project it goes inside isn't available to you.");
     if (!(await writable(c, parent)))
-      return message(c, 402, "This folder can't be changed right now.");
+      return message(c, 402, "This project can't be changed right now.");
     teamId = parent.team_id;
   }
   if (teamSlug) {
@@ -184,14 +188,14 @@ routes.post("/", async (c) => {
       return message(
         c,
         402,
-        "This team's plan has lapsed. Its folders can still be read, but not changed.",
+        "This team's plan has lapsed. Its projects can still be read, but not changed.",
       );
     if (parent && team.id !== parent.team_id)
-      return message(c, 409, "A subfolder must stay in its parent's team.");
+      return message(c, 409, "A project inside another must stay in its team.");
     teamId = team.id;
   }
   const color = input && Object.hasOwn(input, "color") ? colorOf(input.color) : "";
-  if (color === null) return message(c, 400, "Choose a supported folder color.");
+  if (color === null) return message(c, 400, "Choose a supported project colour.");
   const folder: Folder = {
     id: id(),
     created_by: c.get("account"),
@@ -224,24 +228,24 @@ routes.post("/", async (c) => {
 
 routes.patch("/:folder", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
-    return message(c, 402, "This folder can't be changed right now.");
+    return message(c, 402, "This project can't be changed right now.");
   const input = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (
     !input ||
     !Object.keys(input).some((key) => ["title", "description", "parent", "color"].includes(key))
   )
-    return message(c, 400, "Choose a folder change.");
+    return message(c, 400, "Choose a project change.");
   if (Object.hasOwn(input, "parent") && typeof input.parent !== "string")
-    return message(c, 400, "Choose a parent folder by id.");
+    return message(c, 400, "Choose the project it goes inside by id.");
   const title = Object.hasOwn(input, "title") ? titleOf(input.title) : folder.title;
-  if (!title) return message(c, 400, "Give the folder a name.");
+  if (!title) return message(c, 400, "Give the project a name.");
   const description = Object.hasOwn(input, "description")
     ? titleOf(input.description, 400)
     : folder.description;
   const color = Object.hasOwn(input, "color") ? colorOf(input.color) : folder.color;
-  if (color === null) return message(c, 400, "Choose a supported folder color.");
+  if (color === null) return message(c, 400, "Choose a supported project colour.");
   const parentId = Object.hasOwn(input, "parent") ? titleOf(input.parent, 32) : folder.parent_id;
   const problem = await moveProblem(c.env.DB, c.get("account"), folder, parentId);
   if (problem) return message(c, problem.status, problem.message);
@@ -281,12 +285,12 @@ const shareUrl = (
 
 routes.post("/:folder/share", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   const share_key = folder.share_key || `${id()}${id()}`.slice(0, 22);
   if (!folder.share_key)
@@ -298,12 +302,12 @@ routes.post("/:folder/share", async (c) => {
 
 routes.delete("/:folder/share", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   await c.env.DB.prepare("UPDATE folder SET share_key = '' WHERE id = ?").bind(folder.id).run();
   return c.json({ url: "" });
@@ -311,7 +315,7 @@ routes.delete("/:folder/share", async (c) => {
 
 routes.get("/:folder", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   const ownership = folder.team_id
     ? await c.env.DB.prepare("SELECT role FROM membership WHERE team_id = ? AND account_id = ?")
         .bind(folder.team_id, c.get("account"))
@@ -324,7 +328,13 @@ routes.get("/:folder", async (c) => {
     : null;
   const [documents, assets, guides, children, ancestors] = await Promise.all([
     c.env.DB.prepare(
-      "SELECT id, name, version, updated_by, created, updated FROM folder_document WHERE folder_id = ? ORDER BY updated DESC",
+      // With who last saved each and whether that was a person in the hub or an agent.
+      `SELECT d.id, d.name, d.version, d.updated_by, d.created, d.updated,
+              COALESCE(NULLIF(a.name, ''), CASE WHEN a.handle <> '' THEN '@' || a.handle END, '') AS editor,
+              COALESCE((SELECT r.client FROM folder_document_revision r WHERE r.document_id = d.id
+                         ORDER BY r.version DESC LIMIT 1), '') AS client
+         FROM folder_document d LEFT JOIN account a ON a.id = d.updated_by
+        WHERE d.folder_id = ? ORDER BY d.updated DESC`,
     )
       .bind(folder.id)
       .all(),
@@ -374,27 +384,39 @@ routes.get("/:folder", async (c) => {
   });
 });
 
+// A project's work as register rows and its history, in one read (project.ts).
+routes.get("/:folder/project", async (c) => {
+  const folder = await visible(c, c.req.param("folder"));
+  if (!folder) return message(c, 404, "That project isn't available to you.");
+  const view = await projectView(c.env.DB, c.get("account"), folder.id, now());
+  const words = <T extends { changed: string }>(r: T) => ({
+    ...r,
+    changed: changeWords(r.changed),
+  });
+  return c.json({ open: view.open.map(words), done: view.done.map(words), history: view.history });
+});
+
 routes.post("/:folder/documents", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   const input = await c.req.json<{ name?: unknown; body?: unknown }>().catch(() => null);
   const name = titleOf(input?.name, 120);
   if (!name || name.includes("/") || name.includes("\\"))
     return message(c, 400, "Give the document a name without a path.");
   const body = typeof input?.body === "string" ? input.body : "";
-  if (body.length > 256 * 1024) return message(c, 413, "That document is too large for a folder.");
+  if (body.length > 256 * 1024) return message(c, 413, "That document is too large for a project.");
   const count = await c.env.DB.prepare(
     "SELECT COUNT(*) AS n FROM folder_document WHERE folder_id = ?",
   )
     .bind(folder.id)
     .first<{ n: number }>();
-  if ((count?.n || 0) >= 100) return message(c, 409, "This folder has 100 documents already.");
+  if ((count?.n || 0) >= 100) return message(c, 409, "This project has 100 documents already.");
   const doc: Document = {
     id: id(),
     folder_id: folder.id,
@@ -411,31 +433,31 @@ routes.post("/:folder/documents", async (c) => {
         "INSERT INTO folder_document (id, folder_id, name, body, version, updated_by, created, updated) VALUES (?, ?, ?, ?, 1, ?, ?, ?)",
       ).bind(doc.id, folder.id, name, body, doc.updated_by, doc.created, doc.updated),
       c.env.DB.prepare(
-        "INSERT INTO folder_document_revision (document_id, version, body, saved_by, saved_at) VALUES (?, 1, ?, ?, ?)",
-      ).bind(doc.id, body, doc.updated_by, doc.updated),
+        "INSERT INTO folder_document_revision (document_id, version, body, saved_by, saved_at, client) VALUES (?, 1, ?, ?, ?, ?)",
+      ).bind(doc.id, body, doc.updated_by, doc.updated, c.get("client") || ""),
       c.env.DB.prepare("UPDATE folder SET updated = ? WHERE id = ?").bind(doc.updated, folder.id),
     ]);
   } catch {
-    return message(c, 409, "A document with that name is already in this folder.");
+    return message(c, 409, "A document with that name is already in this project.");
   }
   return c.json({ document: doc }, 201);
 });
 
 routes.get("/:folder/documents/:document", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   const document = await documentIn(c, folder.id, c.req.param("document"));
-  return document ? c.json({ document }) : message(c, 404, "That document isn't in this folder.");
+  return document ? c.json({ document }) : message(c, 404, "That document isn't in this project.");
 });
 
 routes.put("/:folder/documents/:document", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   const input = await c.req.json<{ body?: unknown; version?: unknown }>().catch(() => null);
   if (
@@ -445,7 +467,7 @@ routes.put("/:folder/documents/:document", async (c) => {
   )
     return message(c, 400, "Send the document text and the version you opened.");
   if (input.body.length > 256 * 1024)
-    return message(c, 413, "That document is too large for a folder.");
+    return message(c, 413, "That document is too large for a project.");
   const at = now();
   const documentId = c.req.param("document");
   // Both statements share one D1 transaction: a saved version never exists without its revision.
@@ -454,8 +476,8 @@ routes.put("/:folder/documents/:document", async (c) => {
       "UPDATE folder_document SET body = ?, version = version + 1, updated_by = ?, updated = ? WHERE id = ? AND folder_id = ? AND version = ?",
     ).bind(input.body, c.get("account"), at, documentId, folder.id, input.version),
     c.env.DB.prepare(
-      "INSERT OR IGNORE INTO folder_document_revision (document_id, version, body, saved_by, saved_at) SELECT id, version, body, updated_by, updated FROM folder_document WHERE id = ? AND folder_id = ? AND version = ?",
-    ).bind(documentId, folder.id, Number(input.version) + 1),
+      "INSERT OR IGNORE INTO folder_document_revision (document_id, version, body, saved_by, saved_at, client) SELECT id, version, body, updated_by, updated, ? FROM folder_document WHERE id = ? AND folder_id = ? AND version = ?",
+    ).bind(c.get("client") || "", documentId, folder.id, Number(input.version) + 1),
   ]);
   if (!updated?.meta.changes) {
     const exists = await documentIn(c, folder.id, c.req.param("document"));
@@ -464,7 +486,7 @@ routes.put("/:folder/documents/:document", async (c) => {
       exists ? 409 : 404,
       exists
         ? "Someone saved a newer version. Reopen the document before saving."
-        : "That document isn't in this folder.",
+        : "That document isn't in this project.",
     );
   }
   const result = await documentIn(c, folder.id, documentId);
@@ -478,33 +500,33 @@ routes.put("/:folder/documents/:document", async (c) => {
 // would share it, and that is a decision for a person, not a side effect of tidying.
 routes.patch("/:folder/documents/:document", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   const input = await c.req.json<{ name?: unknown; folder?: unknown }>().catch(() => null);
   const document = await documentIn(c, folder.id, c.req.param("document"));
-  if (!document) return message(c, 404, "That document isn't in this folder.");
+  if (!document) return message(c, 404, "That document isn't in this project.");
   if (!input || (input.name === undefined && input.folder === undefined))
-    return message(c, 400, "Send a new name, a folder to move it to, or both.");
+    return message(c, 400, "Send a new name, a project to move it to, or both.");
   const name = input.name === undefined ? document.name : titleOf(input.name, 120);
   if (!name || name.includes("/") || name.includes("\\"))
     return message(c, 400, "Give the document a name without a path.");
   let target = folder;
   if (input.folder !== undefined) {
     if (typeof input.folder !== "string" || !input.folder)
-      return message(c, 400, "Choose the folder to move it to by id.");
+      return message(c, 400, "Choose the project to move it to by id.");
     const found = await visible(c, input.folder);
     if (!found || found.team_id !== folder.team_id)
-      return message(c, 404, "That folder isn't available in this space.");
+      return message(c, 404, "That project isn't available in this space.");
     if (!(await writable(c, found)))
       return message(
         c,
         402,
-        "This team's plan has lapsed. Its folders can still be read, but not changed.",
+        "This team's plan has lapsed. Its projects can still be read, but not changed.",
       );
     target = found;
   }
@@ -514,7 +536,7 @@ routes.patch("/:folder/documents/:document", async (c) => {
     )
       .bind(target.id)
       .first<{ n: number }>();
-    if ((count?.n || 0) >= 100) return message(c, 409, "That folder has 100 documents already.");
+    if ((count?.n || 0) >= 100) return message(c, 409, "That project has 100 documents already.");
   }
   const at = now();
   try {
@@ -533,8 +555,8 @@ routes.patch("/:folder/documents/:document", async (c) => {
       c,
       409,
       target.id === folder.id
-        ? "A document with that name is already in this folder."
-        : "A document with that name is already in the folder you are moving it to.",
+        ? "A document with that name is already in this project."
+        : "A document with that name is already in the project you are moving it to.",
     );
   }
   return c.json({ document: await documentIn(c, target.id, document.id), folder: target.id });
@@ -542,9 +564,9 @@ routes.patch("/:folder/documents/:document", async (c) => {
 
 routes.get("/:folder/documents/:document/revisions", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   const document = await documentIn(c, folder.id, c.req.param("document"));
-  if (!document) return message(c, 404, "That document isn't in this folder.");
+  if (!document) return message(c, 404, "That document isn't in this project.");
   const { results } = await c.env.DB.prepare(
     "SELECT version, saved_by, saved_at FROM folder_document_revision WHERE document_id = ? ORDER BY version DESC LIMIT 50",
   )
@@ -555,9 +577,9 @@ routes.get("/:folder/documents/:document/revisions", async (c) => {
 
 routes.get("/:folder/documents/:document/revisions/:version", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   const document = await documentIn(c, folder.id, c.req.param("document"));
-  if (!document) return message(c, 404, "That document isn't in this folder.");
+  if (!document) return message(c, 404, "That document isn't in this project.");
   const revision = await c.env.DB.prepare(
     "SELECT version, body, saved_by, saved_at FROM folder_document_revision WHERE document_id = ? AND version = ?",
   )
@@ -568,19 +590,19 @@ routes.get("/:folder/documents/:document/revisions/:version", async (c) => {
 
 routes.delete("/:folder/documents/:document", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   const result = await c.env.DB.prepare(
     "DELETE FROM folder_document WHERE folder_id = ? AND id = ?",
   )
     .bind(folder.id, c.req.param("document"))
     .run();
-  if (!result.meta.changes) return message(c, 404, "That document isn't in this folder.");
+  if (!result.meta.changes) return message(c, 404, "That document isn't in this project.");
   await c.env.DB.prepare("UPDATE folder SET updated = ? WHERE id = ?").bind(now(), folder.id).run();
   return c.json({ removed: true });
 });
@@ -614,7 +636,7 @@ export async function storeFolderAsset(
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM folder_asset WHERE folder_id = ?")
     .bind(folder)
     .first<{ n: number }>();
-  if ((count?.n || 0) >= 100) return { error: "This folder has 100 files already.", status: 409 };
+  if ((count?.n || 0) >= 100) return { error: "This project has 100 files already.", status: 409 };
   const asset: Asset = {
     id: id(),
     folder_id: folder,
@@ -641,12 +663,12 @@ export async function storeFolderAsset(
 
 routes.post("/:folder/assets", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   const raw = await c.req.arrayBuffer();
   if (!raw.byteLength) return message(c, 400, "Choose a file that isn't empty.");
@@ -662,11 +684,11 @@ routes.post("/:folder/assets", async (c) => {
 
 routes.get("/:folder/assets/:asset", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   const asset = await c.env.DB.prepare("SELECT * FROM folder_asset WHERE folder_id = ? AND id = ?")
     .bind(folder.id, c.req.param("asset"))
     .first<Asset>();
-  if (!asset || !c.env.SHOTS) return message(c, 404, "That file isn't in this folder.");
+  if (!asset || !c.env.SHOTS) return message(c, 404, "That file isn't in this project.");
   const object = await c.env.SHOTS.get(assetKey(folder.id, asset.id));
   if (!object) return message(c, 404, "That file isn't available right now.");
   return new Response(object.body, {
@@ -683,11 +705,11 @@ routes.get("/:folder/assets/:asset", async (c) => {
 /** A bounded representation an MCP tool can hand to an agent as an image or text block. */
 routes.get("/:folder/assets/:asset/agent", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   const asset = await c.env.DB.prepare("SELECT * FROM folder_asset WHERE folder_id = ? AND id = ?")
     .bind(folder.id, c.req.param("asset"))
     .first<Asset>();
-  if (!asset || !c.env.SHOTS) return message(c, 404, "That file isn't in this folder.");
+  if (!asset || !c.env.SHOTS) return message(c, 404, "That file isn't in this project.");
   const image = asset.type.startsWith("image/");
   const readable = asset.type.startsWith("text/") || asset.type === "application/json";
   if (!image && !readable)
@@ -715,17 +737,17 @@ routes.get("/:folder/assets/:asset/agent", async (c) => {
 
 routes.delete("/:folder/assets/:asset", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   const asset = await c.env.DB.prepare("SELECT id FROM folder_asset WHERE folder_id = ? AND id = ?")
     .bind(folder.id, c.req.param("asset"))
     .first<{ id: string }>();
-  if (!asset) return message(c, 404, "That file isn't in this folder.");
+  if (!asset) return message(c, 404, "That file isn't in this project.");
   if (!c.env.SHOTS) return message(c, 501, "File storage isn't available right now.");
   await c.env.SHOTS.delete(assetKey(folder.id, asset.id));
   await c.env.DB.prepare("DELETE FROM folder_asset WHERE id = ?").bind(asset.id).run();
@@ -735,12 +757,12 @@ routes.delete("/:folder/assets/:asset", async (c) => {
 
 routes.post("/:folder/guides", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   const input = await c.req.json<{ guide?: unknown }>().catch(() => null);
   const guideId = titleOf(input?.guide, 16);
@@ -753,7 +775,7 @@ routes.post("/:folder/guides", async (c) => {
       ? guide.team_id !== folder.team_id
       : guide.account_id !== c.get("account") || Boolean(guide.team_id))
   )
-    return message(c, 404, "That work can't be added to this folder.");
+    return message(c, 404, "That work can't be added to this project.");
   await c.env.DB.prepare(
     "INSERT OR IGNORE INTO folder_guide (folder_id, guide_id, added_by, added) VALUES (?, ?, ?, ?)",
   )
@@ -765,12 +787,12 @@ routes.post("/:folder/guides", async (c) => {
 
 routes.delete("/:folder/guides/:guide", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   await c.env.DB.prepare("DELETE FROM folder_guide WHERE folder_id = ? AND guide_id = ?")
     .bind(folder.id, c.req.param("guide"))
@@ -780,12 +802,12 @@ routes.delete("/:folder/guides/:guide", async (c) => {
 
 routes.delete("/:folder", async (c) => {
   const folder = await visible(c, c.req.param("folder"));
-  if (!folder) return message(c, 404, "That folder isn't available to you.");
+  if (!folder) return message(c, 404, "That project isn't available to you.");
   if (!(await writable(c, folder)))
     return message(
       c,
       402,
-      "This team's plan has lapsed. Its folders can still be read, but not changed.",
+      "This team's plan has lapsed. Its projects can still be read, but not changed.",
     );
   if (folder.created_by !== c.get("account")) {
     const owner = await c.env.DB.prepare(
@@ -794,7 +816,11 @@ routes.delete("/:folder", async (c) => {
       .bind(folder.team_id, c.get("account"))
       .first();
     if (!owner)
-      return message(c, 403, "Only the person who made this folder or a team owner can delete it.");
+      return message(
+        c,
+        403,
+        "Only the person who made this project or a team owner can delete it.",
+      );
   }
   if (folder.team_id) {
     const otherOwner = await c.env.DB.prepare(
@@ -816,7 +842,7 @@ routes.delete("/:folder", async (c) => {
         return message(
           c,
           403,
-          "Only a team owner can delete a subtree containing teammates' folders.",
+          "Only a team owner can delete a project holding teammates' projects.",
         );
     }
   }

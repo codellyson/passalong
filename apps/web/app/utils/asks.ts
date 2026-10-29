@@ -22,14 +22,19 @@ export const ASKS = {
 export const teamAsk = (team: string) =>
   `Add this to Passalong for the team ${team}: <what needs doing>`;
 
-/**
- * New work made from a folder, so the sentence names the folder by id as well as by title. A team
- * folder's work goes to that team, or only its author could see it in the folder.
- */
-export const folderAsk = (folder: { id: string; title: string; team?: string }) => {
-  const team = folder.team ? ` for the team ${folder.team}` : "";
-  return `Add this to Passalong${team}: <what needs doing>. It belongs in the Passalong folder "${folder.title}" (${folder.id}).`;
+/** A project's work, named by id as well as title, and addressed to its team when it has one. */
+export const projectAsk = (project: { id: string; title: string; team?: string }) => {
+  const team = project.team ? ` for the team ${project.team}` : "";
+  return `Add this to Passalong${team}: <what needs doing>. It belongs in the Passalong project "${project.title}" (${project.id}).`;
 };
+
+/** A new project, made and written up by the agent that knows the product. */
+export const newProjectAsk = (team?: string) =>
+  `Make a Passalong project for <the product or repo>${team ? ` for the team ${team}` : ""}, and write its README: what it is, who uses it, the words we use for things and how it is built.`;
+
+/** A project's first documents, written by an agent that can read the product. */
+export const readmeAsk = (project: { id: string; title: string }) =>
+  `Write the README for the Passalong project "${project.title}" (${project.id}): what the product is, who uses it, the words we use for things and how it is built. Then add a page for each area someone working on it needs to know, and a Log page.`;
 
 /** Installing the tool and signing it in, in the order they have to be run. */
 export const CONNECT = ["npm i -g passalong", "passalong login", "passalong setup"] as const;

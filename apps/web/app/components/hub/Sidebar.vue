@@ -6,13 +6,13 @@
   since you last looked, which is the only thing coral means in the hub.
 -->
 <script setup lang="ts">
-import { projectsFrom } from "~/utils/projects";
+import { projectsFrom, seenAt } from "~/utils/projects";
 
 const { needsQ, projectsQ, signedIn } = useHub();
 const route = useRoute();
 
 const waiting = computed(() => needsQ.data.value?.rows.length ?? 0);
-const projects = computed(() => projectsFrom(projectsQ.data.value?.folders ?? []));
+const projects = computed(() => projectsFrom(projectsQ.data.value?.folders ?? [], seenAt));
 
 const item =
   "flex min-h-8 items-center gap-3 rounded-1 px-3 py-1 font-ui text-sm leading-5 no-underline transition-colors";
@@ -30,10 +30,10 @@ const at = {
       route.path.startsWith("/hub/answer"),
   ),
   support: computed(() => route.path.startsWith("/hub/support")),
-  projects: computed(() => route.path === "/hub/folders"),
+  projects: computed(() => route.path === "/hub/projects"),
   settings: computed(() => route.path.startsWith("/hub/settings")),
 };
-const isProject = (id: string) => route.path === `/hub/folders/${id}`;
+const isProject = (id: string) => route.path === `/hub/projects/${id}`;
 </script>
 
 <template>
@@ -54,7 +54,7 @@ const isProject = (id: string) => route.path === `/hub/folders/${id}`;
       <section aria-labelledby="rail-projects" class="flex min-h-0 flex-col gap-1">
         <NuxtLink
           id="rail-projects"
-          to="/hub/folders"
+          to="/hub/projects"
           class="px-3 font-ui text-xs font-medium tracking-wide text-on-rail-muted uppercase no-underline hover:text-on-rail"
           :aria-current="at.projects.value ? 'page' : undefined"
         >
@@ -63,7 +63,7 @@ const isProject = (id: string) => route.path === `/hub/folders/${id}`;
         <ul v-if="projects.length" class="m-0 flex min-h-0 list-none flex-col gap-0 overflow-y-auto p-0 [scrollbar-width:thin]">
           <li v-for="p in projects" :key="p.id" class="m-0">
             <NuxtLink
-              :to="`/hub/folders/${p.id}`"
+              :to="`/hub/projects/${p.id}`"
               :class="[item, tone(isProject(p.id))]"
               :aria-current="isProject(p.id) ? 'page' : undefined"
             >
@@ -75,7 +75,7 @@ const isProject = (id: string) => route.path === `/hub/folders/${id}`;
           </li>
         </ul>
         <p v-else-if="projectsQ.isSuccess.value" class="m-0 px-3 font-ui text-xs text-on-rail-muted">
-          No projects yet. <NuxtLink to="/hub/folders" class="text-on-rail">Start one</NuxtLink>
+          No projects yet. <NuxtLink to="/hub/projects" class="text-on-rail">Start one</NuxtLink>
         </p>
       </section>
 

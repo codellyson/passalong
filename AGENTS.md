@@ -196,8 +196,12 @@ change. Its README says how.
     **A project is a place, its documents are what to know, work is what to do**: anything someone
     must still act on is work, never only a document, which has no owner or state and tells nobody.
     Both servers lead with that rule and say a project's `space`; `test/folder-rule.test.js` keeps
-    them and llms.txt in step. The hub leads creation with an agent prompt and keeps its editor for
-    corrections. It fetches private images with its credential and draws blob URLs, which is why the
+    them and llms.txt in step. In the hub a folder is a **project** (`/hub/projects`, `/hub/projects/:id`
+    with Documents, Work and History tabs; the hub never says "folder"), and its Work and History are
+    one read, `GET /v1/folders/:id/project` (`src/project.ts`, imports no sibling, tested against
+    SQLite). Each document version records what saved it (`client`, migration 0063): `hub` is a
+    person, `mcp`/`cli@…` an agent, `api` and '' unknown. The hub leads creation with an agent prompt
+    and keeps a plain form and its editor for corrections. It fetches private images with its credential and draws blob URLs, which is why the
     hub CSP permits `img-src blob:`.
   - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running
     local server (`npm run test:e2e`, skipped by `npm test`). It puts its accounts on a plan in the

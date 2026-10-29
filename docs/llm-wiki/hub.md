@@ -97,11 +97,27 @@ author.
   `task_event` line as chat, and a reply box to whoever holds it.
 - **Who has it** and **Tied to** (its parent, work made from it, blockers, folders) follow.
 
-## Folders — `/hub/folders`
+## Projects — `/hub/projects`
 
-Private and team project folders hold Markdown documents, file assets and links to existing work.
-The document editor saves a new revision using the version it opened, and refuses a stale save.
-The same documents are reachable through MCP; see [folders.md](folders.md).
+A project is a folder (docs/LOOP.md §0); the hub never says "folder". `/hub/projects` is a register
+like Needs you: each top-level project with its line colour, its line of description, open work,
+documents and last change rolled up over the folders inside it (`projectsFrom()`), coral when
+something in it changed since you last looked, a plain create form and the agent's ask.
+`/hub/projects/:id` has three tabs at their own addresses (`?tab=documents|work|history`):
+**Documents** leads with the README rendered in full, then the other documents (last editor, person
+or agent, and when), folders inside it listed quietly, and files; a document opens in place
+(`?doc=`, `HubProjectDocument`), saves a new version with the version it opened and refuses a stale
+one, and an earlier version is read-only at `?doc=…&v=…` with "Put this version back". **Work** is
+the project's register (Work · With · State · Age · one action), Open then Done recently; "New work"
+opens the box with `?project=`, which files into that project's team and links it here.
+**History** merges work finished (who, person or agent, and what was shown) and document versions,
+newest first, with no counts. Work and History come from one read, `GET /v1/folders/:id/project`
+(`apps/api/src/project.ts`), which owns no table.
+
+Coral on a project: unread news on its work (the server's `changed`), or a document someone else
+saved after this browser last opened the project (`docs_changed` on the folder list against
+`markProjectSeen()` in localStorage — per browser, not per account). There is no `/hub/folders`:
+nothing outside the hub linked to it. See [folders.md](folders.md).
 
 ## Live
 
@@ -124,6 +140,6 @@ pages, each with its own state ("2 need you", "1 failing"), and each page opens 
 holding that anchor (`tabOf()`).
 
 ## Sources
-- `apps/web/app/pages/hub/index.vue` (Needs you), `components/hub/Sidebar.vue`, `utils/projects.ts`, `apps/api/src/needs.ts`, `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/folders/`, `pages/hub/settings/[[tab]].vue`
+- `apps/web/app/pages/hub/index.vue` (Needs you), `components/hub/Sidebar.vue`, `utils/projects.ts`, `apps/api/src/needs.ts`, `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/projects/`, `components/hub/ProjectDocument.vue`, `apps/api/src/project.ts`, `pages/hub/settings/[[tab]].vue`
 - `apps/web/app/components/hub/Board.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
 - [AGENTS.md](../../AGENTS.md): "A team's board is one board", "The hub shows a guide by framing it…", "The hub is live…"

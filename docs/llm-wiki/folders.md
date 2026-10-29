@@ -66,12 +66,14 @@ a client file input or asks `add_file` for a one-time upload link for a file in 
 person's request. No tool deletes a whole project: one mistaken call would take every subfolder and
 file, so that stays a person's act in the hub.
 
-Linked work sits in the folder's outline beside its documents and subfolders, each with its label
-and state and opening its work page. Linking and unlinking are the hub's (`POST`/`DELETE
-/v1/folders/:folder/guides`); agents have no tool for it, since work will live in its project (step
-4). "+ New work" copies a sentence for the agent that names the folder by title and id. The hub lists
-existing folders first and gives an example agent request instead of a creation form; its browser
-editor is there for corrections. A work page lists its folders under "Tied to".
+In the hub a folder is a project (`/hub/projects/:id`): its linked work is the Work tab's register,
+each row opening its work page, and its documents and finished work are one History
+(`GET /v1/folders/:id/project`, `project.ts`). Linking is the hub's (`POST`/`DELETE
+/v1/folders/:folder/guides`, "Add existing work"); agents have no tool for it, since work will live
+in its project (step 4). "New work" opens the box pre-set to the project, which links what it files.
+Each saved version records what saved it (`folder_document_revision.client`, migration 0063): `hub`
+is a person, `mcp` and `cli@…` an agent, `api` and '' unknown — never guessed. A work page lists its
+projects under "Tied to".
 
 A folder can be shared the way work is: a secret link, `/f/<id>/<key>` (migration 0048,
 `folder.share_key`), that anyone holding can read with no account. It opens that folder and every
@@ -84,5 +86,6 @@ script and is never indexed, like a share page; files are downloads, never shown
 ## Sources
 
 - `apps/api/migrations/0046_folders.sql`, `apps/api/migrations/0047_folder_hierarchy.sql`, `apps/api/src/folders.ts`, `apps/api/src/folder-tree.ts`
-- `apps/web/app/pages/hub/folders/`, `apps/web/app/components/hub/Shell.vue`
+- `apps/api/migrations/0063_document_client.sql`, `apps/api/src/project.ts`
+- `apps/web/app/pages/hub/projects/`, `apps/web/app/components/hub/ProjectDocument.vue`, `apps/web/app/components/hub/Shell.vue`
 - `apps/api/src/mcp-http.ts`, `packages/passalong/src/mcp.js`

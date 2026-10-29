@@ -1,20 +1,23 @@
-// Work made from a folder only lands in it if the sentence tells the agent which folder. These pin
-// that the folder is named by id, and that a team folder's work is addressed to its team.
+// Work made from a project only lands in it if the sentence tells the agent which project. These pin
+// that the project is named by id, and that a team project's work is addressed to its team.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { folderAsk, teamAsk } from "../app/utils/asks.ts";
+import { newProjectAsk, projectAsk, readmeAsk, teamAsk } from "../app/utils/asks.ts";
 
-const folder = { id: "fld123", title: "Feature Guide" };
+const project = { id: "fld123", title: "Feature Guide" };
 
-test("a folder's ask names the folder by title and id", () => {
-  assert.match(folderAsk(folder), /^Add this to Passalong: /);
-  assert.match(folderAsk(folder), /the Passalong folder "Feature Guide" \(fld123\)\.$/);
+test("a project's ask names the project by title and id", () => {
+  assert.match(projectAsk(project), /^Add this to Passalong: /);
+  assert.match(projectAsk(project), /the Passalong project "Feature Guide" \(fld123\)\.$/);
+  assert.match(readmeAsk(project), /project "Feature Guide" \(fld123\)/);
 });
 
-test("a team folder's work goes to that team, so the folder's members can see it", () => {
+test("a team project's work goes to that team, so the project's members can see it", () => {
   assert.match(
-    folderAsk({ ...folder, team: "acme" }),
+    projectAsk({ ...project, team: "acme" }),
     /^Add this to Passalong for the team acme: /,
   );
   assert.match(teamAsk("acme"), /^Add this to Passalong for the team acme: /);
+  assert.match(newProjectAsk("acme"), /for the team acme/);
+  assert.doesNotMatch(newProjectAsk(), /team/);
 });

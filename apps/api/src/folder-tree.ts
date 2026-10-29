@@ -65,11 +65,11 @@ export async function moveProblem(
   // A parent you cannot see and one in another space are refused alike, so a refusal does not
   // confirm that somebody else's folder exists.
   if (!parent || parent.team_id !== folder.team_id)
-    return { status: 404, message: "That parent folder isn't available in this space." };
+    return { status: 404, message: "The project it goes inside isn't available in this space." };
   if (await wouldCycle(db, folder.id, parentId))
     return {
       status: 409,
-      message: "A folder can't be moved into itself or one of its subfolders.",
+      message: "A project can't be moved inside itself or a project inside it.",
     };
   return null;
 }

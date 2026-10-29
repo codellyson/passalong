@@ -7,6 +7,8 @@
   its best reading and says what it would check. Filed, the panel says where it went, with move and undo.
 -->
 <script setup lang="ts">
+import { toneOf } from "~/utils/projects";
+
 usePage({
   title: "What do you need? · Passalong",
   description: "Say what you need; Passalong's agent files it for the right team.",
@@ -16,8 +18,25 @@ const { api, json, data } = useHub();
 
 const teams = computed(() => data.value.me?.teams ?? []);
 const team = ref("");
+
+/**
+ * Opened from a project's Work tab (`?project=<id>`): what is filed goes into that project, for the
+ * project's team, and the page says so. The link is made right after filing, by the same route the
+ * project page uses.
+ */
+const project = ref<{ id: string; title: string; team: string } | null>(null);
+const projectId = String(useRoute().query.project || "");
+onMounted(async () => {
+  if (!projectId) return;
+  const got = await api<{ folder: { id: string; title: string; team_slug?: string } }>(
+    `/v1/folders/${encodeURIComponent(projectId)}`,
+  ).catch(() => null);
+  if (!got) return;
+  project.value = { id: got.folder.id, title: got.folder.title, team: got.folder.team_slug || "" };
+  team.value = project.value.team;
+});
 watchEffect(() => {
-  if (!team.value) team.value = data.value.team?.slug || teams.value[0]?.slug || "";
+  if (!team.value && !projectId) team.value = data.value.team?.slug || teams.value[0]?.slug || "";
 });
 
 /** What is written, as markdown from the editor; pictures travel inline in it. */
@@ -208,6 +227,11 @@ async function file() {
       json("POST", { text: text.value, team: team.value }),
     );
     if (got) {
+      if (project.value)
+        await api(`/v1/folders/${project.value.id}/guides`, json("POST", { guide: got.id })).catch(
+          (err: Error) =>
+            (problem.value = `Filed, but not put into ${project.value?.title}: ${err.message}`),
+        );
       filed.value = got;
       loadRecent();
     }
@@ -313,7 +337,12 @@ const toneDot: Record<string, string> = {
               <div class="writer-shell"><div class="writer" aria-hidden="true" /></div>
             </template>
           </ClientOnly>
-          <label v-if="teams.length > 1 && !filed" class="flex items-center gap-2 font-ui text-sm">
+          <p v-if="project" class="m-0 flex items-center gap-2 font-ui text-sm">
+            <span class="text-muted">Into</span>
+            <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneOf(project)" aria-hidden="true" />
+            <NuxtLink :to="`/hub/projects/${project.id}?tab=work`" class="text-fg">{{ project.title }}</NuxtLink>
+          </p>
+          <label v-if="teams.length > 1 && !filed && !project" class="flex items-center gap-2 font-ui text-sm">
             <span class="text-muted">For</span>
             <select v-model="team">
               <option v-for="t in teams" :key="t.slug" :value="t.slug">{{ t.name }}</option>

@@ -15,6 +15,7 @@
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import type { ContextClaim, GuideContext, Task, Working } from "~/types/hub";
 import { expiryLine } from "~/utils/expiry";
+import { toneOf } from "~/utils/projects";
 
 const route = useRoute();
 const id = computed(() => String(route.params.id));
@@ -513,9 +514,9 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               <HubWorkLink v-for="c in ctx.children" :key="c.id" :g="c" />
             </div>
             <div v-if="ctx.folders.length" class="flex flex-col gap-2">
-              <p class="m-0 text-muted">In folders</p>
-              <NuxtLink v-for="f in ctx.folders" :key="f.id" :to="`/hub/folders/${f.id}`" class="flex items-center gap-2 rounded-2 bg-field px-3 py-2 text-fg no-underline hover:shadow-edge">
-                <svg class="size-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
+              <p class="m-0 text-muted">In {{ ctx.folders.length === 1 ? "project" : "projects" }}</p>
+              <NuxtLink v-for="f in ctx.folders" :key="f.id" :to="`/hub/projects/${f.id}`" class="flex items-center gap-2 rounded-2 bg-field px-3 py-2 text-fg no-underline hover:shadow-edge">
+                <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneOf(f)" aria-hidden="true" />
                 <span class="min-w-0 flex-1">{{ f.title }}</span>
               </NuxtLink>
             </div>

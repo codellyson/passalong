@@ -81,7 +81,7 @@ usePage({
         <!-- Sanitised by renderFolderMarkdown on the server before it reaches v-html. -->
         <article class="prose" v-html="data.document.html" />
       </section>
-      <p v-else-if="!data.children.length && !data.files.length" class="mt-8 text-muted">Nothing in this folder yet.</p>
+      <p v-else-if="!data.children.length && !data.files.length" class="mt-8 text-muted">Nothing here yet.</p>
     </div>
   </main>
 </template>

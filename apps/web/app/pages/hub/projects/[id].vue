@@ -1,0 +1,751 @@
+<!--
+  A project: what to know about one product, the work on it, and what happened to it.
+
+  Three tabs at their own addresses (`?tab=documents|work|history`). Documents leads with the README
+  — what this product is — then the other pages and the files. Work is the project's register, rows
+  shaped like Needs you's. History is one time-ordered list of work finished and document versions
+  saved, by a person or an agent; it owns no table (apps/api/src/project.ts) and shows no counts.
+
+  Coral means one thing: changed since you last looked. Work keeps it until opened (unread news on
+  it); a document or a history line someone else saved after your last visit carries it for this
+  visit, and the visit itself is the look (`markProjectSeen`).
+
+  A project is a folder; folders inside it are listed quietly under Documents, and open as projects.
+-->
+<script setup lang="ts">
+import type {
+  Folder,
+  FolderAsset,
+  FolderDocument,
+  ProjectHistoryItem,
+  ProjectWork,
+} from "~/types/folder";
+import { readmeAsk } from "~/utils/asks";
+import { renderFolderMarkdown } from "~/utils/folder-markdown";
+import { age, docsChanged, markProjectSeen, TONES, toneOf } from "~/utils/projects";
+
+usePage({
+  title: "Project · Passalong",
+  description: "What to know about a product, the work on it, and what happened to it.",
+  noindex: true,
+});
+
+const route = useRoute();
+const { api, json, token, signedIn, data, projectsQ } = useHub();
+const id = computed(() => String(route.params.id || ""));
+const TABS = [
+  { key: "documents", label: "Documents" },
+  { key: "work", label: "Work" },
+  { key: "history", label: "History" },
+] as const;
+const tab = computed(() =>
+  TABS.some((t) => t.key === route.query.tab) ? String(route.query.tab) : "documents",
+);
+const docId = computed(() => (typeof route.query.doc === "string" ? route.query.doc : ""));
+const version = computed(() => Number(route.query.v) || undefined);
+const me = computed(() => data.value.me?.account || "");
+const now = ref(Date.now());
+
+// ---- the project itself -------------------------------------------------------------------------
+const folder = ref<(Folder & { share_url?: string }) | null>(null);
+const documents = ref<FolderDocument[]>([]);
+const assets = ref<FolderAsset[]>([]);
+const children = ref<Folder[]>([]);
+const breadcrumbs = ref<{ id: string; title: string; color: string }[]>([]);
+const loading = ref(true);
+const loadError = ref("");
+const problem = ref("");
+const notice = ref("");
+
+/** Who sees it, in words: the team's name, or only you. */
+const space = computed(() => {
+  if (!folder.value?.team_id) return "Only you";
+  const t = data.value.me?.teams.find((x) => x.slug === folder.value?.team_slug);
+  return `Everyone in ${t?.name || folder.value.team_slug || "the team"}`;
+});
+const parent = computed(() => breadcrumbs.value.at(-2) ?? null);
+/** A folder inside a project keeps the project's colour unless it has its own. */
+const tone = computed(() => {
+  const own = [...breadcrumbs.value].reverse().find((b) => b.color);
+  return toneOf({ id: breadcrumbs.value[0]?.id || id.value, color: own?.color || "" });
+});
+
+async function load() {
+  if (!signedIn.value || !id.value) return;
+  loadError.value = "";
+  try {
+    const got = await api<{
+      folder: Folder;
+      documents: FolderDocument[];
+      assets: FolderAsset[];
+      children: Folder[];
+      breadcrumbs: { id: string; title: string; color: string }[];
+    }>(`/v1/folders/${id.value}`);
+    folder.value = got?.folder ?? null;
+    documents.value = got?.documents ?? [];
+    assets.value = got?.assets ?? [];
+    children.value = got?.children ?? [];
+    breadcrumbs.value = got?.breadcrumbs ?? [];
+    await loadReadme();
+  } catch (err) {
+    loadError.value = (err as Error).message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+// ---- work and history ---------------------------------------------------------------------------
+const open = ref<ProjectWork[]>([]);
+const done = ref<ProjectWork[]>([]);
+const history = ref<ProjectHistoryItem[]>([]);
+const viewLoading = ref(true);
+const viewError = ref("");
+async function loadView() {
+  if (!signedIn.value || !id.value) return;
+  viewError.value = "";
+  try {
+    const got = await api<{
+      open: ProjectWork[];
+      done: ProjectWork[];
+      history: ProjectHistoryItem[];
+    }>(`/v1/folders/${id.value}/project`);
+    open.value = got?.open ?? [];
+    done.value = got?.done ?? [];
+    history.value = got?.history ?? [];
+  } catch (err) {
+    viewError.value = (err as Error).message;
+  } finally {
+    viewLoading.value = false;
+  }
+}
+
+/** When you last looked, before this visit: what is newer, and not yours, is marked. */
+const lastLook = ref("");
+let looked = "";
+watch(
+  [signedIn, id],
+  async ([on, now_id]) => {
+    if (!on || !now_id) return;
+    if (now_id !== looked) {
+      looked = now_id;
+      loading.value = true;
+      viewLoading.value = true;
+      folder.value = null;
+      lastLook.value = markProjectSeen(now_id);
+    }
+    await Promise.all([load(), loadView()]);
+    // The project it sits in counts as looked at too, so the rail's mark clears.
+    const root = breadcrumbs.value[0]?.id;
+    if (root && root !== now_id) markProjectSeen(root);
+    projectsQ.refetch();
+  },
+  { immediate: true },
+);
+const refresh = () => Promise.all([load(), loadView()]);
+
+const newSince = (at: string, by: string) => by !== me.value && docsChanged(at, lastLook.value);
+
+// ---- documents ----------------------------------------------------------------------------------
+const isReadme = (d: { name: string }) => /^readme(\.md)?$/i.test(d.name.trim());
+const readmeRow = computed(() => documents.value.find(isReadme) ?? null);
+const others = computed(() =>
+  documents.value.filter((d) => !isReadme(d)).sort((a, b) => b.updated.localeCompare(a.updated)),
+);
+const readme = ref<FolderDocument | null>(null);
+async function loadReadme() {
+  const row = readmeRow.value;
+  if (!row) {
+    readme.value = null;
+    return;
+  }
+  if (readme.value?.id === row.id && readme.value.version === row.version) return;
+  const got = await api<{ document: FolderDocument }>(
+    `/v1/folders/${id.value}/documents/${row.id}`,
+  );
+  readme.value = got?.document ?? null;
+}
+const readmeHtml = computed(() => renderFolderMarkdown(readme.value?.body || ""));
+const ask = computed(() =>
+  folder.value ? readmeAsk({ id: folder.value.id, title: folder.value.title }) : "",
+);
+const editorOf = (d: FolderDocument) =>
+  `${d.editor || "Someone"}${viaOf(d.client) ? ` (${viaOf(d.client)})` : ""}`;
+
+const addingDoc = ref(false);
+const busy = ref(false);
+async function createDocument(name: string, body = "") {
+  busy.value = true;
+  problem.value = "";
+  try {
+    const got = await api<{ document: FolderDocument }>(
+      `/v1/folders/${id.value}/documents`,
+      json("POST", { name, body }),
+    );
+    addingDoc.value = false;
+    await load();
+    if (got?.document)
+      await navigateTo({ query: { tab: "documents", doc: got.document.id, edit: "1" } });
+  } catch (err) {
+    problem.value = (err as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
+const writeReadme = () =>
+  createDocument(
+    "README",
+    `# ${folder.value?.title || ""}\n\nWhat it is, who uses it, the words we use and how it is built.\n`,
+  );
+
+async function onDocGone(message: string) {
+  notice.value = message;
+  await load();
+  await navigateTo({ query: { tab: "documents" } });
+}
+
+// ---- files --------------------------------------------------------------------------------------
+const fileInput = ref<HTMLInputElement | null>(null);
+const uploading = ref(false);
+const authHeaders = (): Record<string, string> =>
+  token.value ? { authorization: `Bearer ${token.value}` } : {};
+async function upload(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  uploading.value = true;
+  problem.value = "";
+  try {
+    const res = await fetch(`/v1/folders/${id.value}/assets`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "content-type": file.type || "application/octet-stream",
+        "x-file-name": file.name,
+      },
+      body: file,
+    });
+    if (!res.ok) {
+      const failed = (await res.json().catch(() => ({}))) as { message?: string };
+      throw new Error(failed.message || "That file couldn't be added.");
+    }
+    notice.value = `${file.name} is in the project.`;
+    await load();
+  } catch (err) {
+    problem.value = (err as Error).message;
+  } finally {
+    uploading.value = false;
+    input.value = "";
+  }
+}
+async function download(a: FolderAsset) {
+  try {
+    const res = await fetch(`/v1/folders/${id.value}/assets/${a.id}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error("That file couldn't be downloaded.");
+    const url = URL.createObjectURL(await res.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = a.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    problem.value = (err as Error).message;
+  }
+}
+async function removeAsset(a: FolderAsset) {
+  if (!confirm(`Delete ${a.name} from this project?`)) return;
+  try {
+    await api(`/v1/folders/${id.value}/assets/${a.id}`, { method: "DELETE" });
+    await load();
+  } catch (err) {
+    problem.value = (err as Error).message;
+  }
+}
+const size = (bytes: number) =>
+  bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / 1048576).toFixed(1)} MB`;
+
+// ---- the header's actions -----------------------------------------------------------------------
+const editing = ref(false);
+async function saveProject(form: HTMLFormElement) {
+  const title = field(form, "title").trim();
+  if (!title) return;
+  busy.value = true;
+  problem.value = "";
+  try {
+    await api(
+      `/v1/folders/${id.value}`,
+      json("PATCH", {
+        title,
+        description: field(form, "description").trim(),
+        color: field(form, "color"),
+      }),
+    );
+    editing.value = false;
+    await load();
+    projectsQ.refetch();
+  } catch (err) {
+    problem.value = (err as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
+const sharing = ref(false);
+async function share() {
+  sharing.value = true;
+  problem.value = "";
+  try {
+    const got = await api<{ url: string }>(`/v1/folders/${id.value}/share`, { method: "POST" });
+    if (folder.value && got?.url) folder.value = { ...folder.value, share_url: got.url };
+  } catch (err) {
+    problem.value = (err as Error).message;
+  } finally {
+    sharing.value = false;
+  }
+}
+async function stopSharing() {
+  if (
+    !confirm(
+      "Stop sharing this project? Everyone with the link loses access, and a new link will be different.",
+    )
+  )
+    return;
+  sharing.value = true;
+  try {
+    await api(`/v1/folders/${id.value}/share`, { method: "DELETE" });
+    if (folder.value) folder.value = { ...folder.value, share_url: "" };
+    notice.value = "This project is no longer shared. The old link stopped working.";
+  } catch (err) {
+    problem.value = (err as Error).message;
+  } finally {
+    sharing.value = false;
+  }
+}
+const deleting = ref(false);
+async function remove() {
+  const f = folder.value;
+  if (
+    !f?.manage ||
+    !confirm(
+      `Delete ${f.title}, everything inside it, and its documents and files? Its work stays where it is. This cannot be undone.`,
+    )
+  )
+    return;
+  deleting.value = true;
+  try {
+    await api(`/v1/folders/${id.value}`, { method: "DELETE" });
+    await projectsQ.refetch();
+    await navigateTo({
+      path: parent.value ? `/hub/projects/${parent.value.id}` : "/hub/projects",
+      query: parent.value ? {} : { deleted: f.title },
+    });
+  } catch (err) {
+    problem.value = (err as Error).message;
+  } finally {
+    deleting.value = false;
+  }
+}
+
+// ---- work ---------------------------------------------------------------------------------------
+/** The row's state, only where its action does not already say it. */
+function stateOf(w: ProjectWork): string {
+  if (w.stage === "done") return w.outcome === "archived" ? "Archived" : "Finished";
+  if (w.stage === "draft") return "Draft";
+  // With nobody, the With column already says it is nobody's.
+  if (w.stage === "todo") return w.with ? "To do" : "";
+  return w.health === "quiet" ? "Went quiet" : w.health === "asking" ? "" : "Working";
+}
+const verbOf = (w: ProjectWork) => (w.health === "asking" ? "Answer" : "Open");
+const plainWords = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+function secondLine(w: ProjectWork) {
+  const s = plainWords(w.summary);
+  const t = plainWords(w.title);
+  return !s || s.includes(t) || t.includes(s) ? "" : w.summary;
+}
+
+// Work written elsewhere, put into this project. Only work in the project's own space can be.
+const linking = ref(false);
+const linkId = ref("");
+const linkable = computed(() => {
+  const here = new Set([...open.value, ...done.value].map((w) => w.id));
+  const seen = new Set<string>();
+  return [...data.value.guides, ...data.value.tasks]
+    .filter((g) => {
+      if (seen.has(g.id) || here.has(g.id)) return false;
+      seen.add(g.id);
+      return folder.value?.team_id ? g.team === folder.value.team_slug : !g.team && g.mine;
+    })
+    .map((g) => ({ value: g.id, label: g.title || g.id }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+});
+async function link() {
+  if (!linkId.value) return;
+  problem.value = "";
+  try {
+    await api(`/v1/folders/${id.value}/guides`, json("POST", { guide: linkId.value }));
+    linkId.value = "";
+    linking.value = false;
+    await loadView();
+  } catch (err) {
+    problem.value = (err as Error).message;
+  }
+}
+
+// ---- history ------------------------------------------------------------------------------------
+const via = (h: ProjectHistoryItem) => (h.via ? ` (${h.via})` : "");
+function historyLine(h: ProjectHistoryItem): string {
+  if (h.kind === "document")
+    return `${h.version === 1 ? "Written" : `Version ${h.version}, changed`} by ${h.by || "someone"}${via(h)}`;
+  const shown = [
+    h.shots && `${h.shots} screenshot${h.shots === 1 ? "" : "s"}`,
+    h.checks && `${h.checks} check${h.checks === 1 ? "" : "s"}`,
+  ].filter(Boolean);
+  return `Finished by ${h.by || "someone"}${via(h)}${shown.length ? ` · shown with ${shown.join(" and ")}` : ""}`;
+}
+const historyHref = (h: ProjectHistoryItem) =>
+  h.kind === "finished"
+    ? `/hub/g/${h.id}`
+    : { path: `/hub/projects/${h.folder}`, query: { tab: "documents", doc: h.id, v: h.version } };
+
+const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
+const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
+</script>
+
+<template>
+  <HubShell>
+    <HubSkeleton v-if="loading && !folder" variant="lines" :rows="8" label="Loading the project" />
+
+    <div v-else-if="!folder" role="alert" class="flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
+      <div class="min-w-0 grow basis-64">
+        <p class="m-0 font-ui text-sm font-semibold text-danger">This project didn't load</p>
+        <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ loadError }}</p>
+      </div>
+      <button class="btn outline danger sm" type="button" @click="refresh">Try again</button>
+    </div>
+
+    <div v-else class="flex min-w-0 flex-col gap-6">
+      <!-- The project: its line, its name, what it is, and what may be done to it. -->
+      <div class="flex flex-col gap-3">
+        <NuxtLink v-if="parent" :to="`/hub/projects/${parent.id}`" class="self-start font-ui text-sm text-muted no-underline hover:text-fg">Inside {{ parent.title }}</NuxtLink>
+        <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div class="flex min-w-0 items-stretch gap-3">
+            <span class="project-mark w-[3px] shrink-0 rounded-[1px]" :data-tone="tone" aria-hidden="true" />
+            <div class="min-w-0">
+              <h1 class="m-0 text-h2 font-medium tracking-tight">{{ folder.title }}</h1>
+              <p v-if="folder.description" class="m-0 mt-1 max-w-[44rem] font-ui text-sm text-muted">{{ folder.description }}</p>
+              <p class="m-0 mt-1 font-ui text-xs text-muted">{{ space }}</p>
+            </div>
+          </div>
+          <div v-if="!editing" class="flex flex-wrap gap-2">
+            <button class="btn sm" type="button" @click="editing = true">Edit</button>
+            <button v-if="!folder.share_url" class="btn sm" type="button" :disabled="sharing" @click="share">{{ sharing ? "Sharing…" : "Share" }}</button>
+            <button v-if="folder.manage" class="btn sm outline danger" type="button" :disabled="deleting" @click="remove">{{ deleting ? "Deleting…" : "Delete" }}</button>
+          </div>
+        </div>
+
+        <form v-if="editing" class="flex flex-col gap-3 rounded-3 border border-line bg-raised px-4 py-4" @submit.prevent="saveProject($event.target as HTMLFormElement)" @keydown.esc="editing = false">
+          <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+            <label class="flex flex-col gap-2 font-ui text-sm">
+              <span class="text-muted">Name</span>
+              <input name="title" maxlength="100" :value="folder.title" required />
+            </label>
+            <label class="flex flex-col gap-2 font-ui text-sm">
+              <span class="text-muted">What it is, in a line</span>
+              <input name="description" maxlength="400" :value="folder.description" />
+            </label>
+          </div>
+          <fieldset class="m-0 flex flex-wrap items-center gap-2 border-0 p-0 font-ui text-sm">
+            <legend class="mb-2 p-0 text-muted">Line colour</legend>
+            <label class="chip-pick">
+              <input type="radio" name="color" value="" :checked="!TONES.includes(folder.color as never)" />
+              <span>From its name</span>
+            </label>
+            <label v-for="t in TONES" :key="t" class="chip-pick">
+              <input type="radio" name="color" :value="t" :checked="folder.color === t" />
+              <span class="project-mark h-3.5 w-[3px] rounded-[1px]" :data-tone="t" aria-hidden="true" />
+              <span class="capitalize">{{ t }}</span>
+            </label>
+          </fieldset>
+          <div class="flex gap-2">
+            <button class="btn primary sm" type="submit" :disabled="busy">Save</button>
+            <button class="btn sm" type="button" @click="editing = false">Cancel</button>
+          </div>
+        </form>
+
+        <div v-if="folder.share_url" class="flex flex-col gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="sr-only" for="share-url">Share link</label>
+            <input id="share-url" class="min-w-0 flex-1 font-code text-xs" :value="folder.share_url" readonly @focus="($event.target as HTMLInputElement).select()" />
+            <button class="btn" type="button" @click="copy(folder.share_url || '', $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy link</span></button>
+            <button class="btn outline danger" type="button" :disabled="sharing" @click="stopSharing">Stop sharing</button>
+          </div>
+          <p class="m-0 font-ui text-xs text-muted">Anyone with this link can read this project's documents and download its files, without an account. Its work is not included.</p>
+        </div>
+      </div>
+
+      <p v-if="notice" role="status" class="m-0 font-ui text-sm">{{ notice }}</p>
+      <p v-if="problem" role="alert" class="m-0 rounded-2 border border-danger bg-danger-soft px-4 py-3 font-ui text-sm text-danger">{{ problem }}</p>
+
+      <nav class="flex gap-6 border-b border-line" aria-label="Project">
+        <NuxtLink
+          v-for="t in TABS"
+          :key="t.key"
+          :to="{ query: { tab: t.key } }"
+          class="tab -mb-px flex items-baseline gap-2 border-b-2 py-2 font-ui text-sm no-underline"
+          :class="tab === t.key ? 'border-fg font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
+          :aria-current="tab === t.key ? 'page' : undefined"
+        >
+          {{ t.label }}
+          <span v-if="t.key === 'work' && open.length" class="text-xs text-muted tabular-nums">{{ open.length }}</span>
+        </NuxtLink>
+      </nav>
+
+      <!-- ============================== Documents ============================== -->
+      <template v-if="tab === 'documents'">
+        <HubProjectDocument
+          v-if="docId"
+          :key="docId"
+          :folder="id"
+          :space="folder.team_id"
+          :doc="docId"
+          :row="documents.find((d) => d.id === docId)"
+          :version="version"
+          :start-editing="route.query.edit === '1'"
+          @changed="load"
+          @gone="onDocGone"
+        />
+
+        <template v-else>
+          <!-- Nothing written down yet: the agent writes it, or you do. -->
+          <section v-if="!documents.length" class="flex flex-col gap-4 border-t border-fg py-8" aria-labelledby="nodocs-h">
+            <p id="nodocs-h" class="m-0 text-h3 font-medium">Nothing written down yet.</p>
+            <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">
+              Start with the README: what this product is, who uses it, the words the team uses and how
+              it is built. Agents read it before they take work here and keep it up to date.
+            </p>
+            <div class="flex max-w-[44rem] flex-wrap items-center gap-3 rounded-2 border border-line bg-field px-4 py-3">
+              <p class="m-0 min-w-0 flex-1 font-ui text-sm">“{{ ask }}”</p>
+              <button class="btn sm" type="button" @click="copy(ask, $event.currentTarget)"><span data-label>Copy</span></button>
+            </div>
+            <button class="btn sm self-start" type="button" :disabled="busy" @click="writeReadme">Write it yourself</button>
+          </section>
+
+          <template v-else>
+            <!-- The README first: what this product is. -->
+            <section v-if="readme" class="flex flex-col gap-3 rounded-3 border border-line bg-raised px-5 pt-4 pb-5" aria-labelledby="readme-h">
+              <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fg pb-2">
+                <h2 id="readme-h" class="m-0 flex items-baseline gap-2 font-ui text-sm font-semibold tracking-normal">
+                  README
+                  <span v-if="newSince(readme.updated, readme.updated_by)" class="text-xs font-medium text-accent">Changed</span>
+                </h2>
+                <span class="flex items-baseline gap-3 font-ui text-xs text-muted tabular-nums">
+                  <span>{{ editorOf(readmeRow || readme) }} · {{ age(readme.updated, now) }}</span>
+                  <NuxtLink :to="{ query: { tab: 'documents', doc: readme.id } }" class="btn sm">Open</NuxtLink>
+                </span>
+              </div>
+              <!-- Sanitised by renderFolderMarkdown before it reaches v-html. -->
+              <div v-if="readme.body.trim()" class="overflow-x-auto"><div class="prose project-readme" v-html="readmeHtml" /></div>
+              <p v-else class="m-0 font-ui text-sm text-muted">The README is empty. Open it to write what this product is.</p>
+            </section>
+            <section v-else class="flex flex-wrap items-center gap-3 rounded-3 border border-line bg-raised px-4 py-3" aria-label="No README yet">
+              <p class="m-0 min-w-0 grow font-ui text-sm"><span class="font-medium">No README yet.</span> <span class="text-muted">It says what this product is, for every person and agent who works on it.</span></p>
+              <button class="btn sm" type="button" @click="copy(ask, $event.currentTarget)"><span data-label>Copy the ask for your agent</span></button>
+              <button class="btn sm" type="button" :disabled="busy" @click="writeReadme">Write it yourself</button>
+            </section>
+
+            <section class="@container flex flex-col" aria-labelledby="docs-h">
+              <div class="flex items-baseline justify-between gap-3 pb-2">
+                <h2 id="docs-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Documents</h2>
+                <button class="btn sm" type="button" :aria-expanded="addingDoc" @click="addingDoc = !addingDoc">New document</button>
+              </div>
+              <form v-if="addingDoc" class="mb-3 flex flex-wrap gap-2" @submit.prevent="createDocument(field($event.target as HTMLFormElement, 'name').trim())">
+                <label class="sr-only" for="new-doc">Document name</label>
+                <input id="new-doc" name="name" class="min-w-0 flex-1" maxlength="120" placeholder="Pricing, Setup, Log…" required />
+                <button class="btn primary" type="submit" :disabled="busy">Add</button>
+                <button class="btn" type="button" @click="addingDoc = false">Cancel</button>
+              </form>
+              <div v-if="others.length" aria-hidden="true" class="hidden grid-cols-[minmax(0,1fr)_12rem_3.5rem] gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="label">
+                <span>Document</span><span>Last edited by</span><span class="text-right">When</span>
+              </div>
+              <ol v-if="others.length" class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
+                <li v-for="d in others" :key="d.id" class="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]">
+                  <span v-if="newSince(d.updated, d.updated_by)" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+                  <p class="m-0 flex min-w-0 grow basis-full flex-wrap items-baseline gap-x-2 font-ui text-sm @2xl:basis-auto">
+                    <NuxtLink :to="{ query: { tab: 'documents', doc: d.id } }" class="font-medium break-words text-fg no-underline hover:underline">{{ d.name }}</NuxtLink>
+                    <span v-if="newSince(d.updated, d.updated_by)" class="text-xs font-medium text-accent">Changed</span>
+                  </p>
+                  <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ editorOf(d) }}</span>
+                  <span class="font-ui text-xs text-muted tabular-nums @2xl:text-right @2xl:text-sm @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(d.updated, now) }}</span>
+                </li>
+              </ol>
+              <p v-else class="m-0 border-t border-fg py-3 font-ui text-sm text-muted">Only the README so far. A page per area — setup, pricing, a Log of what changed — goes here.</p>
+            </section>
+          </template>
+
+          <!-- Folders inside this one, there to reach rather than to lead. -->
+          <section v-if="children.length" class="flex flex-col" aria-labelledby="inside-h">
+            <h2 id="inside-h" class="m-0 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">Inside this project</h2>
+            <ul class="m-0 list-none p-0">
+              <li v-for="c in children" :key="c.id" class="flex items-baseline gap-3 border-b border-line py-2 font-ui text-sm">
+                <NuxtLink :to="`/hub/projects/${c.id}`" class="min-w-0 grow break-words text-fg no-underline hover:underline">{{ c.title }}</NuxtLink>
+                <span class="shrink-0 text-xs text-muted tabular-nums">{{ c.documents || 0 }} {{ c.documents === 1 ? "document" : "documents" }}</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="flex flex-col" aria-labelledby="files-h">
+            <div class="flex items-baseline justify-between gap-3 border-b border-fg pb-2">
+              <h2 id="files-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Files</h2>
+              <button class="btn sm" type="button" :disabled="uploading" @click="fileInput?.click()">{{ uploading ? "Adding…" : "Add a file" }}</button>
+            </div>
+            <input ref="fileInput" class="sr-only" type="file" tabindex="-1" aria-hidden="true" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="upload" />
+            <ul v-if="assets.length" class="m-0 list-none p-0">
+              <li v-for="a in assets" :key="a.id" class="flex items-center gap-3 border-b border-line py-2">
+                <HubFolderAssetPreview :folder="id" :asset="a.id" :type="a.type" :name="a.name" />
+                <div class="min-w-0 grow">
+                  <button class="max-w-full cursor-pointer border-0 bg-transparent p-0 text-left font-ui text-sm break-all text-fg underline" type="button" @click="download(a)">{{ a.name }}</button>
+                  <span class="block font-ui text-xs text-muted tabular-nums">{{ size(a.bytes) }} · {{ age(a.created, now) }}</span>
+                </div>
+                <button class="btn sm" type="button" :aria-label="`Delete ${a.name}`" @click="removeAsset(a)">Delete</button>
+              </li>
+            </ul>
+            <p v-else class="m-0 py-3 font-ui text-sm text-muted">Screenshots, references and source files, up to 10 MB each.</p>
+          </section>
+        </template>
+      </template>
+
+      <!-- ================================ Work ================================= -->
+      <section v-else-if="tab === 'work'" class="@container flex min-w-0 flex-col gap-8" aria-label="Work">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <p class="m-0 font-ui text-sm text-muted">Say what needs doing and the agent files it here, for the right people.</p>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn sm" type="button" :aria-expanded="linking" @click="linking = !linking">Add existing work</button>
+            <NuxtLink :to="{ path: '/hub/new', query: { project: id } }" class="btn primary sm">New work</NuxtLink>
+          </div>
+        </div>
+        <form v-if="linking" class="-mt-4 flex flex-wrap gap-2" @submit.prevent="link">
+          <AppSelect v-model="linkId" class="min-w-0 flex-1" label="Work to add" placeholder="Choose work" :options="linkable" :disabled="!linkable.length" :short-at="40" />
+          <button class="btn" type="submit" :disabled="!linkId">Add</button>
+        </form>
+
+        <HubSkeleton v-if="viewLoading" :rows="4" label="Loading the work" />
+        <div v-else-if="viewError" role="alert" class="flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
+          <div class="min-w-0 grow basis-64">
+            <p class="m-0 font-ui text-sm font-semibold text-danger">The work didn't load</p>
+            <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ viewError }}</p>
+          </div>
+          <button class="btn outline danger sm" type="button" @click="loadView">Try again</button>
+        </div>
+        <template v-else>
+          <section v-for="group in [{ key: 'open', title: 'Open', rows: open }, { key: 'done', title: 'Done recently', rows: done }]" :key="group.key" :aria-labelledby="`${group.key}-h`">
+            <h2 :id="`${group.key}-h`" class="m-0 pb-2 font-ui text-sm font-semibold tracking-normal">{{ group.title }}</h2>
+            <template v-if="group.rows.length">
+              <div aria-hidden="true" class="hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="[cols, label]">
+                <span>Work</span><span>With</span><span>State</span><span class="text-right">Age</span><span />
+              </div>
+              <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
+                <li v-for="w in group.rows" :key="w.id" class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline" :class="cols">
+                  <span v-if="w.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+                  <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
+                    <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
+                      <NuxtLink :to="`/hub/g/${w.id}`" class="font-medium text-fg no-underline hover:underline">{{ w.title || "Untitled" }}</NuxtLink>
+                      <span v-if="w.changed" class="text-xs font-medium text-accent">Changed · {{ w.changed }}</span>
+                    </p>
+                    <p v-if="secondLine(w)" class="m-0 mt-0.5 font-ui text-xs text-muted">{{ secondLine(w) }}</p>
+                  </div>
+                  <NuxtLink :to="`/hub/g/${w.id}`" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">{{ verbOf(w) }}</NuxtLink>
+                  <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">{{ w.with || "Nobody" }}</span>
+                  <span class="order-2 font-ui text-xs @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-sm" :class="w.health === 'quiet' ? 'font-medium text-fg' : 'text-muted'">
+                    <template v-if="stateOf(w)"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ stateOf(w) }}</template>
+                  </span>
+                  <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
+                    <span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(w.since, now) }}
+                  </span>
+                </li>
+              </ol>
+            </template>
+            <div v-else-if="group.key === 'open'" class="flex flex-col gap-2 border-t border-fg py-6">
+              <p class="m-0 text-h3 font-medium">No open work here.</p>
+              <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">New work files it in this project. Work already written somewhere else can be added to it.</p>
+            </div>
+            <p v-else class="m-0 border-t border-fg py-3 font-ui text-sm text-muted">Nothing finished in the last two weeks.</p>
+          </section>
+        </template>
+      </section>
+
+      <!-- =============================== History =============================== -->
+      <section v-else class="flex min-w-0 flex-col" aria-labelledby="history-h">
+        <h2 id="history-h" class="sr-only">History</h2>
+        <HubSkeleton v-if="viewLoading" variant="lines" :rows="6" label="Loading the history" />
+        <div v-else-if="viewError" role="alert" class="flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
+          <div class="min-w-0 grow basis-64">
+            <p class="m-0 font-ui text-sm font-semibold text-danger">The history didn't load</p>
+            <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ viewError }}</p>
+          </div>
+          <button class="btn outline danger sm" type="button" @click="loadView">Try again</button>
+        </div>
+        <div v-else-if="!history.length" class="flex flex-col gap-2 border-t border-fg py-6">
+          <p class="m-0 text-h3 font-medium">Nothing has happened here yet.</p>
+          <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">Work finished in this project and every version of its documents land here, newest first, with who did it.</p>
+        </div>
+        <ol v-else class="m-0 list-none p-0">
+          <li v-for="h in history" :key="`${h.kind}-${h.id}-${h.version}`" class="relative flex items-baseline gap-3 border-b border-line py-3 pl-4">
+            <span v-if="!h.mine && docsChanged(h.at, lastLook)" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+            <div class="min-w-0 grow">
+              <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
+                <NuxtLink :to="historyHref(h)" class="font-medium break-words text-fg no-underline hover:underline">{{ h.title || "Untitled" }}</NuxtLink>
+                <span v-if="!h.mine && docsChanged(h.at, lastLook)" class="text-xs font-medium text-accent">New since you looked</span>
+              </p>
+              <p class="m-0 mt-0.5 font-ui text-xs text-muted">{{ historyLine(h) }}</p>
+              <p v-if="h.note" class="m-0 mt-0.5 font-ui text-xs text-muted">“{{ h.note }}”</p>
+            </div>
+            <span class="shrink-0 font-ui text-xs text-muted tabular-nums">{{ age(h.at, now) }}</span>
+          </li>
+        </ol>
+      </section>
+    </div>
+  </HubShell>
+</template>
+
+<style scoped>
+.chip-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 2rem;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  color: var(--muted);
+  cursor: pointer;
+}
+.chip-pick input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.chip-pick:has(input:checked) {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.chip-pick:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.project-readme {
+  max-width: 46rem;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+.project-readme :deep(h1) {
+  margin: 0 0 var(--s-3);
+  font: 500 1.25rem / 1.3 var(--font-sans);
+  letter-spacing: -0.02em;
+}
+</style>

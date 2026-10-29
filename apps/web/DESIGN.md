@@ -268,6 +268,12 @@ The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, t
 ### Register row
 The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in coral text, a second muted line (a state such as "Went quiet" in ink, then the customer's own words in quotes), the project with its mark (or "Not sorted yet" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
 
+### Tabs
+A page with several views of one thing (a project's Documents, Work and History) is a row of links,
+each its own address (`?tab=`), over a hairline: the current one is ink at 500 with a 2px ink bar
+under it, the rest muted until hovered. A count beside a tab is muted, tabular. Never a pill group,
+never coral.
+
 ### Change mark
 A 3px coral bar the full height of a row at its left edge, with the "Changed" label in coral text beside the title. Used in the register and in side-panel rows; persists until the row is opened.
 

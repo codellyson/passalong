@@ -2631,12 +2631,12 @@ app.post("/v1/uploads", async (c) => {
   if (body.folder !== undefined) {
     if (typeof body.folder !== "string") return err(c, 400, "Send a folder id.");
     const folder = await visibleFolder(c, body.folder);
-    if (!folder) return err(c, 404, "That folder isn't available to you.");
+    if (!folder) return err(c, 404, "That project isn't available to you.");
     if (!(await writableFolder(c, folder)))
       return err(
         c,
         402,
-        "This team's plan has lapsed. Its folders can still be read, but not changed.",
+        "This team's plan has lapsed. Its projects can still be read, but not changed.",
       );
     kind = `folder:${folder.id}`;
   }
@@ -2700,7 +2700,7 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
       return err(
         c,
         402,
-        "This team's plan has lapsed. Its folders can still be read, but not changed.",
+        "This team's plan has lapsed. Its projects can still be read, but not changed.",
       );
   }
 
