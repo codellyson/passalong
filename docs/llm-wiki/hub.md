@@ -6,17 +6,31 @@ a person's own words, which the reader shapes ([notifications.md](notifications.
 documents have a Markdown editor for corrections. Everything a person reads says work, project,
 document or file, never guide.
 
-## Home
+## Needs you
 
-`/hub` is the overview: the board's column counts (Draft, To do, In progress, Done),
-the same for everyone in the team; "How Passalong works", open; and the activity feed. A new account
-gets the first-run steps here instead. The counts come from `useWorkLists`, the same composable the
-Work page draws the board with, so the two pages cannot disagree. `/hub` used to be the Work page:
-a link to it carrying `?tab=`, `?q=`, `?follows=` or `?done=` goes on to `/hub/work` with its query.
+`/hub` is Needs you: what waits on the signed-in person, ranked by the server (`GET /v1/needs`,
+`apps/api/src/needs.ts`) — customers waiting on us, an agent's question, a hold gone quiet, work
+sent to you or your group that nobody took, your work that came back. Each row has a title, its
+summary (or the question asked), a fact strip (project · with · state · waiting) and one action.
+Beside it: customers waiting, and work finished this week with **Reopen** (which asks why). A
+coral bar and a "Changed" line mark work with an unread notification on it; opening the work
+(`markSeen`) clears it, and **Mark all seen** clears everything. Empty, it says nothing needs you
+and lists what closed in the last day. A new account gets the first-run steps here instead. The old
+Home (counter tiles, "How Passalong works", the activity feed) and the Activities page are gone.
+`/hub` used to be the Work page: a link to it carrying `?tab=`, `?q=`, `?follows=` or `?done=` goes
+on to `/hub/work` with its query.
+
+## The rail
+
+Every signed-in page sits beside a 240px solid ink rail (`HubSidebar`): the mark, **Go to id**,
+Needs you with its count, Projects (each top-level folder, with its line colour, its open work and a
+coral dot when something in it changed), Work, Support, **New** (the box at `/hub/new`), and
+Settings and the account menu at the foot. On a phone it is a drawer behind a top bar with the
+menu, the mark and New. The bottom tab bar and the top row of links are gone.
 
 ## Work
 
-**Go to id** in the header (`HubGoTo`, ⌘K or Ctrl+K) opens work by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`guideIdFrom()` in `utils/goto.ts`). On a phone it is a narrower box with no shortcut hint. A work page is under Work in the tab bar, and opens with a ← Work link back to the board.
+**Go to id** on the rail (`HubGoTo`, ⌘K or Ctrl+K) opens work by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`guideIdFrom()` in `utils/goto.ts`). On a phone it is in the drawer, with no shortcut hint. A work page is under Work on the rail, and opens with a ← Work link back to the board.
 
 `/hub/work` is the team board (`HubBoard`), like any shared task board: every piece of work
 in scope is a card in one of four stage columns, and everyone in the team sees the same board. The column
@@ -24,7 +38,7 @@ is the server's — `stage` on every row, from its status and its claims (`board
 index.ts) — so a card moves when the work moves and never because of who is looking. A card shows
 the label its agent gave it (`HubWorkTag`, the first tag), who it is for (`@handle`, `#group`, the team, or private), who it is from and who holds it;
 opening it goes to the work page, where the actions are. From md the columns sit side by
-side, at least 15rem each and sharing the rest — the Work page and the top bar take a 90rem measure — and the board scrolls sideways on its own when they do not fit; on a phone one column shows at a time, picked from tabs. A card's footer says who
+side, at least 15rem each and sharing the rest — the Work page takes the whole width beside the rail — and the board scrolls sideways on its own when they do not fit; on a phone one column shows at a time, picked from tabs. A card's footer says who
 has it — initials, ⚡ and the agent's name, and a dot for its `health` (working, went quiet, asked a
 question, a person's hold), with a word when somebody should look — and who it is for,
 which is also the **Give to…** control. Its age is since its holder was last heard from or its last
@@ -61,12 +75,7 @@ A browser-only person can take work from its page, post progress and hand it in 
 use the person's account identity and a week-long lease; their hand-in carries prose and evidence,
 like an agent's.
 
-"How Passalong works" (a disclosure, open on Home) holds the work loop as four steps: capture what needs doing
-through CLI/MCP/API; route it to a person, group, team or queue; work together through progress,
-questions and attachments; finish with proof, or reopen. Links below the diagram lead to project
-folders, team settings and the activity feed.
-
-The title's scope picker applies to every work list, work being held and activity. Team
+The title's scope picker applies to every work list and work being held. Team
 membership is checked at the API boundary, and each list narrows in SQL before its row limit. A
 failed list shows an error and retry instead of an empty board. Marking activity read only marks the selected scope.
 List rows show a compact image card when the work carries a stored Passalong screenshot. The API
@@ -113,6 +122,6 @@ pages, each with its own state ("2 need you", "1 failing"), and each page opens 
 holding that anchor (`tabOf()`).
 
 ## Sources
-- `apps/web/app/pages/hub/index.vue` (Home), `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/folders/`, `pages/hub/settings/[[tab]].vue`
+- `apps/web/app/pages/hub/index.vue` (Needs you), `components/hub/Sidebar.vue`, `utils/projects.ts`, `apps/api/src/needs.ts`, `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/folders/`, `pages/hub/settings/[[tab]].vue`
 - `apps/web/app/components/hub/Board.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
 - [AGENTS.md](../../AGENTS.md): "A team's board is one board", "The hub shows a guide by framing it…", "The hub is live…"

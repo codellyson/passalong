@@ -425,24 +425,31 @@ Its input is TipTap
   `mt-8` between sections. Half-steps are off the scale — `-1.5`, `-2.5` and `-3.5` were all in use
   and one relationship had four different values, which is what made the interface look unfinished
   before anyone could say why. `-0.5` is the one exception: 2px inside a chip is a sub-unit.
-- **Ink decides, coral punctuates.** The look follows a warm cream system: `--bg` is a pale cream,
-  a card is `--surface-raised` (a deeper cream at `rounded-3`, 24px) with almost no edge, and
-  `--field` is the one near-white surface, for inputs, menus and command wells. The primary action
-  is an ink pill (`.btn.primary`, `bg-ink text-on-ink`) and every `.btn` is a pill. `--coral` is
-  2.6:1 on the canvas, so it is only ever a mark — the nav's diamond (`nav.marked`), an unread dot,
-  a link's underline — and `--accent` is the same hue at a readable 5:1 for any word that has to be
-  coral. Headings are 480 with negative tracking, never 600+; the serif is the editorial accent
-  (work prose and the italic `.turn`), not the display face.
-- **A raised surface's edge is a shadow; a border is structure.** Cards, list containers, panels,
-  menus and the sign-in card take `shadow-edge` (`--edge-shadow` in styles.css: a 1px ring plus a
-  little depth in light, the ring alone in dark), never `border border-line`. Borders stay where
-  they separate or state something: dividers, table rules, inputs and code wells, a selected or
-  focused control, a coloured callout. A row inside a list sits flush, so it rounds its ends to the
-  list's own radius; nested surfaces with a small inset nest their radii (outer = inner + padding —
-  the `.menu` is 16px because its items are 8px inside 8px). Every `.btn` presses to
-  `scale(0.96)`; `.static` opts out. A button in the same row as an input or a code well is a
-  full-height `.btn`, not `.btn sm`: the field is `--control-h`, and a small button beside it
-  sits off its line.
+- **Ink decides, coral means changed (the hub, 2026-10-29).** The palette is kept — cream ground,
+  ink, coral — and the signed-in hub draws it like a drawing set. Its tokens are `.hub-app` in
+  styles.css, put on `<body>` by `HubShell` so teleported menus and drawers inherit them; the
+  landing and the share pages keep the `:root` tokens. In the hub: corners are 2, 3 and 4px
+  (`--r-1`..`--r-3`, and `--r-pill` is 4px too, so no button or chip is a pill — only a dot is
+  round); there is no serif (`--font-serif` is the grotesque; the share page in its iframe keeps
+  its own); counts and ages are tabular figures. The primary action is an ink button
+  (`.btn.primary`). **Coral means one thing in the hub: changed since you last looked** — a 3px
+  coral bar at a row's left edge with a "Changed" line naming what changed, and a coral dot on a
+  project in the rail. It is held until the work is opened (`markSeen` in useHub posts
+  `/v1/notifications/read` with `{ guide }`), and "changed" is an unread notification on that
+  work. Never use coral or `--accent` for a state that is not a change: "waiting on us" is ink.
+  `--coral` is 2.6:1 on the canvas, so it stays a mark; `--accent` is the readable 5:1 for the
+  word "Changed". The rail is solid ink (`--rail`) in both themes. Each project owns one line
+  colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the folder's own colour,
+  a folder coloured coral drawn plum, and one derived from its id when it has none.
+- **A surface's edge is a one-pixel rule.** In the hub `--edge-shadow` is a 1px ring of
+  `--line-strong` and a raised surface (`--surface-raised`) is near-white on the cream, so cards,
+  lists and panels that take `shadow-edge` read as ruled sheets, not soft cards. Prefer a real
+  `border` / `border-b border-line` on new work; a heading's rule is `border-fg`. Only what floats
+  (a menu, a toast, the thread drawer) keeps a lift shadow. A row inside a list sits flush, so it
+  rounds its ends to the list's own radius; nested surfaces nest their radii. Every `.btn` presses
+  to `scale(0.96)`; `.static` opts out. A button in the same row as an input or a code well is a
+  full-height `.btn`, not `.btn sm`: the field is `--control-h`, and a small button beside it sits
+  off its line.
 - **Long values are shortened by unit, never by pixel.** `shorten()` (`app/utils/shorten.ts`) drops
   whole words, then whole path segments, so what is left is a repo name or a host and not
   `techchak-backend (https://g…`. Do not reach for `truncate` on a value a person has to read, and
@@ -693,7 +700,18 @@ Its input is TipTap
   a terminal: claiming or editing a handle, and creating a team. Nothing here is a new endpoint;
   `POST /v1/accounts`, `PATCH /v1/me`, `POST /v1/invites/:code/accept` and `POST /v1/teams` already
   existed. Keep it that way — a browser-only path that needs its own API is a second product.
-- **The board (`GET /v1/board`) is the hub's home queues, defined in SQL.** Waiting = work sent to
+- **Needs you (`GET /v1/needs`, `apps/api/src/needs.ts`) is the hub's first screen, ranked on the
+  server.** What waits on the signed-in person, each piece of work once under its most pressing
+  reason, in this order: a customer waiting on us (no `answered` since they last wrote; longest
+  first), an agent asking (the holder's account or the author), a hold gone quiet (lease run out),
+  work sent to you or a group you are in that nobody took, and your work whose last act was
+  someone else passing it back or reopening it. Beside it, open customer requests (ours first) and
+  work finished in the last seven days with Reopen. Each row carries its project (the top folder
+  above the folder it is linked into, one this account can see) and `changed`, the latest unread
+  notification on it in a few words. It owns no table and imports no sibling, so
+  `test/needs.test.mjs` runs it against real SQLite. The rank is the server's; the hub never
+  re-sorts it. `GET /v1/folders` carries `open` and `changed` per folder for the rail's projects.
+- **The board (`GET /v1/board`) is the old home queues, defined in SQL.** Waiting = work sent to
   you (or your teams, by others) that you have not opened, ordered as the next contracts say. In
   flight = yours, addressed to a person or team, with `NOT EXISTS` a pull by anyone but you
   (`stale` past 7 days). Landed = yours that someone else has opened. "Someone else pulled it" is
@@ -715,8 +733,8 @@ Its input is TipTap
   a page that does not say so lies about the exact thing people open it to check. The pull arm is
   `GROUP BY guide_id` on purpose: `recordPull` writes a row per fetch of `/v1/guides/:id` and the
   CLI resolves an id by fetching, so one `take` can leave two rows seconds apart. The board wants
-  both; a log rendering both says you opened the same thing twice in a minute. The hub shows it as
-  Activities; agents have no tool for it.
+  both; a log rendering both says you opened the same thing twice in a minute. Nothing in the hub
+  shows it now (Activities went with Needs you, 2026-10-29); agents have no tool for it.
 - **Product-wide numbers come from `scripts/metrics.mjs`, never from a route and never from
   Aptabase.** PRD §14's figures are about every account at once, and the API has no reader above an
   account: an endpoint for them would have to invent an admin credential — a new way into everyone's
