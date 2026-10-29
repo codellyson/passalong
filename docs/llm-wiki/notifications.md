@@ -91,7 +91,8 @@ team group by name (`to: #group`). It looks at pictures too — up to three on t
 the box — because a screenshot of an error is often the whole report. Its answer is used whole or not at all (`readVerdict()`), the
 customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for
 the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the
-hub's box, `/hub/new` (`POST /v1/compose`), for writing a task, bug or handover in your own words. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
+hub's box, `/hub/new` (`POST /v1/compose`), for writing a task, bug or handover in your own words;
+there, when unsure, it files its best reading anyway and puts its question on the thread. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
 guide made from a request (a bug sent on to development) reaches Done, the request wakes: a
 `child_done` notification, and — when the team turned the reminder on (`team.tell_customer`, migration
 0059, set by an owner on the Support page; off by default) — it says "tell the customer" and the

@@ -395,7 +395,9 @@ change. Its README says how.
   `reader_unsure`, pushed and mailed, with its one question. The same reader is the hub's box
   (`/hub/new`, `POST /v1/compose`): a teammate's own words become a task, bug or handover, filed at
   once as theirs with no confirm step; the page offers move (`assign`) and undo (delete), and when
-  the reader is unsure nothing is filed until its question is answered there. Its input is TipTap
+  the reader is unsure it files its best reading anyway, with its question on the thread and on the
+  page as "Worth checking" (2026-10-29: asking first made people fill in a form for work the agent
+  was there to shape). Its input is TipTap
   directly (`components/hub/Writer.vue`), not Nuxt UI, so it keeps the hub's look and policy:
   TipTap's injected stylesheet is off (`injectCSS: false`; the hub allows styles from its own
   stylesheet only) and its rules are `.writer` in styles.css; it renders inside `<ClientOnly>`.

@@ -54,8 +54,8 @@ what is lost is customers. Decided:
   and mail. The box on its own screen is next, on the same reader.
 - *Built 2026-10-28:* the box is `/hub/new` ("Write it down here" in the New menu). The reader files
   what was written at once as a task, bug or handover for a group (`POST /v1/compose`); the page
-  says what it became, with one-click move and undo. When unsure it asks there and files nothing
-  until answered. The input is a WYSIWYG editor (TipTap, `components/hub/Writer.vue`): it reads as
+  says what it became, with one-click move and undo. When unsure it still files its best reading and
+  says what is worth checking, with the question on the thread. The input is a WYSIWYG editor (TipTap, `components/hub/Writer.vue`): it reads as
   you type (`POST /v1/compose/preview`, nothing filed) and lists work already on the board that
   looks the same; a pasted screenshot uploads and shows in place, a pasted error or log becomes a
   code block, links stay links; `@` suggests people and `#` the team's groups. The page leads with the agent at work: "What do you need?", starter chips, and an Agent panel beside the editor that fills in as you write — what it is, where it goes and why, what it has drafted, what already looks like it — then where it was filed; the last few it filed are listed below (`GET /v1/compose/recent`).

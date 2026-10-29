@@ -6057,8 +6057,9 @@ async function supportFrom(env: Env, account: string, team: string): Promise<{ n
  * reader turns it into a guide — task, bug or handover, with its sections, routed to a group of the
  * team — and it is filed at once, as theirs. No confirm step, by the author's decision: the guide
  * records that the reader sorted it (a note with its reason), and moving or undoing it is one click
- * on the page that answers. When the reader is unsure nothing is filed; its question comes back, and
- * the next call carries the answer. Their words are quoted into the guide by code, as written.
+ * on the page that answers. When the reader is unsure it still files its best reading, and its
+ * question goes on the thread and back to the page: asking first made people fill in a form for
+ * work the agent was there to shape. Their words are quoted into the guide by code, as written.
  */
 /** The team someone is writing for, if they are in it, and its groups the reader may route to. */
 async function composeTeam(c: Ctx, me: string, slug: string) {
@@ -6183,8 +6184,6 @@ app.post("/v1/compose", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as {
     text?: unknown;
     team?: unknown;
-    question?: unknown;
-    answer?: unknown;
     pictures?: unknown;
   };
   const raw = typeof body.text === "string" ? body.text : "";
@@ -6203,13 +6202,9 @@ app.post("/v1/compose", async (c) => {
   const slug = typeof body.team === "string" ? body.team.trim() : "";
   const { team, groups } = await composeTeam(c, me, slug);
   if (slug && !team) return err(c, 404, "You aren't in that team.");
-  // An answer to the reader's question travels with the text it was about.
-  const question = typeof body.question === "string" ? body.question.trim().slice(0, 200) : "";
-  const answer = typeof body.answer === "string" ? body.answer.trim().slice(0, 1000) : "";
-  const full = question && answer ? `${text}\n\nAsked: ${question}\nAnswer: ${answer}` : text;
   const verdict = await askReader(c.env, {
     subject: "",
-    text: full,
+    text,
     groups,
     from: "team",
     kinds: ["task", "bug", "transfer"],
@@ -6221,7 +6216,7 @@ app.post("/v1/compose", async (c) => {
       502,
       "That couldn't be sorted just now. Try again, or say a little more about it.",
     );
-  if (!verdict.sure) return c.json({ question: verdict.question });
+  const unsure = verdict.sure ? "" : verdict.question;
 
   const who = await c.env.DB.prepare("SELECT name, handle FROM account WHERE id = ?")
     .bind(me)
@@ -6234,7 +6229,7 @@ app.post("/v1/compose", async (c) => {
     .map((u, i) => `![picture ${i + 1}](${u})`);
   let markdown = readerBody(verdict, {
     intro: `${name} wrote this in the hub; it is below as they wrote it.`,
-    text: full,
+    text,
   });
   if (pictures.length) markdown = `${markdown.trimEnd()}\n\n${pictures.join("\n")}\n`;
   markdown = setField(markdown, "title", verdict.title);
@@ -6267,7 +6262,7 @@ app.post("/v1/compose", async (c) => {
   const routed = verdict.route ? groups.find((g) => g.slug === verdict.route) : undefined;
   await claims.noteOn(c.env.DB, id, {
     account: me,
-    body: `Sorted by the reader as a ${verdict.kind}${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${verdict.reason ? `: ${verdict.reason}` : "."}`,
+    body: `Sorted by the reader as a ${verdict.kind}${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${verdict.reason ? `: ${verdict.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
     at: now(),
   });
   count(c, "composed", { kind: verdict.kind });
@@ -6279,6 +6274,7 @@ app.post("/v1/compose", async (c) => {
       summary: verdict.summary,
       route: routed ? { slug: routed.slug, name: routed.name } : null,
       reason: verdict.reason,
+      unsure,
       groups,
     },
     201,
