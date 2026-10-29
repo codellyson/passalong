@@ -72,7 +72,7 @@ async function create(form: HTMLFormElement) {
 }
 
 const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
-const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,14rem)_4.75rem]";
+const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)_4.75rem]";
 </script>
 
 <template>
@@ -162,7 +162,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,14rem)_4.75re
 
       <template v-else>
         <div aria-hidden="true" class="hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="[cols, label]">
-          <span>Project</span><span class="text-right">Open work</span><span class="text-right">Documents</span><span>Last change</span><span />
+          <span>Project</span><span class="text-right">Open work</span><span class="text-right">Documents</span><span class="text-right">Last change</span><span />
         </div>
         <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
           <li
@@ -187,7 +187,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,14rem)_4.75re
             <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
               <span class="@2xl:hidden" aria-hidden="true">· </span>{{ p.documents }}<span class="@2xl:hidden"> {{ p.documents === 1 ? "document" : "documents" }}</span>
             </span>
-            <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">
+            <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
               <span class="@2xl:hidden" aria-hidden="true">· </span><template v-if="p.last">{{ p.last.name }}, by {{ p.last.by }} · <span class="tabular-nums">{{ age(p.last.at, now) }}</span></template><template v-else-if="p.updated"><span class="tabular-nums">{{ age(p.updated, now) }}</span></template><template v-else>—</template>
             </span>
           </li>

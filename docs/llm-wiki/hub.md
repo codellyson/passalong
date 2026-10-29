@@ -106,7 +106,7 @@ something in it changed since you last looked, a plain create form and the agent
 `/hub/projects/:id` has three tabs at their own addresses (`?tab=documents|work|history`):
 **Documents** leads with the README rendered in full, then the other documents (last editor, person
 or agent, and when), folders inside it listed quietly, and files; a document opens in place
-(`?doc=`, `HubProjectDocument`), saves a new version with the version it opened and refuses a stale
+(`?doc=`, `HubProjectDocument`), is edited as rich text (`HubDocEditor`, Markdown on the server), saves a new version with the version it opened and refuses a stale
 one, and an earlier version is read-only at `?doc=…&v=…` with "Put this version back". **Work** is
 the project's register (Work · With · State · Age · one action), Open then Done recently; "New work"
 opens the box with `?project=`, which files into that project's team and links it here.

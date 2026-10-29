@@ -62,8 +62,9 @@ const draft = () => run(() => onTaskDraft({ id: g.value.id } as Task));
 const stop = () => run(() => onTakeBack({ id: g.value.id } as Working));
 const archive = () => run(() => onArchive(g.value, true));
 const unarchive = () => run(() => onArchive(g.value, false));
+/** Delete asks inside the menu, naming what goes, before anything does. */
+const confirming = ref(false);
 function remove() {
-  if (!confirm(`Delete "${g.value.title}"? This cannot be undone.`)) return close();
   run(() => onRemove(g.value));
 }
 const ready = () => run(() => onTaskReady({ id: g.value.id } as Task));
@@ -131,7 +132,14 @@ function copyAndClose(text: string, e: Event) {
         <div class="menu-rule" role="separator" />
         <button v-if="!archived" role="menuitem" class="menu-item" type="button" @click="archive">Archive</button>
         <button v-else role="menuitem" class="menu-item" type="button" @click="unarchive">Unarchive to Draft</button>
-        <button role="menuitem" class="menu-item destructive" type="button" @click="remove">Delete</button>
+        <button v-if="!confirming" role="menuitem" class="menu-item destructive" type="button" @click.stop="confirming = true">Delete…</button>
+        <div v-else class="flex flex-col gap-2 px-2 py-2" role="alert">
+          <p class="m-0 font-ui text-sm">Delete “{{ g.title }}” with its screenshots and files? This cannot be undone.</p>
+          <div class="flex gap-2">
+            <button role="menuitem" class="btn sm outline danger" type="button" @click="remove">Delete</button>
+            <button role="menuitem" class="btn sm" type="button" @click.stop="confirming = false">Keep it</button>
+          </div>
+        </div>
       </template>
     </div>
   </Teleport>

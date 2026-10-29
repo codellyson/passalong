@@ -67,6 +67,7 @@ async function load() {
       earlier.value = r?.revision ?? null;
     }
     draft.value = current.value?.body || "";
+    editorKey.value++;
     editing.value = Boolean(props.startEditing) && !earlier.value;
     // Opened is looked at: its change mark clears, on the server, for this account only.
     if (current.value && props.row?.changed) {
@@ -105,21 +106,26 @@ async function save() {
   }
 }
 
-/** The newer version, after a refused save: the text written here is lost unless copied first. */
+/**
+ * The newer version, after a refused save. The refusal itself asks, in place: load it (what was
+ * written here is replaced) or keep writing, and copy it out first.
+ */
 async function reopen() {
-  if (
-    draft.value !== current.value?.body &&
-    !confirm("Load the newer version? What you wrote here will be replaced.")
-  )
-    return;
   await load();
   editing.value = true;
 }
+function keepWriting() {
+  problem.value = "";
+  stale.value = false;
+}
+/** Remounts the editor when its text is replaced from outside: a reload or a version put back. */
+const editorKey = ref(0);
 
 /** An earlier version into the editor, to be saved as the newest. */
 function putBack() {
   if (!earlier.value) return;
   draft.value = earlier.value.body;
+  editorKey.value++;
   earlier.value = null;
   editing.value = true;
   notice.value = `Version ${props.version} is in the editor. Save it to make it the current version.`;
@@ -206,8 +212,14 @@ async function remove() {
   }
 }
 
+/** Cancel with edits asks in place before throwing them away. */
+const confirmingDiscard = ref(false);
 function cancel() {
-  if (draft.value !== current.value?.body && !confirm("Discard your edits?")) return;
+  if (draft.value !== current.value?.body && !confirmingDiscard.value) {
+    confirmingDiscard.value = true;
+    return;
+  }
+  confirmingDiscard.value = false;
   draft.value = current.value?.body || "";
   editing.value = false;
   stale.value = false;
@@ -241,7 +253,7 @@ function cancel() {
           <h2 class="m-0 text-h3 font-medium tracking-tight">{{ current.name }}</h2>
           <p class="m-0 mt-1 font-ui text-xs text-muted">
             Version {{ current.version }}<template v-if="row?.editor"> by {{ byLine(row.editor, viaOf(row.client)) }}</template>
-            · <span class="tabular-nums">{{ age(current.updated, now) }}</span> ago
+            · <span class="tabular-nums">{{ age(current.updated, now) }}</span>
           </p>
         </div>
         <div v-if="!renaming && !editing && !earlier" class="flex flex-wrap gap-2">
@@ -268,8 +280,14 @@ function cancel() {
 
       <p v-if="notice" role="status" class="m-0 font-ui text-sm">{{ notice }}</p>
       <div v-if="problem" role="alert" class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
-        <p class="m-0 min-w-0 grow font-ui text-sm text-danger">{{ problem }}</p>
-        <button v-if="stale" class="btn outline danger sm" type="button" @click="reopen">Load the newer version</button>
+        <p class="m-0 min-w-0 grow font-ui text-sm text-danger">
+          <template v-if="stale">Someone saved a newer version while you were writing. Load it? What you wrote here will be replaced, so copy anything you want to keep first.</template>
+          <template v-else>{{ problem }}</template>
+        </p>
+        <template v-if="stale">
+          <button class="btn outline danger sm" type="button" @click="reopen">Load the newer version</button>
+          <button class="btn sm" type="button" @click="keepWriting">Keep writing</button>
+        </template>
       </div>
 
       <section v-if="showVersions && !editing" aria-label="Versions" class="rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
@@ -284,16 +302,24 @@ function cancel() {
 
       <div v-if="earlier" class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2 border border-fg px-4 py-3">
         <p class="m-0 min-w-0 grow font-ui text-sm">
-          <span class="font-medium">Version {{ earlier.version }}</span>, saved {{ age(earlier.saved_at, now) }} ago. The current one is version {{ current.version }}.
+          <span class="font-medium">Version {{ earlier.version }}</span>, saved <span class="tabular-nums">{{ age(earlier.saved_at, now) }}</span> before now. The current one is version {{ current.version }}.
         </p>
         <button class="btn primary sm" type="button" @click="putBack">Put this version back</button>
         <NuxtLink :to="docLink()" class="btn sm">See the current one</NuxtLink>
       </div>
 
       <form v-if="editing" class="flex flex-col gap-3" @submit.prevent="save">
-        <label class="sr-only" for="doc-body">Document text</label>
-        <textarea id="doc-body" v-model="draft" class="min-h-[28rem] w-full font-code text-sm" spellcheck="true" />
-        <div class="flex flex-wrap gap-2">
+        <!-- The editor exists only in the browser; the server draws a field of its size. -->
+        <ClientOnly>
+          <HubDocEditor :key="editorKey" :markdown="draft" :label="current.name" @change="draft = $event" />
+          <template #fallback><div class="writer-shell min-h-[30rem]" /></template>
+        </ClientOnly>
+        <div v-if="confirmingDiscard" class="flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
+          <p class="m-0 min-w-0 grow font-ui text-sm">Discard your edits? What you wrote since opening it is lost.</p>
+          <button class="btn sm outline danger" type="button" @click="cancel">Discard</button>
+          <button class="btn sm" type="button" @click="confirmingDiscard = false">Keep writing</button>
+        </div>
+        <div v-else class="flex flex-wrap gap-2">
           <button class="btn primary" type="submit" :disabled="saving">{{ saving ? "Saving…" : "Save version" }}</button>
           <button class="btn" type="button" @click="cancel">Cancel</button>
         </div>

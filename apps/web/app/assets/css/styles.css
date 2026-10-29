@@ -2484,3 +2484,59 @@ table.rows thead th {
   background: var(--surface-raised);
   font-weight: 500;
 }
+/* A project document in the editor (components/hub/DocEditor.vue): set as it reads, in Onest at
+   body size, its headings below the page's own. Mono only inside code. */
+.doc-writer {
+  font: 0.9375rem / 1.65 var(--font-sans);
+  min-height: 28rem;
+  padding: var(--s-5) var(--s-6);
+  white-space: normal;
+}
+.doc-writer > * + * {
+  margin-top: var(--s-3);
+}
+.doc-writer h1 {
+  margin-bottom: 0;
+  font: 500 1.125rem / 1.4 var(--font-sans);
+  letter-spacing: -0.015em;
+}
+.doc-writer h2 {
+  margin-top: var(--s-5);
+  margin-bottom: 0;
+  font: 550 1rem / 1.4 var(--font-sans);
+  letter-spacing: -0.01em;
+}
+.doc-writer h3 {
+  margin-top: var(--s-4);
+  margin-bottom: 0;
+  font: 550 0.875rem / 1.4 var(--font-sans);
+  letter-spacing: 0;
+}
+.doc-writer p {
+  margin-bottom: 0;
+}
+.doc-writer :not(pre) > code {
+  padding: 0 3px;
+  border-radius: var(--r-1);
+  background: var(--surface-raised);
+  font: 0.8125rem / 1 var(--font-mono);
+}
+.doc-writer blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: var(--s-3);
+  border-left: 1px solid var(--line-strong);
+  color: var(--muted);
+}
+.doc-writer a {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.doc-writer hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.doc-writer li > p {
+  margin: 0;
+}

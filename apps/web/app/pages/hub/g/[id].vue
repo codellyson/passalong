@@ -157,9 +157,10 @@ async function run(mark: string, work: () => Promise<unknown>) {
 const takeBack = () => run("release", () => onTakeBack({ id: id.value } as Working));
 const archive = () => run("archive", async () => g.value && (await onArchive(g.value, true)));
 /** Gone for good, with its screenshots and files: asked first, then back to the board. */
+const confirmingDelete = ref(false);
 async function remove() {
-  if (busy.value || !g.value || !confirm(`Delete "${g.value.title}"? This cannot be undone.`))
-    return;
+  if (busy.value || !g.value) return;
+  confirmingDelete.value = false;
   busy.value = "delete";
   try {
     if (await onRemove(g.value)) await navigateTo("/hub/work");
@@ -370,8 +371,14 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             class="btn outline danger"
             type="button"
             :disabled="Boolean(busy)"
-            @click="remove"
-          >{{ busy === "delete" ? "Deleting…" : "Delete" }}</button>
+            :aria-expanded="confirmingDelete"
+            @click="confirmingDelete = !confirmingDelete"
+          >{{ busy === "delete" ? "Deleting…" : "Delete…" }}</button>
+          <div v-if="confirmingDelete" class="flex w-full flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-2" role="alert">
+            <p class="m-0 min-w-0 grow font-ui text-sm">Delete “{{ g.title }}” with its screenshots and files? This cannot be undone.</p>
+            <button class="btn sm outline danger" type="button" @click="remove">Delete</button>
+            <button class="btn sm" type="button" @click="confirmingDelete = false">Keep it</button>
+          </div>
           <button class="btn" type="button" @click="copy(g.url, $event.currentTarget)">
             <AppIcon name="copy" /><span data-label>Copy share link</span>
           </button>

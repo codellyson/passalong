@@ -322,13 +322,10 @@ async function share() {
     sharing.value = false;
   }
 }
+/** Stop sharing asks in place, under the link, saying what it ends. */
+const confirmingStop = ref(false);
 async function stopSharing() {
-  if (
-    !confirm(
-      "Stop sharing this project? Everyone with the link loses access, and a new link will be different.",
-    )
-  )
-    return;
+  confirmingStop.value = false;
   sharing.value = true;
   try {
     await api(`/v1/folders/${id.value}/share`, { method: "DELETE" });
@@ -516,7 +513,12 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             <label class="sr-only" for="share-url">Share link</label>
             <input id="share-url" class="min-w-0 flex-1 font-code text-xs" :value="folder.share_url" readonly @focus="($event.target as HTMLInputElement).select()" />
             <button class="btn" type="button" @click="copy(folder.share_url || '', $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy link</span></button>
-            <button class="btn outline danger" type="button" :disabled="sharing" @click="stopSharing">Stop sharing</button>
+            <button class="btn outline danger" type="button" :disabled="sharing" :aria-expanded="confirmingStop" @click="confirmingStop = !confirmingStop">Stop sharing…</button>
+          </div>
+          <div v-if="confirmingStop" class="flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
+            <p class="m-0 min-w-0 grow font-ui text-sm">Stop sharing {{ folder.title }}? Everyone with the link loses access, and a new link will be different.</p>
+            <button class="btn sm outline danger" type="button" :disabled="sharing" @click="stopSharing">Stop sharing</button>
+            <button class="btn sm" type="button" @click="confirmingStop = false">Keep sharing</button>
           </div>
           <p class="m-0 font-ui text-xs text-muted">Anyone with this link can read this project's documents and download its files, without an account. Its work is not included.</p>
         </div>
@@ -616,8 +618,8 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                     <NuxtLink :to="{ query: { tab: 'documents', doc: d.id } }" class="font-medium break-words text-fg no-underline hover:underline">{{ d.name }}</NuxtLink>
                     <span v-if="d.changed" class="text-xs font-medium text-accent">Changed · {{ d.changed }}</span>
                   </p>
-                  <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ lastEdit(d) }}</span>
-                  <span class="font-ui text-xs text-muted tabular-nums @2xl:text-right @2xl:text-sm @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(d.updated, now) }}</span>
+                  <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ lastEdit(d) }}<span class="tabular-nums @2xl:hidden"> · {{ age(d.updated, now) }}</span></span>
+                  <span class="hidden font-ui text-sm text-fg tabular-nums @2xl:block @2xl:text-right">{{ age(d.updated, now) }}</span>
                 </li>
               </ol>
               <p v-else class="m-0 border-t border-fg py-3 font-ui text-sm text-muted">Only the README so far. A page per area — setup, pricing, a Log of what changed — goes here.</p>
@@ -666,7 +668,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
       <!-- ================================ Work ================================= -->
       <section v-else-if="tab === 'work'" class="@container flex min-w-0 flex-col gap-8" aria-label="Work">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <p class="m-0 font-ui text-sm text-muted">Say what needs doing and the agent files it here, for the right people.</p>
+          <p class="m-0 font-ui text-sm text-muted">{{ open.length || done.length ? "Say what needs doing and the agent files it here, for the right people." : "" }}</p>
           <div class="flex flex-wrap gap-2">
             <button class="btn sm" type="button" :aria-expanded="linking" @click="linking = !linking">Add existing work</button>
             <NuxtLink :to="{ path: '/hub/new', query: { project: id } }" class="btn primary sm">New work</NuxtLink>
@@ -684,6 +686,11 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ viewError }}</p>
           </div>
           <button class="btn outline danger sm" type="button" @click="loadView">Try again</button>
+        </div>
+        <!-- Nothing in it at all: one statement, not an empty Open over an empty Done. -->
+        <div v-else-if="!open.length && !done.length" class="flex flex-col gap-2 pt-2 pb-6">
+          <p class="m-0 text-h3 font-medium">No work in this project yet.</p>
+          <p class="m-0 max-w-[40rem] font-ui text-sm text-muted">New work files it here, for the right people. Work already written somewhere else can be added to it.</p>
         </div>
         <template v-else>
           <section v-for="group in [{ key: 'open', title: 'Open', rows: open }, { key: 'done', title: 'Done recently', rows: done }]" :key="group.key" :aria-labelledby="`${group.key}-h`">
@@ -752,8 +759,8 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                 <p class="m-0 mt-0.5 font-ui text-xs text-muted">{{ historyLine(h) }}</p>
                 <p v-if="h.note" class="m-0 mt-0.5 font-ui text-xs text-muted">“{{ h.note }}”</p>
               </div>
-              <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ byLine(h.by, h.via) }}</span>
-              <span class="font-ui text-xs text-muted tabular-nums @2xl:text-right @2xl:text-sm @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(h.at, now) }}</span>
+              <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ byLine(h.by, h.via) }}<span class="tabular-nums @2xl:hidden"> · {{ age(h.at, now) }}</span></span>
+              <span class="hidden font-ui text-sm text-fg tabular-nums @2xl:block @2xl:text-right">{{ age(h.at, now) }}</span>
             </li>
           </ol>
         </div>

@@ -203,7 +203,11 @@ change. Its README says how.
     person, `mcp`/`cli@…` an agent, `api` and '' unknown. A document's change mark is
     `folder_document_seen` (migration 0064), written when the hub opens it (`PUT
     …/documents/:id/seen`, never on an agent's read), on a save for the saver, and by "Mark all seen". The hub leads creation with an agent prompt
-    and keeps a plain form and its editor for corrections. It fetches private images with its credential and draws blob URLs, which is why the
+    and keeps a plain form and its editor for corrections. A document is edited in TipTap
+    (`components/hub/DocEditor.vue`, configured as Writer.vue is) and stays Markdown on the server:
+    `utils/doc-markdown.ts` converts through TipTap's JSON both ways, `test/doc-markdown.test.mjs`
+    holds the round trip, and a document holding what the editor cannot keep (a table, a task list,
+    HTML, an alert) opens as Markdown instead of being converted. It fetches private images with its credential and draws blob URLs, which is why the
     hub CSP permits `img-src blob:`.
   - `packages/passalong/test/task-flow.e2e.test.js` drives the CLI's operations against a running
     local server (`npm run test:e2e`, skipped by `npm test`). It puts its accounts on a plan in the

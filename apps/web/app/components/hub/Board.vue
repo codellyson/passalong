@@ -158,6 +158,14 @@ const { onArchive, onAssign, onReopen, onTaskDraft, onTaskReady, onTakeBack } = 
 /** Finished, not shelved: what Reopen is for. Archived work comes back through Unarchive. */
 const finished = (g: Guide) => g.status === "consumed" && g.outcome !== "archived";
 
+/** A card dragged out of In progress, waiting for "Stop this agent" or "Keep it". */
+const stopping = ref<Guide | null>(null);
+async function stopAgent() {
+  const g = stopping.value;
+  stopping.value = null;
+  if (g) await onTakeBack({ id: g.id } as Working);
+}
+
 /** The card being dragged, and the column under it. */
 const dragging = ref<Guide | null>(null);
 const over = ref("");
@@ -174,10 +182,12 @@ function moveTo(g: Guide, to: string): (() => Promise<boolean> | boolean) | null
   if (from === "draft" && to === "todo") return () => onTaskReady({ id: g.id } as Task);
   if (from === "todo" && to === "draft" && !holding(g))
     return () => onTaskDraft({ id: g.id } as Task);
+  // Stopping an agent is asked in place, above the board: the card goes back until it is answered.
   if (from === "working" && to === "todo")
-    return () =>
-      confirm(`Stop the agent working on "${g.title}"? It goes back to To do.`) &&
-      onTakeBack({ id: g.id } as Working);
+    return () => {
+      stopping.value = g;
+      return false;
+    };
   if (to === "done" && g.manage && g.status !== "consumed") return () => onArchive(g, true);
   // Finished work dragged back to To do is reopened, with why; anything out of Done to Draft is
   // unarchived, so nobody redoes it without a person saying so.
@@ -359,6 +369,11 @@ const shown = computed(
 
 <template>
   <div class="flex flex-col gap-3">
+    <div v-if="stopping" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-2" role="alert">
+      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on “{{ stopping.title }}”? It goes back to To do.</p>
+      <button class="btn sm outline danger" type="button" @click="stopAgent">Stop this agent</button>
+      <button class="btn sm" type="button" @click="stopping = null">Keep it</button>
+    </div>
     <div role="tablist" aria-label="Board columns" class="flex gap-1 overflow-x-auto [scrollbar-width:none] md:hidden">
       <button
         v-for="col in shownColumns"
