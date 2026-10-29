@@ -22,6 +22,7 @@ const queryClient = useQueryClient();
 const {
   api,
   signedIn,
+  markSeen,
   onTakeBack,
   onRecall,
   onArchive,
@@ -30,6 +31,15 @@ const {
   onTaskReady,
   onTaskDraft,
 } = useHub();
+
+// Opening it is looking at it: what changed on it stops showing as changed on Needs you.
+watch(
+  [id, signedIn],
+  ([which, inside]) => {
+    if (inside) void markSeen(which);
+  },
+  { immediate: true },
+);
 
 const { data, isPending, error } = useQuery({
   queryKey: computed(() => hubKeys.context(id.value)),

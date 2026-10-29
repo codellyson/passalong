@@ -223,6 +223,73 @@
   color-scheme: dark;
 }
 
+/* ---- the hub's tokens ----------------------------------------------------------------------
+   The signed-in screens keep the palette and draw it tighter: square-ish corners (2, 3, 4px and
+   nothing round but a dot), a one-pixel rule where a raised surface used to have a soft edge, the
+   grotesque for everything (no serif in the app). Counts and ages take `tabular-nums` where they
+   stand in a column; prose keeps proportional figures, where tabular ones read as "1 1". Set on
+   <body> by the hub's shell, so what it teleports to the body inherits it too. The landing and the
+   share pages keep the tokens above. Each final token is restated rather than its parts, because a
+   custom property resolves where it is declared and overriding a part here would change nothing.
+
+   Coral keeps one meaning in here: changed since you last looked. A project's line colour is one of
+   the six below and never coral. The sidebar is a solid ink rail in both themes; in dark it sits
+   below the page rather than above it. */
+.hub-app {
+  --r-1: 0.125rem;
+  --r-2: 0.1875rem;
+  --r-3: 0.25rem;
+  --r-pill: 0.25rem;
+  --font-serif: var(--font-sans);
+  --edge-shadow: 0 0 0 1px var(--line-strong);
+  --edge-shadow-hover: 0 0 0 1px light-dark(#cbbcab, #57524b);
+  --surface-raised: light-dark(#fffefd, #201e1b);
+
+  --rail: light-dark(#252522, #11100e);
+  --on-rail: #f4efe9;
+  --on-rail-muted: light-dark(#aaa59d, #9d988f);
+  --rail-line: oklch(1 0 0 / 0.1);
+  --rail-hover: oklch(1 0 0 / 0.06);
+  --rail-current: oklch(1 0 0 / 0.11);
+
+  --project-amber: light-dark(#b07a12, #d8a440);
+  --project-green: light-dark(#3f7d52, #6fb487);
+  --project-blue: light-dark(#3e6fa6, #7aa4d8);
+  --project-violet: light-dark(#7a5bb0, #a68ad8);
+  --project-teal: light-dark(#2f8582, #5fb3ae);
+  --project-plum: light-dark(#9a4d74, #cc7ea6);
+}
+/* On the rail the marks sit on ink in both themes, so they take their light-on-dark half. */
+.rail {
+  --project-amber: #d8a440;
+  --project-green: #6fb487;
+  --project-blue: #7aa4d8;
+  --project-violet: #a68ad8;
+  --project-teal: #5fb3ae;
+  --project-plum: #cc7ea6;
+}
+.project-mark {
+  background: var(--muted);
+}
+.project-mark[data-tone="amber"] {
+  background: var(--project-amber);
+}
+.project-mark[data-tone="green"] {
+  background: var(--project-green);
+}
+.project-mark[data-tone="blue"] {
+  background: var(--project-blue);
+}
+.project-mark[data-tone="violet"] {
+  background: var(--project-violet);
+}
+.project-mark[data-tone="teal"] {
+  background: var(--project-teal);
+}
+.project-mark[data-tone="plum"] {
+  background: var(--project-plum);
+}
+
 *,
 *::before,
 *::after {
@@ -1153,7 +1220,7 @@ details.more summary:hover {
    built from Tailwind utilities, in app/components/hub/. Its semantic colours are the `--ok`,
    `--warn` and `--danger` tokens above, bridged into utility names by assets/css/tailwind.css. */
 
-/* ---- teams, activity, tokens ---------------------------------------------------------------- */
+/* ---- teams, tokens ------------------------------------------------------------------------- */
 /* The form on the three screens outside the hub — sign in, reset, join. They were written before
    the hub had a field pattern; this is that pattern, so a labelled field looks the same wherever
    it appears. `form.join` was declared twice here, flex and then grid, and the flex one had never
@@ -1175,13 +1242,6 @@ form.join label {
   margin: 0 0 var(--s-3);
 }
 
-.notes {
-  list-style: none;
-  padding: 0;
-  margin: var(--s-2) 0 0;
-  font-size: var(--t-sm);
-  line-height: 1.9;
-}
 .note {
   color: var(--muted);
   border: 0;
@@ -1190,31 +1250,6 @@ form.join label {
 .note a {
   color: inherit;
 }
-.note.unread {
-  color: var(--fg);
-}
-.note.unread::marker {
-  content: "";
-}
-.note .when {
-  display: inline-block;
-  min-width: 6.5rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-/* Drawn, not typed: a bullet character is a different size and baseline in every font, and this
-   one has to line up with a row of timestamps. */
-.note.unread .when::before {
-  content: "";
-  display: inline-block;
-  width: 0.375rem;
-  height: 0.375rem;
-  margin-right: var(--s-2);
-  border-radius: 50%;
-  background: var(--accent);
-  vertical-align: 0.1em;
-}
-
 .invite-paste {
   display: flex;
   gap: var(--s-2);

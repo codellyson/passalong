@@ -35,6 +35,12 @@ const PATHS = {
   sun: "M8 5.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M8 1.75v1.25M8 13v1.25M1.75 8H3M13 8h1.25M3.6 3.6l.9.9M11.5 11.5l.9.9M3.6 12.4l.9-.9M11.5 4.5l.9-.9",
   /** Appearance: dark. */
   moon: "M13 9.75A5.25 5.25 0 1 1 6.25 3a4.25 4.25 0 0 0 6.75 6.75z",
+  /** The hub's places, in its sidebar. */
+  inbox: "M2.75 9.25h3l1 1.5h2.5l1-1.5h3M2.75 9.25l1.5-5.5h7.5l1.5 5.5v3h-10.5z",
+  board: "M2.75 2.75h3v10.5h-3zM6.5 2.75h3v7h-3zM10.25 2.75h3v4.5h-3z",
+  support: "M2.75 3.25h10.5v7.5h-6l-3 2.5v-2.5h-1.5z",
+  gear: "M8 5.75a2.25 2.25 0 1 0 0 4.5a2.25 2.25 0 1 0 0-4.5M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5M3.6 3.6l1.05 1.05M11.35 11.35l1.05 1.05M3.6 12.4l1.05-1.05M11.35 4.65l1.05-1.05",
+  menu: "M2.75 4.25h10.5M2.75 8h10.5M2.75 11.75h10.5",
 } as const;
 
 /** Dots are drawn as zero-length strokes with a round cap, so their weight *is* the stroke width —

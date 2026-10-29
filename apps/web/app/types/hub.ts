@@ -127,38 +127,6 @@ export interface Board {
   landed: Guide[];
 }
 
-export interface Note {
-  id: string;
-  at: string;
-  text: string;
-  guide: string | null;
-  read: boolean;
-  /** What happened, as the server names it: "shared", "pulled", "verified"… */
-  kind?: string;
-  /** Who did it, as a person reads them. Empty for a clock or an anonymous reader. */
-  actor_name?: string;
-  team_name?: string;
-  /** The work's title. */
-  title?: string;
-}
-
-/**
- * One thing you did. The server renders `text`, the same way it renders a notification's — see
- * apps/api/src/log.ts for why this is your own acts and `Note` is everyone else's.
- */
-export interface LogEntry {
-  act: "published" | "pulled" | "works" | "broken" | "took" | "passed";
-  at: string;
-  guide: string;
-  title: string;
-  /** Its `source_context`. The author's repo, which is not always the reader's. */
-  repo: string;
-  url: string;
-  mine: boolean;
-  note: string;
-  text: string;
-}
-
 export interface ApiToken {
   id: string;
   name: string;
@@ -265,10 +233,6 @@ export interface HubData {
   me: Me | null;
   guides: Guide[];
   board: Board | null;
-  activity: Note[];
-  /** Your own acts, newest first. The window the server sends, not everything you have ever done. */
-  log: LogEntry[];
-  unread: number;
   tokens: ApiToken[];
   team: TeamDetail | null;
   tasks: Task[];
@@ -363,4 +327,48 @@ export interface GuideContext {
   blocks: Guide[];
   /** The folders holding it that the reader can open. */
   folders: { id: string; title: string; color: string }[];
+}
+
+/** A project as `/v1/needs` names it: the top folder a piece of work is linked into. */
+export interface NeedProject {
+  id: string;
+  title: string;
+  color: string;
+}
+
+/** One row of Needs you. See apps/api/src/needs.ts for the rank. */
+export interface NeedRow {
+  id: string;
+  title: string;
+  summary: string;
+  reason: "customer" | "asking" | "stuck" | "untaken" | "came_back";
+  with: string;
+  since: string;
+  said: string;
+  project: NeedProject | null;
+  /** What changed since you last looked; '' when nothing did. */
+  changed: string;
+}
+
+export interface Needs {
+  rows: NeedRow[];
+  customers: {
+    id: string;
+    title: string;
+    customer: string;
+    ours: boolean;
+    since: string;
+    project: NeedProject | null;
+    changed: string;
+  }[];
+  closed: {
+    id: string;
+    title: string;
+    summary: string;
+    by: string;
+    at: string;
+    project: NeedProject | null;
+    changed: string;
+  }[];
+  unread: number;
 }

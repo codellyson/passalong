@@ -60,7 +60,8 @@ function build(queryClient: QueryClient) {
         hubKeys.allGuides,
         hubKeys.tasks,
         hubKeys.working,
-        hubKeys.log,
+        hubKeys.needs,
+        hubKeys.projects,
       ])
         void queryClient.invalidateQueries({ queryKey: key });
     }, 400);

@@ -15,15 +15,15 @@ import type {
   Board,
   Guide,
   HubData,
-  LogEntry,
   Me,
-  Note,
+  Needs,
   Task,
   TeamDetail,
   Working,
 } from "~/types/hub";
 import { HttpError, SignedOut } from "~/utils/http";
 import { dropFromBoard, patchList, withStatus } from "~/utils/optimistic";
+import type { ProjectFolder } from "~/utils/projects";
 
 const KEY = "passalong.token";
 /** The session cookie's name, as apps/api sets it. Only its presence is ever read here. */
@@ -52,8 +52,6 @@ export const hubKeys = {
   allGuides: ["guides"] as const,
   board: ["board"] as const,
   notifications: ["notifications"] as const,
-  scopedNotifications: (scope: string) => ["notifications", scope] as const,
-  log: ["log"] as const,
   tokens: ["tokens"] as const,
   team: (slug: string) => ["team-detail", slug] as const,
   billing: ["billing"] as const,
@@ -62,10 +60,11 @@ export const hubKeys = {
   working: ["working"] as const,
   scopedWorking: (scope: string) => ["working", scope] as const,
   context: (id: string) => ["guide-context", id] as const,
+  needs: ["needs"] as const,
+  projects: ["projects"] as const,
 };
 
 type GuideList = { guides: Guide[] };
-type Notes = { notifications: Note[]; unread: number };
 
 function build(queryClient: QueryClient) {
   const token = useState<string | null>("hub:token", () => null);
@@ -156,18 +155,18 @@ function build(queryClient: QueryClient) {
     { queryKey: hubKeys.board, queryFn: get<Board>("/v1/board"), enabled },
     queryClient,
   );
-  const notesQ = useQuery(
-    {
-      queryKey: computed(() => hubKeys.scopedNotifications(scope.value)),
-      queryFn: ({ queryKey }) =>
-        get<Notes>(`/v1/notifications?limit=30&scope=${encodeURIComponent(String(queryKey[1]))}`)(),
-      enabled,
-    },
+  // What waits on you, ranked by the server (apps/api/src/needs.ts), and the folders the sidebar
+  // lists as projects. Both are read on every hub page: the sidebar counts from them.
+  const needsQ = useQuery(
+    { queryKey: hubKeys.needs, queryFn: get<Needs>("/v1/needs"), enabled },
     queryClient,
   );
-  // The log is a window, not everything — /hub/log says so.
-  const logQ = useQuery(
-    { queryKey: hubKeys.log, queryFn: get<{ log: LogEntry[] }>("/v1/log?limit=200"), enabled },
+  const projectsQ = useQuery(
+    {
+      queryKey: hubKeys.projects,
+      queryFn: get<{ folders: ProjectFolder[] }>("/v1/folders"),
+      enabled,
+    },
     queryClient,
   );
   const tokensQ = useQuery(
@@ -235,9 +234,6 @@ function build(queryClient: QueryClient) {
     me: signedIn.value ? (meQ.data.value ?? null) : null,
     guides: guidesQ.data.value?.guides ?? [],
     board: boardQ.data.value ?? null,
-    activity: notesQ.data.value?.notifications ?? [],
-    unread: notesQ.data.value?.unread ?? 0,
-    log: logQ.data.value?.log ?? [],
     tokens: tokensQ.data.value?.tokens ?? [],
     team: teamScoped.value ? (teamQ.data.value ?? null) : null,
     tasks: tasksQ.data.value?.tasks ?? [],
@@ -249,8 +245,6 @@ function build(queryClient: QueryClient) {
     me: meQ.isPending.value,
     guides: guidesQ.isPending.value,
     board: boardQ.isPending.value,
-    notifications: notesQ.isPending.value,
-    log: logQ.isPending.value,
     tokens: tokensQ.isPending.value,
     tasks: tasksQ.isPending.value,
     working: workingQ.isPending.value,
@@ -304,8 +298,6 @@ function build(queryClient: QueryClient) {
     board: boardQ.isError.value && !boardQ.data.value,
     tasks: tasksQ.isError.value && !tasksQ.data.value,
     working: workingQ.isError.value && !workingQ.data.value,
-    notifications: notesQ.isError.value && !notesQ.data.value,
-    log: logQ.isError.value && !logQ.data.value,
     tokens: tokensQ.isError.value && !tokensQ.data.value,
   }));
 
@@ -542,17 +534,13 @@ function build(queryClient: QueryClient) {
     await refresh(hubKeys.tasks, hubKeys.working);
   };
 
+  /** Everything unread marked seen: the change marks on Needs you and the sidebar clear. */
   const readAll = () =>
-    change(
-      () => api(`/v1/notifications/read?scope=${encodeURIComponent(scope.value)}`, json("POST")),
-      () =>
-        queryClient.setQueryData<Notes>(hubKeys.scopedNotifications(scope.value), (old) =>
-          old
-            ? { unread: 0, notifications: old.notifications.map((n) => ({ ...n, read: true })) }
-            : old,
-        ),
-      [hubKeys.notifications],
-    );
+    change(() => api("/v1/notifications/read", json("POST")), () => {}, [
+      hubKeys.notifications,
+      hubKeys.needs,
+      hubKeys.projects,
+    ]);
 
   async function createTeam(name: string) {
     const named = name.trim();
@@ -580,9 +568,23 @@ function build(queryClient: QueryClient) {
     queryClient.setQueryData(hubKeys.me, me);
   };
 
+  /**
+   * Opening a piece of work is looking at it: what changed on it stops showing as changed. Nothing
+   * is patched by hand; the lists that show the mark are refetched.
+   */
+  async function markSeen(guide: string) {
+    const r = await api<{ read: number }>("/v1/notifications/read", json("POST", { guide })).catch(
+      () => null,
+    );
+    if (r?.read) await refresh(hubKeys.needs, hubKeys.projects, hubKeys.notifications);
+  }
+
   return {
     token,
     signedIn,
+    needsQ,
+    projectsQ,
+    markSeen,
     maybe,
     expired,
     data,

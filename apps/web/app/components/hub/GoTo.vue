@@ -35,15 +35,15 @@ async function go(form: HTMLFormElement) {
 </script>
 
 <template>
-  <!-- On a phone too, narrower and without the shortcut hint: an id from an agent's message is as
-       likely to be opened there, and a phone has no ⌘K. -->
+  <!-- On the rail, so it is there on every page and in the phone's drawer: an id from an agent's
+       message is as likely to be opened on a phone, which has no ⌘K and so no hint. -->
   <form class="relative min-w-0" role="search" @submit.prevent="go($event.target as HTMLFormElement)">
     <label class="sr-only" for="hub-goto">Go to work by its id</label>
     <input
       id="hub-goto"
       ref="box"
       name="id"
-      class="w-40 font-code text-sm max-sm:w-28 sm:pr-10 lg:w-48"
+      class="h-8 w-full border-rail-line bg-rail-hover pr-12 font-code text-xs text-on-rail placeholder:text-on-rail-muted focus:border-on-rail-muted"
       placeholder="Go to id"
       autocomplete="off"
       spellcheck="false"
@@ -52,7 +52,7 @@ async function go(form: HTMLFormElement) {
       @input="wrong = false"
       @keydown.esc="box?.blur()"
     />
-    <kbd aria-hidden="true" class="pointer-events-none absolute max-sm:hidden top-1/2 right-2 -translate-y-1/2 font-ui text-xs text-muted">{{ mac ? "⌘K" : "Ctrl K" }}</kbd>
+    <kbd aria-hidden="true" class="pointer-events-none absolute max-md:hidden top-1/2 right-2 -translate-y-1/2 font-ui text-xs text-on-rail-muted">{{ mac ? "⌘K" : "Ctrl K" }}</kbd>
     <p id="hub-goto-help" class="sr-only" aria-live="polite">{{ wrong ? "That isn't an id for any work" : "" }}</p>
   </form>
 </template>

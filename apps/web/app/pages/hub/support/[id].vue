@@ -11,7 +11,15 @@ import type { GuideContext, SupportList, SupportRow } from "~/types/hub";
 const route = useRoute();
 const id = computed(() => String(route.params.id));
 const queryClient = useQueryClient();
-const { api, signedIn } = useHub();
+const { api, signedIn, markSeen } = useHub();
+// Opening it is looking at it: what changed on it stops showing as changed on Needs you.
+watch(
+  [id, signedIn],
+  ([which, inside]) => {
+    if (inside) void markSeen(which);
+  },
+  { immediate: true },
+);
 
 usePage({ title: "Support · Passalong", description: "One customer request.", noindex: true });
 
