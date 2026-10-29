@@ -87,7 +87,8 @@ a customer before a person presses Send. A holding agent receives both kinds thr
 **The reader** (`reader.ts`) sorts each request when `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` are
 set — Anthropic, OpenAI or Google through their own AI SDK packages, or any OpenAI-compatible provider
 with `READER_URL`: the kind (task or bug), title, summary and sections, and the
-team group by name (`to: #group`). Its answer is used whole or not at all (`readVerdict()`), the
+team group by name (`to: #group`). It looks at pictures too — up to three on the message or pasted in
+the box — because a screenshot of an error is often the whole report. Its answer is used whole or not at all (`readVerdict()`), the
 customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for
 the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the
 hub's box, `/hub/new` (`POST /v1/compose`), for writing a task, bug or handover in your own words. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When a
