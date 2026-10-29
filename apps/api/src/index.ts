@@ -5839,7 +5839,7 @@ async function receiveSupport(
   const groups = box.team
     ? (
         await env.DB.prepare(
-          `SELECT g.slug, g.name FROM team_group g JOIN team t ON t.id = g.team_id WHERE t.slug = ?`,
+          `SELECT g.slug, g.name FROM team_group g JOIN team t ON t.id = g.team_id WHERE t.slug = ? AND g.slug NOT LIKE '~%'`,
         )
           .bind(box.team)
           .all<{ slug: string; name: string }>()
