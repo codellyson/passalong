@@ -258,7 +258,7 @@ const noteTone: Record<string, string> = {
                 {{ connect.open ? "Close" : "Connect an app" }}
               </button>
               <p :class="blurb">
-                Assistants that work with your guides as you. Each has its own access, reaching only
+                Assistants that act for you in Passalong. Each has its own access, reaching only
                 Passalong's tools, and you can cut it off here.
               </p>
             </div>
@@ -283,8 +283,8 @@ const noteTone: Record<string, string> = {
             <div :class="secHead">
               <h3 id="integrations-h" :class="title">Email, Sentry and PostHog</h3>
               <p :class="blurb">
-                Errors from Sentry and PostHog, and emails sent to you, arrive here as tasks, bugs or
-                transfers. Tasks wait as Drafts until you mark them Ready.
+                Errors from Sentry and PostHog, and emails sent to you, arrive here as work, sorted
+                by Passalong's agent and ready for whoever it is for.
               </p>
             </div>
             <HubIntegrations />

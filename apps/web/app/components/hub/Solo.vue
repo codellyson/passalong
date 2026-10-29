@@ -74,35 +74,35 @@ async function go(path: string) {
     </div>
 
     <p v-if="plan === 'solo'" class="m-0 font-ui text-sm text-muted">
-      You can keep as many guides as you like, on every device you use, and connect your own
+      You can keep as much work as you like, on every device you use, and connect your own
       assistants to them.<template v-if="until">
         {{ " " }}This one was given to you and runs until {{ until }}, after which it lapses —
-        nothing is taken away, and new guides past the free limit wait until you subscribe.
+        nothing is taken away, and new work past the free limit waits until you subscribe.
       </template><template v-if="ends">
         {{ " " }}You cancelled it, so it ends on {{ ends }} and won't renew. Nothing is taken away
-        then, and new guides past the free limit wait until you subscribe again. To keep it, open
+        then, and new work past the free limit waits until you subscribe again. To keep it, open
         Manage billing.
       </template>
     </p>
     <p v-else-if="plan === 'lapsed'" class="m-0 font-ui text-sm text-muted">
-      Your Solo plan has lapsed. Nothing has been taken away: every guide is still here and still
-      yours. New guides past the free limit have to wait until you renew.
+      Your Solo plan has lapsed. Nothing has been taken away: all your work is still here and still
+      yours. New work past the free limit has to wait until you renew.
     </p>
     <!-- The case that would otherwise read as a contradiction: Free on the badge, no limit in the
          footer. Saying which one is doing the lifting is the whole point of showing both. -->
     <p v-else-if="onATeamSeat" class="m-0 font-ui text-sm text-muted">
-      You're in a paid team, so you can already keep as many guides as you like. Solo is for when
+      You're in a paid team, so you can already keep as much work as you like. Solo is for when
       you're not.
     </p>
     <!-- Careful with the tense: an account reaches this state by a plan lapsing as well as by
-         arriving without one, so it may well have guides already synced. Saying "nothing is synced"
+         arriving without one, so it may well have work already synced. Saying "nothing is synced"
          would be false for exactly the person most likely to be reading it. -->
     <p v-else-if="sync === 'none'" class="m-0 font-ui text-sm text-muted">
-      New guides can't be sent until you're on a plan. Guides you already have stay where they are.
+      New work can't be sent until you're on a plan. Work you already have stays where it is.
     </p>
     <div v-else class="flex max-w-md flex-col gap-2">
       <div class="flex justify-between font-ui text-sm text-muted tabular-nums">
-        <span><b class="font-semibold text-fg">{{ data.me?.guides }}</b> of {{ data.me?.limit }} guides</span>
+        <span><b class="font-semibold text-fg">{{ data.me?.guides }}</b> of {{ data.me?.limit }} pieces of work</span>
         <span>{{ Math.max(0, (data.me?.limit ?? 0) - (data.me?.guides ?? 0)) }} left</span>
       </div>
       <!-- A bar, because "18 of 25" is a distance to a wall and reads faster as one. -->
@@ -112,7 +112,7 @@ async function go(path: string) {
         :aria-valuenow="data.me?.guides"
         aria-valuemin="0"
         :aria-valuemax="data.me?.limit"
-        aria-label="Guides used"
+        aria-label="Work used"
       >
         <div
           class="h-full rounded-pill"

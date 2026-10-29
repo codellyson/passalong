@@ -1,5 +1,5 @@
 /**
- * The feed with runs folded: eight guides shared by one person in a row is one line, not eight.
+ * The feed with runs folded: eight pieces of work shared by one person in a row is one line, not eight.
  *
  * Plain functions with no imports beyond a type, so it is testable without Nuxt. The server still
  * writes every sentence (`line()` in apps/api/src/notify.ts); only the plural is made here, and
@@ -13,14 +13,13 @@ export const FOLD_AT = 3;
 
 /** Kind → what the person did, with the count in. Anything else is never folded. */
 const MANY: Record<string, (n: number, team: string) => string> = {
-  shared: (n, team) => `shared ${n} guides with ${team || "your team"}`,
-  handoff: (n) => `sent you ${n} guides`,
-  pulled: (n) => `opened ${n} guides`,
-  taken: (n) => `is taking ${n} guides`,
-  declined: (n) => `passed on ${n} guides`,
-  consumed: (n) => `is done with ${n} guides`,
-  verified: (n) => `said ${n} guides worked`,
-  failed: (n) => `said ${n} guides didn't work`,
+  shared: (n, team) => `shared ${n} pieces of work with ${team || "your team"}`,
+  handoff: (n) => `sent you ${n} pieces of work`,
+  pulled: (n) => `opened ${n} pieces of work`,
+  declined: (n) => `passed on ${n} pieces of work`,
+  consumed: (n) => `is done with ${n} pieces of work`,
+  task_claimed: (n) => `is taking ${n} pieces of work`,
+  task_finished: (n) => `finished ${n} pieces of work`,
 };
 
 export type Entry =

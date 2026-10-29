@@ -1,6 +1,6 @@
 <!--
   The box a row carries while selecting. Present on every row in the mode so titles stay on one
-  edge; switched off where the viewer cannot manage the guide.
+  edge; switched off where the viewer cannot manage the work.
 -->
 <script setup lang="ts">
 const props = defineProps<{

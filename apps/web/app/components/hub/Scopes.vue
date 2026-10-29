@@ -1,5 +1,5 @@
 <!--
-  Whose guides you are looking at, as the title's own dropdown: "Guides in [Khaime ▾]".
+  Whose work you are looking at, as the title's own dropdown: "Work in [Khaime ▾]".
 
   It used to be a row of chips in the masthead, far from the list it filtered, labelled with each
   team's slug in the code face. The slug is what the server stores; the name is what the person

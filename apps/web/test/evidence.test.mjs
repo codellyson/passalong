@@ -72,19 +72,17 @@ test("a trailing full stop is not part of the link", () => {
   ]);
 });
 
-test("the guide page draws evidence with the renderer, not as raw text", async () => {
-  // It printed `![Sales Order PDF](https://passalong.dev/v1/shots/d2eg7b2xaqx7)` as characters.
-  // The hub had the renderer from the day evidence could carry a picture; the share page — the one
-  // the link goes to, the one somebody outside the team opens — put the same text in a <pre>.
+test("the work page draws what it was finished with through the renderer, not as raw text", async () => {
+  // Evidence once printed `![Sales Order PDF](https://passalong.dev/v1/shots/d2eg7b2xaqx7)` as
+  // characters. Every place that shows a hand-in's proof goes through the renderer.
   const { readFile } = await import("node:fs/promises");
-  const page = await readFile(new URL("../app/pages/g/[id]/[key].vue", import.meta.url), "utf8");
-  for (const slot of ["c.ran", "f.detail", "a.writeup"]) {
+  const page = await readFile(new URL("../app/pages/hub/g/[id].vue", import.meta.url), "utf8");
+  for (const slot of ["shown.detail", "b.proof"]) {
     assert.match(
       page,
       new RegExp(`<HubEvidence[^>]*:text="${slot.replace(".", "\\.")}"`),
       `${slot} is drawn by the renderer`,
     );
   }
-  // And nothing is left printing evidence into a <pre> of its own.
-  assert.doesNotMatch(page, /<pre[^>]*>\{\{\s*(c\.ran|f\.detail|a\.writeup)/);
+  assert.doesNotMatch(page, /<pre[^>]*>\{\{\s*(shown\.detail|b\.proof)/);
 });

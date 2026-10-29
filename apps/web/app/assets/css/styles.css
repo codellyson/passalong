@@ -1992,15 +1992,11 @@ form.join label {
    adjusts. Keeping these last is what stops the file from growing descending-specificity pairs,
    where a later, plainer selector silently loses to an earlier, sharper one. */
 
-/* ---- guide prose -------------------------------------------------------------------------------
-   The body of a guide is the only long-form reading in the product, and the only place set in the
-   serif. Everything below styles HTML that came out of remark, from markdown a stranger wrote —
-   so it is written against the elements markdown can produce, not against one nice-looking guide.
-
-   The six canonical sections are marked by the renderer with `data-kind`. Only two are typeset
-   differently: Verification is what you check the work against, Gotchas is what bites you. The
-   rest are the author's argument and read as prose. A section nobody planned for carries no
-   attribute and renders as a plain heading, which is the whole point of doing it this way. */
+/* ---- document prose ----------------------------------------------------------------------------
+   The body of a piece of work is the only long-form reading in the product, and the only place set
+   in the serif. Everything below styles HTML that came out of remark, from markdown a stranger
+   wrote — so it is written against the elements markdown can produce, not against one nice-looking
+   document. No heading means anything here: every section reads as plain prose. */
 article.prose {
   font-family: var(--font-serif);
   font-size: 1.125rem;
@@ -2038,19 +2034,6 @@ article.prose h6 {
   font-size: 1.0625rem;
   line-height: 1.35;
   margin: var(--s-4) 0 var(--s-2);
-}
-
-article.prose h2[data-kind="verification"],
-article.prose h2[data-kind="gotchas"] {
-  border-left: 3px solid var(--line-strong);
-  padding-left: var(--s-4);
-  margin-left: calc(-1 * (var(--s-4) + 3px));
-}
-article.prose h2[data-kind="verification"] {
-  border-left-color: var(--ok);
-}
-article.prose h2[data-kind="gotchas"] {
-  border-left-color: var(--warn);
 }
 
 article.prose p {
@@ -2182,80 +2165,6 @@ article.prose td {
   vertical-align: top;
 }
 
-/* The verify view's fold. Everything it hides is still in the document. */
-article.prose details.rest {
-  margin: var(--s-6) 0;
-  border-top: 1px solid var(--line);
-  padding-top: var(--s-4);
-}
-article.prose details.rest > summary {
-  cursor: pointer;
-  font: 500 var(--t-sm) / 1.5 var(--font-sans);
-  color: var(--muted);
-}
-
-/* Somebody ran this guide and it did not hold. Above the Steps, and in the danger colour, because
-   it is the one thing a reader has to know before following them — the page showed no verdict at
-   all before this, so a guide already found broken read as authoritative and the only way to warn
-   anyone was to publish a second guide titled "Correction: …". */
-.notworking {
-  margin: 0 0 var(--s-6);
-  padding: var(--s-4);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-3);
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.notworking time {
-  font-variant-numeric: tabular-nums;
-}
-
-/* What people had to change to make this work. Not a warning — it held — so it is the page's own
-   quiet voice rather than the danger colour: read before you start, and worth less alarm than a
-   guide somebody could not get to work at all. */
-.adapted {
-  margin: 0 0 var(--s-6);
-  padding: var(--s-4);
-  border: 1px solid var(--line);
-  border-radius: var(--r-3);
-  background: var(--surface-raised);
-}
-
-.adapted time {
-  font-variant-numeric: tabular-nums;
-}
-
-.adapted-said {
-  margin: var(--s-2) 0 0;
-  font: var(--t-sm) / 1.7 var(--font-sans);
-  color: var(--fg);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* "ran" on a check the runner executed: its exit code decided the hand-in, so the badge is the
-   page's one claim of fact about that line. The command and what it returned are in the title. */
-.adapted-badge {
-  flex-shrink: 0;
-  padding: 0.1em 0.45em;
-  border: 1px solid var(--ok);
-  border-radius: var(--r-1);
-  color: var(--ok);
-  font: 600 var(--t-xs) / 1.4 var(--font-ui);
-}
-
-/* The seam in the verify view: the point where the guide stops being re-ordered and goes back to
-   the author's own sequence. Set apart from the prose because it is the page talking, not the
-   guide. */
-article.prose .handover {
-  margin: var(--s-7) 0 var(--s-5);
-  padding-top: var(--s-4);
-  border-top: 1px solid var(--line);
-  font: var(--t-sm) / 1.6 var(--font-sans);
-  color: var(--muted);
-}
-
 article.prose .note,
 .note.lead {
   border-left: 2px solid var(--accent);
@@ -2362,190 +2271,15 @@ tbody tr {
     border-color var(--motion) ease;
 }
 
-/* ---- follow-up dock -----------------------------------------------------------------------------
-   A guide with its follow-ups open beside it, one column each, like a TweetDeck column. Drawn by
-   the server from `?with=` — this page runs no script — so everything here is layout: columns in a
-   row that scrolls sideways, each column scrolling on its own, and on a phone one full-width column
-   at a time that snaps into place as you swipe. Nothing animates. */
-.dock {
-  display: flex;
-  height: 100dvh;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x proximity;
-  background: var(--surface);
-}
-/* An equal split that fills the screen: the guide and every open follow-up share the width, so one
-   follow-up is 50/50, two are thirds, three are quarters. Fixed widths left a wide screen with a
-   60/40 split and empty space beside it, and cut the last column off on a narrow one. No column goes
-   below 22rem, where a paragraph stops being readable; past that the dock scrolls sideways. Text
-   inside a wide column keeps a reading measure rather than running the full width. */
-.dock > main.dock-guide,
-.dock > .dock-col {
-  flex: 1 0 22rem;
-  min-width: 0;
-  height: 100%;
-  overflow-y: auto;
-  scroll-snap-align: start;
-  border-right: 1px solid var(--line);
-}
-.dock > main.dock-guide {
-  max-width: none;
-  margin: 0;
-  padding: 0 var(--s-5) var(--s-7);
-  background: var(--bg);
-}
-.dock > main.dock-guide > *,
-.dock-col-body {
-  max-width: 46rem;
-}
-.dock-col {
-  background: var(--surface-raised);
-}
-.dock-col-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s-2);
-  padding: var(--s-3) var(--s-4);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-raised);
-}
-.dock-col-body {
-  padding: var(--s-4) var(--s-4) var(--s-7);
-  font-size: var(--t-sm);
-}
-.dock-icon {
-  display: grid;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--r-1);
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 1rem;
-}
-.dock-icon:hover {
-  background: var(--surface);
-  color: var(--fg);
-}
-@media (max-width: 40rem) {
-  .dock {
-    scroll-snap-type: x mandatory;
-  }
-  .dock > main.dock-guide,
-  .dock > .dock-col {
-    flex: 0 0 100vw;
-  }
-}
-
-/* The dock's scrollbars. A row of columns has one scrollbar per column plus one along the bottom,
-   and the browser's default bar — a wide grey track on every one of them — turned the dock into a
-   stack of gutters. They are thin, take the line colour rather than their own grey, have no track,
-   and stay faint until you point at the column that scrolls. Scrolling itself is unchanged: wheel,
-   trackpad, keyboard and swipe all still work, and the bar is still there to grab. */
-.dock,
-.dock > main.dock-guide,
-.dock > .dock-col {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-  transition: scrollbar-color var(--motion) ease;
-}
-.dock:hover,
-.dock > main.dock-guide:hover,
-.dock > .dock-col:hover,
-.dock:focus-within {
-  scrollbar-color: var(--line-strong) transparent;
-}
-/* Engines without `scrollbar-color` (older Safari) take the same shape through the prefixed
-   pseudo-elements. */
-.dock::-webkit-scrollbar,
-.dock > main.dock-guide::-webkit-scrollbar,
-.dock > .dock-col::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.dock::-webkit-scrollbar-track,
-.dock > main.dock-guide::-webkit-scrollbar-track,
-.dock > .dock-col::-webkit-scrollbar-track {
-  background: transparent;
-}
-.dock::-webkit-scrollbar-thumb,
-.dock > main.dock-guide::-webkit-scrollbar-thumb,
-.dock > .dock-col::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-.dock:hover::-webkit-scrollbar-thumb,
-.dock > main.dock-guide:hover::-webkit-scrollbar-thumb,
-.dock > .dock-col:hover::-webkit-scrollbar-thumb {
-  background-color: var(--line-strong);
-}
-@media (prefers-reduced-motion: reduce) {
-  .dock,
-  .dock > main.dock-guide,
-  .dock > .dock-col {
-    transition: none;
-  }
-}
-
-/* The dock's motion. Opening or closing a follow-up is a page load — this page runs no script — so
-   the movement comes from cross-document view transitions, which the browser runs between the two
-   pages with CSS alone. Columns keep their place by position (the CSP allows no inline styles, so a
-   column cannot carry its own name): the columns already open slide and resize to their new widths,
-   a column that appears slides in from the right, one that goes fades out, and the guide moves
-   between its full-page layout and its column. A browser without cross-document view transitions
-   simply loads the page, as before. Off entirely for anyone who asked for less motion. */
+/* Moving between pages runs a cross-document view transition, with CSS alone: no page here needs
+   script for it. A browser without them simply loads the page. Off entirely for anyone who asked
+   for less motion. */
 @view-transition {
   navigation: auto;
-}
-main.guide-page {
-  view-transition-name: dock-guide;
-}
-.dock > section.dock-col:nth-of-type(1) {
-  view-transition-name: dock-col-1;
-}
-.dock > section.dock-col:nth-of-type(2) {
-  view-transition-name: dock-col-2;
-}
-.dock > section.dock-col:nth-of-type(3) {
-  view-transition-name: dock-col-3;
-}
-.dock > section.dock-col:nth-of-type(4) {
-  view-transition-name: dock-col-4;
 }
 ::view-transition-group(*) {
   animation-duration: 260ms;
   animation-timing-function: var(--ease-out);
-}
-@keyframes dock-in {
-  from {
-    opacity: 0;
-    transform: translateX(2.5rem);
-  }
-}
-@keyframes dock-out {
-  to {
-    opacity: 0;
-    transform: translateX(1.5rem);
-  }
-}
-::view-transition-new(dock-col-1):only-child,
-::view-transition-new(dock-col-2):only-child,
-::view-transition-new(dock-col-3):only-child,
-::view-transition-new(dock-col-4):only-child {
-  animation: dock-in 260ms var(--ease-out) both;
-}
-::view-transition-old(dock-col-1):only-child,
-::view-transition-old(dock-col-2):only-child,
-::view-transition-old(dock-col-3):only-child,
-::view-transition-old(dock-col-4):only-child {
-  animation: dock-out 180ms ease-in both;
 }
 /* Page to page, in the hub and between public pages alike: the bar stays put and only the page
    under it changes, the old one fading quickly and the new one settling in from a few pixels down.
@@ -2571,16 +2305,9 @@ main.guide-page {
   animation: page-in 220ms var(--ease-out) both;
 }
 
-/* The jump to a newly opened column, from its #f-<id> fragment. */
-.dock {
-  scroll-behavior: smooth;
-}
 @media (prefers-reduced-motion: reduce) {
   @view-transition {
     navigation: none;
-  }
-  .dock {
-    scroll-behavior: auto;
   }
 }
 

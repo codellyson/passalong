@@ -154,7 +154,7 @@ test("a full free plan is the first thing Needs you says", () => {
     teams: [],
   });
   assert.equal(full[0].anchor, "plan");
-  assert.match(full[0].text, /all 25 guides/);
+  assert.match(full[0].text, /all 25 pieces of work/);
   assert.equal(
     attention({
       hasPassword: true,

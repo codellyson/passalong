@@ -1,5 +1,5 @@
 <!--
-  /hub/work: the team board. Every task, handoff and bug in the team is a card, and everyone in the
+  /hub/work: the team board. Every piece of work in the team is a card, and everyone in the
   team sees the same board: in a team, Draft, To do, a column per teammate and group, In progress
   and Done, like a Trello board with a list per person; across all teams, the four stages. Where a
   card sits is the server's (`stage`, `lanes`), so it moves when the work moves and never because
@@ -34,7 +34,7 @@ watch(
     q.value = text(v);
   },
 );
-/** `?follows=<id>`: guides naming it as their parent. */
+/** `?follows=<id>`: work naming it as its parent. */
 const follows = computed(() => text(route.query.follows));
 const followed = computed(() =>
   follows.value ? data.value.guides.find((g) => g.id === follows.value) || null : null,
@@ -92,12 +92,10 @@ const empty = computed(() => columns.value.every((c) => !c.cards.length));
         <span v-if="updating || scopeChanging" role="status" class="font-ui text-sm font-normal text-muted">Updating…</span>
       </h1>
 
-      <!-- Named, not "one guide": the filter is only useful if you can see which guide it is. -->
+      <!-- Named: the filter is only useful if you can see which work it is. -->
       <p v-if="follows" class="m-0 font-ui text-sm text-muted">
-        Follow-ups to
-        <b class="font-medium text-fg">{{ followed?.title || "this guide" }}</b>: more context
-        added to it.
-        <button class="linkish" type="button" @click="copy(followUpAsk(follows), $event.currentTarget)"><span data-label>Copy a follow-up ask</span></button>
+        Work from
+        <b class="font-medium text-fg">{{ followed?.title || "this work" }}</b>
         ·
         <NuxtLink to="/hub/work">Show all work</NuxtLink>
       </p>
@@ -130,7 +128,7 @@ const empty = computed(() => columns.value.every((c) => !c.cards.length));
             <p v-if="empty" class="m-0 mb-4 font-ui text-sm text-muted">
               {{ searching ? "Nothing matches." : "Nothing on the board yet." }}
               <button v-if="searching" class="linkish" type="button" @click="clearSearch">Clear search</button>
-              <button v-else class="linkish" type="button" @click="copy(ASKS.task, $event.currentTarget)">
+              <button v-else class="linkish" type="button" @click="copy(ASKS.work, $event.currentTarget)">
                 <span data-label>Copy a prompt for your agent</span>
               </button>
             </p>

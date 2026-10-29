@@ -9,7 +9,7 @@
  */
 import type { Board, Guide } from "~/types/hub";
 
-const BUCKETS = ["waiting", "failing", "in_flight", "landed"] as const;
+const BUCKETS = ["waiting", "in_flight", "landed"] as const;
 
 export const withStatus = (g: Guide, status: string): Guide => ({ ...g, status });
 

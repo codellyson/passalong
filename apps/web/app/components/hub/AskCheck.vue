@@ -2,8 +2,8 @@
   Ask someone to check (docs/REVIEW.md §5). The one review there is, and only when somebody asks for
   it, from somebody they chose: "open this in the browser and tell me it looks right".
 
-  It makes a follow-up — a task, addressed to the teammate picked, with this guide as its `parent`,
-  so it carries the guide and what it was finished with. A person wrote it here, so it is Ready at
+  It makes more work, addressed to the teammate picked, with this work as its `parent`, so it
+  carries the work and what it was finished with. A person wrote it here, so it is Ready at
   once. They take it, look, and finish it with proof of their own, or pass it with what is wrong,
   which comes back to whoever asked.
 -->
@@ -37,7 +37,7 @@ const people = computed(() =>
     })),
 );
 
-/** A guide id: 8 from the alphabet with no lookalikes, as the CLI mints them (guide.js `newId`). */
+/** An id: 8 from the alphabet with no lookalikes, as the CLI mints them (guide.js `newId`). */
 function newId() {
   const abc = "abcdefghjkmnpqrstuvwxyz23456789";
   return [...crypto.getRandomValues(new Uint8Array(8))].map((b) => abc[b % abc.length]).join("");
@@ -56,26 +56,22 @@ async function ask(form: HTMLFormElement) {
   busy.value = true;
   trouble.value = "";
   const g = props.guide;
-  const title = line(g.title || "this guide");
+  const title = line(g.title || "this work");
   const id = newId();
   const markdown = [
     "---",
     `title: "Check: ${title}"`,
     `summary: "Asked to look at ${title}: ${what}"`,
-    "kind: task",
     `team: ${g.team}`,
     `to: ${to}`,
     `parent: ${g.id}`,
     "---",
     "",
-    "## Goal",
     what,
     "",
-    "## Context",
     `Look at ${g.url} — what it was finished with is on its page in the hub.`,
     "",
-    "## Acceptance",
-    "- You looked, and it holds — with a screenshot of what you saw. If it doesn't, pass this back with what is wrong.",
+    "Done when you looked and it holds, with a screenshot of what you saw. If it doesn't, pass this back with what is wrong.",
     "",
   ].join("\n");
   try {

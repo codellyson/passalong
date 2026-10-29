@@ -183,7 +183,7 @@ async function test(d: Device) {
         <label class="flex items-start gap-2">
           <input type="checkbox" :checked="here.private" class="mt-1" @change="setPrivate(here, ($event.target as HTMLInputElement).checked)" />
           <span>
-            Hide guide titles
+            Hide titles
             <span class="block text-xs text-muted">The notice says only that something needs you — for a lock screen others can see.</span>
           </span>
         </label>

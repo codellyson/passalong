@@ -1,6 +1,6 @@
 <!--
   Act on what is ticked: Archive, Unarchive, Delete. Each button says how many it will touch,
-  because a selection can mix archived and live guides and each act only applies to one kind.
+  because a selection can mix archived and live work and each act only applies to one kind.
   Delete asks once, in place, before it does anything — it cannot be undone.
 -->
 <script setup lang="ts">
@@ -18,7 +18,7 @@ const toUnarchive = computed(() => list.value.filter((p) => p.archived));
 const confirming = ref(false);
 const busy = ref("");
 
-const count = (n: number) => `${n} ${n === 1 ? "guide" : "guides"}`;
+const count = (n: number) => `${n} ${n === 1 ? "piece of work" : "pieces of work"}`;
 
 async function act(action: "archive" | "unarchive" | "delete") {
   const ids = (
@@ -56,7 +56,7 @@ onBeforeUnmount(stop);
       v-if="list.length"
       class="fixed bottom-6 left-1/2 z-30 flex w-[min(44rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-3 rounded-3 bg-ink px-4 py-3 text-on-ink shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
       role="region"
-      aria-label="Selected guides"
+      aria-label="Selected work"
     >
       <div class="flex flex-wrap items-center gap-2 font-ui text-sm">
         <span class="mr-auto font-medium">{{ count(list.length) }} selected</span>

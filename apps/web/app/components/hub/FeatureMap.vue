@@ -3,14 +3,14 @@ const steps = [
   {
     number: "01",
     title: "Capture",
-    detail: "Turn a session into a task, bug report, or handoff.",
+    detail: "Write down what needs doing, in your words or an agent's.",
     surface: "CLI · MCP · API",
     icon: "M4 3.5h5l3 3v6H4z M9 3.5v3h3 M6.5 9h3 M6.5 11h3",
   },
   {
     number: "02",
     title: "Route",
-    detail: "Send it to a person, a group, a team, or the task queue.",
+    detail: "Send it to a person, a group, a team, or the queue.",
     surface: "People · teams · queue",
     icon: "M8 8a2.25 2.25 0 1 0 0-4.5A2.25 2.25 0 0 0 8 8z M3.5 12.5c.5-2 2-3 4.5-3s4 1 4.5 3 M12 5.5h1.5v3H12 M12 7h-2",
   },
@@ -23,9 +23,9 @@ const steps = [
   },
   {
     number: "04",
-    title: "Review with proof",
-    detail: "Hand in checks and evidence. Approve it or ask for changes.",
-    surface: "Checks · evidence · review",
+    title: "Finish with proof",
+    detail: "Finish with what shows it works. Reopen it if it doesn't.",
+    surface: "Evidence · Done · reopen",
     icon: "M8 2.75l4.5 1.75v3.25c0 2.4-1.5 4.4-4.5 5.5-3-1.1-4.5-3.1-4.5-5.5V4.5z M5.75 8l1.5 1.5 3-3",
   },
 ];

@@ -22,7 +22,7 @@ test("a run of three or more from one person folds into one line with the count"
   ]);
   assert.equal(out.length, 1);
   assert.equal(out[0].kind, "group");
-  assert.equal(out[0].text, "Bamiboy shared 3 guides with Khaime");
+  assert.equal(out[0].text, "Bamiboy shared 3 pieces of work with Khaime");
   assert.equal(out[0].notes.length, 3);
 });
 

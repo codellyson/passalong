@@ -1,9 +1,8 @@
 <!--
   A board card's quick actions, opened by right-clicking the card (or the context-menu key on it).
-  The same acts as the guide's own page, worded the same way, and offered under the same rules:
+  The same acts as the work's own page, worded the same way, and offered under the same rules:
   anyone in the team moves work and stops an agent, its author or a team admin (`manage`) archives
-  and deletes. Every kind has the same states, so the same acts. Ready for agents… on a task opens
-  HubReadyPrompt where the menu was, because marking a task Ready asks which repo it is for.
+  and deletes.
 
   Drawn at the pointer, fixed to the viewport and pulled back inside it, so it is never clipped by
   the board's sideways scroll. Escape, a click elsewhere, scrolling or picking an item closes it.
@@ -12,14 +11,12 @@
 import type { Guide, Task, Working } from "~/types/hub";
 
 const props = defineProps<{ guide: Guide; x: number; y: number; canGive: boolean }>();
-const emit = defineEmits<{ close: []; give: []; ready: [] }>();
-const { onArchive, onCloseGuide, onRemove, onReopen, onTaskDraft, onTaskReady, onTakeBack } =
-  useHub();
+const emit = defineEmits<{ close: []; give: [] }>();
+const { onArchive, onRemove, onReopen, onTaskDraft, onTaskReady, onTakeBack } = useHub();
 
 const g = computed(() => props.guide);
-const isTask = computed(() => g.value.kind === "task");
 const archived = computed(() => g.value.status === "consumed");
-const held = computed(() => (g.value.held_by ?? []).some((h) => h.health !== "review"));
+const held = computed(() => Boolean(g.value.held_by?.length));
 
 const menu = ref<HTMLElement | null>(null);
 const at = ref({ left: props.x, top: props.y });
@@ -63,19 +60,13 @@ async function run(act: () => Promise<unknown>) {
 }
 const draft = () => run(() => onTaskDraft({ id: g.value.id } as Task));
 const stop = () => run(() => onTakeBack({ id: g.value.id } as Working));
-// As on the guide's page: a task is archived through its status, a handoff or bug is closed.
-const archive = () => run(() => (isTask.value ? onArchive(g.value, true) : onCloseGuide(g.value)));
+const archive = () => run(() => onArchive(g.value, true));
 const unarchive = () => run(() => onArchive(g.value, false));
 function remove() {
   if (!confirm(`Delete "${g.value.title}"? This cannot be undone.`)) return close();
   run(() => onRemove(g.value));
 }
-// A task asks which repo it is for first; anything else is Ready at once.
-function ready() {
-  if (!isTask.value) return run(() => onTaskReady({ id: g.value.id } as Task));
-  emit("ready");
-  close();
-}
+const ready = () => run(() => onTaskReady({ id: g.value.id } as Task));
 /** Finished work back to To do, with why. Archived work is Unarchive's. */
 const reopenable = computed(() => archived.value && g.value.outcome !== "archived");
 function reopen() {
@@ -100,7 +91,7 @@ function copyAndClose(text: string, e: Event) {
       class="menu !fixed !m-0 w-60"
       :style="{ left: `${at.left}px`, top: `${at.top}px`, right: 'auto' }"
       role="menu"
-      :aria-label="`Actions for ${g.title || 'this guide'}`"
+      :aria-label="`Actions for ${g.title || 'this work'}`"
       @keydown="onKey"
       @contextmenu.prevent
     >
@@ -112,8 +103,8 @@ function copyAndClose(text: string, e: Event) {
         role="menuitem"
         class="menu-item"
         type="button"
-        @click.stop="ready"
-      >{{ isTask ? "Ready for agents…" : "Ready" }}</button>
+        @click="ready"
+      >Ready</button>
       <button
         v-if="g.stage === 'todo' && !held"
         role="menuitem"
@@ -132,9 +123,9 @@ function copyAndClose(text: string, e: Event) {
         role="menuitem"
         class="menu-item"
         type="button"
-        @click="copyAndClose(`passalong pull ${g.url}`, $event)"
+        @click="copyAndClose(`passalong take ${g.id}`, $event)"
       >
-        <AppIcon name="copy" /><span data-label>Copy pull command</span>
+        <AppIcon name="copy" /><span data-label>Copy take command</span>
       </button>
       <template v-if="g.manage">
         <div class="menu-rule" role="separator" />

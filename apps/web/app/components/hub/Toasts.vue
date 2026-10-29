@@ -1,21 +1,18 @@
 <!--
   What just happened, in the corner: a notification as it arrives, from useLive(). One line each,
-  the server's own sentence, and a click opens the guide. They leave on their own after a few
+  the server's own sentence, and a click opens the work. They leave on their own after a few
   seconds; the Activity feed keeps them. Polite, not assertive: news, not an alarm.
 -->
 <script setup lang="ts">
 const { toasts, dismiss } = useLive();
 const DOT: Record<string, string> = {
-  failed: "bg-danger",
-  task_rejected: "bg-danger",
   blocked: "bg-danger",
   sent_back: "bg-danger",
+  stuck: "bg-danger",
   declined: "bg-warn",
   stalled: "bg-warn",
-  verified: "bg-ok",
-  task_approved: "bg-ok",
+  untaken: "bg-warn",
   task_finished: "bg-ok",
-  closed: "bg-ok",
 };
 </script>
 

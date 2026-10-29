@@ -4,7 +4,7 @@ import { renderFolderMarkdown } from "~/utils/folder-markdown";
 
 usePage({
   title: "Folder · Passalong",
-  description: "Documents, assets and guides for one project.",
+  description: "Documents, files and work for one project.",
   noindex: true,
 });
 
@@ -25,19 +25,14 @@ const current = ref<FolderDocument | null>(null);
 const treeOpen = ref(true);
 const guideMenuOpen = ref(false);
 const guideMenu = ref<HTMLElement | null>(null);
-const guideAsks = computed(() => {
-  if (!folder.value) return [];
-  const target = { id: folder.value.id, title: folder.value.title, team: folder.value.team_slug };
-  return [
-    { label: "A task", kind: "task", text: folderGuideAsk("task", target) },
-    { label: "A bug report", kind: "bug", text: folderGuideAsk("bug", target) },
-    {
-      label: "A handoff of finished work",
-      kind: "transfer",
-      text: folderGuideAsk("handoff", target),
-    },
-  ];
-});
+/** What to say to an agent so new work lands in this folder. */
+const workAsk = computed(() =>
+  folder.value
+    ? folderAsk({ id: folder.value.id, title: folder.value.title, team: folder.value.team_slug })
+    : "",
+);
+/** Where work stands, in the board's words. */
+const STAGE: Record<string, string> = { draft: "Draft", published: "Ready", consumed: "Done" };
 /** A menu that stays open behind you is worse than no menu. */
 function onDocumentClick(event: MouseEvent) {
   if (guideMenuOpen.value && !guideMenu.value?.contains(event.target as Node))
@@ -307,7 +302,7 @@ async function linkGuide() {
     guideId.value = "";
     await load();
   } catch (error) {
-    trouble.value = error instanceof Error ? error.message : "That guide couldn't be added.";
+    trouble.value = error instanceof Error ? error.message : "That work couldn't be added.";
   }
 }
 
@@ -316,7 +311,7 @@ async function unlinkGuide(guide: FolderGuide) {
     await api(`/v1/folders/${id.value}/guides/${guide.id}`, { method: "DELETE" });
     await load();
   } catch (error) {
-    trouble.value = error instanceof Error ? error.message : "That guide couldn't be unlinked.";
+    trouble.value = error instanceof Error ? error.message : "That work couldn't be unlinked.";
   }
 }
 
@@ -346,7 +341,7 @@ async function deleteFolder() {
   if (
     !folder.value?.manage ||
     !confirm(
-      `Delete ${folder.value.title}, every subfolder, and their documents and files? Linked guides stay where they are. This cannot be undone.`,
+      `Delete ${folder.value.title}, every subfolder, and their documents and files? Linked work stays where it is. This cannot be undone.`,
     )
   )
     return;
@@ -365,14 +360,16 @@ const renamingFolder = ref(false);
 
 /** What a subfolder holds, in words: "5 documents · 1 file", or that it is empty. */
 function holds(child: Folder) {
-  const parts = [
-    [child.documents || 0, "document"],
-    [child.assets || 0, "file"],
-    [child.guides || 0, "guide"],
-    [child.subfolders || 0, "subfolder"],
-  ]
+  const parts = (
+    [
+      [child.documents || 0, "document", "documents"],
+      [child.assets || 0, "file", "files"],
+      [child.guides || 0, "piece of work", "pieces of work"],
+      [child.subfolders || 0, "subfolder", "subfolders"],
+    ] as const
+  )
     .filter(([n]) => n)
-    .map(([n, word]) => `${n} ${word}${n === 1 ? "" : "s"}`);
+    .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
   return parts.length ? parts.join(" · ") : "Empty";
 }
 const sharing = ref(false);
@@ -564,13 +561,13 @@ watch([signedIn, id], load, { immediate: true });
             <button v-if="folder.manage" class="folder-delete font-ui text-xs text-muted hover:text-danger" type="button" :disabled="deletingFolder" @click="deleteFolder">{{ deletingFolder ? "Deleting…" : "Delete folder" }}</button>
           </div>
         </div>
-        <!-- The link, once there is one: read-only like a guide's, for anyone who holds it. -->
+        <!-- The link, once there is one: read-only like work's, for anyone who holds it. -->
         <div v-if="folder.share_url" class="mt-4 flex flex-wrap items-center gap-2">
           <label class="sr-only" for="folder-share-url">Share link</label>
           <input id="folder-share-url" class="min-w-0 flex-1 font-code text-xs" :value="folder.share_url" readonly @focus="($event.target as HTMLInputElement).select()" />
           <button class="btn" type="button" @click="copy(folder.share_url || '', $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy link</span></button>
           <button class="btn outline danger" type="button" :disabled="sharing" @click="stopSharing">Stop sharing</button>
-          <p class="m-0 w-full font-ui text-xs text-muted">Anyone with this link can read this folder and the folders inside it, and download its files, without an account. Linked guides are not included.</p>
+          <p class="m-0 w-full font-ui text-xs text-muted">Anyone with this link can read this folder and the folders inside it, and download its files, without an account. Linked work is not included.</p>
         </div>
       </header>
       <input ref="fileInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="uploadFile" />
@@ -596,8 +593,7 @@ watch([signedIn, id], load, { immediate: true });
               <svg class="folder-heading-icon size-4 shrink-0" :data-color="child.color || displayColor || 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg><span class="truncate">{{ child.title }}</span>
             </NuxtLink>
             <NuxtLink v-for="guide in guides" :key="guide.id" :to="`/hub/g/${guide.id}`" class="folder-tree-item flex items-center gap-2 py-2 pl-4 pr-2 font-ui text-sm no-underline">
-              <span v-if="kindBadge(guide.kind)" class="shrink-0 rounded-1 border px-1 py-0.5 text-xs leading-none font-medium tracking-wide uppercase" :class="kindBadge(guide.kind)?.class">{{ kindBadge(guide.kind)?.label }}</span>
-              <span class="truncate">{{ guide.title || "Untitled guide" }}</span>
+              <span class="truncate">{{ guide.title || "Untitled" }}</span>
             </NuxtLink>
           </nav>
           <div class="mt-2 flex flex-col">
@@ -613,14 +609,14 @@ watch([signedIn, id], load, { immediate: true });
               <div class="mt-2 flex gap-2"><button class="btn sm primary" type="submit" :disabled="saving || !newSubfolderName.trim()">Add</button><button class="btn sm" type="button" @click="addingSubfolder = false; newSubfolderName = ''">Cancel</button></div>
             </form>
             <div v-if="documents.length" ref="guideMenu" class="relative" @keydown.esc="guideMenuOpen = false">
-              <button class="folder-add w-full rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" aria-haspopup="menu" :aria-expanded="guideMenuOpen" @click="guideMenuOpen = !guideMenuOpen">+ New guide</button>
+              <button class="folder-add w-full rounded-1 px-2 py-2 text-left font-ui text-sm text-muted hover:text-fg" type="button" aria-haspopup="menu" :aria-expanded="guideMenuOpen" @click="guideMenuOpen = !guideMenuOpen">+ New work</button>
               <div v-if="guideMenuOpen" class="menu folder-guide-menu" role="menu">
-                <p class="menu-note mt-0 mb-1">Ask your agent. Click one to copy what to say; it lands in this folder.</p>
-                <button v-for="item in guideAsks" :key="item.label" class="menu-item items-start" type="button" role="menuitem" @click="copy(item.text, $event.currentTarget)">
+                <p class="menu-note mt-0 mb-1">Ask your agent. Click to copy what to say; it lands in this folder.</p>
+                <button class="menu-item items-start" type="button" role="menuitem" @click="copy(workAsk, $event.currentTarget)">
                   <AppIcon name="copy" class="mt-0.5 shrink-0 text-muted" />
                   <span class="flex min-w-0 flex-col">
-                    <span class="font-medium" data-label>{{ item.label }}</span>
-                    <code class="font-code text-xs break-words text-muted">{{ item.text }}</code>
+                    <span class="font-medium" data-label>Some work</span>
+                    <code class="font-code text-xs break-words text-muted">{{ workAsk }}</code>
                   </span>
                 </button>
               </div>
@@ -629,7 +625,7 @@ watch([signedIn, id], load, { immediate: true });
         </div>
         <div class="mt-6 border-t border-line pt-3">
           <a href="#folder-assets" class="folder-section-link flex items-center justify-between rounded-1 px-3 py-2 font-ui text-sm text-muted no-underline hover:bg-field hover:text-fg"><span>Assets</span><span class="text-xs">{{ assets.length }}</span></a>
-          <a href="#folder-guides" class="folder-section-link flex items-center justify-between rounded-1 px-3 py-2 font-ui text-sm text-muted no-underline hover:bg-field hover:text-fg"><span>Guides</span><span class="text-xs">{{ guides.length }}</span></a>
+          <a href="#folder-guides" class="folder-section-link flex items-center justify-between rounded-1 px-3 py-2 font-ui text-sm text-muted no-underline hover:bg-field hover:text-fg"><span>Work</span><span class="text-xs">{{ guides.length }}</span></a>
         </div>
       </aside>
 
@@ -716,15 +712,12 @@ watch([signedIn, id], load, { immediate: true });
             <p class="m-0 mt-2 max-w-md font-ui text-sm text-muted">Documents are for reading: a brief, a script, an overview, a finding that is already settled.</p>
             <button v-if="!addingDocument" class="btn primary mt-4" type="button" @click="startDocument">New document</button>
             <section class="mt-8 border-t border-line pt-6" aria-labelledby="folder-guide-start">
-              <h2 id="folder-guide-start" class="m-0 text-h3">Put a guide in this folder</h2>
-              <p class="m-0 mt-2 mb-3 max-w-md font-ui text-sm text-muted">Anything someone still has to do — an open bug, a piece of work — goes in a guide, which has an owner, a state and an answer. A document tells nobody. Copy what to say to your agent: it writes the guide and links it here.</p>
-              <ul class="m-0 list-none overflow-hidden rounded-2 bg-surface-raised p-0 shadow-edge">
-                <li v-for="(item, index) in guideAsks" :key="item.kind" class="flex flex-wrap items-center gap-3 px-4 py-3" :class="{ 'border-t border-line': index > 0 }">
-                  <span class="shrink-0 rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase" :class="kindBadge(item.kind)?.class">{{ kindBadge(item.kind)?.label }}</span>
-                  <p class="m-0 min-w-0 flex-1 font-ui text-sm text-fg">“{{ item.text }}”</p>
-                  <button class="btn sm" type="button" @click="copy(item.text, $event.currentTarget)"><span data-label>Copy</span></button>
-                </li>
-              </ul>
+              <h2 id="folder-guide-start" class="m-0 text-h3">Put work in this folder</h2>
+              <p class="m-0 mt-2 mb-3 max-w-md font-ui text-sm text-muted">Anything someone still has to do — something broken, something to build — is work, which has an owner, a state and an answer. A document tells nobody. Copy what to say to your agent: it writes the work and links it here.</p>
+              <div class="flex flex-wrap items-center gap-3 rounded-2 bg-surface-raised px-4 py-3 shadow-edge">
+                <p class="m-0 min-w-0 flex-1 font-ui text-sm text-fg">“{{ workAsk }}”</p>
+                <button class="btn sm" type="button" @click="copy(workAsk, $event.currentTarget)"><span data-label>Copy</span></button>
+              </div>
             </section>
           </div>
         </section>
@@ -742,16 +735,16 @@ watch([signedIn, id], load, { immediate: true });
               </li>
             </ul>
           </section>
-          <section id="folder-guides" class="folder-supplement min-w-0 scroll-mt-24" aria-label="Guides">
-            <h2 class="m-0 text-h3">Guides</h2>
-            <p class="m-0 font-ui text-sm text-muted">Link a task, bug or handoff that uses this folder.</p>
+          <section id="folder-guides" class="folder-supplement min-w-0 scroll-mt-24" aria-label="Work">
+            <h2 class="m-0 text-h3">Work</h2>
+            <p class="m-0 font-ui text-sm text-muted">Link work that belongs to this folder.</p>
             <form class="flex w-full gap-2" @submit.prevent="linkGuide">
-              <AppSelect v-model="guideId" class="min-w-0 flex-1" label="Guide to link" placeholder="Choose a guide" :options="guideOptions" :disabled="!guideOptions.length" :short-at="20" />
+              <AppSelect v-model="guideId" class="min-w-0 flex-1" label="Work to link" placeholder="Choose work" :options="guideOptions" :disabled="!guideOptions.length" :short-at="20" />
               <button class="btn" type="submit" :disabled="!guideId">Link</button>
             </form>
             <ul v-if="guides.length" class="m-0 w-full list-none p-0">
               <li v-for="guide in guides" :key="guide.id" class="flex items-start justify-between gap-2 border-t border-line py-3">
-                <div class="min-w-0"><p class="m-0 flex items-center gap-2"><span v-if="kindBadge(guide.kind)" class="shrink-0 rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase" :class="kindBadge(guide.kind)?.class">{{ kindBadge(guide.kind)?.label }}</span><NuxtLink :to="'/hub/g/' + guide.id" class="min-w-0 font-ui text-sm">{{ guide.title || "Untitled guide" }}</NuxtLink></p><p class="m-0 mt-1 font-ui text-xs text-muted">{{ guide.status }}</p></div>
+                <div class="min-w-0"><NuxtLink :to="'/hub/g/' + guide.id" class="min-w-0 font-ui text-sm">{{ guide.title || "Untitled" }}</NuxtLink><p class="m-0 mt-1 font-ui text-xs text-muted">{{ STAGE[guide.status] || guide.status }}</p></div>
                 <button class="font-ui text-xs text-muted underline hover:text-fg" type="button" :aria-label="'Unlink ' + guide.title" @click="unlinkGuide(guide)">Unlink</button>
               </li>
             </ul>

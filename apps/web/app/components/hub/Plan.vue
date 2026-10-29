@@ -68,7 +68,7 @@ interface PlanCopy {
 const FREE: PlanCopy = {
   label: "Free",
   tone: "bg-surface text-muted",
-  says: "Each member has the free plan's limit on guides.",
+  says: "Each member has the free plan's limit on work.",
 };
 
 const PLANS: Record<string, PlanCopy> = {
@@ -76,12 +76,12 @@ const PLANS: Record<string, PlanCopy> = {
   team: {
     label: "Paid",
     tone: "bg-ok-soft text-ok",
-    says: "Everyone in the team can send as many guides as they like.",
+    says: "Everyone in the team can send as much work as they like.",
   },
   lapsed: {
     label: "Read-only",
     tone: "bg-warn-soft text-warn",
-    says: "The plan has lapsed. Everything in the team can still be read and answered; new guides and new members have to wait until it's renewed.",
+    says: "The plan has lapsed. Everything in the team can still be read and answered; new work and new members have to wait until it's renewed.",
   },
 };
 const plan = computed<PlanCopy>(() => (team.value ? (PLANS[team.value.plan] ?? FREE) : FREE));

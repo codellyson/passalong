@@ -1,11 +1,9 @@
 /**
- * A guide's progress, as the things that happened to it in order.
+ * A piece of work's progress, as the things that happened to it in order.
  *
- * The guide page used to answer "where is this?" in pieces: an Answers card with the verdict, who
- * took it and who opened it, and a separate card for who holds it. Each was true and none said what
- * happened when, so a person reading it had to put the handoff's story together themselves. This
- * is that story, derived entirely from what `GET /v1/guides/:id/context` already returns — nothing
- * new is stored, so it cannot disagree with the board.
+ * Derived entirely from what `GET /v1/guides/:id/context` already returns — nothing new is stored,
+ * so it cannot disagree with the board. Who wrote it and who it went to, who opened it, who took it
+ * and what they last said, what it was finished with, and the work that came out of it.
  *
  * Imports only types, so it runs under `node --test` without Nuxt.
  */
@@ -17,29 +15,17 @@ export interface Beat {
   at: string;
   who: string;
   what: string;
-  /** Something said with it, in their words: a progress note, a reason for passing. */
+  /** Something said with it, in their words: a progress note. */
   said?: string;
-  /** Evidence that may carry screenshots, drawn by HubEvidence. */
+  /** What it was finished with, which may carry screenshots, drawn by HubEvidence. */
   proof?: string;
-  /**
-   * Whether the proof is somebody's sentence rather than terminal output. A verdict's report is
-   * prose; a hand-in's evidence is what an agent ran, and reflowing it loses the alignment.
-   */
-  prose?: boolean;
   tone: BeatTone;
-  /** A hand-in: its evidence is shown in full beside the guide, so the page need not repeat it. */
-  handIn?: boolean;
-  /** Another guide this beat is about. */
+  /** Other work this beat is about. */
   link?: { id: string; title: string };
 }
 
 const nameOf = (by: { handle: string; name: string }) =>
   by.name?.trim() || (by.handle ? `@${by.handle}` : "someone");
-/** One person, however they are spelled on the row. */
-const personKey = (by: { handle: string; name: string }) => by.handle || by.name?.trim() || "";
-
-/** How close a verdict has to be to a hand-in by the same person to be the same act. */
-const SAME_ACT_MS = 10 * 60 * 1000;
 
 export function progressOf(ctx: GuideContext): Beat[] {
   const g = ctx.guide;
@@ -48,11 +34,11 @@ export function progressOf(ctx: GuideContext): Beat[] {
   beats.push({
     at: g.created,
     who: g.mine ? "You" : g.from_name || (g.from ? `@${g.from}` : "Someone"),
-    what: g.kind === "task" ? "wrote the task" : to ? `sent it to ${to}` : "published it",
+    what: to ? `sent it to ${to}` : "wrote it",
     tone: "plain",
   });
-  // A verdict or a browser archive writes a receipt so the inbox clears (see AGENTS.md, "Receipt is
-  // not only pull"). It is not someone opening the guide, and the verdict beat already says it.
+  // A browser archive writes a receipt so the inbox clears (see AGENTS.md, "Receipt is not only
+  // pull"), and so did the retired verdict. Neither is someone opening it.
   for (const p of g.pulled_by ?? []) {
     if (p.via === "verdict" || p.via === "web") continue;
     beats.push({
@@ -62,66 +48,15 @@ export function progressOf(ctx: GuideContext): Beat[] {
       tone: "plain",
     });
   }
-  // One "taking it" per person. Saying "I'll do this" and then having your own agent take it in a
-  // repo is one act seen twice, and a browser hold with no place is the ack itself; the line that
-  // says where is the one worth keeping.
-  const inRepo = new Set(ctx.claims.filter((k) => k.repo || k.place).map((k) => personKey(k.by)));
-  const saidTaking = new Set(ctx.acks.filter((k) => k.taken).map((k) => personKey(k.by)));
-  // A hand-in and a verdict from the same person minutes apart are one answer: "handed it in, and
-  // it works". Pair them so the verdict is said on the hand-in rather than as a line of its own.
-  const folded = new Set<(typeof ctx.verdicts)[number]>();
-  const verdictFor = (k: (typeof ctx.claims)[number]) => {
-    const v = ctx.verdicts.find(
-      (v) =>
-        !folded.has(v) &&
-        personKey(v.by) === personKey(k.by) &&
-        Math.abs(Date.parse(v.at) - Date.parse(k.updated)) <= SAME_ACT_MS,
-    );
-    if (v) folded.add(v);
-    return v;
-  };
-
-  // A person's word before any work: "I'm on it", or "not me" with why. An agent holding it is
-  // a claim, below; these are the people who answered in the hub or with `passalong take`.
-  for (const k of ctx.acks) {
-    if (k.taken && inRepo.has(personKey(k.by))) continue;
-    beats.push({
-      at: k.at,
-      who: nameOf(k.by),
-      what: k.taken ? "said they're taking it" : "passed",
-      said: k.taken ? undefined : k.note || undefined,
-      tone: k.taken ? "accent" : "warn",
-    });
-  }
   for (const k of ctx.claims) {
-    const where = [k.repo || k.place, k.host].filter(Boolean).join(" on ");
-    if (where || !saidTaking.has(personKey(k.by)))
-      beats.push({
-        at: k.claimed_at,
-        who: nameOf(k.by),
-        what: where ? `took it in ${where}` : "took it",
-        tone: "accent",
-      });
-    if (k.state === "review") {
-      const v = verdictFor(k);
-      // A person answering in the browser hands in with their verdict's proof as the evidence.
-      // That is one act, so its proof is shown once, on the verdict.
-      const same = ctx.verdicts.some((v) => v.by.handle === k.by.handle && v.detail === k.evidence);
-      beats.push({
-        at: k.updated,
-        who: nameOf(k.by),
-        what: v ? `handed it in: ${v.ok ? "it works" : "it didn't work"}` : "handed it in",
-        // The note is dropped when the evidence already opens with it: a person answering in the
-        // browser hands in with their note as the first line of the evidence.
-        said: same || (k.note && k.evidence.startsWith(k.note)) ? undefined : k.note || undefined,
-        // Folded with its verdict, the verdict's proof is this line's: still shown once.
-        proof: same ? (v ? v.detail || undefined : undefined) : k.evidence || undefined,
-        prose: same && v ? true : undefined,
-        tone: v && !v.ok ? "danger" : "ok",
-        handIn: true,
-        link: k.report ? { id: k.report.id, title: k.report.title || "The write-up" } : undefined,
-      });
-    } else if (k.note) {
+    const where = [k.repo, k.host].filter(Boolean).join(" on ");
+    beats.push({
+      at: k.claimed_at,
+      who: nameOf(k.by),
+      what: where ? `took it in ${where}` : "took it",
+      tone: "accent",
+    });
+    if (k.note)
       beats.push({
         at: k.updated,
         who: nameOf(k.by),
@@ -129,26 +64,24 @@ export function progressOf(ctx: GuideContext): Beat[] {
         said: k.note,
         tone: k.state === "stalled" ? "warn" : "plain",
       });
-    }
   }
-  for (const v of ctx.verdicts) {
-    if (folded.has(v)) continue;
+  // A hand-in ends the hold and is kept as what it was finished with. A failing one is from before
+  // finishing was final, and still says so.
+  for (const v of ctx.verdicts)
     beats.push({
       at: v.at,
       who: nameOf(v.by),
-      what: v.ok ? "says it works" : "says it didn't work",
+      what: v.ok ? "finished it" : "said it didn't work",
       said: v.detail ? undefined : v.note || undefined,
       proof: v.detail || undefined,
-      prose: true,
       tone: v.ok ? "ok" : "danger",
     });
-  }
   for (const c of ctx.children)
     beats.push({
       at: c.created,
       who: c.mine ? "You" : c.from_name || (c.from ? `@${c.from}` : "Someone"),
-      what: "added a follow-up",
-      link: { id: c.id, title: c.title || "Untitled guide" },
+      what: "made more work from it",
+      link: { id: c.id, title: c.title || "Untitled" },
       tone: "plain",
     });
   return beats.filter((b) => b.at).sort((a, b) => a.at.localeCompare(b.at));

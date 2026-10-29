@@ -4,8 +4,8 @@
  *
  * - A `note` is news addressed to you — taken, passed, handed in, approved, works, closed, went
  *   quiet. It becomes a toast and refreshes the lists it could have moved.
- * - A `change` is a guide you can see that moved: a hold, a progress note, a verdict, an ack. It
- *   refreshes that guide's page and the lists, and says nothing: progress notes stay quiet.
+ * - A `change` is work you can see that moved: a hold, a progress note, a hand-in. It
+ *   refreshes that work's page and the lists, and says nothing: progress notes stay quiet.
  *
  * Read with fetch, not EventSource, because EventSource cannot send the bearer token a token
  * sign-in uses. The server ends each connection after a few minutes and this reconnects from the
@@ -43,7 +43,7 @@ function build(queryClient: QueryClient) {
     setTimeout(() => dismiss(key), TOAST_MS);
   }
 
-  // Refreshes are coalesced: an agent handing in writes a hold, a verdict and a notification in
+  // Refreshes are coalesced: an agent handing in writes a hold, what it finished with and a notification in
   // one moment, and each would otherwise refetch every list on its own.
   const touched = new Set<string>();
   let flush: ReturnType<typeof setTimeout> | null = null;
@@ -60,7 +60,6 @@ function build(queryClient: QueryClient) {
         hubKeys.allGuides,
         hubKeys.tasks,
         hubKeys.working,
-        hubKeys.handedIn,
         hubKeys.log,
       ])
         void queryClient.invalidateQueries({ queryKey: key });

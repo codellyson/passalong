@@ -19,7 +19,7 @@ export function expiryLine(
   if (!g.proof_expires) return null;
   return {
     text: `Screenshots deleted in ${timeLeft(g.proof_expires, at)}`,
-    why: "The screenshots that proved this work are deleted 5 days after it was closed, and can't be brought back. The guide itself stays. Turn off Clean-up in Settings to keep them.",
+    why: "The screenshots that proved this work are deleted 5 days after it was closed, and can't be brought back. The work itself stays. Turn off Clean-up in Settings to keep them.",
     soon: new Date(g.proof_expires).getTime() - at < 2 * 86_400_000,
   };
 }

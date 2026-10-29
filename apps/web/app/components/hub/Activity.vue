@@ -2,22 +2,21 @@
   What happened while you were away. The server renders each line so the hub, the CLI and an agent
   all report the same sentence.
 
-  Most of what lands here is a second account of something the board is already showing: the
-  verdict printed on a row, the pull that put a guide in "worth keeping", the handoff sitting in
-  the lane at the top. Those lines are not deleted — they are the audit trail, and a line can be
-  the only record of a guide that has since been removed — but they are folded, so what is left
-  open is the part the board does not already say.
+  Most of what lands here is a second account of something the board is already showing. Those
+  lines are not deleted — they are the audit trail, and a line can be the only record of work that
+  has since been removed — but they are folded, so what is left open is the part the board does
+  not already say.
 -->
 <script setup lang="ts">
 const { data, failed, readAll, load } = useHub();
 
 const activity = computed(() => data.value.activity);
 
-/** Every guide the board is currently showing, in either lane. */
+/** All the work the board is currently showing. */
 const onBoard = computed(() => {
   const b = data.value.board;
   if (!b) return new Set<string>();
-  return new Set([...b.waiting, ...b.failing, ...b.in_flight, ...b.landed].map((g) => g.id));
+  return new Set([...b.waiting, ...b.in_flight, ...b.landed].map((g) => g.id));
 });
 
 /** Folded runs, newest first. A run of one person's eight shares is one entry, not eight lines. */
@@ -103,7 +102,7 @@ const urlFor = (id: string | null) =>
 
     <details v-if="echoes.length" class="mt-2">
       <summary class="cursor-pointer font-ui text-sm text-muted hover:text-fg">
-        {{ plural(echoes.length, "more update") }} about guides already in your list
+        {{ plural(echoes.length, "more update") }} about work already in your list
       </summary>
       <ul class="notes">
         <template v-for="e in echoes" :key="e.kind === 'group' ? e.id : e.note.id">

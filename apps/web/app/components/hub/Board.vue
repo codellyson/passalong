@@ -1,11 +1,11 @@
 <!--
-  The team board: five columns, the same for everyone who opens it, like any shared task board. A
-  card says what kind of work it is, who it is for and who has it; opening it goes to the guide's
-  own page, where anyone in the team can move it on. Which column a card is in is the server's
+  The team board: four columns, the same for everyone who opens it, like any shared task board. A
+  card says what the work is, who it is for and who has it; opening it goes to the work's own page,
+  where anyone in the team can move it on. Which column a card is in is the server's
   (`stage`), so nobody's board is arranged differently from anybody else's.
 
   From md the columns sit side by side, at least 15rem each and sharing what is left, and the board
-  — not the page — scrolls sideways when they do not fit: wrapped into a grid they read as five boxes, not a board. On a phone
+  — not the page — scrolls sideways when they do not fit: wrapped into a grid they read as four boxes, not a board. On a phone
   one column shows at a time, picked from a row of tabs, as Trello and Linear do.
 
   Who a card is for is its footer's right-hand line, and that line is the "Give to…" control: the
@@ -20,10 +20,10 @@
   (HubCardMenu).
 
   A card can be dragged to another column when that column means an act the card's own page
-  offers: back to Draft, Stop this agent (To do, from In progress; asked first), Archive (Done) and
-  Unarchive (out of Done, to Draft), and Ready (Draft to To do), for every kind: a handoff or bug
-  has a task's states. Ready for a task asks which repo it is for (HubReadyPrompt), where it was
-  dropped. While a card is dragged it fades where it
+  offers: back to Draft, Stop this agent (To do, from In progress; asked first), Archive (Done),
+  Unarchive (out of Done, to Draft), Reopen (finished, back to To do) and Ready (Draft to To do),
+  which keeps the repo the work already names; the work's own page is where to change it. While a
+  card is dragged it fades where it
   was, the columns it cannot go to fade, and a gap opens at the top of the one under it. A drop
   lands at once and is put back, with the hub's error, if the server refuses it. The same acts are
   in the right-click menu, which is the way there from a keyboard or a phone.
@@ -34,7 +34,7 @@
   In a team (`people`), it is a Trello board with a list per person: Draft, To do, a column for each
   teammate and each group with work waiting, In progress, Done. Work waiting to be started sits in
   the column of whoever it was sent to (`lanes`, from the server), or To do when nobody in
-  particular; several named people each see it in their column, as one guide. Dragging it to
+  particular; several named people each see it in their column, as one card. Dragging it to
   someone's column gives it to them; dragging to In progress, Done or Draft does what those columns
   always did.
 -->
@@ -124,7 +124,6 @@ const lead = (g: Guide) =>
 const HEALTH = {
   working: { dot: "bg-ok", word: "", label: "working" },
   person: { dot: "bg-line-strong", word: "", label: "a person has it" },
-  review: { dot: "bg-accent", word: "", label: "handed in" },
   asking: { dot: "bg-warn", word: "asked a question", label: "asked a question" },
   quiet: { dot: "bg-danger", word: "went quiet", label: "went quiet" },
 } as const;
@@ -155,36 +154,31 @@ function openMenu(g: Guide, e: MouseEvent) {
   };
 }
 
-const { onArchive, onAssign, onCloseGuide, onReopen, onTaskDraft, onTaskReady, onTakeBack } =
-  useHub();
+const { onArchive, onAssign, onReopen, onTaskDraft, onTaskReady, onTakeBack } = useHub();
 /** Finished, not shelved: what Reopen is for. Archived work comes back through Unarchive. */
 const finished = (g: Guide) => g.status === "consumed" && g.outcome !== "archived";
 
 /** The card being dragged, and the column under it. */
 const dragging = ref<Guide | null>(null);
 const over = ref("");
-const holding = (g: Guide) => (g.held_by ?? []).some((h) => h.health !== "review");
+const holding = (g: Guide) => Boolean(g.held_by?.length);
 
 /**
  * What dropping `g` in column `to` does, or null when it does nothing there. Each is the act the
- * guide's page offers, under the same rule: anyone in the team moves work, `manage` archives. An
+ * work's page offers, under the same rule: anyone in the team moves work, `manage` archives. An
  * act answers false when it did not happen, and the card goes back.
  */
 function moveTo(g: Guide, to: string): (() => Promise<boolean> | boolean) | null {
   const from = g.stage;
-  const task = g.kind === "task";
   if (from === to) return null;
-  // Ready for a task asks which repo first (see drop()); anything else goes at once.
-  if (from === "draft" && to === "todo")
-    return task ? () => false : () => onTaskReady({ id: g.id } as Task);
+  if (from === "draft" && to === "todo") return () => onTaskReady({ id: g.id } as Task);
   if (from === "todo" && to === "draft" && !holding(g))
     return () => onTaskDraft({ id: g.id } as Task);
   if (from === "working" && to === "todo")
     return () =>
       confirm(`Stop the agent working on "${g.title}"? It goes back to To do.`) &&
       onTakeBack({ id: g.id } as Working);
-  if (to === "done" && g.manage && from !== "review" && g.status !== "consumed")
-    return () => (task ? onArchive(g, true) : onCloseGuide(g));
+  if (to === "done" && g.manage && g.status !== "consumed") return () => onArchive(g, true);
   // Finished work dragged back to To do is reopened, with why; anything out of Done to Draft is
   // unarchived, so nobody redoes it without a person saying so.
   if (from === "done" && to === "todo" && finished(g))
@@ -235,7 +229,7 @@ async function place(g: Guide, to: string, act: () => Promise<boolean> | boolean
  * The board with people (`people`): Draft, To do (nobody yet), a column per teammate and per group
  * with work waiting, In progress, Done — a Trello board with a list per person. Only work waiting to
  * be started moves between the people: Draft, In progress and Done are where they are for everyone.
- * A card waiting for several named people shows in each of their columns, as one guide. A card just
+ * A card waiting for several named people shows in each of their columns, as one card. A card just
  * given somewhere shows there until the board catches up (`given`).
  */
 const given = ref<Record<string, string>>({});
@@ -305,14 +299,6 @@ function regive(g: Guide, col: string) {
 const allowed = (g: Guide, col: string) =>
   regive(g, col) || (!isLane(col) && Boolean(moveTo(g, col)));
 
-/** The task waiting on its repo before it goes Ready, and where to ask. */
-const readying = ref<{ guide: Guide; x: number; y: number } | null>(null);
-function ready(repo: string) {
-  const g = readying.value?.guide;
-  readying.value = null;
-  if (g) place(g, "todo", () => onTaskReady({ id: g.id } as Task, repo));
-}
-
 /** How tall the dragged card is, for the gap that opens where it would land. */
 const gap = ref(0);
 function dragStart(g: Guide, e: DragEvent) {
@@ -330,7 +316,7 @@ function dragOver(col: string, e: DragEvent) {
   e.preventDefault();
   over.value = col;
 }
-function drop(col: string, e: DragEvent) {
+function drop(col: string) {
   const g = dragging.value;
   if (g && regive(g, col)) {
     dragEnd();
@@ -339,10 +325,7 @@ function drop(col: string, e: DragEvent) {
   }
   const act = g && !isLane(col) && moveTo(g, col);
   dragEnd();
-  if (!g || !act) return;
-  if (g.kind === "task" && g.stage === "draft" && col === "todo")
-    readying.value = { guide: g, x: e.clientX, y: e.clientY };
-  else place(g, col, act);
+  if (g && act) place(g, col, act);
 }
 
 /**
@@ -406,7 +389,7 @@ const shown = computed(
           over === col.id ? 'ring-2 ring-[var(--accent)]' : '',
         ]"
         @dragover="dragOver(col.id, $event)"
-        @drop.prevent="drop(col.id, $event)"
+        @drop.prevent="drop(col.id)"
         :aria-labelledby="`col-${col.id}`"
       >
         <div class="flex items-baseline gap-2 px-1">
@@ -435,32 +418,24 @@ const shown = computed(
             @dragend="dragEnd"
             @contextmenu.prevent="openMenu(g, $event)"
           >
-            <!-- The top row: the select dot, the badges and the age, in one line so the dot sits on
-                 the badges' centre. Outside the link, because a control inside an <a> would open
+            <!-- The top row: the select dot, the label and the age, in one line so the dot sits on
+                 the label's centre. Outside the link, because a control inside an <a> would open
                  the page; the link below stretches over the whole card instead. -->
             <div class="flex items-center gap-2 px-3 pt-2">
-              <!-- No room taken while hidden, so a card at rest starts at its badge. -->
+              <!-- No room taken while hidden, so a card at rest starts at its label. -->
               <input
                 v-if="g.manage"
                 type="checkbox"
                 class="relative z-10 my-0 ml-0 -mr-2 h-4 w-0 shrink-0 cursor-pointer appearance-none rounded-pill border-0 border-line-strong bg-field opacity-0 transition-[width,margin,opacity] duration-150 checked:border-[var(--accent)] checked:bg-[var(--accent)] checked:shadow-[inset_0_0_0_3px_var(--field)] focus-visible:mr-0 focus-visible:w-4 focus-visible:border focus-visible:opacity-100 group-hover:mr-0 group-hover:w-4 group-hover:border group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:mr-0 [@media(hover:none)]:w-4 [@media(hover:none)]:border [@media(hover:none)]:opacity-100"
                 :class="selected.length ? '!mr-0 !w-4 !border !opacity-100' : ''"
                 :checked="has(g.id)"
-                :aria-label="`Select ${g.title || 'this guide'}`"
+                :aria-label="`Select ${g.title || 'this work'}`"
                 @change="pick(g)"
               >
-              <span
-                v-if="kindBadge(g.kind)"
-                class="rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase"
-                :class="kindBadge(g.kind)!.class"
-              >{{ kindBadge(g.kind)!.label }}</span>
-              <span
-                v-if="g.can_review"
-                class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold text-accent"
-              >Your review</span>
-              <!-- Done is approved work and archived work; the card says which, in words. -->
+              <HubWorkTag :tags="g.tags" />
+              <!-- Done is finished work and archived work; the card says which, in words. -->
               <span v-if="g.stage === 'done' && g.outcome" class="font-ui text-xs text-muted">{{
-                { finished: "Finished", approved: "Approved", archived: "Archived" }[g.outcome]
+                { finished: "Finished", approved: "Finished", archived: "Archived" }[g.outcome]
               }}</span>
               <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
             </div>
@@ -469,7 +444,7 @@ const shown = computed(
             <NuxtLink
               :to="`/hub/g/${g.id}`"
               class="line-clamp-2 px-3 pt-2 pb-1 font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 focus-visible:after:outline-2 focus-visible:after:outline-[var(--accent)] focus-visible:after:outline-solid"
-            >{{ g.title || "Untitled guide" }}</NuxtLink>
+            >{{ g.title || "Untitled" }}</NuxtLink>
             <!-- The footer sits beside the link, not inside it: a button inside an <a> is invalid
                  and would open the page. -->
             <div class="flex items-center gap-2 px-3 pb-2 font-ui text-xs text-muted">
@@ -522,7 +497,6 @@ const shown = computed(
       :can-give="canGive(menu.guide)"
       @close="menu = null"
       @give="openGive(menu!.guide.id, menu!.x, menu!.y)"
-      @ready="readying = { ...menu! }"
     />
     <Teleport to="body">
       <div
@@ -540,14 +514,5 @@ const shown = computed(
         />
       </div>
     </Teleport>
-    <HubReadyPrompt
-      v-if="readying"
-      :key="readying.guide.id"
-      :guide="readying.guide"
-      :x="readying.x"
-      :y="readying.y"
-      @close="readying = null"
-      @ready="ready"
-    />
   </div>
 </template>

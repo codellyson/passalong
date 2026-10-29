@@ -284,7 +284,7 @@ async function deleteSelected() {
 
 <template>
   <HubShell heading="Folders">
-    <template #sub>Keep a project's writing, screens and guides together for you and your agents.</template>
+    <template #sub>Keep a project's writing, screens and work together for you and your agents.</template>
 
     <!-- Nothing to filter until there is something somewhere; a narrowed, empty view keeps it to widen back. -->
     <div v-if="!loaded || folders.length || scope !== 'all'" class="mb-6 flex flex-wrap items-center justify-between gap-4">

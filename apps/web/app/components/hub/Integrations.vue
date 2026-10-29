@@ -1,11 +1,10 @@
 <!--
-  Integrations (apps/api/src/inbound.ts): the ways a guide arrives from outside — email to an address,
+  Integrations (apps/api/src/inbound.ts): the ways work arrives from outside — email to an address,
   or a webhook from Sentry, PostHog or your own code — and the email senders asking to be let in.
 
-  The kind is in the address or URL (`+bug`, `/bug`) because a guide's kind is always stated,
-  never guessed, and whoever picks the address is the one stating it. It asks where the work comes
-  from and shows only that source's addresses and steps: Settings is overwhelming already, and four
-  sources' instructions at once would be the worst of it.
+  One address takes anything and the agent sorts it, as the box does; customers write to their own.
+  It asks where the work comes from and shows only that source's address and steps: Settings is
+  overwhelming already, and four sources' instructions at once would be the worst of it.
 -->
 <script setup lang="ts">
 interface Sender {
@@ -19,79 +18,61 @@ interface Sender {
 const { api, json, data } = useHub();
 const myEmail = computed(() => data.value.me?.email || "your account's email");
 
-type Kind = "task" | "bug" | "transfer";
 const state = ref<{
   available: boolean;
-  addresses: (Record<Kind | "support", string> & { new?: string }) | null;
-  hooks: Record<Kind, string> | null;
+  addresses: { new: string; support: string } | null;
+  hook: string | null;
   senders: Sender[];
 } | null>(null);
 
-/** What each address makes, in the words the rest of the hub uses for them. */
-const KINDS: { id: Kind | "support"; label: string; note: string }[] = [
-  { id: "task", label: "Task", note: "work to do, ready to pick up" },
-  { id: "bug", label: "Bug", note: "a defect to fix" },
-  { id: "transfer", label: "Transfer", note: "context to hand over" },
+/**
+ * Email has two addresses: anything, sorted by the agent, and the one customers write to. A webhook
+ * has one URL, and no customer to answer.
+ */
+const ROWS = [
+  {
+    id: "new" as const,
+    label: "Anything",
+    note: "the agent sorts it and reads its pictures; on a phone, share a screenshot to Mail and send it here",
+  },
+  {
+    id: "support" as const,
+    label: "Customer support",
+    note: "anyone can write; they get a tracking number, and you answer from the work",
+  },
 ];
-/**
- * The address customers write to (docs/LOOP.md): email only, since a webhook has no customer to
- * answer, and unlike the others anyone may write to it.
- */
-const SUPPORT_ROW = {
-  id: "support" as const,
-  label: "Customer support",
-  note: "anyone can write; they get a tracking number, and you answer from the guide",
-};
-/**
- * The address for anything, sorted by the agent as the box sorts writing: offered when the server
- * has a reader. On an iPhone, which cannot share to a website, Share then Mail sends a screenshot.
- */
-const ANYTHING_ROW = {
-  id: "new" as const,
-  label: "Anything",
-  note: "the agent sorts it and reads its pictures; on a phone, share a screenshot to Mail and send it here",
-};
-const rows = computed(() =>
-  source.value === "email"
-    ? [...(state.value?.addresses?.new ? [ANYTHING_ROW] : []), ...KINDS, SUPPORT_ROW]
-    : KINDS,
-);
 const busy = ref("");
 const problem = ref("");
 const source = ref<"email" | "sentry" | "posthog" | "code">("email");
 /**
  * The team a webhook files into, on its URL as `?team=`: the team in view, or the only one. Without
- * it a guide stays the account's own and never reaches the team's board.
+ * it the work stays the account's own and never reaches the team's board.
  */
 const team = computed(
   () =>
     data.value.team?.slug ||
     (data.value.me?.teams?.length === 1 ? data.value.me.teams[0]!.slug : ""),
 );
-const hooks = computed(() =>
-  state.value?.hooks
-    ? (Object.fromEntries(
-        Object.entries(state.value.hooks).map(([k, url]) => [
-          k,
-          team.value ? `${url}?team=${team.value}` : url,
-        ]),
-      ) as Record<Kind, string>)
-    : null,
+/** The webhook URL with the team on it, for the same reason. */
+const hook = computed(() =>
+  state.value?.hook ? `${state.value.hook}${team.value ? `?team=${team.value}` : ""}` : "",
 );
-/** The addresses with the team in them, `key+bug+team@…`, for the same reason. */
-const addresses = computed(() =>
-  state.value?.addresses
-    ? (Object.fromEntries(
-        Object.entries(state.value.addresses).map(([k, a]) => [
-          k,
-          team.value && a ? a.replace("@", `+${team.value}@`) : a,
-        ]),
-      ) as Record<string, string>)
-    : null,
-);
-/** Email shows its addresses; every other source posts to its URL. */
-const shown = computed<Record<string, string> | null>(() =>
-  source.value === "email" ? addresses.value : hooks.value,
+/** The addresses with the team in them, `key+new+team@…`, for the same reason. */
+const withTeam = (a: string) => (team.value && a ? a.replace("@", `+${team.value}@`) : a);
+/** Email shows its addresses; every other source posts to the one URL. */
+const shown = computed(() =>
+  !state.value?.addresses
+    ? []
+    : source.value === "email"
+      ? ROWS.map((r) => ({ ...r, value: withTeam(state.value!.addresses![r.id]) }))
+      : [
+          {
+            id: "hook",
+            label: "Webhook URL",
+            note: "the agent sorts what arrives",
+            value: hook.value,
+          },
+        ],
 );
 /** Replacing or removing the addresses breaks whatever uses them, so it asks in place first. */
 const confirming = ref<"" | "new" | "off">("");
@@ -146,7 +127,7 @@ const choices = [
         <button class="btn primary" type="button" :disabled="Boolean(busy)" @click="make">
           {{ busy === "make" ? "Making…" : "Get your addresses" }}
         </button>
-        <span class="text-muted">For email, Sentry, PostHog and your own code: one for each kind of guide.</span>
+        <span class="text-muted">For email, Sentry, PostHog and your own code.</span>
       </div>
 
       <template v-else>
@@ -165,14 +146,14 @@ const choices = [
             </label>
           </div>
 
-          <ul v-if="shown" class="m-0 flex list-none flex-col gap-3 p-0">
-            <li v-for="k in rows" :key="k.id" class="flex flex-col gap-2">
+          <ul v-if="shown.length" class="m-0 flex list-none flex-col gap-3 p-0">
+            <li v-for="k in shown" :key="k.id" class="flex flex-col gap-2">
               <span><b class="font-medium text-fg">{{ k.label }}</b> <span class="text-muted">· {{ k.note }}</span></span>
               <div class="flex flex-wrap items-center gap-2">
                 <code
                   class="flex h-[var(--control-h)] min-w-0 flex-1 items-center overflow-x-auto rounded-1 border border-line-strong bg-field px-3 font-code text-sm whitespace-nowrap text-fg"
-                >{{ shown[k.id] }}</code>
-                <button class="btn" type="button" @click="copy(shown[k.id] ?? '', $event.currentTarget)">
+                >{{ k.value }}</code>
+                <button class="btn" type="button" @click="copy(k.value, $event.currentTarget)">
                   <AppIcon name="copy" /><span data-label>Copy</span>
                 </button>
               </div>
@@ -200,16 +181,15 @@ const choices = [
               In Sentry, open <b class="font-medium text-fg">Settings → Developer Settings → Custom
               Integrations</b> and create an <b class="font-medium text-fg">Internal Integration</b>.
             </li>
-            <li>Paste the Bug URL above as its <b class="font-medium text-fg">Webhook URL</b>.</li>
+            <li>Paste the URL above as its <b class="font-medium text-fg">Webhook URL</b>.</li>
             <li>
               Under <b class="font-medium text-fg">Webhooks</b>, tick <b class="font-medium text-fg">issue</b>
               for every new issue, and turn on <b class="font-medium text-fg">Alert Rule Action</b> to
               send only what an alert rule picks. Save.
             </li>
             <li>
-              Repeats of one Sentry issue stay one guide; resolved, assigned and other updates are
-              ignored. For a task URL, add <code>{{ team ? "&" : "?" }}repo=owner/repo</code> so it arrives pointed at that
-              repo; otherwise you choose the repo when you mark it Ready.
+              Repeats of one Sentry issue stay one piece of work; resolved, assigned and other updates
+              are ignored. Add <code>{{ team ? "&" : "?" }}repo=owner/repo</code> so it arrives pointed at that repo.
             </li>
           </ol>
           <ol v-else-if="source === 'posthog'" class="m-0 flex flex-col gap-1 pl-5 text-muted">
@@ -217,20 +197,20 @@ const choices = [
               In PostHog, open <b class="font-medium text-fg">Error tracking → Configuration →
               Alerting</b> and add an <b class="font-medium text-fg">HTTP Webhook</b> for issues created.
             </li>
-            <li>Paste the Bug URL above, and leave the body as it is.</li>
+            <li>Paste the URL above, and leave the body as it is.</li>
             <li>
               Use <b class="font-medium text-fg">Test function</b>, then
-              <b class="font-medium text-fg">Create &amp; enable</b>. Repeats of one issue stay one guide.
-              A task URL takes <code>{{ team ? "&" : "?" }}repo=owner/repo</code> too.
+              <b class="font-medium text-fg">Create &amp; enable</b>. Repeats of one issue stay one piece of
+              work. The URL takes <code>{{ team ? "&" : "?" }}repo=owner/repo</code> too.
             </li>
           </ol>
           <div v-else class="flex flex-col gap-2 text-muted">
             <p class="m-0">
-              POST JSON to a URL above. Only <code>title</code> is required; send the same
-              <code>id</code> again and it adds to the open guide instead of making a new one. Add
-              <code>{{ team ? "&" : "?" }}repo=owner/repo</code> to a task URL to say which repo it is for.
+              POST JSON to the URL above. Only <code>title</code> is required; send the same
+              <code>id</code> again and it adds to the open work instead of making a new one. Add
+              <code>{{ team ? "&" : "?" }}repo=owner/repo</code> to say which repo it is for.
             </p>
-            <code class="block overflow-x-auto rounded-1 border border-line bg-field px-3 py-2 font-code text-sm whitespace-pre text-fg">curl -X POST {{ hooks?.task }} \
+            <code class="block overflow-x-auto rounded-1 border border-line bg-field px-3 py-2 font-code text-sm whitespace-pre text-fg">curl -X POST {{ hook }} \
   -H 'content-type: application/json' \
   -d '{"title": "Checkout is down", "text": "500s since 09:12", "url": "https://…", "id": "checkout-500"}'</code>
           </div>
@@ -248,7 +228,7 @@ const choices = [
       </template>
 
       <div v-if="pending.length" class="flex flex-col gap-2">
-        <h4 class="m-0 font-medium text-fg">Asking to email you guides</h4>
+        <h4 class="m-0 font-medium text-fg">Asking to email you work</h4>
         <ul class="m-0 flex list-none flex-col gap-2 p-0">
           <li
             v-for="s in pending"
@@ -263,7 +243,7 @@ const choices = [
             <button class="btn outline danger sm" type="button" :disabled="Boolean(busy)" @click="decide(s, 'blocked')">Block</button>
           </li>
         </ul>
-        <p class="m-0 text-xs text-muted">Allowing one doesn't turn what it already sent into guides; its next email does.</p>
+        <p class="m-0 text-xs text-muted">Allowing one doesn't turn what it already sent into work; its next email does.</p>
       </div>
 
       <div v-if="decided.length" class="flex flex-col gap-2">

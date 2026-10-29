@@ -1,19 +1,19 @@
 <!--
-  One guide, signed in: the document, and everything around it.
+  One piece of work, signed in: the document, and everything around it.
 
-  The share page is the guide as anyone holding the link reads it, and it cannot say what only you
-  may know — who holds it, what they handed in, the guides it is tied to — because anyone with the
-  link would see that too. This page says it, and it is the hub's, so it knows who is asking.
+  The share page is the work as anyone holding the link reads it, and it cannot say what only you
+  may know — who holds it, what it was finished with, the work it is tied to — because anyone with
+  the link would see that too. This page says it, and it is the hub's, so it knows who is asking.
 
-  It never turns the guide's markdown into its own HTML. The hub runs script, and a guide is
+  It never turns the work's markdown into its own HTML. The hub runs script, and the document is
   markdown somebody else wrote; the share page is safe to render it on only because it runs none.
   So the document is that page, framed (`?embed=1`, same origin, sandboxed, still no script), and
   everything beside it comes from `GET /v1/guides/:id/context`, which records no pull: looking at
-  your own board is not opening the guide.
+  your own board is not opening the work.
 -->
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { ContextClaim, Guide, GuideContext, HandedIn, Task, Working } from "~/types/hub";
+import type { ContextClaim, GuideContext, Task, Working } from "~/types/hub";
 import { expiryLine } from "~/utils/expiry";
 
 const route = useRoute();
@@ -22,19 +22,13 @@ const queryClient = useQueryClient();
 const {
   api,
   signedIn,
-  onApprove,
-  onReject,
-  onCloseHandedIn,
-  onSendBackHandedIn,
   onTakeBack,
-  onCloseGuide,
   onRecall,
   onArchive,
   onReopen,
   onRemove,
   onTaskReady,
   onTaskDraft,
-  data: hub,
 } = useHub();
 
 const { data, isPending, error } = useQuery({
@@ -48,36 +42,31 @@ const expiry = computed(() => (g.value ? expiryLine(g.value) : null));
 const trouble = computed(() => (error.value ? error.value.message : ""));
 
 usePage({
-  title: "Guide · Passalong",
-  description: "One guide and everything around it.",
+  title: "Work · Passalong",
+  description: "One piece of work and everything around it.",
   noindex: true,
 });
-// The tab says which guide once it is known; the page's own meta stays generic, since nothing is
+// The tab says which work once it is known; the page's own meta stays generic, since nothing is
 // fetched on the server.
 useHead({
-  title: computed(() => (g.value?.title ? `${g.value.title} · Passalong` : "Guide · Passalong")),
+  title: computed(() => (g.value?.title ? `${g.value.title} · Passalong` : "Work · Passalong")),
 });
-
-const badge = computed(() => kindBadge(g.value?.kind));
-const isTask = computed(() => g.value?.kind === "task");
 
 /** The share page, as a path: whichever host the hub is on serves it, so the frame is same-origin. */
 const frame = computed(() => {
   if (!g.value?.url) return "";
   try {
-    // While something is handed in, the hub shows it above the frame; the frame need not repeat it.
-    return `${new URL(g.value.url).pathname}?embed=1${returned.value.length ? "&adapted=0" : ""}`;
+    return `${new URL(g.value.url).pathname}?embed=1`;
   } catch {
     return "";
   }
 });
 
 const who = (by: { handle: string; name: string }) => personName(by.name, by.handle) || "someone";
-const where = (k: ContextClaim) => [k.repo || k.place, k.host].filter(Boolean).join(" on ");
+const where = (k: ContextClaim) => [k.repo, k.host].filter(Boolean).join(" on ");
 const STATE: Record<ContextClaim["state"], { label: string; tone: string }> = {
   claimed: { label: "working", tone: "bg-accent-soft text-accent" },
   stalled: { label: "gone quiet", tone: "bg-warn-soft text-warn" },
-  review: { label: "handed in", tone: "bg-ok-soft text-ok" },
 };
 
 const addressed = computed(() => {
@@ -89,26 +78,25 @@ const addressed = computed(() => {
 });
 
 /**
- * What last wrote it, as a person reads it — so a guide that came out wrong can be traced to the
- * release that wrote it. Nothing when it is unknown: a guide from before this was recorded.
+ * What last wrote it, as a person reads it — so work that came out wrong can be traced to the
+ * release that wrote it. Nothing when it is unknown: work from before this was recorded.
  */
 const writer = computed(() => {
   const c = g.value?.client || "";
   if (c.startsWith("cli@<=")) return `passalong ${c.slice(6)} or older`;
   if (c.startsWith("cli@")) return `passalong ${c.slice(4)}`;
-  return { mcp: "the hosted MCP server", hub: "the hub", api: "the API" }[c] || "";
+  return { mcp: "the hosted MCP server", hub: "the hub", api: "the API", email: "email" }[c] || "";
 });
 
 /**
  * Anyone who can open it here is its author or in its team, and a team's board is everyone's: they
- * may mark it ready, move it to draft, stop an agent and review a hand-in. Archiving stays with its
- * author or a team admin (`mayArchive`), and nobody reviews their own work (`mayReview`).
+ * may mark it ready, move it to draft, stop an agent and reopen it. Archiving stays with its author
+ * or a team admin (`mayArchive`).
  */
 const mayAct = computed(() => Boolean(ctx.value));
 const mayArchive = computed(() => Boolean(ctx.value?.owner || ctx.value?.admin));
-const mayReview = (k: ContextClaim) => mayAct.value && !(k.mine && Boolean(g.value?.team));
 
-/** One line saying where the guide stands, before any detail. */
+/** One line saying where the work stands, before any detail. */
 const standing = computed(() => {
   const c = ctx.value;
   if (!c || !g.value) return "";
@@ -116,60 +104,17 @@ const standing = computed(() => {
   if (g.value.status === "consumed")
     return g.value.outcome === "archived" || !g.value.outcome ? "Archived." : "Finished.";
   if (g.value.status === "draft") return "A draft: nobody can take it until it is ready.";
-  const review = c.claims.filter((k) => k.state === "review").length;
-  const held = c.claims.filter((k) => k.state !== "review").length;
-  // Said to the person who handed it in, in their own terms: it is done on their side, and somebody
-  // else in the team reviews it.
-  if (g.value.team && c.claims.some((k) => k.mine && k.state === "review"))
-    return "You handed it in. Waiting for someone else in the team to accept it.";
-  if (review)
-    return `Finished${c.claims.length > 1 ? ` in ${plural(review, "place")}` : ""}: waiting for a review. ${g.value.team ? "Anyone in the team but whoever did it" : "You"} can accept it or ask for changes.`;
-  if (held) return `Being worked on${held > 1 ? ` in ${held} places` : ""}.`;
-  if (g.value.failing) return "Someone ran it and it didn't work.";
-  if (g.value.verdict?.ok) return "Someone ran it and it works.";
-  if (isTask.value)
-    return c.blocked_by.some((b) => b.status !== "consumed")
-      ? "Waiting on the tasks it is blocked by."
-      : c.target
-        ? `Ready: the next agent working in ${c.target} will take it.`
-        : c.target === ""
-          ? "Ready, for no repo: an agent takes it when it is given this task."
-          : "Ready: the next agent in the right repo will take it.";
-  return "Ready: nobody has taken it yet.";
+  if (c.claims.length) return "Being worked on.";
+  if (c.blocked_by.some((b) => b.status !== "consumed"))
+    return "Waiting on the work it is blocked by.";
+  return c.target
+    ? `Ready: the next agent working in ${c.target} will take it.`
+    : "Ready: nobody has taken it yet.";
 });
-
-// ---- the list it was opened from ----------------------------------------------------------
-
-/**
- * Opened from Needs you, the page steps through that list as it was filtered: the one before, the
- * one after, and where this one sits. Answering an item takes it out and moves on to the next, so
- * a pile of reviews is worked through here without going back to the list between each.
- */
-const { queue, remember } = useReviewQueue();
-const place = computed(() => queue.value.findIndex((q) => q.id === id.value));
-const prevItem = computed(() => (place.value > 0 ? queue.value[place.value - 1] : null));
-const nextItem = computed(() =>
-  place.value >= 0 && place.value < queue.value.length - 1 ? queue.value[place.value + 1] : null,
-);
-async function advance() {
-  // Not opened from a queue: stay, and show what the review just did.
-  if (place.value < 0)
-    return queryClient.invalidateQueries({ queryKey: hubKeys.context(id.value) });
-  const after = nextItem.value ?? prevItem.value;
-  remember(queue.value.filter((q) => q.id !== id.value));
-  await navigateTo(after ? `/hub/g/${after.id}` : "/hub/work");
-}
-
-/** A task handed in for review gets the line-by-line review, from the hub's own copy of it. */
-const reviewTask = computed(() =>
-  isTask.value
-    ? (hub.value.tasks.find((t) => t.id === id.value && t.state === "review") ?? null)
-    : null,
-);
 
 // ---- acting on it --------------------------------------------------------------------------
 
-/** Mark or unmark the task as safe for the runner (PUT /v1/guides/:id/alone). */
+/** Mark or unmark it as safe for the runner (PUT /v1/guides/:id/alone). */
 const markingAlone = ref(false);
 async function markAlone(on: boolean) {
   markingAlone.value = true;
@@ -185,85 +130,46 @@ async function markAlone(on: boolean) {
   }
 }
 
-/** Accept is held until the evidence has been opened, as it is on the review rows. */
-const read = ref(new Set<string>());
 const busy = ref("");
-const sendingBack = ref<string | null>(null);
 
-async function run(mark: string, work: () => Promise<unknown>, answers = false) {
+async function run(mark: string, work: () => Promise<unknown>) {
   if (busy.value) return;
   busy.value = mark;
   try {
-    const ok = (await work()) !== false;
+    await work();
     await queryClient.invalidateQueries({ queryKey: hubKeys.context(id.value) });
-    if (ok && answers) await advance();
   } finally {
     busy.value = "";
   }
 }
 
-const accept = (k: ContextClaim) =>
-  run(
-    `accept:${k.place}`,
-    () =>
-      isTask.value
-        ? onApprove({ id: id.value } as Task)
-        : onCloseHandedIn({ id: id.value, place: k.place } as HandedIn),
-    true,
-  );
-
-function sendBack(k: ContextClaim, e: Event) {
-  const why = field(e.currentTarget as HTMLFormElement, "why").trim();
-  if (!why) return;
-  return run(
-    `back:${k.place}`,
-    async () => {
-      const ok = isTask.value
-        ? await onReject({ id: id.value } as Task, why)
-        : await onSendBackHandedIn({ id: id.value, place: k.place } as HandedIn, why);
-      sendingBack.value = null;
-      return ok;
-    },
-    true,
-  );
-}
-
 const takeBack = () => run("release", () => onTakeBack({ id: id.value } as Working));
-// `/close` is for handoffs and bugs only; a task is archived through its status, author or admin.
-const close = () =>
-  run(
-    "close",
-    async () =>
-      g.value &&
-      (await (isTask.value ? onArchive(g.value as Guide, true) : onCloseGuide(g.value as Guide))),
-  );
+const archive = () => run("archive", async () => g.value && (await onArchive(g.value, true)));
 /** Gone for good, with its screenshots and files: asked first, then back to the board. */
 async function remove() {
   if (busy.value || !g.value || !confirm(`Delete "${g.value.title}"? This cannot be undone.`))
     return;
   busy.value = "delete";
   try {
-    if (await onRemove(g.value as Guide)) await navigateTo("/hub/work");
+    if (await onRemove(g.value)) await navigateTo("/hub/work");
   } finally {
     busy.value = "";
   }
 }
-const recall = () => run("recall", async () => g.value && (await onRecall(g.value as Guide)));
+const recall = () => run("recall", async () => g.value && (await onRecall(g.value)));
 /** Sent to somebody, still unanswered, with nobody on it: the one moment taking it back makes sense. */
 const recallable = computed(
   () =>
     Boolean(ctx.value?.owner) &&
     Boolean(g.value?.team) &&
-    g.value?.kind !== "task" &&
     g.value?.status !== "consumed" &&
     !ctx.value?.claims.length,
 );
-const reopen = () =>
-  run("reopen", async () => g.value && (await onArchive(g.value as Guide, false)));
+const reopen = () => run("reopen", async () => g.value && (await onArchive(g.value, false)));
 
 /** Finished, not archived: what Reopen is for, and what leads with the proof it was finished with. */
 const finished = computed(() => g.value?.status === "consumed" && g.value.outcome !== "archived");
-/** What it was finished with: the latest standing "it works", kept after the hand-in's claim. */
+/** What it was finished with: the latest hand-in, kept after its claim. */
 const shown = computed(() => (ctx.value?.verdicts ?? []).find((v) => v.ok) ?? null);
 const reopening = ref(false);
 function sendReopen(form: HTMLFormElement) {
@@ -276,14 +182,12 @@ function sendReopen(form: HTMLFormElement) {
   });
 }
 /**
- * Ready asks which repo the task is for: an agent's take with no id only offers tasks for the repo
- * it is in, and the person deciding a task is worth doing is the one who knows where. Read through
- * the form on submit, because the input is prefilled and stays uncontrolled.
+ * Ready can say which repo it is for: an agent's take with no id only offers work for the repo it
+ * is in. Empty is no repo, which suits work that needs none. Read through the form on submit,
+ * because the input is prefilled and stays uncontrolled.
  */
 const taskReady = (form: HTMLFormElement) =>
-  run("ready", () =>
-    onTaskReady({ id: id.value } as Task, isTask.value ? field(form, "repo") : undefined),
-  );
+  run("ready", () => onTaskReady({ id: id.value } as Task, field(form, "repo")));
 const taskDraft = () => run("draft", () => onTaskDraft({ id: id.value } as Task));
 
 /** One line for each button whose name alone does not say what it does. */
@@ -295,27 +199,22 @@ const hints = computed(() => {
     out.push(
       "Stop this agent: it goes back to waiting and the agent is told to stop. Nothing is deleted.",
     );
-  if (mayArchive.value && g.value.status !== "consumed" && !reviewing.value)
+  if (mayArchive.value && g.value.status !== "consumed")
     out.push("Archive: moves it off your board. You can unarchive it.");
   if (mayAct.value && g.value.status === "published" && !c.claims.length)
-    out.push("Move to Draft: keep it visible for review, but stop anyone from taking it.");
+    out.push("Move to Draft: keep it visible, but stop anyone from taking it.");
   return out;
 });
 
-const holding = computed(() => (ctx.value?.claims ?? []).some((k) => k.state !== "review"));
-const handedInByMe = computed(() =>
-  (ctx.value?.claims ?? []).some((k) => k.mine && k.state === "review"),
-);
-/** What came back: the hand-ins, read in the main column rather than squeezed into the side. */
-const returned = computed(() => (ctx.value?.claims ?? []).filter((k) => k.state === "review"));
+const holding = computed(() => Boolean(ctx.value?.claims.length));
 
-// ---- the frame fits the guide -------------------------------------------------------------
+// ---- the frame fits the document ----------------------------------------------------------
 
 /**
- * The frame is as tall as the guide in it. A fixed height gave the guide a scrollbar of its own
+ * The frame is as tall as the document in it. A fixed height gave it a scrollbar of its own
  * inside the page's, and in a full-page view it simply stopped, with the sidebar running on
  * beside empty space. The frame is same-origin, so the hub — which runs script — can measure it;
- * the guide page inside still runs none.
+ * the share page inside still runs none.
  */
 const frameEl = ref<HTMLIFrameElement | null>(null);
 const frameHeight = ref(0);
@@ -328,12 +227,11 @@ function fit() {
   };
   measure();
   watcher?.disconnect();
-  // Opening a <details> in the guide changes its height; follow it.
+  // Opening a <details> in the document changes its height; follow it.
   watcher = new ResizeObserver(measure);
   watcher.observe(doc.documentElement);
 }
 onBeforeUnmount(() => watcher?.disconnect());
-const reviewing = computed(() => (ctx.value?.claims ?? []).some((k) => k.state === "review"));
 
 /** What happened to it, in order. See utils/progress.ts. */
 const progress = computed(() => (ctx.value ? progressOf(ctx.value) : []));
@@ -349,35 +247,20 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
     </p>
 
     <article v-else-if="ctx && g" class="flex flex-col gap-6">
-      <!-- Only when opened from Needs you: where this sits in that list, and the way along it. -->
-      <nav v-if="place >= 0" class="flex flex-wrap items-center justify-between gap-3 font-ui text-sm" aria-label="Needs you">
-        <NuxtLink to="/hub/work?tab=needs" class="text-muted no-underline hover:text-fg">← Needs you</NuxtLink>
-        <span class="flex items-center gap-2">
-          <span class="text-muted tabular-nums">{{ place + 1 }} of {{ queue.length }}</span>
-          <NuxtLink v-if="prevItem" :to="`/hub/g/${prevItem.id}`" class="btn sm no-underline">Previous</NuxtLink>
-          <button v-else class="btn sm" type="button" disabled>Previous</button>
-          <NuxtLink v-if="nextItem" :to="`/hub/g/${nextItem.id}`" class="btn sm no-underline">Next</NuxtLink>
-          <button v-else class="btn sm" type="button" disabled>Next</button>
-        </span>
-      </nav>
-      <!-- Otherwise the way back to the board, at the top where a phone reader looks for it. -->
-      <nav v-else class="font-ui text-sm" aria-label="Back">
+      <!-- The way back to the board, at the top where a phone reader looks for it. -->
+      <nav class="font-ui text-sm" aria-label="Back">
         <NuxtLink to="/hub/work" class="text-muted no-underline hover:text-fg">← Work</NuxtLink>
       </nav>
       <header class="m-0 flex flex-col gap-2 border-b-0 p-0">
         <p class="m-0 flex flex-wrap items-center gap-2 font-ui text-sm text-muted">
-          <span
-            v-if="badge"
-            class="rounded-1 border px-1.5 py-0.5 font-ui text-xs font-medium tracking-wide uppercase"
-            :class="badge.class"
-          >{{ badge.label }}</span>
+          <HubWorkTag :tags="g.tags" />
           <span>from <b class="font-medium text-fg">{{ g.mine ? "you" : fromName(g) }}</b></span>
           <span v-if="addressed">· to <b class="font-medium text-fg">{{ addressed }}</b></span>
           <span>· {{ rel(g.created) }}</span>
           <span v-if="g.source_context">· {{ g.source_context }}</span>
           <span v-if="writer">· via {{ writer }}</span>
         </p>
-        <h1 class="m-0">{{ g.title || "Untitled guide" }}</h1>
+        <h1 class="m-0">{{ g.title || "Untitled" }}</h1>
         <!-- What it says to a person, first: the document below is the agent's form of it. -->
         <p v-if="g.summary" class="m-0 font-ui text-lg leading-snug text-fg">{{ g.summary }}</p>
         <p
@@ -388,7 +271,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
         <!-- The runner (`passalong work --watch`) takes only tasks a person marked here. -->
         <label
-          v-if="isTask && g.status !== 'consumed'"
+          v-if="g.status !== 'consumed'"
           class="flex items-start gap-2 font-ui text-sm"
         >
           <input
@@ -409,14 +292,13 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             class="flex flex-wrap items-center gap-2"
             @submit.prevent="taskReady($event.target as HTMLFormElement)"
           >
-            <template v-if="isTask">
-            <label class="sr-only" for="ready-repo">Which repo is this for?</label>
+            <label class="sr-only" for="ready-repo">Which repo is this for? Leave it empty for none.</label>
             <input
               id="ready-repo"
               name="repo"
               class="w-56"
               list="ready-repos"
-              placeholder="Repo: owner/repo"
+              placeholder="Repo, if any: owner/repo"
               :value="ctx.target || ''"
               autocomplete="off"
               spellcheck="false"
@@ -424,9 +306,8 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <datalist id="ready-repos">
               <option v-for="r in ctx.repos || []" :key="r" :value="r" />
             </datalist>
-            </template>
             <button class="btn primary" type="submit" :disabled="Boolean(busy)">
-              {{ busy === "ready" ? "Making ready…" : isTask ? "Ready for agents" : "Ready" }}
+              {{ busy === "ready" ? "Making ready…" : "Ready" }}
             </button>
           </form>
           <button
@@ -444,12 +325,12 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             @click="takeBack"
           >{{ busy === "release" ? "Stopping…" : "Stop this agent" }}</button>
           <button
-            v-if="mayArchive && g.status !== 'consumed' && !reviewing"
+            v-if="mayArchive && g.status !== 'consumed'"
             class="btn"
             type="button"
             :disabled="Boolean(busy)"
-            @click="close"
-          >{{ busy === "close" ? "Archiving…" : "Archive" }}</button>
+            @click="archive"
+          >{{ busy === "archive" ? "Archiving…" : "Archive" }}</button>
           <button
             v-if="recallable"
             class="btn"
@@ -486,15 +367,15 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <button
             class="btn"
             type="button"
-            @click="copy(`passalong pull ${g.url}`, $event.currentTarget)"
+            @click="copy(`passalong take ${g.id}`, $event.currentTarget)"
           >
-            <AppIcon name="copy" /><span data-label>Copy pull command</span>
+            <AppIcon name="copy" /><span data-label>Copy take command</span>
           </button>
           <a class="btn" :href="g.url" target="_blank" rel="noopener">
             <AppIcon name="open" />Open share page
           </a>
         </div>
-        <!-- Reopen asks why, and the reason goes at the top of the guide for whoever takes it next. -->
+        <!-- Reopen asks why, and the reason goes at the top of the work for whoever takes it next. -->
         <form v-if="reopening" class="flex flex-wrap items-center gap-2" @submit.prevent="sendReopen($event.target as HTMLFormElement)">
           <label class="sr-only" for="reopen-why">Why reopen it?</label>
           <input id="reopen-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="What's wrong — whoever finished it is told" />
@@ -514,82 +395,25 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
         <div class="flex min-w-0 flex-col gap-6">
         <!-- A customer's request: the conversation lives on its Support page, not here. -->
         <p v-if="ctx.customer" class="m-0 font-ui text-sm">
-          This task came from {{ ctx.customer.name || ctx.customer.email }}.
+          This came from {{ ctx.customer.name || ctx.customer.email }}.
           <NuxtLink :to="`/hub/support/${id}`">Open the conversation</NuxtLink>
         </p>
-
-        <!-- What came back, above the guide it answers: the write-up is the thing to read on a
-             handed-in guide, and it read as a 40-line column in a sidebar. -->
-        <section
-          v-for="k in returned"
-          :key="`back:${k.place}`"
-          :class="card"
-          class="flex flex-col gap-3"
-          :aria-label="`What ${who(k.by)} handed in`"
-        >
-          <h2 :class="label">What came back</h2>
-          <p class="m-0 flex flex-wrap items-center gap-2 font-ui text-sm">
-            <b class="font-medium">{{ k.mine ? "You" : who(k.by) }}</b>
-            <span class="text-muted">handed it in · {{ rel(k.updated) }}</span>
-            <span v-if="where(k)" class="font-code text-xs text-muted">· {{ where(k) }}</span>
-          </p>
-          <p v-if="k.note" class="m-0 font-ui text-sm text-muted">“{{ k.note }}”</p>
-          <p v-if="k.report || k.pr" class="m-0 flex flex-wrap gap-x-3 font-ui text-sm">
-            <NuxtLink v-if="k.report" :to="`/hub/g/${k.report.id}`">{{ k.report.title || "The write-up" }}</NuxtLink>
-            <a v-if="k.pr" :href="k.pr" target="_blank" rel="noopener">The change</a>
-          </p>
-          <HubTaskReview v-if="reviewTask && mayReview(k)" :task="reviewTask" @done="advance" />
-          <template v-else>
-          <HubHandIn
-            :evidence="k.evidence"
-            :checks="k.checks"
-            :writeup="k.writeup"
-            :risk="k.risk"
-            @read="read = new Set([...read, k.place])"
-          />
-          <div v-if="mayReview(k)" class="flex flex-col gap-2">
-            <div class="flex flex-wrap gap-2">
-              <button
-                class="btn primary sm"
-                type="button"
-                :disabled="Boolean(busy) || !read.has(k.place)"
-                @click="accept(k)"
-              >{{ busy === `accept:${k.place}` ? "Accepting…" : isTask ? "Approve" : "Accept" }}</button>
-              <button
-                class="btn outline danger sm"
-                type="button"
-                :aria-expanded="sendingBack === k.place"
-                @click="sendingBack = sendingBack === k.place ? null : k.place"
-              >Ask for changes</button>
-            </div>
-            <p v-if="!read.has(k.place)" class="m-0 font-ui text-xs text-muted">
-              Open what it ran before you accept it.
-            </p>
-            <form v-if="sendingBack === k.place" class="flex flex-col gap-2" @submit.prevent="sendBack(k, $event)">
-              <textarea name="why" required placeholder="What is still wrong — the next agent reads this first" />
-              <button class="btn danger outline sm self-start" :disabled="Boolean(busy)">
-                {{ busy === `back:${k.place}` ? "Sending…" : "Send request" }}
-              </button>
-            </form>
-          </div>
-          </template>
-        </section>
 
         <!-- What it was finished with, first: finishing is final, so this is the record of it. -->
         <section v-if="finished && shown" :class="card" class="flex flex-col gap-3" aria-label="What it was finished with">
           <h2 :class="label">Finished with</h2>
           <p class="m-0 font-ui text-sm"><b class="font-medium">{{ who(shown.by) }}</b><template v-if="shown.note">: {{ shown.note }}</template></p>
           <HubEvidence v-if="shown.detail" :text="shown.detail" />
-          <p v-if="shown.writeup" class="m-0 font-ui text-sm text-muted">{{ shown.writeup }}</p>
+          <p v-if="shown.writeup" class="m-0 font-ui text-sm whitespace-pre-wrap text-muted">{{ shown.writeup }}</p>
         </section>
 
         <!-- The document. Sandboxed with no script, on top of a page whose own policy already
              allows none: it can open a link in a new tab and nothing else. -->
-        <section class="overflow-hidden rounded-3 bg-bg shadow-edge" aria-label="The guide">
+        <section class="overflow-hidden rounded-3 bg-bg shadow-edge" aria-label="The work">
           <iframe
             v-if="frame"
             :src="frame"
-            :title="g.title || 'The guide'"
+            :title="g.title || 'The work'"
             sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             referrerpolicy="no-referrer"
             class="block min-h-[28rem] w-full border-0"
@@ -602,9 +426,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 
         <aside class="flex flex-col gap-4">
           <!-- Progress: what happened to it, in order, ending on where it is now. A rule runs down
-               the left and each beat is a dot on it in its tone; "now" is the coral diamond. Who
-               opened it, who took it, what they said and showed — the Answers card said these in
-               pieces, with no sense of when. -->
+               the left and each beat is a dot on it in its tone; "now" is the coral diamond. -->
           <section :class="card" class="flex flex-col gap-4" aria-labelledby="progress-h">
             <h2 id="progress-h" :class="label">Progress</h2>
             <ol class="relative m-0 flex list-none flex-col gap-5 p-0">
@@ -620,8 +442,8 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                     <b class="font-medium">{{ b.who }}</b> {{ b.what }}
                     <span class="text-muted">· <time :datetime="b.at">{{ rel(b.at) }}</time></span>
                   </p>
-                  <p v-if="b.said && !b.handIn" class="m-0 rounded-2 bg-field px-3 py-2 text-muted">{{ b.said }}</p>
-                  <div v-if="b.proof && !b.handIn" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" :prose="b.prose" /></div>
+                  <p v-if="b.said" class="m-0 rounded-2 bg-field px-3 py-2 text-muted">{{ b.said }}</p>
+                  <div v-if="b.proof" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" prose /></div>
                   <NuxtLink v-if="b.link" :to="`/hub/g/${b.link.id}`" class="self-start">{{ b.link.title }} →</NuxtLink>
                 </div>
               </li>
@@ -635,12 +457,12 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             </ol>
           </section>
 
-          <!-- Who has it, and what came back. One entry per place: a handoff is taken once per repo. -->
+          <!-- Who has it: one holder at a time. -->
           <section v-if="ctx.claims.length" :class="card" class="flex flex-col gap-4">
             <h2 :class="label">Who has it</h2>
             <div
               v-for="k in ctx.claims"
-              :key="k.place"
+              :key="k.claimed_at"
               class="flex flex-col gap-2 border-t border-line pt-4 first-of-type:border-t-0 first-of-type:pt-0"
             >
               <p class="m-0 flex flex-wrap items-center gap-2 font-ui text-sm">
@@ -651,41 +473,36 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                 <span class="text-muted">· {{ rel(k.updated) }}</span>
               </p>
               <p v-if="where(k)" class="m-0 font-code text-xs text-muted">{{ where(k) }}</p>
-              <p v-if="k.note && k.state !== 'review'" class="m-0 font-ui text-sm text-muted">“{{ k.note }}”</p>
-              <p v-if="k.state === 'review'" class="m-0 font-ui text-xs text-muted">What they handed in is beside the guide.</p>
+              <p v-if="k.note" class="m-0 font-ui text-sm text-muted">“{{ k.note }}”</p>
             </div>
           </section>
 
 
 
-          <!-- The guides it is tied to. Each opens here, so the chain is walked without leaving. -->
+          <!-- The work it is tied to. Each opens here, so the chain is walked without leaving. -->
           <section
-            v-if="ctx.parent || ctx.children.length || ctx.blocked_by.length || ctx.blocks.length || g.report || ctx.folders?.length"
+            v-if="ctx.parent || ctx.children.length || ctx.blocked_by.length || ctx.blocks.length || ctx.folders.length"
             :class="card"
             class="flex flex-col gap-4 font-ui text-sm"
           >
             <h2 :class="label">Tied to</h2>
             <div v-if="ctx.parent" class="flex flex-col gap-2">
-              <p class="m-0 text-muted">Follows</p>
-              <HubGuideLink :g="ctx.parent" />
-            </div>
-            <div v-if="g.report" class="flex flex-col gap-2">
-              <p class="m-0 text-muted">Part of a bug report</p>
-              <NuxtLink :to="`/hub/report/${g.report}`">{{ g.report_title || "The report" }}</NuxtLink>
+              <p class="m-0 text-muted">Came from</p>
+              <HubWorkLink :g="ctx.parent" />
             </div>
             <div v-if="ctx.blocked_by.length" class="flex flex-col gap-2">
               <p class="m-0 text-muted">Blocked by</p>
-              <HubGuideLink v-for="b in ctx.blocked_by" :key="b.id" :g="b" />
+              <HubWorkLink v-for="b in ctx.blocked_by" :key="b.id" :g="b" />
             </div>
             <div v-if="ctx.blocks.length" class="flex flex-col gap-2">
               <p class="m-0 text-muted">Blocks</p>
-              <HubGuideLink v-for="b in ctx.blocks" :key="b.id" :g="b" />
+              <HubWorkLink v-for="b in ctx.blocks" :key="b.id" :g="b" />
             </div>
             <div v-if="ctx.children.length" class="flex flex-col gap-2">
-              <p class="m-0 text-muted">Follow-ups · {{ ctx.children.length }}</p>
-              <HubGuideLink v-for="c in ctx.children" :key="c.id" :g="c" />
+              <p class="m-0 text-muted">Work from this · {{ ctx.children.length }}</p>
+              <HubWorkLink v-for="c in ctx.children" :key="c.id" :g="c" />
             </div>
-            <div v-if="ctx.folders?.length" class="flex flex-col gap-2">
+            <div v-if="ctx.folders.length" class="flex flex-col gap-2">
               <p class="m-0 text-muted">In folders</p>
               <NuxtLink v-for="f in ctx.folders" :key="f.id" :to="`/hub/folders/${f.id}`" class="flex items-center gap-2 rounded-2 bg-field px-3 py-2 text-fg no-underline hover:shadow-edge">
                 <svg class="size-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3.5 6.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
@@ -699,7 +516,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 
     <div v-else-if="isPending" class="flex flex-col gap-4">
       <span class="block h-7 w-2/3 rounded-pill bg-line-strong" aria-hidden="true" />
-      <HubSkeleton :rows="3" label="Loading the guide" />
+      <HubSkeleton :rows="3" label="Loading the work" />
     </div>
   </HubShell>
 </template>

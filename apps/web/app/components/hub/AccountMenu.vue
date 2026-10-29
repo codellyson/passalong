@@ -1,5 +1,5 @@
 <!--
-  You, and the few things that are about you rather than about a guide: your settings, where to
+  You, and the few things that are about you rather than about a piece of work: your settings, where to
   learn how the product works, and signing out.
 
   It replaces a footer that printed your handle — or, with no handle, "account <id>" — beside a

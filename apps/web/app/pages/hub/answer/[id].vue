@@ -1,7 +1,7 @@
 <!--
-  Where the buttons on a shared guide page used to lead, to say whether you were taking it and how
-  it went. Every kind of guide is now taken, handed in and reviewed the same way, on its own page in
-  the hub, so this only forwards there — links already sent in mail and chat keep working.
+  Where the buttons on a share page used to lead, to say whether you were taking it and how it
+  went. All work is now taken and finished the same way, on its own page in the hub, so this only
+  forwards there — links already sent in mail and chat keep working.
 -->
 <script setup lang="ts">
 const route = useRoute();

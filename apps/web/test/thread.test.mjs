@@ -37,9 +37,9 @@ test("what has no words of its own gets a sentence, and is quiet", () => {
   );
 });
 
-test("a refusal carries its reason and reads as a refusal", () => {
+test("a reopen carries its reason and reads as a refusal", () => {
   const m = messageOf(item("sent_back", { body: "Acceptance 2 not met", by: by({ you: true }) }));
-  assert.equal(m.text, "Sent back: Acceptance 2 not met");
+  assert.equal(m.text, "Reopened: Acceptance 2 not met");
   assert.equal(m.tone, "bad");
   assert.equal(m.mine, true);
   assert.equal(

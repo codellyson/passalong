@@ -1,24 +1,24 @@
-// Guide pages, blog posts and learn pages render Markdown through one remark pipeline. These pin
-// what the page around that HTML relies on: the outline the contents rail is drawn from, the
-// section kinds a guide is typeset by, figures for screenshots, and GitHub's footnotes and alerts.
+// Share pages, blog posts and learn pages render Markdown through one remark pipeline. These pin
+// what the page around that HTML relies on: the outline the contents rail is drawn from, figures
+// for screenshots, and GitHub's footnotes and alerts. No heading means anything: none is marked.
 import "./aliases.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 const { renderBody, renderMarkdown } = await import("../server/utils/guide-html.ts");
 
-test("h2 and h3 make the outline, canonical sections carry their kind, ids never repeat", () => {
+test("h2 and h3 make the outline, no heading is marked, ids never repeat", () => {
   const { html, outline } = renderBody(
     "# Title\n\n## Problem\n\nx\n\n### Detail *one*\n\n## Steps\n\n1. a\n\n## Steps\n\n#### deep",
-    "guide",
   );
   assert.deepEqual(outline, [
-    { level: 2, text: "Problem", id: "problem", kind: "problem" },
-    { level: 3, text: "Detail one", id: "detail-one", kind: undefined },
-    { level: 2, text: "Steps", id: "steps", kind: "steps" },
-    { level: 2, text: "Steps", id: "steps-1", kind: "steps" },
+    { level: 2, text: "Problem", id: "problem" },
+    { level: 3, text: "Detail one", id: "detail-one" },
+    { level: 2, text: "Steps", id: "steps" },
+    { level: 2, text: "Steps", id: "steps-1" },
   ]);
-  assert.match(html, /<h2 id="problem" data-kind="problem">Problem<\/h2>/);
+  assert.match(html, /<h2 id="problem">Problem<\/h2>/);
+  assert.doesNotMatch(html, /data-kind/);
   assert.match(html, /<h3 id="detail-one">Detail <em>one<\/em><\/h3>/);
   // Below h3 is detail, not structure: it gets an id to link to and stays out of the rail.
   assert.match(html, /<h4 id="deep">deep<\/h4>/);
@@ -26,7 +26,7 @@ test("h2 and h3 make the outline, canonical sections carry their kind, ids never
 });
 
 test("a heading's id comes from its words, not from the escaped HTML", () => {
-  const { outline } = renderBody("## A teammate's agent & <kbd>you</kbd>", "guide");
+  const { outline } = renderBody("## A teammate's agent & <kbd>you</kbd>");
   assert.equal(outline[0].text, "A teammate's agent & you");
   assert.equal(outline[0].id, "a-teammates-agent-you");
 });
@@ -34,7 +34,6 @@ test("a heading's id comes from its words, not from the escaped HTML", () => {
 test("a screenshot on its own line becomes a captioned figure; one in a sentence does not", () => {
   const { html } = renderBody(
     "![The broken screen](https://passalong.dev/v1/shots/abc)\n\nInline ![icon](https://x.dev/i.png) here.",
-    "guide",
   );
   assert.match(
     html,
@@ -45,12 +44,12 @@ test("a screenshot on its own line becomes a captioned figure; one in a sentence
 });
 
 test("raw HTML passes through, because the page's CSP is what keeps it inert", () => {
-  const { html } = renderBody("<details><summary>s</summary>b</details>", "guide");
+  const { html } = renderBody("<details><summary>s</summary>b</details>");
   assert.match(html, /<details><summary>s<\/summary>b<\/details>/);
 });
 
 test("footnotes link both ways and their hidden label stays out of the outline", () => {
-  const { html, outline } = renderBody("## Problem\n\nClaim.[^1]\n\n[^1]: Source.", "guide");
+  const { html, outline } = renderBody("## Problem\n\nClaim.[^1]\n\n[^1]: Source.");
   assert.match(html, /href="#user-content-fn-1"/);
   assert.match(html, /id="user-content-fn-1"/);
   assert.match(html, /<section data-footnotes/);
@@ -98,7 +97,7 @@ test("anything that is not exactly a marker line stays an ordinary quote", () =>
   }
 });
 
-test("alerts render in a guide and inside the verify view's sections", () => {
-  const { html } = renderBody("## Verification\n\n> [!WARNING]\n> Staging only.", "verify");
+test("alerts render inside a section of a document", () => {
+  const { html } = renderBody("## Verification\n\n> [!WARNING]\n> Staging only.");
   assert.match(html, /markdown-alert-warning/);
 });

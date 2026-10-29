@@ -169,14 +169,14 @@ function guides(t: TeamDetail) {
           <h3 class="m-0 font-ui text-base font-semibold text-fg">{{ t.name || t.slug }}</h3>
           <p class="m-0 font-ui text-sm text-muted">
             {{ t.role === "owner" ? "You're an admin" : "You're a member" }} · {{ plural(t.members.length, "person").replace("persons", "people") }} ·
-            {{ plural(t.guides, "guide") }}
+            {{ t.guides }} {{ t.guides === 1 ? "piece of work" : "pieces of work" }}
           </p>
         </div>
         <div class="ml-auto flex flex-wrap items-center gap-2">
           <button class="btn sm" @click="invite(t, $event.currentTarget)">
             <AppIcon name="copy" /><span data-label>Copy invite link</span>
           </button>
-          <button class="btn sm" @click="guides(t)">See its guides</button>
+          <button class="btn sm" @click="guides(t)">See its work</button>
         </div>
       </div>
 
@@ -250,7 +250,7 @@ function guides(t: TeamDetail) {
     </article>
 
     <p v-if="!teams.length" class="m-0 font-ui text-sm text-muted">
-      No team yet. A team is the people you send guides to.
+      No team yet. A team is the people you send work to.
     </p>
 
     <form v-if="naming" id="new-team" class="flex flex-wrap items-end gap-3" @submit.prevent="make">

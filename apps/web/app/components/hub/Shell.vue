@@ -4,18 +4,17 @@
   the signed-out state is not a page — every /hub route collapses to the same sign-in card, and a
   layout would have to render a heading above it that describes a screen the visitor cannot see.
 
-  The top bar holds only places (Guides, Activities, Settings) and two menus: New, for making a
-  guide, and you. It used to carry a large "Your transfers" heading, a sentence of counts computed
+  The top bar holds only places (Work, Support, Folders, Activities, Settings) and two menus: New,
+  for writing work down, and you. It used to carry a large heading, a sentence of counts computed
   differently from the counts below it, team chips labelled with slugs, and a "Report a bug" tab
-  that was a verb among places. Each page now names itself, and the guides page counts its own
-  sections.
+  that was a verb among places. Each page now names itself.
 -->
 <script setup lang="ts">
 import { useMutation, useQuery } from "@tanstack/vue-query";
 
 withDefaults(
   defineProps<{
-    /** The page's own title. The guides page draws its own, with the team picker in it. */
+    /** The page's own title. The Work page draws its own, with the team picker in it. */
     heading?: string;
   }>(),
   { heading: "" },
@@ -33,7 +32,7 @@ useHead({
     {
       tagPosition: "bodyOpen",
       innerHTML:
-        "<p><b>Passalong</b> needs JavaScript to show your guides. A guide's own link still opens without it.</p>",
+        "<p><b>Passalong</b> needs JavaScript to show your work. A share link still opens without it.</p>",
     },
   ],
 });
@@ -184,25 +183,22 @@ const tabs = [
   { to: "/hub/settings", label: "Settings" },
 ];
 
-/** The pages that are about one guide or one report belong under Work. */
+/** The pages that are about one piece of work belong under Work. */
 const active = (to: string) =>
   to === "/hub/work"
     ? route.path === "/hub/work" ||
       route.path.startsWith("/hub/g/") ||
-      route.path.startsWith("/hub/answer") ||
-      route.path.startsWith("/hub/report")
+      route.path.startsWith("/hub/answer")
     : to === "/hub/folders" || to === "/hub/settings" || to === "/hub/support"
       ? route.path.startsWith(to)
       : route.path === to;
 </script>
 
 <template>
-  <!-- Wider than the 46rem the rest of the product reads at. That measure is right for a guide
+  <!-- Wider than the 46rem the rest of the product reads at. That measure is right for a document
        and wrong for a list: this is the one surface that is scanned rather than read. -->
   <!-- Settings is wider again: it has a section nav beside its content, and the connect sheet puts
-       an app picker beside its steps. Tasks too: its review puts an inbox beside a pane that holds
-       two columns, what was asked against what came back, and at 54rem each column wrapped every
-       Acceptance line to four or five lines. -->
+       an app picker beside its steps. -->
   <!-- The navbar, outside <main> and spanning the viewport by being a block in the page rather
        than a box one viewport wide. `100vw` counts the vertical scrollbar, so the old full-bleed
        pseudo-element was about eight pixels wider than the page and the browser drew a horizontal
@@ -302,7 +298,7 @@ const active = (to: string) =>
       >
         <div class="min-w-0 grow basis-64">
           <p class="m-0 font-ui text-sm font-semibold text-danger">
-            {{ error ? "That didn't work" : "Your guides didn't load" }}
+            {{ error ? "That didn't work" : "Your work didn't load" }}
           </p>
           <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ error || loadError }}</p>
         </div>
@@ -356,11 +352,11 @@ const active = (to: string) =>
 
       <div v-if="lapsed.length || noPlan || nearLimit" class="mb-8 flex flex-col">
         <!-- Specific about which half stops: everything in the team can still be read and answered,
-             and only new guides are refused. -->
+             and only new work is refused. -->
         <p v-for="t in lapsed" :key="t.slug" :class="notice">
           <span :class="dot" aria-hidden="true" />
           <span class="min-w-0 grow">
-            <b class="text-fg">{{ t.name }} can't take new guides right now.</b>
+            <b class="text-fg">{{ t.name }} can't take new work right now.</b>
             Its plan has lapsed. Everything already in it can still be read and answered, and nobody
             new can join.
             {{ t.role === "owner" ? "Renew it in Settings." : "Ask the team owner to renew it." }}
@@ -370,8 +366,8 @@ const active = (to: string) =>
         <p v-if="noPlan" :class="notice">
           <span :class="dot" aria-hidden="true" />
           <span class="min-w-0 grow">
-            <b class="text-fg">Sending guides needs a plan.</b>
-            Guides you already have stay where they are.
+            <b class="text-fg">Sending work needs a plan.</b>
+            Work you already have stays where it is.
           </span>
           <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">Choose a plan</NuxtLink>
         </p>
@@ -379,9 +375,9 @@ const active = (to: string) =>
         <p v-if="nearLimit" :class="notice">
           <span :class="dot" aria-hidden="true" />
           <span class="min-w-0 grow">
-            <b class="text-fg">You're using {{ data.me?.guides }} of {{ data.me?.limit }} guides on the free plan.</b>
-            <template v-if="full"> New guides can't be sent until you make room.</template>
-            Archiving a finished guide frees a space.
+            <b class="text-fg">You're using {{ data.me?.guides }} of {{ data.me?.limit }} pieces of work on the free plan.</b>
+            <template v-if="full"> New work can't be sent until you make room.</template>
+            Archiving finished work frees a space.
           </span>
           <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub/work', query: { done: '1' } }">Show finished work</NuxtLink>
           <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>
@@ -395,7 +391,7 @@ const active = (to: string) =>
            skeleton under it would promise a list that is not coming. -->
       <div v-if="!signedIn && !meFailed" class="flex flex-col gap-6">
         <span class="block h-6 w-48 rounded-pill bg-line-strong" aria-hidden="true" />
-        <HubSkeleton :rows="4" label="Loading your guides" />
+        <HubSkeleton :rows="4" label="Loading your work" />
       </div>
       <!-- Only for a known session. After a failed session check the banner is the page: the
            slot would render its empty states ("Nothing is waiting on you") as if they were facts. -->

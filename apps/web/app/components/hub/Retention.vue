@@ -1,8 +1,8 @@
 <!--
-  Whether Passalong tidies guides away on a clock.
+  Whether Passalong tidies work away on a clock.
 
-  On by default, and it is the setting most people should leave alone: a closed guide's proof
-  screenshots are deleted five days after it is closed, and a guide you sent that nobody has opened
+  On by default, and it is the setting most people should leave alone: finished work's proof
+  screenshots are deleted five days after it is closed, and work you sent that nobody has opened
   is archived after fourteen days. Turning it off keeps both for good. Saved the moment it is
   flipped, because a switch that waits for a Save button is a switch people leave half done.
 -->
@@ -44,7 +44,7 @@ async function flip(next: boolean) {
       <span>
         <b>Clean up automatically</b>
         <span class="mt-1 block text-muted">
-          Screenshots that proved a finished guide are deleted 5 days after it is closed. This
+          Screenshots that proved finished work are deleted 5 days after it is closed. This
           cannot be undone. Turn this off to keep them.
         </span>
       </span>

@@ -14,7 +14,6 @@ import type {
   ApiToken,
   Board,
   Guide,
-  HandedIn,
   HubData,
   LogEntry,
   Me,
@@ -62,8 +61,6 @@ export const hubKeys = {
   scopedTasks: (scope: string) => ["tasks", scope] as const,
   working: ["working"] as const,
   scopedWorking: (scope: string) => ["working", scope] as const,
-  handedIn: ["handed-in"] as const,
-  scopedHandedIn: (scope: string) => ["handed-in", scope] as const,
   context: (id: string) => ["guide-context", id] as const,
 };
 
@@ -87,7 +84,7 @@ function build(queryClient: QueryClient) {
   /**
    * The server's guess that you are signed in: a session cookie arrived with the request. It is
    * HttpOnly, so invisible to script and visible to the server. Not proof, but a far better first
-   * paint than the sign-in card for someone who is about to see their guides.
+   * paint than the sign-in card for someone who is about to see their work.
    */
   const maybe = useState("hub:maybe", () =>
     Boolean(import.meta.server && useRequestHeaders(["cookie"]).cookie?.includes(`${COOKIE}=`)),
@@ -199,26 +196,13 @@ function build(queryClient: QueryClient) {
     queryClient,
   );
 
-  // Who is working on what, across every kind of guide.
+  // Who is working on what.
   const workingQ = useQuery(
     {
       queryKey: computed(() => hubKeys.scopedWorking(scope.value)),
       queryFn: ({ queryKey }) =>
         get<{ working: Working[] }>(
           `/v1/working?scope=${encodeURIComponent(String(queryKey[1]))}`,
-        )(),
-      enabled,
-    },
-    queryClient,
-  );
-
-  // Handoffs you wrote that somebody handed in, waiting on you to close.
-  const handedInQ = useQuery(
-    {
-      queryKey: computed(() => hubKeys.scopedHandedIn(scope.value)),
-      queryFn: ({ queryKey }) =>
-        get<{ handed_in: HandedIn[] }>(
-          `/v1/handed_in?scope=${encodeURIComponent(String(queryKey[1]))}`,
         )(),
       enabled,
     },
@@ -258,7 +242,6 @@ function build(queryClient: QueryClient) {
     team: teamScoped.value ? (teamQ.data.value ?? null) : null,
     tasks: tasksQ.data.value?.tasks ?? [],
     working: workingQ.data.value?.working ?? [],
-    handedIn: handedInQ.data.value?.handed_in ?? [],
   }));
 
   /** What has not arrived yet, per endpoint, so each part of a page can wait on its own data. */
@@ -271,7 +254,6 @@ function build(queryClient: QueryClient) {
     tokens: tokensQ.isPending.value,
     tasks: tasksQ.isPending.value,
     working: workingQ.isPending.value,
-    handedIn: handedInQ.isPending.value,
   }));
 
   /** A background refresh of data already on screen: worth a quiet word, never a blank page. */
@@ -286,7 +268,7 @@ function build(queryClient: QueryClient) {
 
   /** A load that failed after retrying, in the server's words. A signed-out session is not one. */
   const loadError = computed(() => {
-    const failed = [meQ, guidesQ, boardQ, tasksQ, workingQ, handedInQ]
+    const failed = [meQ, guidesQ, boardQ, tasksQ, workingQ]
       .map((q) => q.error.value)
       .find((e) => e && !(e instanceof SignedOut));
     return failed ? (failed as Error).message : null;
@@ -322,7 +304,6 @@ function build(queryClient: QueryClient) {
     board: boardQ.isError.value && !boardQ.data.value,
     tasks: tasksQ.isError.value && !tasksQ.data.value,
     working: workingQ.isError.value && !workingQ.data.value,
-    handedIn: handedInQ.isError.value && !handedInQ.data.value,
     notifications: notesQ.isError.value && !notesQ.data.value,
     log: logQ.isError.value && !logQ.data.value,
     tokens: tokensQ.isError.value && !tokensQ.data.value,
@@ -387,7 +368,7 @@ function build(queryClient: QueryClient) {
     queryClient.setQueryData<Board>(hubKeys.board, (old) => (old ? fn(old) : old));
 
   /**
-   * Archive a guide, or put it back. Archived is shelf space, not a judgement — and shelf space is
+   * Archive work, or put it back. Archived is shelf space, not a judgement — and shelf space is
    * what the free plan counts, so this is how to make room without deleting anything.
    */
   const onArchive = (g: Guide, archived: boolean) => {
@@ -409,9 +390,9 @@ function build(queryClient: QueryClient) {
     }, [hubKeys.allGuides, hubKeys.board, hubKeys.me]);
 
   /**
-   * Archive, unarchive or delete several guides at once — the selection bar's one call.
+   * Archive, unarchive or delete several pieces of work at once — the selection bar's one call.
    *
-   * No optimistic patching: a status change moves guides between buckets the board defines in
+   * No optimistic patching: a status change moves work between buckets the board defines in
    * SQL, and guessing those here is how the two drift. It sends each change, four at a time, then
    * reloads once. A refusal does not stop the rest; it is counted and said, with the first reason.
    */
@@ -443,7 +424,6 @@ function build(queryClient: QueryClient) {
       hubKeys.me,
       hubKeys.tasks,
       hubKeys.working,
-      hubKeys.handedIn,
       ...also,
     );
     if (failed.length) {
@@ -454,13 +434,9 @@ function build(queryClient: QueryClient) {
   }
 
   /**
-   * The task gate, and the one move before it. All four are the author's, and the server says so
-   * if anyone else tries — the board only offers them on your own tasks, so it never has to.
-   * Reject needs a reason for the reason a failed verdict does: the next agent reads it before it
-   * starts again, and "no" on its own teaches it nothing.
-   *
-   * Each moves the row to the column it will land in before the server answers, the way every
-   * other mutation here does, and puts it back if the server refuses.
+   * Ready, Draft and Stop this agent: anyone in the team moves work between them. Each moves the row
+   * to the column it will land in before the server answers, the way every other mutation here
+   * does, and puts it back if the server refuses.
    */
   const moveTask = (t: Task, state: Task["state"], path: string, init: RequestInit) =>
     change(
@@ -471,7 +447,7 @@ function build(queryClient: QueryClient) {
         ),
       [hubKeys.tasks, hubKeys.working, hubKeys.allGuides, hubKeys.board],
     );
-  /** `target`, when given, is the repo the task is for; left out, the task keeps the one it has. */
+  /** `target`, when given, is the repo the work is for; left out, it keeps the one it has. */
   const onTaskReady = (t: Task, target?: string) =>
     moveTask(
       t,
@@ -492,7 +468,6 @@ function build(queryClient: QueryClient) {
       ), () => {}, [
       hubKeys.tasks,
       hubKeys.working,
-      hubKeys.handedIn,
       hubKeys.allGuides,
       hubKeys.board,
       hubKeys.context(id),
@@ -523,43 +498,10 @@ function build(queryClient: QueryClient) {
     personTaskChange(id, "person-progress", { note });
   const onPersonTaskHandIn = (id: string, body: unknown) =>
     personTaskChange(id, "person-hand_in", body);
-  /**
-   * The author's close on a handoff or bug somebody handed in: accept it, which archives the guide,
-   * or send that repo's hand-in back with why. The row leaves the list before the server answers.
-   */
-  const dropHandedIn = (h: HandedIn) =>
-    queryClient.setQueryData<{ handed_in: HandedIn[] }>(
-      hubKeys.scopedHandedIn(scope.value),
-      (old) =>
-        old
-          ? { handed_in: old.handed_in.filter((x) => !(x.id === h.id && x.place === h.place)) }
-          : old,
-    );
-  /**
-   * Take work back from whoever holds it, from the one view that knows who does.
-   *
-   * `onRelease` is the same call reached from a task's own row. This one exists because a handoff
-   * has no such row: the guide lists know who acknowledged one, which is not who holds the claim,
-   * so Taken is the only place the author can act on the truth.
-   */
+  /** Take work back from whoever holds it: Stop this agent. */
   const onTakeBack = (w: Working) =>
     change(
       () => api(`/v1/guides/${w.id}/release`, json("POST")),
-      () =>
-        queryClient.setQueryData<{ working: Working[] }>(
-          hubKeys.scopedWorking(scope.value),
-          (old) =>
-            // Every row for that guide, not just this one: a handoff held in three repos is taken
-            // back from all three by one call, and leaving the others on screen would be a lie.
-            old ? { working: old.working.filter((x) => x.id !== w.id) } : old,
-        ),
-      [hubKeys.working, hubKeys.tasks, hubKeys.allGuides, hubKeys.board],
-    );
-
-  /** A held task is finished and its agent never said so. Gone from the Taken list either way. */
-  const onMarkDone = (w: Working) =>
-    change(
-      () => api(`/v1/guides/${w.id}/mark_done`, json("POST")),
       () =>
         queryClient.setQueryData<{ working: Working[] }>(
           hubKeys.scopedWorking(scope.value),
@@ -568,46 +510,13 @@ function build(queryClient: QueryClient) {
       [hubKeys.working, hubKeys.tasks, hubKeys.allGuides, hubKeys.board],
     );
 
-  /**
-   * The author closes a guide of theirs, from its own row.
-   *
-   * Same endpoint as onCloseHandedIn — one implementation, and the hand-in row keeps its own
-   * wording because there the answer really is "I accept this". Here it is "this is finished",
-   * which is a thing only the author can know when nobody ever opened it.
-   */
-  const onCloseGuide = (g: Guide) =>
-    change(() => api(`/v1/guides/${g.id}/close`, json("POST")), () => {}, [
-      hubKeys.allGuides,
-      hubKeys.board,
-      hubKeys.working,
-      hubKeys.handedIn,
-    ]);
-
   /** Take back something you sent: private again, and gone from the inboxes it was in. */
   const onRecall = (g: Guide) =>
     change(() => api(`/v1/guides/${g.id}/recall`, json("POST")), () => {}, [
       hubKeys.allGuides,
       hubKeys.board,
       hubKeys.working,
-      hubKeys.handedIn,
     ]);
-
-  const onCloseHandedIn = (h: HandedIn) =>
-    change(
-      () => api(`/v1/guides/${h.id}/close`, json("POST")),
-      () =>
-        queryClient.setQueryData<{ handed_in: HandedIn[] }>(
-          hubKeys.scopedHandedIn(scope.value),
-          (old) => (old ? { handed_in: old.handed_in.filter((x) => x.id !== h.id) } : old),
-        ),
-      [hubKeys.handedIn, hubKeys.allGuides, hubKeys.board, hubKeys.working],
-    );
-  const onSendBackHandedIn = (h: HandedIn, why: string) =>
-    change(
-      () => api(`/v1/guides/${h.id}/send_back`, json("POST", { place: h.place, why })),
-      () => dropHandedIn(h),
-      [hubKeys.handedIn, hubKeys.working],
-    );
 
   /**
    * Give something you wrote to someone else in its team: "@handle", "#group", or "" for everyone.
@@ -620,17 +529,10 @@ function build(queryClient: QueryClient) {
       hubKeys.allGuides,
       hubKeys.board,
       hubKeys.working,
-      hubKeys.handedIn,
     ]);
 
-  const onApprove = (t: Task) => moveTask(t, "done", `/v1/tasks/${t.id}/approve`, json("POST"));
-  const onReject = (t: Task, why: string) => {
-    const said = why.trim();
-    if (!said) return;
-    return moveTask(t, "ready", `/v1/tasks/${t.id}/reject`, json("POST", { why: said }));
-  };
   /**
-   * Write to whoever holds a guide: an answer to a question, or something thought of since. Not
+   * Write to whoever holds a piece of work: an answer to a question, or something thought of since. Not
    * optimistic — the server decides who may write and whether anyone is holding it, and a message
    * that appears and then vanishes is worse than one that takes a moment. Refetches what shows the
    * waiting state, so a question you just answered leaves "Asking you".
@@ -639,8 +541,6 @@ function build(queryClient: QueryClient) {
     await api(`/v1/guides/${encodeURIComponent(id)}/reply`, json("POST", { body }));
     await refresh(hubKeys.tasks, hubKeys.working);
   };
-
-  const onRelease = (t: Task) => moveTask(t, "ready", `/v1/guides/${t.id}/release`, json("POST"));
 
   const readAll = () =>
     change(
@@ -713,17 +613,10 @@ function build(queryClient: QueryClient) {
     onPass,
     onPersonTaskProgress,
     onPersonTaskHandIn,
-    onApprove,
     onAssign,
-    onCloseHandedIn,
     onRecall,
-    onSendBackHandedIn,
-    onReject,
-    onRelease,
     onReply,
     onTakeBack,
-    onMarkDone,
-    onCloseGuide,
     readAll,
     createTeam,
     signOut,

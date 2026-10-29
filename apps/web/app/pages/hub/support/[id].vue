@@ -41,12 +41,12 @@ const STATE: Record<SupportRow["state"], string> = {
   solved: "Solved",
 };
 
-/** Where the task stands, in the words the board uses. */
+/** Where the request stands, in the words the board uses. */
 const taskStage = computed(() => {
   if (!g.value || !ctx.value) return "";
   if (g.value.status === "consumed") return "Done";
   if (g.value.status === "draft") return "Draft";
-  const held = ctx.value.claims.find((k) => k.state !== "review");
+  const held = ctx.value.claims[0];
   if (held)
     return held.state === "stalled"
       ? `Held by ${held.by.name || held.by.handle || "an agent"}, gone quiet`
@@ -59,7 +59,7 @@ const work = computed(() =>
   (ctx.value?.children ?? []).map((c) => ({
     id: c.id,
     title: c.title || "Untitled",
-    kind: kindBadge(c.kind)?.label ?? "",
+    tag: c.tags[0] ?? "",
     stage: c.status === "consumed" ? (c.outcome === "archived" ? "Closed" : "Done") : "Open",
     at: c.updated || "",
     done: c.status === "consumed" && c.outcome !== "archived",
@@ -98,7 +98,7 @@ const refresh = () => {
         <HubConversation :guide-id="id" :name="name" :finished="finished" :state="row?.state" :tell="row?.tell" @sent="refresh" />
 
         <aside class="flex flex-col gap-4 rounded-3 bg-raised px-4 py-3 shadow-edge" aria-labelledby="task-h">
-          <h2 id="task-h" class="m-0 font-ui text-base font-medium">The task</h2>
+          <h2 id="task-h" class="m-0 font-ui text-base font-medium">The work</h2>
           <div class="flex flex-col gap-1 font-ui text-sm">
             <NuxtLink :to="`/hub/g/${id}`" class="font-medium">{{ g.title }}</NuxtLink>
             <span class="text-muted">{{ taskStage }}</span>
@@ -108,7 +108,7 @@ const refresh = () => {
             <ul class="m-0 flex list-none flex-col gap-2 p-0">
               <li v-for="w in work" :key="w.id" class="flex flex-col">
                 <NuxtLink :to="`/hub/g/${w.id}`">{{ w.title }}</NuxtLink>
-                <span class="text-muted">{{ w.kind ? `${w.kind} · ` : "" }}{{ w.stage }}</span>
+                <span class="text-muted">{{ w.tag ? `${w.tag} · ` : "" }}{{ w.stage }}</span>
               </li>
             </ul>
           </div>

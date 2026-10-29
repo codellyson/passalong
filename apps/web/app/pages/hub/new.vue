@@ -1,9 +1,9 @@
 <!--
   What do you need? (docs/LOOP.md §1a, problem 2): a place to make a Passalong without an agent of
-  your own. Write or paste anything; the agent — the reader — gives it its shape (task, bug or
-  handover, with its sections), sends it to one of the team's groups and files it, with no confirm
-  step. Its work is on the page the whole time: the panel beside the editor says, as you write, what
-  this is, where it goes, what it has drafted and what already looks like it. Unsure, it still files
+  your own. Write or paste anything; the agent — the reader — names it, labels it if a label helps,
+  sends it to one of the team's groups and files it as work, with no confirm step. Its work is on
+  the page the whole time: the panel beside the editor says, as you write, what it will be called,
+  where it goes and why, and what already looks like it. Unsure, it still files
   its best reading and says what it would check. Filed, the panel says where it went, with move and undo.
 -->
 <script setup lang="ts">
@@ -34,13 +34,12 @@ const problem = ref("");
 const STARTERS = [
   { label: "Something's broken", text: "Something's broken: " },
   { label: "We need something built", text: "We need " },
-  { label: "Hand work over", text: "Handing this over: " },
   { label: "A customer asked…", text: "A customer asked " },
 ];
 
 interface Filed {
   id: string;
-  kind: string;
+  tag: string;
   title: string;
   summary: string;
   route: { slug: string; name: string } | null;
@@ -92,11 +91,10 @@ watch(
  * nothing is filed — and what already on the board looks like it, so nothing is filed twice.
  */
 interface Preview {
-  kind: string;
   title: string;
+  tag: string;
   route: { slug: string; name: string } | null;
   reason: string;
-  sections: string[];
   question: string;
 }
 const preview = ref<Preview | null>(null);
@@ -159,9 +157,7 @@ const state = computed(() =>
 );
 
 /** What the agent filed for this account here, newest first. */
-const recent = ref<{ id: string; title: string; kind: string; created: string; routed: string }[]>(
-  [],
-);
+const recent = ref<{ id: string; title: string; created: string; routed: string }[]>([]);
 const loadRecent = () =>
   api<{ filed: typeof recent.value }>("/v1/compose/recent")
     .then((r) => (recent.value = r?.filed ?? []))
@@ -269,8 +265,8 @@ const toneDot: Record<string, string> = {
       <header class="m-0 flex flex-col gap-2 border-b-0 p-0">
         <h1 class="m-0">What do you need?</h1>
         <p class="m-0 max-w-[40rem] font-ui text-base text-muted">
-          Say it however it comes. Passalong's agent turns it into a task, a bug or a handover, sends
-          it to the right team, and files it.
+          Say it however it comes. Passalong's agent works out what it is, sends it to the right
+          people, and files it as work.
         </p>
       </header>
 
@@ -339,11 +335,7 @@ const toneDot: Record<string, string> = {
             <div class="flex flex-col gap-1 font-ui">
               <span class="text-xs text-muted">Filed as</span>
               <span class="flex items-start gap-2 text-base">
-                <span
-                  v-if="kindBadge(filed.kind)"
-                  class="mt-0.5 rounded-1 border px-2 py-0.5 text-xs font-medium tracking-wide uppercase"
-                  :class="kindBadge(filed.kind)?.class"
-                >{{ kindBadge(filed.kind)?.label }}</span>
+                <HubWorkTag :tags="[filed.tag]" class="mt-1" />
                 <NuxtLink :to="`/hub/g/${filed.id}`" class="text-fg">{{ filed.title }}</NuxtLink>
               </span>
             </div>
@@ -378,13 +370,9 @@ const toneDot: Record<string, string> = {
           <!-- Reading: what it has made of the writing so far. -->
           <template v-else-if="preview">
             <div class="flex flex-col gap-1 font-ui" :class="reading ? 'opacity-60' : ''">
-              <span class="text-xs text-muted">This is</span>
+              <span class="text-xs text-muted">It will be</span>
               <span class="flex items-start gap-2 text-base">
-                <span
-                  v-if="kindBadge(preview.kind)"
-                  class="mt-0.5 rounded-1 border px-2 py-0.5 text-xs font-medium tracking-wide uppercase"
-                  :class="kindBadge(preview.kind)?.class"
-                >{{ kindBadge(preview.kind)?.label }}</span>
+                <HubWorkTag :tags="[preview.tag]" class="mt-1" />
                 <span>{{ preview.title }}</span>
               </span>
             </div>
@@ -395,10 +383,10 @@ const toneDot: Record<string, string> = {
               </span>
               <span v-if="preview.reason" class="text-sm text-muted">{{ preview.reason }}</span>
             </div>
-            <div v-if="preview.sections.length || evidence.length" class="flex flex-col gap-2 font-ui text-sm">
-              <span class="text-xs text-muted">Drafting</span>
+            <div v-if="evidence.length" class="flex flex-col gap-2 font-ui text-sm">
+              <span class="text-xs text-muted">Keeping</span>
               <ul class="m-0 flex list-none flex-col gap-2 p-0">
-                <li v-for="s in [...preview.sections, ...evidence]" :key="s" class="flex items-center gap-2">
+                <li v-for="s in evidence" :key="s" class="flex items-center gap-2">
                   <AppIcon name="check" class="shrink-0 text-ok" />{{ s }}
                 </li>
               </ul>
@@ -415,9 +403,9 @@ const toneDot: Record<string, string> = {
 
           <!-- Waiting: what it is about to do, so the first look says there is an agent here. -->
           <ul v-else class="m-0 flex list-none flex-col gap-2 p-0 font-ui text-sm text-muted">
-            <li>Works out whether it's a task, a bug or a handover</li>
-            <li>Sends it to the team that should act</li>
-            <li>Drafts what it needs, so nobody starts cold</li>
+            <li>Names it and says what it is about</li>
+            <li>Sends it to the people who should act</li>
+            <li>Keeps your words, errors and pictures as they came</li>
             <li>Files it anyway when unsure, and says what to check</li>
           </ul>
         </aside>
@@ -432,7 +420,7 @@ const toneDot: Record<string, string> = {
               class="flex items-center justify-between gap-3 rounded-2 bg-raised px-4 py-3 font-ui text-sm text-fg no-underline shadow-edge"
             >
               <span class="min-w-0 truncate">
-                <span class="text-muted">{{ kindBadge(r.kind)?.label ?? r.kind }} ·</span> {{ r.title }}
+                {{ r.title }}
                 <span v-if="r.routed" class="text-muted">→ {{ r.routed }}</span>
               </span>
               <span class="shrink-0 text-muted">{{ rel(r.created) }}</span>

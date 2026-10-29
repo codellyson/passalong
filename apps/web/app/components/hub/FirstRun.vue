@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import type { Me } from "~/types/hub";
-import { ASKS, bugAsk, CONNECT, teamTaskAsk } from "~/utils/asks";
+import { ASKS, CONNECT, teamAsk } from "~/utils/asks";
 
 const { data, api, json, setMe } = useHub();
 
@@ -147,35 +147,27 @@ const step =
 
         <template v-if="team">
           <h2 class="m-0 font-ui text-base font-semibold" :class="claimed ? 'text-fg' : 'text-muted'">
-            Record your first issue for {{ team.name }}
+            Write down your first work for {{ team.name }}
           </h2>
           <p class="mt-1 mb-0 font-ui text-sm text-muted">
-            Say this in Claude Code. Name the team: an issue filed without one is private to you, and
+            Say this in Claude Code. Name the team: work written without one is private to you, and
             {{ team.name }} will not see it.
           </p>
           <div class="mt-3 flex flex-col gap-2">
-            <HubAsk :text="bugAsk(team.slug)" />
-            <p class="m-0 font-ui text-xs text-muted">
-              For work to be done rather than something broken:
-              <code>{{ teamTaskAsk(team.slug) }}</code>
-            </p>
+            <HubAsk :text="teamAsk(team.slug)" />
           </div>
         </template>
 
         <template v-else>
           <h2 class="m-0 font-ui text-base font-semibold" :class="claimed ? 'text-fg' : 'text-muted'">
-            Give an agent its first task
+            Give an agent its first work
           </h2>
           <p class="mt-1 mb-0 font-ui text-sm text-muted">
             Your agent writes it, in the repo it is for. Say this in Claude Code, or any agent with the
-            Passalong tools. It waits here as a draft until you have read it.
+            Passalong tools.
           </p>
           <div class="mt-3 flex flex-col gap-2">
-            <HubAsk :text="ASKS.task" />
-            <p class="m-0 font-ui text-xs text-muted">
-              Finished something someone else should repeat? Say <b class="font-medium text-fg">“{{ ASKS.handoff }}”</b>
-              at the end of the session.
-            </p>
+            <HubAsk :text="ASKS.work" />
           </div>
         </template>
       </li>

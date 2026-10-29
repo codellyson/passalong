@@ -13,7 +13,7 @@ const props = defineProps<{
   guideId: string;
   /** What to call the customer in the conversation: their name, else their address. */
   name: string;
-  /** Guides made from this request that are finished: a fix sent on to development, say. */
+  /** Work made from this request that is finished: a fix sent on to development, say. */
   finished?: { id: string; title: string; at: string }[];
   /** Where the request stands; a draft is started by itself when the next word is ours. */
   state?: string;
@@ -26,7 +26,7 @@ const busy = ref(false);
 const problem = ref("");
 const done = ref(false);
 
-/** What the customer wrote and what they were sent, oldest first, from the guide's thread. */
+/** What the customer wrote and what they were sent, oldest first, from the request's thread. */
 const said = ref<ThreadItem[]>([]);
 const loaded = ref(false);
 async function load() {

@@ -38,10 +38,10 @@ export interface FolderAsset {
   created: string;
 }
 
+/** Work linked into a folder. The route keeps the old name, `guides`. */
 export interface FolderGuide {
   id: string;
   title: string;
-  kind: string;
   summary: string;
   status: string;
 }

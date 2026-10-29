@@ -1,5 +1,5 @@
 <!--
-  Home: the hub's overview. The board's five column counts, the same for everyone in the team; how
+  Home: the hub's overview. The board's four column counts, the same for everyone in the team; how
   Passalong works; and the activity feed. The board itself is /hub/work.
 
   `/hub` was the Work page, so links carrying a work query (`?tab=`, `?q=`, `?follows=`,
@@ -39,7 +39,7 @@ const { unavailable, waiting, first, hasTeams, columns } = useWorkLists(none, no
       </h1>
 
       <!-- A failed list draws no counts rather than zeroes: the shell's banner offers Try again. -->
-      <nav v-if="!unavailable" aria-label="Work overview" class="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <nav v-if="!unavailable" aria-label="Work overview" class="grid grid-cols-2 gap-3 md:grid-cols-4">
         <NuxtLink
           v-for="s in columns"
           :key="s.id"

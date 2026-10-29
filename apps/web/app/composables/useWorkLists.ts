@@ -2,13 +2,13 @@ import type { Ref } from "vue";
 import type { Guide } from "~/types/hub";
 
 /**
- * The team board: every guide in scope — tasks, handoffs and bugs — in one column each, the same
- * for everyone who opens it. The column is the server's (`stage` on every guide row); nothing here
+ * The team board: all work in scope, in one column each, the same for everyone who opens it. The
+ * column is the server's (`stage` on every row); nothing here
  * re-decides it per viewer, which is what made two teammates see the same work in different places.
  * Home shows the column counts and /hub/work the board; both read them from here.
  *
  * `q` and `follows` narrow it, as the Work page's search does. `mineOnly` keeps only the cards
- * that are about you — yours, sent to you or a group you are in, held by you, or yours to review —
+ * that are about you — yours, sent to you or a group you are in, or held by you —
  * without moving any card to a different column.
  */
 export const STAGES = [
@@ -21,7 +21,7 @@ export type Stage = (typeof STAGES)[number]["id"];
 
 /** A card that is about you. Used as a filter only: it never moves a card. */
 export const aboutMe = (g: Guide) =>
-  g.mine || Boolean(g.for_me) || Boolean(g.can_review) || Boolean(g.held_by?.some((h) => h.you));
+  g.mine || Boolean(g.for_me) || Boolean(g.held_by?.some((h) => h.you));
 
 export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Ref<boolean>) {
   const { data, scope, loading, failed } = useHub();
@@ -52,7 +52,7 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Re
   };
 
   /**
-   * The list is scoped and the inbox is not. Across all teams, a guide sent to you from outside your
+   * The list is scoped and the inbox is not. Across all teams, work sent to you from outside your
    * teams is in the inbox and not in the list — the one thing here that must not go missing.
    */
   const guides = computed<Guide[]>(() => {
@@ -79,7 +79,6 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Re
       g.to_group,
       g.team_name,
       g.id,
-      g.report_title,
       ...(g.held_by ?? []).flatMap((h) => [h.name, h.agent]),
       ...(g.tags || []),
       ...(g.stack_assumptions || []),

@@ -1,7 +1,7 @@
 <!--
   What you did, under a heading per month.
 
-  The board answers "what needs me now" and the guides page answers "where did everything get to".
+  The board answers "what needs me now" and the Work page answers "where did everything get to".
   Both are ordered by state, and neither can answer "what did I get done in September" — which is
   the question someone has at the end of a month, in a standup, or when a piece of work has fallen
   far enough out of memory that the only thing they still know about it is roughly when it was.
@@ -94,9 +94,9 @@ const months = computed(() => {
     <HubSkeleton v-else-if="loading.log" variant="lines" :rows="6" label="Loading your activities" />
     <div v-else-if="!data.log.length" class="empty">
       <h2>No activities yet</h2>
-      <p>It fills up as you send guides, open them, and answer them, newest first.</p>
+      <p>It fills up as you send work, open it, and answer it, newest first.</p>
       <div class="actions">
-        <HubAsk :text="ASKS.task" />
+        <HubAsk :text="ASKS.work" />
       </div>
     </div>
 
@@ -155,7 +155,7 @@ const months = computed(() => {
         <p class="mt-8 font-ui text-sm text-muted">
           Showing {{ visible.length }} of {{ data.log.length }}.
           <b class="text-fg">This is what you sent and answered, not everything you worked on.</b>
-          Work that never became a guide has no line here, so a quiet month is not necessarily a
+          Work that was never written down here has no line, so a quiet month is not necessarily a
           quiet month.
         </p>
       </template>

@@ -28,7 +28,7 @@ export interface Message {
   pictures: boolean;
   /** Files attached to it, to be downloaded. Their lines are taken out of `text`. */
   files: { name: string; url: string }[];
-  /** Negative: a decline, a failing verdict, a send-back, a pass. */
+  /** Negative: a decline, a failing verdict, a reopen, a pass. */
   tone: "neutral" | "bad";
 }
 
@@ -83,7 +83,7 @@ export function messageOf(i: ThreadItem): Message {
   let tone: Message["tone"] = "neutral";
   switch (i.kind) {
     case "customer":
-      // Stored under the guide's author because the customer has no account; it is their words,
+      // Stored under the work's author because the customer has no account; it is their words,
       // and the files they sent are drawn and offered the way anyone's are.
       break;
     case "answered":
@@ -111,10 +111,12 @@ export function messageOf(i: ThreadItem): Message {
       quiet = true;
       break;
     case "approved":
-      text = "Approved.";
+      // A person said it is done while somebody still held it (markDone in claims.ts).
+      text = said("Marked done", i.body);
       break;
     case "sent_back":
-      text = said("Sent back", i.body);
+      // Reopened after it was finished, with why (reopen in claims.ts).
+      text = said("Reopened", i.body);
       tone = "bad";
       break;
     case "asked":
@@ -123,8 +125,9 @@ export function messageOf(i: ThreadItem): Message {
     case "replied":
       break;
     case "noted":
-      // Left on the task before anybody took it: the author speaking to whoever does.
+      // Left on the work before anybody took it: the author speaking to whoever does.
       break;
+    // No longer written; work from before still carries it, and acks below.
     case "closed":
       text = "Closed.";
       quiet = true;

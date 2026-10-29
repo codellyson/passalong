@@ -325,7 +325,7 @@ export function attention(input: {
   if (plan?.sync === "none") {
     items.push({
       tone: "bad",
-      text: "New guides can't be sent until you're on a plan.",
+      text: "New work can't be sent until you're on a plan.",
       where: "Your plan",
       action: "See your plan",
       anchor: "plan",
@@ -333,7 +333,7 @@ export function attention(input: {
   } else if (plan?.sync === "free" && plan.limit > 0 && plan.guides >= plan.limit) {
     items.push({
       tone: "bad",
-      text: `You've used all ${plan.limit} guides on the free plan, so new guides can't be sent. Archiving a finished guide frees a space.`,
+      text: `You've used all ${plan.limit} pieces of work on the free plan, so new work can't be sent. Archiving finished work frees a space.`,
       where: "Your plan",
       action: "See your plan",
       anchor: "plan",
@@ -367,7 +367,7 @@ export function attention(input: {
       if (g.members.length) continue;
       items.push({
         tone: "warn",
-        text: `Group ${g.name || g.slug} has nobody in it, so guides sent there reach no one.`,
+        text: `Group ${g.name || g.slug} has nobody in it, so work sent there reaches no one.`,
         where: `${t.name} · Groups`,
         action: "Choose people",
         anchor: `team-${t.slug}`,

@@ -1,9 +1,10 @@
 <!--
-  How a guide gets made, offered from every hub page.
+  How work gets written down, offered from every hub page.
 
-  Passalong is agent first: the agent that has the context writes the guide. Without one, "Write it
-  down here" opens /hub/new, where the reader shapes what a person wrote (docs/LOOP.md §1a). Each item copies the sentence to say to it (app/utils/asks.ts). The CLI is the other way,
-  for a terminal without an agent.
+  Passalong is agent first: the agent that has the context writes it. Without one, "Write it down
+  here" opens /hub/new, where the reader shapes what a person wrote (docs/LOOP.md §1a). Each item
+  copies the sentence to say to an agent (app/utils/asks.ts). The CLI is the other way, for a
+  terminal without an agent.
 -->
 <script setup lang="ts">
 import { ASKS } from "~/utils/asks";
@@ -12,12 +13,11 @@ const open = ref(false);
 const root = ref<HTMLElement | null>(null);
 
 const ITEMS = [
-  { label: "A task", text: ASKS.task },
-  { label: "A plan of tasks", text: ASKS.plan },
-  { label: "A handoff of finished work", text: ASKS.handoff },
+  { label: "Some work", text: ASKS.work },
+  { label: "A plan, split into work", text: ASKS.plan },
 ];
 
-const CLI = 'passalong task "what needs doing"';
+const CLI = 'passalong new "what needs doing"';
 
 function onDocument(e: MouseEvent) {
   if (open.value && !root.value?.contains(e.target as Node)) open.value = false;
@@ -45,7 +45,7 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
         <AppIcon name="open" class="mt-0.5 shrink-0 text-muted" />
         <span class="flex min-w-0 flex-col">
           <span class="font-medium text-fg">Write it down here</span>
-          <span class="text-xs text-muted">Say it in your own words; it becomes a task, bug or handover.</span>
+          <span class="text-xs text-muted">Say it in your own words; the agent files it as work.</span>
         </span>
       </NuxtLink>
       <p class="menu-note mt-2 mb-1">Or ask your agent. Click one to copy what to say:</p>
@@ -71,7 +71,7 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
         @click="copy(CLI, $event.currentTarget)"
       >
         <AppIcon name="copy" class="shrink-0 text-muted" />
-        <span>From a terminal: <code data-label>passalong task</code></span>
+        <span>From a terminal: <code data-label>passalong new</code></span>
       </button>
     </div>
   </div>

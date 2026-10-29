@@ -304,7 +304,7 @@ const head =
       <div class="flex flex-wrap items-baseline gap-x-3">
         <h4 class="m-0 font-ui text-sm font-semibold text-fg">A new admin account</h4>
         <span class="font-ui text-xs text-muted">
-          A separate account, so admin work is never done by the one that publishes guides.
+          A separate account, so admin work is never done by the one that sends work.
         </span>
       </div>
 

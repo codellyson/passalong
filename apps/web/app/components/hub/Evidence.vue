@@ -1,7 +1,7 @@
 <!--
   What a hand-in ran, as it was sent (docs/V2.md §11).
 
-  One renderer for both places evidence is read: the review pane and the handed-in row. Output
+  One renderer for everywhere evidence is read: what work was finished with, and the thread. Output
   stays monospace and literal — a reviewer is reading a terminal, and reflowing it would lose the
   alignment that makes it readable. Links are followable where they sit, and screenshots are drawn
   rather than printed as a URL nobody can see.

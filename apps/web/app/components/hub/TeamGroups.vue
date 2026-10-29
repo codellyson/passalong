@@ -3,7 +3,7 @@
 
   Addressing had two settings and needed a third. Naming one person is precise and wrong when you
   do not know who is free; leaving it off shares with everybody and reaches people it has nothing
-  to do with. Both end the same way — the guide sits in a lane nobody treats as theirs.
+  to do with. Both end the same way — the work sits in a lane nobody treats as theirs.
 
   Membership is edited as a list rather than one person at a time, because "who is in #frontend" is
   a thing somebody decides in one sitting, and two controls racing over one list is how a person
@@ -136,13 +136,13 @@ async function drop(g: Group) {
           </span>
           <!-- An empty group reaches nobody, and a guide sent to it lands with no one at all.
                Said plainly, because it looks like it is working. -->
-          <span v-else class="font-ui text-sm text-warn">Nobody in it yet, so guides sent here reach no one</span>
+          <span v-else class="font-ui text-sm text-warn">Nobody in it yet, so work sent here reaches no one</span>
           <span class="ml-auto flex flex-wrap items-center gap-2">
             <button class="btn sm" :disabled="busy" @click="edit(g)">
               {{ editing === g.id ? "Cancel" : "Choose who's in it" }}
             </button>
             <template v-if="removing === g.id">
-              <span class="font-ui text-sm text-muted">Guides already sent keep the name.</span>
+              <span class="font-ui text-sm text-muted">Work already sent keeps the name.</span>
               <button class="btn outline danger sm" @click="drop(g)">Remove it</button>
               <button class="btn sm" @click="removing = null">Keep it</button>
             </template>
@@ -168,7 +168,7 @@ async function drop(g: Group) {
       </li>
     </ul>
     <p v-else class="m-0 font-ui text-sm text-muted">
-      No groups yet. Without one, a guide goes to one person or to the whole team.
+      No groups yet. Without one, work goes to one person or to the whole team.
     </p>
 
     <form v-if="adding" class="appears mt-2 flex flex-wrap items-end gap-3" @submit.prevent="add">
@@ -183,7 +183,7 @@ async function drop(g: Group) {
       </button>
       <button class="btn" type="button" @click="adding = false; slug = ''">Cancel</button>
       <p class="m-0 basis-full font-ui text-sm text-muted">
-        A guide sent to the group reaches everyone in it, and the first person to take it takes it
+        Work sent to the group reaches everyone in it, and the first person to take it takes it
         off everyone else's list. Agents can send to it by name too.
       </p>
     </form>

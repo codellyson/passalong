@@ -1,5 +1,5 @@
 <!--
-  A team's channels: where verdicts and handoffs arrive for everyone at once.
+  A team's channels: where work being sent, taken and finished arrives for everyone at once.
 
   More than one, because a team with a space for QA and a space for the people who fix things has
   two rooms, not one. Each is named, because "which of these stopped working" is unanswerable when
@@ -138,7 +138,7 @@ async function test(id: string) {
       </li>
     </ul>
     <p v-else class="m-0 font-ui text-sm text-muted">
-      No channel — verdicts reach people by mail and in their feed, but not a room.
+      No channel — news reaches people by mail and in their feed, but not a room.
     </p>
 
     <form v-if="adding" class="appears mt-2 flex flex-wrap items-end gap-3" @submit.prevent="add">
