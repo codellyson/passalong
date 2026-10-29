@@ -200,6 +200,33 @@ export interface Received {
   automated: boolean;
   /** Files on the message, as they came. What is kept of them is decided where they are stored. */
   files: { name: string; type: string; bytes: Uint8Array }[];
+  /** Its Message-ID, `<…>`; "" when it has none worth keeping. */
+  mid: string;
+  /** The Message-IDs it answers (In-Reply-To and References), newest last. */
+  refs: string[];
+}
+
+/** Message-IDs in a header, each `<…>` with no space or bracket inside, at most 20. */
+export function mids(header: string | undefined): string[] {
+  return (String(header || "").match(/<[^<>\s]{1,250}>/g) ?? []).slice(-20);
+}
+
+/**
+ * A customer's Message-IDs with one more, newest last, kept within what a References header may
+ * carry (2048 bytes at Cloudflare): the oldest go first.
+ */
+export function withMid(kept: string, mid: string): string {
+  if (!mid) return kept;
+  const all = [...mids(kept).filter((m) => m !== mid), mid];
+  while (all.join(" ").length > 2000) all.shift();
+  return all.join(" ");
+}
+
+/** The headers that make mail to a customer part of their own conversation. */
+export function threadHeaders(kept: string): Record<string, string> {
+  const all = mids(kept);
+  const last = all.at(-1);
+  return last ? { "In-Reply-To": last, References: all.join(" ") } : {};
 }
 
 /** The most files one customer message keeps; a reply to a person, not a folder. */
@@ -247,6 +274,8 @@ export async function parseEmail(
           ? new TextEncoder().encode(a.content)
           : new Uint8Array(a.content as ArrayBuffer),
     })),
+    mid: mids(email.messageId)[0] ?? "",
+    refs: [...mids(email.references), ...mids(email.inReplyTo)],
   };
 }
 

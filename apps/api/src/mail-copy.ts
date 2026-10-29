@@ -170,15 +170,15 @@ export function verdictCopy(o: {
  * number, and that replying adds to it. Plain on purpose — it is from the team, not from Passalong,
  * and it promises nothing about when beyond "when it's sorted".
  */
-export function ackCopy(o: { from: string; title: string; ref: string }): Copy {
+export function ackCopy(o: { from: string; subject: string; ref: string }): Copy {
   return {
-    subject: `[${o.ref}] Re: ${o.title}`,
+    subject: customerSubject(o),
     preview: `We've got your message. Your tracking number is ${o.ref}.`,
     eyebrow: o.from,
     text: [
       "Thanks — we've got your message, and we'll write back when it's sorted.",
       "",
-      `Your tracking number is ${o.ref}. Reply to this email to add anything; keep the number in the subject.`,
+      `Your tracking number is ${o.ref}. Reply to this email to add anything.`,
       "",
       `— ${o.from}`,
     ],
@@ -206,11 +206,20 @@ export function plainForCustomer(md: string): string {
     .trim();
 }
 
-/** A person's answer to a customer, with the tracking number kept in the subject for their reply. */
-export function answerCopy(o: { from: string; title: string; ref: string; body: string }): Copy {
+/**
+ * The subject of every mail to a customer: a reply to the subject they wrote under, so it lands in
+ * their own conversation, with the tracking number at the end for clients that thread by nothing else.
+ */
+export function customerSubject(o: { subject: string; ref: string }): string {
+  const s = o.subject.replace(/^((re|fwd?|aw)\s*:\s*)+/i, "").trim() || "Your message";
+  return `Re: ${s} [${o.ref}]`;
+}
+
+/** A person's answer to a customer, in the conversation the customer started. */
+export function answerCopy(o: { from: string; subject: string; ref: string; body: string }): Copy {
   o = { ...o, body: plainForCustomer(o.body) };
   return {
-    subject: `[${o.ref}] Re: ${o.title}`,
+    subject: customerSubject(o),
     preview: o.body.split("\n")[0]?.slice(0, 140) ?? "",
     eyebrow: o.from,
     text: [
