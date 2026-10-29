@@ -51,23 +51,17 @@ test("every kind renders a sentence naming who did what", () => {
   assert.deepEqual(seen, [
     '@bob sent you "Add Paystack webhook verification" in khaime',
     '@bob shared "Add Paystack webhook verification" with khaime',
-    '@bob is taking "Add Paystack webhook verification"',
     '@bob passed on "Add Paystack webhook verification"',
     '@bob opened "Add Paystack webhook verification"',
     '@bob is done with "Add Paystack webhook verification"',
     '@bob put "Add Paystack webhook verification" back on your list',
-    '@bob said "Add Paystack webhook verification" worked',
-    '@bob said "Add Paystack webhook verification" didn\'t work',
     "@bob joined khaime",
     "@bob made you an admin of khaime",
     "@bob removed you from khaime",
-    '@bob\'s agent took the task "Add Paystack webhook verification"',
-    '@bob\'s agent finished "Add Paystack webhook verification", and it is waiting for your review',
-    '@bob approved "Add Paystack webhook verification"',
-    '@bob sent "Add Paystack webhook verification" back',
+    '@bob\'s agent took "Add Paystack webhook verification"',
+    '@bob\'s agent finished "Add Paystack webhook verification"',
     '@bob took "Add Paystack webhook verification" back from your agent',
-    '@bob accepted your work on "Add Paystack webhook verification", and closed it',
-    '@bob sent "Add Paystack webhook verification" back',
+    '@bob reopened "Add Paystack webhook verification"',
     '@bob gave "Add Paystack webhook verification" to someone else',
     '"Add Paystack webhook verification" has gone quiet — nobody has heard from whoever holds it',
     '"Add Paystack webhook verification" went back to Draft — nobody took it',
@@ -86,7 +80,7 @@ test("every kind renders a sentence naming who did what", () => {
     "Two subscriptions are paying for one plan. Refund one in Bachs",
     // Both actorless: a machine sent them, so neither names a person.
     'An email became "Add Paystack webhook verification"',
-    "A new sender wants to email you guides. Allow or block it in Settings",
+    "A new sender wants to email you work. Allow or block it in Settings",
     '"Add Paystack webhook verification" came in from a webhook',
   ]);
 });
@@ -98,7 +92,7 @@ test("a person's name and a team's name win over their handle and slug", () => {
     'Hybee1 sent you "Add Paystack webhook verification" in Khaime',
   );
   assert.equal(named({ kind: "joined" }), "Hybee1 joined Khaime");
-  assert.equal(named({ kind: "taken" }), 'Hybee1 is taking "Add Paystack webhook verification"');
+  assert.equal(named({ kind: "declined" }), 'Hybee1 passed on "Add Paystack webhook verification"');
   assert.equal(
     named({ kind: "consumed" }),
     'Hybee1 is done with "Add Paystack webhook verification"',
@@ -122,15 +116,15 @@ test("a room is never told 'you': a handoff there says who it went to", () => {
   );
 });
 
-test("a failing verdict carries its reason into the line", () => {
-  const r = row({ kind: "failed", note: "401 on a valid signature too" });
+test("a reopen carries its reason into the line", () => {
+  const r = row({ kind: "sent_back", note: "toggle does nothing on Safari" });
   assert.equal(
     line(r),
-    '@bob said "Add Paystack webhook verification" didn\'t work: 401 on a valid signature too',
+    '@bob reopened "Add Paystack webhook verification": toggle does nothing on Safari',
   );
-  assert.equal(summary(r).note, "401 on a valid signature too");
-  // A reason is the point of the verdict; without one the line still reads.
-  assert.doesNotMatch(line(row({ kind: "failed" })), /:\s*$/);
+  assert.equal(summary(r).note, "toggle does nothing on Safari");
+  // A reason is the point of reopening; without one the line still reads.
+  assert.doesNotMatch(line(row({ kind: "sent_back" })), /:\s*$/);
 });
 
 test("an anonymous share-link reader is the only 'Someone'", () => {
@@ -150,7 +144,7 @@ test("repeat opens read as one line that says how many times", () => {
 });
 
 test("a guide that has since been deleted still reads", () => {
-  assert.equal(line(row({ title: "" })), "@bob opened a guide");
+  assert.equal(line(row({ title: "" })), "@bob opened untitled work");
 });
 
 test("no sentence uses the words the product retired", () => {
@@ -178,13 +172,4 @@ test("a decline carries its reason, because that is the whole point of saying no
     '@bob passed on "Add Paystack webhook verification": no context on the payments side',
   );
   assert.equal(summary(r).note, "no context on the payments side");
-  // Taking it needs no reason, and the line must still read without one.
-  assert.equal(line(row({ kind: "taken" })), '@bob is taking "Add Paystack webhook verification"');
-});
-
-test("a rejection says why", () => {
-  assert.equal(
-    line(row({ kind: "task_rejected", note: "toggle does nothing on Safari" })),
-    '@bob sent "Add Paystack webhook verification" back: toggle does nothing on Safari',
-  );
 });

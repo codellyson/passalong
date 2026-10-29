@@ -8,13 +8,12 @@ const index = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
 const between = (from, to) =>
   index.slice(index.indexOf(from), index.indexOf(to, index.indexOf(from)));
 
-const recall = between('app.post("/v1/guides/:id/recall"', 'app.post("/v1/guides/:id/send_back"');
+const recall = between('app.post("/v1/guides/:id/recall"', 'app.post("/v1/guides/:id/reopen"');
 const adhoc = between("const ADHOC_MAX", "/** Whether the caller owns the team");
 
-test("recall is the author's, for a sent non-task, and not while somebody is on it", () => {
+test("recall is the author's, for sent work, and not while somebody is on it", () => {
   assert.ok(recall.length > 0, "found the route");
   assert.match(recall, /if \(!found\.owner\) return err\(c, 403/);
-  assert.match(recall, /row\.kind === "task"/);
   assert.match(recall, /if \(!row\.team_id\)\s+return err\(c, 400/);
   assert.match(recall, /FROM claim c[\s\S]*WHERE c\.guide_id = \?/);
   assert.match(recall, /if \(holder\)[\s\S]*409/);

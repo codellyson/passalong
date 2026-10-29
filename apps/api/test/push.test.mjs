@@ -19,18 +19,14 @@ test("only what needs you is pushed; the rest stays in the feed and the toasts",
     "customer_wrote",
     "email_sender",
     "emailed",
-    "failed",
     "handoff",
     "hooked",
     "reader_unsure",
     "sent_back",
     "stalled",
     "stuck",
-    "taken",
     "task_finished",
-    "task_rejected",
     "untaken",
-    "verified",
   ]);
   for (const quiet of ["pulled", "joined", "shared", "consumed", "task_claimed"])
     assert.ok(!PUSHED.has(quiet), `${quiet} is not pushed`);

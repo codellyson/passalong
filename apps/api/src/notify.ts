@@ -1,33 +1,24 @@
 // The notification spine. Four moments matter, and each one is a row addressed to the account
 // that should hear about it:
 //
-//   handoff   a guide was addressed to you by name
-//   shared    a guide landed in a team you are in
-//   taken     someone said they are on it — the first word back, before any work
+//   handoff   work was addressed to you by name
+//   shared    work landed in a team you are in
 //   declined  someone said it is not theirs, and why — the one that needs re-homing
-//   pulled    someone pulled your guide — the transfer landed
-//   consumed  the receiver marked your guide done
+//   pulled    someone opened your work
+//   consumed  it was archived, or is done with
 //   reopened  and put it back — the other half of that pair, which used to happen in silence
-//   verified  someone tried it and it holds up
-//   failed    someone tried it and it does not — the one people need to see today
 //   joined    someone accepted your invite
 //   promoted  a team owner made you an owner of it
 //   removed   a team owner took you out of it
 //
-// And the task queue's, between a task's author and whoever's agent has it (docs/V2.md). Each
+// And the queue's, between whoever asked for work and whoever's agent has it (docs/V2.md). Each
 // goes to the other party, so a person working alone hears none of them:
 //
-//   task_claimed   a teammate's agent took your task
-//   task_finished  it is done and waiting for your review — the one that needs you
-//   task_approved  the author accepted what your agent did
-//   task_rejected  and sent it back, with why
-//   task_released  and took it back from your agent, which should stop
-//
-// And the author's close on a handoff or a bug somebody handed in (docs/V2.md §11):
-//
-//   closed         the author accepted what you handed in, and the guide is done
-//   sent_back      the author turned it down in your repo, with why
-//   reassigned     the author gave work you were on to someone else, and took it back from you
+//   task_claimed   a teammate's agent took your work
+//   task_finished  it is done — finishing is final, so this is the news
+//   task_released  somebody took it back from your agent, which should stop
+//   sent_back      finished work was reopened, with why
+//   reassigned     somebody gave work you were on to someone else, and took it back from you
 //
 // And the conversation between whoever asked for work and whoever holds it (docs/CONVERSATION.md):
 //
@@ -42,22 +33,16 @@ import type { MailEnv } from "./email.js";
 export const KINDS = [
   "handoff",
   "shared",
-  "taken",
   "declined",
   "pulled",
   "consumed",
   "reopened",
-  "verified",
-  "failed",
   "joined",
   "promoted",
   "removed",
   "task_claimed",
   "task_finished",
-  "task_approved",
-  "task_rejected",
   "task_released",
-  "closed",
   "sent_back",
   "reassigned",
   // The one event with no actor: a lease ran out and nobody did anything, which is the news.
@@ -185,13 +170,7 @@ const ALWAYS_UNREAD = new Set<Kind>(["asked", "replied"]);
  */
 export const PUSHED = new Set<Kind>([
   "handoff",
-  // Someone saying they are taking what you sent. It is the answer to the question a handoff
-  // leaves open, and the author asked for it on their phone; one per person who takes it.
-  "taken",
   "task_finished",
-  "verified",
-  "failed",
-  "task_rejected",
   "sent_back",
   "stalled",
   "blocked",
@@ -284,10 +263,9 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
  * "someone here might". `pulled` and `consumed` are one person's progress on their own work, and a
  * room told about every pull learns to ignore the room.
  */
-// A decline is here for the same reason a failed verdict is: it is work that has stopped moving
-// and somebody in the room has to pick it up. `taken` rides along because a team watching a
-// channel wants "who has this" answered where they are already looking.
-const ANNOUNCED = new Set<Kind>(["shared", "handoff", "taken", "declined", "verified", "failed"]);
+// A decline is here because it is work that has stopped moving and somebody in the room has to
+// pick it up.
+const ANNOUNCED = new Set<Kind>(["shared", "handoff", "declined"]);
 
 export interface Announcement {
   kind: Kind;
@@ -407,13 +385,8 @@ type Color = { red: number; green: number; blue: number; alpha: number };
 const tone = (red: number, green: number, blue: number): Color => ({ red, green, blue, alpha: 1 });
 
 const TONES: Record<string, Color> = {
-  // #ab2f21 — someone tried it and it does not hold up.
-  failed: tone(0.671, 0.184, 0.129),
   // #8a5a08 — handed back, so it has stopped moving and only its author can restart it.
   declined: tone(0.541, 0.353, 0.031),
-  // #3f6b45 — it worked, or somebody has it.
-  verified: tone(0.247, 0.42, 0.271),
-  taken: tone(0.247, 0.42, 0.271),
 };
 /** #b5451b, the brand. Everything that is neither good news nor bad. */
 const BRAND = tone(0.71, 0.271, 0.106);
@@ -448,7 +421,7 @@ export function chatCard(a: CardFacts): Record<string, unknown>[] | null {
       buttonList: {
         buttons: [
           {
-            text: "Open the guide",
+            text: "Open it",
             onClick: { openLink: { url: a.url } },
             color: TONES[a.kind] ?? BRAND,
           },
@@ -750,7 +723,7 @@ export function line(r: LineFacts): string {
     (r.actor_id || r.actor
       ? displayName({ id: r.actor_id || "", handle: r.actor, name: r.actor_real })
       : "Someone");
-  const title = r.title ? `"${r.title}"` : "a guide";
+  const title = r.title ? `"${r.title}"` : "untitled work";
   const team = r.team_name || r.team || "";
   const note = r.note ? `: ${r.note}` : "";
   switch (r.kind) {
@@ -760,8 +733,6 @@ export function line(r: LineFacts): string {
         : `${who} sent you ${title}${team ? ` in ${team}` : ""}`;
     case "shared":
       return `${who} shared ${title} with ${team || "your team"}`;
-    case "taken":
-      return `${who} is taking ${title}${note}`;
     case "declined":
       return `${who} passed on ${title}${note}`;
     case "pulled":
@@ -770,10 +741,6 @@ export function line(r: LineFacts): string {
       return `${who} is done with ${title}`;
     case "reopened":
       return `${who} put ${title} back on your list`;
-    case "verified":
-      return `${who} said ${title} worked${note}`;
-    case "failed":
-      return `${who} said ${title} didn't work${note}`;
     case "joined":
       return `${who} joined ${team || "your team"}`;
     case "promoted":
@@ -807,21 +774,15 @@ export function line(r: LineFacts): string {
       // the guide when the absence of anyone doing anything is the news.
       return `${title} has gone quiet — nobody has heard from whoever holds it${note}`;
     case "task_claimed":
-      return `${who}'s agent took the task ${title}`;
+      return `${who}'s agent took ${title}`;
     case "task_finished":
       // Actorless when it was your own agent: notify() drops what you caused, and your agent
-      // finishing your task is the hand-in you most need to hear about.
-      return `${r.actor || r.actor_real ? `${who}'s agent` : "Your agent"} finished ${title}, and it is waiting for your review`;
-    case "task_approved":
-      return `${who} approved ${title}`;
-    case "task_rejected":
-      return `${who} sent ${title} back${note}`;
+      // finishing your work is the hand-in you most need to hear about.
+      return `${r.actor || r.actor_real ? `${who}'s agent` : "Your agent"} finished ${title}`;
     case "task_released":
       return `${who} took ${title} back from your agent`;
-    case "closed":
-      return `${who} accepted your work on ${title}, and closed it`;
     case "sent_back":
-      return `${who} sent ${title} back${note}`;
+      return `${who} reopened ${title}${note}`;
     case "blocked":
       return `The agent holding ${title} is stuck on you${note}`;
     case "reassigned":
@@ -839,7 +800,7 @@ export function line(r: LineFacts): string {
     case "hooked":
       return `${title} came in from ${r.note || "a webhook"}`;
     case "email_sender":
-      return `${r.note || "A new sender"} wants to email you guides. Allow or block it in Settings`;
+      return `${r.note || "A new sender"} wants to email you work. Allow or block it in Settings`;
     default:
       return `${who} did something with ${title}`;
   }

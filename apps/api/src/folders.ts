@@ -325,7 +325,7 @@ routes.get("/:folder", async (c) => {
       .bind(folder.id)
       .all<Asset>(),
     c.env.DB.prepare(
-      "SELECT g.id, g.title, g.kind, g.summary, g.status FROM folder_guide fg JOIN guide g ON g.id = fg.guide_id WHERE fg.folder_id = ? ORDER BY fg.added DESC",
+      "SELECT g.id, g.title, g.summary, g.status FROM folder_guide fg JOIN guide g ON g.id = fg.guide_id WHERE fg.folder_id = ? ORDER BY fg.added DESC",
     )
       .bind(folder.id)
       .all(),

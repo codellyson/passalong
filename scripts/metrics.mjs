@@ -98,7 +98,8 @@ const QUERIES = {
       LEFT JOIN verdict v ON v.guide_id = p.guide_id
      WHERE p.account_id <> '' AND p.account_id <> g.account_id`,
 
-  // Not §14. The task queue, which none of the four above can see.
+  // Not §14. The queue of work (docs/WORK.md: every piece of work is on it), which none of the four
+  // above can see.
   //
   // The four §14 numbers all read `guide`, `pull` and `verdict` — the share-and-pull loop. A task
   // is taken, worked and handed in through `claim`, and no metric read that table at all, so the
@@ -126,8 +127,7 @@ const QUERIES = {
                     THEN 1 ELSE 0 END) AS stalled,
            SUM(CASE WHEN g.status = 'published' AND c.state = 'review' THEN 1 ELSE 0 END) AS review
       FROM guide g
-      LEFT JOIN claim c ON c.guide_id = g.id AND c.place = ''
-     WHERE g.kind = 'task'`,
+      LEFT JOIN claim c ON c.guide_id = g.id`,
 
   // What a hand-in brought with it, which is the only thing here that says whether the gate works.
   //
@@ -174,9 +174,9 @@ const QUERIES = {
         WHERE g.status = 'published' AND c.state = 'claimed'
           AND c.lease_until <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) AS quiet,
       (SELECT COUNT(*) FROM guide g
-        WHERE g.kind <> 'task' AND g.status = 'published'
+        WHERE g.status = 'published'
           AND g.updated <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 days')
-          AND (g.to_account_id <> '' OR g.to_group_id <> '' OR g.team_id <> '')
+          AND (g.to_account_id <> '' OR g.to_group_id <> '')
           AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
           AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
           AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)

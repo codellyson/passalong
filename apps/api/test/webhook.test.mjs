@@ -66,11 +66,11 @@ function harness(urls, { ok = true } = {}) {
   };
 }
 
-test("a failed verdict reaches the channel, with the sentence every surface shows", async () => {
+test("a decline reaches the channel, with the sentence every surface shows", async () => {
   const h = harness("https://hooks.slack.com/services/T0/B0/xxxx");
   try {
     const text = line({
-      kind: "failed",
+      kind: "declined",
       actor: "hybee1",
       title: "Add Paystack webhook verification",
       team: "",
@@ -78,14 +78,14 @@ test("a failed verdict reaches the channel, with the sentence every surface show
       note: "the signature check rejects valid payloads",
     });
     await announce(h.env, {
-      kind: "failed",
+      kind: "declined",
       team_id: "t1",
       text,
       url: "https://passalong.dev/g/abc12345/key",
     });
     assert.equal(h.posts.length, 1);
     const { body } = h.posts[0];
-    assert.match(body.text, /@hybee1 said "Add Paystack webhook verification" didn't work/);
+    assert.match(body.text, /@hybee1 passed on "Add Paystack webhook verification"/);
     assert.match(body.text, /the signature check rejects valid payloads/);
     assert.match(body.text, /https:\/\/passalong\.dev\/g\/abc12345\/key/);
     assert.equal(
@@ -101,10 +101,10 @@ test("a failed verdict reaches the channel, with the sentence every surface show
 test("a channel hears about the team's work, not one person's progress", async () => {
   const h = harness("https://example.test/hook");
   try {
-    for (const kind of ["shared", "handoff", "verified", "failed"]) {
+    for (const kind of ["shared", "handoff", "declined"]) {
       await announce(h.env, { kind, team_id: "t1", text: `${kind} happened` });
     }
-    assert.equal(h.posts.length, 4);
+    assert.equal(h.posts.length, 3);
 
     h.posts.length = 0;
     // A room told about every pull learns to ignore the room.
@@ -120,9 +120,9 @@ test("a channel hears about the team's work, not one person's progress", async (
 test("no channel, no team, and a channel that refuses are all survivable", async () => {
   const none = harness("");
   try {
-    await announce(none.env, { kind: "failed", team_id: "t1", text: "x" });
+    await announce(none.env, { kind: "declined", team_id: "t1", text: "x" });
     assert.equal(none.posts.length, 0, "nothing to post to");
-    await announce(none.env, { kind: "failed", team_id: "", text: "x" });
+    await announce(none.env, { kind: "declined", team_id: "", text: "x" });
     assert.equal(none.posts.length, 0, "no team at all");
   } finally {
     none.restore();
@@ -132,7 +132,7 @@ test("no channel, no team, and a channel that refuses are all survivable", async
   const gone = harness("https://example.test/hook", { ok: false });
   try {
     await assert.doesNotReject(() =>
-      announce(gone.env, { kind: "failed", team_id: "t1", text: "x" }),
+      announce(gone.env, { kind: "declined", team_id: "t1", text: "x" }),
     );
   } finally {
     gone.restore();
@@ -142,7 +142,7 @@ test("no channel, no team, and a channel that refuses are all survivable", async
 test("a channel that hangs does not hang the request that triggered it", async () => {
   const h = harness("https://example.test/hook");
   try {
-    await announce(h.env, { kind: "failed", team_id: "t1", text: "x" });
+    await announce(h.env, { kind: "declined", team_id: "t1", text: "x" });
     assert.ok(h.posts[0].init.signal, "the post must carry a timeout");
   } finally {
     h.restore();
@@ -194,7 +194,7 @@ test("every channel a team has gets the line", async () => {
     "https://discord.com/api/webhooks/1/a",
   ]);
   try {
-    await announce(h.env, { kind: "failed", team_id: "t1", text: "it does not work" });
+    await announce(h.env, { kind: "declined", team_id: "t1", text: "it does not work" });
     assert.equal(h.posts.length, 3, "one post per channel");
     // Each in its own dialect, decided per destination rather than sent to all three alike.
     assert.deepEqual(h.posts[0].body, { text: "it does not work" });
@@ -225,7 +225,7 @@ test("one dead channel does not withhold the line from the others", async () => 
     return { ok: true, status: 200 };
   };
   try {
-    await assert.doesNotReject(() => announce(env, { kind: "failed", team_id: "t1", text: "x" }));
+    await assert.doesNotReject(() => announce(env, { kind: "declined", team_id: "t1", text: "x" }));
     assert.ok(
       seen.some((u) => u.includes("live")),
       "the live channel still heard it",
@@ -282,7 +282,7 @@ test("Chat gets a card, because Chat is the one room that cannot make its own", 
   assert.match(card.header.subtitle, /Lukman sent "Invoice creation fails" to Hybee1/);
   const buttons = card.sections[0].widgets.at(-1).buttonList.buttons;
   assert.equal(buttons[0].onClick.openLink.url, facts().url);
-  assert.equal(buttons[0].text, "Open the guide");
+  assert.equal(buttons[0].text, "Open it");
 });
 
 test("everywhere else is left alone — they unfurl, or they do not take cards", () => {
@@ -301,21 +301,24 @@ test("everywhere else is left alone — they unfurl, or they do not take cards",
 
 test("the reason gets its own paragraph, and the tone gets the button", () => {
   const card = chatCard(
-    facts({ kind: "failed", note: "the flag it tells you to set does not exist on this version" }),
+    facts({
+      kind: "declined",
+      note: "the flag it tells you to set does not exist on this version",
+    }),
   )[0].card;
   const [first, second] = card.sections[0].widgets;
   assert.match(first.textParagraph.text, /<i>the flag it tells you/);
-  // #ab2f21. A failed verdict is the one thing in the room that should not look like everything
-  // else in it. The names are google.type.Color's, spelled out: `r`/`g`/`b` is refused whole with
-  // a 400, which is silent, which is a room that stops hearing anything at all.
+  // #8a5a08. Work handed back has stopped moving, and should not look like everything else in the
+  // room. The names are google.type.Color's, spelled out: `r`/`g`/`b` is refused whole with a 400,
+  // which is silent, which is a room that stops hearing anything at all.
   assert.deepEqual(second.buttonList.buttons[0].color, {
-    red: 0.671,
-    green: 0.184,
-    blue: 0.129,
+    red: 0.541,
+    green: 0.353,
+    blue: 0.031,
     alpha: 1,
   });
-  const ok = chatCard(facts({ kind: "verified" }))[0].card.sections[0].widgets[0];
-  assert.equal(ok.buttonList.buttons[0].color.green, 0.42, "a verdict that holds up is green");
+  const plain = chatCard(facts({ kind: "shared" }))[0].card.sections[0].widgets[0];
+  assert.equal(plain.buttonList.buttons[0].color.red, 0.71, "anything else wears the brand");
 });
 
 test("a title somebody typed cannot become markup", () => {
@@ -348,7 +351,7 @@ test("a room with a card is not also sent the naked URL it replaced", async () =
   const h = harness(GCHAT);
   try {
     await announce(h.env, {
-      kind: "failed",
+      kind: "declined",
       team_id: "t1",
       text: '@ada says "Fix the payment link" does not work',
       title: "Fix the payment link",
@@ -370,7 +373,7 @@ test("a room without a card still gets the link spelled out", async () => {
   const h = harness("https://hooks.slack.com/services/T0/B0/xxxx");
   try {
     await announce(h.env, {
-      kind: "failed",
+      kind: "declined",
       team_id: "t1",
       text: "Ada said it didn't work",
       title: "Fix the payment link",
@@ -385,7 +388,7 @@ test("a room without a card still gets the link spelled out", async () => {
 test("nothing in the card carries a field name Chat does not know", () => {
   // Google refuses a payload whole for one unrecognised key, and the refusal is silent. So the
   // shape is pinned by name against the Chat API's own vocabulary, top to bottom.
-  const card = chatCard(facts({ kind: "failed", note: "why" }))[0];
+  const card = chatCard(facts({ kind: "declined", note: "why" }))[0];
   assert.deepEqual(Object.keys(card).sort(), ["card", "cardId"]);
   assert.deepEqual(Object.keys(card.card).sort(), ["header", "sections"]);
   assert.deepEqual(Object.keys(card.card.header).sort(), ["subtitle", "title"]);

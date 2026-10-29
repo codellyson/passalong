@@ -7,16 +7,7 @@
 //
 // Every name passed in here is a display name (see `displayName` in notify.ts): somebody's own
 // typing, so it is escaped wherever it lands in markup.
-import {
-  askedCopy,
-  doneCopy,
-  FIX_AND_RESEND,
-  handoffCopy,
-  hubUrl,
-  openedCopy,
-  repliedCopy,
-  verdictCopy,
-} from "./mail-copy.js";
+import { askedCopy, doneCopy, handoffCopy, hubUrl, openedCopy, repliedCopy } from "./mail-copy.js";
 import { b, button, footnote, link, p, quote, shell } from "./mail-html.js";
 import { type MailEnv, sendMail } from "./mail-send.js";
 
@@ -163,40 +154,6 @@ export function sendReplied(
         quote(o.body, "ok"),
         p("Your agent reads it the next time it checks in.", MUTED),
         button("Open the guide", o.url),
-      ],
-      foot: [seeEverything(env)],
-    }),
-  );
-}
-
-/** The verdict mail. A failure is the one notification nobody should have to go looking for. */
-export function sendVerdict(
-  env: MailEnv,
-  o: {
-    to: string;
-    byName: string;
-    title: string;
-    url: string;
-    ok: boolean;
-    note: string;
-  },
-) {
-  const copy = verdictCopy({ ...o, hub: hubUrl(env.PUBLIC_ORIGIN) });
-  return sendMail(
-    env,
-    o.to,
-    copy.subject,
-    copy.text,
-    shell({
-      origin: env.PUBLIC_ORIGIN,
-      preview: copy.preview,
-      eyebrow: copy.eyebrow,
-      heading: o.title,
-      tone: o.ok ? "ok" : "danger",
-      body: [
-        ...(o.note ? [quote(o.note, o.ok ? "ok" : "danger")] : []),
-        button("Open the guide", o.url),
-        ...(o.ok ? [] : [p(FIX_AND_RESEND, MUTED)]),
       ],
       foot: [seeEverything(env)],
     }),

@@ -23,10 +23,6 @@ export interface Copy {
 export const hubUrl = (origin?: string) =>
   `${(origin || "https://passalong.dev").replace(/\/$/, "")}/hub`;
 
-/** What the author of a guide that did not work is told to do next. */
-export const FIX_AND_RESEND =
-  "Update the guide and share it again; the link you sent keeps working.";
-
 export function handoffCopy(o: {
   fromName: string;
   title: string;
@@ -132,33 +128,6 @@ export function repliedCopy(o: {
       "Your agent reads it the next time it checks in.",
       "",
       `Open the guide: ${o.url}`,
-      "",
-      `See everything in one place: ${o.hub}`,
-    ],
-  };
-}
-
-export function verdictCopy(o: {
-  byName: string;
-  title: string;
-  url: string;
-  ok: boolean;
-  note: string;
-  hub: string;
-}): Copy {
-  const said = o.ok ? "worked" : "didn't work";
-  return {
-    subject: `${o.byName} said "${o.title}" ${said}`,
-    // The reason goes in the preview, because on a failure it is the only thing the reader needs
-    // and the inbox is where they are standing.
-    preview: `${o.byName} said it ${said}${o.note ? `: ${o.note}` : "."}`,
-    eyebrow: `${o.byName} said it ${said}`,
-    text: [
-      `${o.byName} tried "${o.title}" and said it ${said}.`,
-      ...(o.note ? ["", `  "${o.note}"`] : []),
-      "",
-      `Open the guide: ${o.url}`,
-      ...(o.ok ? [] : ["", FIX_AND_RESEND]),
       "",
       `See everything in one place: ${o.hub}`,
     ],

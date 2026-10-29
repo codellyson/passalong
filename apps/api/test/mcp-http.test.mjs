@@ -10,8 +10,6 @@ import { handleMcp } from "../src/mcp-http.ts";
 
 const PROTOCOL = "2025-06-18";
 const VOCAB = {
-  areas: "web, mobile",
-  severities: "s1 blocker, s3 minor",
   shotTypes: "Accepts image/png, image/jpeg",
 };
 
@@ -350,7 +348,7 @@ test("file_bugs opens the report first, then files each issue under it", async (
           title: "sweep",
           environment: "staging",
           issues: [
-            { title: "one", problem: "p1", reproduce: "1. a", area: "web", severity: "s1" },
+            { title: "one", problem: "p1", reproduce: "1. a" },
             { title: "two", problem: "p2", reproduce: "1. b" },
           ],
         },
@@ -368,7 +366,6 @@ test("file_bugs opens the report first, then files each issue under it", async (
   const first = seen[1].body.markdown;
   assert.match(first, /^kind: bug$/m);
   assert.match(first, /^report: rep12345$/m);
-  assert.match(first, /^severity: s1$/m);
   assert.match(first, /^## Reproduce$/m);
   assert.ok(!/^## Steps$/m.test(first), "a bug must never carry a Steps section");
   assert.match(first, /^> \*\*Bug report\.\*\*/m);

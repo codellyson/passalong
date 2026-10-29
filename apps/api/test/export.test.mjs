@@ -29,8 +29,8 @@ test("export pages through everything the account can read, and nothing else", (
     INSERT INTO membership (team_id, account_id, joined) VALUES ('t', 'me', '${at}'), ('t', 'mate', '${at}');`);
   const guide = db.prepare(
     `INSERT INTO guide (id, account_id, team_id, share_key, title, status, source_context, tags, stack,
-                        markdown, created, updated, kind)
-     VALUES (?, ?, ?, 'k', 't', 'published', '', '[]', '[]', ?, ?, ?, 'transfer')`,
+                        markdown, created, updated)
+     VALUES (?, ?, ?, 'k', 't', 'published', '', '[]', '[]', ?, ?, ?)`,
   );
   const mine = [];
   for (let i = 0; i < PAGE + 5; i++) {

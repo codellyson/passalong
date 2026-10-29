@@ -50,7 +50,6 @@ test("refusals name what happened and what to do next", async () => {
     "Choose 2 to 31 letters, numbers or dashes, starting with a letter or number.",
     "Screenshots can't be uploaded here right now.",
     "That file isn't an image. Use a PNG, JPEG, WebP or GIF.",
-    "This report doesn't exist or was deleted.",
     "Syncing guides needs a plan. Choose one in Settings.",
   ]) {
     assert.ok(src.includes(now), `missing: ${now}`);

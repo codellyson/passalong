@@ -62,8 +62,8 @@ function seed(db) {
   db.raw
     .prepare(
       `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack,
-                          markdown, created, updated, kind, target)
-       VALUES ('g1', 'me', 'k', 'A task', 'published', '', '[]', '[]', '', ?, ?, 'task', 'o/r')`,
+                          markdown, created, updated, target)
+       VALUES ('g1', 'me', 'k', 'A task', 'published', '', '[]', '[]', '', ?, ?, 'o/r')`,
     )
     .run(T0, T0);
   const shot = db.raw.prepare(
@@ -115,11 +115,11 @@ test("the evidence a guide's hand-ins carry is read back from its claims", async
   seed(db);
   db.raw
     .prepare(
-      `INSERT INTO claim (guide_id, place, account_id, agent_id, state, evidence,
+      `INSERT INTO claim (guide_id, account_id, agent_id, state, evidence,
                           claimed_at, lease_until, updated)
-       VALUES (?, ?, 'me', 'agent-a', 'review', ?, ?, ?, ?)`,
+       VALUES (?, 'me', 'agent-a', 'review', ?, ?, ?, ?)`,
     )
-    .run("g1", "", "ran it: https://passalong.dev/v1/shots/eee555", T0, T0, T0);
+    .run("g1", "ran it: https://passalong.dev/v1/shots/eee555", T0, T0, T0);
   assert.deepEqual(await evidenceOn(db, "g1"), ["ran it: https://passalong.dev/v1/shots/eee555"]);
   assert.deepEqual(await evidenceOn(db, "nothing"), []);
 });

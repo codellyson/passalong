@@ -558,16 +558,11 @@ async function parentOf(call: Call, id: string): Promise<{ text: string; id: str
 /**
  * The product's own vocabulary, handed in rather than imported.
  *
- * `guide.ts` is the single source for the areas and severities, and importing it here would make
- * this module untestable: it is a sibling imported as `./guide.js`, which Node's type stripping
- * cannot resolve, so a test that touches this file would not load at all — the same reason the app
- * itself is not importable, noted in hosts.ts. Passing it in keeps one source and one test.
+ * Importing it would make this module untestable: a sibling imported as `./guide.js` is what Node's
+ * type stripping cannot resolve, so a test that touches this file would not load at all — the same
+ * reason the app itself is not importable, noted in hosts.ts. Passing it in keeps one source.
  */
 export interface Vocabulary {
-  /** Product area slugs, for the file_bugs schema description. */
-  areas: string;
-  /** Severity slugs and what they mean. */
-  severities: string;
   /** Image media types `/v1/shots` accepts, for the attach_screenshot description. */
   shotTypes: string;
 }
@@ -2159,8 +2154,6 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
                 .optional()
                 .describe("the behaviour that should have happened"),
               gotchas: z.string().optional().describe("what is already ruled out"),
-              area: z.string().optional().describe(`which surface — known: ${vocabulary.areas}`),
-              severity: z.string().optional().describe(`${vocabulary.severities} (default s3)`),
             }),
           )
           .min(1),

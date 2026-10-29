@@ -195,15 +195,15 @@ export async function sweepProof(
           .run();
     }
     const { results: held } = await env.DB.prepare(
-      "SELECT place, evidence FROM claim WHERE guide_id = ? AND evidence <> ''",
+      "SELECT evidence FROM claim WHERE guide_id = ? AND evidence <> ''",
     )
       .bind(guide)
-      .all<{ place: string; evidence: string }>();
+      .all<{ evidence: string }>();
     for (const k of held) {
       const evidence = strike(k.evidence, gone);
       if (evidence !== k.evidence)
-        await env.DB.prepare("UPDATE claim SET evidence = ? WHERE guide_id = ? AND place = ?")
-          .bind(evidence, guide, k.place)
+        await env.DB.prepare("UPDATE claim SET evidence = ? WHERE guide_id = ?")
+          .bind(evidence, guide)
           .run();
     }
   }

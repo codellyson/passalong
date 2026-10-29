@@ -27,8 +27,8 @@ test("reading the context is not opening the guide: no pull, no receipt, no mark
 
 test("every related guide is filtered for this caller on its own", () => {
   const readable = route.match(/\$\{readable\}/g) ?? [];
-  // parent, children, blockers, what it blocks, and the hand-ins' write-ups.
-  assert.equal(readable.length, 5);
+  // parent, children, blockers and what it blocks.
+  assert.equal(readable.length, 4);
   assert.match(route, /team_id IN \(SELECT team_id FROM membership WHERE account_id = \?\)/);
 });
 

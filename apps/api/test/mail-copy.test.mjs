@@ -10,13 +10,11 @@ import {
   askedCopy,
   customerSubject,
   doneCopy,
-  FIX_AND_RESEND,
   handoffCopy,
   hubUrl,
   openedCopy,
   plainForCustomer,
   repliedCopy,
-  verdictCopy,
 } from "../src/mail-copy.ts";
 
 const ID = "k3mq2xa7";
@@ -28,20 +26,12 @@ const every = () => [
   handoffCopy({ fromName: "Hybee1", title: TITLE, id: ID, url: URL_, team: "Khaime" }),
   openedCopy({ byName: "Ada", title: TITLE, url: URL_, hub: HUB }),
   doneCopy({ byName: "Ada", title: TITLE, url: URL_, hub: HUB }),
-  verdictCopy({ byName: "Ada", title: TITLE, url: URL_, ok: true, note: "", hub: HUB }),
-  verdictCopy({ byName: "Ada", title: TITLE, url: URL_, ok: false, note: "401s", hub: HUB }),
 ];
 
 test("every subject says who did what, by name", () => {
   assert.deepEqual(
     every().map((m) => m.subject),
-    [
-      `Hybee1 sent you "${TITLE}"`,
-      `Ada opened "${TITLE}"`,
-      `Ada is done with "${TITLE}"`,
-      `Ada said "${TITLE}" worked`,
-      `Ada said "${TITLE}" didn't work`,
-    ],
+    [`Hybee1 sent you "${TITLE}"`, `Ada opened "${TITLE}"`, `Ada is done with "${TITLE}"`],
   );
 });
 
@@ -52,8 +42,6 @@ test("the preview starts with the person, and neither it nor the subject carries
     assert.ok(!m.preview.includes(ID), `an id in the preview: ${m.preview}`);
     assert.doesNotMatch(`${m.subject}\n${m.preview}\n${m.eyebrow}`, /someone/i);
   }
-  // On a failure the reason is what the reader needs, so it is in the preview.
-  assert.equal(every()[4].preview, "Ada said it didn't work: 401s");
 });
 
 test("the text half leads with opening the guide, and a command is only a footnote", () => {
@@ -73,15 +61,6 @@ test("see everything points at the hub, never at a command", () => {
     assert.ok(m.text.includes(`See everything in one place: ${HUB}`));
     assert.doesNotMatch(m.text.join("\n"), /passalong activity/);
   }
-});
-
-test("a failed verdict says how to fix it, and a good one does not", () => {
-  assert.equal(
-    FIX_AND_RESEND,
-    "Update the guide and share it again; the link you sent keeps working.",
-  );
-  assert.ok(every()[4].text.includes(FIX_AND_RESEND));
-  assert.ok(!every()[3].text.includes(FIX_AND_RESEND));
 });
 
 test("no mail mentions a retired verb or calls a real person someone", async () => {

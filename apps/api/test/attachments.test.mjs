@@ -60,8 +60,8 @@ function seed(db) {
   db.raw
     .prepare(
       `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack,
-                          markdown, created, updated, kind, target)
-       VALUES ('g1', 'me', 'k', 'A task', 'published', '', '[]', '[]', '', ?, ?, 'task', 'o/r')`,
+                          markdown, created, updated, target)
+       VALUES ('g1', 'me', 'k', 'A task', 'published', '', '[]', '[]', '', ?, ?, 'o/r')`,
     )
     .run(T0, T0);
   return (id, account, guide = "", created = T0) =>
