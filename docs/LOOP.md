@@ -1,8 +1,63 @@
 # The loop: every request closes
 
-**Status:** Direction, recorded 2026-10-28 from a conversation with the author. Nothing here is
-built. It is written down so the train of thought is not lost; each step below still needs its own
-decision before it is built.
+**Status:** Direction, recorded 2026-10-28 from a conversation with the author and extended
+2026-10-29 by §0, which now leads. Much of §1a–§6 has since been built; each section says what.
+
+## 0. Projects: the picture everything fits in (2026-10-29)
+
+Passalong began as a way to pass information between contexts, which is where guides, transfers
+and the other odd names came from. Usage moved away from that: 162 of 200 guides in real use were
+really tasks and bug reports, handovers that followed their template went mostly unread, and teams
+used Passalong to track work, not to pass documents. What a team will pay for is the thing that
+keeps a mixed team (developers, marketing, support) from dropping work in the AI age, and that
+gives every person and agent who picks work up the knowledge of the product. So:
+
+**Five ideas.**
+1. **Things come in**: customer email, a phone screenshot, the box in the hub, alerts.
+2. **The agent sorts them**: which project each belongs to and which group should act.
+3. **Projects**: one per product or repo (a marketing project needs no repo). Today's folders
+   become projects.
+4. **Documents**: what to know about a project. Its README says what the product is, who uses it,
+   the words the team uses and how it is built; other pages cover one area each; a Log page says
+   what changed. Agents read them when they take work and update them when they hand it in;
+   every version is kept, so a person can see what changed and undo it.
+5. **Work**: what to do, as tasks and bugs, each with an owner, a state and proof when finished.
+   A page says what is true; a task or bug says what someone must still do, and that is what
+   reminds people and closes the loop with a customer.
+
+**Two rules.**
+- **Everything lives in exactly one project.** Nothing floats on its own.
+- **People and groups belong to the team, not to a project.** One developer works across several
+  projects without being added to each.
+
+**What goes.**
+- **Handover guides** (`kind: transfer`). Knowledge is written into a project's documents, where
+  everyone finds it later, instead of a one-off document handed to one person. Old ones stay
+  readable; nothing new is made as one.
+- **The word "guide"** as something a person has to learn. The hub says task, bug, document and
+  project.
+
+**What stays.** Everything that closes the loop: take, progress, hand-in with proof, reopen, the
+reminders (untaken, stalled, a waiting customer), customer threads, the reader. Passalong carries
+and remembers; it never hosts the agent that does the work (§6 item 5 is withdrawn).
+
+**Build order.** Each step works on its own, and none renames or removes anything until the one
+before has proved itself in use.
+1. **Onboarding**: a guided setup run once by whoever creates the team: the team and its people,
+   its groups, its projects (name, one line, repo if any), filling each project's documents (a
+   prompt to paste into an agent for a repo; a few questions or pasted docs otherwise), where work
+   comes in, and connecting agents.
+2. **Sorting into projects**: the reader picks the project as it already picks the group.
+3. **Documents on take and hand-in**: `take` hands the project's README, a list of its pages and
+   the pages that match the work; `hand_in` asks for the pages the work changed and a Log line.
+4. **The hub around projects**: open a project to see its documents, its open work and its history.
+5. **Retire handovers**: the tools stop offering `transfer`; "hand this over" becomes "update the
+   project".
+
+**The test for any new feature: which of the five does it live in?** One that fits none probably
+does not belong. The risk this guards against is becoming Linear, Notion and Freshdesk at once and
+losing to each on features; the line to hold is *your team's agents know your product, and nothing
+that comes in gets dropped*.
 
 ## 1. The dream, and how to tell it is true
 
@@ -217,7 +272,7 @@ Still to settle: whether the customer gets a page to check status, or only email
    It reverses "the hub has no editor and will not get one" (docs/DESIGN_BRIEF.md), which assumed
    every guide starts where an agent already did the work; in the loop, work starts with a person
    asking. That brief and AGENTS.md are updated when it is built.
-5. **Later:** a hosted runner so Ready work is picked up without a person opening a session —
+5. *Withdrawn 2026-10-29: Passalong never hosts the agent that does the work (§0).* **Later:** a hosted runner so Ready work is picked up without a person opening a session —
    for development, a one-time-connected sandbox or a teammate's machine.
 
 ## 7. Open

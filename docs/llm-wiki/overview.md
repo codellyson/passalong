@@ -4,6 +4,11 @@
 session to agent session, person to person — as a **guide**: markdown with frontmatter that the
 next agent can act on directly. The product is the handoff, not a knowledge base.
 
+> **Direction since 2026-10-29** ([LOOP.md §0](../LOOP.md)): projects (today's folders, one per
+> product or repo) hold documents (what to know) and work (tasks and bugs); the agent sorts what comes
+> in into a project, and whoever takes work is handed the project's documents and updates them.
+> Handover guides are being retired. This page describes what is built today.
+
 ## The problem it answers
 
 Every AI coding session starts from zero. The agent in one repo does not know what the agent in

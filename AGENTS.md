@@ -4,6 +4,11 @@ Passalong hands a finished implementation from one context (repo, machine, agent
 to another as a **transfer guide**: markdown with frontmatter that an agent can act on directly.
 The product is the baton pass, not a knowledge base. `docs/PRD.md` is the source of intent.
 
+**The direction changed on 2026-10-29: read `docs/LOOP.md` §0 before building anything new.**
+Folders become projects (one per product or repo) holding documents and work; handover guides and
+the word "guide" are being retired; onboarding comes first. The contracts below describe what is
+built today and stay true until a change replaces them.
+
 This file is the **conventions**: the rules and the sharp edges, and it is what to read first.
 Reference material lives beside it — `docs/wiki/` has the schema, the `/v1` surface, the auth
 model, how the web view stays safe, and how releases work. `apps/web/public/llms.txt` is the

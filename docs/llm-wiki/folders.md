@@ -1,5 +1,9 @@
 # Folders
 
+> **Direction since 2026-10-29** ([LOOP.md §0](../LOOP.md)): folders become **projects**, one per
+> product or repo, and every task and bug lives in one. The rule below still holds: documents are what
+> to know, tasks and bugs are what to do.
+
 **A folder is a place; its documents are what to know; guides are what to do.** That is the one
 rule for sorting what goes in. Anything someone still has to act on — an open defect, work not yet
 done, a check nobody ran — is a bug or task guide linked into the folder, because a guide has an
