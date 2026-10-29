@@ -351,17 +351,60 @@ async function projectsOf(
       f = byId.get(f.parent_id);
     return f ? { id: f.id, title: f.title, color: f.color || "" } : null;
   };
-  const { results: links } = await db
-    .prepare(
-      `SELECT guide_id, folder_id FROM folder_guide WHERE guide_id IN (${ids.map(() => "?").join(",")})
-        ORDER BY added`,
-    )
-    .bind(...ids)
-    .all<{ guide_id: string; folder_id: string }>();
+  const links: { guide_id: string; folder_id: string }[] = [];
+  for (const slice of slices(ids))
+    links.push(
+      ...(
+        await db
+          .prepare(
+            `SELECT guide_id, folder_id FROM folder_guide WHERE guide_id IN (${slice.map(() => "?").join(",")})
+              ORDER BY added`,
+          )
+          .bind(...slice)
+          .all<{ guide_id: string; folder_id: string }>()
+      ).results,
+    );
   for (const l of links) {
     if (out.has(l.guide_id)) continue;
     const p = root(l.folder_id);
     if (p) out.set(l.guide_id, p);
   }
   return out;
+}
+
+/** D1 refuses a statement with more than 100 bound values. */
+const slices = (ids: string[], size = 90) =>
+  Array.from({ length: Math.ceil(ids.length / size) }, (_, i) =>
+    ids.slice(i * size, (i + 1) * size),
+  );
+
+/**
+ * The two facts every board card shows beside its title, for a page of guides: its project, and
+ * what changed on it since this account last looked, worded as the register words it.
+ */
+export async function marksOf(
+  db: D1Database,
+  account: string,
+  ids: string[],
+): Promise<Map<string, { project: Project | null; changed: string }>> {
+  const projects = await projectsOf(db, account, ids);
+  const latest = new Map<string, string>();
+  for (const slice of slices(ids)) {
+    const { results } = await db
+      .prepare(
+        `SELECT guide_id, kind FROM notification
+          WHERE account_id = ? AND read_at = '' AND guide_id IN (${slice.map(() => "?").join(",")})
+          ORDER BY at`,
+      )
+      .bind(account, ...slice)
+      .all<{ guide_id: string; kind: string }>();
+    // Oldest first, so the latest unread one is what is left: the same one the register names.
+    for (const r of results) latest.set(r.guide_id, r.kind);
+  }
+  return new Map(
+    ids.map((id) => [
+      id,
+      { project: projects.get(id) ?? null, changed: changeWords(latest.get(id) ?? "") },
+    ]),
+  );
 }

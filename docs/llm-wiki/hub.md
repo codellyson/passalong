@@ -34,33 +34,40 @@ menu, the mark and New. The bottom tab bar and the top row of links are gone.
 
 **Go to id** on the rail (`HubGoTo`, ⌘K or Ctrl+K) opens work by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`guideIdFrom()` in `utils/goto.ts`). On a phone it is in the drawer, with no shortcut hint. A work page is under Work on the rail, and opens with a ← Work link back to the board.
 
-`/hub/work` is the team board (`HubBoard`), like any shared task board: every piece of work
-in scope is a card in one of four stage columns, and everyone in the team sees the same board. The column
-is the server's — `stage` on every row, from its status and its claims (`boardPlace()` in
-index.ts) — so a card moves when the work moves and never because of who is looking. A card shows
-the label its agent gave it (`HubWorkTag`, the first tag), who it is for (`@handle`, `#group`, the team, or private), who it is from and who holds it;
-opening it goes to the work page, where the actions are. From md the columns sit side by
-side, at least 15rem each and sharing the rest — the Work page takes the whole width beside the rail — and the board scrolls sideways on its own when they do not fit; on a phone one column shows at a time, picked from tabs. A card's footer says who
-has it — initials, ⚡ and the agent's name, and a dot for its `health` (working, went quiet, asked a
-question, a person's hold), with a word when somebody should look — and who it is for,
-which is also the **Give to…** control. Its age is since its holder was last heard from or its last
-edit. Done is faded. In a team it is a Trello board with a list per person: Draft, To do, a
-column per teammate and per group with work waiting, In progress, Done. Waiting work sits in the
-column of whoever it was sent to (the server's `lanes`), or To do; several named people each see it,
-as one card; dragging it to a column gives it there. **By person** is on by default, and off
-(`?by=stage`) shows the four stages with everyone's work together. The page picks the viewer's team when they have
-only one; "All teams" keeps the plain stage columns. **Show only mine** (`?mine=1`, and an old
-`?tab=needs` link) narrows to cards about you — yours, sent to you or your group, or held by you — without moving any card. Done shows the newest twenty.
-A round dot at a card's top-left (shown on hover, always on touch, and on every card once one is
-selected) selects it for the floating bar that archives, unarchives or deletes several at once;
-only cards you may manage have one. Right-clicking a card opens its quick actions (`HubCardMenu`):
-Ready, Move to Draft, Give to…, Stop this agent, Reopen…, copy the share link or the take command,
-Archive or Unarchive to Draft, Delete — the work page's acts under its rules. A card can also be dragged
-to a column that means one of those acts (back to Draft, Stop this agent, Archive, Unarchive, Reopen,
-and Ready from Draft to To do, which keeps the repo the work already names; its page is where to
-change it). A drop lands at once and goes back, with the hub's error, if the server
-refuses; while dragging, a gap opens where the card would land. From md the columns are lanes the
-height of the window, each scrolling its own cards under a fixed header.
+`/hub/work` is the team board (`HubBoard`): **four columns, people inside** (2026-10-30). Draft,
+To do, In progress and Done always fit the page — Draft and Done narrower — and never scroll
+sideways; below a 60rem board they stack as sections, and on a phone one shows at a time under a
+row of tabs. Everyone in the team sees the same board. The column is the server's — `stage` on
+every row, from its status and its claims (`boardPlace()` in index.ts) — so a card moves when the
+work moves and never because of who is looking. Inside To do, work is grouped under who it is for
+(the server's `lanes`): you first, then each teammate, each group, then **Anyone**; work sent to
+several named people shows under each of them, as one card. The page picks the viewer's team when
+they have only one; across all teams the groups are named from the cards themselves.
+
+A card (`HubBoardCard`) has the register's anatomy: its title (the link covers the card), "Changed ·
+<what>" in coral text with the coral bar at its left edge when something changed since you last
+looked (`changed` on every row, from unread notifications, worded as Needs you words it), then the
+project's 3×14 line mark and name (`project` on every row, the top folder it is linked into) and
+its age in tabular figures. In progress adds one muted line: "Went quiet" or "Waiting on you" when
+the hold needs somebody, who holds it ("Bola, an agent", or a person plainly) and their last
+progress note (`held_by[].note`). Done is quiet and shows the latest twenty by finish time, with
+**See all** (`?done=all`). Above the board: a **project** filter (`?project=`, or "Not in a
+project") and **Only mine** (`?mine=1`, and an old `?tab=needs` link) — cards about you: yours,
+sent to you or your group, or held by you — and a search. Neither moves a card. An empty board says
+"Nothing on the board" with **New work**; a filter that leaves nothing says what it was ("Nothing in
+Billing app") with **Clear filter**.
+
+Each card has one control, its menu button (`HubCardMenu`, also on right-click): Open, Ready, Move
+to Draft, Give to…, Stop this agent, Reopen… (a reason asked inside the menu), copy the share link
+or the take command, Archive or Unarchive to Draft, Delete (asked in place) — the work page's acts
+under its rules. Dragging does the same acts: Draft to To do is Ready (keeping the repo it names),
+To do to Draft, In progress to To do stops the agent (asked above the board), into Done archives,
+finished work back to To do reopens (its reason asked above the board), out of Done to Draft
+unarchives; between To do's groups gives it to that person or group (`POST
+/v1/guides/:id/assign`), and while a To do card is dragged every teammate and group shows as a
+place to drop it. Nothing is dropped into In progress: taking is "I'll do this" on the work page.
+A moved card fades until the board has reloaded from the server, and a polite live region says what
+happened. Bulk selection is gone.
 
 It replaced four tabs (Needs you, Being worked on, Open, Done) worked out per viewer, which put the
 same work in different places for different teammates and counted it differently.
@@ -144,5 +151,5 @@ holding that anchor (`tabOf()`).
 
 ## Sources
 - `apps/web/app/pages/hub/index.vue` (Needs you), `components/hub/Sidebar.vue`, `utils/projects.ts`, `apps/api/src/needs.ts`, `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/projects/`, `components/hub/ProjectDocument.vue`, `apps/api/src/project.ts`, `pages/hub/settings/[[tab]].vue`
-- `apps/web/app/components/hub/Board.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
+- `apps/web/app/components/hub/Board.vue`, `BoardCard.vue`, `CardMenu.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
 - [AGENTS.md](../../AGENTS.md): "A team's board is one board", "The hub shows a guide by framing it…", "The hub is live…"

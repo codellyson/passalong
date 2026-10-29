@@ -382,50 +382,6 @@ function build(queryClient: QueryClient) {
     }, [hubKeys.allGuides, hubKeys.board, hubKeys.me]);
 
   /**
-   * Archive, unarchive or delete several pieces of work at once — the selection bar's one call.
-   *
-   * No optimistic patching: a status change moves work between buckets the board defines in
-   * SQL, and guessing those here is how the two drift. It sends each change, four at a time, then
-   * reloads once. A refusal does not stop the rest; it is counted and said, with the first reason.
-   */
-  async function onBulk(
-    ids: string[],
-    action: "archive" | "unarchive" | "delete",
-    also: QueryKey[] = [],
-  ): Promise<number> {
-    error.value = null;
-    const call = (id: string) =>
-      action === "delete"
-        ? api(`/v1/guides/${id}`, { method: "DELETE" })
-        : api(
-            `/v1/guides/${id}/status`,
-            json("PATCH", {
-              status: action === "archive" ? "consumed" : "draft",
-            }),
-          );
-    const failed: string[] = [];
-    for (let i = 0; i < ids.length; i += 4) {
-      const batch = await Promise.allSettled(ids.slice(i, i + 4).map(call));
-      for (const r of batch)
-        if (r.status === "rejected" && !(r.reason instanceof SignedOut))
-          failed.push((r.reason as Error).message);
-    }
-    await refresh(
-      hubKeys.allGuides,
-      hubKeys.board,
-      hubKeys.me,
-      hubKeys.tasks,
-      hubKeys.working,
-      ...also,
-    );
-    if (failed.length) {
-      const verb = { archive: "archived", unarchive: "unarchived", delete: "deleted" }[action];
-      error.value = `${failed.length} of ${ids.length} could not be ${verb}: ${failed[0]}`;
-    }
-    return ids.length - failed.length;
-  }
-
-  /**
    * Ready, Draft and Stop this agent: anyone in the team moves work between them. Each moves the row
    * to the column it will land in before the server answers, the way every other mutation here
    * does, and puts it back if the server refuses.
@@ -540,6 +496,7 @@ function build(queryClient: QueryClient) {
       hubKeys.notifications,
       hubKeys.needs,
       hubKeys.projects,
+      hubKeys.allGuides,
     ]);
 
   async function createTeam(name: string) {
@@ -576,7 +533,8 @@ function build(queryClient: QueryClient) {
     const r = await api<{ read: number }>("/v1/notifications/read", json("POST", { guide })).catch(
       () => null,
     );
-    if (r?.read) await refresh(hubKeys.needs, hubKeys.projects, hubKeys.notifications);
+    if (r?.read)
+      await refresh(hubKeys.needs, hubKeys.projects, hubKeys.notifications, hubKeys.allGuides);
   }
 
   return {
@@ -607,7 +565,6 @@ function build(queryClient: QueryClient) {
     refresh,
     onArchive,
     onRemove,
-    onBulk,
     onTaskReady,
     onTaskDraft,
     onPersonTaskTake,

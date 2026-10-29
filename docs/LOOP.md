@@ -181,7 +181,7 @@ base answers come from). Passalong already has a piece of each:
 | From | Passalong today |
 | --- | --- |
 | Freshdesk | Email in and webhooks turn messages into guides (`apps/api/src/inbound.ts`) |
-| Linear / Trello | The team board, a column per person (`Board.vue`, `lanesOf()`) |
+| Linear / Trello | The team board: four columns, To do grouped by who it is for (`Board.vue`, `lanesOf()`) |
 | Intercom | Threads with `ask`/`reply` (docs/CONVERSATION.md), folders as a knowledge base |
 
 **The value is the seam, not the three halves.** Teams run a help desk beside an issue tracker. A

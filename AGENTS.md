@@ -333,15 +333,20 @@ change. Its README says how.
   is what this replaced. Anyone in the team marks work Ready or Draft, stops an agent, gives it to
   someone else ("Give to…" on a card, `POST /v1/guides/:id/assign`) and reopens finished work
   (`MAY_MOVE` in claims.ts). Archiving and deleting stay with the author or a team admin
-  (`MAY_DECIDE`). "Show only mine" is a filter, never a different board. **By person**
-  **A team's board is a Trello board with a list per person (2026-10-16):** Draft, To do, a column
-  per teammate and per group with work waiting, In progress, Done. Work waiting to be started sits
-  in the column of whoever it was sent to (`lanes`, `lanesOf()` in index.ts: a person, `#group`, or
-  each of several named people, shown once in each, never copies), or To do when it is for
-  nobody in particular; dragging it to a column gives it there. In progress and Done hold everyone's
-  work. **By person** is on by default; turning it off (`?by=stage`) snaps back to the four stage
-  columns with everyone's work together. Rows per person were tried first and crowded the page.
-  "All teams" has no people, so it keeps the stage columns.
+  (`MAY_DECIDE`). **Four columns, people inside (2026-10-30, the author's decision):** the four
+  columns always fit the page and never scroll sideways; inside To do, work is grouped under who it
+  is for — you first, then each teammate, each group, then Anyone (nobody in particular) — from
+  `lanes` (`lanesOf()` in index.ts: a person, `#group`, or each of several named people, shown once
+  under each, never copies). Dragging between To do's groups gives it there (the assign route);
+  while a To do card is dragged every teammate and group shows as somewhere to drop it. Dragging
+  between columns is only ever an act the work page offers (Ready, Move to Draft, Stop this agent,
+  Archive, Reopen, Unarchive); nothing is dropped into In progress, because taking is "I'll do
+  this" or an agent's `take`. Every drag has a card-menu item, which is the keyboard's way. A moved
+  card fades until the board reloads from the server. A project filter (`?project=`, the
+  `project` on each row) and Only mine (`?mine=1`) narrow the cards and never move one. A column
+  per person with By person on by default (`?by=stage` to turn it off) was tried first (2026-10-16)
+  and scrolled sideways once a team had more than a few people; it is gone, and so is bulk
+  selection.
 - **Finishing is final, and needs proof; there is no review stage (2026-10-15, docs/REVIEW.md).**
   In production 64% of hand-ins were archived with nobody answering them and none was ever sent
   back, so the stage cost more than it caught. `hand_in` ends the work: `claims.handIn()` then

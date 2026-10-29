@@ -5,17 +5,16 @@ import type { Guide } from "~/types/hub";
  * The team board: all work in scope, in one column each, the same for everyone who opens it. The
  * column is the server's (`stage` on every row); nothing here
  * re-decides it per viewer, which is what made two teammates see the same work in different places.
- * Home shows the column counts and /hub/work the board; both read them from here.
  *
  * `q` and `follows` narrow it, as the Work page's search does. `mineOnly` keeps only the cards
- * that are about you — yours, sent to you or a group you are in, or held by you —
- * without moving any card to a different column.
+ * that are about you — yours, sent to you or a group you are in, or held by you — and `project`
+ * only one project's ("none": work in no project), without moving any card to a different column.
  */
 export const STAGES = [
-  { id: "draft", label: "Draft", hint: "Not ready for anyone yet" },
-  { id: "todo", label: "To do", hint: "Ready, nobody has it" },
-  { id: "working", label: "In progress", hint: "Held by a person or an agent" },
-  { id: "done", label: "Done", hint: "Finished, with what was shown, or archived" },
+  { id: "draft", label: "Draft", hint: "Nothing waiting to be read first." },
+  { id: "todo", label: "To do", hint: "Nothing ready and waiting." },
+  { id: "working", label: "In progress", hint: "Nobody is working on anything." },
+  { id: "done", label: "Done", hint: "Nothing finished yet." },
 ] as const;
 export type Stage = (typeof STAGES)[number]["id"];
 
@@ -23,7 +22,12 @@ export type Stage = (typeof STAGES)[number]["id"];
 export const aboutMe = (g: Guide) =>
   g.mine || Boolean(g.for_me) || Boolean(g.held_by?.some((h) => h.you));
 
-export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Ref<boolean>) {
+export function useWorkLists(
+  q: Ref<string>,
+  follows: Ref<string>,
+  mineOnly?: Ref<boolean>,
+  project?: Ref<string>,
+) {
   const { data, scope, loading, failed } = useHub();
 
   /** A failed list cannot be reported as an empty board. The shell offers Try again. */
@@ -68,6 +72,7 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Re
   const matches = (g: Guide) => {
     if (follows.value && g.parent !== follows.value) return false;
     if (mineOnly?.value && !aboutMe(g)) return false;
+    if (project?.value && (g.project?.id ?? "none") !== project.value) return false;
     return hit([
       g.title,
       g.summary,

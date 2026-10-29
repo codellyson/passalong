@@ -1,11 +1,12 @@
 <!--
-  A board card's quick actions, opened by right-clicking the card (or the context-menu key on it).
-  The same acts as the work's own page, worded the same way, and offered under the same rules:
-  anyone in the team moves work and stops an agent, its author or a team admin (`manage`) archives
-  and deletes.
+  A board card's actions, opened from the card's own menu button or by right-clicking it. The same
+  acts as the work's own page, worded the same way, and offered under the same rules: anyone in the
+  team moves work and stops an agent, its author or a team admin (`manage`) archives and deletes.
+  It is also the keyboard's way to do what dragging does: each move between columns is an item
+  here (Ready, Move to Draft, Stop this agent, Reopen, Archive), and so is Give to….
 
-  Drawn at the pointer, fixed to the viewport and pulled back inside it, so it is never clipped by
-  the board's sideways scroll. Escape, a click elsewhere, scrolling or picking an item closes it.
+  Drawn where it was opened, fixed to the viewport and pulled back inside it. Escape, a click
+  elsewhere, scrolling or picking an item closes it. Reopen and Delete ask inside it, in place.
 -->
 <script setup lang="ts">
 import type { Guide, Task, Working } from "~/types/hub";
@@ -46,6 +47,8 @@ function close() {
 
 /** Up and down move between items, as in any menu; Tab leaves it. */
 function onKey(e: KeyboardEvent) {
+  // Tab moves through the reason form's own buttons rather than leaving the menu.
+  if (e.key === "Tab" && (e.target as HTMLElement).closest("form")) return;
   if (e.key === "Escape" || e.key === "Tab") return close();
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   e.preventDefault();
@@ -70,10 +73,15 @@ function remove() {
 const ready = () => run(() => onTaskReady({ id: g.value.id } as Task));
 /** Finished work back to To do, with why. Archived work is Unarchive's. */
 const reopenable = computed(() => archived.value && g.value.outcome !== "archived");
-function reopen() {
-  const why = prompt(`Why reopen "${g.value.title}"? Whoever finished it is told.`)?.trim();
-  if (!why) return close();
-  run(() => onReopen(g.value.id, why));
+const reopening = ref(false);
+// The item that opened it had focus and is gone; the field takes it.
+watch(reopening, async (on) => {
+  await nextTick();
+  if (on) menu.value?.querySelector<HTMLInputElement>("input[name=why]")?.focus();
+});
+function reopen(form: HTMLFormElement) {
+  const why = field(form, "why").trim();
+  if (why) run(() => onReopen(g.value.id, why));
 }
 function give() {
   emit("give");
@@ -115,7 +123,15 @@ function copyAndClose(text: string, e: Event) {
       >Move to Draft</button>
       <button v-if="canGive" role="menuitem" class="menu-item" type="button" @click.stop="give">Give to…</button>
       <button v-if="held" role="menuitem" class="menu-item" type="button" @click="stop">Stop this agent</button>
-      <button v-if="reopenable" role="menuitem" class="menu-item" type="button" @click="reopen">Reopen…</button>
+      <button v-if="reopenable && !reopening" role="menuitem" class="menu-item" type="button" @click.stop="reopening = true">Reopen…</button>
+      <form v-else-if="reopenable" class="flex flex-col gap-2 px-2 py-2" @submit.prevent="reopen($event.target as HTMLFormElement)">
+        <label class="font-ui text-sm" :for="`reopen-${g.id}`">What's still wrong? Whoever finished it is told.</label>
+        <input :id="`reopen-${g.id}`" name="why" class="h-8 text-sm" required @keydown.stop />
+        <div class="flex gap-2">
+          <button class="btn sm primary" type="submit">Reopen</button>
+          <button class="btn sm" type="button" @click.stop="reopening = false">Keep it</button>
+        </div>
+      </form>
       <div class="menu-rule" role="separator" />
       <button role="menuitem" class="menu-item" type="button" @click="copyAndClose(g.url, $event)">
         <AppIcon name="copy" /><span data-label>Copy share link</span>

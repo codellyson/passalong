@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { changeWords, needs } from "../src/needs.ts";
+import { changeWords, marksOf, needs } from "../src/needs.ts";
 import { KINDS } from "../src/notify.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
@@ -160,6 +160,25 @@ test("a row is changed while an unread notification is on it, and names the proj
   assert.equal(by.u2.changed, "", "read already");
   assert.deepEqual(by.u1.project, { id: "top", title: "Website", color: "blue" }, "the top folder");
   assert.equal(by.u2.project, null, "a folder you cannot see names nothing");
+});
+
+test("a board card is marked with its project and its latest unread change, past D1's bind limit", async () => {
+  const { db, x, guide } = world();
+  const ids = Array.from({ length: 120 }, (_, i) => `g${i}`);
+  for (const id of ids) guide(id);
+  x(`INSERT INTO notification (account_id, kind, guide_id, at, read_at) VALUES
+       ('ada', 'task_claimed', 'g110', '${ago(3)}', ''), ('ada', 'task_finished', 'g110', '${ago(1)}', ''),
+       ('ada', 'handoff', 'g1', '${ago(1)}', '${ago(0.5)}'), ('bo', 'handoff', 'g2', '${ago(1)}', '');
+     INSERT INTO folder (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
+       ('top', 'bo', 't', 'Billing app', '${ago(9)}', '${ago(9)}', 'teal', '');
+     INSERT INTO folder_guide (folder_id, guide_id, added_by, added) VALUES ('top', 'g115', 'bo', '${ago(9)}');`);
+  const marks = await marksOf(db, "ada", ids);
+  assert.equal(marks.size, 120);
+  assert.equal(marks.get("g110").changed, "Finished", "the latest unread one");
+  assert.equal(marks.get("g1").changed, "", "read already");
+  assert.equal(marks.get("g2").changed, "", "somebody else's notification");
+  assert.deepEqual(marks.get("g115").project, { id: "top", title: "Billing app", color: "teal" });
+  assert.equal(marks.get("g0").project, null);
 });
 
 test("customers and recent closes come beside the register", async () => {

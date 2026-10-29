@@ -89,8 +89,12 @@ export interface Guide {
   for_me?: boolean;
   /** Its column on the team board, worked out by the server the same for everyone. */
   stage?: "draft" | "todo" | "working" | "done";
-  /** Whose rows it sits in when the board is by person: holders, else who it was sent to. Empty is Anyone. */
+  /** Who it is for, as To do groups it: holders, else who it was sent to (account ids, `#group`). Empty is Anyone. */
   lanes?: string[];
+  /** The project it is linked into, or null. */
+  project?: NeedProject | null;
+  /** What changed on it since you last looked; '' when nothing did. */
+  changed?: string;
   /** Who holds it. `agent` is empty for a person working it in the browser. */
   held_by?: {
     name: string;
@@ -100,6 +104,8 @@ export interface Guide {
     health: "asking" | "person" | "quiet" | "working";
     /** When it was last heard from. */
     since: string;
+    /** The holder's last progress note, or "". */
+    note?: string;
   }[];
   /** The group inside the team it was handed to, by name. Empty when it went to a person or all. */
   to_group?: string;

@@ -171,7 +171,7 @@ import {
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { ackCopy, answerCopy } from "./mail-copy.js";
 import { handleMcp } from "./mcp-http.js";
-import { needs } from "./needs.js";
+import { marksOf, needs } from "./needs.js";
 import { newsFor } from "./news.js";
 import {
   announce,
@@ -575,13 +575,14 @@ type BoardClaim = {
   name: string;
   lease_until: string;
   updated: string;
+  note: string;
   asking: number;
 };
 
 /**
- * Whose column a guide sits in on the board's by-person view: whoever holds it (account ids), else
+ * Who a guide is for, as the board's To do column groups it: whoever holds it (account ids), else
  * whoever it was sent to — one person, a group as `#slug`, or each of several named people. Empty is
- * Anyone: work sent to the whole team sits once. One guide shown in several columns, never copies.
+ * Anyone: work sent to the whole team sits once. One guide shown under several people, never copies.
  */
 function lanesOf(
   r: GuideRow,
@@ -619,6 +620,8 @@ function boardPlace(r: GuideRow, claimRows: BoardClaim[], me: string, at: string
         you: k.account_id === me,
         health: k.asking ? "asking" : person ? "person" : k.lease_until <= at ? "quiet" : "working",
         since: k.updated,
+        // The holder's last progress note: the one muted line an In progress card carries.
+        note: k.note || "",
       };
     }),
   };
@@ -689,7 +692,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     async (slice, marks) =>
       (
         await c.env.DB.prepare(
-          `SELECT c.guide_id, c.account_id, c.state, c.agent_id, c.lease_until, c.updated,
+          `SELECT c.guide_id, c.account_id, c.state, c.agent_id, c.lease_until, c.updated, c.note,
                   COALESCE(NULLIF(a.name, ''), NULLIF(a.handle, ''), '') AS name,
                   ${claims.ASKING} IS NOT NULL AS asking
              FROM claim c LEFT JOIN account a ON a.id = c.account_id
@@ -701,6 +704,11 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   ))
     held.set(k.guide_id, [...(held.get(k.guide_id) || []), k]);
   const at = now();
+  const marks = await marksOf(
+    c.env.DB,
+    me,
+    rows.map((r) => r.id),
+  );
   const myGroups = new Set(
     (
       await c.env.DB.prepare("SELECT group_id FROM group_member WHERE account_id = ?")
@@ -814,6 +822,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       answered_elsewhere: elsewhere.has(r.id),
       ...boardPlace(r, held.get(r.id) || [], me, at),
       lanes: lanesOf(r, held.get(r.id) || [], groups, members),
+      // The project it is linked into, and what changed on it since you last looked ('' if nothing).
+      ...marks.get(r.id),
       parent: r.parent_id || "",
       parent_title: parentTitles.get(r.parent_id) || "",
       parent_url: parentUrls.get(r.parent_id) || "",

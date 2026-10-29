@@ -268,6 +268,32 @@ The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, t
 ### Register row
 The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in coral text, a second muted line (a state such as "Went quiet" in ink, then the customer's own words in quotes), the project with its mark (or "Not sorted yet" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
 
+### Work board
+Four columns, people inside, and never a sideways scroll. Draft, To do, In progress and Done sit
+side by side once the board's own container passes 60rem (4fr · 5fr · 5fr · 4fr, 24px apart);
+below that they stack as sections 40px apart, and under 768px they are one column at a time under
+a row of tabs. Each column is a heading at 550 with a muted tabular count over an ink rule, like a
+register's head; there are no column boxes. Inside To do, work is grouped under who it is for —
+You, each person, each group, Anyone — each group named by an uppercase label over a hairline.
+Cards stack 8px apart; in the stacked layout they run two to a row from a 40rem board.
+
+A card is deeper cream at 3px corners with the Edge ring: the title at 500 (the whole card opens
+it), then "Changed · <what>" in coral text with the 3px coral bar at its left edge, then the
+project's 3×14 mark and name with the age right-aligned in tabular figures. In progress adds one
+muted line — a state word in ink at 500 when the hold needs somebody ("Went quiet", "Waiting on
+you"), who holds it ("Bola, an agent"), and their last note in quotes. Done cards are quiet: the
+title muted, "Finished" or "Archived" beside the project. The card's one control is a 28px ghost
+menu button (the "more" glyph) at its top right; the menu is the keyboard's way to every drag.
+
+Dragging: the column or group a card can go to takes a 2px ink outline, the ones it cannot fade to
+50%, and the dragged card fades to 40% where it was; a moved card stays faded until the board has
+reloaded. A question before an act (stop an agent, why to reopen) is a hairline-ruled strip above
+the board. Above it all: the heading with its summary line ("13 to do · 1 in progress · 2 changed
+since you last looked"), then the project picker, Only mine and the search on one line. Empty
+board: "Nothing on the board" at the title size over an ink rule, a line saying what will show,
+and New work; a filter that leaves nothing names itself ("Nothing in Billing app") with Clear
+filter; an empty column says so in one muted line.
+
 ### Tabs
 A page with several views of one thing (a project's Documents, Work and History) is a row of links,
 each its own address (`?tab=`), over a hairline: the current one is ink at 500 with a 2px ink bar
@@ -278,7 +304,7 @@ never coral.
 A 3px coral bar the full height of a row at its left edge, with the label "Changed · <what>" in coral text beside the title: what changed on work ("Changed · Finished"), on a document ("Changed · version 3 by Bola"), in a project ("Changed · Pricing"). One wording everywhere; never "New" or "Changed" alone. Used in the register and in side-panel rows; persists until that thing is opened. Whether something changed is always the server's answer (unread notifications for work, `folder_document_seen` for documents), never kept in the browser.
 
 ### Danger
-A destructive control is never a peer of the everyday ones. It sits alone at the foot of the form that edits the thing (a project's Delete at the foot of Edit), or in a row's own place for a row (a file's Delete), outline danger, and pressing it asks in place: a line naming what goes and what stays ("Delete Billing app and its 3 documents and 1 file? Work in it is kept."), then Delete and Keep it. The same holds for every question the hub asks before an act: stopping an agent (a strip above the board when a card is dragged out of In progress), stopping sharing, discarding edits, loading a newer version over yours. No browser `confirm()` anywhere in the hub.
+A destructive control is never a peer of the everyday ones. It sits alone at the foot of the form that edits the thing (a project's Delete at the foot of Edit), or in a row's own place for a row (a file's Delete), outline danger, and pressing it asks in place: a line naming what goes and what stays ("Delete Billing app and its 3 documents and 1 file? Work in it is kept."), then Delete and Keep it. The same holds for every question the hub asks before an act: stopping an agent or reopening finished work (a strip above the board when a card is dragged out of In progress or Done), stopping sharing, discarding edits, loading a newer version over yours. No browser `confirm()` anywhere in the hub.
 
 ### Document editor
 A project document is edited as it reads: a rich-text field (TipTap, `components/hub/DocEditor.vue`) in a field-white well with a 1px edge, Onest at 0.9375rem/1.65, headings on the document scale (h1 1.125rem/500, h2 1rem/550, h3 0.875rem/550), mono only inside code. Above it, one hairline-ruled toolbar of plain words (Heading, Subheading, Bold, Italic, List, Numbered, Quote, Code); a pressed tool is ink. "Markdown" at the toolbar's end switches to the source for those who want it, off by default; a document the editor cannot hold faithfully (a table, a task list, HTML) opens as Markdown with one line saying why. The server keeps Markdown either way (`utils/doc-markdown.ts`).
