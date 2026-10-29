@@ -19,9 +19,10 @@
 //   POST   /v1/invites/:code/accept    join the team behind an invite
 //   GET    /v1/guides?q=&scope=        list/search: scope=all (default) | mine | <team slug>
 //   GET    /v1/board                   the queues: waiting, in flight, landed
+//   GET    /v1/needs                   what waits on you, ranked, with customers and recent closes
 //   GET    /v1/log?repo=&since=       what you did, newest first
 //   GET    /v1/notifications?unread=   what happened while you were away
-//   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
+//   POST   /v1/notifications/read      { ids?, guide? } → mark read (everything unread when both omitted)
 //   GET    /v1/events                  live notifications and guide changes, as Server-Sent Events
 //   GET    /v1/push                    push set up here?, its key, and your devices
 //   POST   /v1/push/subscriptions      { endpoint, keys, label?, private? } turn push on for a device
@@ -170,6 +171,7 @@ import {
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { ackCopy, answerCopy } from "./mail-copy.js";
 import { handleMcp } from "./mcp-http.js";
+import { needs } from "./needs.js";
 import { newsFor } from "./news.js";
 import {
   announce,
@@ -3065,6 +3067,17 @@ app.get("/v1/board", async (c) => {
   });
 });
 
+// What waits on the signed-in person, ranked, beside the customers waiting and what was finished
+// lately: the hub's first screen. See needs.ts for the order and why it is one read.
+app.get("/v1/needs", async (c) => {
+  const account = c.get("account");
+  const [found, unread] = await Promise.all([
+    needs(c.env.DB, account, now()),
+    unreadCount(c.env, account),
+  ]);
+  return c.json({ ...found, unread });
+});
+
 // ---- log --------------------------------------------------------------------------------
 
 // What you did, newest first. The opposite face of `/v1/notifications`: that one is what other
@@ -3598,8 +3611,23 @@ app.post("/v1/notifications/read", async (c) => {
   const requested = c.req.query("scope") || "all";
   const scope = await workScope(c, requested);
   if (!scope) return err(c, 404, `You're not in a team called "${requested}".`);
-  const { ids } = (await c.req.json().catch(() => ({}))) as { ids?: number[] };
-  const clean = (ids || []).map(Number).filter(Number.isInteger).slice(0, 200);
+  const { ids, guide } = (await c.req.json().catch(() => ({}))) as {
+    ids?: number[];
+    guide?: unknown;
+  };
+  let clean = (ids || []).map(Number).filter(Number.isInteger).slice(0, 200);
+  // Opening a piece of work marks what happened to it seen, and nothing else: with no unread rows
+  // on it there is nothing to mark, and an empty id list would mean everything.
+  if (typeof guide === "string" && guide) {
+    const { results } = await c.env.DB.prepare(
+      "SELECT id FROM notification WHERE account_id = ? AND guide_id = ? AND read_at = ''",
+    )
+      .bind(c.get("account"), guide)
+      .all<{ id: number }>();
+    clean = results.map((r) => r.id);
+    if (!clean.length)
+      return c.json({ read: 0, unread: await unreadCount(c.env, c.get("account"), scope) });
+  }
   const read = await markRead(c.env, c.get("account"), clean, scope);
   return c.json({ read, unread: await unreadCount(c.env, c.get("account"), scope) });
 });

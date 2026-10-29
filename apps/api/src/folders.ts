@@ -106,18 +106,22 @@ routes.get("/", async (c) => {
             ) THEN 1 ELSE 0 END AS manage,
             (SELECT COUNT(*) FROM folder_document d WHERE d.folder_id = f.id) AS documents,
             (SELECT COUNT(*) FROM folder_asset a WHERE a.folder_id = f.id) AS assets,
-            (SELECT COUNT(*) FROM folder_guide g WHERE g.folder_id = f.id) AS guides${
-              words
-                ? `,
+            (SELECT COUNT(*) FROM folder_guide g WHERE g.folder_id = f.id) AS guides,
+            (SELECT COUNT(*) FROM folder_guide l JOIN guide w ON w.id = l.guide_id
+              WHERE l.folder_id = f.id AND w.status <> 'consumed') AS open,
+            EXISTS (SELECT 1 FROM folder_guide l JOIN notification n ON n.guide_id = l.guide_id
+              WHERE l.folder_id = f.id AND n.account_id = ? AND n.read_at = '') AS changed${
+                words
+                  ? `,
             (SELECT json_group_array(json_object('id', d.id, 'name', d.name)) FROM folder_document d
               WHERE d.folder_id = f.id AND (d.name LIKE ? ESCAPE '\\' OR d.body LIKE ? ESCAPE '\\')) AS matches`
-                : ""
-            }
+                  : ""
+              }
        FROM folder f LEFT JOIN team t ON t.id = f.team_id
       WHERE ${where}
       ORDER BY f.updated DESC`,
   )
-    .bind(me, me, ...(words ? [like, like] : []), ...values)
+    .bind(me, me, me, ...(words ? [like, like] : []), ...values)
     .all<
       Folder & {
         team_name: string;
@@ -125,6 +129,8 @@ routes.get("/", async (c) => {
         documents: number;
         assets: number;
         guides: number;
+        open: number;
+        changed: number;
         matches?: string;
       }
     >();
