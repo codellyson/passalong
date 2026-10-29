@@ -11,7 +11,7 @@ because a Worker has no filesystem.
 - `/blog` lists published posts; `/blog/:slug` renders one in the reading face; `/blog/rss.xml` is the
   feed; the sitemap lists posts once `/blog` is published.
 - No script and the strict policy, like docs.
-- Rendered by the same remark pipeline as guide pages (`renderMarkdown` in
+- Rendered by the same remark pipeline as share pages (`renderMarkdown` in
   `server/utils/guide-html.ts`), so tables, task lists, footnotes and `> [!NOTE]` alerts work in posts.
 - A draft renders at its address, noindex, and appears nowhere else. `/blog` is itself a draft in
   `shared/pages.ts`.
@@ -35,11 +35,11 @@ read by the same `server/utils/blog.ts` with the collection named (`"learn"`), s
 
 ## Publish — planned, nothing built
 
-A product feature: an approved task's write-up becomes a public post — a changelog entry — for the
+A product feature: finished work's write-up becomes a public post — a changelog entry — for the
 people the work was for. The pitch: *your changelog writes itself from work you already checked.*
 
 - The user's own agent drafts it; only a person publishes it.
-- A post is its own entity, not a public guide: guides carry share keys, private proof and handles.
+- A post is its own entity, not public work: work carries share keys, private proof and handles.
 - Before publishing, checks flag secrets, internal addresses, private links, named people and repo
   paths. Proof screenshots are opted in one by one as public copies.
 - A team page with a feed, no script; custom domains later, through Cloudflare for SaaS.

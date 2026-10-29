@@ -5,6 +5,7 @@ in `AGENTS.md` and the PRs; this is the map.
 
 | Date | Decision | Why |
 | --- | --- | --- |
+| 2026-10-29 | **One thing, work** — built ([docs/WORK.md](../WORK.md)): no kinds, sections, templates, handovers, write-up guides, report sets, verify view, ack, verdict or review; one holder per piece of work; email in is `key+new@` and `key+support@`, the webhook `POST /v1/in/<key>`; the reader names work and tags it; 17 agent tools over work, project, document and file (16 over HTTP); people never read "guide". Overhaul, never patch: removed whole, data migrated (0061, 0062), old CLIs cut off by `MIN_CLIENT`. Supersedes "`kind` is explicit" (2026-09-25). | Kinds were the system doing the agent's reading in advance: 162 of 200 guides were filed under the wrong kind, templates padded short notes and handovers went unread. |
 | 2026-10-29 | **The agent decides**: Passalong's own agent closes finished work, archives abandoned work and judges hand-ins; evidence is an input, not a gate (the hand-in proof refusal goes); every decision is written with its reason and undone by Reopen. Sending to a customer stays a person's. First: stop handovers, then the agent tidies the board. [LOOP.md §0](../LOOP.md) | People do not answer: 64% of hand-ins sat unanswered, finished work never reached Done, and unread handovers sat on the board until archived by hand. |
 | 2026-10-29 | **Projects** lead: folders become one project per product or repo, holding documents and work; handover guides and the word "guide" go; onboarding is built first. Passalong never hosts the agent that does the work. [LOOP.md §0](../LOOP.md) | 162 of 200 guides were really tasks and bugs and handovers went unread; the pain is dropped work and agents that do not know the product, which documents in a project answer and a one-off handover does not. |
 | 2026-10-10 | **One Markdown renderer**: guides, the blog, learn pages and folder documents all use remark with GFM and GitHub's alerts; `marked` is gone. | Two parsers read the same Markdown two ways — footnotes worked in a folder and broke in a guide — and alerts needed writing once. Guides stay unsanitised behind their CSP; folder documents stay sanitised. |
@@ -22,7 +23,7 @@ in `AGENTS.md` and the PRs; this is the map.
 | 2026-09-26 | A **signed-in guide page** that frames the share page. | The hub runs script; it must never render a stranger's markdown as its own HTML. |
 | 2026-09-26 | The **warm cream redesign**: Onest, Newsreader, ink pills. | A calmer, product-native look; coral as punctuation. |
 | 2026-09-25 | **Handed in is final**; old CLIs refused (426). | Follow-ups nobody asked for came from agents that had already handed in; rules ship on merge, text ships on reinstall. |
-| 2026-09-25 | **`kind` is explicit**, no default. | A silent default mislabelled 162 of 200 guides. |
+| 2026-09-25 | **`kind` is explicit**, no default. Superseded 2026-10-29: there is no kind. | A silent default mislabelled 162 of 200 guides. |
 | 2026-09-24 | Evidence over prose; screenshots from the real thing. | The write-up is the agent's word; evidence is what a reviewer can check. |
 | 2026-09-23 | Roles and gifts: `super`, and plans that end on a date. | Comps were untracked UPDATEs that never ended. |
 | 2026-09-21 | **The task queue** (V2): tasks, claims, the human gate. | Guides as the unit, with a queue on top, not a Trello for agents. [docs/V2.md](../V2.md) |
@@ -30,5 +31,5 @@ in `AGENTS.md` and the PRs; this is the map.
 | 2026-09-04 | Named **Passalong** (was Relay); teams (M2). | Relay was unownable; the team is what pays. |
 
 ## Sources
-- `git log --merges origin/master` (PRs #1–#65)
+- `git log --merges origin/master` (PRs #1–#65); branch `claude/projects-direction` for one thing, work
 - [AGENTS.md](../../AGENTS.md), [docs/PRD.md](../PRD.md), [docs/V2.md](../V2.md), [docs/PUBLISH.md](../PUBLISH.md)

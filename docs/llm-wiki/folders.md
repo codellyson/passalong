@@ -1,24 +1,28 @@
 # Folders
 
 > **Direction since 2026-10-29** ([LOOP.md §0](../LOOP.md)): folders become **projects**, one per
-> product or repo, and every task and bug lives in one. The rule below still holds: documents are what
-> to know, tasks and bugs are what to do.
+> product or repo, and all work lives in one (build step 4). Agents already call them projects: the
+> tools are `find_projects`, `save_project`, `read_document`, `save_document`, `delete_document`,
+> `add_file`, `read_file`, `delete_file` (docs/WORK.md).
 
-**A folder is a place; its documents are what to know; guides are what to do.** That is the one
-rule for sorting what goes in. Anything someone still has to act on — an open defect, work not yet
-done, a check nobody ran — is a bug or task guide linked into the folder, because a guide has an
-owner, a state and an answer. A document has none of those and notifies nobody: an agent that filed
-an incident's open defects as documents left them with nobody on them. Overviews, decisions, and
-findings already resolved are documents. Both MCP servers lead their folder instructions with this
-rule, `create_folder_document` repeats it, and `packages/passalong/test/folder-rule.test.js` holds
-both servers and `llms.txt` to it. Where a folder lives comes back as `space` from `create_folder`
-and `get_folder` ("private …" or "team …"), and agents are told to report that — the same agent
-told a person a folder was in the team space when it had made it private.
+**A project is a place; its documents are what to know; work is what to do.** That is the one rule
+for sorting what goes in. Anything someone still has to act on — an open defect, work not yet done, a
+check nobody ran — is work, because work has an owner, a state and an answer. A document has none of
+those and notifies nobody: an agent that filed an incident's open defects as documents left them with
+nobody on them. Overviews, decisions, and findings already resolved are documents. Both MCP servers
+lead their instructions with this rule, `save_document` repeats it ("anything someone must still act
+on is work (create_work)"), and `packages/passalong/test/folder-rule.test.js` holds both servers and
+`llms.txt` to it. Where a project lives comes back as `space` from `find_projects` and `save_project`
+("private …" or "team …"), and agents are told to report that — an agent once told a person a folder
+was in the team space when it had made it private.
 
-A folder holds the material for a project that outlives one handoff: a tutorial's brief, script,
-screenshots and reference files. A guide remains the request to do one piece of work. Linking the
-guide to the folder gives that request context without copying the files into its markdown or
-changing the guide format. Folders can nest at multiple levels within one private or team space.
+What an agent learns goes into a project's documents, not into a piece of work for one person: the
+capture skill and the server instructions say to read the README and the page for that area, update
+the page that already covers it, and add a line to its Log.
+
+A folder holds the material for a project that outlives one piece of work: a README, a page per
+area, a Log, a tutorial's brief, script, screenshots and reference files. Linking work to the folder
+gives it that context without copying the files into its markdown. Folders can nest at multiple levels within one private or team space.
 Each folder may carry a grouping color; an uncolored child inherits its parent's color in the hub.
 The hub list shows top-level folders and opens each level with a chevron, so depth costs nothing
 until somebody opens it; each level steps in once beside a thin rail rather than slanting further.
@@ -30,8 +34,8 @@ spaces whatever a client offers: those rules live in `folder-tree.ts`, which imp
 
 Each folder is private to its creator or shared with one team. Team membership grants reading and
 writing; only its creator or a team owner can delete the whole folder. Files are owned by the
-folder, not by a linked guide. They remain private downloads with byte-checked types and an R2
-key under `folders/`; removing a guide does not remove its project material.
+folder, not by linked work. They remain private downloads with byte-checked types and an R2
+key under `folders/`; removing work does not remove its project material.
 When a team's plan lapses, its folders remain readable but cannot be changed.
 
 Documents are Markdown that a person can read and edit in the hub and an agent can read and edit
@@ -39,9 +43,9 @@ through either MCP server. Agents can also read folder images and small text ass
 The hub opens a document beside an outline of the folder — its documents, then its subfolders, on
 one rail under the folder's name, the open one marked on the rail — and renders sanitized GitHub-flavored
 Markdown, including tables, task lists, footnotes and GitHub's `> [!NOTE]` alerts, through the same
-remark pipeline guide pages use. Markdown images appear as links so opening a
+remark pipeline share pages use. Markdown images appear as links so opening a
 private document does not silently fetch a third-party image. Editing still uses the Markdown
-source. Assets and linked guides stay in the same
+source. Files and linked work stay in the same
 workspace below the document. A folder with no documents keeps the same layout, so the page does not
 change shape when its first document arrives. Opening another document starts it at its title. The
 outline stacks above the document on narrow screens.
@@ -49,45 +53,33 @@ Each save sends the version that was opened; a newer save is refused,
 so one editor cannot silently overwrite the other. Revision snapshots let a person bring earlier
 text back into the editor and save it as a new version.
 
-The MCP server instructions tell an agent to list existing folders before creating one, infer the
-name and first document from a short request, pass a team slug only for an explicitly shared folder,
-then use the returned id to add documents, assets and relevant guides. A local MCP agent uploads a
-file by path; a hosted one accepts a client file input or issues a one-time folder upload link for a
-file in its sandbox. The public `llms.txt` carries the same steps. The hub lists existing folders
-first and then gives an example agent request instead of a creation form; its browser editor is
-there for corrections.
+The MCP server instructions tell an agent to call `find_projects` before `save_project`, infer the
+name and first document from a short request, pass a team slug only for an explicitly shared project,
+then use the returned id with the document and file tools. `save_document` writes, renames and moves a
+document (to another folder in the same space, by changing its `folder_id`, so its id and history go
+with it — never a copy and a delete, and never across spaces, since that would share it), and refuses
+a stale version so nobody's writing is lost. `read_document` with `history` lists and returns earlier
+versions, so a bad edit can be saved back over. A local agent adds a file by path; a hosted one passes
+a client file input or asks `add_file` for a one-time upload link for a file in its sandbox.
+`read_file` brings an image or small text file into the agent's context. `delete_document` and
+`delete_file` remove one document or file for good — marked destructive, and told to act only on a
+person's request. No tool deletes a whole project: one mistaken call would take every subfolder and
+file, so that stays a person's act in the hub.
 
-Linked guides sit in the folder's outline beside its documents and subfolders, each badged with
-its kind (task, bug, transfer) and opening its guide page. "+ New guide" offers a task, a bug
-report or a handoff the agent-first way — it copies a sentence for the agent that names the folder
-by title and id, so the agent publishes the guide and then links it with `link_folder_guide`.
+Linked work sits in the folder's outline beside its documents and subfolders, each with its label
+and state and opening its work page. Linking and unlinking are the hub's (`POST`/`DELETE
+/v1/folders/:folder/guides`); agents have no tool for it, since work will live in its project (step
+4). "+ New work" copies a sentence for the agent that names the folder by title and id. The hub lists
+existing folders first and gives an example agent request instead of a creation form; its browser
+editor is there for corrections. A work page lists its folders under "Tied to".
 
-Agents can also remove: `unlink_folder_guide` takes a guide out (the guide is untouched), and
-`delete_folder_document` and `delete_folder_asset` remove one document or file for good — the two
-tools marked destructive, and told to act only on a person's request. No tool deletes a whole
-folder: one mistaken call would take every subfolder and file, so that stays a person's act in the
-hub.
-
-Agents can find their way back and undo their own mistakes: `list_folders` takes `query` (folder
-name and description, document names and text, with the matching documents named in each result)
-and `guide` (the folders a guide is in); `rename_folder_document` renames without a version, since
-a rename overwrites nobody's text; `move_folder_document` (and "Move to…" in the hub) moves a
-document to another folder in the same space by changing its `folder_id`, so its id and history go
-with it — never a copy and a delete, and never across spaces, since that would share it; `get_folder_document_history` lists and returns earlier versions
-so a bad edit can be saved back over. In the hub, a guide's page lists its folders under "Tied to",
-and a folder and its documents can be renamed in place.
-
-A folder can be shared the way a guide is: a secret link, `/f/<id>/<key>` (migration 0048,
+A folder can be shared the way work is: a secret link, `/f/<id>/<key>` (migration 0048,
 `folder.share_key`), that anyone holding can read with no account. It opens that folder and every
-folder inside it, never anything above or beside it, and never its linked guides, which have
-links of their own. Unlike a guide, a folder is not shared until someone asks — "Share link" in the
-hub, `share_folder` for an agent — because it holds private files; "Stop sharing" clears the key so
+folder inside it, never anything above or beside it, and never its linked work, which has
+links of its own. Unlike work, a folder is not shared until someone asks — "Share link" in the
+hub; agents have no tool for it — because it holds private files; "Stop sharing" clears the key so
 every copy of the old link stops working, and sharing again makes a different one. The page runs no
-script and is never indexed, like a guide page; files are downloads, never shown inline.
-
-This is a project context, not another kind of guide. The guide's task, bug and transfer semantics
-and its export format stay the same. Folder assets have their own storage and access rules rather
-than pretending to be screenshots claimed by a guide.
+script and is never indexed, like a share page; files are downloads, never shown inline.
 
 ## Sources
 

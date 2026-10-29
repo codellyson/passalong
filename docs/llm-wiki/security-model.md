@@ -2,14 +2,14 @@
 
 ## The share key is the secret
 
-A guide's id is an address; the key in `/g/:id/:key` is the authorisation. So it must never leave:
-guide pages are `noindex`, `robots.txt` disallows `/g/`, `x-robots-tag` is set on the raw `.md`, team
+Work's id is an address; the key in `/g/:id/:key` is the authorisation. So it must never leave:
+share pages are `noindex`, `robots.txt` disallows `/g/`, `x-robots-tag` is set on the raw `.md`, team
 channels get a built card instead of an unfurl, the unfurl cache is keyed without it, and analytics are
 sent from the Worker with categorical props only — never an id, handle, title or URL.
 
 ## Pages that render someone else's markdown run no script
 
-A guide page renders markdown a stranger wrote, and there is no sanitiser behind it — only the policy
+A share page renders markdown a stranger wrote, and there is no sanitiser behind it — only the policy
 `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' https: data:`. That is the
 product's one real security property. The landing, docs, FAQ, connect and blog get it too (`noScripts`).
 A shared folder (`/f/:id/:key`) gets the same rule, `noindex` and a `robots.txt` disallow, and its
@@ -19,9 +19,9 @@ documents also go through the sanitising folder renderer; its files are served a
 Only `/hub`, `/join` and `/reset` run script, with a per-request nonce (`server/plugins/csp.ts`) —
 never `'unsafe-inline'`.
 
-## The hub frames guides, never renders them
+## The hub frames work, never renders it
 
-The hub runs script and holds a token, so it shows a guide by framing its share page (`?embed=1`) in a
+The hub runs script and holds a token, so it shows work by framing its share page (`?embed=1`) in a
 sandboxed same-origin iframe with no `allow-scripts`. Its policy gains `frame-src 'self'` and nothing
 wider. Inside the frame every link opens a new tab, so nothing can navigate it. The service worker
 answers one request only, the phone's share (`POST /hub/share`), and keeps what was shared in the
@@ -32,7 +32,7 @@ controls load exactly as without it.
 
 - **Screenshots** are claimed only by the account that uploaded them — naming someone else's shot id
   cannot take it.
-- **Checks never run a command read from a guide**, which would make every pull remote code execution.
+- **Checks never run a command read from a piece of work**, which would make every take remote code execution.
 - **Passwords**: PBKDF2 at the Worker's cap of 100,000 iterations, so a 12-character minimum and a Have
   I Been Pwned range check make up the difference, failing open.
 - **Secrets are stored hashed**: tokens, session ids, reset codes.

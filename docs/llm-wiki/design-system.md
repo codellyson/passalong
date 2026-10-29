@@ -16,7 +16,7 @@ near-white surface is the thing you act on. Hierarchy comes from fill, not outli
 ## Type
 
 - **Onest** for the interface — headings at 480 with negative tracking, never 600+.
-- **Newsreader** for guide prose and the italic turn in a headline — a reading face with a real italic.
+- **Newsreader** for work and document prose and the italic turn in a headline — a reading face with a real italic.
 - **JetBrains Mono** for everything the machine wrote: ids, tags, commands, code.
 - All three self-hosted: `font-src 'self'`.
 
@@ -28,7 +28,7 @@ nest: outer = inner + padding.
 
 ## Rows
 
-Every row in a list has the same anatomy: kind badge and title on one line, then who, where, when and
+Every row in a list has the same anatomy: label and title on one line, then who, where, when and
 state in muted text — the state last, in its tone — and sentence-case actions on the right. No
 stripes, no filled state pills in front of titles.
 

@@ -1,8 +1,10 @@
 # Hub
 
 The signed-in web app at `/hub`, and one of only three pages allowed to run script (with `/join` and
-`/reset`). It covers everything a browser-only person needs. Guides are created by `share()`;
-folder documents have a Markdown editor because their purpose is continuing work on a brief or script.
+`/reset`). It covers everything a browser-only person needs. The box at `/hub/new` writes work from
+a person's own words, which the reader shapes ([notifications.md](notifications.md)); folder
+documents have a Markdown editor for corrections. Everything a person reads says work, project,
+document or file, never guide.
 
 ## Home
 
@@ -14,79 +16,79 @@ a link to it carrying `?tab=`, `?q=`, `?follows=` or `?done=` goes on to `/hub/w
 
 ## Work
 
-**Go to id** in the header (`HubGoTo`, ⌘K or Ctrl+K) opens a guide by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`guideIdFrom()` in `utils/goto.ts`). On a phone it is a narrower box with no shortcut hint. A guide's page is under Work in the tab bar, and opens with a ← Work link back to the board.
+**Go to id** in the header (`HubGoTo`, ⌘K or Ctrl+K) opens work by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`guideIdFrom()` in `utils/goto.ts`). On a phone it is a narrower box with no shortcut hint. A work page is under Work in the tab bar, and opens with a ← Work link back to the board.
 
-`/hub/work` is the team board (`HubBoard`), like any shared task board: every task, handoff and bug
-in scope is a card in one of five columns, and everyone in the team sees the same board. The column
-is the server's — `stage` on every guide row, from its status and its claims (`boardPlace()` in
-index.ts) — so a card moves when the work moves and never because of who is looking. A card says
-its kind, who it is for (`@handle`, `#group`, the team, or private), who it is from and who holds it;
-opening it goes to the guide page, where the actions are. From md the five columns sit side by
-side, at least 15rem each and sharing the rest — the Work page and the top bar take a 90rem measure so
-five fit at about 17rem on a wide screen — and the board scrolls sideways on its own when they do not; on a phone one column shows at a time, picked from tabs. A card's footer says who
+`/hub/work` is the team board (`HubBoard`), like any shared task board: every piece of work
+in scope is a card in one of four stage columns, and everyone in the team sees the same board. The column
+is the server's — `stage` on every row, from its status and its claims (`boardPlace()` in
+index.ts) — so a card moves when the work moves and never because of who is looking. A card shows
+the label its agent gave it (`HubWorkTag`, the first tag), who it is for (`@handle`, `#group`, the team, or private), who it is from and who holds it;
+opening it goes to the work page, where the actions are. From md the columns sit side by
+side, at least 15rem each and sharing the rest — the Work page and the top bar take a 90rem measure — and the board scrolls sideways on its own when they do not fit; on a phone one column shows at a time, picked from tabs. A card's footer says who
 has it — initials, ⚡ and the agent's name, and a dot for its `health` (working, went quiet, asked a
-question, a person's hold, handed in), with a word when somebody should look — and who it is for,
+question, a person's hold), with a word when somebody should look — and who it is for,
 which is also the **Give to…** control. Its age is since its holder was last heard from or its last
 edit. Done is faded. In a team it is a Trello board with a list per person: Draft, To do, a
 column per teammate and per group with work waiting, In progress, Done. Waiting work sits in the
 column of whoever it was sent to (the server's `lanes`), or To do; several named people each see it,
-as one guide; dragging it to a column gives it there. **By person** is on by default, and off
+as one card; dragging it to a column gives it there. **By person** is on by default, and off
 (`?by=stage`) shows the four stages with everyone's work together. The page picks the viewer's team when they have
 only one; "All teams" keeps the plain stage columns. **Show only mine** (`?mine=1`, and an old
-`?tab=needs` link) narrows to cards about you — yours, sent to you or your group, held by you, or
-yours to review — without moving any card. Done shows the newest twenty.
+`?tab=needs` link) narrows to cards about you — yours, sent to you or your group, or held by you — without moving any card. Done shows the newest twenty.
 A round dot at a card's top-left (shown on hover, always on touch, and on every card once one is
 selected) selects it for the floating bar that archives, unarchives or deletes several at once;
 only cards you may manage have one. Right-clicking a card opens its quick actions (`HubCardMenu`):
-Open, Ready for agents…, Move to Draft, Give to…, Stop this agent, copy link or pull command,
-Archive or Unarchive, Delete — the guide page's acts under its rules. A card can also be dragged
-to a column that means one of those acts (back to Draft, Stop this agent, Archive, Unarchive);
-Draft to To do asks which repo where it was dropped (`HubReadyPrompt`, which Ready for agents… in
-the menu opens too). A drop lands at once and goes back, with the hub's error, if the server
+Ready, Move to Draft, Give to…, Stop this agent, Reopen…, copy the share link or the take command,
+Archive or Unarchive to Draft, Delete — the work page's acts under its rules. A card can also be dragged
+to a column that means one of those acts (back to Draft, Stop this agent, Archive, Unarchive, Reopen,
+and Ready from Draft to To do, which keeps the repo the work already names; its page is where to
+change it). A drop lands at once and goes back, with the hub's error, if the server
 refuses; while dragging, a gap opens where the card would land. From md the columns are lanes the
 height of the window, each scrolling its own cards under a fixed header.
 
 It replaced four tabs (Needs you, Being worked on, Open, Done) worked out per viewer, which put the
-same guide in different places for different teammates and counted it differently.
+same work in different places for different teammates and counted it differently.
 
-**Who may do what on a team guide:** anyone in the team moves it between Draft and Ready, stops an
+**Who may do what on team work:** anyone in the team moves it between Draft and Ready, stops an
 agent, gives it to someone else (**Give to…** on every card that is not done), and reopens finished
-work with a reason (**Reopen**, on the guide page, the card menu, or dragging it out of Done).
-Finishing is final, so there is no review: a guide page leads a finished guide with what it was
-**Finished with**, and **Ask someone to check** sends a teammate a follow-up task to look at it.
+work with a reason (**Reopen**, on the work page, the card menu, or dragging it out of Done).
+Finishing is final, so there is no review: a work page leads finished work with what it was
+**Finished with**, and **Ask someone to check** sends a teammate new work, with this as its parent,
+to look at it.
 Archiving and deleting stay with its author or a team admin.
 
-A browser-only person can take an eligible task from its guide page,
-post progress and hand it in there. These holds use the person's account identity and a week-long
-lease; their hand-in may include prose and evidence without requiring a separate report guide.
-Agent hand-ins still carry their report guide and their usual evidence contract.
+A browser-only person can take work from its page, post progress and hand it in there. These holds
+use the person's account identity and a week-long lease; their hand-in carries prose and evidence,
+like an agent's.
 
-"How Passalong works" (a disclosure, open on Home) holds the work loop as four steps: capture a task, bug or
-handoff through CLI/MCP/API; route it to a person, group, team or queue; collaborate through progress,
-questions and attachments; then review checks and evidence. Links below the diagram lead to project
+"How Passalong works" (a disclosure, open on Home) holds the work loop as four steps: capture what needs doing
+through CLI/MCP/API; route it to a person, group, team or queue; work together through progress,
+questions and attachments; finish with proof, or reopen. Links below the diagram lead to project
 folders, team settings and the activity feed.
 
-The title's scope picker applies to guides, tasks, work being held, hand-ins and activity. Team
+The title's scope picker applies to every work list, work being held and activity. Team
 membership is checked at the API boundary, and each list narrows in SQL before its row limit. A
 failed list shows an error and retry instead of an empty board. Marking activity read only marks the selected scope.
-List rows show a compact image card when the guide carries a stored Passalong screenshot. The API
-chooses the first image named in the guide document, then the oldest image in its evidence, and
-only from shots still claimed by that guide. The hub loads it from its own origin.
-Team admins can select, archive, unarchive and delete teammates' guides in the same lists as the
-author; task review and ready actions also appear where the API already lets an admin decide.
+List rows show a compact image card when the work carries a stored Passalong screenshot. The API
+chooses the first image named in its document, then the oldest image in its evidence, and
+only from shots it still claims. The hub loads it from its own origin.
+Team admins can select, archive, unarchive and delete teammates' work in the same lists as the
+author.
 
-## The guide page — `/hub/g/:id`
+## The work page — `/hub/g/:id`
 
 - **The document** is the share page at `?embed=1` in a sandboxed same-origin frame with no scripts. The
   hub never renders a stranger's markdown as its own HTML (see [security-model.md](security-model.md)).
 - **Progress** leads the sidebar: what happened, in order — sent, opened, taken and where, what they
-  said, what they handed in and showed, follow-ups — ending on a coral *Now* line. Built from
+  said, what they handed in and showed, work made from it — ending on a coral *Now* line. Built from
   `GET /v1/guides/:id/context`, which records no pull.
-- **Who has it** and **Tied to** (what it follows, follow-ups, report, blockers) follow.
+- **The thread** (`HubThread`, `GET /v1/guides/:id/thread`) is the conversation: every
+  `task_event` line as chat, and a reply box to whoever holds it.
+- **Who has it** and **Tied to** (its parent, work made from it, blockers, folders) follow.
 
 ## Folders — `/hub/folders`
 
-Private and team project folders hold Markdown documents, file assets and links to existing guides.
+Private and team project folders hold Markdown documents, file assets and links to existing work.
 The document editor saves a new revision using the version it opened, and refuses a stale save.
 The same documents are reachable through MCP; see [folders.md](folders.md).
 
@@ -113,4 +115,4 @@ holding that anchor (`tabOf()`).
 ## Sources
 - `apps/web/app/pages/hub/index.vue` (Home), `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/folders/`, `pages/hub/settings/[[tab]].vue`
 - `apps/web/app/components/hub/Board.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
-- [AGENTS.md](../../AGENTS.md): "The board", "The hub shows a guide by framing it…", "The hub is live…"
+- [AGENTS.md](../../AGENTS.md): "A team's board is one board", "The hub shows a guide by framing it…", "The hub is live…"
