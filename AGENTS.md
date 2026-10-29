@@ -378,9 +378,11 @@ change. Its README says how.
   Settings; off, a finished fix wakes the request without those words, line or automatic draft.
 - **The reader is provider-agnostic, and only fills fields (reader.ts, docs/LOOP.md §1a).** It turns a
   customer's message into a task or a bug, with title, summary and sections, and routes it to one of
-  the team's groups. It speaks the OpenAI-compatible Chat Completions API, so any provider serving it
-  works: `READER_URL`, `READER_KEY` (a secret) and `READER_MODEL` on the web Worker; without them,
-  intake keeps its fixed rule. Every answer passes `readVerdict()` or is thrown away whole — a kind
+  the team's groups. It calls the model through the AI SDK (`ai`) and each provider's own package:
+  `READER_PROVIDER` (`anthropic`, `openai`, `google`, or `openai-compatible` for OpenRouter, Groq,
+  Ollama and the like, which also needs `READER_URL`), `READER_KEY` (a secret) and `READER_MODEL` on
+  the web Worker; without them, intake keeps its fixed rule. A raw fetch to one vendor's API shape
+  was the first version, and only OpenAI spoke it natively. Every answer passes `readVerdict()` or is thrown away whole — a kind
   from the list, a group that exists, lengths capped, each kind's required sections, no contact
   details — never patched. The customer's own words are quoted into the guide by code, not by the
   model. Its reason goes on the thread as a note; when it is unsure, the author and team owners get

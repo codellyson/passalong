@@ -3,10 +3,11 @@
  * a title, a summary, the sections that kind needs, and which of the team's groups should act
  * (docs/LOOP.md §1a). It is the agent that turns a customer's message into a Passalong task.
  *
- * Provider-agnostic on purpose: it speaks the OpenAI-compatible Chat Completions API, which OpenAI,
- * Anthropic, Google, OpenRouter, Groq, Ollama and Cloudflare Workers AI all serve. `READER_URL`,
- * `READER_KEY` and `READER_MODEL` choose one; without them there is no reader and intake keeps its
- * fixed rule.
+ * Provider-agnostic on purpose: it calls the model through the AI SDK and each provider's own
+ * package, so Anthropic, OpenAI and Google are spoken natively and anything serving the OpenAI
+ * Chat Completions API (OpenRouter, Groq, Ollama, Workers AI) works as `openai-compatible`.
+ * `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` choose one, and `READER_URL` points elsewhere
+ * (required for `openai-compatible`); without them there is no reader and intake keeps its fixed rule.
  *
  * The model only fills fields. Everything it returns is checked here before anything uses it — a
  * kind from the list, a group that exists, lengths capped, the sections each kind requires — and an
@@ -16,7 +17,20 @@
  * Imports nothing from its siblings, so its tests can import it.
  */
 
-export type ReaderEnv = { READER_URL?: string; READER_KEY?: string; READER_MODEL?: string };
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { generateText, type LanguageModel } from "ai";
+
+export type ReaderEnv = {
+  READER_PROVIDER?: string;
+  READER_URL?: string;
+  READER_KEY?: string;
+  READER_MODEL?: string;
+};
+
+export const READER_PROVIDERS = ["anthropic", "openai", "google", "openai-compatible"] as const;
 
 /** Every kind the reader may choose; a caller narrows it (a customer never sends a handover). */
 export const READER_KINDS = ["task", "bug", "transfer"] as const;
@@ -56,7 +70,58 @@ export interface ReaderInput {
 
 /** Configured when all three settings are present. */
 export const readerReady = (env: ReaderEnv) =>
-  Boolean(env.READER_URL && env.READER_KEY && env.READER_MODEL);
+  READER_PROVIDERS.some((p) => p === env.READER_PROVIDER) &&
+  Boolean(env.READER_KEY && env.READER_MODEL) &&
+  (env.READER_PROVIDER !== "openai-compatible" || Boolean(env.READER_URL));
+
+/** The configured model, through its provider's own package. `doFetch` is for tests. */
+function readerModel(env: ReaderEnv, doFetch: typeof fetch): LanguageModel {
+  // Global fetch is left to the SDK: handed over detached, a Worker refuses it ("Illegal invocation").
+  const o = {
+    apiKey: env.READER_KEY,
+    baseURL: env.READER_URL || undefined,
+    fetch: doFetch === fetch ? undefined : doFetch,
+  };
+  const id = String(env.READER_MODEL);
+  switch (env.READER_PROVIDER) {
+    case "anthropic":
+      return createAnthropic(o)(id);
+    case "google":
+      return createGoogleGenerativeAI(o)(id);
+    case "openai":
+      return createOpenAI(o)(id);
+    default:
+      return createOpenAICompatible({ ...o, baseURL: String(env.READER_URL), name: "reader" })(id);
+  }
+}
+
+/**
+ * One call to the model: its text, or null on no reader, an error or a timeout. The prompts ask for
+ * one JSON object and the callers check whatever comes back, so the answer is read as text.
+ */
+async function ask(
+  env: ReaderEnv,
+  messages: { role: string; content: string }[],
+  temperature: number,
+  doFetch: typeof fetch,
+  what: string,
+): Promise<string | null> {
+  if (!readerReady(env)) return null;
+  try {
+    const { text } = await generateText({
+      model: readerModel(env, doFetch),
+      system: messages[0]?.content,
+      prompt: messages[1]?.content ?? "",
+      temperature,
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(20_000),
+    });
+    return text;
+  } catch (e) {
+    console.error(what, (e as Error).message.slice(0, 200));
+    return null;
+  }
+}
 
 function system(from: "customer" | "team", kinds: ReaderKind[]): string {
   const handover = kinds.includes("transfer");
@@ -170,29 +235,8 @@ export async function askReader(
   input: ReaderInput,
   doFetch: typeof fetch = fetch,
 ): Promise<Verdict | null> {
-  if (!readerReady(env)) return null;
-  try {
-    const res = await doFetch(`${String(env.READER_URL).replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${env.READER_KEY}` },
-      body: JSON.stringify({
-        model: env.READER_MODEL,
-        messages: readerMessages(input),
-        temperature: 0,
-        response_format: { type: "json_object" },
-      }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) {
-      console.error("reader", res.status, (await res.text()).slice(0, 200));
-      return null;
-    }
-    const data = (await res.json()) as { choices?: { message?: { content?: unknown } }[] };
-    return readVerdict(data.choices?.[0]?.message?.content, input.groups, input.kinds);
-  } catch (e) {
-    console.error("reader", (e as Error).message);
-    return null;
-  }
+  const text = await ask(env, readerMessages(input), 0, doFetch, "reader");
+  return text === null ? null : readVerdict(text, input.groups, input.kinds);
 }
 
 // ---- drafting a reply to a customer ---------------------------------------------------------
@@ -282,27 +326,6 @@ export async function askDraft(
   input: DraftInput,
   doFetch: typeof fetch = fetch,
 ): Promise<string | null> {
-  if (!readerReady(env)) return null;
-  try {
-    const res = await doFetch(`${String(env.READER_URL).replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${env.READER_KEY}` },
-      body: JSON.stringify({
-        model: env.READER_MODEL,
-        messages: draftMessages(input),
-        temperature: 0.3,
-        response_format: { type: "json_object" },
-      }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) {
-      console.error("draft", res.status, (await res.text()).slice(0, 200));
-      return null;
-    }
-    const data = (await res.json()) as { choices?: { message?: { content?: unknown } }[] };
-    return readDraft(data.choices?.[0]?.message?.content);
-  } catch (e) {
-    console.error("draft", (e as Error).message);
-    return null;
-  }
+  const text = await ask(env, draftMessages(input), 0.3, doFetch, "draft");
+  return text === null ? null : readDraft(text);
 }

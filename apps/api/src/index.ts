@@ -300,7 +300,8 @@ type Env = MailEnv &
     PUBLIC_ORIGIN?: string;
     /** The domain Email Routing sends guides to (inbound.ts). Unset: Settings says it is not set up. */
     INBOUND_DOMAIN?: string;
-    /** The reader (reader.ts): an OpenAI-compatible endpoint, its key (a secret) and the model. */
+    /** The reader (reader.ts): provider, its key (a secret), the model, and an address if needed. */
+    READER_PROVIDER?: string;
     READER_URL?: string;
     READER_KEY?: string;
     READER_MODEL?: string;

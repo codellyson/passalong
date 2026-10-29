@@ -82,8 +82,9 @@ joins that request (`customer` thread event, `customer_wrote` notification) and 
 finished. A person answers on the request's page under the **Support** tab (`/hub/support/:id`, `POST /v1/guides/:id/customer`; the tab is a table of every request, state derived by `supportState()`),
 recorded as `answered`; there is no CLI command or MCP tool for it on purpose, because nothing reaches
 a customer before a person presses Send. A holding agent receives both kinds through `deliver()`.
-**The reader** (`reader.ts`) sorts each request when `READER_URL`, `READER_KEY` and `READER_MODEL` are
-set — any OpenAI-compatible provider: the kind (task or bug), title, summary and sections, and the
+**The reader** (`reader.ts`) sorts each request when `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` are
+set — Anthropic, OpenAI or Google through their own AI SDK packages, or any OpenAI-compatible provider
+with `READER_URL`: the kind (task or bug), title, summary and sections, and the
 team group by name (`to: #group`). Its answer is used whole or not at all (`readVerdict()`), the
 customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for
 the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the

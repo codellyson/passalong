@@ -10,11 +10,16 @@
     "db:migrate:remote": "wrangler d1 migrations apply passalong --remote"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.91",
+    "@ai-sdk/google": "4.0.107",
+    "@ai-sdk/openai": "4.0.104",
+    "@ai-sdk/openai-compatible": "3.0.80",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "ai": "7.0.156",
     "hono": "^4.6.0",
     "postal-mime": "^4.0.5",
     "workers-og": "^0.0.27",
-    "zod": "^3.24.0"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260811.1",

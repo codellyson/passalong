@@ -98,22 +98,60 @@ test("the customer's text is fenced, and cannot close the fence", () => {
   assert.equal((user.content.match(/```/g) || []).length, 2, "only the fence's own two markers");
 });
 
-test("any OpenAI-compatible provider: the call, and every way it can fail", async () => {
-  const env = { READER_URL: "https://llm.example/v1/", READER_KEY: "k", READER_MODEL: "small" };
+/** A Chat Completions answer, as an OpenAI-compatible provider sends it. */
+const chat = (content) =>
+  new Response(
+    JSON.stringify({
+      id: "c1",
+      object: "chat.completion",
+      created: 1,
+      model: "small",
+      choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    }),
+    { headers: { "content-type": "application/json" } },
+  );
+
+test("the reader is configured by provider, and each needs what it needs", () => {
   assert.equal(readerReady({}), false);
+  assert.equal(
+    readerReady({ READER_PROVIDER: "anthropic", READER_KEY: "k", READER_MODEL: "m" }),
+    true,
+  );
+  assert.equal(
+    readerReady({ READER_KEY: "k", READER_MODEL: "m" }),
+    false,
+    "no provider is no reader",
+  );
+  assert.equal(
+    readerReady({ READER_PROVIDER: "claude", READER_KEY: "k", READER_MODEL: "m" }),
+    false,
+  );
+  assert.equal(
+    readerReady({ READER_PROVIDER: "openai-compatible", READER_KEY: "k", READER_MODEL: "m" }),
+    false,
+    "a compatible provider needs its address",
+  );
+});
+
+test("any OpenAI-compatible provider: the call, and every way it can fail", async () => {
+  const env = {
+    READER_PROVIDER: "openai-compatible",
+    READER_URL: "https://llm.example/v1/",
+    READER_KEY: "k",
+    READER_MODEL: "small",
+  };
   assert.equal(await askReader({}, { subject: "", text: "", groups: [] }), null, "none configured");
 
   let sent;
   const ok = async (url, init) => {
-    sent = { url, init };
-    return new Response(
-      JSON.stringify({ choices: [{ message: { content: JSON.stringify(bug) } }] }),
-    );
+    sent = { url: String(url), init };
+    return chat(JSON.stringify(bug));
   };
   const v = await askReader(env, { subject: "x", text: "y", groups: GROUPS }, ok);
   assert.equal(v?.kind, "bug");
   assert.equal(sent.url, "https://llm.example/v1/chat/completions");
-  assert.equal(sent.init.headers.authorization, "Bearer k");
+  assert.equal(new Headers(sent.init.headers).get("authorization"), "Bearer k");
   assert.equal(JSON.parse(sent.init.body).model, "small");
 
   const down = async () => new Response("overloaded", { status: 529 });
@@ -122,6 +160,35 @@ test("any OpenAI-compatible provider: the call, and every way it can fail", asyn
     throw new Error("network");
   };
   assert.equal(await askReader(env, { subject: "", text: "", groups: [] }, thrown), null);
+  const prose = async () => chat("I think it is a bug.");
+  assert.equal(await askReader(env, { subject: "", text: "", groups: GROUPS }, prose), null);
+});
+
+test("Anthropic is spoken natively, through its own package", async () => {
+  const env = { READER_PROVIDER: "anthropic", READER_KEY: "ak", READER_MODEL: "claude-haiku-5-5" };
+  let sent;
+  const ok = async (url, init) => {
+    sent = { url: String(url), init };
+    return new Response(
+      JSON.stringify({
+        id: "m1",
+        type: "message",
+        role: "assistant",
+        model: "claude-haiku-5-5",
+        content: [{ type: "text", text: JSON.stringify(bug) }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+  };
+  const v = await askReader(env, { subject: "x", text: "y", groups: GROUPS }, ok);
+  assert.equal(v?.kind, "bug");
+  assert.match(sent.url, /api\.anthropic\.com\/v1\/messages$/);
+  assert.equal(new Headers(sent.init.headers).get("x-api-key"), "ak");
+  const body = JSON.parse(sent.init.body);
+  assert.equal(body.model, "claude-haiku-5-5");
+  assert.match(body.system[0]?.text ?? body.system, /only fill|JSON/i);
 });
 
 test("a teammate's writing may be a handover; a customer's may not", () => {
@@ -191,7 +258,12 @@ test("a draft is built from the conversation, fenced, with the finished work", (
 });
 
 test("drafting uses the same provider settings, and fails quietly", async () => {
-  const env = { READER_URL: "https://llm.example/v1", READER_KEY: "k", READER_MODEL: "small" };
+  const env = {
+    READER_PROVIDER: "openai-compatible",
+    READER_URL: "https://llm.example/v1",
+    READER_KEY: "k",
+    READER_MODEL: "small",
+  };
   const input = {
     customer: "",
     from: "Support",
@@ -200,12 +272,7 @@ test("drafting uses the same provider settings, and fails quietly", async () => 
     finished: [],
   };
   assert.equal(await askDraft({}, input), null);
-  const ok = async () =>
-    new Response(
-      JSON.stringify({
-        choices: [{ message: { content: JSON.stringify({ reply: "Hello, it is fixed now." }) } }],
-      }),
-    );
+  const ok = async () => chat(JSON.stringify({ reply: "Hello, it is fixed now." }));
   assert.equal(await askDraft(env, input, ok), "Hello, it is fixed now.");
   const down = async () => new Response("no", { status: 500 });
   assert.equal(await askDraft(env, input, down), null);

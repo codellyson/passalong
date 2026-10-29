@@ -48,8 +48,8 @@ what is lost is customers. Decided:
 - Open: where customers write besides email (WhatsApp, chat, social, phone).
 
 **Problem 2 — people create Passalongs in ChatGPT and Claude, not on Passalong.** Decided:
-- *Built 2026-10-28 for support:* the reader (`apps/api/src/reader.ts`, provider-agnostic over the
-  OpenAI-compatible API) sorts each customer message into a task or a bug and routes it to the
+- *Built 2026-10-28 for support:* the reader (`apps/api/src/reader.ts`, provider-agnostic through the
+  AI SDK: Anthropic, OpenAI, Google or any OpenAI-compatible provider) sorts each customer message into a task or a bug and routes it to the
   team's group by name; unsure, it files for the whole team and asks the author and owners by push
   and mail. The box on its own screen is next, on the same reader.
 - *Built 2026-10-28:* the box is `/hub/new` ("Write it down here" in the New menu). The reader files
