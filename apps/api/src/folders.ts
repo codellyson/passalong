@@ -2,6 +2,7 @@
 import { Hono } from "hono";
 import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
 import { type Folder, findVisible, moveProblem } from "./folder-tree.js";
+import { tagList } from "./guide.js";
 import { mintOrigin } from "./hosts.js";
 import { planNow } from "./quota.js";
 
@@ -325,10 +326,10 @@ routes.get("/:folder", async (c) => {
       .bind(folder.id)
       .all<Asset>(),
     c.env.DB.prepare(
-      "SELECT g.id, g.title, g.summary, g.status FROM folder_guide fg JOIN guide g ON g.id = fg.guide_id WHERE fg.folder_id = ? ORDER BY fg.added DESC",
+      "SELECT g.id, g.title, g.summary, g.status, g.tags FROM folder_guide fg JOIN guide g ON g.id = fg.guide_id WHERE fg.folder_id = ? ORDER BY fg.added DESC",
     )
       .bind(folder.id)
-      .all(),
+      .all<{ id: string; title: string; summary: string; status: string; tags: string }>(),
     c.env.DB.prepare(
       // With what each holds, so a folder that only groups others can show what is in them.
       `SELECT f.id, f.title, f.description, f.parent_id, f.color,
@@ -360,7 +361,8 @@ routes.get("/:folder", async (c) => {
     },
     documents: documents.results,
     assets: assets.results,
-    guides: guides.results,
+    // The label its agent gave each piece of work, normalised as summaries() does.
+    guides: guides.results.map((g) => ({ ...g, tags: tagList(JSON.parse(g.tags || "[]")) })),
     children: children.results,
     breadcrumbs: ancestors.results,
   });
@@ -745,7 +747,7 @@ routes.post("/:folder/guides", async (c) => {
       ? guide.team_id !== folder.team_id
       : guide.account_id !== c.get("account") || Boolean(guide.team_id))
   )
-    return message(c, 404, "That guide can't be added to this folder.");
+    return message(c, 404, "That work can't be added to this folder.");
   await c.env.DB.prepare(
     "INSERT OR IGNORE INTO folder_guide (folder_id, guide_id, added_by, added) VALUES (?, ?, ?, ?)",
   )

@@ -237,7 +237,7 @@ codex mcp add passalong -- passalong mcp</code></pre>
             <a href="/hub/settings">your hub</a>; they are named and revocable.
           </p>
           <pre><code>curl -H "authorization: Bearer $TOKEN" \
-  https://passalong.dev/v1/inbox</code></pre>
+  https://passalong.dev/v1/tasks</code></pre>
           <p>
             Reading a guide someone shared needs no account at all — the key in the share link is
             the authorisation, and appending <code>.md</code> gives you the document.

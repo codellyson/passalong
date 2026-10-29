@@ -208,7 +208,7 @@ export const APPS: ConnectApp[] = [
       { text: "Make a token under {path}, named after where it will live.", path: "API tokens" },
       {
         text: "Call the API with it.",
-        copy: 'curl -H "authorization: Bearer $TOKEN" \\\n  https://passalong.dev/v1/inbox',
+        copy: 'curl -H "authorization: Bearer $TOKEN" \\\n  https://passalong.dev/v1/tasks',
       },
     ],
     notes: [],

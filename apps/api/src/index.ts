@@ -18,8 +18,7 @@
 //   POST   /v1/teams/:slug/invites     { email? } → invite link (mailed when an email is given)
 //   POST   /v1/invites/:code/accept    join the team behind an invite
 //   GET    /v1/guides?q=&scope=        list/search: scope=all (default) | mine | <team slug>
-//   GET    /v1/inbox                   guides handed to you (or your teams) you have not pulled
-//   GET    /v1/board                   the queues: waiting, not working, in flight, landed, promote
+//   GET    /v1/board                   the queues: waiting, in flight, landed
 //   GET    /v1/log?repo=&since=       what you did, newest first
 //   GET    /v1/notifications?unread=   what happened while you were away
 //   POST   /v1/notifications/read      { ids? } → mark read (everything unread when ids omitted)
@@ -126,7 +125,6 @@ import {
 import {
   clipFollowUp,
   dropField,
-  FOLLOW_UPS_MAX,
   type Meta,
   parseMeta,
   publishProblem,
@@ -348,7 +346,7 @@ const err = (c: { json: (o: unknown, s: number) => Response }, status: number, m
   c.json({ message }, status);
 
 const GUIDE_GONE =
-  "This guide isn't available any more. It may have been deleted or moved to a team you're not in.";
+  "This work isn't available any more. It may have been deleted or moved to a team you're not in.";
 const NOT_AN_EMAIL = "That doesn't look like an email address. Check it and try again.";
 
 // Share links are built from the request origin. Under `wrangler dev` a custom-domain route makes
@@ -412,24 +410,6 @@ interface GuideRow {
   /** The subject they wrote under and their Message-IDs, for one conversation (0060). */
   customer_subject?: string;
   customer_mids?: string;
-}
-interface VerdictRow {
-  guide_id: string;
-  account_id: string;
-  ok: number;
-  note: string;
-  at: string;
-  handle: string;
-  name: string;
-}
-interface AckRow {
-  guide_id: string;
-  account_id: string;
-  taken: number;
-  note: string;
-  at: string;
-  handle: string;
-  name: string;
 }
 interface PullRow {
   guide_id: string;
@@ -573,61 +553,6 @@ async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<strin
   return map;
 }
 
-/** Current verdicts per guide, newest first. One row per person, so this is everyone's answer. */
-async function verdicts(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, VerdictRow[]>> {
-  const map = new Map<string, VerdictRow[]>();
-  if (!rows.length) return map;
-  const results = await inSlices(
-    rows.map((r) => r.id),
-    0,
-    async (slice, marks) =>
-      (
-        await db(c)
-          .prepare(
-            `SELECT v.guide_id, v.account_id, v.ok, v.note, v.at,
-                    COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
-             FROM verdict v LEFT JOIN account a ON a.id = v.account_id
-             WHERE v.guide_id IN (${marks})
-             ORDER BY v.at DESC LIMIT 200`,
-          )
-          .bind(...slice)
-          .all<VerdictRow>()
-      ).results,
-  );
-  for (const v of results) map.set(v.guide_id, [...(map.get(v.guide_id) || []), v]);
-  return map;
-}
-
-/**
- * Who has answered "are you doing this?", newest first, for a page of guides.
- *
- * Shaped exactly like `verdicts()` above because it is the same kind of fact — the reader's, not
- * the author's, and one standing answer per person.
- */
-async function acks(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, AckRow[]>> {
-  const map = new Map<string, AckRow[]>();
-  if (!rows.length) return map;
-  const results = await inSlices(
-    rows.map((r) => r.id),
-    0,
-    async (slice, marks) =>
-      (
-        await db(c)
-          .prepare(
-            `SELECT k.guide_id, k.account_id, k.taken, k.note, k.at,
-                    COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
-             FROM ack k LEFT JOIN account a ON a.id = k.account_id
-             WHERE k.guide_id IN (${marks})
-             ORDER BY k.at DESC LIMIT 200`,
-          )
-          .bind(...slice)
-          .all<AckRow>()
-      ).results,
-  );
-  for (const k of results) map.set(k.guide_id, [...(map.get(k.guide_id) || []), k]);
-  return map;
-}
-
 /**
  * A person by id, as a sentence names them — see `displayName`. '' when there is no id at all, so
  * an unaddressed guide reads as unaddressed. An id whose account row is gone still names somebody.
@@ -637,10 +562,6 @@ function nameOf(people: Map<string, AccountRow>, id: string): string {
   const a = people.get(id);
   return displayName({ id, handle: a?.handle, name: a?.name });
 }
-
-/** A verdict or an ack, which carry their author's handle and name joined onto the row. */
-const personName = (r: { account_id: string; handle: string; name: string }) =>
-  r.account_id ? displayName({ id: r.account_id, handle: r.handle, name: r.name }) : "someone";
 
 /** Where work sits on its team's board, the same for everyone who opens it: its status, then
  * whether anybody holds it. */
@@ -709,8 +630,6 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     rows.flatMap((r) => [r.account_id, r.to_account_id]),
   );
   const pulls = await recentPulls(c, rows);
-  const said = await verdicts(c, rows);
-  const answered = await acks(c, rows);
   // A row can show the first image the guide carries without sending its document to the hub.
   // Check the shot's guide_id, so a pasted URL for somebody else's image is never a preview.
   const ownedShots = new Map<string, { id: string; name: string }[]>();
@@ -859,11 +778,6 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   return rows.map((r) => {
     const shots = ownedShots.get(r.id) || [];
     const image = guidePreview(shotIds(r.markdown), shots);
-    const heard = said.get(r.id) || [];
-    // The latest word, plus whether anyone's standing verdict is still negative.
-    const latest = heard[0];
-    const answers = answered.get(r.id) || [];
-    const own = answers.find((k) => k.account_id === me);
     return {
       id: r.id,
       title: r.title,
@@ -908,27 +822,6 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       proof_expires: proofEnds.get(r.id) || "",
       // Which release wrote it, for tracing a malformed guide back. Empty from before 0035.
       client: r.client || "",
-      verdict: latest
-        ? {
-            ok: Boolean(latest.ok),
-            by: latest.handle,
-            by_name: personName(latest),
-            note: latest.note,
-            at: latest.at,
-          }
-        : null,
-      failing: heard.some((v) => !v.ok),
-      // The first word back, before any work: who said they are on it, and who passed. A decline
-      // is carried in full — the reason is the whole reason to say no out loud, exactly as it is
-      // for a failing verdict.
-      taken_by: answers.filter((k) => k.taken).map((k) => k.handle || "someone"),
-      // Parallel to `taken_by`, index for index: the same people, as a person reads them.
-      taken_by_names: answers.filter((k) => k.taken).map(personName),
-      declined: answers
-        .filter((k) => !k.taken)
-        .map((k) => ({ by: k.handle, by_name: personName(k), note: k.note, at: k.at })),
-      // Your own standing answer, so the row can offer the other one rather than asking again.
-      my_ack: own ? { taken: Boolean(own.taken), note: own.note, at: own.at } : null,
       pulled_by: (pulls.get(r.id) || []).map((p) => ({
         handle: p.handle,
         via: p.via,
@@ -1999,7 +1892,7 @@ app.patch("/v1/me", async (c) => {
       return err(c, 400, "keep_forever is true or false.");
     // Turning the clean-up back on is always allowed; turning it off is what a plan will buy.
     if (patch.keep_forever && !mayKeep(undefined))
-      return err(c, 402, "Keeping every guide for good is part of a paid plan.");
+      return err(c, 402, "Keeping all your work for good is part of a paid plan.");
     sets.push("keep_forever = ?");
     binds.push(patch.keep_forever ? 1 : 0);
   }
@@ -2318,7 +2211,7 @@ app.post("/v1/teams/:slug/channels/:id/test", async (c) => {
   const result = await post(
     c.env,
     channel,
-    `Passalong is connected to ${team.name}. You'll see guides being sent and answered here.`,
+    `Passalong is connected to ${team.name}. You'll see work being sent and finished here.`,
   );
   // The channel's own answer, because "it did not arrive" is otherwise unattributable.
   return c.json({ delivered: result.ok, status: result.status, error: result.error });
@@ -3113,8 +3006,6 @@ async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
   return results;
 }
 
-app.get("/v1/inbox", async (c) => c.json({ guides: await summaries(c, await inboxRows(c)) }));
-
 // ---- board ------------------------------------------------------------------------------
 
 // Work is only finished when it lands on the other side, so the dashboard is queues rather than
@@ -3125,7 +3016,6 @@ app.get("/v1/inbox", async (c) => c.json({ guides: await summaries(c, await inbo
 const STALE_DAYS = 7;
 const PULLED_BY_OTHERS = `EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id
      AND p.account_id <> '' AND p.account_id <> g.account_id)`;
-const FAILING = "EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id AND v.ok = 0)";
 // Addressed to someone and still untouched by them. Named because the buckets below are tested in
 // order and the first match wins (DESIGN_BRIEF §2), so the later ones have to say what they are
 // not: each query carries the negation of every bucket above it rather than trusting the reader —
@@ -3139,20 +3029,11 @@ app.get("/v1/board", async (c) => {
       .bind(account, ...binds)
       .all<GuideRow>();
 
-  const [waiting, failing, flight, landed] = await Promise.all([
+  const [waiting, flight, landed] = await Promise.all([
     inboxRows(c, 20),
-    // Someone tried your work and it does not hold up. The most actionable thing on the page.
+    // Handed to a person or a team, and still untouched by anyone but you.
     mine(
-      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published' AND ${FAILING}
-       ORDER BY g.updated DESC LIMIT 20`,
-    ).then((r) => r.results),
-    // Handed to a person or a team, and still untouched by anyone but you. A failed verdict wins
-    // over "nobody has it yet": a verdict usually implies a pull row, but one left by the guide's
-    // own author does not (recordReceipt skips itself), so without this guard a self-verdict of
-    // { ok: false } on an unpulled guide would fill a card here and in `failing` at the same time.
-    mine(
-      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
-         AND ${IN_FLIGHT} AND NOT ${FAILING}
+      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published' AND ${IN_FLIGHT}
        ORDER BY g.created ASC LIMIT 20`,
     ).then((r) => r.results),
     // Someone else has it. This used to stop at three pulls, above which a guide moved to a
@@ -3161,30 +3042,25 @@ app.get("/v1/board", async (c) => {
     // is itself the negation of `in_flight`, so this needs no separate guard against it.
     mine(
       `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
-         AND ${PULLED_BY_OTHERS} AND NOT ${FAILING}
+         AND ${PULLED_BY_OTHERS}
        ORDER BY g.updated DESC LIMIT 20`,
     ).then((r) => r.results),
   ]);
 
   // One summaries() pass over every row, then split back into buckets: the lookups it does
   // (teams, people, recent pulls) are per-call, not per-row.
-  const all = [...waiting, ...failing, ...flight, ...landed];
+  const all = [...waiting, ...flight, ...landed];
   const byId = new Map((await summaries(c, all)).map((s) => [s.id, s]));
   const pick = (rows: GuideRow[]) => rows.map((r) => byId.get(r.id)).filter(Boolean);
   const cutoff = Date.now() - STALE_DAYS * 864e5;
 
   return c.json({
     waiting: pick(waiting),
-    failing: pick(failing),
     in_flight: pick(flight).map((g) => ({
       ...g,
       stale: new Date(g?.created ?? 0).getTime() < cutoff,
     })),
     landed: pick(landed),
-    // Kept, always empty, for one release. `passalong board` in the published CLI reads
-    // `b.promote.length` with no guard, so dropping the key outright makes an installed 0.1.0
-    // throw rather than degrade. It goes when the CLI's own removal ships.
-    promote: [] as ReturnType<typeof pick>,
     unread: await unreadCount(c.env, account),
   });
 });
@@ -3862,7 +3738,7 @@ app.put("/v1/guides/:id", async (c) => {
   const account = c.get("account");
   const id = c.req.param("id");
   if (!ID_RE.test(id))
-    return err(c, 400, "That isn't a valid guide id. Use 6 to 12 lowercase letters and numbers.");
+    return err(c, 400, "That isn't a valid id. Use 6 to 12 lowercase letters and numbers.");
   // The document, either as itself or wrapped in JSON.
   //
   // `text/markdown` is the honest shape and what the CLI sends: the guide *is* the body. But an
@@ -3888,14 +3764,14 @@ app.put("/v1/guides/:id", async (c) => {
       c,
       400,
       sentJson
-        ? 'The guide is empty. Send {"markdown": "---\\ntitle: ...\\n---\\n\\n## Problem ..."}.'
-        : 'The guide is empty. Send it as text/markdown, or as JSON: {"markdown": "..."}.',
+        ? 'The work is empty. Send {"markdown": "---\\ntitle: ...\\nsummary: ...\\n---\\n\\n..."}.'
+        : 'The work is empty. Send it as text/markdown, or as JSON: {"markdown": "..."}.',
     );
   }
   // A hard ceiling before anything is read; the working limit is checked below, once the guide's
   // current size is known, because a guide stored before it existed may keep the size it has.
   if (markdown.length > 512 * 1024)
-    return err(c, 413, "This guide is over 512 KB. Move large logs or files out and link to them.");
+    return err(c, 413, "This work is over 512 KB. Move large logs or files out and link to them.");
   // Before anything reads the meta: what it lacks is exactly what this is about. Refused rather
   // than stored, because the stored copy would be the document with those fields emptied.
   const unheld = unheldFields(markdown);
@@ -3917,8 +3793,8 @@ app.put("/v1/guides/:id", async (c) => {
     );
   const meta: Meta = parseMeta(markdown);
   if (meta.id && meta.id !== id)
-    return err(c, 400, "The id in the guide's frontmatter doesn't match the id it is saved under.");
-  if (!meta.title) return err(c, 400, "The guide needs a title. Add title: to its frontmatter.");
+    return err(c, 400, "The id in the frontmatter doesn't match the id it is saved under.");
+  if (!meta.title) return err(c, 400, "It needs a title. Add title: to its frontmatter.");
 
   // Addressing: `team: <slug>` puts the guide in a team; `to: <handle>` hands it to a member.
   let team: (TeamRow & { role: string }) | null = null;
@@ -3929,7 +3805,7 @@ app.put("/v1/guides/:id", async (c) => {
       return err(
         c,
         400,
-        `You're not in a team called "${meta.team}". Check the team in the guide, or ask to be invited.`,
+        `You're not in a team called "${meta.team}". Check the team in the frontmatter, or ask to be invited.`,
       );
     // Read-only, not closed: everything already in the team stays readable, pullable and
     // answerable, and this is the one door that shuts. 402 rather than 403 — nobody lacks
@@ -3938,7 +3814,7 @@ app.put("/v1/guides/:id", async (c) => {
       return err(
         c,
         402,
-        `${team.name}'s plan has lapsed, so it can't take new guides. Everything already in it ` +
+        `${team.name}'s plan has lapsed, so it can't take new work. Everything already in it ` +
           "can still be read and answered. Ask the team owner to renew.",
       );
   }
@@ -3952,7 +3828,7 @@ app.put("/v1/guides/:id", async (c) => {
       return err(
         c,
         400,
-        "To send a guide to a person or a group, also say which team it's in (team: in the frontmatter).",
+        "To send work to a person or a group, also say which team it's in (team: in the frontmatter).",
       );
     if (/[,\s]/.test(raw)) {
       const many = await adhocGroup(c, team, raw);
@@ -4028,7 +3904,7 @@ app.put("/v1/guides/:id", async (c) => {
         return err(
           c,
           400,
-          `A chain of guides can be at most ${LINEAGE_MAX} deep. Leave parent: off to start a new one.`,
+          `A chain of work can be at most ${LINEAGE_MAX} deep. Leave parent: off to start a new one.`,
         );
       parentId = parent.row.id;
     }
@@ -4043,7 +3919,7 @@ app.put("/v1/guides/:id", async (c) => {
     return err(
       c,
       400,
-      `An image in this guide (${unreachable[0]}) is on your computer, so nobody else can see it. ` +
+      `An image in this work (${unreachable[0]}) is on your computer, so nobody else can see it. ` +
         "Upload it first, then use the link you get back. Agents: use the add_file tool.",
     );
 
@@ -4066,7 +3942,7 @@ app.put("/v1/guides/:id", async (c) => {
       > & { size: number }
     >();
   if (existing && existing.account_id !== account)
-    return err(c, 403, "That guide id is already used by another account. Choose a different id.");
+    return err(c, 403, "That id is already used by another account. Choose a different id.");
   const tooBig = sizeProblem(markdown.length, existing?.size ?? 0);
   if (tooBig) return err(c, 413, tooBig);
 
@@ -4092,8 +3968,8 @@ app.put("/v1/guides/:id", async (c) => {
         c,
         402,
         room.plan === "none"
-          ? "Syncing guides needs a plan. Choose one in Settings."
-          : `You're using all ${room.limit} guides on your plan. Archive a finished guide to ` +
+          ? "Sending work needs a plan. Choose one in Settings."
+          : `You're using all ${room.limit} pieces of work on your plan. Archive finished work to ` +
               "make room, or choose a bigger plan in Settings.",
       );
     }
@@ -4411,45 +4287,6 @@ app.get("/v1/export", async (c) => {
 });
 
 /**
- * The guides that came out of this one, one level down.
- *
- * One level rather than the tree: a caller can walk it, and a recursive query returning every
- * descendant of a guide that travelled is a response nobody renders. Readable on the parent is the
- * gate, and each child is filtered again on its own — a follow-up published into a team you are
- * not in does not appear under a guide you can see. Drafts are not children yet.
- *
- * `?markdown=1` is the reader's form: a follow-up is more context for the guide, so whoever opens
- * the original — an agent through get_guide or take, a person through `passalong pull` —
- * gets the follow-ups' content with it. That form is oldest first, because context reads in the
- * order it was added and a later follow-up may build on or correct an earlier one; at most
- * `FOLLOW_UPS_MAX` of them, each clipped by `clipFollowUp`. Without it the listing is newest first,
- * up to 100, summaries only, as the hub has always read it.
- *
- * Neither form records a pull on the children. Fetching context for a guide is not the reader
- * opening those guides: a pull row moves a guide into its author's "landed" queue and mails them,
- * and a follow-up nobody chose to open must not tell its author it was picked up.
- */
-app.get("/v1/guides/:id/children", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
-  const account = c.get("account");
-  const withMarkdown = ["1", "true"].includes(c.req.query("markdown") || "");
-  const { results } = await c.env.DB.prepare(
-    `SELECT * FROM guide WHERE parent_id = ? AND status <> 'draft'
-       AND (account_id = ? OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?))
-     ORDER BY created ${withMarkdown ? "ASC" : "DESC"} LIMIT ?`,
-  )
-    .bind(found.row.id, account, account, withMarkdown ? FOLLOW_UPS_MAX : 100)
-    .all<GuideRow>();
-  const guides = await summaries(c, results);
-  if (!withMarkdown) return c.json({ guides });
-  const markdown = new Map(results.map((r) => [r.id, clipFollowUp(r.id, r.markdown)]));
-  return c.json({
-    guides: guides.map((g) => ({ ...g, markdown: markdown.get(g.id) || "" })),
-  });
-});
-
-/**
  * The guide this one came out of, with its content and where it has got to.
  *
  * Follow-ups travelled one way. Opening a guide handed over the guides written under it, and
@@ -4512,7 +4349,7 @@ app.get("/v1/guides/:id/parent", async (c) => {
  * board is not opening the guide: a pull row moves it into its author's "landed" queue and mails
  * them, so this route answers from rows that already exist and writes none.
  *
- * Every related guide is filtered on its own, as /children and /parent are: being able to read
+ * Every related guide is filtered on its own, as /parent is: being able to read
  * this one does not hand you the title of a blocker in a team you are not in. `risk` is the
  * reviewer's (migration 0032), so only the author sees it; the rest of a hand-in is what
  * `GET /v1/tasks` already shows anyone who can see the task.
@@ -4531,7 +4368,7 @@ app.get("/v1/guides/:id/context", async (c) => {
         .bind(...bind, me, me)
         .all<GuideRow>()
     ).results;
-  const [held, parentRows, childRows, blockerRows, blocksRows, said, answered] = await Promise.all([
+  const [held, parentRows, childRows, blockerRows, blocksRows, said] = await Promise.all([
     c.env.DB.prepare(
       `SELECT c.*, COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
          FROM claim c LEFT JOIN account a ON a.id = c.account_id
@@ -4557,8 +4394,7 @@ app.get("/v1/guides/:id/context", async (c) => {
         WHERE b.blocker_id = ? AND ${readable} ORDER BY g.created`,
       row.id,
     ),
-    // What each person who answered showed: a "works" carries screenshots of it working, a
-    // "didn't work" the whole report. The summary above has only the latest one-line note.
+    // What each hand-in showed, kept by complete() after its claim went.
     c.env.DB.prepare(
       `SELECT v.ok, v.note, v.detail, v.writeup, v.at, COALESCE(a.handle, '') AS handle,
               COALESCE(a.name, '') AS name
@@ -4575,14 +4411,6 @@ app.get("/v1/guides/:id/context", async (c) => {
         handle: string;
         name: string;
       }>(),
-    // Who said they are on it or passed, and when — the page's progress is these in order.
-    c.env.DB.prepare(
-      `SELECT k.taken, k.note, k.at, COALESCE(a.handle, '') AS handle, COALESCE(a.name, '') AS name
-         FROM ack k LEFT JOIN account a ON a.id = k.account_id
-        WHERE k.guide_id = ? ORDER BY k.at`,
-    )
-      .bind(row.id)
-      .all<{ taken: number; note: string; at: string; handle: string; name: string }>(),
   ]);
   const claimRows = held.results;
 
@@ -4652,12 +4480,6 @@ app.get("/v1/guides/:id/context", async (c) => {
       writeup: v.writeup,
       at: v.at,
     })),
-    acks: answered.results.map((k) => ({
-      taken: Boolean(k.taken),
-      by: { handle: k.handle, name: k.name },
-      note: k.note,
-      at: k.at,
-    })),
     parent: pick(parentRows)[0] ?? null,
     children: pick(childRows),
     blocked_by: pick(blockerRows),
@@ -4681,11 +4503,11 @@ app.patch("/v1/guides/:id/status", async (c) => {
     return err(
       c,
       400,
-      "Promoted was retired: how often a guide is opened already says how far it has travelled. " +
-        "Guides that carry it keep it.",
+      "Promoted was retired: how often work is opened already says how far it has travelled. " +
+        "Work that carries it keeps it.",
     );
   if (!status || !(SETTABLE as readonly string[]).includes(status))
-    return err(c, 400, `A guide's status can only be ${SETTABLE.join(", ")}.`);
+    return err(c, 400, `Work's status can only be ${SETTABLE.join(", ")}.`);
   // A team's board is everyone's: anyone in the team moves work between Draft and Ready
   // (readableGuide has already said they are in it). Archiving stays with its author or an admin.
   if (!author && status === "consumed")
@@ -4819,6 +4641,8 @@ async function recordDecline(c: Ctx & { env: Env }, row: GuideRow, note: string)
   )
     .bind(row.id, account, note, now())
     .run();
+  // The ack keeps it off this person's list; the thread line is what everyone reads.
+  await claims.event(c.env.DB, row.id, "passed", { account, body: note, at: now() });
 
   const people = await accounts(c, [account, row.account_id]);
   await notify(c.env, {
@@ -5807,7 +5631,7 @@ app.post("/v1/guides/:id/customer/draft", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
   const row = found.row;
-  if (!row.customer) return err(c, 409, "This guide has no customer to answer.");
+  if (!row.customer) return err(c, 409, "This work has no customer to answer.");
   const { results: said } = await c.env.DB.prepare(
     "SELECT kind, body FROM task_event WHERE guide_id = ? AND kind IN ('customer', 'answered') ORDER BY id",
   )
@@ -5868,7 +5692,7 @@ app.post("/v1/guides/:id/customer", async (c) => {
   const found = await readableGuide(c, c.req.param("id"));
   if (!found) return err(c, 404, GUIDE_GONE);
   const row = found.row;
-  if (!row.customer || !row.ref) return err(c, 409, "This guide has no customer to answer.");
+  if (!row.customer || !row.ref) return err(c, 409, "This work has no customer to answer.");
   // The remote MCP server dispatches through here; an agent there never sends. A token can still
   // reach this route (the hub signs in with one from `passalong hub`), so the rest is the absence
   // of any CLI command or tool for it, not a lock.
@@ -5876,7 +5700,7 @@ app.post("/v1/guides/:id/customer", async (c) => {
     return err(
       c,
       403,
-      "A reply to a customer is sent by a person, from the guide's page in the hub.",
+      "A reply to a customer is sent by a person, from the work's page in the hub.",
     );
   const body = (await c.req.json().catch(() => ({}))) as { body?: unknown };
   const text = typeof body.body === "string" ? body.body.trim() : "";
@@ -6231,27 +6055,6 @@ app.post("/v1/tasks/next", async (c) => {
     },
     ...claims.steps("taken"),
   });
-});
-
-/**
- * Held work is finished and its agent has not said so. See claims.markDone: a teammate ends it on
- * the spot, and whoever's agent holds it hands it in as theirs.
- */
-app.post("/v1/guides/:id/mark_done", async (c) => {
-  const id = c.req.param("id");
-  const body = (await c.req.json().catch(() => ({}))) as { note?: unknown };
-  const r = await claims.markDone(c.env.DB, id, {
-    account: c.get("account"),
-    at: now(),
-    note: typeof body.note === "string" ? body.note : "",
-  });
-  if ("error" in r) return err(c, r.status, r.error);
-  // Said done by a person rather than the agent: finished like any hand-in, with nobody after it.
-  // Always, so the claim goes and what was said is kept, even when a teammate already ended it.
-  await claims.complete(c.env.DB, id, { account: r.claimant, at: now() });
-  count(c, "task_finished", {});
-  await taskEvent(c, id, "task_finished", "");
-  return c.json({ id, state: "done" });
 });
 
 /**
@@ -6884,7 +6687,7 @@ const VIEW_HEADERS = {
 
 app.get("/g/:id/:key{.+\\.md}", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key").replace(/\.md$/, ""));
-  if (!row) return c.text("no such guide", 404);
+  if (!row) return c.text("no such work", 404);
   await recordPull(c, row, "", "link");
   return c.text(row.markdown, 200, {
     "content-type": "text/markdown; charset=utf-8",
@@ -6902,7 +6705,7 @@ app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c), later(c)));
 
 app.get("/g/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
-  if (!row) return c.text("no such guide", 404, VIEW_HEADERS);
+  if (!row) return c.text("no such work", 404, VIEW_HEADERS);
   const people = await accounts(c, [row.account_id]);
   return renderOgImage(
     c.env,

@@ -128,7 +128,7 @@ export async function logFeed(
  * three can never drift into describing the same act differently.
  */
 export function line(r: Pick<LogRow, "act" | "title" | "detail">): string {
-  const title = r.title ? `"${r.title}"` : "a guide";
+  const title = r.title ? `"${r.title}"` : "a piece of work";
   const why = r.detail ? `: ${r.detail}` : "";
   // The `act` values are the API's and stay as they are; the sentence uses the words a person uses.
   switch (r.act) {

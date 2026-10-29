@@ -100,7 +100,7 @@ function card(o: { title: string; from: string; meta: Meta }): string {
   <div style="display:flex;flex-direction:column;">
     <div style="display:flex;margin-bottom:28px;">${bits.map(chip).join("")}</div>
     <div style="display:flex;align-items:center;border-top:2px solid ${C.line};padding-top:26px;">
-      <div style="display:flex;color:${C.muted};font-size:26px;">${o.from ? `From ${esc(clip(o.from, 60))}` : "A Passalong guide"}</div>
+      <div style="display:flex;color:${C.muted};font-size:26px;">${o.from ? `From ${esc(clip(o.from, 60))}` : "Work on Passalong"}</div>
     </div>
   </div>
 </div>`;

@@ -78,7 +78,6 @@ export interface Guide {
   to_name?: string;
   team_name?: string;
   to_group_name?: string;
-  taken_by_names?: string[];
   source_context: string | null;
   tags: string[];
   stack_assumptions: string[];
@@ -306,20 +305,14 @@ export interface ThreadItem {
     | "handed_in"
     | "passed"
     | "released"
-    | "approved"
-    | "sent_back"
-    | "closed"
+    | "reopened"
     | "asked"
     | "replied"
     | "noted"
     | "customer"
-    | "answered"
-    | "verdict"
-    | "ack";
+    | "answered";
   at: string;
   body: string;
-  /** A verdict or an ack (from before both were retired) only: it worked, or they took it. */
-  ok?: boolean;
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
 }
 
@@ -354,10 +347,7 @@ export interface GuideContext {
   /** The owner of its team, and not its author: may act on it as if they were. */
   admin?: boolean;
   claims: ContextClaim[];
-  /**
-   * What it was finished with, newest first: each hand-in is kept as one (`complete()` in
-   * claims.ts). A failing one is from before finishing was final.
-   */
+  /** What it was finished with, newest first: each hand-in is kept as one (`complete()` in claims.ts). */
   verdicts: {
     ok: boolean;
     by: { handle: string; name: string };

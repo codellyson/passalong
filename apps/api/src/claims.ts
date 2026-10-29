@@ -535,9 +535,7 @@ export type EventKind =
   | "handed_in"
   | "passed"
   | "released"
-  | "approved"
-  | "sent_back"
-  | "closed"
+  | "reopened"
   | "asked"
   | "replied"
   | "noted"
@@ -551,7 +549,7 @@ export type EventKind =
  * Tell a parent that a guide made from it reached Done (docs/LOOP.md step 3): a note on its thread,
  * which `deliver()` hands to whoever holds it and to whoever takes it next. Once per child — the
  * child's id is in the line and a second call finds it — because several routes can end the same
- * guide in one act (mark done, then complete). Returns whether it wrote. Never throws.
+ * piece of work in one act. Returns whether it wrote. Never throws.
  */
 export async function wakeParent(
   db: D1Database,
@@ -607,7 +605,7 @@ export async function reopenForCustomer(
       id,
     )
     .run();
-  await event(db, id, "sent_back", { account, body: reason, at });
+  await event(db, id, "reopened", { account, body: reason, at });
   return true;
 }
 
@@ -635,7 +633,7 @@ export async function customerEvent(
  * before and never in its place, and it never throws: a thread that loses a bubble is a smaller
  * harm than a hand-in refused because the history could not be written.
  */
-async function event(
+export async function event(
   db: D1Database,
   id: string,
   kind: EventKind,
@@ -1366,85 +1364,8 @@ export async function reopen(
     .prepare("SELECT DISTINCT account_id FROM verdict WHERE guide_id = ? AND ok = 1")
     .bind(id)
     .all<{ account_id: string }>();
-  await event(db, id, "sent_back", { account, body: reason, at });
+  await event(db, id, "reopened", { account, body: reason, at });
   return { finishers: results.map((r) => r.account_id) };
-}
-
-/**
- * Somebody says held work is finished, without the agent saying so.
- *
- * The agent that did the work often cannot hand it in: the session ended, the evidence was refused
- * in a shape it kept getting wrong, or it is simply gone. Until somebody said so the work stayed
- * held, and nobody else could take it.
- *
- * Two kinds of people may say it. Anyone in its team but the holder: it is Done on the spot, with a
- * line saying who said so. The account whose agent holds it: it is handed in as theirs, which the
- * route then finishes like any hand-in.
- */
-export async function markDone(
-  db: D1Database,
-  id: string,
-  { account, at, note }: { account: string; at: string; note: string },
-): Promise<
-  | { state: "done" | "review"; claimant: string; author: string }
-  | { error: string; status: 404 | 409 }
-> {
-  const g = await db
-    .prepare(`SELECT account_id, team_id, markdown FROM guide WHERE id = ?1 AND ${MAY_MOVE}`)
-    .bind(id, account)
-    .first<{ account_id: string; team_id: string; markdown: string }>();
-  const own = g
-    ? null
-    : await db
-        .prepare("SELECT account_id, team_id, markdown FROM guide WHERE id = ?")
-        .bind(id)
-        .first<{ account_id: string; team_id: string; markdown: string }>();
-  const task = g ?? own;
-  const claim = task ? await claimOf(db, id) : null;
-  // Somebody else in the team saying it is done ends it; the holder saying so hands it in, as
-  // their agent would have. A private piece of work has nobody else, so its author ends it.
-  const isAuthor = Boolean(g) && !(task!.team_id !== "" && claim?.account_id === account);
-  if (!task || (!isAuthor && claim?.account_id !== account))
-    return { status: 404, error: "no such work of yours, or none held by your agent" };
-  if (!claim || claim.state !== "claimed")
-    return { status: 409, error: claim ? "it is already handed in" : "nobody holds this" };
-
-  const said = String(note ?? "")
-    .trim()
-    .slice(0, NOTE_MAX);
-  const where = [claim.host, claim.worktree].filter(Boolean).join(":") || `agent ${claim.agent_id}`;
-  const evidence = "Marked done in the hub; the agent did not hand it in.";
-  const toReview = db
-    .prepare(
-      `UPDATE claim SET state = 'review', evidence = ?, note = COALESCE(NULLIF(?, ''), note), updated = ?
-        WHERE guide_id = ? AND state = 'claimed'`,
-    )
-    .bind(evidence, said, at, id);
-
-  if (isAuthor) {
-    const by = task.account_id === account ? "its author" : "a teammate";
-    const line = `${at.slice(0, 10)} marked done by ${by} while held by ${where}${said ? `: ${said}` : ""}`;
-    await db.batch([
-      toReview,
-      db
-        .prepare(
-          "UPDATE guide SET status = 'consumed', outcome = 'approved', markdown = ?, updated = ? WHERE id = ?",
-        )
-        .bind(withStatus(withNote(task.markdown, line), "consumed"), at, id),
-    ]);
-    await event(db, id, "approved", { account, at, body: said });
-    return { state: "done", claimant: claim.account_id, author: task.account_id };
-  }
-
-  await toReview.run();
-  await event(db, id, "handed_in", {
-    account,
-    agent: claim.agent_id,
-    host: claim.host,
-    body: said || "marked done in the hub",
-    at,
-  });
-  return { state: "review", claimant: claim.account_id, author: task.account_id };
 }
 
 /**
@@ -1800,37 +1721,30 @@ export function steps(event: StepEvent, replies = 0): { next: Step[]; say?: stri
   }
 }
 
-/** One line of a guide's thread: something an agent or a person did to it, oldest first. */
+/** One line of a piece of work's thread: something an agent or a person did to it, oldest first. */
 export interface ThreadItem {
-  /** `e<n>` for a recorded event, `v:<account>` / `a:<account>` for a verdict or an ack. */
+  /** `e<n>`, the recorded event. */
   id: string;
-  kind: EventKind | "verdict" | "ack";
+  kind: EventKind;
   at: string;
   /** One line, in the voice of whoever did it. Empty for acts that say everything by themselves. */
   body: string;
-  /** Only a verdict or an ack: whether it worked, or whether they took it. */
-  ok?: boolean;
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
 }
 
 /**
- * A guide's thread: what happened to it, in order, as the conversation a person would read.
- *
- * Merges `task_event` with the verdicts and acks already on the guide, which are the reader's side
- * of the same conversation and live in their own tables for their own reasons (migrations 0004 and
- * 0013). Nothing here is stored twice: when a person answers in the browser the route also writes
- * the claim transition their answer causes, and that event is dropped here in favour of the answer
- * itself, so one act is one line.
+ * A piece of work's thread: what happened to it, in order, as the conversation a person would read.
+ * `task_event` is the whole of it (migration 0062 moved the old verdicts and acks in).
  *
  * Who may read it is the caller's to settle — this is a query, and the route asks `readableGuide`.
  */
 export async function thread(db: D1Database, id: string, viewer: string): Promise<ThreadItem[]> {
-  const { results: events } = await db
+  const { results } = await db
     .prepare(
       `SELECT e.id, e.kind, e.at, e.body, e.account_id, e.agent_id, e.host,
               COALESCE(a.name, '') AS name, COALESCE(a.handle, '') AS handle
          FROM task_event e LEFT JOIN account a ON a.id = e.account_id
-        WHERE e.guide_id = ? ORDER BY e.id LIMIT 500`,
+        WHERE e.guide_id = ? ORDER BY e.at, e.id LIMIT 500`,
     )
     .bind(id)
     .all<{
@@ -1844,80 +1758,19 @@ export async function thread(db: D1Database, id: string, viewer: string): Promis
       name: string;
       handle: string;
     }>();
-  const { results: verdicts } = await db
-    .prepare(
-      `SELECT v.account_id, v.ok, v.note, v.at, COALESCE(a.name, '') AS name,
-              COALESCE(a.handle, '') AS handle
-         FROM verdict v LEFT JOIN account a ON a.id = v.account_id WHERE v.guide_id = ?`,
-    )
-    .bind(id)
-    .all<{
-      account_id: string;
-      ok: number;
-      note: string;
-      at: string;
-      name: string;
-      handle: string;
-    }>();
-  const { results: acks } = await db
-    .prepare(
-      `SELECT k.account_id, k.taken, k.note, k.at, COALESCE(a.name, '') AS name,
-              COALESCE(a.handle, '') AS handle
-         FROM ack k LEFT JOIN account a ON a.id = k.account_id WHERE k.guide_id = ?`,
-    )
-    .bind(id)
-    .all<{
-      account_id: string;
-      taken: number;
-      note: string;
-      at: string;
-      name: string;
-      handle: string;
-    }>();
-
-  const answered = new Set([
-    ...verdicts.map((v) => `handed_in:${v.account_id}`),
-    ...acks.map((k) => `${k.taken ? "taken" : "passed"}:${k.account_id}`),
-  ]);
-  const person = (agent: string) => agent.startsWith("person-");
-  const items: ThreadItem[] = [];
-  for (const e of events) {
-    // A person's own hold and hand-in made in the browser are the ack and the verdict they just gave.
-    if (person(e.agent_id) && answered.has(`${e.kind}:${e.account_id}`)) continue;
-    items.push({
-      id: `e${e.id}`,
-      kind: e.kind,
-      at: e.at,
-      body: e.body,
-      by: {
-        name: e.name,
-        handle: e.handle,
-        agent: Boolean(e.agent_id) && !person(e.agent_id),
-        host: e.host,
-        you: e.account_id === viewer,
-      },
-    });
-  }
-  const you = (account: string) => account === viewer;
-  for (const v of verdicts)
-    items.push({
-      id: `v:${v.account_id}`,
-      kind: "verdict",
-      at: v.at,
-      body: v.note,
-      ok: v.ok === 1,
-      by: { name: v.name, handle: v.handle, agent: false, host: "", you: you(v.account_id) },
-    });
-  for (const k of acks)
-    items.push({
-      id: `a:${k.account_id}`,
-      kind: "ack",
-      at: k.at,
-      body: k.note,
-      ok: k.taken === 1,
-      by: { name: k.name, handle: k.handle, agent: false, host: "", you: you(k.account_id) },
-    });
-  return items.sort((x, y) => (x.at === y.at ? 0 : x.at < y.at ? -1 : 1));
+  return results.map((e) => ({
+    id: `e${e.id}`,
+    kind: e.kind,
+    at: e.at,
+    body: e.body,
+    by: {
+      name: e.name,
+      handle: e.handle,
+      agent: Boolean(e.agent_id) && !e.agent_id.startsWith("person-"),
+      host: e.host,
+      you: e.account_id === viewer,
+    },
+  }));
 }
 
 /**

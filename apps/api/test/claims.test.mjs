@@ -30,7 +30,6 @@ import {
   LEASE_MS,
   leaf,
   list,
-  markDone,
   next,
   PERSON_LEASE_MS,
   pass,
@@ -1283,7 +1282,7 @@ test("a holder who is not the author can release their own hold, and only theirs
   assert.equal((await take(db, "t1", A, { at: later(3) })).claim.agent_id, "agent-a");
 });
 
-test("anyone in the team can release work, and mark it done — the holder hands it in instead", async () => {
+test("anyone in the team can release work a teammate's agent holds", async () => {
   const db = d1();
   const guide = seed(db);
   db.raw.exec(
@@ -1304,21 +1303,6 @@ test("anyone in the team can release work, and mark it done — the holder hands
   const rel = await release(db, "t1", mate);
   assert.equal(rel.state, "ready", JSON.stringify(rel));
   assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM claim WHERE guide_id = 't1'").get().n, 0);
-
-  // Held and finished in fact: a teammate ends it on the spot.
-  await take(db, "t2", holder, { at: T0 });
-  const done = await markDone(db, "t2", { ...mate, note: "" });
-  assert.equal(done.state, "done", JSON.stringify(done));
-  assert.equal(db.raw.prepare("SELECT status FROM guide WHERE id = 't2'").get().status, "consumed");
-  assert.match(
-    db.raw.prepare("SELECT markdown FROM guide WHERE id = 't2'").get().markdown,
-    /marked done by a teammate/,
-  );
-
-  // The holder saying it is done hands it in, as its agent would have; the route then finishes it.
-  await take(db, "t3", holder, { at: T0 });
-  assert.equal((await markDone(db, "t3", { account: "other", at: T0, note: "" })).state, "review");
-  assert.equal((await markDone(db, "t3", { account: "stranger", at: T0, note: "" })).status, 404);
 });
 
 // ---- assignment: work for one person, or one group, is theirs to take -------------------------
@@ -1501,8 +1485,7 @@ test("a thread keeps what progress overwrote and what a release deleted, in orde
       ["released", "migration written"],
       ["taken", ""],
       ["handed_in", "done"],
-      ["verdict", "done"],
-      ["sent_back", "the second part is not met"],
+      ["reopened", "the second part is not met"],
     ],
   );
   assert.equal(t[0].by.agent, true, "a worktree's act is an agent's");
@@ -1511,26 +1494,36 @@ test("a thread keeps what progress overwrote and what a release deleted, in orde
   assert.equal((await thread(db, "t1", "other"))[3].by.you, false);
 });
 
-test("a person's answer in the browser is one line, not the answer and the hold it caused", async () => {
-  const db = d1();
-  const guide = seed(db);
-  guide("h1", { account: "other" });
-  const me = { account: "me", agent: "person-me", repo: "" };
-  await take(db, "h1", me, { at: T0, many: true });
-  db.raw
-    .prepare(
-      "INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES ('h1', 'me', 1, '', ?)",
-    )
-    .run(T0);
-  await handIn(db, "h1", me, { at: later(1000), note: "works", evidence: "works", person: true });
-  db.raw
-    .prepare(
-      "INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES ('h1', 'me', 1, 'works', ?)",
-    )
-    .run(later(1000));
+test("0062 moves old verdicts, acks and retired kinds into the thread, once each", () => {
+  const sql = before("0062_");
+  sql.exec(
+    `INSERT INTO account (id, token_hash, created) VALUES ('me', 'h', '${T0}'), ('bo', 'h2', '${T0}')`,
+  );
+  sql.exec(`INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated)
+     VALUES ('g1', 'me', 'k', 't', 'published', '', '[]', '[]', '', '${T0}', '${T0}')`);
+  sql.exec(`INSERT INTO task_event (guide_id, kind, account_id, body, at) VALUES
+      ('g1', 'handed_in', 'me', 'shipped', '${later(1)}'),
+      ('g1', 'sent_back', 'bo', 'not met', '${later(2)}'),
+      ('g1', 'approved', 'bo', '', '${later(3)}'),
+      ('g1', 'closed', 'bo', 'dup', '${later(4)}');
+    INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES ('g1', 'bo', 0, 'wrong repo', '${later(5)}');
+    INSERT INTO verdict (guide_id, account_id, ok, note, at) VALUES
+      ('g1', 'me', 1, 'shipped', '${later(1)}'), ('g1', 'bo', 0, '500 on save', '${later(6)}');`);
+  migrate(sql, "0062_");
   assert.deepEqual(
-    (await thread(db, "h1", "me")).map((i) => i.kind),
-    ["ack", "verdict"],
+    sql
+      .prepare("SELECT kind, account_id, body FROM task_event ORDER BY at, id")
+      .all()
+      .map((r) => `${r.kind}:${r.account_id}:${r.body}`),
+    [
+      "handed_in:me:shipped",
+      "reopened:bo:not met",
+      "handed_in:bo:Marked done",
+      "handed_in:bo:Closed: dup",
+      "passed:bo:wrong repo",
+      "reopened:bo:500 on save",
+    ],
+    "a hand-in already on the thread is not written twice",
   );
 });
 
@@ -1858,64 +1851,6 @@ test("migration 0036 clears browser holds already superseded, and nothing else",
     left.map((r) => `${r.guide_id}:${r.place}`),
     ["g1:o/r", "g2:", "t1:"],
   );
-});
-
-test("the author marks a held task done: approved on the spot, and its agent is free for the next", async () => {
-  const db = d1();
-  const guide = seed(db);
-  guide("t1");
-  guide("t2", { created: later(1) });
-  await take(db, "t1", { ...A, host: "mac", worktree: "shop" }, { at: T0 });
-  const r = await markDone(db, "t1", { account: "me", at: later(2), note: "pushed, merged" });
-  assert.equal(r.state, "done");
-  const row = db.raw.prepare("SELECT status, markdown FROM guide WHERE id = 't1'").get();
-  assert.equal(row.status, "consumed");
-  assert.match(row.markdown, /marked done by its author while held by mac:shop: pushed, merged/);
-  assert.equal(
-    (await take(db, "t2", A, { at: later(3) })).claim.agent_id,
-    "agent-a",
-    "the agent that held it is no longer blocked",
-  );
-});
-
-test("whoever's agent holds work can mark it done, and that hands it in as theirs", async () => {
-  const db = d1();
-  const guide = seed(db);
-  guide("t1");
-  teamed(db);
-  await take(db, "t1", { account: "other", agent: "agent-o", repo: "o/r", any: true }, { at: T0 });
-  const r = await markDone(db, "t1", { account: "other", at: later(1), note: "" });
-  assert.equal(r.state, "review");
-  assert.equal(
-    db.raw.prepare("SELECT status FROM guide WHERE id = 't1'").get().status,
-    "published",
-  );
-  assert.equal(
-    db.raw.prepare("SELECT state FROM claim WHERE guide_id = 't1'").get().state,
-    "review",
-  );
-  assert.deepEqual(await complete(db, "t1", { account: "other", at: later(2) }), { done: true });
-});
-
-test("marking done is refused outside the team, and for work nobody holds or already handed in", async () => {
-  const db = d1();
-  const guide = seed(db);
-  guide("t1");
-  guide("t2");
-  teamed(db);
-  assert.equal((await markDone(db, "t1", { account: "me", at: T0, note: "" })).status, 409);
-  await take(db, "t1", A, { at: T0 });
-  assert.equal((await markDone(db, "t1", { account: "stranger", at: T0, note: "" })).status, 404);
-  // The author's own agent holds it: saying it is done sends it to a teammate's review.
-  assert.equal(
-    (await markDone(db, "t1", { account: "me", at: later(1), note: "" })).state,
-    "review",
-  );
-  assert.equal((await markDone(db, "t1", { account: "me", at: later(2), note: "" })).status, 409);
-  // A private task has nobody else, so its author's word approves it.
-  db.raw.exec("UPDATE guide SET team_id = '' WHERE id = 't2'");
-  await take(db, "t2", A, { at: T0 });
-  assert.equal((await markDone(db, "t2", { account: "me", at: later(3), note: "" })).state, "done");
 });
 
 test("a quiet hold stays its agent's when it takes another: the board shows it stalled", async () => {

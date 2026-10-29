@@ -44,13 +44,13 @@ test("refusals name what happened and what to do next", async () => {
   const src = await source();
   for (const now of [
     "You're not in that team any more, or it was deleted.",
-    "This guide isn't available any more. It may have been deleted or moved to a team you're not in.",
+    "This work isn't available any more. It may have been deleted or moved to a team you're not in.",
     "This invite doesn't work any more. Ask whoever sent it for a new link.",
     "That reset link has expired or was already used. Ask for a new one from the sign-in page.",
     "Choose 2 to 31 letters, numbers or dashes, starting with a letter or number.",
     "Screenshots can't be uploaded here right now.",
     "That file isn't an image. Use a PNG, JPEG, WebP or GIF.",
-    "Syncing guides needs a plan. Choose one in Settings.",
+    "Sending work needs a plan. Choose one in Settings.",
   ]) {
     assert.ok(src.includes(now), `missing: ${now}`);
   }

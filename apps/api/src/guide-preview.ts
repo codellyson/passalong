@@ -7,5 +7,5 @@ export function guidePreview(
     .map((id) => shots.find((shot) => shot.id === id))
     .find((shot) => shot !== undefined);
   const shot = fromDocument ?? shots[0];
-  return shot ? { url: `/v1/shots/${shot.id}`, alt: shot.name || "Guide image" } : null;
+  return shot ? { url: `/v1/shots/${shot.id}`, alt: shot.name || "Image" } : null;
 }

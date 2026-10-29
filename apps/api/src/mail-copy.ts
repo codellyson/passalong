@@ -33,12 +33,12 @@ export function handoffCopy(o: {
   const where = o.team ? ` in ${o.team}` : "";
   return {
     subject: `${o.fromName} sent you "${o.title}"`,
-    preview: `${o.fromName} sent you a guide${where}. Open it to take it.`,
-    eyebrow: `${o.fromName} sent you a guide${where}`,
+    preview: `${o.fromName} sent you work${where}. Open it to take it.`,
+    eyebrow: `${o.fromName} sent you work${where}`,
     text: [
       `${o.fromName} sent you "${o.title}"${where}.`,
       "",
-      `Open the guide: ${o.url}`,
+      `Open it: ${o.url}`,
       "",
       "Take it there when you start: nobody else can take it while you hold it, and",
       `${o.fromName} sees you have it. Hand it in when it is done, with what you ran to show it.`,
@@ -51,30 +51,28 @@ export function handoffCopy(o: {
 export function openedCopy(o: { byName: string; title: string; url: string; hub: string }): Copy {
   return {
     subject: `${o.byName} opened "${o.title}"`,
-    preview: `${o.byName} opened your guide. What's still open is whether it worked for them.`,
+    preview: `${o.byName} opened your work.`,
     eyebrow: `${o.byName} opened it`,
     text: [
-      `${o.byName} opened your guide "${o.title}".`,
+      `${o.byName} opened "${o.title}".`,
       "",
-      "What's still open is whether it worked for them.",
-      "",
-      `Open the guide: ${o.url}`,
+      `Open it: ${o.url}`,
       "",
       `See everything in one place: ${o.hub}`,
     ],
   };
 }
 
-/** Somebody who is not the author is done with a guide. The author archiving it sends nothing. */
+/** Somebody who is not the author is done with a piece of work. The author archiving it sends nothing. */
 export function doneCopy(o: { byName: string; title: string; url: string; hub: string }): Copy {
   return {
     subject: `${o.byName} is done with "${o.title}"`,
-    preview: `${o.byName} is done with your guide. Nothing is waiting on either of you.`,
+    preview: `${o.byName} is done with your work. Nothing is waiting on either of you.`,
     eyebrow: `${o.byName} is done with it`,
     text: [
-      `${o.byName} is done with your guide "${o.title}". Nothing is waiting on either of you.`,
+      `${o.byName} is done with "${o.title}". Nothing is waiting on either of you.`,
       "",
-      `Open the guide: ${o.url}`,
+      `Open it: ${o.url}`,
       "",
       `See everything in one place: ${o.hub}`,
     ],
@@ -103,7 +101,7 @@ export function askedCopy(o: {
       "",
       `Answer it in the hub: ${o.hub}`,
       "",
-      `Open the guide: ${o.url}`,
+      `Open it: ${o.url}`,
     ],
   };
 }
@@ -127,7 +125,7 @@ export function repliedCopy(o: {
       "",
       "Your agent reads it the next time it checks in.",
       "",
-      `Open the guide: ${o.url}`,
+      `Open it: ${o.url}`,
       "",
       `See everything in one place: ${o.hub}`,
     ],

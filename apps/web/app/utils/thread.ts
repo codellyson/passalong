@@ -3,7 +3,7 @@
  *
  * The server sends facts — "progress, by this agent, with this note" — and this puts them in the
  * voice a person would use, so the conversation reads as one. Nothing here rewrites what an agent
- * wrote: a progress note, a reason and a verdict's note come through as they were sent, and a line
+ * wrote: a progress note, a reason and a question come through as they were sent, and a line
  * with nothing of its own to say gets a plain sentence for what happened.
  *
  * Imports only types, so it runs under `node --test` without Nuxt — which is why the name rule
@@ -28,7 +28,7 @@ export interface Message {
   pictures: boolean;
   /** Files attached to it, to be downloaded. Their lines are taken out of `text`. */
   files: { name: string; url: string }[];
-  /** Negative: a decline, a failing verdict, a reopen, a pass. */
+  /** Negative: a reopen or a pass. */
   tone: "neutral" | "bad";
 }
 
@@ -110,11 +110,7 @@ export function messageOf(i: ThreadItem): Message {
           : "Took this back.";
       quiet = true;
       break;
-    case "approved":
-      // A person said it is done while somebody still held it (markDone in claims.ts).
-      text = said("Marked done", i.body);
-      break;
-    case "sent_back":
+    case "reopened":
       // Reopened after it was finished, with why (reopen in claims.ts).
       text = said("Reopened", i.body);
       tone = "bad";
@@ -126,20 +122,6 @@ export function messageOf(i: ThreadItem): Message {
       break;
     case "noted":
       // Left on the work before anybody took it: the author speaking to whoever does.
-      break;
-    // No longer written; work from before still carries it, and acks below.
-    case "closed":
-      text = "Closed.";
-      quiet = true;
-      break;
-    case "verdict":
-      text = i.ok ? said("It works", i.body) : said("It does not work", i.body);
-      tone = i.ok ? "neutral" : "bad";
-      break;
-    case "ack":
-      text = i.ok ? "On it." : said("Not me", i.body);
-      tone = i.ok ? "neutral" : "bad";
-      quiet = Boolean(i.ok) && !i.body;
       break;
   }
   // A file is a line of its own, `[name](…/v1/attachments/<id>)`, and is shown as something to

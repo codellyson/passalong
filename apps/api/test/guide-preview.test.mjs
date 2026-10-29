@@ -16,7 +16,7 @@ test("guide rows choose the first available document image", () => {
 test("guide rows fall back to proof, then to no image", () => {
   assert.deepEqual(guidePreview([], [{ id: "proof123", name: "" }]), {
     url: "/v1/shots/proof123",
-    alt: "Guide image",
+    alt: "Image",
   });
   assert.equal(guidePreview(["foreign1"], []), null);
 });

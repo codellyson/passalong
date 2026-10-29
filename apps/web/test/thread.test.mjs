@@ -38,24 +38,20 @@ test("what has no words of its own gets a sentence, and is quiet", () => {
 });
 
 test("a reopen carries its reason and reads as a refusal", () => {
-  const m = messageOf(item("sent_back", { body: "Acceptance 2 not met", by: by({ you: true }) }));
+  const m = messageOf(item("reopened", { body: "Acceptance 2 not met", by: by({ you: true }) }));
   assert.equal(m.text, "Reopened: Acceptance 2 not met");
   assert.equal(m.tone, "bad");
   assert.equal(m.mine, true);
   assert.equal(
-    messageOf(item("verdict", { ok: false, body: "500 on save" })).text,
-    "It does not work: 500 on save",
-  );
-  assert.equal(
-    messageOf(item("ack", { ok: false, body: "wrong repo" })).text,
-    "Not me: wrong repo",
+    messageOf(item("passed", { body: "wrong repo" })).text,
+    "Handing this back: wrong repo",
   );
 });
 
 test("somebody else is named, by name else handle", () => {
-  assert.equal(messageOf(item("approved", { by: by({ handle: "ada" }) })).who, "@ada");
+  assert.equal(messageOf(item("handed_in", { by: by({ handle: "ada" }) })).who, "@ada");
   assert.equal(
-    messageOf(item("approved", { by: by({ name: "Ada L", handle: "ada" }) })).who,
+    messageOf(item("handed_in", { by: by({ name: "Ada L", handle: "ada" }) })).who,
     "Ada L",
   );
 });
@@ -67,7 +63,7 @@ test("one speaker's run shares a name; a long gap or a new speaker starts anothe
     item("taken", { id: "1", at: t(0), by: a }),
     item("progress", { id: "2", at: t(2), body: "x", by: a }),
     item("progress", { id: "3", at: t(30), body: "y", by: a }),
-    item("approved", { id: "4", at: t(31), by: by({ you: true }) }),
+    item("handed_in", { id: "4", at: t(31), by: by({ you: true }) }),
   ]);
   assert.deepEqual(
     g.map((x) => x.messages.map((m) => m.id)),

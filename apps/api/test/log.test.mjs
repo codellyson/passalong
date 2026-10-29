@@ -56,7 +56,7 @@ test("a positive act never grows a colon, even when a row carries a note", () =>
 
 test("a guide with no title still produces a sentence", () => {
   // Title is written from the document's frontmatter, and a draft published without one is legal.
-  assert.equal(line(row({ title: "" })), "sent a guide");
+  assert.equal(line(row({ title: "" })), "sent a piece of work");
 });
 
 test("mine is the author, not the actor: every row in a log is something you did", () => {

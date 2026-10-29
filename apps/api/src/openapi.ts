@@ -39,7 +39,7 @@ const GUIDE = {
       type: "string",
       enum: ["draft", "published", "consumed", "promoted"],
       description:
-        "`promoted` is read-only: guides that carry it keep it, and no write can set it.",
+        "`promoted` is read-only: work that carries it keeps it, and no write can set it.",
     },
     url: {
       type: "string",
@@ -97,40 +97,6 @@ const GUIDE = {
     tags: { type: "array", items: { type: "string" } },
     stack_assumptions: { type: "array", items: { type: "string" } },
     parent: { type: "string", description: "The work this came out of, if any." },
-    failing: { type: "boolean", description: "Someone tried it and said it does not work." },
-    verdict: {
-      type: ["object", "null"],
-      properties: {
-        ok: { type: "boolean" },
-        by: { type: "string" },
-        by_name: { type: "string" },
-        note: { type: "string" },
-        at: { type: "string", format: "date-time" },
-      },
-    },
-    taken_by: {
-      type: "array",
-      items: { type: "string" },
-      description: "Handles of the people who said they are on it.",
-    },
-    taken_by_names: {
-      type: "array",
-      items: { type: "string" },
-      description: "The same people as taken_by, in the same order, by name.",
-    },
-    declined: {
-      type: "array",
-      description: "Who handed it back, and why. Only its author can re-home it.",
-      items: {
-        type: "object",
-        properties: {
-          by: { type: "string" },
-          by_name: { type: "string" },
-          note: { type: "string" },
-          at: { type: "string", format: "date-time" },
-        },
-      },
-    },
   },
 } as const;
 
@@ -221,7 +187,7 @@ const NOT_HELD = {
 
 const guideList = {
   200: {
-    description: "Guides.",
+    description: "Work.",
     content: {
       "application/json": {
         schema: {
@@ -298,7 +264,7 @@ export function openapi(origin: string) {
       "/v1/folders/{folder}": {
         get: {
           operationId: "getFolder",
-          summary: "List a folder's documents, assets and linked guides.",
+          summary: "List a folder's documents, files and linked work.",
           parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             200: { description: "Folder contents." },
@@ -375,7 +341,7 @@ export function openapi(origin: string) {
       "/v1/folders/{folder}/guides": {
         post: {
           operationId: "linkFolderGuide",
-          summary: "Link an existing guide to a folder without changing the guide.",
+          summary: "Link existing work to a folder without changing it.",
           parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -389,13 +355,13 @@ export function openapi(origin: string) {
               },
             },
           },
-          responses: { 201: { description: "The linked guide id." } },
+          responses: { 201: { description: "The linked work's id." } },
         },
       },
       "/v1/guides": {
         get: {
           operationId: "searchGuides",
-          summary: "Search guides by words in the title, tags, stack, or body.",
+          summary: "Search work by words in the title, tags, stack, or body.",
           parameters: [
             { name: "q", in: "query", schema: { type: "string" }, description: "Search words." },
             SCOPE_PARAMETER,
@@ -406,21 +372,21 @@ export function openapi(origin: string) {
       "/v1/guides/{id}": {
         get: {
           operationId: "getGuide",
-          summary: "One guide's full markdown.",
+          summary: "One piece of work's full markdown.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
-            200: { description: "The guide.", content: { "text/markdown": {} } },
-            404: { description: "No such guide." },
+            200: { description: "The work.", content: { "text/markdown": {} } },
+            404: { description: "No such work." },
           },
         },
         put: {
           operationId: "publishGuide",
-          summary: "Publish or update a guide. The body is the whole document.",
+          summary: "Create or update work. The body is the whole document.",
           description:
             "Frontmatter carries `title:`, `summary:` and the addressing: `team:` and `to:` hand it " +
             "over. `kind:` is refused: work has no kinds. `parent:` names the work this came out of " +
             "— or send `parent` beside `markdown` and it is written into the frontmatter for you. " +
-            "Choose a new id only for a new guide. To change one, PUT to the id it was published " +
+            "Choose a new id only for new work. To change one, PUT to the id it was published " +
             "under: a different id publishes a second copy, and each counts against the synced limit.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
@@ -441,7 +407,7 @@ export function openapi(origin: string) {
                     parent: {
                       type: "string",
                       description:
-                        "Optional id of the guide this one came out of. Written into the " +
+                        "Optional id of the work this came out of. Written into the " +
                         "frontmatter as `parent:`, so the stored document is the same either way.",
                     },
                   },
@@ -454,33 +420,6 @@ export function openapi(origin: string) {
             200: { description: "Updated." },
             201: { description: "Created." },
             400: { description: "The document or its addressing is not valid." },
-          },
-        },
-      },
-      "/v1/guides/{id}/children": {
-        get: {
-          operationId: "listFollowUps",
-          summary: "The guides that came out of this one, one level down.",
-          description:
-            "Guides whose `parent:` names this one — its follow-ups, more context for it — " +
-            "filtered to what you can read. One level: walk it for more. Newest first, up to 100, " +
-            "as summaries. With `markdown=1`, each summary also carries the follow-up's `markdown`, " +
-            "oldest first (context reads in the order it was added), at most 20, and any one over " +
-            "32 KB is cut with a marker saying so. Neither form counts as opening the follow-ups.",
-          parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
-            {
-              name: "markdown",
-              in: "query",
-              required: false,
-              description:
-                "1 to include each follow-up's markdown, oldest first, capped at 20 and 32 KB each",
-              schema: { type: "string", enum: ["1"] },
-            },
-          ],
-          responses: {
-            200: { description: "The follow-ups.", content: { "application/json": {} } },
-            404: { description: "No such guide." },
           },
         },
       },
@@ -564,7 +503,7 @@ export function openapi(origin: string) {
                 type: "string",
                 maxLength: 4000,
                 description:
-                  "What you ran and what came back: the command and the lines that decided it, a test summary, a link to the change, or a screenshot url. A verdict on your own work is not evidence.",
+                  "What you ran and what came back: the command and the lines that decided it, a test summary, a link to the change, or a screenshot url. Your own word for your work is not evidence.",
               },
             },
             ["note", "evidence"],
@@ -799,13 +738,6 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/inbox": {
-        get: {
-          operationId: "inbox",
-          summary: "Handed to you and not yet taken.",
-          responses: guideList,
-        },
-      },
       "/v1/board": {
         get: {
           operationId: "board",
@@ -819,15 +751,15 @@ export function openapi(origin: string) {
           summary: "What you did, newest first.",
           description:
             "Your own acts on work — published, pulled, finished, and the ones you passed on — " +
-            "each with a rendered `text` line and the guide's repo. The opposite of " +
+            "each with a rendered `text` line and its repo. The opposite of " +
             "notifications, which is what other people did. It records what was passed along, " +
-            "not what was worked on: work that never became a guide has no entry here.",
+            "not what was worked on: something never written down as work has no entry here.",
           parameters: [
             {
               name: "repo",
               in: "query",
               schema: { type: "string" },
-              description: "Narrow to guides whose source repo matches.",
+              description: "Narrow to work whose source repo matches.",
             },
             {
               name: "since",
@@ -852,7 +784,7 @@ export function openapi(origin: string) {
       "/v1/shots": {
         post: {
           operationId: "uploadScreenshot",
-          summary: "Store a screenshot and get a URL to put in a guide's markdown.",
+          summary: "Store a screenshot and get a URL to put in work's markdown.",
           description:
             "Raw image bytes with a content-type; png, jpeg, webp or gif, up to 5MB. Reference " +
             "the returned url as a markdown image so the evidence outlives wherever it came from.",
@@ -904,7 +836,7 @@ export function openapi(origin: string) {
           operationId: "sendToUploadLink",
           summary: "Send raw bytes to an upload link. POST works too.",
           description:
-            "The minted link decides whether to store a screenshot (5 MB), a guide file (10 MB), " +
+            "The minted link decides whether to store a screenshot (5 MB), a file on work (10 MB), " +
             "or a folder asset (10 MB). Types are checked from the bytes. Returns the stored item.",
           security: [],
           parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
@@ -919,7 +851,7 @@ export function openapi(origin: string) {
       "/g/{id}/{key}.md": {
         get: {
           operationId: "readSharedGuide",
-          summary: "A guide's markdown from its share link. No account needed.",
+          summary: "Work's markdown from its share link. No account needed.",
           description:
             "The key in the share URL is the whole authorization. Reading one records a pull, " +
             "which is how the sender learns it landed.",
@@ -930,7 +862,7 @@ export function openapi(origin: string) {
           ],
           responses: {
             200: { description: "The markdown.", content: { "text/markdown": {} } },
-            404: { description: "No such guide." },
+            404: { description: "No such work." },
           },
         },
       },

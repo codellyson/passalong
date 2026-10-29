@@ -36,7 +36,7 @@ export function sendHandoff(
       eyebrow: copy.eyebrow,
       heading: o.title,
       body: [
-        button("Open the guide", o.url),
+        button("Open it", o.url),
         p(
           `Take it there when you start: nobody else can take it while you hold it, and ` +
             `${b(o.fromName)} sees you have it.`,
@@ -74,7 +74,7 @@ export function sendPulled(
       tone: "ok",
       body: [
         p("They have it. What's still open is whether it worked for them."),
-        button("Open the guide", o.url),
+        button("Open it", o.url),
       ],
       foot: [seeEverything(env)],
     }),
@@ -100,7 +100,7 @@ export function sendConsumed(
       tone: "ok",
       body: [
         p(`${b(o.byName)} is done with what you sent. Nothing is waiting on either of you.`),
-        button("Open the guide", o.url),
+        button("Open it", o.url),
       ],
       foot: [seeEverything(env)],
     }),
@@ -153,7 +153,7 @@ export function sendReplied(
       body: [
         quote(o.body, "ok"),
         p("Your agent reads it the next time it checks in.", MUTED),
-        button("Open the guide", o.url),
+        button("Open it", o.url),
       ],
       foot: [seeEverything(env)],
     }),

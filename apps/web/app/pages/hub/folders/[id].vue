@@ -744,7 +744,7 @@ watch([signedIn, id], load, { immediate: true });
             </form>
             <ul v-if="guides.length" class="m-0 w-full list-none p-0">
               <li v-for="guide in guides" :key="guide.id" class="flex items-start justify-between gap-2 border-t border-line py-3">
-                <div class="min-w-0"><NuxtLink :to="'/hub/g/' + guide.id" class="min-w-0 font-ui text-sm">{{ guide.title || "Untitled" }}</NuxtLink><p class="m-0 mt-1 font-ui text-xs text-muted">{{ STAGE[guide.status] || guide.status }}</p></div>
+                <div class="min-w-0"><div class="flex min-w-0 items-center gap-2"><NuxtLink :to="'/hub/g/' + guide.id" class="min-w-0 font-ui text-sm">{{ guide.title || "Untitled" }}</NuxtLink><HubWorkTag :tags="guide.tags" /></div><p class="m-0 mt-1 font-ui text-xs text-muted">{{ STAGE[guide.status] || guide.status }}</p></div>
                 <button class="font-ui text-xs text-muted underline hover:text-fg" type="button" :aria-label="'Unlink ' + guide.title" @click="unlinkGuide(guide)">Unlink</button>
               </li>
             </ul>

@@ -44,10 +44,10 @@ test("the preview starts with the person, and neither it nor the subject carries
   }
 });
 
-test("the text half leads with opening the guide, and a command is only a footnote", () => {
+test("the text half leads with opening the work, and a command is only a footnote", () => {
   const handoff = every()[0].text;
   assert.equal(handoff[0], `Hybee1 sent you "${TITLE}" in Khaime.`);
-  assert.ok(handoff.includes(`Open the guide: ${URL_}`));
+  assert.ok(handoff.includes(`Open it: ${URL_}`));
   assert.match(handoff.join("\n"), /Take it there/);
   const commands = handoff.filter((l) => l.includes("passalong "));
   assert.deepEqual(commands, [`Using a terminal or an agent? passalong take ${ID}`]);

@@ -44,4 +44,6 @@ export interface FolderGuide {
   title: string;
   summary: string;
   status: string;
+  /** The label its agent gave it; the first is shown. */
+  tags: string[];
 }

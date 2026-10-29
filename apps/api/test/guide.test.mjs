@@ -266,27 +266,17 @@ test("an empty list is written as one, not left as the old value", () => {
   assert.deepEqual(parseMeta(out).tags, []);
 });
 
-test("a correction is a verdict with room, shown on the guide", async () => {
-  // The page never rendered a verdict, so a guide somebody had already found broken still read as
-  // authoritative to the next reader — and `note` is capped at 280 characters, the width of the
-  // row it was written for. Between them, the only way to warn anyone was to publish a second
-  // guide titled "Correction: …" and hope they followed the link.
-  // A hand-in's evidence lands on the verdict that finishing keeps, not only on the claim it goes
-  // with, which is what makes the guide able to show it.
-  const claims = await readFile(new URL("../src/claims.ts", import.meta.url), "utf8");
-  assert.match(claims, /INSERT INTO verdict[\s\S]*detail, checks, writeup/);
-
-  // And the page asks for them. Without this the rest is a column nobody reads.
+test("the share page is the document and nothing about who answered it", async () => {
+  // The key in the URL is the whole authorisation, so the page is public to whoever holds it: what
+  // a hand-in showed and who sent it are on the signed-in work page, never here.
   const page = await readFile(
     new URL("../../web/server/api/guide/[id]/[key].get.ts", import.meta.url),
     "utf8",
   );
-  assert.match(page, /FROM verdict\s*\n\s*WHERE guide_id = \? AND ok = 0/, "only the failures");
-  assert.doesNotMatch(
-    page,
-    /SELECT[^;]*account_id[^;]*FROM verdict/,
-    "and nobody is named: the key in the URL is the whole authorisation, so this page is public",
-  );
+  assert.doesNotMatch(page, /FROM (verdict|ack|claim)\b/);
+  // What finishing keeps is the standing verdict, which the signed-in page leads with.
+  const claims = await readFile(new URL("../src/claims.ts", import.meta.url), "utf8");
+  assert.match(claims, /INSERT INTO verdict[\s\S]*detail, checks, writeup/);
 });
 
 test("nothing a stranger does to your guide happens in silence", async () => {
@@ -444,12 +434,9 @@ test("a field can be taken out of the frontmatter, and nothing else moves", () =
   assert.equal(parseMeta(dropField(md, "to")).to, undefined);
 });
 
-test("a guide that worked with changes says so, on itself", async () => {
-  // The other half of the correction channel, and the last thing an agent had to publish a guide
-  // to say. A hand-in that HELD, and had to adapt something to get there, had `ok` (a boolean),
-  // `note` (280 characters) and `evidence` (what you ran). So the adaptation arrived as a
-  // follow-up guide — "The email step needs MAIL_FROM and the R2 bucket name" — with an id, a
-  // share link and an inbox row asking somebody to take it, when it is a paragraph about a guide.
+test("work that finished with changes says so, on itself", async () => {
+  // A hand-in that held, and had to adapt something to get there, says so in its writeup — never in
+  // a second piece of work written to carry a paragraph.
   const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
   const handIn = src.slice(src.indexOf('app.post("/v1/guides/:id/hand_in"'));
   const route = handIn.slice(0, handIn.indexOf("\napp."));
@@ -459,55 +446,6 @@ test("a guide that worked with changes says so, on itself", async () => {
   // row per account, and silence is not a retraction.
   const claims = await readFile(new URL("../src/claims.ts", import.meta.url), "utf8");
   assert.match(claims, /writeup = CASE WHEN excluded\.writeup <> ''/);
-
-  const page = await readFile(
-    new URL("../../web/server/api/guide/[id]/[key].get.ts", import.meta.url),
-    "utf8",
-  );
-  // Its own query, not one over both: a guide with five write-ups must never push a "this did not
-  // hold" off the list the reader is warned by.
-  assert.match(page, /WHERE guide_id = \? AND ok = 1 AND \(writeup <> '' OR checks <> ''\)/);
-  assert.match(
-    page,
-    /FROM verdict\s*\n\s*WHERE guide_id = \? AND ok = 0/,
-    "the warning still stands alone",
-  );
-  assert.doesNotMatch(
-    page,
-    /SELECT[^;]*account_id[^;]*FROM verdict/,
-    "and nobody is named: the key in the URL is the whole authorisation, so this page is public",
-  );
-});
-
-test("what ran outranks what was said about it, on the guide", async () => {
-  // The page showed a passing hand-in's `writeup` — prose nothing checked — at the top, above the
-  // guide it is about, and did not show that hand-in's `checks` at all. The executed commands, the
-  // one thing on the page the agent could not have written, were only in the author's hub row. So
-  // the surface gave its best position to its weakest evidence.
-  const page = await readFile(
-    new URL("../../web/server/api/guide/[id]/[key].get.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(page, /SELECT writeup, checks, at FROM verdict/, "the page asks for both");
-  // A check the runner executed carries `cmd` and an `exit`; one with only `ran` is the agent's
-  // account. They are separated here, not merged into a count of "evidence".
-  assert.match(page, /ran: rows\.filter\(verified\)/);
-  assert.match(page, /said: rows\.filter\(\(c\) => !verified\(c\)\)/);
-  assert.match(page, /\.sort\(\(a, b\) => b\.ran\.length - a\.ran\.length\)/, "run evidence first");
-
-  const view = await readFile(
-    new URL("../../web/app/pages/g/[id]/[key].vue", import.meta.url),
-    "utf8",
-  );
-  // Order in the markup is the ranking a reader actually meets.
-  const at = (needle) => {
-    const i = view.indexOf(needle);
-    assert.ok(i > 0, `${needle} should be on the page`);
-    return i;
-  };
-  assert.ok(at("a.ran") < at("a.said"), "executed commands before the agent's account of them");
-  assert.ok(at("a.said") < at("a.writeup"), "and both before prose");
-  assert.match(view, /What they said they changed/, "prose is labelled as what it is");
 });
 
 test("a hand-in says what it did in a sentence, before anything behind it is read", async () => {
