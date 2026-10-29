@@ -385,7 +385,10 @@ change. Its README says how.
   `READER_PROVIDER` (`anthropic`, `openai`, `google`, or `openai-compatible` for OpenRouter, Groq,
   Ollama and the like, which also needs `READER_URL`), `READER_KEY` (a secret) and `READER_MODEL` on
   the web Worker; without them, intake keeps its fixed rule. A raw fetch to one vendor's API shape
-  was the first version, and only OpenAI spoke it natively. Every answer passes `readVerdict()` or is thrown away whole — a kind
+  was the first version, and only OpenAI spoke it natively. It is shown the pictures as well as the words
+  (`readerImages()`: up to three, PNG/JPEG/GIF/WebP, 4 MB each; from the box, only shots the writer
+  uploaded), because a screenshot of an error is often the whole report and a reader that cannot see it
+  asks the person to type out what the picture already says. Every answer passes `readVerdict()` or is thrown away whole — a kind
   from the list, a group that exists, lengths capped, each kind's required sections, no contact
   details — never patched. The customer's own words are quoted into the guide by code, not by the
   model. Its reason goes on the thread as a note; when it is unsure, the author and team owners get

@@ -191,6 +191,47 @@ test("Anthropic is spoken natively, through its own package", async () => {
   assert.match(body.system[0]?.text ?? body.system, /only fill|JSON/i);
 });
 
+test("a pasted screenshot reaches the model as a picture, and only pictures it can read", async () => {
+  const env = { READER_PROVIDER: "anthropic", READER_KEY: "ak", READER_MODEL: "claude-haiku-5-5" };
+  let body;
+  const ok = async (_url, init) => {
+    body = JSON.parse(init.body);
+    return new Response(
+      JSON.stringify({
+        id: "m1",
+        type: "message",
+        role: "assistant",
+        model: "claude-haiku-5-5",
+        content: [{ type: "text", text: JSON.stringify(bug) }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+  };
+  const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const images = [
+    { type: "image/png", bytes: png },
+    { type: "text/html", bytes: png },
+    { type: "image/png", bytes: new Uint8Array(0) },
+  ];
+  const v = await askReader(
+    env,
+    { subject: "", text: "Something's broken:", groups: GROUPS, from: "team", images },
+    ok,
+  );
+  assert.equal(v?.kind, "bug");
+  const parts = body.messages[0].content;
+  const pictures = parts.filter((p) => p.type === "image");
+  assert.equal(pictures.length, 1, "html and empty files are not shown");
+  assert.equal(pictures[0].source.media_type, "image/png");
+  assert.match(parts.find((p) => p.type === "text").text, /1 picture attached/);
+  assert.match(
+    readerMessages({ subject: "", text: "", groups: [], images: [images[0]] })[1].content,
+    /no text: see the pictures/,
+  );
+});
+
 test("a teammate's writing may be a handover; a customer's may not", () => {
   const t = {
     ...bug,

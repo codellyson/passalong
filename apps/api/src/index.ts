@@ -234,7 +234,7 @@ import {
   planNow,
   seatsFull,
 } from "./quota.js";
-import { askDraft, askReader, readerReady } from "./reader.js";
+import { askDraft, askReader, READER_IMAGES, type ReaderImage, readerReady } from "./reader.js";
 import { sizeProblem } from "./sections.js";
 import {
   conversationOn,
@@ -5870,6 +5870,7 @@ async function receiveSupport(
     subject: withoutRef(mail.subject),
     text: mail.text,
     groups,
+    images: mail.files.map((f) => ({ type: f.type, bytes: f.bytes })),
   });
   const title = verdict?.title || titleOf(withoutRef(mail.subject)) || "A message from a customer";
   const made = await intake(env, ctx, {
@@ -6084,6 +6085,28 @@ async function composeTeam(c: Ctx, me: string, slug: string) {
 const INLINE_SHOT = /!\[[^\]]*\]\((\S*?\/v1\/shots\/[a-z0-9]{6,16})\)/g;
 
 /**
+ * The pictures someone pasted, for the reader to look at: only shots this account uploaded, so
+ * naming another's id shows the model nothing. A picture that cannot be read is left out.
+ */
+async function shotsToRead(c: Ctx, me: string, urls: string[]): Promise<ReaderImage[]> {
+  const bucket = c.env.SHOTS;
+  if (!bucket) return [];
+  const ids = [...new Set(urls.map((u) => u.match(/\/v1\/shots\/([a-z0-9]{6,16})$/)?.[1]))]
+    .filter((id): id is string => Boolean(id))
+    .slice(0, READER_IMAGES);
+  const out: ReaderImage[] = [];
+  for (const id of ids) {
+    const row = await c.env.DB.prepare("SELECT type FROM shot WHERE id = ? AND account_id = ?")
+      .bind(id, me)
+      .first<{ type: string }>();
+    const object = row && (await bucket.get(shotKey(id, row.type)).catch(() => null));
+    if (row && object)
+      out.push({ type: row.type, bytes: new Uint8Array(await object.arrayBuffer()) });
+  }
+  return out;
+}
+
+/**
  * What the box's writing would become as it is written (docs/LOOP.md §1a, "read as I type"): the
  * reader's kind, group and title, or its question. Nothing is filed; short text is not sent.
  */
@@ -6092,8 +6115,12 @@ app.post("/v1/compose/preview", async (c) => {
     return err(c, 501, "Writing it down here isn't set up on this server yet.");
   const me = c.get("account");
   const body = (await c.req.json().catch(() => ({}))) as { text?: unknown; team?: unknown };
-  const text = (typeof body.text === "string" ? body.text : "").replace(INLINE_SHOT, "").trim();
-  if (text.length < 20) return c.json({ preview: null });
+  const raw = typeof body.text === "string" ? body.text : "";
+  const shots = [...raw.matchAll(INLINE_SHOT)].map((m) => m[1] as string);
+  const text = raw.replace(INLINE_SHOT, "").trim();
+  // A screenshot says enough on its own; words alone need a sentence before they are worth reading.
+  if (text.length < 20 && !shots.length) return c.json({ preview: null });
+  const images = await shotsToRead(c, me, shots);
   const slug = typeof body.team === "string" ? body.team.trim() : "";
   const { team, groups } = await composeTeam(c, me, slug);
   const v = await askReader(c.env, {
@@ -6102,6 +6129,7 @@ app.post("/v1/compose/preview", async (c) => {
     groups,
     from: "team",
     kinds: ["task", "bug", "transfer"],
+    images,
   });
   if (!v) return c.json({ preview: null });
   const routed = v.route ? groups.find((g) => g.slug === v.route) : undefined;
@@ -6167,7 +6195,10 @@ app.post("/v1/compose", async (c) => {
     .replace(INLINE_SHOT, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  if (!text) return err(c, 400, "Write what you need first.");
+  const pasted = [...inline, ...(Array.isArray(body.pictures) ? body.pictures : [])].filter(
+    (u): u is string => typeof u === "string",
+  );
+  if (!text && !pasted.length) return err(c, 400, "Write what you need first.");
   if (text.length > 8000) return err(c, 400, "That is over 8000 characters. Say it shorter.");
   const slug = typeof body.team === "string" ? body.team.trim() : "";
   const { team, groups } = await composeTeam(c, me, slug);
@@ -6182,6 +6213,7 @@ app.post("/v1/compose", async (c) => {
     groups,
     from: "team",
     kinds: ["task", "bug", "transfer"],
+    images: await shotsToRead(c, me, pasted),
   });
   if (!verdict)
     return err(
@@ -6196,8 +6228,8 @@ app.post("/v1/compose", async (c) => {
     .first<{ name: string; handle: string }>();
   const name = who?.name || (who?.handle ? `@${who.handle}` : "Someone");
   // Pictures are uploaded as screenshots first; only our own shot addresses, after the words.
-  const pictures = [...inline, ...(Array.isArray(body.pictures) ? body.pictures : [])]
-    .filter((u): u is string => typeof u === "string" && /\/v1\/shots\/[a-z0-9]{6,16}$/.test(u))
+  const pictures = pasted
+    .filter((u) => /\/v1\/shots\/[a-z0-9]{6,16}$/.test(u))
     .slice(0, 5)
     .map((u, i) => `![picture ${i + 1}](${u})`);
   let markdown = readerBody(verdict, {
