@@ -21,9 +21,13 @@ gives every person and agent who picks work up the knowledge of the product. So:
    the words the team uses and how it is built; other pages cover one area each; a Log page says
    what changed. Agents read them when they take work and update them when they hand it in;
    every version is kept, so a person can see what changed and undo it.
-5. **Work**: what to do, as tasks and bugs, each with an owner, a state and a record of how it finished.
-   A page says what is true; a task or bug says what someone must still do, and that is what
-   reminds people and closes the loop with a customer.
+5. **Work**: what to do. **One thing, with no kinds**: not task, bug or handover, and no required
+   sections, templates or headings. A piece of work is what it is in plain words, with whatever came
+   with it (screenshots, files, a customer's message), its project, who has it and its state, plus a
+   one- or two-line summary for people scanning the hub. The agent reads it and works out what done
+   means; a writer may say "done when", nothing requires it. The hub may show a label such as "bug"
+   that the agent sets, as description, never as a rule. A page says what is true; work says what
+   someone must still do, and that is what reminds people and closes the loop with a customer.
 
 **Two rules.**
 - **Everything lives in exactly one project.** Nothing floats on its own.
@@ -34,8 +38,10 @@ gives every person and agent who picks work up the knowledge of the product. So:
 - **Handover guides** (`kind: transfer`). Knowledge is written into a project's documents, where
   everyone finds it later, instead of a one-off document handed to one person. Old ones stay
   readable; nothing new is made as one.
-- **The word "guide"** as something a person has to learn. The hub says task, bug, document and
-  project.
+- **Kinds and sections**: `kind:`, the per-kind templates and required headings, and every rule
+  that turns on them. Splitting work into kinds was the system doing the agent's reading in advance.
+- **The word "guide"** everywhere: the hub, the agent tools, the CLI. Four nouns remain: project,
+  document, work, file.
 
 **The agent decides; people are told, not asked.** Passalong's own agent (the reader) reads the
 problem and everything around it — notes, hand-ins, screenshots, output, linked work, a customer
@@ -52,14 +58,22 @@ wrong Done can.
 reminders (untaken, stalled, a waiting customer), customer threads, the reader. Passalong carries
 and remembers; it never hosts the agent that does the work (§6 item 5 is withdrawn).
 
-**Build order.** Each step works on its own, and none renames or removes anything until the one
-before has proved itself in use. The first two answer what hurts in the live product today
+**Overhaul, never patch.** What is wrong for this picture is replaced whole and the old removed
+completely — code, routes, tools, columns, docs — not kept alive beside the new. Installed CLIs and
+agents are moved by publishing the new CLI and raising `MIN_CLIENT`, not by keeping old routes.
+Data is migrated, never silently dropped.
+
+**Agent tools: 17, four nouns.** Work: `take`, `progress`, `hand_in`, `pass`, `ask`, `create_work`,
+`find_work`, `update_work`. Projects: `find_projects`, `save_project`, `read_document`,
+`save_document`, `delete_document`. Files: `add_file`, `read_file`, `delete_file`. Account:
+`accounts`. Everything else (about 45 today) goes.
+
+**Build order.** Each step lands whole. The first two answer what hurts in the live product today
 (2026-10-29): agents publishing a handover nobody reads after finishing a task, which sits on the
 board until someone archives it by hand; and finished work nobody moved to Done.
-1. **Stop handovers**: the tools stop offering `transfer`; an agent's explanation goes in its
-   hand-in or the project's documents. A handover still published right after its author finished a
-   task is attached to that task as its write-up, never shown as new work. Existing unread
-   write-ups are archived once.
+1. **One thing: work**: guides, kinds, sections, handovers and hand-in write-up guides go in one
+   overhaul, with the 17 tools; an agent's explanation goes in its hand-in or the project's
+   documents. Existing handovers are migrated (knowledge into documents, the rest archived).
 2. **The agent tidies the board**: a daily review of quiet work closes what is finished, archives
    what is abandoned and nudges what is still going; every hand-in is judged against what the task
    asked for and closed or reopened with what is missing. The proof gate on `hand_in`
@@ -73,7 +87,6 @@ board until someone archives it by hand; and finished work nobody moved to Done.
 5. **Documents on take and hand-in**: `take` hands the project's README, a list of its pages and
    the pages that match the work; `hand_in` asks for the pages the work changed and a Log line.
 6. **The hub around projects**: open a project to see its documents, its open work and its history.
-7. **Retire the word "guide"**: "hand this over" becomes "update the project" everywhere.
 
 **The test for any new feature: which of the five does it live in?** One that fits none probably
 does not belong. The risk this guards against is becoming Linear, Notion and Freshdesk at once and
