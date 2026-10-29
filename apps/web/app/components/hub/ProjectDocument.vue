@@ -302,7 +302,7 @@ function cancel() {
 
       <div v-if="earlier" class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2 border border-fg px-4 py-3">
         <p class="m-0 min-w-0 grow font-ui text-sm">
-          <span class="font-medium">Version {{ earlier.version }}</span>, saved <span class="tabular-nums">{{ age(earlier.saved_at, now) }}</span> before now. The current one is version {{ current.version }}.
+          <span class="font-medium">Version {{ earlier.version }}</span>, saved <span class="tabular-nums">{{ age(earlier.saved_at, now) }}</span> ago. The current one is version {{ current.version }}.
         </p>
         <button class="btn primary sm" type="button" @click="putBack">Put this version back</button>
         <NuxtLink :to="docLink()" class="btn sm">See the current one</NuxtLink>
