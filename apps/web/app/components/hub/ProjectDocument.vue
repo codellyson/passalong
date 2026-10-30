@@ -229,7 +229,7 @@ function cancel() {
 
 <template>
   <article class="flex min-w-0 flex-col gap-4" aria-label="Document">
-    <NuxtLink :to="{ query: { tab: 'documents' } }" class="self-start font-ui text-sm text-muted no-underline hover:text-fg">← All documents</NuxtLink>
+    <NuxtLink :to="{ query: { tab: 'documents' } }" class="inline-flex items-center gap-1 self-start font-ui text-sm text-muted no-underline hover:text-fg"><AppIcon name="back" :size="14" />All documents</NuxtLink>
 
     <HubSkeleton v-if="loading && !current" variant="lines" :rows="6" label="Opening the document" />
 

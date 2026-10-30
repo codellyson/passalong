@@ -47,10 +47,11 @@ const ours = (r: SupportRow) => r.state === "new" || r.state === "needs_reply";
 const TABS = [
   { key: "ours", label: "Waiting on us", has: ours },
   {
-    key: "theirs",
-    label: "Waiting on them",
-    has: (r: SupportRow) => r.state === "waiting" || r.state === "with_development",
+    key: "development",
+    label: "With development",
+    has: (r: SupportRow) => r.state === "with_development",
   },
+  { key: "theirs", label: "Waiting on them", has: (r: SupportRow) => r.state === "waiting" },
   { key: "solved", label: "Solved", has: (r: SupportRow) => r.state === "solved" },
   { key: "all", label: "All", has: () => true },
 ] as const;
@@ -208,7 +209,10 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
       <template v-else>
         <!-- The hairline is the nav's own inset edge: the row can scroll sideways on a phone
              without clipping the current tab's bar. -->
-        <nav class="flex gap-5 overflow-x-auto shadow-[inset_0_-1px_0_var(--line)] @2xl:gap-6" aria-label="Requests">
+        <nav
+          class="flex gap-5 overflow-x-auto shadow-[inset_0_-1px_0_var(--line)] @max-3xl:pr-12 @max-3xl:[mask-image:linear-gradient(to_right,#000_calc(100%-3rem),transparent)] @2xl:gap-6"
+          aria-label="Requests"
+        >
           <NuxtLink
             v-for="t in TABS"
             :key="t.key"
@@ -226,6 +230,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
           <p class="m-0 text-h3 font-medium">
             <template v-if="q.trim()">Nothing matches “{{ q.trim() }}”{{ tab.key === "all" ? "" : ` in ${tab.label}` }}.</template>
             <template v-else-if="tab.key === 'ours'">Nobody is waiting on us.</template>
+            <template v-else-if="tab.key === 'development'">Nothing is with development.</template>
             <template v-else-if="tab.key === 'theirs'">Nobody owes us an answer.</template>
             <template v-else>Nothing solved yet.</template>
           </p>
@@ -237,7 +242,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
           <div aria-hidden="true" class="mt-4 hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="[cols, label]">
             <span>Customer</span><span>Request</span><span>Project</span><span>State</span><span class="text-right">Waiting</span>
           </div>
-          <ol class="m-0 mt-4 list-none border-t border-fg p-0 @2xl:mt-0 @2xl:border-t-0">
+          <ol class="m-0 mt-1 list-none p-0 @2xl:mt-0">
             <li
               v-for="r in list"
               :key="r.id"
@@ -253,7 +258,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
               <!-- Waiting: beside the name on a narrow row, last column on a wide one. -->
               <span
                 class="col-start-2 row-start-1 text-right font-ui text-sm tabular-nums @2xl:col-start-5"
-                :class="r.late ? 'font-medium text-danger' : r.waiting_since ? 'text-fg' : 'text-muted'"
+                :class="r.waiting_since ? 'font-medium text-fg' : 'text-muted'"
               >
                 <template v-if="r.waiting_since">{{ age(r.waiting_since, now) }}<span v-if="r.late" class="sr-only">, waiting too long</span></template>
                 <template v-else><span aria-hidden="true">—</span><span class="sr-only">not waiting on us</span></template>
@@ -296,7 +301,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
         <label v-for="t in data.teams" :key="t.slug" class="flex items-start gap-3 font-ui text-sm">
           <input
             type="checkbox"
-            class="mt-0.5"
+            class="mt-0.5 size-4 shrink-0 accent-[var(--chosen)]"
             :checked="t.tell"
             :disabled="setting === t.slug"
             @change="setTell(t.slug, ($event.target as HTMLInputElement).checked)"

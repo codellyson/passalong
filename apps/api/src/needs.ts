@@ -146,7 +146,7 @@ export async function needs(
               COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'customer'), g.created) AS wrote,
               COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'answered'), '') AS answered,
               COALESCE((SELECT e.body FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'customer'
-                         ORDER BY e.id DESC LIMIT 1), '') AS words
+                         ORDER BY e.at DESC, e.id DESC LIMIT 1), '') AS words
          FROM guide g
         WHERE g.customer <> '' AND g.status = 'published' AND ${VISIBLE}`,
       account,
@@ -415,9 +415,10 @@ export type SupportState = "new" | "needs_reply" | "with_development" | "waiting
 
 /**
  * Where a customer's request stands, from what already happened (docs/LOOP.md §1a): never stored,
- * so it cannot disagree with the request. Solved is Done. A customer who wrote after our last
- * answer needs a reply whatever else is going on. Otherwise open work made from it means it is
- * with development; nothing said to them yet is new; our word last means we wait on them.
+ * so it cannot disagree with the request. Solved is Done. Nothing said to them yet is new, and a
+ * customer who wrote after our last answer needs a reply, whatever else is going on: a fix being
+ * open never hides a customer nobody has answered. Only once our word is last does open work made
+ * from it mean it is with development; otherwise we wait on them.
  */
 export function supportState(r: {
   done: boolean;
@@ -426,10 +427,9 @@ export function supportState(r: {
   openWork: number;
 }): SupportState {
   if (r.done) return "solved";
-  if (r.answered && r.lastBy === "customer") return "needs_reply";
-  if (r.openWork > 0) return "with_development";
   if (!r.answered) return "new";
-  return r.lastBy === "team" ? "waiting" : "needs_reply";
+  if (r.lastBy !== "team") return "needs_reply";
+  return r.openWork > 0 ? "with_development" : "waiting";
 }
 
 export interface SupportRequest {
@@ -465,7 +465,7 @@ export async function supportRequests(
   waitMs: number,
 ): Promise<{ requests: SupportRequest[]; teams: { slug: string; name: string; tell: boolean }[] }> {
   const LAST = (col: string, kinds = "'customer', 'answered'") =>
-    `(SELECT ${col} FROM task_event WHERE guide_id = g.id AND kind IN (${kinds}) ORDER BY id DESC LIMIT 1)`;
+    `(SELECT ${col} FROM task_event WHERE guide_id = g.id AND kind IN (${kinds}) ORDER BY at DESC, id DESC LIMIT 1)`;
   const { results } = await db
     .prepare(
       `SELECT g.id, g.title, g.ref, g.customer, g.customer_name, g.status, g.created, g.updated,

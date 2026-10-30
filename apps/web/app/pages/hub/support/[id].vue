@@ -126,6 +126,16 @@ const sortedNote = computed(
     )?.body ?? "",
 );
 
+/** One at a time: the request waiting on us longest, after this one. */
+const next = computed(() => {
+  const r = (list.value?.requests ?? [])
+    .filter((x) => x.id !== id.value && x.waiting_since)
+    .sort((a, b) => a.waiting_since.localeCompare(b.waiting_since))[0];
+  return r ? { id: r.id, name: r.customer.name || r.customer.email } : null;
+});
+const solvedHere = ref(false);
+watch(id, () => (solvedHere.value = false));
+
 const refresh = () =>
   Promise.all(
     [
@@ -184,7 +194,10 @@ const leaveProjects = () =>
 
 const mayClose = computed(() => Boolean(ctx.value?.owner || ctx.value?.admin));
 const markSolved = () =>
-  act(() => api(`/v1/guides/${id.value}/status`, json("PATCH", { status: "consumed" })));
+  act(async () => {
+    await api(`/v1/guides/${id.value}/status`, json("PATCH", { status: "consumed" }));
+    solvedHere.value = true;
+  });
 /**
  * Solved by hand is archived, and archived work comes back through Draft — straight on to Ready
  * here, because a waiting customer must not sit in a draft that reaches nobody. Finished work
@@ -228,7 +241,7 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
 
     <article v-else-if="ctx && g" class="flex flex-col gap-6">
       <header class="m-0 flex flex-col gap-2 border-b-0 p-0">
-        <NuxtLink to="/hub/support" class="self-start font-ui text-sm text-muted no-underline hover:text-fg">← Support</NuxtLink>
+        <NuxtLink to="/hub/support" class="inline-flex items-center gap-1 self-start font-ui text-sm text-muted no-underline hover:text-fg"><AppIcon name="back" :size="14" />Support</NuxtLink>
         <h1 class="m-0 text-h2 font-medium tracking-tight break-words">{{ g.title }}</h1>
         <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm text-muted">
           <span class="text-fg">{{ name }}</span>
@@ -238,7 +251,7 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
           </template>
           <template v-if="row?.waiting_since">
             <span aria-hidden="true">·</span>
-            <span class="tabular-nums" :class="row.late ? 'font-medium text-danger' : ''">waiting {{ age(row.waiting_since, now) }}</span>
+            <span class="font-medium text-fg tabular-nums">waiting {{ age(row.waiting_since, now) }}<template v-if="row.late"> · over 4 hours</template></span>
           </template>
         </p>
       </header>
@@ -250,6 +263,7 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
           :name="name"
           :ready="ready"
           :state="row?.state"
+          :next="next"
           @sent="refresh"
         />
 
@@ -353,6 +367,9 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
                 <button class="btn primary sm" type="submit" :disabled="busy">{{ busy ? "Reopening…" : "Reopen" }}</button>
               </form>
               <p v-if="open === 'reopen' && problem" class="m-0 font-ui text-sm text-danger" role="alert">{{ problem }}</p>
+              <NuxtLink v-if="solvedHere && next" :to="`/hub/support/${next.id}`" class="btn sm mt-1 self-start" role="status">
+                Next waiting · {{ next.name }}
+              </NuxtLink>
             </template>
             <template v-else-if="mayClose">
               <button type="button" class="btn sm self-start" :disabled="busy" @click="markSolved">Mark solved</button>

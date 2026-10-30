@@ -215,7 +215,11 @@ test("a request's place in the Support table comes from what happened to it", ()
   const st = (o) =>
     supportState({ done: false, lastBy: "customer", answered: false, openWork: 0, ...o });
   assert.equal(st({}), "new", "the customer wrote and nobody has answered");
-  assert.equal(st({ openWork: 1 }), "with_development", "work made from it is open");
+  assert.equal(
+    st({ openWork: 1 }),
+    "new",
+    "nobody has answered: a fix being open does not hide them",
+  );
   assert.equal(st({ answered: true, lastBy: "team" }), "waiting", "our word was last");
   assert.equal(
     st({ answered: true, lastBy: "customer", openWork: 1 }),
@@ -240,6 +244,20 @@ test("the Support list: state, their latest words, how long and whether too long
   ev("r3", "answered", ago(19), "ada", "On its way");
   guide("r4", { customer: "d@x.com", status: "consumed", outcome: "archived" });
   guide("w1");
+  // Unanswered with a fix open: still New, still waiting on us.
+  guide("r5", { customer: "e@x.com", created: ago(9) });
+  ev("r5", "customer", ago(9), "bo", "Broken");
+  x(`UPDATE guide SET parent_id = 'r5' WHERE id = 'w1'`);
+  // Answered with a fix open: with development.
+  guide("r6", { customer: "f@x.com", created: ago(9) });
+  ev("r6", "customer", ago(9), "bo", "Also broken");
+  ev("r6", "answered", ago(8), "ada", "On it");
+  guide("w2");
+  x(`UPDATE guide SET parent_id = 'r6' WHERE id = 'w2'`);
+  // Event ids that run opposite to their times (an import, a backfill): time decides.
+  guide("r7", { customer: "g@x.com", created: ago(9) });
+  ev("r7", "customer", ago(3), "bo", "Wrote last");
+  ev("r7", "answered", ago(5), "ada", "Answered first");
   x(`UPDATE guide SET team_id = '' , account_id = 'cy' WHERE id = 'r4';
      INSERT INTO notification (account_id, kind, guide_id, at, read_at) VALUES
        ('ada', 'customer_wrote', 'r1', '${ago(6)}', '');
@@ -252,9 +270,16 @@ test("the Support list: state, their latest words, how long and whether too long
   const by = Object.fromEntries(requests.map((r) => [r.id, r]));
   assert.deepEqual(
     Object.keys(by).sort(),
-    ["r1", "r2", "r3"],
+    ["r1", "r2", "r3", "r5", "r6", "r7"],
     "customers only, and only visible ones",
   );
+  assert.equal(by.r5.state, "new", "unanswered, though a fix is open");
+  assert.equal(by.r5.waiting_since, ago(9), "and its age shows");
+  assert.equal(by.r6.state, "with_development");
+  assert.equal(by.r6.waiting_since, "");
+  assert.equal(by.r7.state, "needs_reply", "the later message is theirs, whatever the ids say");
+  assert.equal(by.r7.last.by, "customer");
+  assert.equal(by.r7.waiting_since, ago(3));
   assert.equal(by.r1.state, "needs_reply");
   assert.equal(by.r1.said, "Still broken", "their own latest words, on one line");
   assert.equal(by.r1.waiting_since, ago(6));

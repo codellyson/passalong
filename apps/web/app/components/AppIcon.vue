@@ -41,6 +41,8 @@ const PATHS = {
   support: "M2.75 3.25h10.5v7.5h-6l-3 2.5v-2.5h-1.5z",
   gear: "M8 5.75a2.25 2.25 0 1 0 0 4.5a2.25 2.25 0 1 0 0-4.5M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5M3.6 3.6l1.05 1.05M11.35 11.35l1.05 1.05M3.6 12.4l1.05-1.05M11.35 4.65l1.05-1.05",
   menu: "M2.75 4.25h10.5M2.75 8h10.5M2.75 11.75h10.5",
+  /** Back to the list this page came from. */
+  back: "M12.75 8h-9.5M7 4.25L3.25 8 7 11.75",
 } as const;
 
 /** Dots are drawn as zero-length strokes with a round cap, so their weight *is* the stroke width —

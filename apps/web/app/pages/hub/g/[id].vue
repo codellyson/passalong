@@ -261,7 +261,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
     <article v-else-if="ctx && g" class="flex flex-col gap-6">
       <!-- The way back to the board, at the top where a phone reader looks for it. -->
       <nav class="font-ui text-sm" aria-label="Back">
-        <NuxtLink to="/hub/work" class="text-muted no-underline hover:text-fg">← Work</NuxtLink>
+        <NuxtLink to="/hub/work" class="inline-flex items-center gap-1 text-muted no-underline hover:text-fg"><AppIcon name="back" :size="14" />Work</NuxtLink>
       </nav>
       <header class="m-0 flex flex-col gap-2 border-b-0 p-0">
         <p class="m-0 flex flex-wrap items-center gap-2 font-ui text-sm text-muted">

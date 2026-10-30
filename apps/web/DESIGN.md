@@ -317,21 +317,28 @@ filter; an empty column says so in one muted line.
 The Needs you register with a customer's columns: Customer (name, the tracking number muted under
 it) 10rem, Request (the title at 500 as the row's link, the customer's latest words in quotes under
 it), Project 8rem, State 8.5rem, Waiting 3.5rem right-aligned. The state is a word, ink at 500 when
-the next word is ours (New, Needs reply) and muted otherwise; the only colour is the waiting age in
-danger once it passes four hours, said again in the summary line ("10 waiting on us, all for more
-than 4 hours"). Tabs over it (Waiting on us, Waiting on them, Solved, All) carry their counts; the
-search sits beside the heading. On a phone each row is the name with the age at its right, the
+the next word is ours (New, Needs reply) and muted otherwise. The waiting age is ink at 500 in
+tabular figures, as on Needs you; no colour marks a long wait — the summary line counts it ("10
+waiting on us, all for more than 4 hours") and the request's header says "over 4 hours". Tabs over
+it (Waiting on us, With development, Waiting on them, Solved, All) carry their counts; on a phone
+the tab row scrolls sideways and fades at its right edge to say it continues. The search sits
+beside the heading. On a phone each row is the name with the age at its right, the
 title, the quote and one muted fact line.
 
 ### Conversation
 A customer request reads like Front: the thread is the page, the reply box is pinned to the
 window's foot (sticky, cream ground, a hairline above), and the facts are a side panel (17rem from
 1024px, 19rem from 1280px, sticky; under the thread on a phone). Each message is a block up to
-40rem: a header line — who said it at 500 (the customer's name, or "You", or the teammate's name),
-"customer" or "to Kemi Ade" muted, and an exact time ("Oct 28, 08:34 PM") right-aligned in tabular
-figures — over a 1px-ruled, 4px-cornered body: field white with the stronger rule for the customer,
-deeper cream for ours, which sits to the right. Pictures are drawn inside the body; files are `sm`
-buttons under it ("INV-1042.pdf Download"). The reply box is the TipTap writer at 0.9375rem, 6rem
+40rem, every one on the same left edge and width, as in Front: a header line — who said it at 500
+(the customer's name, or "You", or the teammate's name), "customer" or "to Kemi Ade" muted, and an
+exact time ("Oct 28, 08:34 PM") right-aligned in tabular figures — over a 1px-ruled, 4px-cornered
+body: field white with the stronger rule for the customer, deeper cream for ours. The fill and the
+header carry the speaker, not a side. Pictures are drawn inside the body; a picture whose file is
+gone is a muted line ("invoice-fixed.png · no longer available"); files are `sm` buttons under the
+body, at its left ("INV-1042.pdf Download"). The page opens on the latest message, just above the
+pinned reply box (the page's scroll-padding-bottom is the box's height), and returns there after a
+send. After Send or Mark solved it offers "Next waiting · <name>": the request waiting on us
+longest, one at a time. The reply box is the TipTap writer at 0.9375rem, 6rem
 tall and scrolling inside itself past 40vh, with Picture and Draft again as ghost `sm` buttons and
 **Send** as the one primary. The agent's draft arrives in it when the next word is ours, and the
 line under it says "**Drafted by the agent** from the conversation…" until someone changes a word.
@@ -339,6 +346,11 @@ The panel's facts are uppercase labels over values, divided by hairlines: Custom
 Move…), On it / For (with Give to…; "Went quiet ·" in ink when the hold lapsed), Work made from it
 (live rows with the change mark), The work, then Mark solved or Reopen at the foot. Each act opens
 in place under its fact as a menu surface set static in the panel; a refusal is said there.
+
+### Back link
+A page reached from a list leads with a muted link back to it ("Support", "Work", "All
+documents") behind the drawn back arrow (`AppIcon` `back`, 14px at the icon set's 1.75 stroke),
+never a "←" glyph.
 
 ### Tabs
 A page with several views of one thing (a project's Documents, Work and History) is a row of links,

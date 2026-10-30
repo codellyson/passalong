@@ -21,6 +21,8 @@ const props = defineProps<{
   ready?: { id: string; title: string }[];
   /** Where the request stands; a draft is started by itself when the next word is ours. */
   state?: string;
+  /** The next request waiting on us, oldest first, offered once this one is answered. */
+  next?: { id: string; name: string } | null;
 }>();
 const emit = defineEmits<{ sent: [] }>();
 const { api, json, token } = useHub();
@@ -155,6 +157,39 @@ async function send() {
   }
 }
 
+/**
+ * The conversation opens on its latest message, just above the pinned reply box, and comes back to
+ * it after a send. The page is what scrolls, so its scroll-padding-bottom is the box's height:
+ * scrolling a message into view then stops above the box instead of under it.
+ */
+const list = ref<HTMLElement | null>(null);
+const composer = ref<HTMLElement | null>(null);
+let sized: ResizeObserver | undefined;
+onMounted(() => {
+  if (!composer.value || typeof ResizeObserver === "undefined") return;
+  sized = new ResizeObserver(([e]) => {
+    document.documentElement.style.scrollPaddingBottom = `${Math.ceil(e?.borderBoxSize?.[0]?.blockSize ?? 0) + 16}px`;
+  });
+  sized.observe(composer.value);
+});
+onBeforeUnmount(() => {
+  sized?.disconnect();
+  document.documentElement.style.scrollPaddingBottom = "";
+});
+const toLatest = () =>
+  nextTick(() =>
+    list.value?.lastElementChild?.scrollIntoView({ block: "end", behavior: "instant" }),
+  );
+let shown = 0;
+watch(
+  () => said.value.length,
+  (n) => {
+    if (n > shown) void toLatest();
+    shown = n;
+  },
+  { immediate: true, flush: "post" },
+);
+
 // The next word is ours: have a draft ready rather than an empty box. Once, when the request's state
 // and the conversation are both known and the editor is there.
 let autoDrafted = false;
@@ -172,12 +207,11 @@ watchEffect(() => {
     <p v-else-if="!said.length" class="m-0 border-t border-line py-6 font-ui text-sm text-muted">
       Nothing has been said yet.
     </p>
-    <ol v-else class="m-0 flex list-none flex-col gap-5 p-0">
+    <ol v-else ref="list" class="m-0 flex list-none flex-col gap-5 p-0">
       <li
         v-for="{ m, ours, who, msg } in lines"
         :key="m.id"
         class="flex w-full max-w-[40rem] flex-col gap-1"
-        :class="ours ? 'self-end' : 'self-start'"
       >
         <p class="m-0 flex flex-wrap items-baseline gap-x-2 px-1 font-ui text-xs">
           <span class="font-medium text-fg">{{ who }}</span>
@@ -193,7 +227,7 @@ watchEffect(() => {
           <HubEvidence v-if="msg.pictures" :text="msg.text" prose label="A message with pictures" class="!mt-0" />
           <template v-else>{{ msg.text }}</template>
         </div>
-        <ul v-if="msg.files.length" class="m-0 flex list-none flex-wrap gap-2 p-0" :class="ours ? 'justify-end' : ''">
+        <ul v-if="msg.files.length" class="m-0 flex list-none flex-wrap gap-2 p-0">
           <li v-for="f in msg.files" :key="f.url">
             <button type="button" class="btn sm max-w-64" @click="save(f)">
               <span class="truncate">{{ f.name }}</span>
@@ -205,7 +239,7 @@ watchEffect(() => {
     </ol>
 
     <!-- The reply box, pinned to the foot of the window while the thread scrolls under it. -->
-    <form class="sticky bottom-0 z-10 mt-8 flex flex-col gap-2 border-t border-line bg-bg pt-3 pb-4" @submit.prevent="send">
+    <form ref="composer" class="sticky bottom-0 z-10 mt-8 flex flex-col gap-2 border-t border-line bg-bg pt-3 pb-4" @submit.prevent="send">
       <p v-for="f in ready" :key="f.id" class="m-0 font-ui text-sm" role="status">
         <NuxtLink :to="`/hub/g/${f.id}`">{{ f.title }}</NuxtLink> is done. Tell {{ name }}.
       </p>
@@ -231,7 +265,9 @@ watchEffect(() => {
               </button>
             </span>
             <span class="flex items-center gap-3">
-              <span v-if="done" class="font-ui text-sm text-muted" role="status">Sent</span>
+              <span v-if="done" class="font-ui text-sm text-muted" role="status">
+                Sent<template v-if="next"> · <NuxtLink :to="`/hub/support/${next.id}`" class="font-medium text-fg">Next waiting · {{ next.name }}</NuxtLink></template>
+              </span>
               <button class="btn primary" :disabled="busy || !reply.trim()">{{ busy ? "Sending…" : "Send" }}</button>
             </span>
           </template>

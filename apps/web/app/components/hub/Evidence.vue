@@ -53,6 +53,8 @@ const shots = computed(() => parts.value.filter((p) => p.kind === "shot").length
 /** Folded only when there is enough to be worth folding: a short run is just shown. */
 const long = computed(() => lines.value > FOLD + 4 || shots.value > 1);
 const open = ref(false);
+/** Pictures whose file is gone (proof is swept after a while): said in a line, not drawn broken. */
+const gone = ref(new Set<number>());
 
 /**
  * A screenshot, opened over the page at full size. The review is the whole point of proof, and a
@@ -103,7 +105,10 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
         <!-- A screenshot is the part of the evidence a reviewer reads fastest, so it is shown whole,
              capped at a thumbnail's height so one picture does not fill the page, and a click
              opens it full size over the page. -->
-        <figure v-else class="my-3 first:mt-0 last:mb-0">
+        <p v-else-if="gone.has(i)" class="my-3 font-ui text-xs text-muted first:mt-0 last:mb-0">
+          {{ p.alt || "A picture" }} · no longer available
+        </p>
+        <figure v-else class="mx-0 my-3 first:mt-0 last:mb-0">
           <a
             :href="p.url"
             target="_blank"
@@ -116,6 +121,7 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
               :src="p.url"
               :alt="p.alt || 'a screenshot from the hand-in'"
               loading="lazy"
+              @error="gone = new Set(gone).add(i)"
               class="block max-h-72 w-auto max-w-full rounded-1 outline outline-image-edge"
             />
           </a>

@@ -141,16 +141,20 @@ nothing outside the hub linked to it. See [folders.md](folders.md).
 column: the customer (name, tracking number quietly under it), the request (title, and the
 customer's own latest words on one line), its project (3×14 mark, or "Not in a project"), its state
 — New, Needs reply, With development, Waiting on customer, Solved, derived by `supportState()` and
-never stored — and how long they have waited while the next word is ours, in tabular figures and in
-danger once past the four hours `customer_waiting` uses (`late`). Coral is the change mark, from
-unread notifications ("Changed · Customer wrote"). Views are tabs at their own addresses: Waiting on
-us (default), Waiting on them (waiting on the customer, or with development), Solved, All, each with
-its count; a search filters across them. Nobody written yet: the team's support address with Copy.
+never stored; an unanswered customer is New whatever development is doing, and With development
+needs our word last — and how long they have waited while the next word is ours, ink in tabular
+figures; past the four hours `customer_waiting` uses (`late`) the summary line counts it. The last
+message is decided by time (`at`, then id), as the thread and Needs you decide it. Coral is the
+change mark, from unread notifications ("Changed · Customer wrote"). Views are tabs at their own
+addresses: Waiting on us (default), With development, Waiting on them, Solved, All, each with its
+count; a search filters across them. Nobody written yet: the team's support address with Copy.
 The owner's **Tell the customer when a fix is done** is a quiet setting row at the foot.
 
 `/hub/support/:id` is the conversation (`HubConversation`): the customer's messages and ours in
-order, each headed by who said it (the customer's name, or the teammate's) and an exact time, their
-pictures drawn and files offered; the reply box (`HubWriter`) is pinned to the window's foot. When
+order on one left edge, each headed by who said it (the customer's name, or the teammate's) and an
+exact time, their pictures drawn (or "· no longer available" when the file is gone) and files
+offered; the reply box (`HubWriter`) is pinned to the window's foot, and the page opens on the
+latest message just above it. After Send or Mark solved it offers "Next waiting · <name>". When
 the next word is ours the agent's draft (`askDraft()`) is already in it, labelled as the agent's
 until someone changes it; **Send** is the one primary act and a person's. Beside it, a side panel of
 facts: the customer (address shown only to the team, tracking number), project with **Move…**, who
