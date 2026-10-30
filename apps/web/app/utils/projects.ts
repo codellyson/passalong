@@ -1,20 +1,20 @@
 // Projects in the hub's sidebar, and the two small facts every row of the hub shows: a project's
 // line colour and how long something has waited.
 //
-// A project is a top-level folder for now (docs/LOOP.md §0). Each owns one line colour, shown as a
+// A project is a top-level project for now (docs/LOOP.md §0). Each owns one line colour, shown as a
 // mark wherever the project appears. Coral is not one of them: in the hub coral means active, so a
-// folder someone coloured coral is drawn stone.
+// project someone coloured coral is drawn stone.
 
 export const TONES = ["amber", "green", "blue", "violet", "teal", "stone"] as const;
 export type Tone = (typeof TONES)[number];
 
-/** A folder's stored colour as a line colour, or "" when it has none. Older folders stored coral. */
+/** A project's stored colour as a line colour, or "" when it has none. Older projects stored coral. */
 export function storedTone(color?: string | null): Tone | "" {
   if (color === "coral") return "stone";
   return (TONES as readonly string[]).includes(color || "") ? (color as Tone) : "";
 }
 
-/** The folder's own colour when it has one; otherwise one picked from its id, the same every time. */
+/** The project's own colour when it has one; otherwise one picked from its id, the same every time. */
 export function toneOf(p: { id: string; color?: string | null }): Tone {
   const own = storedTone(p.color);
   if (own) return own;
@@ -23,7 +23,7 @@ export function toneOf(p: { id: string; color?: string | null }): Tone {
   return TONES[h % TONES.length] as Tone;
 }
 
-export interface ProjectFolder {
+export interface ApiProject {
   id: string;
   title: string;
   color: string;
@@ -67,17 +67,17 @@ export interface SidebarProject {
   changed: string;
 }
 
-/** The top folders, each counting what is linked into it and every folder beneath it. */
-export function projectsFrom(folders: ProjectFolder[]): SidebarProject[] {
-  const byId = new Map(folders.map((f) => [f.id, f]));
-  const rootOf = (f: ProjectFolder) => {
+/** The top projects, each counting what is linked into it and every project beneath it. */
+export function projectsFrom(projects: ApiProject[]): SidebarProject[] {
+  const byId = new Map(projects.map((f) => [f.id, f]));
+  const rootOf = (f: ApiProject) => {
     let at = f;
     for (let hops = 0; at.parent_id && byId.has(at.parent_id) && hops < 64; hops++)
-      at = byId.get(at.parent_id) as ProjectFolder;
+      at = byId.get(at.parent_id) as ApiProject;
     return at;
   };
   const out = new Map<string, SidebarProject>();
-  for (const f of folders) {
+  for (const f of projects) {
     if (f.parent_id && byId.has(f.parent_id)) continue;
     out.set(f.id, {
       id: f.id,
@@ -91,7 +91,7 @@ export function projectsFrom(folders: ProjectFolder[]): SidebarProject[] {
       changed: "",
     });
   }
-  for (const f of folders) {
+  for (const f of projects) {
     const p = out.get(rootOf(f).id);
     if (!p) continue;
     p.open += Number(f.open || 0);

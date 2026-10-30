@@ -8,11 +8,11 @@
   does not move when you tick.
 -->
 <script setup lang="ts">
-import type { Guide } from "~/types/hub";
+import type { Work } from "~/types/hub";
 
 type Person = { id: string; label: string; to: string };
 const props = defineProps<{
-  picked: Guide[];
+  picked: Work[];
   people: Person[] | null;
   groups: { slug: string; name: string }[];
   me: { id: string; to: string } | null;
@@ -26,7 +26,7 @@ const toDraft = computed(() =>
   props.picked.filter((g) => g.stage === "todo" && !g.held_by?.length),
 );
 const toReady = computed(() => props.picked.filter((g) => g.stage === "draft"));
-const archivable = computed(() => props.picked.filter((g) => g.manage && g.status !== "consumed"));
+const archivable = computed(() => props.picked.filter((g) => g.manage && g.status !== "done"));
 
 const choices = computed(() =>
   props.people
@@ -78,7 +78,7 @@ function move(to: "draft" | "todo") {
           text: `Make ${n(ids.length)} ready? Whoever each is for is told.`,
           verb: "Make ready",
           ids,
-          act: { status: "published" },
+          act: { status: "ready" },
           done: `${n(ids.length)} ready, in To do.`,
         };
 }
@@ -88,7 +88,7 @@ function archive() {
     text: `Archive ${n(ids.length)}? They go to Done; nothing is deleted.`,
     verb: "Archive",
     ids,
-    act: { status: "consumed" },
+    act: { status: "done" },
     done: `Archived ${n(ids.length)}.`,
   };
 }

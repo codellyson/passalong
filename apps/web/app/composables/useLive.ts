@@ -2,7 +2,7 @@
  * The hub, kept live: reads `/v1/events` while you are signed in and the tab is visible, refreshes
  * what an event touches, and turns notifications into toasts.
  *
- * - A `note` is news addressed to you — taken, passed, handed in, approved, works, closed, went
+ * - A `note` is news addressed to you — taken, passed, handed in, reopened, works, closed, went
  *   quiet. It becomes a toast and refreshes the lists it could have moved.
  * - A `change` is work you can see that moved: a hold, a progress note, a hand-in. It
  *   refreshes that work's page and the lists, and says nothing: progress notes stay quiet.
@@ -18,7 +18,7 @@ import type { QueryClient } from "@tanstack/vue-query";
 export interface Toast {
   key: number;
   text: string;
-  guide: string;
+  work: string;
   kind: string;
 }
 
@@ -47,8 +47,8 @@ function build(queryClient: QueryClient) {
   // one moment, and each would otherwise refetch every list on its own.
   const touched = new Set<string>();
   let flush: ReturnType<typeof setTimeout> | null = null;
-  function refresh(guide: string) {
-    if (guide) touched.add(guide);
+  function refresh(work: string) {
+    if (work) touched.add(work);
     flush ??= setTimeout(() => {
       flush = null;
       for (const id of touched) {
@@ -59,7 +59,7 @@ function build(queryClient: QueryClient) {
       for (const key of [
         hubKeys.notifications,
         hubKeys.board,
-        hubKeys.allGuides,
+        hubKeys.allWork,
         hubKeys.tasks,
         hubKeys.working,
         hubKeys.needs,
@@ -88,7 +88,7 @@ function build(queryClient: QueryClient) {
       if (extra > 0)
         toast({
           text: `${extra} more update${extra === 1 ? "" : "s"} in your activity`,
-          guide: "",
+          work: "",
           kind: "",
         });
     }, 1500);
@@ -98,15 +98,15 @@ function build(queryClient: QueryClient) {
       for (const e of parse(value)) {
         if (e.id) cursor = e.id;
         if (e.event === "note") {
-          const n = JSON.parse(e.data) as { text: string; guide: string; kind: string };
-          refresh(n.guide);
+          const n = JSON.parse(e.data) as { text: string; work: string; kind: string };
+          refresh(n.work);
           if (!settled) {
             caughtUp.push(n.text);
             if (caughtUp.length > BURST) continue;
           }
-          toast({ text: n.text, guide: n.guide, kind: n.kind });
+          toast({ text: n.text, work: n.work, kind: n.kind });
         } else if (e.event === "change") {
-          refresh((JSON.parse(e.data) as { guide_id: string }).guide_id);
+          refresh((JSON.parse(e.data) as { work_id: string }).work_id);
         }
       }
     }

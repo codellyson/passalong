@@ -1,13 +1,13 @@
 /**
  * A piece of work's progress, as the things that happened to it in order.
  *
- * Derived entirely from what `GET /v1/guides/:id/context` already returns — nothing new is stored,
+ * Derived entirely from what `GET /v1/work/:id/context` already returns — nothing new is stored,
  * so it cannot disagree with the board. Who wrote it and who it went to, who opened it, who took it
  * and what they last said, what it was finished with, and the work that came out of it.
  *
  * Imports only types, so it runs under `node --test` without Nuxt.
  */
-import type { GuideContext } from "~/types/hub";
+import type { WorkContext } from "~/types/hub";
 
 export type BeatTone = "plain" | "held" | "ok" | "danger" | "warn";
 
@@ -27,8 +27,8 @@ export interface Beat {
 const nameOf = (by: { handle: string; name: string }) =>
   by.name?.trim() || (by.handle ? `@${by.handle}` : "someone");
 
-export function progressOf(ctx: GuideContext): Beat[] {
-  const g = ctx.guide;
+export function progressOf(ctx: WorkContext): Beat[] {
+  const g = ctx.work;
   const beats: Beat[] = [];
   const to = g.to_name || (g.to ? `@${g.to}` : g.to_group_name || g.team_name || "");
   beats.push({
@@ -37,10 +37,9 @@ export function progressOf(ctx: GuideContext): Beat[] {
     what: to ? `sent it to ${to}` : "wrote it",
     tone: "plain",
   });
-  // A browser archive writes a receipt so the inbox clears (see AGENTS.md, "Receipt is not only
-  // pull"), and so did the retired verdict. Neither is someone opening it.
+  // A browser archive writes a receipt so the inbox clears; that is not someone opening it.
   for (const p of g.pulled_by ?? []) {
-    if (p.via === "verdict" || p.via === "web") continue;
+    if (p.via === "web") continue;
     beats.push({
       at: p.at,
       who: p.handle ? `@${p.handle}` : "Someone with the link",
@@ -67,7 +66,7 @@ export function progressOf(ctx: GuideContext): Beat[] {
   }
   // A hand-in ends the hold and is kept as what it was finished with. A failing one is from before
   // finishing was final, and still says so.
-  for (const v of ctx.verdicts)
+  for (const v of ctx.proofs)
     beats.push({
       at: v.at,
       who: nameOf(v.by),

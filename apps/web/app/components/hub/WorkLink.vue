@@ -4,12 +4,12 @@
   out of it — so the chain is walked inside the hub rather than out through share links.
 -->
 <script setup lang="ts">
-import type { Guide } from "~/types/hub";
+import type { Work } from "~/types/hub";
 
-const props = defineProps<{ g: Guide }>();
+const props = defineProps<{ g: Work }>();
 const where = computed(() => {
   const g = props.g;
-  if (g.status === "consumed") return "done";
+  if (g.status === "done") return "done";
   if (g.status === "draft") return "draft";
   if (g.held_by?.length) return "being worked on";
   return rel(g.created);
@@ -18,7 +18,7 @@ const where = computed(() => {
 
 <template>
   <NuxtLink
-    :to="`/hub/g/${g.id}`"
+    :to="`/hub/w/${g.id}`"
     class="flex items-baseline gap-2 rounded-2 bg-field px-3 py-2 no-underline hover:shadow-edge"
   >
     <HubWorkTag :tags="g.tags" />

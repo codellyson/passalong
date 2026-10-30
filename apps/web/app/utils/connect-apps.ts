@@ -315,12 +315,12 @@ export interface AttentionItem {
 export function attention(input: {
   hasPassword: boolean;
   /** Your own sync ceiling, as /v1/me sends it. At the limit, nothing new can be sent. */
-  plan?: { sync: string; guides: number; limit: number };
+  plan?: { sync: string; work: number; limit: number };
   connectors: ConnectorRow[];
   teams: { slug: string; name: string; channels: ChannelRow[]; groups: GroupRow[] }[];
 }): AttentionItem[] {
   const items: AttentionItem[] = [];
-  // First, because it stops the one thing Passalong is for: sending a guide.
+  // First, because it stops the one thing Passalong is for: sending a piece of work.
   const plan = input.plan;
   if (plan?.sync === "none") {
     items.push({
@@ -330,7 +330,7 @@ export function attention(input: {
       action: "See your plan",
       anchor: "plan",
     });
-  } else if (plan?.sync === "free" && plan.limit > 0 && plan.guides >= plan.limit) {
+  } else if (plan?.sync === "free" && plan.limit > 0 && plan.work >= plan.limit) {
     items.push({
       tone: "bad",
       text: `You've used all ${plan.limit} pieces of work on the free plan, so new work can't be sent. Archiving finished work frees a space.`,

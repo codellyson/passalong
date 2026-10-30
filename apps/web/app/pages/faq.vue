@@ -44,7 +44,7 @@ const QUESTIONS = [
   },
   {
     q: "Are share links private?",
-    a: "They are unlisted rather than secret. The key in the link is the authorisation, so anyone you send it to can read it and anyone they forward it to can too. Search engines are kept out three ways: share pages are noindex, they carry an x-robots-tag header for links that leak, and /g/ is disallowed in robots.txt. Treat a share link like an unlisted video, not like a password.",
+    a: "They are unlisted rather than secret. The key in the link is the authorisation, so anyone you send it to can read it and anyone they forward it to can too. Search engines are kept out three ways: share pages are noindex, they carry an x-robots-tag header for links that leak, and /w/ is disallowed in robots.txt. Treat a share link like an unlisted video, not like a password.",
   },
   {
     q: "Which assistants and editors does it work with?",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{ folder: string; asset: string; type: string; name: string }>();
+const props = defineProps<{ project: string; file: string; type: string; name: string }>();
 const { token } = useHub();
 const source = ref("");
 
@@ -8,7 +8,9 @@ onMounted(async () => {
   try {
     const headers: Record<string, string> = {};
     if (token.value) headers.authorization = `Bearer ${token.value}`;
-    const response = await fetch(`/v1/folders/${props.folder}/assets/${props.asset}`, { headers });
+    const response = await fetch(`/v1/projects/${props.project}/files/${props.file}`, {
+      headers,
+    });
     if (response.ok) source.value = URL.createObjectURL(await response.blob());
   } catch {
     // The labelled file row remains useful when a preview cannot be fetched.

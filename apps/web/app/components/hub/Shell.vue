@@ -74,7 +74,7 @@ const measure = computed(() =>
     : route.path === "/hub"
       ? "max-w-[78rem]"
       : route.path.startsWith("/hub/settings") ||
-          route.path.startsWith("/hub/g/") ||
+          route.path.startsWith("/hub/w/") ||
           route.path.startsWith("/hub/projects") ||
           route.path.startsWith("/hub/support") ||
           route.path === "/hub/new" ||
@@ -179,11 +179,11 @@ const lapsed = computed(() => (data.value.me?.teams ?? []).filter((t) => t.plan 
 const noPlan = computed(() => data.value.me?.sync === "none");
 const full = computed(() => {
   const me = data.value.me;
-  return Boolean(me && me.sync === "free" && me.guides >= me.limit);
+  return Boolean(me && me.sync === "free" && me.work >= me.limit);
 });
 const nearLimit = computed(() => {
   const me = data.value.me;
-  return Boolean(me && me.sync === "free" && me.guides >= me.limit * 0.8);
+  return Boolean(me && me.sync === "free" && me.work >= me.limit * 0.8);
 });
 </script>
 
@@ -334,7 +334,7 @@ const nearLimit = computed(() => {
         <p v-if="nearLimit" :class="notice">
           <span :class="dot" aria-hidden="true" />
           <span class="min-w-0 grow">
-            <b class="text-fg">You're using {{ data.me?.guides }} of {{ data.me?.limit }} pieces of work on the free plan.</b>
+            <b class="text-fg">You're using {{ data.me?.work }} of {{ data.me?.limit }} pieces of work on the free plan.</b>
             <template v-if="full"> New work can't be sent until you make room.</template>
             Archiving finished work frees a space.
           </span>

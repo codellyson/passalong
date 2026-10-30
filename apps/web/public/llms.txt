@@ -16,7 +16,7 @@ as a step that touches production, rather than bold text a reader can skim past.
 
 ## If you are an agent reading a share link
 
-A share link looks like `https://passalong.dev/g/<id>/<key>`. Append `.md` for the raw markdown.
+A share link looks like `https://passalong.dev/w/<id>/<key>`. Append `.md` for the raw markdown.
 
 1. Read it, and the work it came from (`parent:`) if it names one. Work has no kinds and no required
    sections: what it says, in plain words, is what is asked. Work out what done means from it.
@@ -35,9 +35,8 @@ Frontmatter holds strings and string lists only:
 - `summary` — required: one or two plain sentences, 400 characters at most, with no ids or paths,
   saying what it is and whether anybody has to act. The text is for agents; the summary is what a
   person reads first in their hub. Work with no summary is refused.
-- `status` — `draft`, `published` (Ready) or `consumed` (archived, or Done). New work is Ready: it
+- `status` — `draft`, `ready` or `done` (finished or archived). New work is Ready: it
   reaches whoever it is for at once. Say `status: draft` only when a person should read it first.
-  (`promoted` is retired: work carrying it keeps it and it still parses, but no write can set it.)
 - `team`, `to` — where it goes. `to:` inside the named team is `@handle` (one person, who sees it
   first), several handles, `#group` (the people who do a thing; the first to take it takes it off
   the others' boards), or absent (the whole team).
@@ -87,7 +86,7 @@ Work:
 - `update_work` — change work that exists: Ready, Draft or archived, who it is for, or its text.
 
 Projects and documents:
-- `find_projects` — list, search or open a project (a folder in the hub), with its documents,
+- `find_projects` — list, search or open a project (a project in the hub), with its documents,
   files and work.
 - `save_project` — create a project, or change its name, description, parent or colour.
 - `read_document` — one document's text and version; `history` lists or returns earlier versions.
@@ -203,5 +202,5 @@ account. Repeats add a note to the open work rather than making another.
 - npm: https://www.npmjs.com/package/passalong
 - Source: https://github.com/codellyson/passalong
 
-Share pages are `noindex` and `/g/` is disallowed in robots.txt: a share link is for whoever holds
+Share pages are `noindex` and `/w/` is disallowed in robots.txt: a share link is for whoever holds
 it, not for search engines. Do not crawl share links found elsewhere.

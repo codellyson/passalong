@@ -18,7 +18,7 @@ const inApp = computed(
 const kind = computed(() => {
   if (props.error?.statusMessage === "invite" || path.startsWith("/join/")) return "invite";
   if (props.error?.statusCode !== 404) return "broken";
-  if (path.startsWith("/g/")) return "work";
+  if (path.startsWith("/w/")) return "work";
   return "missing";
 });
 

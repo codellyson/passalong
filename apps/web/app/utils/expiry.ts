@@ -8,7 +8,7 @@ export function timeLeft(iso: string, at = Date.now()): string {
 }
 
 /**
- * The line a guide shows when its proof screenshots are about to be deleted, or null. A sent guide
+ * The line a piece of work shows when its proof screenshots are about to be deleted, or null. A sent piece of work
  * nobody took is no longer tidied away — it stays Ready and a person is told — so this is the one
  * clock left. `soon` is the last two days, for a louder colour.
  */

@@ -4,7 +4,7 @@
   presses Send — nothing reaches a customer before somebody has read it. When the next word is ours
   the agent's draft is already in the box, labelled as the agent's until someone changes it.
 
-  The thread comes from the page (`GET /v1/guides/:id/thread`), which also reads the reader's note
+  The thread comes from the page (`GET /v1/work/:id/thread`), which also reads the reader's note
   from it for the side panel; after a send the page refetches it.
 -->
 <script setup lang="ts">
@@ -12,7 +12,7 @@ import type { ThreadItem } from "~/types/hub";
 import { messageOf } from "~/utils/thread";
 
 const props = defineProps<{
-  guideId: string;
+  workId: string;
   /** Every line of the request's thread, oldest first; null while it loads. */
   thread: ThreadItem[] | null;
   /** What to call the customer in the conversation: their name, else their address. */
@@ -112,7 +112,7 @@ async function draft(quiet = false) {
   if (!quiet) problem.value = "";
   try {
     const got = await api<{ draft: string }>(
-      `/v1/guides/${props.guideId}/customer/draft`,
+      `/v1/work/${props.workId}/customer/draft`,
       json("POST", {}),
     );
     if (got?.draft) {
@@ -152,7 +152,7 @@ async function send() {
   problem.value = "";
   sentAt.value = "";
   try {
-    await api(`/v1/guides/${props.guideId}/customer`, json("POST", { body }));
+    await api(`/v1/work/${props.workId}/customer`, json("POST", { body }));
     writer.value?.clear();
     reply.value = "";
     drafted.value = "";
@@ -311,7 +311,7 @@ watchEffect(() => {
         </template>
       </p>
       <p v-for="f in ready" :key="f.id" class="m-0 font-ui text-sm" role="status">
-        <NuxtLink :to="`/hub/g/${f.id}`">{{ f.title }}</NuxtLink> is done. Tell {{ name }}.
+        <NuxtLink :to="`/hub/w/${f.id}`">{{ f.title }}</NuxtLink> is done. Tell {{ name }}.
       </p>
       <!-- The same editor as the box, without @ and #: a customer has no use for the team's names. -->
       <ClientOnly>

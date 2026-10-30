@@ -11,7 +11,7 @@
   (connected apps, API tokens), Integrations is what sends work to you (email, Sentry, PostHog).
   Agents keeps the `connections` address it had when both were one page.
 
-  Old links still land: `/hub/settings#plan` is forwarded to the page holding `#plan`.
+  A section anchor lands: `/hub/settings#plan` is forwarded to the page holding `#plan`.
 -->
 <script setup lang="ts">
 import { attention } from "~/utils/connect-apps";
@@ -35,7 +35,7 @@ const items = computed(() =>
   attention({
     hasPassword: !needsPassword.value,
     plan: me.value
-      ? { sync: me.value.sync, guides: me.value.guides, limit: me.value.limit }
+      ? { sync: me.value.sync, work: me.value.work, limit: me.value.limit }
       : undefined,
     connectors: connectors.value,
     teams: extras.value,
@@ -65,7 +65,7 @@ function go(item: (typeof items.value)[number]) {
 const planNote = computed(() => {
   const m = me.value;
   if (!m) return "";
-  if (m.sync === "free") return `${m.guides} of ${m.limit}`;
+  if (m.sync === "free") return `${m.work} of ${m.limit}`;
   return m.plan === "solo" ? "Solo" : m.plan === "lapsed" ? "lapsed" : "no limit";
 });
 
@@ -136,7 +136,7 @@ const summary = computed(() => {
         return "In a paid team, so there's no limit on work.";
       if (m.plan === "solo") return "Solo, with no limit on work.";
       if (m.plan === "lapsed") return "Your Solo plan has lapsed. Nothing has been taken away.";
-      if (m.sync === "free") return `Free plan · ${m.guides} of ${m.limit} pieces of work used`;
+      if (m.sync === "free") return `Free plan · ${m.work} of ${m.limit} pieces of work used`;
       return "No plan yet, so new work can't be sent.";
     case "teams":
       // With teams, the template writes the line itself so each name links to its block.

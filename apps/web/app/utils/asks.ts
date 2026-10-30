@@ -21,7 +21,7 @@ export const newProjectAsk = (team?: string) =>
 
 /**
  * A project's first documents, written by an agent that can read the product: from its repo when it
- * has one (`folder.repo`), which the agent is told to read first.
+ * has one (`project.repo`), which the agent is told to read first.
  */
 export const readmeAsk = (project: { id: string; title: string; repo?: string }) =>
   `${project.repo ? `Read the repo ${project.repo} and write` : "Write"} the README for the Passalong project "${project.title}" (${project.id}): what the product is, who uses it, the words we use for things and how it is built. Then add a page for each area someone working on it needs to know, and a Log page of what changed.`;

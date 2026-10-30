@@ -7,11 +7,11 @@
  *
  * Pure and type-only imports, so it runs under `node --test` without Nuxt.
  */
-import type { Board, Guide } from "~/types/hub";
+import type { Board, Work } from "~/types/hub";
 
 const BUCKETS = ["waiting", "in_flight", "landed"] as const;
 
-export const withStatus = (g: Guide, status: string): Guide => ({ ...g, status });
+export const withStatus = (g: Work, status: string): Work => ({ ...g, status });
 
 /** Off the board entirely: passed on, answered, archived or deleted. */
 export function dropFromBoard(board: Board, id: string): Board {
@@ -20,6 +20,6 @@ export function dropFromBoard(board: Board, id: string): Board {
   return out;
 }
 
-export function patchList(guides: Guide[], id: string, fn: (g: Guide) => Guide): Guide[] {
-  return guides.map((g) => (g.id === id ? fn(g) : g));
+export function patchList(work: Work[], id: string, fn: (g: Work) => Work): Work[] {
+  return work.map((g) => (g.id === id ? fn(g) : g));
 }

@@ -9,14 +9,14 @@
   elsewhere, scrolling or picking an item closes it. Reopen and Delete ask inside it, in place.
 -->
 <script setup lang="ts">
-import type { Guide, Task, Working } from "~/types/hub";
+import type { Task, Work, Working } from "~/types/hub";
 
-const props = defineProps<{ guide: Guide; x: number; y: number; canGive: boolean }>();
+const props = defineProps<{ work: Work; x: number; y: number; canGive: boolean }>();
 const emit = defineEmits<{ close: []; give: [] }>();
 const { onArchive, onRemove, onReopen, onTaskDraft, onTaskReady, onTakeBack } = useHub();
 
-const g = computed(() => props.guide);
-const archived = computed(() => g.value.status === "consumed");
+const g = computed(() => props.work);
+const archived = computed(() => g.value.status === "done");
 const held = computed(() => Boolean(g.value.held_by?.length));
 
 const menu = ref<HTMLElement | null>(null);
@@ -104,7 +104,7 @@ function copyAndClose(text: string, e: Event) {
       @keydown="onKey"
       @contextmenu.prevent
     >
-      <NuxtLink role="menuitem" class="menu-item" :to="`/hub/g/${g.id}`" @click="close">
+      <NuxtLink role="menuitem" class="menu-item" :to="`/hub/w/${g.id}`" @click="close">
         <AppIcon name="open" />Open
       </NuxtLink>
       <button

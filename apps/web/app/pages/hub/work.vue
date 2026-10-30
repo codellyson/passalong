@@ -5,9 +5,7 @@
   is looking. A project filter (`?project=`) and Only mine (`?mine=1`) narrow the cards without
   moving any of them.
 
-  /hub/guides, /hub/tasks and a /hub link carrying a work query redirect here with that query, so
-  `?q=` and `?follows=` links still work; an old `?tab=needs` link opens Only mine, since that tab
-  was the cards about you. `?done=all` shows every finished card.
+  `?done=all` shows every finished card.
 -->
 <script setup lang="ts">
 import { useQuery } from "@tanstack/vue-query";
@@ -37,17 +35,17 @@ const setQuery = (patch: Record<string, string | undefined>) =>
 /** `?follows=<id>`: work naming it as its parent. */
 const follows = computed(() => text(route.query.follows));
 const followed = computed(() =>
-  follows.value ? data.value.guides.find((g) => g.id === follows.value) || null : null,
+  follows.value ? data.value.work.find((g) => g.id === follows.value) || null : null,
 );
 const mineOnly = computed({
-  get: () => route.query.mine === "1" || route.query.tab === "needs",
-  set: (on: boolean) => setQuery({ mine: on ? "1" : undefined, tab: undefined }),
+  get: () => route.query.mine === "1",
+  set: (on: boolean) => setQuery({ mine: on ? "1" : undefined }),
 });
 const project = computed({
   get: () => text(route.query.project),
   set: (id: string) => setQuery({ project: id || undefined }),
 });
-const projects = computed(() => projectsFrom(projectsQ.data.value?.folders ?? []));
+const projects = computed(() => projectsFrom(projectsQ.data.value?.projects ?? []));
 const projectOptions = computed(() => [
   { value: "", label: "All projects" },
   ...projects.value.map((p) => ({ value: p.id, label: p.title })),
@@ -126,7 +124,6 @@ function clearFilters() {
     q: undefined,
     follows: undefined,
     mine: undefined,
-    tab: undefined,
     project: undefined,
   });
 }

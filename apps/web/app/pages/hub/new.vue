@@ -9,7 +9,7 @@
 -->
 <script setup lang="ts">
 import { useQueryClient } from "@tanstack/vue-query";
-import type { Guide } from "~/types/hub";
+import type { Work } from "~/types/hub";
 import { age, byLine, toneOf } from "~/utils/projects";
 import { shorten } from "~/utils/shorten";
 
@@ -40,10 +40,10 @@ const projectId = String(useRoute().query.project || "");
 onMounted(async () => {
   if (!projectId) return;
   const got = await api<{
-    folder: { id: string; title: string; color?: string; team_slug?: string };
-  }>(`/v1/folders/${encodeURIComponent(projectId)}`).catch(() => null);
+    project: { id: string; title: string; color?: string; team_slug?: string };
+  }>(`/v1/projects/${encodeURIComponent(projectId)}`).catch(() => null);
   if (!got) return;
-  preset.value = { ...got.folder, team: got.folder.team_slug || "" };
+  preset.value = { ...got.project, team: got.project.team_slug || "" };
   team.value = preset.value.team;
 });
 watchEffect(() => {
@@ -157,7 +157,7 @@ const STAGE: Record<string, string> = {
   working: "In progress",
   done: "Done",
 };
-const relatedOf = (g: Guide): Related => {
+const relatedOf = (g: Work): Related => {
   const h = g.held_by?.[0];
   return {
     id: g.id,
@@ -198,13 +198,13 @@ watch([text, team], () => {
       preview.value = got?.preview ?? null;
       const q = preview.value?.title || "";
       const found = q
-        ? await api<{ guides: Guide[] }>(
-            `/v1/guides?q=${encodeURIComponent(q.split(" ").slice(0, 4).join(" "))}&scope=${encodeURIComponent(team.value || "all")}`,
+        ? await api<{ work: Work[] }>(
+            `/v1/work?q=${encodeURIComponent(q.split(" ").slice(0, 4).join(" "))}&scope=${encodeURIComponent(team.value || "all")}`,
           ).catch(() => null)
         : null;
       if (mine === asked)
-        related.value = (found?.guides ?? [])
-          .filter((g) => g.status !== "consumed")
+        related.value = (found?.work ?? [])
+          .filter((g) => g.status !== "done")
           .slice(0, 3)
           .map(relatedOf);
     } catch (err) {
@@ -346,10 +346,9 @@ async function moveProject(to: string) {
   if (!f || to === (f.project?.id ?? "")) return;
   problem.value = "";
   try {
-    if (to)
-      await api(`/v1/folders/${encodeURIComponent(to)}/guides`, json("POST", { guide: f.id }));
+    if (to) await api(`/v1/projects/${encodeURIComponent(to)}/work`, json("POST", { work: f.id }));
     if (f.project)
-      await api(`/v1/folders/${encodeURIComponent(f.project.id)}/guides/${f.id}`, {
+      await api(`/v1/projects/${encodeURIComponent(f.project.id)}/work/${f.id}`, {
         method: "DELETE",
       });
     filed.value = { ...f, project: f.projects.find((p) => p.id === to) ?? null };
@@ -370,7 +369,7 @@ async function undo() {
   if (!filed.value) return;
   problem.value = "";
   try {
-    const got = await api<{ told?: number }>(`/v1/guides/${filed.value.id}`, {
+    const got = await api<{ told?: number }>(`/v1/work/${filed.value.id}`, {
       method: "DELETE",
     });
     const told = got?.told ?? 0;
@@ -464,7 +463,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
         </p>
 
         <div class="flex flex-wrap items-center gap-2">
-          <NuxtLink :to="`/hub/g/${filed.id}`" class="btn primary no-underline">Open it</NuxtLink>
+          <NuxtLink :to="`/hub/w/${filed.id}`" class="btn primary no-underline">Open it</NuxtLink>
           <button type="button" class="btn" @click="again">Write another</button>
           <button type="button" class="btn" :aria-expanded="moving" @click="moving = !moving">
             Move…<AppIcon name="reveal" class="shrink-0 transition-transform" :class="moving ? 'rotate-180' : ''" />
@@ -657,7 +656,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                 <p :class="label">Looks like</p>
                 <ul class="m-0 flex list-none flex-col gap-2 p-0">
                   <li v-for="r in related" :key="r.id" class="flex flex-col gap-0.5 font-ui">
-                    <NuxtLink :to="`/hub/g/${r.id}`" class="text-sm break-words text-fg">{{ r.title }}</NuxtLink>
+                    <NuxtLink :to="`/hub/w/${r.id}`" class="text-sm break-words text-fg">{{ r.title }}</NuxtLink>
                     <span class="flex flex-wrap items-baseline gap-x-1 text-xs text-muted">
                       <template v-if="r.project">
                         <span class="project-mark h-3 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
@@ -689,7 +688,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
             class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 @2xl:grid"
             :class="[cols, r.id === justFiled ? 'settle' : '']"
           >
-            <NuxtLink :to="`/hub/g/${r.id}`" class="min-w-0 grow basis-full font-ui text-sm font-medium break-words text-fg no-underline hover:underline @2xl:basis-auto">{{ r.title }}</NuxtLink>
+            <NuxtLink :to="`/hub/w/${r.id}`" class="min-w-0 grow basis-full font-ui text-sm font-medium break-words text-fg no-underline hover:underline @2xl:basis-auto">{{ r.title }}</NuxtLink>
             <span class="flex min-w-0 items-baseline gap-2 font-ui text-xs @2xl:text-sm">
               <template v-if="r.project_id">
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf({ id: r.project_id, color: r.project_color })" aria-hidden="true" />

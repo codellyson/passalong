@@ -5,7 +5,7 @@ import "./aliases.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { renderBody, renderMarkdown } = await import("../server/utils/guide-html.ts");
+const { renderBody, renderMarkdown } = await import("../server/utils/work-html.ts");
 
 test("h2 and h3 make the outline, no heading is marked, ids never repeat", () => {
   const { html, outline } = renderBody(

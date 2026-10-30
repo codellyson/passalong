@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { progressOf } from "../app/utils/progress.ts";
 
 const T = (m) => `2026-09-16T10:${String(m).padStart(2, "0")}:00.000Z`;
-const guide = (over = {}) => ({
+const work = (over = {}) => ({
   id: "g1",
   title: "Map the modules",
   mine: true,
@@ -15,16 +15,16 @@ const guide = (over = {}) => ({
   ...over,
 });
 const ctx = (over = {}) => ({
-  guide: guide(over.guide),
+  work: work(over.work),
   owner: true,
   claims: [],
-  verdicts: [],
+  proofs: [],
   parent: null,
   children: [],
   blocked_by: [],
   blocks: [],
   ...over,
-  ...(over.guide ? { guide: guide(over.guide) } : {}),
+  ...(over.work ? { work: work(over.work) } : {}),
 });
 const say = (beats) => beats.map((b) => `${b.who} ${b.what}`);
 const claim = (state, note) => ({
@@ -41,7 +41,7 @@ const claim = (state, note) => ({
 test("it starts with the sending and runs in time order, whatever order the rows arrive in", () => {
   const beats = progressOf(
     ctx({
-      guide: { pulled_by: [{ handle: "hybee1", at: T(5) }] },
+      work: { pulled_by: [{ handle: "hybee1", at: T(5) }] },
       claims: [claim("claimed", "")],
     }),
   );
@@ -53,7 +53,7 @@ test("it starts with the sending and runs in time order, whatever order the rows
 });
 
 test("work for nobody in particular is written, not sent", () => {
-  const [first] = progressOf(ctx({ guide: { to: "", to_name: "" } }));
+  const [first] = progressOf(ctx({ work: { to: "", to_name: "" } }));
   assert.equal(first.what, "wrote it");
 });
 
@@ -73,7 +73,7 @@ test("an agent's hold says where, then its last word", () => {
 test("finishing carries what it was finished with", () => {
   const beats = progressOf(
     ctx({
-      verdicts: [
+      proofs: [
         {
           ok: true,
           by: { handle: "ada", name: "Ada" },
@@ -92,7 +92,7 @@ test("finishing carries what it was finished with", () => {
 });
 
 test("a receipt is not someone opening it", () => {
-  const beats = progressOf(ctx({ guide: { pulled_by: [{ handle: "bo", via: "web", at: T(3) }] } }));
+  const beats = progressOf(ctx({ work: { pulled_by: [{ handle: "bo", via: "web", at: T(3) }] } }));
   assert.deepEqual(say(beats), ["You sent it to Ibrahim Adekunle"]);
 });
 

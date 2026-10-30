@@ -1,5 +1,5 @@
 // The web surface: every page a person looks at. The Worker in apps/api keeps the machine-facing
-// half (`/v1/*`, the raw `.md` of a guide, its OG card) and, for now, deploys separately — phase 4
+// half (`/v1/*`, the raw `.md` of a piece of work, its OG card) and, for now, deploys separately — phase 4
 // mounts it here so there is one origin and one deploy again.
 
 import { fileURLToPath } from "node:url";
@@ -16,10 +16,10 @@ export default defineNuxtConfig({
   nitro: {
     preset: "cloudflare_module",
 
-    // The mounted API renders each guide's unfurl card with `workers-og`, which is satori and
+    // The mounted API renders each piece of work's unfurl card with `workers-og`, which is satori and
     // resvg compiled to wasm. Without this the bundler tries to parse the .wasm as JavaScript and
     // the build dies on the first byte. It stays behind the dynamic import it already had in
-    // apps/api, so only /g/:id/:key/og.png pays for ~1.7MB on a cold start.
+    // apps/api, so only /w/:id/:key/og.png pays for ~1.7MB on a cold start.
     //
     // That renderer also reads `public/fonts/onest-{400,600}.woff` through the ASSETS
     // binding. Nothing else does — satori cannot read woff2, and the stylesheet loads the variable
@@ -31,14 +31,14 @@ export default defineNuxtConfig({
     // through useStorage("assets:blog") — see server/utils/blog.ts.
     serverAssets: [
       { baseName: "blog", dir: fileURLToPath(new URL("./content/blog", import.meta.url)) },
-      // The /learn pages: long-lived guides, read the same way as the blog.
+      // The /learn pages: long-lived work, read the same way as the blog.
       { baseName: "learn", dir: fileURLToPath(new URL("./content/learn", import.meta.url)) },
     ],
   },
 
-  // The guide format is defined once, in apps/api/src/guide.ts, and mirrored from
-  // packages/passalong/src/guide.js. Both halves of the product need it — apps/api still serves a
-  // guide's raw `.md` and its OG card — so it is aliased across rather than copied, which would
+  // The work format is defined once, in apps/api/src/work.ts, and mirrored from
+  // packages/passalong/src/work.js. Both halves of the product need it — apps/api still serves a
+  // work's raw `.md` and its OG card — so it is aliased across rather than copied, which would
   // make a third place to keep in step. Both aliased modules are leaves with no imports of their
   // own; the cutover merges the two trees and the alias goes away.
   alias: {
@@ -111,13 +111,7 @@ export default defineNuxtConfig({
   },
 
   routeRules: {
-    // There is no writer in the browser: the agent that has the context writes the guide
-    // (docs/V2.md §11). Old links and bookmarks land on the hub, whose New menu says what to ask.
-    "/hub/write": { redirect: "/hub" },
-    // Work has no kinds (docs/WORK.md), so the format page is the work format; old links follow.
-    // Permanent, so search engines move the old address's standing to the new one.
-    "/docs/guide-format": { redirect: { to: "/docs/work-format", statusCode: 301 } },
-    // Guide pages render markdown a stranger wrote, and the CSP is what makes that safe rather
+    // Work pages render markdown a stranger wrote, and the CSP is what makes that safe rather
     // than a sanitiser. `noScripts` drops the entry script, the import map, the inlined payload
     // and the JS resource hints, so the page can be served with no `script-src` at all. It also
     // means the route never hydrates: nothing on it may be interactive.
@@ -125,21 +119,21 @@ export default defineNuxtConfig({
     // The headers are `VIEW_HEADERS` from apps/api/src/index.ts, verbatim. They move here from
     // being a hand-spread object literal on every `c.html()` call.
     "/": { noScripts: true, headers: PUBLIC_HEADERS },
-    // A guide page renders markdown a stranger wrote. There is no sanitiser behind this — the CSP
+    // A work page renders markdown a stranger wrote. There is no sanitiser behind this — the CSP
     // is what makes it safe, and `noScripts` is what lets the CSP name no `script-src` at all.
     //
     // `x-robots-tag` because robots.txt and the page's `noindex` meta do not cover it between them:
     // a disallowed page is never fetched, so its meta is never read, and a leaked link can still be
     // indexed as a bare URL. The header also reaches the raw `.md` and the card, which have no
     // <head> to put a meta tag in.
-    "/g/**": {
+    "/w/**": {
       noScripts: true,
       headers: { ...VIEW_HEADERS, "x-robots-tag": "noindex, nofollow, noarchive" },
     },
-    // A shared folder is a share link like a guide's, and gets exactly its treatment: no script,
-    // the strict policy, and never indexed. Its documents are sanitised as well, since a folder's
+    // A shared project is a share link like a piece of work's, and gets exactly its treatment: no script,
+    // the strict policy, and never indexed. Its documents are sanitised as well, since a project's
     // files are private until someone shares the link.
-    "/f/**": {
+    "/p/**": {
       noScripts: true,
       headers: { ...VIEW_HEADERS, "x-robots-tag": "noindex, nofollow, noarchive" },
     },
@@ -157,7 +151,7 @@ export default defineNuxtConfig({
     // strict policy. Both spellings, as for docs.
     "/blog": { noScripts: true, headers: PUBLIC_HEADERS },
     "/blog/**": { noScripts: true, headers: PUBLIC_HEADERS },
-    // The /learn guides are prose we wrote, like the blog.
+    // The /learn work are prose we wrote, like the blog.
     "/learn/**": { noScripts: true, headers: PUBLIC_HEADERS },
 
     // The hub, the invite page and the password reset run script, so their header is written per

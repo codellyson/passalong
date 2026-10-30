@@ -1,5 +1,5 @@
 <!--
-  What a hand-in ran, as it was sent (docs/V2.md §11).
+  What a hand-in ran, as it was sent.
 
   One renderer for everywhere evidence is read: what work was finished with, and the thread. Output
   stays monospace and literal — a reviewer is reading a terminal, and reflowing it would lose the
@@ -18,7 +18,7 @@ const props = defineProps<{
    * A check with no command behind it is the agent's sentence about what it saw, and the share
    * page says so by setting it in the reading face instead of the mono one. It still comes through
    * here, because a screenshot in it has to become a picture wherever it was written — that was
-   * the bug: the guide page printed `![Sales Order PDF](https://…/v1/shots/d2eg7b2xaqx7)` as text.
+   * the bug: the work page printed `![Sales Order PDF](https://…/v1/shots/d2eg7b2xaqx7)` as text.
    */
   prose?: boolean;
   /** What a screen reader calls this region. It was always "What it ran", which is wrong for a chat. */

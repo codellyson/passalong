@@ -1,30 +1,30 @@
 <!--
   One document of a project: read it, edit it, see its earlier versions and put one back.
 
-  Every save carries the version that was opened, and the server refuses a stale one (folders.ts),
+  Every save carries the version that was opened, and the server refuses a stale one (projects.ts),
   so a person's edit and an agent's cannot silently replace each other. Refused, the text stays in
   the editor and the page says how to get the newer version. An earlier version is shown read-only
   at its own address (`?doc=…&v=…`), which is where History links to.
 -->
 <script setup lang="ts">
-import type { Folder, FolderDocument } from "~/types/folder";
-import { renderFolderMarkdown } from "~/utils/folder-markdown";
+import type { Project, ProjectDocument } from "~/types/project";
+import { renderProjectMarkdown } from "~/utils/project-markdown";
 import { age, byLine, viaOf } from "~/utils/projects";
 
 const props = defineProps<{
   /** The project the document is in. */
-  folder: string;
+  project: string;
   space: string;
   doc: string;
   version?: number;
   startEditing?: boolean;
   /** The document's row from the project's list: who saved it last, which a single read lacks. */
-  row?: FolderDocument;
+  row?: ProjectDocument;
 }>();
 const emit = defineEmits<{ changed: []; gone: [message: string] }>();
 
 const { api, json } = useHub();
-const current = ref<FolderDocument | null>(null);
+const current = ref<ProjectDocument | null>(null);
 const earlier = ref<{ version: number; body: string; saved_at: string } | null>(null);
 const draft = ref("");
 const editing = ref(false);
@@ -38,7 +38,7 @@ const showVersions = ref(false);
 const versions = ref<{ version: number; saved_at: string }[]>([]);
 const now = ref(Date.now());
 
-const base = computed(() => `/v1/folders/${props.folder}/documents/${props.doc}`);
+const base = computed(() => `/v1/projects/${props.project}/documents/${props.doc}`);
 /** What is read, without a first heading that only repeats the document's name above it. */
 const shown = computed(() => {
   const body = earlier.value ? earlier.value.body : current.value?.body || "";
@@ -47,7 +47,7 @@ const shown = computed(() => {
     ? body.slice(first[0].length)
     : body;
 });
-const rendered = computed(() => renderFolderMarkdown(shown.value));
+const rendered = computed(() => renderProjectMarkdown(shown.value));
 const docLink = (v?: number) => ({
   query: { tab: "documents", doc: props.doc, ...(v ? { v } : {}) },
 });
@@ -57,7 +57,7 @@ async function load() {
   problem.value = "";
   stale.value = false;
   try {
-    const got = await api<{ document: FolderDocument }>(base.value);
+    const got = await api<{ document: ProjectDocument }>(base.value);
     current.value = got?.document ?? null;
     earlier.value = null;
     if (props.version && current.value && props.version !== current.value.version) {
@@ -80,7 +80,7 @@ async function load() {
     loading.value = false;
   }
 }
-watch(() => [props.doc, props.folder, props.version], load, { immediate: true });
+watch(() => [props.doc, props.project, props.version], load, { immediate: true });
 
 async function save() {
   if (!current.value) return;
@@ -89,7 +89,7 @@ async function save() {
   notice.value = "";
   stale.value = false;
   try {
-    const got = await api<{ document: FolderDocument }>(
+    const got = await api<{ document: ProjectDocument }>(
       base.value,
       json("PUT", { body: draft.value, version: current.value.version }),
     );
@@ -169,15 +169,15 @@ async function openMove() {
   moveOpen.value = !moveOpen.value;
   if (!moveOpen.value) return;
   try {
-    const got = await api<{ folders: Folder[] }>("/v1/folders");
-    const all = (got?.folders ?? []).filter((f) => f.team_id === props.space);
+    const got = await api<{ projects: Project[] }>("/v1/projects");
+    const all = (got?.projects ?? []).filter((f) => f.team_id === props.space);
     const byId = new Map(all.map((f) => [f.id, f]));
-    const path = (f: Folder): string => {
+    const path = (f: Project): string => {
       const parent = byId.get(f.parent_id);
       return parent ? `${path(parent)} / ${f.title}` : f.title;
     };
     targets.value = all
-      .filter((f) => f.id !== props.folder)
+      .filter((f) => f.id !== props.project)
       .map((f) => ({ id: f.id, title: path(f), depth: 0 }))
       .sort((a, b) => a.title.localeCompare(b.title));
   } catch (err) {
@@ -188,7 +188,7 @@ async function move(to: { id: string; title: string }) {
   if (!current.value) return;
   moveOpen.value = false;
   try {
-    await api(base.value, json("PATCH", { folder: to.id }));
+    await api(base.value, json("PATCH", { project: to.id }));
     emit("gone", `${current.value.name} moved to ${to.title}.`);
   } catch (err) {
     problem.value = (err as Error).message;
@@ -324,7 +324,7 @@ function cancel() {
           <button class="btn" type="button" @click="cancel">Cancel</button>
         </div>
       </form>
-      <!-- Sanitised by renderFolderMarkdown before it reaches v-html. -->
+      <!-- Sanitised by renderProjectMarkdown before it reaches v-html. -->
       <div v-else-if="shown" class="overflow-x-auto"><div class="prose project-doc" v-html="rendered" /></div>
       <p v-else class="m-0 font-ui text-sm text-muted">Nothing written yet. Edit to start.</p>
     </template>

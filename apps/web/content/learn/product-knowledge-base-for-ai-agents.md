@@ -26,7 +26,7 @@ building features that pull the product somewhere it is not meant to go.
 staff, not developers" changes how an agent writes an error message.
 
 **The words the team uses.** Every product has terms that mean something specific. Write them down
-with what they mean and what they do not mean. An agent that calls a "project" a "folder" in the
+with what they mean and what they do not mean. An agent that calls a "customer" a "user" in the
 interface has made a real mistake, even if the code works.
 
 **How it is built.** The parts, how they connect, what to run to check a change, and the sharp

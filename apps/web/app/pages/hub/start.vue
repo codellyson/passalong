@@ -8,7 +8,7 @@
   Needs you, a link in a chat and a second device all land on the same step (`?step=`), and Needs
   you stays a register of what waits. Where the person got to is the server's (`account.setup`,
   apps/api/src/setup.ts), so it resumes anywhere; everything a step makes goes through the routes
-  that already exist — teams, invites, groups, folders, documents, inbound, connectors.
+  that already exist — teams, invites, groups, projects, documents, inbound, connectors.
 
   Continue is the step's act and is offered only when there is something to act on; Skip is always
   there and is remembered as skipped, so Needs you can say what is left.
@@ -275,16 +275,16 @@ const saveGroups = () =>
   });
 
 // ---- 4. What you work on --------------------------------------------------------------------
-const folders = computed(() => projectsQ.data.value?.folders ?? []);
-/** This team's projects (or your own, with no team): the top-level folders in that space. */
+const allProjects = computed(() => projectsQ.data.value?.projects ?? []);
+/** This team's projects (or your own, with no team): the top-level projects in that space. */
 const projects = computed(() => {
   const ids = new Set(
-    folders.value.filter((f) => (f.team_slug || "") === slug.value).map((f) => f.id),
+    allProjects.value.filter((f) => (f.team_slug || "") === slug.value).map((f) => f.id),
   );
-  return projectsFrom(folders.value)
+  return projectsFrom(allProjects.value)
     .filter((p) => ids.has(p.id))
     .map((p) => {
-      const f = folders.value.find((x) => x.id === p.id);
+      const f = allProjects.value.find((x) => x.id === p.id);
       return { ...p, color: f?.color || "", repo: f?.repo || "" };
     });
 });
@@ -297,7 +297,7 @@ const saveProjects = () =>
   act(async () => {
     for (const r of filled.value) {
       await api(
-        "/v1/folders",
+        "/v1/projects",
         json("POST", {
           title: r.title.trim(),
           description: r.line.trim(),
@@ -334,7 +334,7 @@ const saveKnow = () =>
     for (const p of unsaved.value) {
       const d = drafts[p.id]!;
       await api(
-        `/v1/folders/${p.id}/documents`,
+        `/v1/projects/${p.id}/documents`,
         json("POST", { name: "README", body: draftBody(p.title, d, p.description) }),
       );
       d.written = true;

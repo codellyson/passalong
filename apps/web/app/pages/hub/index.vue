@@ -10,10 +10,6 @@
 
   An ink bar at a row's left edge, with a line naming what changed, says changed since you last
   looked (coral is the hub's active state). It stays until the work is opened (`markSeen`).
-
-  `/hub` was the Work page, so links carrying a work query (`?tab=`, `?q=`, `?follows=`,
-  `?done=1`) are still out in the world. They go on to /hub/work with that query. `?verified=` and
-  `?forgot=` are the shell's and stay here.
 -->
 <script setup lang="ts">
 import type { NeedRow, Needs } from "~/types/hub";
@@ -22,8 +18,6 @@ import { age, toneOf } from "~/utils/projects";
 // Inline: definePageMeta is lifted out of this script and cannot see its variables.
 definePageMeta({
   middleware: async (to) => {
-    if (["tab", "q", "follows", "done"].some((k) => k in to.query))
-      return navigateTo({ path: "/hub/work", query: to.query }, { replace: true });
     // Someone with no team who never touched setup sets up before Needs you renders, so the
     // register never flashes on the way (pages/hub/start.vue). On a first load the server asks,
     // with the session cookie the request carried, and answers with a redirect; a redirect made
@@ -116,7 +110,7 @@ function secondLine(r: NeedRow): string {
   return !s || s.includes(t) || t.includes(s) ? "" : r.summary;
 }
 const href = (r: { id: string; reason?: NeedRow["reason"] }) =>
-  r.reason === "customer" ? `/hub/support/${r.id}` : `/hub/g/${r.id}`;
+  r.reason === "customer" ? `/hub/support/${r.id}` : `/hub/w/${r.id}`;
 /** Who it is with, and how many requests when one customer asked the same thing more than once. */
 const withWho = (r: Row) =>
   r.also?.length ? `${r.with} · ${r.also.length + 1} requests` : r.with || "Nobody";
@@ -212,7 +206,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             <p :class="label" class="m-0">Closed in the last day</p>
             <ul class="m-0 flex list-none flex-col p-0">
               <li v-for="c in overnight" :key="c.id" class="flex items-baseline gap-3 border-t border-line py-2 font-ui text-sm">
-                <NuxtLink :to="`/hub/g/${c.id}`" class="min-w-0 grow no-underline">{{ c.title }}</NuxtLink>
+                <NuxtLink :to="`/hub/w/${c.id}`" class="min-w-0 grow no-underline">{{ c.title }}</NuxtLink>
                 <span class="shrink-0 text-xs text-muted tabular-nums">{{ age(c.at, now) }}</span>
               </li>
             </ul>
@@ -337,7 +331,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             <li v-for="c in needs.closed" :key="c.id" class="relative flex flex-col gap-1 border-b border-line py-3 pl-3 last:border-b-0">
               <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <span class="flex items-baseline gap-3">
-                <NuxtLink :to="`/hub/g/${c.id}`" class="min-w-0 grow font-ui text-sm font-medium break-words text-fg no-underline hover:underline">{{ c.title }}</NuxtLink>
+                <NuxtLink :to="`/hub/w/${c.id}`" class="min-w-0 grow font-ui text-sm font-medium break-words text-fg no-underline hover:underline">{{ c.title }}</NuxtLink>
                 <span class="shrink-0 font-ui text-xs text-muted tabular-nums">{{ age(c.at, now) }}</span>
               </span>
               <span class="flex items-center gap-2 font-ui text-xs text-muted">

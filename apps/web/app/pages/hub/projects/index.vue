@@ -1,13 +1,13 @@
 <!--
   Projects: one per product or repo (docs/LOOP.md §0), each with its line colour, what it is in a
   line, its open work, its documents and when it last changed, as a register like Needs you. A
-  project is a top-level folder; folders inside it count towards it and are reached from its page.
+  project is a top-level project; projects inside it count towards it and are reached from its page.
 
   Coral is the one meaning it has in the hub: something in the project changed since you last
   looked — news on its work, or a document someone else saved since you last opened it.
 -->
 <script setup lang="ts">
-import type { Folder } from "~/types/folder";
+import type { Project } from "~/types/project";
 import { newProjectAsk } from "~/utils/asks";
 import { age, projectsFrom } from "~/utils/projects";
 
@@ -20,7 +20,7 @@ usePage({
 const { api, json, data, projectsQ } = useHub();
 const route = useRoute();
 
-const projects = computed(() => projectsFrom(projectsQ.data.value?.folders ?? []));
+const projects = computed(() => projectsFrom(projectsQ.data.value?.projects ?? []));
 const teams = computed(() => data.value.me?.teams ?? []);
 const changedCount = computed(() => projects.value.filter((p) => p.changed).length);
 const openCount = computed(() => projects.value.reduce((n, p) => n + p.open, 0));
@@ -54,8 +54,8 @@ async function create(form: HTMLFormElement) {
   busy.value = true;
   problem.value = "";
   try {
-    const got = await api<{ folder: Folder }>(
-      "/v1/folders",
+    const got = await api<{ project: Project }>(
+      "/v1/projects",
       json("POST", {
         title,
         description: field(form, "description").trim(),
@@ -63,7 +63,7 @@ async function create(form: HTMLFormElement) {
       }),
     );
     await projectsQ.refetch();
-    if (got?.folder.id) await navigateTo(`/hub/projects/${got.folder.id}`);
+    if (got?.project.id) await navigateTo(`/hub/projects/${got.project.id}`);
   } catch (err) {
     problem.value = (err as Error).message;
   } finally {

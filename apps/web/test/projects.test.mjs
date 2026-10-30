@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { age, byLine, projectsFrom, storedTone, toneOf } from "../app/utils/projects.ts";
 
-test("a project keeps its folder's colour, never coral, and is stable without one", () => {
+test("a project keeps its project's colour, never coral, and is stable without one", () => {
   assert.equal(toneOf({ id: "a", color: "blue" }), "blue");
   assert.equal(toneOf({ id: "a", color: "coral" }), "stone");
   assert.equal(toneOf({ id: "abc", color: "" }), toneOf({ id: "abc", color: "" }));
@@ -12,7 +12,7 @@ test("a project keeps its folder's colour, never coral, and is stable without on
   assert.equal(storedTone("violet"), "violet");
 });
 
-test("projects are the top folders, counting everything beneath them", () => {
+test("projects are the top projects, counting everything beneath them", () => {
   const got = projectsFrom([
     { id: "w", title: "Website", color: "green", parent_id: "", open: 1, changed: 0 },
     { id: "p", title: "Pages", color: "", parent_id: "w", open: 2, changed: 1 },
@@ -37,7 +37,7 @@ test("age reads in one unit", () => {
 });
 
 test("a project rolls up documents, its last change and what changed in it", () => {
-  const folders = [
+  const projects = [
     {
       id: "w",
       title: "Website",
@@ -60,7 +60,7 @@ test("a project rolls up documents, its last change and what changed in it", () 
       changed_what: "Pricing",
     },
   ];
-  const [w] = projectsFrom(folders);
+  const [w] = projectsFrom(projects);
   assert.equal(w.documents, 5);
   assert.equal(w.updated, "2026-10-20");
   assert.deepEqual(w.last, { name: "Pricing", by: "Bola", at: "2026-10-20" });

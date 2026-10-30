@@ -4,7 +4,7 @@
   backticks, or a share or hub link — and Enter opens it. ⌘K or Ctrl+K focuses it from any hub page.
 -->
 <script setup lang="ts">
-import { guideIdFrom } from "~/utils/goto";
+import { workIdFrom } from "~/utils/goto";
 
 const box = ref<HTMLInputElement | null>(null);
 const wrong = ref(false);
@@ -25,12 +25,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 
 // Uncontrolled, as the hub's other inputs: read on submit.
 async function go(form: HTMLFormElement) {
-  const id = guideIdFrom(field(form, "id"));
+  const id = workIdFrom(field(form, "id"));
   wrong.value = !id;
   if (!id) return;
   form.reset();
   box.value?.blur();
-  await navigateTo(`/hub/g/${id}`);
+  await navigateTo(`/hub/w/${id}`);
 }
 </script>
 

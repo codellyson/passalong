@@ -1,5 +1,5 @@
 import type { Ref } from "vue";
-import type { Guide } from "~/types/hub";
+import type { Work } from "~/types/hub";
 
 /**
  * The team board: all work in scope, in one column each, the same for everyone who opens it. The
@@ -19,7 +19,7 @@ export const STAGES = [
 export type Stage = (typeof STAGES)[number]["id"];
 
 /** A card that is about you. Used as a filter only: it never moves a card. */
-export const aboutMe = (g: Guide) =>
+export const aboutMe = (g: Work) =>
   g.mine || Boolean(g.for_me) || Boolean(g.held_by?.some((h) => h.you));
 
 export function useWorkLists(
@@ -31,10 +31,8 @@ export function useWorkLists(
   const { data, scope, loading, failed } = useHub();
 
   /** A failed list cannot be reported as an empty board. The shell offers Try again. */
-  const unavailable = computed(() => failed.value.guides || failed.value.board);
-  const waiting = computed(
-    () => !unavailable.value && (loading.value.guides || loading.value.board),
-  );
+  const unavailable = computed(() => failed.value.work || failed.value.board);
+  const waiting = computed(() => !unavailable.value && (loading.value.work || loading.value.board));
 
   // An account with nothing in it is not looking at a board. It gets the steps that lead somewhere,
   // but only once the list has arrived empty, or every first load would flash onboarding.
@@ -43,7 +41,7 @@ export function useWorkLists(
       Boolean(data.value.me) &&
       !waiting.value &&
       !unavailable.value &&
-      data.value.guides.length === 0 &&
+      data.value.work.length === 0 &&
       data.value.tasks.length === 0,
   );
   const hasTeams = computed(() => Boolean(data.value.me?.teams.length));
@@ -59,8 +57,8 @@ export function useWorkLists(
    * The list is scoped and the inbox is not. Across all teams, work sent to you from outside your
    * teams is in the inbox and not in the list — the one thing here that must not go missing.
    */
-  const guides = computed<Guide[]>(() => {
-    const list = data.value.guides;
+  const work = computed<Work[]>(() => {
+    const list = data.value.work;
     return scope.value !== "all"
       ? list
       : [
@@ -69,7 +67,7 @@ export function useWorkLists(
         ];
   });
 
-  const matches = (g: Guide) => {
+  const matches = (g: Work) => {
     if (follows.value && g.parent !== follows.value) return false;
     if (mineOnly?.value && !aboutMe(g)) return false;
     if (project?.value && (g.project?.id ?? "none") !== project.value) return false;
@@ -91,7 +89,7 @@ export function useWorkLists(
   };
 
   const columns = computed(() => {
-    const shown = guides.value.filter(matches);
+    const shown = work.value.filter(matches);
     return STAGES.map((s) => ({
       ...s,
       cards: shown.filter((g) => (g.stage ?? "todo") === s.id),

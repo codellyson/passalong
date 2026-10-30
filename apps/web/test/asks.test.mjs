@@ -4,12 +4,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { newProjectAsk, projectAsk, readmeAsk } from "../app/utils/asks.ts";
 
-const project = { id: "fld123", title: "Feature Guide" };
+const project = { id: "fld123", title: "Feature Work" };
 
 test("a project's ask names the project by title and id", () => {
   assert.match(projectAsk(project), /^Add this to Passalong: /);
-  assert.match(projectAsk(project), /the Passalong project "Feature Guide" \(fld123\)\.$/);
-  assert.match(readmeAsk(project), /project "Feature Guide" \(fld123\)/);
+  assert.match(projectAsk(project), /the Passalong project "Feature Work" \(fld123\)\.$/);
+  assert.match(readmeAsk(project), /project "Feature Work" \(fld123\)/);
 });
 
 test("a team project's work goes to that team, so the project's members can see it", () => {

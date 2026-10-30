@@ -37,7 +37,7 @@ const onATeamSeat = computed(() => sync.value === "unlimited" && plan.value !== 
 
 const LABEL: Record<string, string> = { free: "Free", solo: "Solo", lapsed: "Payment lapsed" };
 const label = computed(() => LABEL[plan.value] ?? "Free");
-const used = computed(() => data.value.me?.guides ?? 0);
+const used = computed(() => data.value.me?.work ?? 0);
 const limit = computed(() => data.value.me?.limit ?? 0);
 /** Paid for by a subscription, rather than given: only then is there a billing page to open. */
 const paying = computed(() => plan.value === "solo" && !until.value);

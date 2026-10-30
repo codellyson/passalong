@@ -20,7 +20,7 @@ export interface Me {
   has_password: boolean;
   /** Whether the email was proven to reach its owner (migrations/0050). Absent from an older server. */
   email_verified?: boolean;
-  guides: number;
+  work: number;
   /** Only meaningful when `sync` is "free". See apps/api/src/quota.ts. */
   limit: number;
   /** "unlimited" | "free" | "none" — a falsy `limit` cannot tell the first from the last. */
@@ -45,13 +45,13 @@ export interface Me {
 
 export interface Pull {
   handle: string | null;
-  /** How it arrived: "cli", "link", or a receipt a retired verdict ("verdict") or archive ("web") wrote. */
+  /** How it arrived: "cli", "link", or the receipt an archive ("web") wrote. */
   via?: string;
   at: string;
 }
 
-/** A piece of work, as a list row. The route and table keep the old name, `guide`. */
-export interface Guide {
+/** A piece of work, as a list row. */
+export interface Work {
   id: string;
   title: string | null;
   /** What it says to a person, a sentence or two. Empty on work from before summaries. */
@@ -59,8 +59,8 @@ export interface Guide {
   /** When its proof screenshots are deleted, or "". Only on finished work that has some. */
   proof_expires?: string;
   status: string;
-  /** How it reached Done: finished, marked done ("approved"), or archived. '' while it is not done. */
-  outcome?: "finished" | "approved" | "archived" | "";
+  /** How it reached Done: finished or archived. '' while it is not done. */
+  outcome?: "finished" | "archived" | "";
   url: string;
   created: string;
   /** Its last edit or status change. */
@@ -128,9 +128,9 @@ export interface Guide {
 
 /** The board's buckets are defined in SQL. The hub renders them; it never derives them. */
 export interface Board {
-  waiting: Guide[];
-  in_flight: Guide[];
-  landed: Guide[];
+  waiting: Work[];
+  in_flight: Work[];
+  landed: Work[];
 }
 
 export interface ApiToken {
@@ -141,7 +141,7 @@ export interface ApiToken {
 }
 
 export interface TeamDetail extends Team {
-  guides: number;
+  work: number;
   /** How many members the plan is paid for. Zero on a free plan, where seats are not the limit. */
   seats?: number;
   /** Paid for through Bachs, so there is a billing page to open. A given plan has none. */
@@ -237,7 +237,7 @@ export interface Working {
 
 export interface HubData {
   me: Me | null;
-  guides: Guide[];
+  work: Work[];
   board: Board | null;
   tokens: ApiToken[];
   team: TeamDetail | null;
@@ -273,7 +273,7 @@ export interface SupportList {
   teams: { slug: string; name: string; tell: boolean }[];
 }
 
-/** One line of a piece of work's thread. See GET /v1/guides/:id/thread and claims.thread(). */
+/** One line of a piece of work's thread. See GET /v1/work/:id/thread and claims.thread(). */
 export interface ThreadItem {
   id: string;
   kind:
@@ -293,7 +293,7 @@ export interface ThreadItem {
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
 }
 
-/** Whoever holds a piece of work. See GET /v1/guides/:id/context. */
+/** Whoever holds a piece of work. See GET /v1/work/:id/context. */
 export interface ContextClaim {
   state: "claimed" | "stalled";
   by: { handle: string; name: string };
@@ -310,8 +310,8 @@ export interface ContextClaim {
 }
 
 /** Everything around one piece of work, for its page in the hub. No markdown: that stays on the share page. */
-export interface GuideContext {
-  guide: Guide;
+export interface WorkContext {
+  work: Work;
   /** Its repo, as the queue matches it; '' for no repo. */
   target: string;
   /** Repos this account's work and agents already use, to pick from when marking it Ready. */
@@ -325,7 +325,7 @@ export interface GuideContext {
   admin?: boolean;
   claims: ContextClaim[];
   /** What it was finished with, newest first: each hand-in is kept as one (`complete()` in claims.ts). */
-  verdicts: {
+  proofs: {
     ok: boolean;
     by: { handle: string; name: string };
     note: string;
@@ -334,15 +334,15 @@ export interface GuideContext {
     writeup: string;
     at: string;
   }[];
-  parent: Guide | null;
-  children: Guide[];
-  blocked_by: Guide[];
-  blocks: Guide[];
-  /** The folders holding it that the reader can open. */
-  folders: { id: string; title: string; color: string }[];
+  parent: Work | null;
+  children: Work[];
+  blocked_by: Work[];
+  blocks: Work[];
+  /** The projects holding it that the reader can open. */
+  projects: { id: string; title: string; color: string }[];
 }
 
-/** A project as `/v1/needs` names it: the top folder a piece of work is linked into. */
+/** A project as `/v1/needs` names it: the top project a piece of work is linked into. */
 export interface NeedProject {
   id: string;
   title: string;

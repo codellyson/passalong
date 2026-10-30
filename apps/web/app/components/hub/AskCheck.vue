@@ -1,5 +1,5 @@
 <!--
-  Ask someone to check (docs/REVIEW.md §5). The one review there is, and only when somebody asks for
+  Ask someone to check. The one review there is, and only when somebody asks for
   it, from somebody they chose: "open this in the browser and tell me it looks right".
 
   It makes more work, addressed to the teammate picked, with this work as its `parent`, so it
@@ -9,9 +9,9 @@
 -->
 <script setup lang="ts">
 import { useQuery } from "@tanstack/vue-query";
-import type { Guide, TeamDetail } from "~/types/hub";
+import type { TeamDetail, Work } from "~/types/hub";
 
-const props = defineProps<{ guide: Guide }>();
+const props = defineProps<{ work: Work }>();
 const { api, signedIn, data } = useHub();
 
 /** Opened from the work page's More menu, which owns the trigger. */
@@ -21,12 +21,10 @@ const sent = ref<{ id: string; to: string } | null>(null);
 const trouble = ref("");
 
 const detail = useQuery({
-  queryKey: computed(() => hubKeys.team(props.guide.team || "")),
+  queryKey: computed(() => hubKeys.team(props.work.team || "")),
   queryFn: async () =>
-    (await api<TeamDetail>(
-      `/v1/teams/${encodeURIComponent(props.guide.team || "")}`,
-    )) as TeamDetail,
-  enabled: computed(() => signedIn.value && open.value && Boolean(props.guide.team)),
+    (await api<TeamDetail>(`/v1/teams/${encodeURIComponent(props.work.team || "")}`)) as TeamDetail,
+  enabled: computed(() => signedIn.value && open.value && Boolean(props.work.team)),
 });
 const me = computed(() => data.value.me?.account || "");
 const people = computed(() =>
@@ -38,7 +36,7 @@ const people = computed(() =>
     })),
 );
 
-/** An id: 8 from the alphabet with no lookalikes, as the CLI mints them (guide.js `newId`). */
+/** An id: 8 from the alphabet with no lookalikes, as the CLI mints them (work.js `newId`). */
 function newId() {
   const abc = "abcdefghjkmnpqrstuvwxyz23456789";
   return [...crypto.getRandomValues(new Uint8Array(8))].map((b) => abc[b % abc.length]).join("");
@@ -56,7 +54,7 @@ async function ask(form: HTMLFormElement) {
   if (!to || !what || busy.value) return;
   busy.value = true;
   trouble.value = "";
-  const g = props.guide;
+  const g = props.work;
   const title = line(g.title || "this work");
   const id = newId();
   const markdown = [
@@ -76,7 +74,7 @@ async function ask(form: HTMLFormElement) {
     "",
   ].join("\n");
   try {
-    await api(`/v1/guides/${id}`, {
+    await api(`/v1/work/${id}`, {
       method: "PUT",
       headers: { "content-type": "text/markdown" },
       body: markdown,
@@ -97,7 +95,7 @@ async function ask(form: HTMLFormElement) {
   <div v-if="open || sent || trouble" class="flex flex-col gap-2">
     <p v-if="sent" class="m-0 font-ui text-sm text-muted" role="status">
       Asked {{ sent.to }} to check it —
-      <NuxtLink :to="`/hub/g/${sent.id}`">the request</NuxtLink>.
+      <NuxtLink :to="`/hub/w/${sent.id}`">the request</NuxtLink>.
     </p>
     <form v-if="open" class="flex flex-wrap items-center gap-2" @submit.prevent="ask($event.target as HTMLFormElement)">
       <label class="sr-only" for="check-to">Who should check it?</label>

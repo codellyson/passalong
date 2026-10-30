@@ -4,7 +4,7 @@
   The record was a set of documents and states — a piece of work, a claim, evidence — and a
   person had to assemble the story from them. This reads it the way a chat reads: the agent says it
   is taking the work, says what it is doing, says it is done; you say it is not, and why. One line
-  each, in order, from GET /v1/guides/:id/thread.
+  each, in order, from GET /v1/work/:id/thread.
 
   This is the short version: the work itself, what was handed in and the evidence are one click away
   wherever this is shown, and nothing here replaces them.
@@ -45,7 +45,7 @@ async function load() {
   const ask = ++latest;
   try {
     const got = await api<{ thread: ThreadItem[]; mine?: boolean; summary?: string }>(
-      `/v1/guides/${encodeURIComponent(props.id)}/thread`,
+      `/v1/work/${encodeURIComponent(props.id)}/thread`,
     );
     // A slow answer for work you have since left is dropped, not shown.
     if (ask === latest) {

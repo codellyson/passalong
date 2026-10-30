@@ -6,7 +6,7 @@
   Inside To do, work is grouped under who it is for (the server's `lanes`): you first, then each
   teammate, each group, then Anyone — work for nobody in particular. A card sent to several named
   people shows under each of them, as one card. Dragging a card between To do's groups gives it
-  there (`POST /v1/guides/:id/assign`); while a To do card is dragged, every teammate and group
+  there (`POST /v1/work/:id/assign`); while a To do card is dragged, every teammate and group
   shows as somewhere to drop it, even with nothing waiting for them.
 
   Dragging between columns does what the work's own page offers, under the same rules: Draft to To
@@ -29,11 +29,11 @@
 -->
 <script setup lang="ts">
 import type { STAGES } from "~/composables/useWorkLists";
-import type { Guide, Task, Working } from "~/types/hub";
+import type { Task, Work, Working } from "~/types/hub";
 
-type Column = (typeof STAGES)[number] & { cards: Guide[] };
+type Column = (typeof STAGES)[number] & { cards: Work[] };
 type Person = { id: string; label: string; to: string };
-type Group = { key: string; label: string; to: string; cards: Guide[] };
+type Group = { key: string; label: string; to: string; cards: Work[] };
 
 const props = defineProps<{
   columns: Column[];
@@ -68,9 +68,9 @@ const doneCards = computed(() => {
 
 // ---- To do, by who it is for ---------------------------------------------------------------
 
-const dragging = ref<Guide | null>(null);
+const dragging = ref<Work | null>(null);
 /** Anyone in the team can give work to someone else; only within one team's board. */
-const canGive = (g: Guide) => Boolean(g.team) && g.stage !== "done";
+const canGive = (g: Work) => Boolean(g.team) && g.stage !== "done";
 const giving = computed(
   () => Boolean(props.people) && dragging.value?.stage === "todo" && canGive(dragging.value),
 );
@@ -82,7 +82,7 @@ const todoGroups = computed<Group[]>(() => {
     if (!byKey.has(key)) byKey.set(key, { key, label, to, cards: [] });
     return byKey.get(key) as Group;
   };
-  const person = (id: string, g?: Guide) => {
+  const person = (id: string, g?: Work) => {
     if (me && id === me.id) return group(id, "You", me.to);
     const p = props.people?.find((x) => x.id === id);
     if (p) return group(id, p.label, p.to);
@@ -117,8 +117,8 @@ const todoGroups = computed<Group[]>(() => {
 // ---- moving --------------------------------------------------------------------------------
 
 const { onArchive, onAssign, onReopen, onTaskDraft, onTaskReady, onTakeBack } = useHub();
-const holding = (g: Guide) => Boolean(g.held_by?.length);
-const finished = (g: Guide) => g.status === "consumed" && g.outcome !== "archived";
+const holding = (g: Work) => Boolean(g.held_by?.length);
+const finished = (g: Work) => g.status === "done" && g.outcome !== "archived";
 
 /** Said once a move lands or is refused, for anyone not watching the card. */
 const said = ref("");
@@ -143,8 +143,8 @@ function toggleGroup(key: string) {
   if (!next.delete(key)) next.add(key);
   opened.value = next;
 }
-const pickable = (g: Guide) => g.stage !== "done";
-function pick(g: Guide) {
+const pickable = (g: Work) => g.stage !== "done";
+function pick(g: Work) {
   const next = new Set(picks.value);
   if (!next.delete(g.id)) next.add(g.id);
   picks.value = next;
@@ -176,7 +176,7 @@ watch(
     moving.value = next;
   },
 );
-async function act(g: Guide, work: () => Promise<boolean>, done: string) {
+async function act(g: Work, work: () => Promise<boolean>, done: string) {
   moving.value = new Set(moving.value).add(g.id);
   const ok = await work();
   if (ok) {
@@ -191,13 +191,13 @@ async function act(g: Guide, work: () => Promise<boolean>, done: string) {
 }
 
 /** A card waiting on a question asked above the board: stopping its agent, or why to reopen it. */
-const asking = ref<{ kind: "stop" | "reopen"; guide: Guide } | null>(null);
+const asking = ref<{ kind: "stop" | "reopen"; work: Work } | null>(null);
 
 /**
  * What dropping `g` in column `to` does, or null when it does nothing there. Each is an act the
  * work's page offers, under the same rule: anyone in the team moves work, `manage` archives.
  */
-function moveTo(g: Guide, to: string): (() => void) | null {
+function moveTo(g: Work, to: string): (() => void) | null {
   const from = g.stage;
   const name = `“${g.title || "That work"}”`;
   if (from === to) return null;
@@ -205,17 +205,17 @@ function moveTo(g: Guide, to: string): (() => void) | null {
     return () => act(g, () => onTaskReady({ id: g.id } as Task), `${name} is ready, in To do.`);
   if (from === "todo" && to === "draft" && !holding(g))
     return () => act(g, () => onTaskDraft({ id: g.id } as Task), `${name} moved to Draft.`);
-  if (from === "working" && to === "todo") return () => (asking.value = { kind: "stop", guide: g });
-  if (to === "done" && g.manage && g.status !== "consumed")
+  if (from === "working" && to === "todo") return () => (asking.value = { kind: "stop", work: g });
+  if (to === "done" && g.manage && g.status !== "done")
     return () => act(g, () => onArchive(g, true), `${name} archived, in Done.`);
   if (from === "done" && to === "todo" && finished(g))
-    return () => (asking.value = { kind: "reopen", guide: g });
-  if (from === "done" && to === "draft" && g.manage && g.status === "consumed")
+    return () => (asking.value = { kind: "reopen", work: g });
+  if (from === "done" && to === "draft" && g.manage && g.status === "done")
     return () => act(g, () => onArchive(g, false), `${name} unarchived, in Draft.`);
   return null;
 }
 /** Waiting work given to a different group inside To do. */
-function giveTo(g: Guide, key: string) {
+function giveTo(g: Work, key: string) {
   if (!giving.value || g.stage !== "todo") return null;
   const target = todoGroups.value.find((x) => x.key === key);
   if (!target || target.cards.some((x) => x.id === g.id)) return null;
@@ -229,7 +229,7 @@ function giveTo(g: Guide, key: string) {
 }
 
 async function stopAgent() {
-  const g = asking.value?.guide;
+  const g = asking.value?.work;
   asking.value = null;
   if (g)
     await act(
@@ -239,7 +239,7 @@ async function stopAgent() {
     );
 }
 async function reopen(form: HTMLFormElement) {
-  const g = asking.value?.guide;
+  const g = asking.value?.work;
   const why = field(form, "why").trim();
   if (!g || !why) return;
   asking.value = null;
@@ -254,7 +254,7 @@ watch(asking, async (a) => {
 // ---- dragging ------------------------------------------------------------------------------
 
 const over = ref("");
-function dragStart(g: Guide, e: DragEvent) {
+function dragStart(g: Work, e: DragEvent) {
   dragging.value = g;
   e.dataTransfer?.setData("text/plain", g.title || g.id);
   if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
@@ -291,17 +291,17 @@ function groupDrop(key: string, e: DragEvent) {
 
 // ---- menus ---------------------------------------------------------------------------------
 
-const menu = ref<{ guide: Guide; x: number; y: number } | null>(null);
+const menu = ref<{ work: Work; x: number; y: number } | null>(null);
 /** The card whose "Give to…" picker is open, and where it floats. */
-const givingTo = ref<{ guide: Guide; left: number; top: number } | null>(null);
+const givingTo = ref<{ work: Work; left: number; top: number } | null>(null);
 const popover = ref<HTMLElement | null>(null);
-async function openGive(g: Guide, x: number, y: number) {
-  givingTo.value = { guide: g, left: x, top: y };
+async function openGive(g: Work, x: number, y: number) {
+  givingTo.value = { work: g, left: x, top: y };
   await nextTick();
   const box = popover.value?.getBoundingClientRect();
   if (box && givingTo.value)
     givingTo.value = {
-      guide: g,
+      work: g,
       left: Math.max(8, Math.min(x, window.innerWidth - box.width - 8)),
       top: Math.max(8, Math.min(y, window.innerHeight - box.height - 8)),
     };
@@ -313,7 +313,7 @@ function onDocument(e: Event) {
 onMounted(() => document.addEventListener("pointerdown", onDocument, true));
 onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocument, true));
 /** The address the picker starts on: `@handle`, `#group`, or "" for the whole team. */
-const addressed = (g: Guide) =>
+const addressed = (g: Work) =>
   g.to
     ? `@${g.to}`
     : g.to_group?.startsWith("~")
@@ -346,7 +346,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
 
     <!-- A question the board asks before an act, in place: never a browser dialog. -->
     <div v-if="asking?.kind === 'stop'" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-3" role="alert">
-      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on “{{ asking.guide.title }}”? It goes back to To do.</p>
+      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on “{{ asking.work.title }}”? It goes back to To do.</p>
       <button class="btn sm outline danger" type="button" @click="stopAgent">Stop this agent</button>
       <button class="btn sm" type="button" @click="asking = null">Keep it</button>
     </div>
@@ -355,7 +355,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
       class="flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-3"
       @submit.prevent="reopen($event.target as HTMLFormElement)"
     >
-      <label for="board-why" class="m-0 font-ui text-sm">Reopen “{{ asking.guide.title }}”? Whoever finished it is told why.</label>
+      <label for="board-why" class="m-0 font-ui text-sm">Reopen “{{ asking.work.title }}”? Whoever finished it is told why.</label>
       <input id="board-why" ref="askField" name="why" class="h-8 min-w-0 grow basis-48 text-sm" placeholder="What's still wrong" required @keydown.esc="asking = null" />
       <button class="btn sm primary" type="submit">Reopen</button>
       <button class="btn sm" type="button" @click="asking = null">Keep it</button>
@@ -428,7 +428,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
                 <HubBoardCard
                   v-for="g in full(t) ? t.cards : t.cards.slice(0, GROUP_SHOWN)"
                   :key="g.id"
-                  :guide="g"
+                  :work="g"
                   :now="now"
                   :draggable="!moving.has(g.id)"
                   :moving="moving.has(g.id) || dragging?.id === g.id"
@@ -439,7 +439,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
                   @pick="pick(g)"
                   @drag="dragStart(g, $event)"
                   @dragend="dragEnd"
-                  @menu="(x, y) => (menu = { guide: g, x, y })"
+                  @menu="(x, y) => (menu = { work: g, x, y })"
                 />
               </ul>
               <button
@@ -459,7 +459,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
             <HubBoardCard
               v-for="g in c.id === 'done' ? doneCards : c.cards"
               :key="g.id"
-              :guide="g"
+              :work="g"
               :now="now"
               :draggable="!moving.has(g.id)"
               :moving="moving.has(g.id) || dragging?.id === g.id"
@@ -470,7 +470,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
               @pick="pick(g)"
               @drag="dragStart(g, $event)"
               @dragend="dragEnd"
-              @menu="(x, y) => (menu = { guide: g, x, y })"
+              @menu="(x, y) => (menu = { work: g, x, y })"
             />
           </ul>
           <p v-if="c.id === 'done' && c.cards.length > DONE_SHOWN" class="m-0 font-ui text-xs text-muted">
@@ -498,13 +498,13 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
     />
     <HubCardMenu
       v-if="menu"
-      :key="menu.guide.id + menu.x + menu.y"
-      :guide="menu.guide"
+      :key="menu.work.id + menu.x + menu.y"
+      :work="menu.work"
       :x="menu.x"
       :y="menu.y"
-      :can-give="canGive(menu.guide)"
+      :can-give="canGive(menu.work)"
       @close="menu = null"
-      @give="openGive(menu!.guide, menu!.x, menu!.y)"
+      @give="openGive(menu!.work, menu!.x, menu!.y)"
     />
     <Teleport to="body">
       <div
@@ -515,9 +515,9 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
         @keydown.esc="givingTo = null"
       >
         <HubAssignPicker
-          :id="givingTo.guide.id"
-          :team="givingTo.guide.team || ''"
-          :to="addressed(givingTo.guide)"
+          :id="givingTo.work.id"
+          :team="givingTo.work.team || ''"
+          :to="addressed(givingTo.work)"
           @done="givingTo = null"
         />
       </div>

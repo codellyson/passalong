@@ -7,9 +7,9 @@
 const { toasts, dismiss } = useLive();
 const DOT: Record<string, string> = {
   blocked: "bg-danger",
-  sent_back: "bg-danger",
+  reopened: "bg-danger",
   stuck: "bg-danger",
-  declined: "bg-warn",
+  passed: "bg-warn",
   stalled: "bg-warn",
   untaken: "bg-warn",
   task_finished: "bg-ok",
@@ -36,8 +36,8 @@ const DOT: Record<string, string> = {
         <!-- A toast is news you have not looked at yet, so a kind with no status colour wears the change mark. -->
         <span class="mt-1.5 size-2 shrink-0 rounded-pill" :class="DOT[t.kind] || 'bg-changed'" aria-hidden="true" />
         <NuxtLink
-          v-if="t.guide"
-          :to="`/hub/g/${t.guide}`"
+          v-if="t.work"
+          :to="`/hub/w/${t.work}`"
           class="min-w-0 flex-1 text-fg no-underline hover:underline"
           @click="dismiss(t.key)"
         >{{ t.text }}</NuxtLink>

@@ -20,19 +20,19 @@
 // else should be handed, and keying on it would only split the cache for the few visitors who
 // have one. Without this the first signed-in visit to a path stored its masthead for everybody.
 //
-// Only pages listed as published in shared/pages.ts, and blog posts once the blog is. The hub, the
+// Only pages listed as live in shared/pages.ts, and blog posts once the blog is. The hub, the
 // share links and every flow with a session never reach the cache.
 //
 // Route-rule headers (the CSP) are not stored: they are applied to the event on every request,
 // hit or miss, before the renderer runs. What is stored is what the renderer itself returned.
-import { published } from "#shared/pages";
+import { isPublic } from "#shared/pages";
 import { hasSession } from "../../app/utils/session";
 
 /** How long a colo keeps a page. The build id in the key is what retires it on a deploy. */
 const EDGE_TTL = 60 * 60 * 24;
 
 const cacheable = (path: string) =>
-  published(path) || (published("/blog") && path.startsWith("/blog/"));
+  isPublic(path) || (isPublic("/blog") && path.startsWith("/blog/"));
 
 const edgeCache = (): Cache | undefined =>
   (globalThis as { caches?: CacheStorage & { default?: Cache } }).caches?.default;

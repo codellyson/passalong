@@ -4,7 +4,7 @@
 
   The choices are the team as a whole, each teammate, and each group. A teammate with no @name is
   picked by their account id, which the server accepts as an address. Choosing
-  calls POST /v1/guides/:id/assign; whoever held it and is left out has it taken back and is told,
+  calls POST /v1/work/:id/assign; whoever held it and is left out has it taken back and is told,
   which the note under the list says before anyone presses anything.
 -->
 <script setup lang="ts">

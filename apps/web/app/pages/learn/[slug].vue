@@ -1,14 +1,14 @@
 <!--
-  One /learn page: a long-lived guide to a topic, rather than a dated post. The body is our own
+  One /learn page: a long-lived work to a topic, rather than a dated post. The body is our own
   markdown from content/learn, rendered on the server by the blog's reader, under the same
   no-script policy as every public page.
 
   Whether it is indexed is decided in one place, shared/pages.ts: a page not listed there as
-  published renders for review, noindex and unlinked, whatever its frontmatter says.
+  live renders for review, noindex and unlinked, whatever its frontmatter says.
 -->
 <script setup lang="ts">
 import { APEX } from "#api/hosts";
-import { published } from "#shared/pages";
+import { isPublic } from "#shared/pages";
 
 const route = useRoute();
 const slug = computed(() => String(route.params.slug));
@@ -17,7 +17,7 @@ if (!page.value) throw createError({ statusCode: 404, statusMessage: "no such pa
 
 const path = `/learn/${page.value.slug}`;
 const url = `${APEX}${path}`;
-const draft = !published(path);
+const draft = !isPublic(path);
 
 usePage({
   title: `${page.value.title} · Passalong`,

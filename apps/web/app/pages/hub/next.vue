@@ -13,7 +13,7 @@
 -->
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { GuideContext, NeedRow, SupportList, ThreadItem } from "~/types/hub";
+import type { NeedRow, SupportList, ThreadItem, WorkContext } from "~/types/hub";
 import { age, toneOf } from "~/utils/projects";
 
 usePage({
@@ -67,13 +67,13 @@ watch(
 const threadQ = useQuery({
   queryKey: computed(() => hubKeys.supportThread(id.value)),
   queryFn: async () =>
-    (await api<{ thread: ThreadItem[] }>(`/v1/guides/${id.value}/thread`))?.thread ?? [],
+    (await api<{ thread: ThreadItem[] }>(`/v1/work/${id.value}/thread`))?.thread ?? [],
   enabled: computed(() => signedIn.value && customer.value),
 });
 /** Who Send goes to and under what subject: the request's context, as its own page reads it. */
 const contextQ = useQuery({
   queryKey: computed(() => hubKeys.context(id.value)),
-  queryFn: async () => (await api<GuideContext>(`/v1/guides/${id.value}/context`)) ?? null,
+  queryFn: async () => (await api<WorkContext>(`/v1/work/${id.value}/context`)) ?? null,
   enabled: computed(() => signedIn.value && customer.value),
 });
 const { data: support } = useQuery({
@@ -226,7 +226,7 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
             <NuxtLink v-for="(other, i) in item.also" :key="other" :to="`/hub/support/${other}`">request {{ i + 2 }}</NuxtLink>
           </p>
           <p class="m-0 font-ui text-sm">
-            <NuxtLink :to="customer ? `/hub/support/${item.id}` : `/hub/g/${item.id}`">
+            <NuxtLink :to="customer ? `/hub/support/${item.id}` : `/hub/w/${item.id}`">
               {{ customer ? "Open the request" : "Open the work" }}
             </NuxtLink>
           </p>
@@ -235,7 +235,7 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
         <HubConversation
           v-if="customer"
           :key="`c-${item.id}`"
-          :guide-id="item.id"
+          :work-id="item.id"
           :thread="threadQ.data.value ?? null"
           :name="contextQ.data.value?.customer?.name || item.with || 'the customer'"
           :address="contextQ.data.value?.customer?.email"
@@ -250,7 +250,7 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
             <p class="m-0 font-ui text-xs font-medium text-muted">{{ SAID[item.reason] }}</p>
             <p class="m-0 rounded-3 border border-line-strong bg-field px-4 py-3 font-ui text-sm leading-relaxed break-words whitespace-pre-wrap">{{ item.said }}</p>
           </div>
-          <NuxtLink :to="`/hub/g/${item.id}`" class="btn self-start" :class="done ? '' : 'primary'">{{ VERB[item.reason] }} on its page</NuxtLink>
+          <NuxtLink :to="`/hub/w/${item.id}`" class="btn self-start" :class="done ? '' : 'primary'">{{ VERB[item.reason] }} on its page</NuxtLink>
           <section aria-label="Thread" class="flex max-w-[48rem] flex-col border-t border-line pt-4">
             <HubThread
               :key="`t-${item.id}`"

@@ -1,14 +1,14 @@
-// One shared folder, for the page at /f/:id/:key. See server/utils/shared-folder.ts for what the
+// One shared project, for the page at /p/:id/:key. See server/utils/shared-project.ts for what the
 // key opens. Documents render through the same sanitising pipeline the hub uses: a shared page
-// runs no script, but a folder document is still somebody's text shown to somebody else.
-import { renderFolderMarkdown } from "../../../../app/utils/folder-markdown";
+// runs no script, but a project document is still somebody's text shown to somebody else.
+import { renderProjectMarkdown } from "../../../../app/utils/project-markdown";
 import { db } from "../../../utils/d1";
-import { sharedFolder } from "../../../utils/shared-folder";
+import { sharedProject } from "../../../utils/shared-project";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
   const inside = typeof query.in === "string" ? query.in : "";
-  const { root, tree, current } = await sharedFolder(
+  const { root, tree, current } = await sharedProject(
     event,
     getRouterParam(event, "id") || "",
     getRouterParam(event, "key") || "",
@@ -17,13 +17,13 @@ export default defineEventHandler(async (event) => {
   const [{ results: documents }, { results: files }] = await Promise.all([
     db(event)
       .prepare(
-        "SELECT id, name, updated FROM folder_document WHERE folder_id = ? ORDER BY name COLLATE NOCASE",
+        "SELECT id, name, updated FROM document WHERE project_id = ? ORDER BY name COLLATE NOCASE",
       )
       .bind(current.id)
       .all<{ id: string; name: string; updated: string }>(),
     db(event)
       .prepare(
-        "SELECT id, name, type, bytes FROM folder_asset WHERE folder_id = ? ORDER BY name COLLATE NOCASE",
+        "SELECT id, name, type, bytes FROM project_file WHERE project_id = ? ORDER BY name COLLATE NOCASE",
       )
       .bind(current.id)
       .all<{ id: string; name: string; type: string; bytes: number }>(),
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
   const pick = documents.find((d) => d.id === wanted) ?? documents[0];
   const open = pick
     ? await db(event)
-        .prepare("SELECT body FROM folder_document WHERE id = ? AND folder_id = ?")
+        .prepare("SELECT body FROM document WHERE id = ? AND project_id = ?")
         .bind(pick.id, current.id)
         .first<{ body: string }>()
     : null;
@@ -45,14 +45,14 @@ export default defineEventHandler(async (event) => {
   }
   return {
     root: { id: root.id, title: root.title },
-    folder: { id: current.id, title: current.title, description: current.description },
+    project: { id: current.id, title: current.title, description: current.description },
     crumbs,
     children: tree
       .filter((f) => f.parent_id === current.id && f.id !== current.id)
       .map((f) => ({ id: f.id, title: f.title }))
       .sort((a, b) => a.title.localeCompare(b.title)),
     documents,
-    document: pick ? { ...pick, html: renderFolderMarkdown(open?.body || "") } : null,
+    document: pick ? { ...pick, html: renderProjectMarkdown(open?.body || "") } : null,
     files,
   };
 });

@@ -6,7 +6,7 @@
 
   It understands what is pasted into it: a picture is uploaded and shown in place, an error or a log
   becomes a code block, a link stays a link. It knows the team: `@` suggests people and `#` the
-  team's groups. What it emits is markdown (utils/markdown.ts), the form every guide is in.
+  team's groups. What it emits is markdown (utils/markdown.ts), the form every piece of work is in.
 -->
 <script setup lang="ts">
 import Image from "@tiptap/extension-image";

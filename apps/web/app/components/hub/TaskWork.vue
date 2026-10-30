@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { ContextClaim, Guide } from "~/types/hub";
+import type { ContextClaim, Work } from "~/types/hub";
 
-const props = defineProps<{ guide: Guide; claims: ContextClaim[] }>();
+const props = defineProps<{ work: Work; claims: ContextClaim[] }>();
 const { data, api, onPersonTaskProgress, onPersonTaskHandIn, error } = useHub();
 
 /**
- * Finishing needs proof a person can look at (docs/REVIEW.md §3), so the form takes a screenshot:
+ * Finishing needs proof a person can look at, so the form takes a screenshot:
  * uploaded like a reply's picture, and its line put into what shows it works.
  */
 const uploading = ref(false);
@@ -49,10 +49,10 @@ async function act(work: () => Promise<boolean>) {
   }
 }
 
-const update = () => act(() => onPersonTaskProgress(props.guide.id, progress.value));
+const update = () => act(() => onPersonTaskProgress(props.work.id, progress.value));
 const handIn = async () => {
   if (!summary.value.trim()) return false;
-  const ok = await onPersonTaskHandIn(props.guide.id, {
+  const ok = await onPersonTaskHandIn(props.work.id, {
     note: summary.value,
     writeup: writeup.value,
     evidence: evidence.value,

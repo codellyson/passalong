@@ -8,7 +8,7 @@
  *
  * Imports only types, so it runs under `node --test` without Nuxt.
  */
-import type { Guide, Me, Team } from "~/types/hub";
+import type { Me, Team, Work } from "~/types/hub";
 
 export function personName(
   name?: string | null,
@@ -18,11 +18,11 @@ export function personName(
   return name?.trim() || (handle ? `@${handle}` : id ? `@${id}` : "");
 }
 
-export const fromName = (g: Guide) => g.from_name || personName(null, g.from);
-export const toName = (g: Guide) => g.to_name || personName(null, g.to);
+export const fromName = (g: Work) => g.from_name || personName(null, g.from);
+export const toName = (g: Work) => g.to_name || personName(null, g.to);
 
 /** A team by the name it was given, not the slug it was stored under. */
-export function teamLabel(g: Pick<Guide, "team" | "team_name">, teams: Team[] = []): string {
+export function teamLabel(g: Pick<Work, "team" | "team_name">, teams: Team[] = []): string {
   return g.team_name || teams.find((t) => t.slug === g.team)?.name || g.team || "";
 }
 

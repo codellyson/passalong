@@ -102,59 +102,53 @@ const STRUCTURED = {
 useHead({ script: [{ type: "application/ld+json", innerHTML: JSON.stringify(STRUCTURED) }] });
 
 /**
- * The specimen: one piece of work, going out and coming back, side by side.
+ * The specimen: one thing that came in, followed to done.
  *
- * The left is the work as it was written down — plain words and a line saying what done means; the
- * right is what the agent handed in against it, with how it checked each line. The checks on the
- * right are the lines on the left, one for one.
+ * Three moments of one customer email, left to right: what arrived, where Passalong's agent sent it
+ * and why, and how it ended — a fix handed in with proof, and a reply a person read and sent. The
+ * times carry the order, so there are no step numbers. It is an example and says so underneath;
+ * nobody here is a real customer.
  *
- * Built from the devices the share page uses — the fact row, the sectioning — so it is a real
+ * Built from the devices the product's own pages use — the fact row, the checked lines — so it is a
  * surface of this product rather than a drawing of one. Nothing claims to be a screenshot.
  */
-const SPECIMEN = {
-  out: {
-    label: "The work you wrote down",
-    title: "Backfill order totals without locking the table",
+const TRAIL = [
+  {
+    when: "Came in · 09:12",
+    title: "“Charged twice this month”",
     facts: [
-      { label: "For", value: "orders-api" },
-      { label: "Waits for", value: "Add total column" },
+      { label: "From", value: "Maya, a customer" },
+      { label: "To", value: "Your support address" },
     ],
-    sections: [
-      {
-        h: "Why",
-        p: "Every order should have a stored total, so checkout stops computing it per request.",
-      },
-      {
-        h: "Careful",
-        p: "No lock that stalls checkout. Postgres 16, in production, during trading hours.",
-      },
+    quote: "Hi, I was charged twice for October. Can you refund one of them?",
+  },
+  {
+    when: "Sorted · 09:12",
+    title: "Billing, for the billing group",
+    facts: [
+      { label: "Project", value: "Billing app" },
+      { label: "For", value: "#billing" },
     ],
-    acceptance: [
-      "Every row reconciles: pnpm verify:totals exits 0",
-      "No lock wait over 50ms in pg_stat_activity",
-      "total is NOT NULL once the backfill ends",
+    done: [
+      "The agent’s reason: a duplicate charge, so billing",
+      "Maya got her tracking number, R‑K7Q2M9",
+      "Nobody had to read it first to route it",
     ],
   },
-  back: {
-    label: "What came back",
-    title: "Backfill order totals: done",
+  {
+    when: "Done · 11:40",
+    title: "Refunded, and Maya heard back",
     facts: [
-      { label: "Taken by", value: "Ada’s agent" },
-      { label: "Change", value: "commit 3f9a2c1" },
+      { label: "Fixed by", value: "Bola’s agent" },
+      { label: "Sent by", value: "Ada" },
     ],
-    sections: [
-      {
-        h: "What it changed",
-        p: "Chunked by primary key rather than one statement: the lock is the cost here, not the work. Nullable first and NOT NULL last, so nothing waits on a rewrite. Chunks under 1,000 ran slower, so it uses 5,000.",
-      },
-    ],
-    checked: [
-      "pnpm verify:totals exits 0 across 4.1M rows",
-      "Longest lock wait 12ms, sampled every second",
-      "NOT NULL set after the tail was clean",
+    done: [
+      "Charge check fixed, with the test run as proof",
+      "Reply drafted by the agent",
+      "Read and sent by Ada, in the same thread",
     ],
   },
-};
+];
 
 /**
  * A number from real use, for the proof line under the specimen — and nothing until there is one.
@@ -193,51 +187,26 @@ const PROOF = null as { figure: string; says: string } | null;
       </p>
     </header>
 
-    <!--
-      Work, as it arrives — not as a file.
-
-      This block has been two wrong things. It was a drawn browser window, which was a picture of
-      software nobody photographed. Then it was the markdown source, which is the aesthetic of a
-      config file and argues that what this product makes is a text file.
-
-      What it makes is the page at `/w/:id/:key`: what needs doing and how to know it is done — set
-      so a person can read it and shaped so an agent can act on it. That is a real surface of this product, built here from the same devices that page uses:
-      the fact row, the tags, the sectioning. Nothing is invented and nothing claims to be a
-      screenshot.
-    -->
-    <section class="specimen pair" aria-label="Work as it was written down, and what the agent handed back">
-      <article v-for="side in [SPECIMEN.out, SPECIMEN.back]" :key="side.label">
-        <p class="side">{{ side.label }}</p>
-        <h2>{{ side.title }}</h2>
-
+    <!-- One thing that came in, followed to done: the hero's promise, shown. -->
+    <section class="specimen trail" aria-label="One customer email, followed from arrival to done">
+      <article v-for="step in TRAIL" :key="step.when">
+        <p class="when">{{ step.when }}</p>
+        <h2>{{ step.title }}</h2>
         <dl class="facts">
-          <div v-for="f in side.facts" :key="f.label">
+          <div v-for="f in step.facts" :key="f.label">
             <dt>{{ f.label }}</dt>
             <dd>{{ f.value }}</dd>
           </div>
         </dl>
-
-        <!-- The lines of done first, on both sides, so each check sits level with the line it
-             answers. -->
-        <div class="sec">
-          <h3>{{ "acceptance" in side ? "Done when" : "How it checked each line" }}</h3>
-          <ul class="checks" :class="{ met: !('acceptance' in side) }">
-            <li v-for="line in 'acceptance' in side ? side.acceptance : side.checked" :key="line">{{ line }}</li>
-          </ul>
-        </div>
-
-        <div>
-          <div v-for="sec in side.sections" :key="sec.h" class="sec">
-            <h3>{{ sec.h }}</h3>
-            <p>{{ sec.p }}</p>
-          </div>
-        </div>
+        <blockquote v-if="step.quote" class="said">{{ step.quote }}</blockquote>
+        <ul v-else class="checks met">
+          <li v-for="line in step.done" :key="line">{{ line }}</li>
+        </ul>
       </article>
     </section>
     <p class="under">
-      What you asked for, beside what it says it checked, one line for one line — so a hand-in that
-      skips a line shows, and anyone can reopen it with why. Underneath both is plain markdown, in
-      your hub and yours to export whenever you want out.
+      One email, followed to done: nobody had to sort it, chase it or remember to reply, and every
+      step is on the request’s thread. An example; Maya is not a real customer.
     </p>
     <p v-if="PROOF" class="proof"><b>{{ PROOF.figure }}</b> {{ PROOF.says }}</p>
 

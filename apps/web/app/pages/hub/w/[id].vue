@@ -8,12 +8,12 @@
   It never turns the work's markdown into its own HTML. The hub runs script, and the document is
   markdown somebody else wrote; the share page is safe to render it on only because it runs none.
   So the document is that page, framed (`?embed=1`, same origin, sandboxed, still no script), and
-  everything beside it comes from `GET /v1/guides/:id/context`, which records no pull: looking at
+  everything beside it comes from `GET /v1/work/:id/context`, which records no pull: looking at
   your own board is not opening the work.
 -->
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { ContextClaim, GuideContext, Task, Working } from "~/types/hub";
+import type { ContextClaim, Task, WorkContext, Working } from "~/types/hub";
 import { expiryLine } from "~/utils/expiry";
 import { toneOf } from "~/utils/projects";
 
@@ -47,11 +47,11 @@ watch(
 
 const { data, isPending, error } = useQuery({
   queryKey: computed(() => hubKeys.context(id.value)),
-  queryFn: async () => (await api<GuideContext>(`/v1/guides/${id.value}/context`)) ?? null,
+  queryFn: async () => (await api<WorkContext>(`/v1/work/${id.value}/context`)) ?? null,
   enabled: signedIn,
 });
 const ctx = computed(() => data.value ?? null);
-const g = computed(() => ctx.value?.guide ?? null);
+const g = computed(() => ctx.value?.work ?? null);
 const expiry = computed(() => (g.value ? expiryLine(g.value) : null));
 const trouble = computed(() => (error.value ? error.value.message : ""));
 
@@ -115,12 +115,11 @@ const standing = computed(() => {
   const c = ctx.value;
   if (!c || !g.value) return "";
   // Done says how it got there: finished with proof, or shelved by its author.
-  if (g.value.status === "consumed")
+  if (g.value.status === "done")
     return g.value.outcome === "archived" || !g.value.outcome ? "Archived." : "Finished.";
   if (g.value.status === "draft") return "A draft: nobody can take it until it is ready.";
   if (c.claims.length) return "Being worked on.";
-  if (c.blocked_by.some((b) => b.status !== "consumed"))
-    return "Waiting on the work it is blocked by.";
+  if (c.blocked_by.some((b) => b.status !== "done")) return "Waiting on the work it is blocked by.";
   return c.target
     ? `Ready: the next agent working in ${c.target} will take it.`
     : "Ready: nobody has taken it yet.";
@@ -128,12 +127,12 @@ const standing = computed(() => {
 
 // ---- acting on it --------------------------------------------------------------------------
 
-/** Mark or unmark it as safe for the runner (PUT /v1/guides/:id/alone). */
+/** Mark or unmark it as safe for the runner (PUT /v1/work/:id/alone). */
 const markingAlone = ref(false);
 async function markAlone(on: boolean) {
   markingAlone.value = true;
   try {
-    await api(`/v1/guides/${id.value}/alone`, {
+    await api(`/v1/work/${id.value}/alone`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ on }),
@@ -167,7 +166,7 @@ const recallable = computed(
   () =>
     Boolean(ctx.value?.owner) &&
     Boolean(g.value?.team) &&
-    g.value?.status !== "consumed" &&
+    g.value?.status !== "done" &&
     !ctx.value?.claims.length,
 );
 
@@ -180,19 +179,19 @@ const holdingMine = computed(() => {
 /** Sent to the whole team, or to you or a group you are in, and not yours: yours to take. */
 const canTake = computed(() => {
   const x = g.value;
-  if (!x || ctx.value?.owner || x.status !== "published" || holding.value) return false;
+  if (!x || ctx.value?.owner || x.status !== "ready" || holding.value) return false;
   return !((x.to || x.to_group) && !x.for_me);
 });
-const canGive = computed(() => Boolean(g.value?.team) && g.value?.status !== "consumed");
+const canGive = computed(() => Boolean(g.value?.team) && g.value?.status !== "done");
 /** Who it is for now, as the assign route names it. */
 const givenTo = computed(() =>
   g.value?.to ? `@${g.value.to}` : g.value?.to_group ? `#${g.value.to_group}` : "",
 );
 
 /** Finished, not archived: what Reopen is for, and what leads with the proof it was finished with. */
-const finished = computed(() => g.value?.status === "consumed" && g.value.outcome !== "archived");
+const finished = computed(() => g.value?.status === "done" && g.value.outcome !== "archived");
 /** What it was finished with: the latest hand-in, kept after its claim. */
-const shown = computed(() => (ctx.value?.verdicts ?? []).find((v) => v.ok) ?? null);
+const shown = computed(() => (ctx.value?.proofs ?? []).find((v) => v.ok) ?? null);
 
 /**
  * The one act the work's state asks for, shown as the lead; everything else is under More. Draft:
@@ -203,8 +202,7 @@ type Act = "ready" | "take" | "give" | "stop" | "reopen" | "unarchive" | "";
 const lead = computed<Act>(() => {
   const x = g.value;
   if (!x) return "";
-  if (x.status === "consumed")
-    return finished.value ? "reopen" : mayArchive.value ? "unarchive" : "";
+  if (x.status === "done") return finished.value ? "reopen" : mayArchive.value ? "unarchive" : "";
   if (x.status === "draft") return mayAct.value ? "ready" : "";
   if (holding.value) return holdingMine.value ? "" : "stop";
   if (canTake.value) return "take";
@@ -213,7 +211,7 @@ const lead = computed<Act>(() => {
 /** At most one act beside it: Give to… with I'll do this, otherwise Archive for whoever may. */
 const beside = computed<"give" | "archive" | "">(() => {
   if (lead.value === "take" && canGive.value) return "give";
-  return mayArchive.value && g.value?.status !== "consumed" ? "archive" : "";
+  return mayArchive.value && g.value?.status !== "done" ? "archive" : "";
 });
 
 /** The form opened in place under the acts: one at a time. */
@@ -484,12 +482,12 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
             <div v-if="moreOpen" id="work-more" ref="moreMenu" class="menu" role="menu" aria-label="More for this work">
               <button v-if="canTake" role="menuitem" class="menu-item" type="button" @click="open('pass')">Not for me…</button>
               <button v-if="canGive && lead !== 'give' && beside !== 'give'" role="menuitem" class="menu-item" type="button" @click="open('give')">Give to…</button>
-              <button v-if="g.status === 'published' && !holding" role="menuitem" class="menu-item" type="button" @click="pick(taskDraft)">
+              <button v-if="g.status === 'ready' && !holding" role="menuitem" class="menu-item" type="button" @click="pick(taskDraft)">
                 <span class="flex flex-col"><span>Move to Draft</span><span class="text-xs text-muted">Nobody can take it until it is ready again.</span></span>
               </button>
               <button v-if="holding && lead !== 'stop'" role="menuitem" class="menu-item" type="button" @click="pick(takeBack)">Stop this agent</button>
-              <button v-if="mayArchive && g.status !== 'consumed' && beside !== 'archive'" role="menuitem" class="menu-item" type="button" @click="pick(archive)">Archive</button>
-              <button v-if="mayArchive && g.status === 'consumed' && lead !== 'unarchive'" role="menuitem" class="menu-item" type="button" @click="pick(unarchive)">Unarchive to Draft</button>
+              <button v-if="mayArchive && g.status !== 'done' && beside !== 'archive'" role="menuitem" class="menu-item" type="button" @click="pick(archive)">Archive</button>
+              <button v-if="mayArchive && g.status === 'done' && lead !== 'unarchive'" role="menuitem" class="menu-item" type="button" @click="pick(unarchive)">Unarchive to Draft</button>
               <button v-if="recallable" role="menuitem" class="menu-item" type="button" @click="pick(recall)">
                 <span class="flex flex-col"><span>Make it private again</span><span class="text-xs text-muted">It leaves everyone's inbox. Anyone who opened it keeps what they read.</span></span>
               </button>
@@ -507,7 +505,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               </button>
               <!-- The runner (`passalong work --watch`) takes only work a person marked here. -->
               <button
-                v-if="g.status !== 'consumed'"
+                v-if="g.status !== 'done'"
                 role="menuitemcheckbox"
                 class="menu-item !items-start"
                 type="button"
@@ -564,11 +562,11 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           <div v-if="panel === 'give' && g.team" class="menu !static !mt-0 !w-full max-w-sm">
             <HubAssignPicker :id="id" :team="g.team" :to="givenTo" @done="gave" />
           </div>
-          <HubAskCheck v-if="g.team && g.status !== 'draft'" v-model:open="asking" :guide="g" />
+          <HubAskCheck v-if="g.team && g.status !== 'draft'" v-model:open="asking" :work="g" />
         </div>
       </header>
 
-      <HubTaskWork :guide="g" :claims="ctx.claims" />
+      <HubTaskWork :work="g" :claims="ctx.claims" />
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">
@@ -623,7 +621,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
                   </p>
                   <p v-if="b.said" class="m-0 rounded-2 bg-field px-3 py-2 text-muted">{{ b.said }}</p>
                   <div v-if="b.proof" class="rounded-2 bg-field px-3 py-2"><HubEvidence :text="b.proof" prose /></div>
-                  <NuxtLink v-if="b.link" :to="`/hub/g/${b.link.id}`" class="self-start">{{ b.link.title }} →</NuxtLink>
+                  <NuxtLink v-if="b.link" :to="`/hub/w/${b.link.id}`" class="self-start">{{ b.link.title }} →</NuxtLink>
                 </div>
               </li>
               <li class="relative flex gap-3">
@@ -660,7 +658,7 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
 
           <!-- The work it is tied to. Each opens here, so the chain is walked without leaving. -->
           <section
-            v-if="ctx.parent || ctx.children.length || ctx.blocked_by.length || ctx.blocks.length || ctx.folders.length"
+            v-if="ctx.parent || ctx.children.length || ctx.blocked_by.length || ctx.blocks.length || ctx.projects.length"
             :class="card"
             class="flex flex-col gap-4 font-ui text-sm"
           >
@@ -681,9 +679,9 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               <p class="m-0 text-muted">Work from this · {{ ctx.children.length }}</p>
               <HubWorkLink v-for="c in ctx.children" :key="c.id" :g="c" />
             </div>
-            <div v-if="ctx.folders.length" class="flex flex-col gap-2">
-              <p class="m-0 text-muted">In {{ ctx.folders.length === 1 ? "project" : "projects" }}</p>
-              <NuxtLink v-for="f in ctx.folders" :key="f.id" :to="`/hub/projects/${f.id}`" class="flex items-center gap-2 rounded-2 bg-field px-3 py-2 text-fg no-underline hover:shadow-edge">
+            <div v-if="ctx.projects.length" class="flex flex-col gap-2">
+              <p class="m-0 text-muted">In {{ ctx.projects.length === 1 ? "project" : "projects" }}</p>
+              <NuxtLink v-for="f in ctx.projects" :key="f.id" :to="`/hub/projects/${f.id}`" class="flex items-center gap-2 rounded-2 bg-field px-3 py-2 text-fg no-underline hover:shadow-edge">
                 <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneOf(f)" aria-hidden="true" />
                 <span class="min-w-0 flex-1">{{ f.title }}</span>
               </NuxtLink>

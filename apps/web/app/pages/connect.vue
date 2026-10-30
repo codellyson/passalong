@@ -25,10 +25,10 @@
 -->
 <script setup lang="ts">
 import { APEX } from "#api/hosts";
-import { published } from "#shared/pages";
+import { isPublic } from "#shared/pages";
 
-/** The closing section links the full format once that page is published, and not before. */
-const formatPublished = published("/docs/work-format");
+/** The closing section links the full format once that page is live, and not before. */
+const formatPublished = isPublic("/docs/work-format");
 
 usePage({
   title: "Set up Passalong in Claude Code, Codex, ChatGPT or Claude",
@@ -241,7 +241,7 @@ codex mcp add passalong -- passalong mcp</code></pre>
             Reading work someone shared needs no account at all — the key in the share link is
             the authorisation, and appending <code>.md</code> gives you the document.
           </p>
-          <pre><code>curl https://passalong.dev/g/&lt;id&gt;/&lt;key&gt;.md</code></pre>
+          <pre><code>curl https://passalong.dev/w/&lt;id&gt;/&lt;key&gt;.md</code></pre>
         </div>
       </section>
     </div>

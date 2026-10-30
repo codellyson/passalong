@@ -8,20 +8,20 @@
 
   Coral means one thing: changed since you last looked, said as "Changed · <what>". Work keeps it
   until opened (unread news on it); a document keeps it until you open that document (the server's
-  `folder_document_seen`, project.ts). Both are the server's answer; nothing is kept in the browser.
+  `document_seen`, project.ts). Both are the server's answer; nothing is kept in the browser.
 
-  A project is a folder; folders inside it are listed quietly under Documents, and open as projects.
+  A project is a project; projects inside it are listed quietly under Documents, and open as projects.
 -->
 <script setup lang="ts">
 import type {
-  Folder,
-  FolderAsset,
-  FolderDocument,
+  Project,
+  ProjectDocument,
+  ProjectFile,
   ProjectHistoryItem,
   ProjectWork,
-} from "~/types/folder";
+} from "~/types/project";
 import { readmeAsk } from "~/utils/asks";
-import { renderFolderMarkdown } from "~/utils/folder-markdown";
+import { renderProjectMarkdown } from "~/utils/project-markdown";
 import { age, byLine, TONES, toneOf, viaOf } from "~/utils/projects";
 
 usePage({
@@ -46,10 +46,10 @@ const version = computed(() => Number(route.query.v) || undefined);
 const now = ref(Date.now());
 
 // ---- the project itself -------------------------------------------------------------------------
-const folder = ref<(Folder & { share_url?: string }) | null>(null);
-const documents = ref<FolderDocument[]>([]);
-const assets = ref<FolderAsset[]>([]);
-const children = ref<Folder[]>([]);
+const project = ref<(Project & { share_url?: string }) | null>(null);
+const documents = ref<ProjectDocument[]>([]);
+const files = ref<ProjectFile[]>([]);
+const children = ref<Project[]>([]);
 const breadcrumbs = ref<{ id: string; title: string; color: string }[]>([]);
 const loading = ref(true);
 const loadError = ref("");
@@ -58,12 +58,12 @@ const notice = ref("");
 
 /** Who sees it, in words: the team's name, or only you. */
 const space = computed(() => {
-  if (!folder.value?.team_id) return "Only you";
-  const t = data.value.me?.teams.find((x) => x.slug === folder.value?.team_slug);
-  return `Everyone in ${t?.name || folder.value.team_slug || "the team"}`;
+  if (!project.value?.team_id) return "Only you";
+  const t = data.value.me?.teams.find((x) => x.slug === project.value?.team_slug);
+  return `Everyone in ${t?.name || project.value.team_slug || "the team"}`;
 });
 const parent = computed(() => breadcrumbs.value.at(-2) ?? null);
-/** A folder inside a project keeps the project's colour unless it has its own. */
+/** A project inside a project keeps the project's colour unless it has its own. */
 const tone = computed(() => {
   const own = [...breadcrumbs.value].reverse().find((b) => b.color);
   return toneOf({ id: breadcrumbs.value[0]?.id || id.value, color: own?.color || "" });
@@ -74,15 +74,15 @@ async function load() {
   loadError.value = "";
   try {
     const got = await api<{
-      folder: Folder;
-      documents: FolderDocument[];
-      assets: FolderAsset[];
-      children: Folder[];
+      project: Project;
+      documents: ProjectDocument[];
+      files: ProjectFile[];
+      children: Project[];
       breadcrumbs: { id: string; title: string; color: string }[];
-    }>(`/v1/folders/${id.value}`);
-    folder.value = got?.folder ?? null;
+    }>(`/v1/projects/${id.value}`);
+    project.value = got?.project ?? null;
     documents.value = got?.documents ?? [];
-    assets.value = got?.assets ?? [];
+    files.value = got?.files ?? [];
     children.value = got?.children ?? [];
     breadcrumbs.value = got?.breadcrumbs ?? [];
     await loadReadme();
@@ -107,7 +107,7 @@ async function loadView() {
       open: ProjectWork[];
       done: ProjectWork[];
       history: ProjectHistoryItem[];
-    }>(`/v1/folders/${id.value}/project`);
+    }>(`/v1/projects/${id.value}/project`);
     open.value = got?.open ?? [];
     done.value = got?.done ?? [];
     history.value = got?.history ?? [];
@@ -131,7 +131,7 @@ watch(
       shown = now_id;
       loading.value = true;
       viewLoading.value = true;
-      folder.value = null;
+      project.value = null;
       readAll.value = false;
       confirmingDelete.value = false;
     }
@@ -152,7 +152,7 @@ const readmeRow = computed(() => documents.value.find(isReadme) ?? null);
 const others = computed(() =>
   documents.value.filter((d) => !isReadme(d)).sort((a, b) => b.updated.localeCompare(a.updated)),
 );
-const readme = ref<FolderDocument | null>(null);
+const readme = ref<ProjectDocument | null>(null);
 async function loadReadme() {
   const row = readmeRow.value;
   if (!row) {
@@ -160,8 +160,8 @@ async function loadReadme() {
     return;
   }
   if (readme.value?.id === row.id && readme.value.version === row.version) return;
-  const got = await api<{ document: FolderDocument }>(
-    `/v1/folders/${id.value}/documents/${row.id}`,
+  const got = await api<{ document: ProjectDocument }>(
+    `/v1/projects/${id.value}/documents/${row.id}`,
   );
   readme.value = got?.document ?? null;
 }
@@ -173,7 +173,7 @@ async function loadReadme() {
 const readmeParts = computed(() => {
   let body = readme.value?.body || "";
   const first = body.match(/^\s*#\s+(.+)\n?/);
-  if (first && first[1]?.trim().toLowerCase() === folder.value?.title.trim().toLowerCase())
+  if (first && first[1]?.trim().toLowerCase() === project.value?.title.trim().toLowerCase())
     body = body.slice(first[0].length);
   const cut = body.search(/^##\s/m);
   return cut > 0 && body.slice(0, cut).trim()
@@ -181,15 +181,15 @@ const readmeParts = computed(() => {
     : { opening: body, rest: false, all: body };
 });
 const readmeHtml = computed(() =>
-  renderFolderMarkdown(readAll.value ? readmeParts.value.all : readmeParts.value.opening),
+  renderProjectMarkdown(readAll.value ? readmeParts.value.all : readmeParts.value.opening),
 );
 const ask = computed(() =>
-  folder.value
-    ? readmeAsk({ id: folder.value.id, title: folder.value.title, repo: folder.value.repo })
+  project.value
+    ? readmeAsk({ id: project.value.id, title: project.value.title, repo: project.value.repo })
     : "",
 );
 /** "Version 3 by Bola, an agent": the one way a document's last save is said. */
-const lastEdit = (d: FolderDocument) =>
+const lastEdit = (d: ProjectDocument) =>
   `Version ${d.version} by ${byLine(d.editor || "", viaOf(d.client))}`;
 
 const addingDoc = ref(false);
@@ -198,8 +198,8 @@ async function createDocument(name: string, body = "") {
   busy.value = true;
   problem.value = "";
   try {
-    const got = await api<{ document: FolderDocument }>(
-      `/v1/folders/${id.value}/documents`,
+    const got = await api<{ document: ProjectDocument }>(
+      `/v1/projects/${id.value}/documents`,
       json("POST", { name, body }),
     );
     addingDoc.value = false;
@@ -215,7 +215,7 @@ async function createDocument(name: string, body = "") {
 const writeReadme = () =>
   createDocument(
     "README",
-    `# ${folder.value?.title || ""}\n\nWhat it is, who uses it, the words we use and how it is built.\n`,
+    `# ${project.value?.title || ""}\n\nWhat it is, who uses it, the words we use and how it is built.\n`,
   );
 
 async function onDocGone(message: string) {
@@ -236,7 +236,7 @@ async function upload(e: Event) {
   uploading.value = true;
   problem.value = "";
   try {
-    const res = await fetch(`/v1/folders/${id.value}/assets`, {
+    const res = await fetch(`/v1/projects/${id.value}/files`, {
       method: "POST",
       headers: {
         ...authHeaders(),
@@ -258,9 +258,9 @@ async function upload(e: Event) {
     input.value = "";
   }
 }
-async function download(a: FolderAsset) {
+async function download(a: ProjectFile) {
   try {
-    const res = await fetch(`/v1/folders/${id.value}/assets/${a.id}`, { headers: authHeaders() });
+    const res = await fetch(`/v1/projects/${id.value}/files/${a.id}`, { headers: authHeaders() });
     if (!res.ok) throw new Error("That file couldn't be downloaded.");
     const url = URL.createObjectURL(await res.blob());
     const link = document.createElement("a");
@@ -274,9 +274,9 @@ async function download(a: FolderAsset) {
 }
 /** The file whose Delete was pressed: its row asks before anything goes. */
 const confirmingFile = ref("");
-async function removeAsset(a: FolderAsset) {
+async function removeFile(a: ProjectFile) {
   try {
-    await api(`/v1/folders/${id.value}/assets/${a.id}`, { method: "DELETE" });
+    await api(`/v1/projects/${id.value}/files/${a.id}`, { method: "DELETE" });
     confirmingFile.value = "";
     notice.value = `Deleted ${a.name}.`;
     await load();
@@ -298,7 +298,7 @@ async function saveProject(form: HTMLFormElement) {
   problem.value = "";
   try {
     await api(
-      `/v1/folders/${id.value}`,
+      `/v1/projects/${id.value}`,
       json("PATCH", {
         title,
         description: field(form, "description").trim(),
@@ -320,8 +320,8 @@ async function share() {
   sharing.value = true;
   problem.value = "";
   try {
-    const got = await api<{ url: string }>(`/v1/folders/${id.value}/share`, { method: "POST" });
-    if (folder.value && got?.url) folder.value = { ...folder.value, share_url: got.url };
+    const got = await api<{ url: string }>(`/v1/projects/${id.value}/share`, { method: "POST" });
+    if (project.value && got?.url) project.value = { ...project.value, share_url: got.url };
   } catch (err) {
     problem.value = (err as Error).message;
   } finally {
@@ -334,8 +334,8 @@ async function stopSharing() {
   confirmingStop.value = false;
   sharing.value = true;
   try {
-    await api(`/v1/folders/${id.value}/share`, { method: "DELETE" });
-    if (folder.value) folder.value = { ...folder.value, share_url: "" };
+    await api(`/v1/projects/${id.value}/share`, { method: "DELETE" });
+    if (project.value) project.value = { ...project.value, share_url: "" };
     notice.value = "This project is no longer shared. The old link stopped working.";
   } catch (err) {
     problem.value = (err as Error).message;
@@ -349,19 +349,19 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 const deleteWhat = computed(() => {
   const parts = [
     documents.value.length && plural(documents.value.length, "document", "documents"),
-    assets.value.length && plural(assets.value.length, "file", "files"),
+    files.value.length && plural(files.value.length, "file", "files"),
     children.value.length &&
       plural(children.value.length, "project inside it", "projects inside it"),
   ].filter(Boolean) as string[];
   const what = parts.length ? ` and its ${parts.join(", ").replace(/, ([^,]*)$/, " and $1")}` : "";
-  return `Delete ${folder.value?.title}${what}? Work in it is kept. This cannot be undone.`;
+  return `Delete ${project.value?.title}${what}? Work in it is kept. This cannot be undone.`;
 });
 async function remove() {
-  const f = folder.value;
+  const f = project.value;
   if (!f?.manage) return;
   deleting.value = true;
   try {
-    await api(`/v1/folders/${id.value}`, { method: "DELETE" });
+    await api(`/v1/projects/${id.value}`, { method: "DELETE" });
     await projectsQ.refetch();
     await navigateTo({
       path: parent.value ? `/hub/projects/${parent.value.id}` : "/hub/projects",
@@ -401,11 +401,11 @@ const linkId = ref("");
 const linkable = computed(() => {
   const here = new Set([...open.value, ...done.value].map((w) => w.id));
   const seen = new Set<string>();
-  return [...data.value.guides, ...data.value.tasks]
+  return [...data.value.work, ...data.value.tasks]
     .filter((g) => {
       if (seen.has(g.id) || here.has(g.id)) return false;
       seen.add(g.id);
-      return folder.value?.team_id ? g.team === folder.value.team_slug : !g.team && g.mine;
+      return project.value?.team_id ? g.team === project.value.team_slug : !g.team && g.mine;
     })
     .map((g) => ({ value: g.id, label: g.title || g.id }))
     .sort((a, b) => a.label.localeCompare(b.label));
@@ -414,7 +414,7 @@ async function link() {
   if (!linkId.value) return;
   problem.value = "";
   try {
-    await api(`/v1/folders/${id.value}/guides`, json("POST", { guide: linkId.value }));
+    await api(`/v1/projects/${id.value}/work`, json("POST", { work: linkId.value }));
     linkId.value = "";
     linking.value = false;
     await loadView();
@@ -436,8 +436,8 @@ function historyLine(h: ProjectHistoryItem): string {
 }
 const historyHref = (h: ProjectHistoryItem) =>
   h.kind === "finished"
-    ? `/hub/g/${h.id}`
-    : { path: `/hub/projects/${h.folder}`, query: { tab: "documents", doc: h.id, v: h.version } };
+    ? `/hub/w/${h.id}`
+    : { path: `/hub/projects/${h.project}`, query: { tab: "documents", doc: h.id, v: h.version } };
 
 const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
 const cols = "@2xl:grid-cols-[minmax(0,1fr)_8rem_7rem_3.5rem_4.75rem]";
@@ -446,9 +446,9 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
 
 <template>
   <HubShell>
-    <HubSkeleton v-if="loading && !folder" variant="lines" :rows="8" label="Loading the project" />
+    <HubSkeleton v-if="loading && !project" variant="lines" :rows="8" label="Loading the project" />
 
-    <div v-else-if="!folder" role="alert" class="flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
+    <div v-else-if="!project" role="alert" class="flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
       <div class="min-w-0 grow basis-64">
         <p class="m-0 font-ui text-sm font-semibold text-danger">This project didn't load</p>
         <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ loadError }}</p>
@@ -464,17 +464,17 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           <div class="min-w-0">
             <h1 class="m-0 flex items-center gap-3 text-h2 font-medium tracking-tight">
               <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="tone" aria-hidden="true" />
-              <span class="min-w-0 break-words">{{ folder.title }}</span>
+              <span class="min-w-0 break-words">{{ project.title }}</span>
             </h1>
-            <p v-if="folder.description" class="m-0 mt-1 max-w-[44rem] pl-[15px] font-ui text-sm text-muted">{{ folder.description }}</p>
+            <p v-if="project.description" class="m-0 mt-1 max-w-[44rem] pl-[15px] font-ui text-sm text-muted">{{ project.description }}</p>
             <p class="m-0 mt-1 flex flex-wrap gap-x-2 pl-[15px] font-ui text-xs text-muted">
               <span>{{ space }}</span>
-              <template v-if="folder.repo"><span aria-hidden="true">·</span><span>Repo <span class="font-code text-fg">{{ folder.repo }}</span></span></template>
+              <template v-if="project.repo"><span aria-hidden="true">·</span><span>Repo <span class="font-code text-fg">{{ project.repo }}</span></span></template>
             </p>
           </div>
           <div v-if="!editing" class="flex flex-wrap gap-2">
             <button class="btn sm" type="button" @click="editing = true">Edit</button>
-            <button v-if="!folder.share_url" class="btn sm" type="button" :disabled="sharing" @click="share">{{ sharing ? "Sharing…" : "Share" }}</button>
+            <button v-if="!project.share_url" class="btn sm" type="button" :disabled="sharing" @click="share">{{ sharing ? "Sharing…" : "Share" }}</button>
           </div>
         </div>
 
@@ -482,25 +482,25 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
             <label class="flex flex-col gap-2 font-ui text-sm">
               <span class="text-muted">Name</span>
-              <input name="title" maxlength="100" :value="folder.title" required />
+              <input name="title" maxlength="100" :value="project.title" required />
             </label>
             <label class="flex flex-col gap-2 font-ui text-sm">
               <span class="text-muted">What it is, in a line</span>
-              <input name="description" maxlength="400" :value="folder.description" />
+              <input name="description" maxlength="400" :value="project.description" />
             </label>
             <label class="flex flex-col gap-2 font-ui text-sm md:col-span-2">
               <span class="text-muted">Repo <span class="text-muted">· if it has one</span></span>
-              <input name="repo" maxlength="200" class="code-field" spellcheck="false" :value="folder.repo || ''" placeholder="github.com/acme/billing" />
+              <input name="repo" maxlength="200" class="code-field" spellcheck="false" :value="project.repo || ''" placeholder="github.com/acme/billing" />
             </label>
           </div>
           <fieldset class="m-0 flex flex-wrap items-center gap-2 border-0 p-0 font-ui text-sm">
             <legend class="mb-2 p-0 text-muted">Line colour</legend>
             <label class="chip-pick">
-              <input type="radio" name="color" value="" :checked="!TONES.includes(folder.color as never)" />
+              <input type="radio" name="color" value="" :checked="!TONES.includes(project.color as never)" />
               <span>From its name</span>
             </label>
             <label v-for="t in TONES" :key="t" class="chip-pick">
-              <input type="radio" name="color" :value="t" :checked="folder.color === t" />
+              <input type="radio" name="color" :value="t" :checked="project.color === t" />
               <span class="project-mark h-3.5 w-[3px] rounded-[1px]" :data-tone="t" aria-hidden="true" />
               <span class="capitalize">{{ t }}</span>
             </label>
@@ -510,7 +510,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             <button class="btn sm" type="button" @click="editing = false; confirmingDelete = false">Cancel</button>
           </div>
           <!-- The one danger here, at the foot, asking in place and saying what goes. -->
-          <div v-if="folder.manage" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-3">
+          <div v-if="project.manage" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-3">
             <button v-if="!confirmingDelete" class="btn sm outline danger" type="button" @click="confirmingDelete = true">Delete project…</button>
             <template v-else>
               <p class="m-0 min-w-0 grow font-ui text-sm" role="alert">{{ deleteWhat }}</p>
@@ -520,15 +520,15 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           </div>
         </form>
 
-        <div v-if="folder.share_url" class="flex flex-col gap-2">
+        <div v-if="project.share_url" class="flex flex-col gap-2">
           <div class="flex flex-wrap items-center gap-2">
             <label class="sr-only" for="share-url">Share link</label>
-            <input id="share-url" class="min-w-0 flex-1 font-code text-xs" :value="folder.share_url" readonly @focus="($event.target as HTMLInputElement).select()" />
-            <button class="btn" type="button" @click="copy(folder.share_url || '', $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy link</span></button>
+            <input id="share-url" class="min-w-0 flex-1 font-code text-xs" :value="project.share_url" readonly @focus="($event.target as HTMLInputElement).select()" />
+            <button class="btn" type="button" @click="copy(project.share_url || '', $event.currentTarget)"><AppIcon name="copy" /><span data-label>Copy link</span></button>
             <button class="btn outline danger" type="button" :disabled="sharing" :aria-expanded="confirmingStop" @click="confirmingStop = !confirmingStop">Stop sharing…</button>
           </div>
           <div v-if="confirmingStop" class="flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
-            <p class="m-0 min-w-0 grow font-ui text-sm">Stop sharing {{ folder.title }}? Everyone with the link loses access, and a new link will be different.</p>
+            <p class="m-0 min-w-0 grow font-ui text-sm">Stop sharing {{ project.title }}? Everyone with the link loses access, and a new link will be different.</p>
             <button class="btn sm outline danger" type="button" :disabled="sharing" @click="stopSharing">Stop sharing</button>
             <button class="btn sm" type="button" @click="confirmingStop = false">Keep sharing</button>
           </div>
@@ -558,8 +558,8 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
         <HubProjectDocument
           v-if="docId"
           :key="docId"
-          :folder="id"
-          :space="folder.team_id"
+          :project="id"
+          :space="project.team_id"
           :doc="docId"
           :row="documents.find((d) => d.id === docId)"
           :version="version"
@@ -596,7 +596,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                   <NuxtLink :to="{ query: { tab: 'documents', doc: readme.id } }" class="btn sm">Open</NuxtLink>
                 </span>
               </div>
-              <!-- Sanitised by renderFolderMarkdown before it reaches v-html. -->
+              <!-- Sanitised by renderProjectMarkdown before it reaches v-html. -->
               <template v-if="readmeParts.all.trim()">
                 <div class="overflow-x-auto"><div class="prose project-prose" v-html="readmeHtml" /></div>
                 <button v-if="readmeParts.rest" class="btn sm self-start" type="button" :aria-expanded="readAll" @click="readAll = !readAll">{{ readAll ? "Show less" : "Read all" }}</button>
@@ -638,7 +638,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             </section>
           </template>
 
-          <!-- Folders inside this one, there to reach rather than to lead. -->
+          <!-- Projects inside this one, there to reach rather than to lead. -->
           <section v-if="children.length" class="flex flex-col" aria-labelledby="inside-h">
             <h2 id="inside-h" class="m-0 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">Inside this project</h2>
             <ul class="m-0 list-none p-0">
@@ -655,10 +655,10 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               <button class="btn sm" type="button" :disabled="uploading" @click="fileInput?.click()">{{ uploading ? "Adding…" : "Add a file" }}</button>
             </div>
             <input ref="fileInput" class="sr-only" type="file" tabindex="-1" aria-hidden="true" accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.zip,.md,.txt,.csv,.json" @change="upload" />
-            <ul v-if="assets.length" class="m-0 list-none p-0">
-              <template v-for="a in assets" :key="a.id">
+            <ul v-if="files.length" class="m-0 list-none p-0">
+              <template v-for="a in files" :key="a.id">
               <li class="flex items-center gap-3 border-b border-line py-2">
-                <HubFolderAssetPreview :folder="id" :asset="a.id" :type="a.type" :name="a.name" />
+                <HubProjectFilePreview :project="id" :file="a.id" :type="a.type" :name="a.name" />
                 <div class="min-w-0 grow">
                   <button class="max-w-full cursor-pointer border-0 bg-transparent p-0 text-left font-ui text-sm break-all text-fg underline" type="button" @click="download(a)">{{ a.name }}</button>
                   <span class="block font-ui text-xs text-muted tabular-nums">{{ size(a.bytes) }} · {{ age(a.created, now) }}</span>
@@ -667,7 +667,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               </li>
               <li v-if="confirmingFile === a.id" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-2" role="alert">
                 <p class="m-0 min-w-0 grow font-ui text-sm">Delete {{ a.name }} from this project? It cannot be brought back.</p>
-                <button class="btn sm outline danger" type="button" @click="removeAsset(a)">Delete</button>
+                <button class="btn sm outline danger" type="button" @click="removeFile(a)">Delete</button>
                 <button class="btn sm" type="button" @click="confirmingFile = ''">Keep it</button>
               </li>
               </template>
@@ -716,12 +716,12 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
                   <span v-if="w.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
                   <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
                     <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
-                      <NuxtLink :to="`/hub/g/${w.id}`" class="font-medium text-fg no-underline hover:underline">{{ w.title || "Untitled" }}</NuxtLink>
+                      <NuxtLink :to="`/hub/w/${w.id}`" class="font-medium text-fg no-underline hover:underline">{{ w.title || "Untitled" }}</NuxtLink>
                       <span v-if="w.changed" class="text-xs font-medium text-changed">Changed · {{ w.changed }}</span>
                     </p>
                     <p v-if="secondLine(w)" class="m-0 mt-0.5 font-ui text-xs text-muted">{{ secondLine(w) }}</p>
                   </div>
-                  <NuxtLink :to="`/hub/g/${w.id}`" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">{{ verbOf(w) }}</NuxtLink>
+                  <NuxtLink :to="`/hub/w/${w.id}`" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">{{ verbOf(w) }}</NuxtLink>
                   <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">{{ w.with || "Nobody" }}</span>
                   <span class="order-2 font-ui text-xs @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-sm" :class="w.health === 'quiet' ? 'font-medium text-fg' : 'text-muted'">
                     <template v-if="stateOf(w)"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ stateOf(w) }}</template>

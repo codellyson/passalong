@@ -76,7 +76,7 @@ test("the work page draws what it was finished with through the renderer, not as
   // Evidence once printed `![Sales Order PDF](https://passalong.dev/v1/shots/d2eg7b2xaqx7)` as
   // characters. Every place that shows a hand-in's proof goes through the renderer.
   const { readFile } = await import("node:fs/promises");
-  const page = await readFile(new URL("../app/pages/hub/g/[id].vue", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/pages/hub/w/[id].vue", import.meta.url), "utf8");
   for (const slot of ["shown.detail", "b.proof"]) {
     assert.match(
       page,

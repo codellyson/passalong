@@ -3,7 +3,7 @@
   colour of the button or label it sits in.
 
   Inline and hand-written for two reasons. An icon font or a sprite from a CDN is refused outright
-  by the CSP (`font-src 'self'`, and no third-party origin is allowed), and a guide page runs no
+  by the CSP (`font-src 'self'`, and no third-party origin is allowed), and a work page runs no
   script at all — so anything that resolves icons at runtime cannot exist there. These are markup,
   server-rendered like everything else.
 
@@ -40,8 +40,8 @@ const PATHS = {
   /** An attachment: a paper clip. */
   attach:
     "M10.5 5.25 6.4 9.35a1.25 1.25 0 0 0 1.77 1.77l4.6-4.6a2.5 2.5 0 0 0-3.54-3.54l-4.6 4.6a3.75 3.75 0 0 0 5.3 5.3l3.32-3.32",
-  /** A project: a folder, the one shape everybody reads as a place things are kept. */
-  folder: "M2.75 4.25h4l1.25 1.5h5.25v7h-10.5z",
+  /** A project: a project, the one shape everybody reads as a place things are kept. */
+  project: "M2.75 4.25h4l1.25 1.5h5.25v7h-10.5z",
   board: "M2.75 2.75h3v10.5h-3zM6.5 2.75h3v7h-3zM10.25 2.75h3v4.5h-3z",
   support: "M2.75 3.25h10.5v7.5h-6l-3 2.5v-2.5h-1.5z",
   gear: "M8 5.75a2.25 2.25 0 1 0 0 4.5a2.25 2.25 0 1 0 0-4.5M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5M3.6 3.6l1.05 1.05M11.35 11.35l1.05 1.05M3.6 12.4l1.05-1.05M11.35 4.65l1.05-1.05",

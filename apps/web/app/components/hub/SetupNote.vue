@@ -26,7 +26,7 @@ const show = computed(
 
 /** What a done step made, where it is cheap to say: the team's name, how many projects. */
 const made = computed<Partial<Record<SetupStep, string>>>(() => {
-  const n = (projectsQ.data.value?.folders ?? []).filter(
+  const n = (projectsQ.data.value?.projects ?? []).filter(
     (f) => !f.parent_id && (f.team_slug || "") === (team.value?.slug ?? ""),
   ).length;
   return {

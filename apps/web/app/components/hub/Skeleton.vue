@@ -14,7 +14,7 @@ withDefaults(
     rows?: number;
     /** Said to screen readers, which get nothing from grey bars. */
     label?: string;
-    /** Rows in a bordered list like the guides page, or bare lines inside a settings section. */
+    /** Rows in a bordered list like the work page, or bare lines inside a settings section. */
     variant?: "list" | "lines";
   }>(),
   { rows: 3, label: "Loading", variant: "list" },

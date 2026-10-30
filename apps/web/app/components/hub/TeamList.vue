@@ -111,7 +111,7 @@ async function invite(t: TeamDetail, el: EventTarget | null) {
   if (made) copy(made.url, el);
 }
 
-function guides(t: TeamDetail) {
+function work(t: TeamDetail) {
   scope.value = t.slug;
   router.push("/hub");
 }
@@ -137,10 +137,10 @@ function guides(t: TeamDetail) {
           <h2 :id="`team-${t.slug}-h`" class="m-0 text-h3 font-medium tracking-tight">{{ t.name || t.slug }}</h2>
           <p class="m-0 mt-1 font-ui text-sm text-muted">
             {{ t.role === "owner" ? "You're an admin" : "You're a member" }} · {{ t.members.length }} {{ t.members.length === 1 ? "person" : "people" }} ·
-            {{ t.guides }} {{ t.guides === 1 ? "piece of work" : "pieces of work" }}
+            {{ t.work }} {{ t.work === 1 ? "piece of work" : "pieces of work" }}
           </p>
         </div>
-        <button class="btn sm" type="button" @click="guides(t)">See its work</button>
+        <button class="btn sm" type="button" @click="work(t)">See its work</button>
       </div>
 
       <HubSettingsSection

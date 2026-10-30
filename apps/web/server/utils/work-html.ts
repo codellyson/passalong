@@ -1,7 +1,7 @@
-// Markdown to HTML for a guide page. This runs on the server only — the page it feeds is served
+// Markdown to HTML for a work page. This runs on the server only — the page it feeds is served
 // under `noScripts`, and keeping the parser here keeps it out of the client bundle entirely.
-// It is the same remark + GFM pipeline folder documents use, plus GitHub's alerts, so a guide,
-// a post and a folder document read the same Markdown the same way.
+// It is the same remark + GFM pipeline project documents use, plus GitHub's alerts, so a piece of work,
+// a post and a project document read the same Markdown the same way.
 //
 // Nothing sanitises the output. That is deliberate and is the same bargain apps/api makes: the
 // route's CSP is `default-src 'none'` with no `script-src` at all, so anything script-shaped in
@@ -120,7 +120,7 @@ function makeRenderer(into: Heading[], slug: (s: string) => string) {
   return (s: string) => String(processor.processSync(s));
 }
 
-/** Markdown we wrote ourselves, such as a blog post, rendered the way a guide is. */
+/** Markdown we wrote ourselves, such as a blog post, rendered the way a piece of work is. */
 export function renderMarkdown(body: string): string {
   return makeRenderer([], slugger())(body);
 }

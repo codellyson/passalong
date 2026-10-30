@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import "./aliases.mjs";
 
-const { renderFolderMarkdown } = await import("../app/utils/folder-markdown.ts");
+const { renderProjectMarkdown } = await import("../app/utils/project-markdown.ts");
 
-test("folder documents render GFM without executing document content", () => {
-  const html = renderFolderMarkdown(`| Feature | Route |
+test("project documents render GFM without executing document content", () => {
+  const html = renderProjectMarkdown(`| Feature | Route |
 | :--- | ---: |
 | Sign up | /register |
 
@@ -32,8 +32,8 @@ test("folder documents render GFM without executing document content", () => {
   assert.doesNotMatch(html, /<img|<script|javascript:/i);
 });
 
-test("folder documents keep GitHub alerts through the sanitizer, and only their classes", () => {
-  const html = renderFolderMarkdown(
+test("project documents keep GitHub alerts through the sanitizer, and only their classes", () => {
+  const html = renderProjectMarkdown(
     '> [!CAUTION]\n> Deletes the bucket.\n\n<div class="x">raw</div>',
   );
   assert.match(html, /<div class="markdown-alert markdown-alert-caution">/);

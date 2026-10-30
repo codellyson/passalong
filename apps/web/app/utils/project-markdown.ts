@@ -14,7 +14,7 @@ function safeHref(href: string): string | null {
 }
 
 // A private document must not silently load a third-party image when opened.
-// Folder assets require a credential, so Markdown images become links instead.
+// Project files require a credential, so Markdown images become links instead.
 const markdown = unified()
   .use(remarkParse)
   .use(remarkGfm)
@@ -48,6 +48,6 @@ const markdown = unified()
   })
   .use(rehypeStringify);
 
-export function renderFolderMarkdown(body: string): string {
+export function renderProjectMarkdown(body: string): string {
   return String(markdown.processSync(body));
 }

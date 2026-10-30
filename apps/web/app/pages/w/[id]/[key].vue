@@ -32,12 +32,12 @@ const embed = computed(() => route.query.embed === "1");
 if (embed.value) useHead({ base: { target: "_blank" } });
 
 const { data: work } = await useFetch(
-  () => `/api/guide/${encodeURIComponent(id.value)}/${encodeURIComponent(key.value)}`,
+  () => `/api/work/${encodeURIComponent(id.value)}/${encodeURIComponent(key.value)}`,
 );
 if (!work.value) throw createError({ statusCode: 404, statusMessage: "no such work" });
 
 /** Share links are built from the host that served them, so each serving host stays consistent. */
-const url = computed(() => `${useRequestURL().origin}/g/${id.value}/${work.value?.shareKey}`);
+const url = computed(() => `${useRequestURL().origin}/w/${id.value}/${work.value?.shareKey}`);
 const meta = computed(() => work.value?.meta);
 const outline = computed(() => work.value?.outline || []);
 
@@ -69,7 +69,7 @@ const facts = computed(() =>
  * Where taking it leads. This page runs no script, so it cannot hold a form: the button is a link
  * to the work in the hub, which signs the visitor in if needed and offers I'll do this there.
  */
-const inHub = computed(() => `/hub/g/${encodeURIComponent(id.value)}`);
+const inHub = computed(() => `/hub/w/${encodeURIComponent(id.value)}`);
 const author = computed(() => str(meta.value?.author) || "whoever sent it");
 /** Work made from this one, oldest first, and the work this came from. */
 const children = computed(() => work.value?.children ?? []);
@@ -92,7 +92,7 @@ usePage({
 <template>
   <div v-if="work">
     <main
-      class="guide-page"
+      class="work-page"
       :class="embed ? 'max-w-[46rem] pt-6' : 'max-w-[64rem] md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10'"
     >
       <!-- Sticky with no script: the rail scrolls with the document until it reaches the top and
@@ -162,7 +162,7 @@ usePage({
           </div>
         </header>
 
-        <!-- eslint-disable-next-line vue/no-v-html -- see server/utils/guide-html.ts: the CSP is what
+        <!-- eslint-disable-next-line vue/no-v-html -- see server/utils/work-html.ts: the CSP is what
              makes this safe, and it is checked by scripts/probe.sh against a deployed response. -->
         <article class="prose" v-html="work.html" />
 

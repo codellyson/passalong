@@ -32,11 +32,11 @@ Passalong keeps a mixed team from dropping work in the AI age, and gives every p
 
 ## Capabilities and Constraints
 
-- Work is one thing: plain markdown with a title, a summary and optional tags (an agent may tag `bug`); no kinds or required sections (docs/WORK.md). People see "work", "project", "document", "file"; never "guide".
+- Work is one thing: plain markdown with a title, a summary and optional tags (an agent may tag `bug`); no kinds or required sections (docs/WORK.md). People see "work", "project", "document", "file"; never "work".
 - Share pages render markdown a stranger wrote and run no script; only `/hub`, `/join/:code` and `/reset` run script. The hub frames a work item's document, never renders it as its own HTML.
 - A customer's contact details are columns, never in the document.
 - Nothing is sent to a customer until a person presses Send.
-- Settings must not grow; new setup belongs on the board or in a folder.
+- Settings must not grow; new setup belongs on the board or in a project.
 - Undecided: where customers write besides email.
 
 ## Brand Commitments
@@ -45,7 +45,7 @@ Name: Passalong. Voice: plain words, short sentences, says what happened and who
 
 ## Evidence on Hand
 
-No customer testimonials, logos or usage figures are recorded for use in the product; none may be invented. Internal production figures exist in docs/REVIEW.md and AGENTS.md for decisions, not for display.
+No customer testimonials, logos or usage figures are recorded for use in the product; none may be invented. Internal production figures exist in AGENTS.md for decisions, not for display.
 
 ## Product Principles
 

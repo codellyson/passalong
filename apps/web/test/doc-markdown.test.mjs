@@ -5,7 +5,7 @@ import test from "node:test";
 import "./aliases.mjs";
 
 const { markdownToDoc, docToMarkdown } = await import("../app/utils/doc-markdown.ts");
-const { renderFolderMarkdown } = await import("../app/utils/folder-markdown.ts");
+const { renderProjectMarkdown } = await import("../app/utils/project-markdown.ts");
 
 const roundTrip = (md) => {
   const got = markdownToDoc(md);
@@ -13,7 +13,7 @@ const roundTrip = (md) => {
   return docToMarkdown(got.doc);
 };
 const same = (md) =>
-  assert.equal(renderFolderMarkdown(roundTrip(md)), renderFolderMarkdown(md), md);
+  assert.equal(renderProjectMarkdown(roundTrip(md)), renderProjectMarkdown(md), md);
 
 test("headings, emphasis, code, links and breaks come back as they went in", () => {
   same("# Billing app\n\n## Who uses it\n\n### Words we use\n\nPlain text.");
@@ -34,7 +34,7 @@ test("lists keep their kind, their numbering and their nesting", () => {
 
 test("code blocks, quotes, rules and pictures survive", () => {
   same(
-    "```ts\nconst a = 1;\n// ``` inside\n```\n\n> Quoted\n>\n> Two paragraphs\n\n---\n\n![Invoice header](/v1/folders/a/assets/b)",
+    "```ts\nconst a = 1;\n// ``` inside\n```\n\n> Quoted\n>\n> Two paragraphs\n\n---\n\n![Invoice header](/v1/projects/a/files/b)",
   );
   same("```\n````\n```");
 });

@@ -12,7 +12,7 @@ const waiting = computed(() => needsQ.data.value?.rows.length ?? 0);
 type Tab = {
   to: string;
   label: string;
-  icon: "inbox" | "folder" | "plus" | "board" | "support";
+  icon: "inbox" | "project" | "plus" | "board" | "support";
   on: boolean;
   count?: number;
   box?: boolean;
@@ -21,13 +21,13 @@ const tabs = computed<Tab[]>(() => {
   const p = route.path;
   return [
     { to: "/hub", label: "Needs you", icon: "inbox", on: p === "/hub", count: waiting.value },
-    { to: "/hub/projects", label: "Projects", icon: "folder", on: p.startsWith("/hub/projects") },
+    { to: "/hub/projects", label: "Projects", icon: "project", on: p.startsWith("/hub/projects") },
     { to: "/hub/new", label: "New", icon: "plus", on: p === "/hub/new", box: true },
     {
       to: "/hub/work",
       label: "Work",
       icon: "board",
-      on: p === "/hub/work" || p.startsWith("/hub/g/") || p.startsWith("/hub/answer"),
+      on: p === "/hub/work" || p.startsWith("/hub/w/"),
     },
     { to: "/hub/support", label: "Support", icon: "support", on: p.startsWith("/hub/support") },
   ];

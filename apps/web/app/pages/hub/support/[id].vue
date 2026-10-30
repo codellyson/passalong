@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { Guide, GuideContext, SupportList, SupportRow, ThreadItem } from "~/types/hub";
+import type { SupportList, SupportRow, ThreadItem, Work, WorkContext } from "~/types/hub";
 import { age, byLine, projectsFrom, toneOf } from "~/utils/projects";
 
 const route = useRoute();
@@ -28,13 +28,13 @@ usePage({ title: "Support · Passalong", description: "One customer request.", n
 
 const ctxQ = useQuery({
   queryKey: computed(() => hubKeys.context(id.value)),
-  queryFn: async () => (await api<GuideContext>(`/v1/guides/${id.value}/context`)) ?? null,
+  queryFn: async () => (await api<WorkContext>(`/v1/work/${id.value}/context`)) ?? null,
   enabled: signedIn,
 });
 const threadQ = useQuery({
   queryKey: computed(() => hubKeys.supportThread(id.value)),
   queryFn: async () =>
-    (await api<{ thread: ThreadItem[] }>(`/v1/guides/${id.value}/thread`))?.thread ?? [],
+    (await api<{ thread: ThreadItem[] }>(`/v1/work/${id.value}/thread`))?.thread ?? [],
   enabled: signedIn,
 });
 const { data: list } = useQuery({
@@ -44,7 +44,7 @@ const { data: list } = useQuery({
 });
 const ctx = computed(() => ctxQ.data.value ?? null);
 const row = computed(() => list.value?.requests.find((r) => r.id === id.value) ?? null);
-const g = computed(() => ctx.value?.guide ?? null);
+const g = computed(() => ctx.value?.work ?? null);
 const customer = computed(() => ctx.value?.customer ?? null);
 const name = computed(() => customer.value?.name || customer.value?.email || "the customer");
 useHead({
@@ -65,7 +65,7 @@ const STATE: Record<SupportRow["state"], string> = {
   waiting: "Waiting on the customer",
   solved: "Solved",
 };
-const solved = computed(() => g.value?.status === "consumed");
+const solved = computed(() => g.value?.status === "done");
 
 /** Who has it: whoever holds it, else who it was given to. "Bola, an agent" for an agent. */
 const onIt = computed(() => {
@@ -92,13 +92,13 @@ const STAGE: Record<string, string> = {
   done: "Finished",
 };
 const work = computed(() =>
-  (ctx.value?.children ?? []).map((c: Guide) => {
+  (ctx.value?.children ?? []).map((c: Work) => {
     const holder = c.held_by?.[0];
     return {
       id: c.id,
       title: c.title || "Untitled",
       stage:
-        c.status === "consumed"
+        c.status === "done"
           ? c.outcome === "archived"
             ? "Archived"
             : "Finished"
@@ -106,7 +106,7 @@ const work = computed(() =>
       who: holder ? byLine(holder.name, holder.agent ? "agent" : "") : "",
       changed: c.changed || "",
       at: c.updated || c.created,
-      done: c.status === "consumed" && c.outcome !== "archived",
+      done: c.status === "done" && c.outcome !== "archived",
     };
   }),
 );
@@ -174,7 +174,7 @@ const project = computed(() => row.value?.project ?? null);
 /** Only projects in the request's own space: the server refuses a link across teams. */
 const projects = computed(() =>
   projectsFrom(
-    (projectsQ.data.value?.folders ?? []).filter(
+    (projectsQ.data.value?.projects ?? []).filter(
       (f) => (f.team_slug || "") === (g.value?.team || ""),
     ),
   ),
@@ -183,25 +183,25 @@ const projects = computed(() =>
 const moveTo = (to: string) =>
   act(async () => {
     if (to !== project.value?.id)
-      await api(`/v1/folders/${encodeURIComponent(to)}/guides`, json("POST", { guide: id.value }));
-    for (const f of ctx.value?.folders ?? [])
+      await api(`/v1/projects/${encodeURIComponent(to)}/work`, json("POST", { work: id.value }));
+    for (const f of ctx.value?.projects ?? [])
       if (f.id !== to)
-        await api(`/v1/folders/${encodeURIComponent(f.id)}/guides/${id.value}`, {
+        await api(`/v1/projects/${encodeURIComponent(f.id)}/work/${id.value}`, {
           method: "DELETE",
         });
     await queryClient.invalidateQueries({ queryKey: hubKeys.projects });
   });
 const leaveProjects = () =>
   act(async () => {
-    for (const f of ctx.value?.folders ?? [])
-      await api(`/v1/folders/${encodeURIComponent(f.id)}/guides/${id.value}`, { method: "DELETE" });
+    for (const f of ctx.value?.projects ?? [])
+      await api(`/v1/projects/${encodeURIComponent(f.id)}/work/${id.value}`, { method: "DELETE" });
     await queryClient.invalidateQueries({ queryKey: hubKeys.projects });
   });
 
 const mayClose = computed(() => Boolean(ctx.value?.owner || ctx.value?.admin));
 const markSolved = () =>
   act(async () => {
-    await api(`/v1/guides/${id.value}/status`, json("PATCH", { status: "consumed" }));
+    await api(`/v1/work/${id.value}/status`, json("PATCH", { status: "done" }));
     solvedHere.value = true;
   });
 /**
@@ -212,13 +212,13 @@ const markSolved = () =>
 const archived = computed(() => g.value?.outcome === "archived" || !g.value?.outcome);
 const unarchive = () =>
   act(async () => {
-    await api(`/v1/guides/${id.value}/status`, json("PATCH", { status: "draft" }));
-    await api(`/v1/guides/${id.value}/status`, json("PATCH", { status: "published" }));
+    await api(`/v1/work/${id.value}/status`, json("PATCH", { status: "draft" }));
+    await api(`/v1/work/${id.value}/status`, json("PATCH", { status: "ready" }));
   });
 async function reopen(form: HTMLFormElement) {
   const why = field(form, "why").trim();
   if (!why) return;
-  await act(() => api(`/v1/guides/${encodeURIComponent(id.value)}/reopen`, json("POST", { why })));
+  await act(() => api(`/v1/work/${encodeURIComponent(id.value)}/reopen`, json("POST", { why })));
 }
 const gave = () => {
   open.value = "";
@@ -264,7 +264,7 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
 
       <div class="grid items-start gap-x-8 gap-y-8 lg:grid-cols-[minmax(0,1fr)_17rem] xl:grid-cols-[minmax(0,1fr)_19rem]">
         <HubConversation
-          :guide-id="id"
+          :work-id="id"
           :thread="threadQ.data.value ?? null"
           :name="name"
           :address="customer?.email"
@@ -317,7 +317,7 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
                 No project it can go in. A request goes in a project of its own team{{ g.team ? "" : ", and this one is in none" }}.
               </p>
               <p v-if="problem" class="menu-note !text-danger" role="alert">{{ problem }}</p>
-              <template v-if="ctx.folders.length">
+              <template v-if="ctx.projects.length">
                 <div class="menu-rule" />
                 <button type="button" class="menu-item text-muted" :disabled="busy" @click="leaveProjects">Not in a project</button>
               </template>
@@ -340,7 +340,7 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
             <ul class="m-0 flex list-none flex-col p-0">
               <li v-for="w in work" :key="w.id" class="relative flex flex-col gap-0.5 border-t border-line py-2 pl-3 first:border-t-0 first:pt-1">
                 <span v-if="w.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
-                <NuxtLink :to="`/hub/g/${w.id}`" class="font-ui text-sm font-medium break-words text-fg no-underline hover:underline">{{ w.title }}</NuxtLink>
+                <NuxtLink :to="`/hub/w/${w.id}`" class="font-ui text-sm font-medium break-words text-fg no-underline hover:underline">{{ w.title }}</NuxtLink>
                 <span class="font-ui text-xs text-muted">
                   <span class="text-fg">{{ w.stage }}</span><template v-if="w.who"> · {{ w.who }}</template>
                 </span>
@@ -352,13 +352,13 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
           <div v-if="ready.length" :class="fact">
             <p :class="label">Finished since you last answered</p>
             <p v-for="w in ready" :key="w.id" class="m-0 font-ui text-sm">
-              <NuxtLink :to="`/hub/g/${w.id}`">{{ w.title }}</NuxtLink>
+              <NuxtLink :to="`/hub/w/${w.id}`">{{ w.title }}</NuxtLink>
             </p>
           </div>
 
           <div :class="fact">
             <p :class="label">The work</p>
-            <NuxtLink :to="`/hub/g/${id}`" class="font-ui text-sm">Open its page</NuxtLink>
+            <NuxtLink :to="`/hub/w/${id}`" class="font-ui text-sm">Open its page</NuxtLink>
             <p v-if="sortedNote" class="m-0 font-ui text-xs text-muted">{{ sortedNote }}</p>
           </div>
 

@@ -5,7 +5,7 @@
 // that is constant is a nonce that is worthless. The header has to be written per response, next
 // to the markup it describes.
 //
-// It only acts when it actually finds an inline script, so a `noScripts` route — a guide page,
+// It only acts when it actually finds an inline script, so a `noScripts` route — a work page,
 // the landing — keeps the stricter header its route rule already set and never sees a nonce it
 // has no use for. That also means this needs no list of routes to keep in step with nuxt.config:
 // whether a page runs script is decided by whether one is there.

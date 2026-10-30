@@ -1,4 +1,4 @@
-export interface Folder {
+export interface Project {
   id: string;
   title: string;
   description: string;
@@ -11,24 +11,24 @@ export interface Folder {
   team_name?: string;
   created_by: string;
   manage?: boolean | number;
-  /** The folder's share link, or empty when it is not shared. Only on a single folder's read. */
+  /** The project's share link, or empty when it is not shared. Only on a single project's read. */
   share_url?: string;
   created: string;
   updated: string;
   documents?: number;
-  assets?: number;
-  guides?: number;
-  /** Only on a folder's children, where a grouping folder shows what each holds. */
-  subfolders?: number;
+  files?: number;
+  work?: number;
+  /** Only on a project's children, where a grouping project shows what each holds. */
+  subprojects?: number;
 }
 
-export interface FolderDocument {
+export interface ProjectDocument {
   id: string;
   name: string;
   body: string;
   version: number;
   updated_by: string;
-  /** Who last saved it, by name or @handle. Only on a folder's read. */
+  /** Who last saved it, by name or @handle. Only on a project's read. */
   editor?: string;
   /** What saved it last: "hub" is a person, anything else an agent, "" from before it was kept. */
   client?: string;
@@ -38,7 +38,7 @@ export interface FolderDocument {
   updated: string;
 }
 
-export interface FolderAsset {
+export interface ProjectFile {
   id: string;
   name: string;
   type: string;
@@ -46,8 +46,8 @@ export interface FolderAsset {
   created: string;
 }
 
-/** Work linked into a folder. The route keeps the old name, `guides`. */
-export interface FolderGuide {
+/** Work linked into a project. */
+export interface LinkedWork {
   id: string;
   title: string;
   summary: string;
@@ -81,7 +81,7 @@ export interface ProjectHistoryItem {
   changed: string;
   id: string;
   title: string;
-  folder: string;
+  project: string;
   version: number;
   note: string;
   shots: number;

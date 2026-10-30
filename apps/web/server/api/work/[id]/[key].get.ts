@@ -4,9 +4,9 @@
 // check — there is no account involved. This returns exactly what the share link already shows
 // to whoever has it, so it is not a wider surface than the page it feeds.
 import { track } from "#api/analytics";
-import { body as bodyOf, parseMeta } from "#api/guide";
+import { body as bodyOf, parseMeta } from "#api/work";
 import { db } from "../../../utils/d1";
-import { renderBody, summarize } from "../../../utils/guide-html";
+import { renderBody, summarize } from "../../../utils/work-html";
 
 const ID_RE = /^[a-z0-9]{6,12}$/;
 const KEY_RE = /^[a-z0-9]{16,32}$/;
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
   const row = await db(event)
     .prepare(
       `SELECT id, share_key, markdown, pulls, account_id, team_id, parent_id
-         FROM guide WHERE id = ? AND share_key = ?`,
+         FROM work WHERE id = ? AND share_key = ?`,
     )
     .bind(id, key)
     .first<{
@@ -47,11 +47,11 @@ export default defineEventHandler(async (event) => {
   const sameRoom = row.team_id ? "team_id = ?" : "team_id = '' AND account_id = ?";
   const roomValue = row.team_id || row.account_id;
   const origin = getRequestURL(event).origin;
-  const link = (g: { id: string; share_key: string }) => `${origin}/g/${g.id}/${g.share_key}`;
+  const link = (g: { id: string; share_key: string }) => `${origin}/w/${g.id}/${g.share_key}`;
 
   const { results: children } = await db(event)
     .prepare(
-      `SELECT id, share_key, title, created FROM guide
+      `SELECT id, share_key, title, created FROM work
         WHERE parent_id = ? AND status <> 'draft' AND ${sameRoom}
         ORDER BY created ASC LIMIT 20`,
     )
@@ -60,7 +60,7 @@ export default defineEventHandler(async (event) => {
 
   const parentRow = row.parent_id
     ? await db(event)
-        .prepare(`SELECT id, share_key, title FROM guide WHERE id = ? AND ${sameRoom}`)
+        .prepare(`SELECT id, share_key, title FROM work WHERE id = ? AND ${sameRoom}`)
         .bind(row.parent_id, roomValue)
         .first<{ id: string; share_key: string; title: string }>()
     : null;
@@ -70,7 +70,7 @@ export default defineEventHandler(async (event) => {
   // share keys to a third party — and loosening the CSP to load one would trade the product's one
   // real security property for a chart. Event names only, and nothing identifying goes near them.
   const env = (event.context.cloudflare as { env?: Record<string, string> } | undefined)?.env;
-  if (env) event.waitUntil(track(env, "guide_viewed"));
+  if (env) event.waitUntil(track(env, "work_viewed"));
 
   const body = bodyOf(row.markdown);
   const { html, outline } = renderBody(body);

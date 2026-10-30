@@ -12,11 +12,11 @@
   the card opens the same menu. A card that has just moved settles into its new place.
 -->
 <script setup lang="ts">
-import type { Guide } from "~/types/hub";
+import type { Work } from "~/types/hub";
 import { age, toneOf } from "~/utils/projects";
 
 const props = defineProps<{
-  guide: Guide;
+  work: Work;
   now: number;
   draggable: boolean;
   moving: boolean;
@@ -34,7 +34,7 @@ const emit = defineEmits<{
   pick: [];
 }>();
 
-const g = computed(() => props.guide);
+const g = computed(() => props.work);
 const done = computed(() => g.value.stage === "done");
 const outcome = computed(() =>
   done.value && g.value.outcome ? (g.value.outcome === "archived" ? "Archived" : "Finished") : "",
@@ -91,7 +91,7 @@ function fromContext(e: MouseEvent) {
     <span v-if="g.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
     <div class="flex items-start gap-2">
       <NuxtLink
-        :to="`/hub/g/${g.id}`"
+        :to="`/hub/w/${g.id}`"
         class="line-clamp-3 min-w-0 grow font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 hover:underline focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-[var(--focus)] focus-visible:after:outline-solid"
       >{{ g.title || "Untitled" }}</NuxtLink>
       <!-- No room taken while hidden, so a narrow column's title keeps its width. -->

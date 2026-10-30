@@ -1,14 +1,14 @@
 <!--
   One project in setup's "What to know" step: how its README gets written.
 
-  A project with a repo (`folder.repo`) gets the sentence to paste into the person's own agent, which
+  A project with a repo (`project.repo`) gets the sentence to paste into the person's own agent, which
   can read the code (Passalong never runs one). Without a repo, the person answers three short
   questions or pastes what they already have. What they type lives in `draft`, which the page owns:
   its Continue writes every project's README at once, and its Skip asks before dropping any. A README
   somebody already wrote is said to exist and left alone.
 -->
 <script setup lang="ts">
-import type { FolderDocument } from "~/types/folder";
+import type { ProjectDocument } from "~/types/project";
 import { readmeAsk } from "~/utils/asks";
 import { toneOf } from "~/utils/projects";
 import type { KnowDraft } from "~/utils/setup";
@@ -21,14 +21,14 @@ const props = defineProps<{
 const { api } = useHub();
 
 const isReadme = (d: { name: string }) => /^readme(\.md)?$/i.test(d.name.trim());
-const readme = ref<FolderDocument | null>(null);
+const readme = ref<ProjectDocument | null>(null);
 const loaded = ref(false);
 const problem = ref("");
 
 async function load() {
   problem.value = "";
   try {
-    const got = await api<{ documents: FolderDocument[] }>(`/v1/folders/${props.project.id}`);
+    const got = await api<{ documents: ProjectDocument[] }>(`/v1/projects/${props.project.id}`);
     readme.value = got?.documents.find(isReadme) ?? null;
     props.draft.written = Boolean(readme.value);
   } catch (e) {

@@ -6,16 +6,16 @@
 #   3. a <link rel=stylesheet>         — the one stylesheet, extracted to its own hashed file
 #   4. the markup still server-rendered — noScripts drops the JS, not the HTML
 #
-# Together those are what let a page keep `default-src 'none'` with no `script-src` at all. Guide
+# Together those are what let a page keep `default-src 'none'` with no `script-src` at all. Work
 # pages render markdown a stranger wrote and that CSP is the only thing making it safe, so if this
-# stops passing, `/g/**` cannot move.
+# stops passing, `/w/**` cannot move.
 #
 #   sh scripts/probe.sh https://passalong-web.<subdomain>.workers.dev [path]
 #
 # It runs against the landing page by default — a real page under the real route rule, rather than
-# a fixture that could drift from one. Pass a path to check another, e.g. a guide page:
+# a fixture that could drift from one. Pass a path to check another, e.g. a work page:
 #
-#   sh scripts/probe.sh https://passalong.dev /g/<id>/<key>
+#   sh scripts/probe.sh https://passalong.dev /w/<id>/<key>
 #
 # `nuxt dev` cannot answer any of this: a development build ships scripts and inlines styles
 # whatever the config says.

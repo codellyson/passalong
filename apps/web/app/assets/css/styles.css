@@ -5,7 +5,7 @@
 /* ---- fonts ---------------------------------------------------------------------------------
    Three variable faces, latin subset, all OFL. Onest carries the interface: a soft, warm
    grotesque that holds its shape at 480 with tight tracking, which is the whole display voice.
-   Newsreader carries guide prose and the italic turn in a headline — a reading face, and one with
+   Newsreader carries work prose and the italic turn in a headline — a reading face, and one with
    a real italic, where the old serif had none and the browser slanted the roman to fake it.
    JetBrains Mono carries everything the machine wrote — ids, tags, commands, code.
    `swap` so a slow font never blanks the text. */
@@ -611,7 +611,7 @@ button.primary,
   border-color: var(--line-strong);
 }
 
-/* Sizes. A row of guides is mostly text, and a button at full padding inside one is most of a
+/* Sizes. A row of work is mostly text, and a button at full padding inside one is most of a
    line tall. */
 .btn.sm {
   height: var(--control-h-sm);
@@ -1063,46 +1063,46 @@ input[name="token"],
   margin-bottom: var(--s-4);
 }
 
-.guides {
+.work {
   list-style: none;
   padding: 0;
   margin: 0;
 }
-.guide {
+.work {
   padding: var(--s-4) 0;
   border-top: 1px solid var(--line);
   margin: 0;
 }
-.guide:last-child {
+.work:last-child {
   border-bottom: 1px solid var(--line);
 }
-.guide .head {
+.work .head {
   display: flex;
   justify-content: space-between;
   gap: var(--s-4);
   align-items: baseline;
 }
-.guide .title {
+.work .title {
   font-size: var(--t-h3);
   font-weight: 500;
   letter-spacing: -0.015em;
   color: var(--fg);
   text-decoration: none;
 }
-.guide .title:hover {
+.work .title:hover {
   color: var(--emphasis);
 }
-.guide .meta {
+.work .meta {
   margin-top: var(--s-2);
 }
-.guide .actions {
+.work .actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
   margin-top: var(--s-3);
 }
-.guide.consumed .title,
-.status.consumed {
+.work.done .title,
+.status.done {
   color: var(--muted);
 }
 
@@ -1245,7 +1245,7 @@ details.more summary:hover {
 }
 
 /* ---- board ------------------------------------------------------------------------------------
-   Nothing here. The board — the waiting lane and the handoff list — is the one region of the app
+   Nothing here. The board — its four columns — is the one region of the app
    built from Tailwind utilities, in app/components/hub/. Its semantic colours are the `--ok`,
    `--warn` and `--danger` tokens above, bridged into utility names by assets/css/tailwind.css. */
 
@@ -1290,7 +1290,7 @@ form.join label {
   min-width: 0;
 }
 
-/* ---- guide views ---------------------------------------------------------------------------- */
+/* ---- work views ---------------------------------------------------------------------------- */
 .pull {
   margin-top: var(--s-7);
   padding: var(--s-4) var(--s-5);
@@ -1324,7 +1324,7 @@ form.join label {
    until you notice it is also the brief: what this product makes is written prose, so the page
    that sells it should be able to carry its claim in type alone.
 
-   What went: a drawn browser window with traffic-light dots and a fake address bar around a guide
+   What went: a drawn browser window with traffic-light dots and a fake address bar around a piece of work
    by a person who does not exist. A picture of software that was never photographed is the tell of
    a template. The artifact is shown as the file it is instead.
 
@@ -1369,7 +1369,7 @@ form.join label {
 }
 .hero h1 {
   /* Sans at 480, tracked in hard: a soft, compact display line rather than a blunt one. The serif
-     is kept for the turn alone, where it is an accent — the face guides are read in, arriving in
+     is kept for the turn alone, where it is an accent — the face work are read in, arriving in
      the one phrase that says what is wrong. */
   font-family: var(--font-sans);
   font-size: var(--t-display);
@@ -1547,15 +1547,15 @@ form.join label {
   text-wrap: pretty;
 }
 
-/* The artifact. Not a rendering of a guide, not a screenshot of one: the file. */
-/* A guide as the product renders one, on the page that has to make it look worth having.
+/* The artifact. Not a rendering of a piece of work, not a screenshot of one: the file. */
+/* A piece of work as the product renders one, on the page that has to make it look worth having.
 
    Deliberately not the markdown source. A slab of monospace is what a config file looks like, and
    it made the loudest claim on this page "we produce text files" — which is both true and the
    smallest possible reading of the thing. The document is the product; the file format is the
    promise underneath it, and it is stated in one line below rather than shown at full size.
 
-   Everything here is a device the guide page already uses, so this is the product rather than a
+   Everything here is a device the work page already uses, so this is the product rather than a
    picture of it: the serif headings, the labelled fact row, the tags. */
 .specimen {
   margin: var(--gap) 0 var(--s-4);
@@ -1577,14 +1577,14 @@ form.join label {
   letter-spacing: -0.015em;
   text-wrap: balance;
 }
-/* The same labelled row the guide page carries, and for the same reason: the repo a guide came out
+/* The same labelled row the work page carries, and for the same reason: the repo a piece of work came out
    of and the stack it assumes are different facts, and a reader should not have to tell two grey
    strings apart by guessing. */
 .specimen .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: var(--s-3) var(--s-6);
-  margin: var(--s-4) 0 0;
+  margin: var(--s-4) 0;
   padding: var(--s-3) 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -1606,7 +1606,7 @@ form.join label {
   gap: var(--s-2);
   margin: var(--s-3) 0 0;
 }
-/* The five headings every guide has. They are the argument this block makes — that finished work
+/* The five headings every piece of work has. They are the argument this block makes — that finished work
    arrives in the same shape every time — so they carry the serif and the weight. */
 .specimen .sec {
   margin-top: var(--s-5);
@@ -1625,40 +1625,54 @@ form.join label {
   text-wrap: pretty;
 }
 
-/* Out and back, side by side: what was asked for against what came back. One column on a narrow
-   screen, where the task still comes first. The rule between them is structure, so it is a border. */
-.specimen.pair {
+/* One thing that came in, followed to done: three moments side by side from 56rem, a hairline
+   between them, each moment's when, title, facts and body sharing rows with the others so the facts
+   and the lists start level. Stacked on a narrow screen, in the order it happened. */
+.specimen.trail {
   display: grid;
   gap: var(--s-7) var(--s-6);
   grid-template-columns: minmax(0, 1fr);
 }
-.specimen.pair article {
+.specimen.trail article {
   max-width: none;
   margin: 0;
 }
-@media (min-width: 52rem) {
-  .specimen.pair {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(5, auto);
+@media (min-width: 56rem) {
+  .specimen.trail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(4, auto);
     row-gap: 0;
   }
-  /* Each side's label, title, facts, checks and prose share rows with the other side's, so the
-     two checklists start level however many lines either title takes. */
-  .specimen.pair article {
+  .specimen.trail article {
     display: grid;
-    grid-row: span 5;
+    grid-row: span 4;
     grid-template-rows: subgrid;
     align-content: start;
   }
-  .specimen.pair article + article {
+  .specimen.trail article + article {
     padding-inline-start: var(--s-6);
     border-inline-start: 1px solid var(--line);
   }
 }
-.specimen .side {
-  margin: 0 0 var(--s-3);
+/* When it happened, and what happened: the times carry the order. Tabular, so 09:12 and 11:40
+   line up as times rather than as words. */
+.specimen .when {
+  margin: 0 0 var(--s-2);
   font: 500 var(--t-sm) / 1.3 var(--font-sans);
-  color: var(--accent);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* The customer's own words, as they wrote them: the serif, and nothing that makes them look like code. */
+.specimen .said {
+  align-self: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--fg);
+  text-wrap: pretty;
 }
 .specimen .checks {
   margin: 0;
@@ -2212,7 +2226,7 @@ article.prose section[data-footnotes] > h2 {
 }
 
 /* Markdown has no caption syntax, so a standalone image's alt text becomes one — see figures() in
-   server/utils/guide-html.ts. Guides carry screenshots of the thing that was broken. */
+   server/utils/work-html.ts. Work carry screenshots of the thing that was broken. */
 article.prose figure {
   margin: var(--s-5) 0;
 }

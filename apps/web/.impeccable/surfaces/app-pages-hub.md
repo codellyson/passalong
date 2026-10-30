@@ -27,4 +27,4 @@ FORM: Drawing Set (candidate 7 of the grounded list), fused with the user-pinned
 
 SIGNATURE: the change mark — a 3px ink bar at a row's left edge plus a "Changed" label naming what changed; it persists until the row is opened, and the sidebar shows a dot on any project with unseen changes.
 
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review and its call, DESIGN.md, and every shipping raster carrying its provenance

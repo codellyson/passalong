@@ -20,7 +20,7 @@ const code = computed(() => String(route.params.code));
 
 const { data: invite } = await useFetch(`/api/invite/${encodeURIComponent(code.value)}`);
 // `statusMessage: "invite"` is what error.vue reads to say "ask for a fresh invite" rather than
-// talking about guide links.
+// talking about work links.
 if (!invite.value) throw createError({ statusCode: 404, statusMessage: "invite" });
 
 const team = computed(() => invite.value?.team ?? "");

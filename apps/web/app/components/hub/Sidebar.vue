@@ -2,7 +2,7 @@
   The hub's places, on a solid ink rail: what needs you, each project with its line colour and its
   open work, the team's work and support, the box, and you at the foot.
 
-  A project is a top-level folder for now. The light dot beside one means something in it changed
+  A project is a top-level project for now. The light dot beside one means something in it changed
   since you last looked. Coral is where you are, and the box.
 -->
 <script setup lang="ts">
@@ -12,7 +12,7 @@ const { needsQ, projectsQ, signedIn } = useHub();
 const route = useRoute();
 
 const waiting = computed(() => needsQ.data.value?.rows.length ?? 0);
-const projects = computed(() => projectsFrom(projectsQ.data.value?.folders ?? []));
+const projects = computed(() => projectsFrom(projectsQ.data.value?.projects ?? []));
 
 const item =
   "flex min-h-8 items-center gap-3 rounded-1 px-3 py-1 font-ui text-sm leading-5 no-underline transition-colors";
@@ -23,12 +23,7 @@ const tone = (on: boolean) =>
 
 const at = {
   needs: computed(() => route.path === "/hub"),
-  work: computed(
-    () =>
-      route.path === "/hub/work" ||
-      route.path.startsWith("/hub/g/") ||
-      route.path.startsWith("/hub/answer"),
-  ),
+  work: computed(() => route.path === "/hub/work" || route.path.startsWith("/hub/w/")),
   support: computed(() => route.path.startsWith("/hub/support")),
   projects: computed(() => route.path === "/hub/projects"),
   settings: computed(() => route.path.startsWith("/hub/settings")),
@@ -36,7 +31,7 @@ const at = {
 /** The project on the rail that holds the page: a project inside another lights its top one. */
 const currentProject = computed(() => {
   const open = route.path.match(/^\/hub\/projects\/([^/]+)/)?.[1] || "";
-  const byId = new Map((projectsQ.data.value?.folders ?? []).map((f) => [f.id, f]));
+  const byId = new Map((projectsQ.data.value?.projects ?? []).map((f) => [f.id, f]));
   let f = byId.get(open);
   for (let hops = 0; f?.parent_id && byId.has(f.parent_id) && hops < 64; hops++)
     f = byId.get(f.parent_id);

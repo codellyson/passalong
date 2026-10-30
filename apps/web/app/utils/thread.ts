@@ -42,7 +42,7 @@ const FILE_LINE =
 /** The most a message may say, as the server keeps it. A picture or a file is a line of it. */
 export const REPLY_MAX = 1000;
 
-/** The most one reply carries, pictures and files together: it is a reply, not a folder. */
+/** The most one reply carries, pictures and files together: it is a reply, not a project. */
 export const REPLY_ATTACHMENTS = 3;
 
 /** A thing attached to a reply and not yet sent: a picture drawn in the thread, or a file saved from it. */

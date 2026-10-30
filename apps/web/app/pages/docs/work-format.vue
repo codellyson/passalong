@@ -1,7 +1,7 @@
 <!--
   The work format, for people. public/llms.txt is the same material written for an agent.
 
-  The format itself is defined in apps/api/src/guide.ts; if a field changes there, this page and
+  The format itself is defined in apps/api/src/work.ts; if a field changes there, this page and
   llms.txt change with it.
 
   Script-free: route rule `/docs/**` is `noScripts` with the strict CSP.
@@ -33,7 +33,7 @@ const FIELDS = [
   },
   {
     name: "status",
-    note: "`draft` (read it first), `published` (Ready) or `consumed` (archived). New work is Ready unless it says `draft`. `promoted` still parses, and nothing can set it.",
+    note: "`draft` (read it first), `ready` or `done` (finished or archived). New work is Ready unless it says `draft`.",
   },
   { name: "team", note: "The team it is in, by slug. Without one it is yours alone." },
   {
@@ -184,7 +184,7 @@ Done when a Safari user can pick a picture and see it as their avatar.
         <h2>Share links</h2>
         <div class="say">
           <p>
-            Every piece of work has a link, <code>/g/&lt;id&gt;/&lt;key&gt;</code>. The key is the
+            Every piece of work has a link, <code>/w/&lt;id&gt;/&lt;key&gt;</code>. The key is the
             secret: whoever holds the link reads it without an account, and appending
             <code>.md</code> gives the raw markdown. The page runs no script and is never indexed.
           </p>
