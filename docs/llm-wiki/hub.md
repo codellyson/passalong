@@ -57,8 +57,13 @@ started") and the `ASKS`/`CONNECT`/`teamAsk` sentences it used are gone.
 Every signed-in page sits beside a 240px solid ink rail (`HubSidebar`): the mark, **Go to id**,
 Needs you with its count, Projects (each top-level folder, with its line colour, its open work and a
 coral dot when something in it changed), Work, Support, **New** (the box at `/hub/new`), and
-Settings and the account menu at the foot. On a phone it is a drawer behind a top bar with the
-menu, the mark and New. The bottom tab bar and the top row of links are gone.
+Settings and the account menu at the foot. On a phone the places are docked along the bottom as
+in a phone app (`HubDock`, 2026-10-30, the author's call): Needs you with its count, Projects, New,
+Work and Support on a 56px ink bar that clears the home indicator (`viewport-fit=cover` on hub pages
+only); the current one is on-rail text with a 2px bar along its top. The rest of the rail — Go to id,
+each project, Settings, you — is a drawer behind the top bar's menu, beside the mark. Anything fixed
+or sticky at the foot (toasts, the bulk bar, a conversation's composer) stands `--dock` clear of it,
+which is 0 from 768px up.
 
 ## Work
 

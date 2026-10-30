@@ -5,7 +5,8 @@
   would have to render a heading above it that describes a screen the visitor cannot see.
 
   The rail (HubSidebar) holds the places: Needs you, the projects, Work, Support, the box, and you.
-  On a phone it is a drawer behind a top bar, so the page keeps its whole width. The hub's tokens
+  On a phone the places are a dock along the bottom (HubDock), as in a phone app, and the rest of the
+  rail — Go to id, each project, Settings, you — is a drawer behind the top bar's menu. The hub's tokens
   (`.hub-app` in styles.css) go on <body>, so what a page teleports there draws the same way.
 -->
 <script setup lang="ts">
@@ -82,7 +83,12 @@ const measure = computed(() =>
         : "max-w-[54rem]",
 );
 
-useHead({ bodyAttrs: { class: "hub-app" } });
+useHead({
+  bodyAttrs: { class: "hub-app" },
+  // `viewport-fit=cover` is what makes `env(safe-area-inset-bottom)` real, so the dock clears a
+  // phone's home indicator. Hub pages only: the landing and share pages keep the plain viewport.
+  meta: [{ name: "viewport", content: "width=device-width,initial-scale=1,viewport-fit=cover" }],
+});
 
 /** The rail as a drawer on a phone: closed on every move, and by Escape. */
 const drawer = ref(false);
@@ -218,14 +224,9 @@ const nearLimit = computed(() => {
           <AppIcon name="menu" />
         </button>
         <AppBrand to="/hub" />
-        <div class="ml-auto flex items-center gap-2">
-          <NuxtLink v-if="signedIn" to="/hub/new" class="btn primary sm" aria-label="New">
-            <AppIcon name="plus" />
-          </NuxtLink>
-        </div>
       </div>
 
-  <main class="max-md:pt-6 md:pt-10" :class="measure">
+  <main class="max-md:pt-6 max-md:pb-[calc(var(--dock)+var(--s-7))] md:pt-10" :class="measure">
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->
@@ -357,6 +358,7 @@ const nearLimit = computed(() => {
   </main>
     </div>
   </div>
+  <HubDock v-if="signedIn" />
   <HubToasts v-if="framed" />
   <!-- The one conversation panel for every page of the hub. -->
   <HubThreadDrawer v-if="signedIn" />

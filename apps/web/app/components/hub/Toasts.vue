@@ -18,7 +18,7 @@ const DOT: Record<string, string> = {
 
 <template>
   <div
-    class="pointer-events-none fixed right-4 bottom-4 z-40 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2"
+    class="pointer-events-none fixed right-4 bottom-[calc(var(--dock)+1rem)] z-40 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2"
     role="status"
     aria-live="polite"
   >

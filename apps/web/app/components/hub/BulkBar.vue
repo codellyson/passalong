@@ -120,7 +120,7 @@ const solid = "btn sm !border-bg !bg-bg !text-fg";
 <template>
   <div
     v-if="picked.length"
-    class="fixed bottom-6 left-1/2 z-30 flex w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-3 rounded-3 border border-ink bg-ink px-4 py-3 text-on-ink md:left-[calc(50%+7.5rem)] md:w-[min(48rem,calc(100vw-17rem))]"
+    class="fixed bottom-[calc(var(--dock)+1.5rem)] left-1/2 z-30 flex w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-3 rounded-3 border border-ink bg-ink px-4 py-3 text-on-ink md:left-[calc(50%+7.5rem)] md:w-[min(48rem,calc(100vw-17rem))]"
     role="region"
     aria-label="Selected work"
     @keydown.esc="asking || step ? reset() : emit('clear')"

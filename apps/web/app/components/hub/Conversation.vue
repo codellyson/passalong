@@ -290,7 +290,7 @@ watchEffect(() => {
     </ol>
 
     <!-- The reply box, pinned to the foot of the window while the thread scrolls under it. -->
-    <form ref="composer" class="sticky bottom-0 z-10 mt-8 flex flex-col gap-2 border-t border-line bg-bg pt-3 pb-4" @submit.prevent="send">
+    <form ref="composer" class="sticky bottom-[var(--dock)] z-10 mt-8 flex flex-col gap-2 border-t border-line bg-bg pt-3 pb-4" @submit.prevent="send">
       <p v-for="f in ready" :key="f.id" class="m-0 font-ui text-sm" role="status">
         <NuxtLink :to="`/hub/g/${f.id}`">{{ f.title }}</NuxtLink> is done. Tell {{ name }}.
       </p>

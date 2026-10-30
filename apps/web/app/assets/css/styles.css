@@ -248,6 +248,8 @@
    the six below and never coral or anything near it. The sidebar is a solid ink rail in both themes; in dark it sits
    below the page rather than above it. */
 .hub-app {
+  /* The phone's bottom dock (HubDock): what fixed and sticky things at the foot stand clear of. */
+  --dock: 0px;
   --r-1: 0.125rem;
   --r-2: 0.1875rem;
   --r-3: 0.25rem;
@@ -2640,4 +2642,11 @@ button.chip-pick:focus-visible {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* Below md the hub's places are a dock along the bottom, as on a phone app. */
+@media (max-width: 47.99rem) {
+  .hub-app {
+    --dock: calc(3.5rem + env(safe-area-inset-bottom));
+  }
 }
