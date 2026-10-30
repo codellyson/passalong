@@ -405,11 +405,14 @@ change. Its README says how.
   by the model. Its reason goes on the thread as a note; when it is unsure, the author and team
   owners get `reader_unsure`, pushed and mailed, with its one question. The same reader is the
   hub's box (`/hub/new`, `POST /v1/compose`): a teammate's own words become work, filed at once as
-  theirs with no confirm step; the page offers move (`assign`) and undo (delete), and when the
+  theirs with no confirm step, and into one of the team's projects when the reader picks one
+  (`projects` in `ReaderInput`: a top-level folder's id from the list, or none; `?project=` wins and
+  the reader is not asked), linked through `POST /v1/folders/:id/guides` so who may link what stays
+  in that route; the page offers Move (project, and `assign` for group or person) and Undo
+  (delete, the words put back in the editor), and when the
   reader is unsure it files its best reading anyway, with its question on the thread and on the
   page as "Worth checking" (2026-10-29: asking first made people fill in a form for work the agent
   was there to shape). Its input is TipTap
-Its input is TipTap
   directly (`components/hub/Writer.vue`), not Nuxt UI, so it keeps the hub's look and policy:
   TipTap's injected stylesheet is off (`injectCSS: false`; the hub allows styles from its own
   stylesheet only) and its rules are `.writer` in styles.css; it renders inside `<ClientOnly>`.

@@ -88,7 +88,9 @@ a customer before a person presses Send. A holding agent receives both kinds thr
 **The reader** (`reader.ts`) sorts each request when `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` are
 set — Anthropic, OpenAI or Google through their own AI SDK packages, or any OpenAI-compatible provider
 with `READER_URL`: a title, a summary, an optional tag (`bug`, `feature`,
-`question` — description only) and the team group by name (`to: #group`), with its reason; it
+`question` — description only), the team group by name (`to: #group`) with its reason, and — in
+the box — one of the team's projects (its top-level folders) by id, judged by name and description,
+or none; `?project=` wins over its choice and the work is linked through the project route; it
 writes no sections and chooses no kind. It looks at pictures too — up to three on the message or pasted in
 the box — because a screenshot of an error is often the whole report. Its answer is used whole or not at all (`readVerdict()`), the
 customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for

@@ -5379,7 +5379,38 @@ async function composeTeam(c: Ctx, me: string, slug: string) {
           .all<{ slug: string; name: string }>()
       ).results
     : [];
-  return { team, groups };
+  // A team's projects are its top-level folders (docs/LOOP.md §0); the reader may put work in one.
+  const projects = team
+    ? (
+        await c.env.DB.prepare(
+          "SELECT id, title, description, color FROM folder WHERE team_id = ? AND parent_id = '' ORDER BY title",
+        )
+          .bind(team.id)
+          .all<ComposeProject & { description: string }>()
+      ).results
+    : [];
+  return { team, groups, projects };
+}
+
+type ComposeProject = { id: string; title: string; color: string };
+
+/**
+ * Where the box's work goes: the project it was opened from (`?project=`) wins when the writer can
+ * see it, else the one the reader chose from the team's, else none. Only what the page draws.
+ */
+async function composeProject(
+  c: Ctx,
+  me: string,
+  preset: unknown,
+  chosen: string,
+  projects: ComposeProject[],
+): Promise<ComposeProject | null> {
+  if (typeof preset === "string" && preset) {
+    const f = await visibleFolder(c, preset);
+    return f ? { id: f.id, title: f.title, color: f.color } : null;
+  }
+  const p = projects.find((x) => x.id === chosen);
+  return p ? { id: p.id, title: p.title, color: p.color } : null;
 }
 
 /** Our own screenshots written inline, as `![…](…/v1/shots/<id>)`: lifted out of the words. */
@@ -5415,7 +5446,11 @@ app.post("/v1/compose/preview", async (c) => {
   if (!readerReady(c.env))
     return err(c, 501, "Writing it down here isn't set up on this server yet.");
   const me = c.get("account");
-  const body = (await c.req.json().catch(() => ({}))) as { text?: unknown; team?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as {
+    text?: unknown;
+    team?: unknown;
+    project?: unknown;
+  };
   const raw = typeof body.text === "string" ? body.text : "";
   const shots = [...raw.matchAll(INLINE_SHOT)].map((m) => m[1] as string);
   const text = raw.replace(INLINE_SHOT, "").trim();
@@ -5423,11 +5458,13 @@ app.post("/v1/compose/preview", async (c) => {
   if (text.length < 20 && !shots.length) return c.json({ preview: null });
   const images = await shotsToRead(c, me, shots);
   const slug = typeof body.team === "string" ? body.team.trim() : "";
-  const { team, groups } = await composeTeam(c, me, slug);
+  const { team, groups, projects } = await composeTeam(c, me, slug);
   const v = await askReader(c.env, {
     subject: "",
     text: text.slice(0, 8000),
     groups,
+    // Opened from a project, that is where it goes; the reader is not asked to choose one.
+    projects: body.project ? [] : projects,
     from: "team",
     images,
   });
@@ -5438,6 +5475,7 @@ app.post("/v1/compose/preview", async (c) => {
       title: v.title,
       tag: v.tag,
       route: team && routed ? { slug: routed.slug, name: routed.name } : null,
+      project: await composeProject(c, me, body.project, v.project, projects),
       reason: v.reason,
       question: v.sure ? "" : v.question,
     },
@@ -5448,15 +5486,28 @@ app.post("/v1/compose/preview", async (c) => {
 app.get("/v1/compose/recent", async (c) => {
   const me = c.get("account");
   const { results } = await c.env.DB.prepare(
-    `SELECT g.id, g.title, g.created, COALESCE(tg.name, tg.slug, '') AS routed
+    `SELECT g.id, g.title, g.created, COALESCE(tg.name, tg.slug, ta.name, '@' || ta.handle, '') AS routed,
+            COALESCE(f.id, '') AS project_id, COALESCE(f.title, '') AS project,
+            COALESCE(f.color, '') AS project_color
        FROM guide g LEFT JOIN team_group tg ON tg.id = g.to_group_id
+       LEFT JOIN account ta ON ta.id = g.to_account_id
+       LEFT JOIN folder f ON f.id = (SELECT fg.folder_id FROM folder_guide fg WHERE fg.guide_id = g.id
+                                      ORDER BY fg.added LIMIT 1)
       WHERE g.account_id = ? AND g.client = 'hub'
         AND EXISTS (SELECT 1 FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'noted'
                      AND e.body LIKE 'Sorted by the reader%')
       ORDER BY g.created DESC LIMIT 5`,
   )
     .bind(me)
-    .all<{ id: string; title: string; created: string; routed: string }>();
+    .all<{
+      id: string;
+      title: string;
+      created: string;
+      routed: string;
+      project_id: string;
+      project: string;
+      project_color: string;
+    }>();
   return c.json({ filed: results });
 });
 
@@ -5468,6 +5519,7 @@ app.post("/v1/compose", async (c) => {
     text?: unknown;
     team?: unknown;
     pictures?: unknown;
+    project?: unknown;
   };
   const raw = typeof body.text === "string" ? body.text : "";
   // Pictures pasted into the editor travel inline; they are lifted out of the quoted words and
@@ -5483,12 +5535,13 @@ app.post("/v1/compose", async (c) => {
   if (!text && !pasted.length) return err(c, 400, "Write what you need first.");
   if (text.length > 8000) return err(c, 400, "That is over 8000 characters. Say it shorter.");
   const slug = typeof body.team === "string" ? body.team.trim() : "";
-  const { team, groups } = await composeTeam(c, me, slug);
+  const { team, groups, projects } = await composeTeam(c, me, slug);
   if (slug && !team) return err(c, 404, "You aren't in that team.");
   const verdict = await askReader(c.env, {
     subject: "",
     text,
     groups,
+    projects: body.project ? [] : projects,
     from: "team",
     images: await shotsToRead(c, me, pasted),
   });
@@ -5543,9 +5596,26 @@ app.post("/v1/compose", async (c) => {
   );
   if (!res.ok) return err(c, res.status, (await res.text()).slice(0, 300));
   const routed = verdict.route ? groups.find((g) => g.slug === verdict.route) : undefined;
+  // Into its project through the project route, so who may link what is decided in one place.
+  let project = await composeProject(c, me, body.project, verdict.project, projects);
+  if (project) {
+    const linked = await app.fetch(
+      asAccount(
+        new Request(`${origin(c)}/v1/folders/${project.id}/guides`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ guide: id }),
+        }),
+        me,
+        "hub",
+      ),
+      c.env,
+    );
+    if (!linked.ok) project = null;
+  }
   await claims.noteOn(c.env.DB, id, {
     account: me,
-    body: `Sorted by the reader${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${verdict.reason ? `: ${verdict.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
+    body: `Sorted by the reader${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${verdict.reason ? `: ${verdict.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
     at: now(),
   });
   count(c, "composed", {});
@@ -5559,6 +5629,8 @@ app.post("/v1/compose", async (c) => {
       reason: verdict.reason,
       unsure,
       groups,
+      project,
+      projects: projects.map(({ id, title, color }) => ({ id, title, color })),
     },
     201,
   );

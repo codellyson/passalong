@@ -20,6 +20,7 @@ const bug = {
   summary: "The Invoices page shows a white screen; developers need to fix it.",
   tag: "bug",
   route: "developers",
+  project: "",
   reason: "Something we built is broken.",
   sure: true,
   question: "",
@@ -29,6 +30,7 @@ const task = {
   summary: "The customer wants invoices sent to a new address.",
   tag: "",
   route: "billing",
+  project: "",
   reason: "An account change, for billing.",
   sure: true,
   question: "",
@@ -76,6 +78,32 @@ test("an answer that breaks any rule is thrown away, never repaired", () => {
   assert.equal(readVerdict({ ...bug, route: "#Developers" }, GROUPS)?.route, "developers");
   assert.equal(readVerdict({ ...bug, tag: "#Feature" }, GROUPS)?.tag, "feature");
   assert.equal(readVerdict({ ...bug, route: "" }, [])?.route, "", "no group is the whole team");
+});
+
+test("it chooses a project the way it chooses a group: from the list or not at all", () => {
+  const PROJECTS = [
+    { id: "p1billing", title: "Billing app", description: "Invoices and plans" },
+    { id: "p2site", title: "Website" },
+  ];
+  assert.equal(
+    readVerdict({ ...bug, project: "p1billing" }, GROUPS, PROJECTS)?.project,
+    "p1billing",
+  );
+  assert.equal(readVerdict({ ...bug, project: "" }, GROUPS, PROJECTS)?.project, "", "none fits");
+  assert.equal(
+    readVerdict({ ...bug, project: "Billing app" }, GROUPS, PROJECTS),
+    null,
+    "a name is not an id, and is not guessed into one",
+  );
+  assert.equal(readVerdict({ ...bug, project: "p1billing" }, GROUPS), null, "no projects given");
+  assert.equal(readVerdict(bug, GROUPS)?.project, "", "an answer without one is in no project");
+  const [, user] = readerMessages({ subject: "", text: "x", groups: [], projects: PROJECTS });
+  assert.match(user.content, /- p1billing: Billing app \(Invoices and plans\)/);
+  assert.match(user.content, /- p2site: Website\n/);
+  assert.match(
+    readerMessages({ subject: "", text: "x", groups: [] })[1].content,
+    /no projects: project is always ""/,
+  );
 });
 
 test("unsure keeps its question", () => {
@@ -228,12 +256,12 @@ test("a pasted screenshot reaches the model as a picture, and only pictures it c
   );
 });
 
-test("the reader is asked for a name, a tag and a group, never a kind or sections", () => {
+test("the reader is asked for a name, a tag, a group and a project, never a kind or sections", () => {
   for (const from of ["customer", "team"]) {
     const [system] = readerMessages({ subject: "", text: "x", groups: [], from });
     assert.match(
       system.content,
-      /"title", "summary", "tag", "route", "reason", "sure", "question"/,
+      /"title", "summary", "tag", "route", "project", "reason", "sure", "question"/,
     );
     assert.doesNotMatch(system.content, /"kind"|transfer|acceptance|reproduce|verification/i);
   }

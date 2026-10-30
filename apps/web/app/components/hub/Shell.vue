@@ -75,7 +75,8 @@ const measure = computed(() =>
       : route.path.startsWith("/hub/settings") ||
           route.path.startsWith("/hub/g/") ||
           route.path.startsWith("/hub/projects") ||
-          route.path.startsWith("/hub/support")
+          route.path.startsWith("/hub/support") ||
+          route.path === "/hub/new"
         ? "max-w-[70rem]"
         : "max-w-[54rem]",
 );

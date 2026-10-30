@@ -122,6 +122,21 @@ or agent, and when), folders inside it listed quietly, and files; a document ope
 one, and an earlier version is read-only at `?doc=…&v=…` with "Put this version back". **Work** is
 the project's register (Work · With · State · Age · one action), Open then Done recently; "New work"
 opens the box with `?project=`, which files into that project's team and links it here.
+
+## The box
+
+`/hub/new` is a writing surface: one tall editor (`HubWriter`, `class="box"`) under "What do you
+need?", with Picture, @ Person and # Group inside it and **File it** (or ⌘/Ctrl+Enter, caught
+before the editor turns it into a line break). Starter lines sit under it as quiet text while it is
+empty; a team picker shows only for someone in several teams. Beside it (under it on a phone) is
+the agent's reading, refreshed as you write from `POST /v1/compose/preview`: Work (title and tag),
+Project (mark or "Not in a project"), For (group or everyone, with the reason), Worth checking when
+unsure, what is kept as it came, and Looks like (work already on the board). Filing turns the page
+into "Filed: <title>" with Project, For and Why, and Open it, Move… (project and who it is for, in
+place) and Undo (deletes it and puts the words back in the editor), then Write another. The last
+five filings are a register below. An empty preview answering 501 means there is no reader, and the
+page says "Writing it down here isn't set up" before anyone writes. `?shared=1` (a phone's Share)
+lands with the shared words and pictures already in the editor.
 **History** merges work finished (who, person or agent, and what was shown) and document versions,
 newest first, with no counts. Work and History come from one read, `GET /v1/folders/:id/project`
 (`apps/api/src/project.ts`), which owns no table.

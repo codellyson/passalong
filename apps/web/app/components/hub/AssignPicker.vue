@@ -12,7 +12,8 @@ import { useQuery } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 
 const props = defineProps<{ id: string; team: string; to?: string }>();
-const emit = defineEmits<{ done: [] }>();
+/** `done` carries the address chosen once it is given, and nothing when it was not. */
+const emit = defineEmits<{ done: [to?: string] }>();
 const { api, onAssign, signedIn } = useHub();
 
 const detail = useQuery({
@@ -56,9 +57,9 @@ const busy = ref(false);
 async function pick(to: string) {
   if (to === (props.to ?? "") || busy.value) return emit("done");
   busy.value = true;
-  await onAssign(props.id, to);
+  const ok = await onAssign(props.id, to);
   busy.value = false;
-  emit("done");
+  emit("done", ok ? to : undefined);
 }
 </script>
 

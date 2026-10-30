@@ -2543,6 +2543,16 @@ table.rows thead th {
   margin: 0;
 }
 
+/* The box (/hub/new): the editor is the page, so it starts tall and grows with what is written. */
+.writer-shell.box .writer {
+  min-height: 11rem;
+}
+@media (min-width: 64rem) {
+  .writer-shell.box .writer {
+    min-height: 20rem;
+  }
+}
+
 /* The reply box under a customer conversation: pinned to the window's foot, so it starts short and
    scrolls inside itself before it can push the thread off the screen. */
 .writer-shell.reply .writer {

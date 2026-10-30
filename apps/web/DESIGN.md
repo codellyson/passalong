@@ -347,6 +347,34 @@ Move…), On it / For (with Give to…; "Went quiet ·" in ink when the hold lap
 (live rows with the change mark), The work, then Mark solved or Reopen at the foot. Each act opens
 in place under its fact as a menu surface set static in the panel; a refusal is said there.
 
+### The box
+"What do you need?" (`/hub/new`) is a writing surface at the 70rem measure: the heading with one
+muted line, then the editor as the page's centre — the TipTap writer in its field-white well,
+20rem tall from 1024px (11rem on a phone), Picture, @ Person and # Group as borderless ghost `sm`
+buttons inside its foot and **File it** as the one primary at its right with the shortcut beside it
+in muted text ("⌘ Enter", "Ctrl Enter" elsewhere). While it is empty, starter lines sit under it as
+quiet underlined words after "Start from", middot-separated, never pills. A team picker sits beside
+the heading only for someone in several teams. Beside the editor (19rem from 1024px, sticky; under
+it on a phone) the agent's reading is a side panel, not a chat: "The agent will file" at 550 over an
+ink rule with its state at the right in muted text (Waiting for you, Reading…, Ready to file, Not
+sure, Filing…), then uppercase-labelled facts divided by hairlines — Work (the title at 500 and its
+tag as a quiet outlined label), Project (the 3×14 mark and name, or "Not in a project"), For (the
+group, a person, or "Everyone in <team>", with the reason muted under it), Worth checking (a warn dot
+and the question) when unsure, Kept as it came, and Looks like (links to work already on the board).
+Before there is anything to read each fact says what will appear there in muted text. Values fade
+to 60% while a new reading is on its way. With no reader on the server the panel says "Writing it
+down here isn't set up" and File it is disabled. A refusal is the danger callout under the editor
+with Try again.
+
+Filed, the page becomes a confirmation in place: "Filed:" muted before the title at the headline
+size, the tag beside it, the summary under it, an ink rule, then Project · For · Why as labelled
+values in a row, Worth checking on hairlines when unsure, and Open it (primary), Move…, Undo and,
+after a hairline divider, Write another. Move… opens two static menus side by side: the team's
+projects with a check on the current one and "Not in a project" under a menu rule, and the Give to
+list. Undo deletes it in one press and puts the words back in the editor with one muted line saying
+so. Below everything, "Filed from here by you" is a short register — Work, Project 9rem, For 9rem,
+Filed 3.5rem right-aligned in tabular figures — collapsing on a phone like every register.
+
 ### Back link
 A page reached from a list leads with a muted link back to it ("Support", "Work", "All
 documents") behind the drawn back arrow (`AppIcon` `back`, 14px at the icon set's 1.75 stroke),
