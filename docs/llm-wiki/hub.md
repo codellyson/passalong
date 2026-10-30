@@ -31,20 +31,25 @@ run once by whoever starts the team: **Your team** (team name, your name and @na
 for someone meant to join instead), **Who's on it** (copy an invite link, or invite by email —
 `POST /v1/teams/:slug/invites` mails when the server has a mailer and says "Not emailed" with the
 person's own link when it does not), **Who does what** (Developers, Support and Marketing as
-editable starters, with who is in each), **What you work on** (up to five projects: name, one line,
-repo; a repo is written into a README stub as `Repo: …`), **What to know** (per project: with a repo
-the sentence to paste into the person's own agent, `repoReadmeAsk()`; without, three questions or
-pasted docs, written into the README in their own words by `readmeFromAnswers()`), **Where work
-comes in** (the Anything and Customer support addresses from `/v1/inbound`, with the phone tip) and
-**Connect your agents** (`HubConnectors`, opened on Claude Code). A page of its own rather than a
-state of Needs you, so every device and the "Finish setting up" link land on the same step
-(`?step=`). Each step is a heading, one line of why, its controls, **Continue** (offered only when
-there is something to act on) and **Skip**. Where the person got to is `account.setup` (migration
-0066, `apps/api/src/setup.ts`, `PUT /v1/me/setup`, read on `/v1/me`): steps done and skipped and
-whether it was put away; accounts already in a team when 0066 ran start with it put away, and an
-invited member is never offered it. Finishing goes to Needs you with "You're set up.", naming what
-is ready and linking each step left. Finish counts the agents step done only when an app or a CLI
-token can act as the person. The reader does not polish the three answers yet. `FirstRun` ("Get
+editable starters, with who is in each as toggle chips), **What you work on** (up to five projects:
+name, one line, repo — `folder.repo`, migration 0067 — each row's line mark showing as soon as it is
+named, in the colour it is made with), **What to know** (per project: with a repo the sentence to
+paste into the person's own agent, `readmeAsk()` naming the repo; without, three questions or pasted
+docs, all written as READMEs by Continue in the person's own words, `draftBody()`; Skip with words
+typed asks first), **Where work comes in** (the Anything and Customer support addresses from
+`/v1/inbound`, breaking only between their parts, with the phone tip) and **Connect your agents**
+(`HubConnectors`, opened on Claude Code; the last button says "Finish without an agent" when nothing
+can act as the person, which leaves that step left). A page of its own rather than a state of Needs
+you, so every device and the "Finish setting up" link land on the same step (`?step=`). Each step is
+a heading, one line of why, its controls, **Continue** (offered only when there is something to act
+on) and **Skip**. Where the person got to is `account.setup` (migration 0066,
+`apps/api/src/setup.ts`, `PUT /v1/me/setup`, read on `/v1/me`): steps done and skipped and whether
+it was put away; accounts already in a team when 0066 ran start with it put away, and an invited
+member is never offered it. `/hub`'s route middleware sends a teamless account that never touched
+setup there before Needs you renders (on the server with the session cookie on a first load; a
+redirect made during hydration left a blank page). On Needs you, setup is a short register of the
+seven steps, done ones checked, left ones linked, headed "You're set up." only when nothing is left
+and "Finish setting up" otherwise. The reader does not polish the three answers yet. `FirstRun` ("Get
 started") and the `ASKS`/`CONNECT`/`teamAsk` sentences it used are gone.
 
 ## The rail

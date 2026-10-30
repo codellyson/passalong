@@ -1,7 +1,7 @@
 /** Small project folders: readable Markdown, reusable assets, and links to actionable guides. */
 import { Hono } from "hono";
 import { ATTACH_MAX, safeName, sniffAttachment } from "./attachments.js";
-import { type Folder, findVisible, moveProblem } from "./folder-tree.js";
+import { type Folder, findVisible, moveProblem, repoOf } from "./folder-tree.js";
 import { tagList } from "./guide.js";
 import { mintOrigin } from "./hosts.js";
 import { changeWords } from "./needs.js";
@@ -46,6 +46,8 @@ const message = (
 const titleOf = (value: unknown, limit = 100) =>
   typeof value === "string" ? value.trim().slice(0, limit) : "";
 const COLORS = new Set(["", "coral", "amber", "green", "blue", "violet", "teal", "stone"]);
+const REPO_PROBLEM =
+  "Write the repo as one address, like github.com/acme/billing, in 200 characters or fewer.";
 const colorOf = (value: unknown) => (typeof value === "string" && COLORS.has(value) ? value : null);
 const assetKey = (folder: string, asset: string) => `folders/${folder}/${asset}`;
 
@@ -101,7 +103,7 @@ routes.get("/", async (c) => {
     values.push(like, like, like, like);
   }
   const { results } = await c.env.DB.prepare(
-    `SELECT f.id, f.title, f.description, f.parent_id, f.color, f.team_id, f.created_by, f.created, f.updated,
+    `SELECT f.id, f.title, f.description, f.parent_id, f.color, f.repo, f.team_id, f.created_by, f.created, f.updated,
             COALESCE(t.name, '') AS team_name, COALESCE(t.slug, '') AS team_slug,
             CASE WHEN f.created_by = ? OR EXISTS (
               SELECT 1 FROM membership owner WHERE owner.team_id = f.team_id AND owner.account_id = ? AND owner.role = 'owner'
@@ -170,6 +172,7 @@ routes.post("/", async (c) => {
       team?: unknown;
       parent?: unknown;
       color?: unknown;
+      repo?: unknown;
     }>()
     .catch(() => null);
   const title = titleOf(input?.title);
@@ -212,6 +215,8 @@ routes.post("/", async (c) => {
   }
   const color = input && Object.hasOwn(input, "color") ? colorOf(input.color) : "";
   if (color === null) return message(c, 400, "Choose a supported project colour.");
+  const repo = repoOf(input?.repo);
+  if (repo === null) return message(c, 400, REPO_PROBLEM);
   const folder: Folder = {
     id: id(),
     created_by: c.get("account"),
@@ -220,12 +225,13 @@ routes.post("/", async (c) => {
     description,
     parent_id: parentId,
     color,
+    repo,
     share_key: "",
     created: now(),
     updated: now(),
   };
   await c.env.DB.prepare(
-    "INSERT INTO folder (id, created_by, team_id, title, description, parent_id, color, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO folder (id, created_by, team_id, title, description, parent_id, color, repo, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
     .bind(
       folder.id,
@@ -235,6 +241,7 @@ routes.post("/", async (c) => {
       description,
       parentId,
       color,
+      repo,
       folder.created,
       folder.updated,
     )
@@ -250,7 +257,9 @@ routes.patch("/:folder", async (c) => {
   const input = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (
     !input ||
-    !Object.keys(input).some((key) => ["title", "description", "parent", "color"].includes(key))
+    !Object.keys(input).some((key) =>
+      ["title", "description", "parent", "color", "repo"].includes(key),
+    )
   )
     return message(c, 400, "Choose a project change.");
   if (Object.hasOwn(input, "parent") && typeof input.parent !== "string")
@@ -262,16 +271,20 @@ routes.patch("/:folder", async (c) => {
     : folder.description;
   const color = Object.hasOwn(input, "color") ? colorOf(input.color) : folder.color;
   if (color === null) return message(c, 400, "Choose a supported project colour.");
+  const repo = Object.hasOwn(input, "repo") ? repoOf(input.repo) : folder.repo;
+  if (repo === null) return message(c, 400, REPO_PROBLEM);
   const parentId = Object.hasOwn(input, "parent") ? titleOf(input.parent, 32) : folder.parent_id;
   const problem = await moveProblem(c.env.DB, c.get("account"), folder, parentId);
   if (problem) return message(c, problem.status, problem.message);
   const updated = now();
   await c.env.DB.prepare(
-    "UPDATE folder SET title = ?, description = ?, parent_id = ?, color = ?, updated = ? WHERE id = ?",
+    "UPDATE folder SET title = ?, description = ?, parent_id = ?, color = ?, repo = ?, updated = ? WHERE id = ?",
   )
-    .bind(title, description, parentId, color, updated, folder.id)
+    .bind(title, description, parentId, color, repo, updated, folder.id)
     .run();
-  return c.json({ folder: { ...folder, title, description, parent_id: parentId, color, updated } });
+  return c.json({
+    folder: { ...folder, title, description, parent_id: parentId, color, repo, updated },
+  });
 });
 
 /**

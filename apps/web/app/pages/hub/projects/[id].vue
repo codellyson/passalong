@@ -118,6 +118,10 @@ async function loadView() {
   }
 }
 
+// Declared before the watch below, which resets them: on a move here inside the hub it runs at
+// once, signed in, and reading them before their declaration threw and left the page loading.
+const readAll = ref(false);
+const confirmingDelete = ref(false);
 let shown = "";
 watch(
   [signedIn, id],
@@ -166,7 +170,6 @@ async function loadReadme() {
  * and everything from the first second-level heading on behind "Read all", so the documents
  * register is still in the first screen.
  */
-const readAll = ref(false);
 const readmeParts = computed(() => {
   let body = readme.value?.body || "";
   const first = body.match(/^\s*#\s+(.+)\n?/);
@@ -181,7 +184,9 @@ const readmeHtml = computed(() =>
   renderFolderMarkdown(readAll.value ? readmeParts.value.all : readmeParts.value.opening),
 );
 const ask = computed(() =>
-  folder.value ? readmeAsk({ id: folder.value.id, title: folder.value.title }) : "",
+  folder.value
+    ? readmeAsk({ id: folder.value.id, title: folder.value.title, repo: folder.value.repo })
+    : "",
 );
 /** "Version 3 by Bola, an agent": the one way a document's last save is said. */
 const lastEdit = (d: FolderDocument) =>
@@ -297,6 +302,7 @@ async function saveProject(form: HTMLFormElement) {
       json("PATCH", {
         title,
         description: field(form, "description").trim(),
+        repo: field(form, "repo").trim(),
         color: field(form, "color"),
       }),
     );
@@ -339,7 +345,6 @@ async function stopSharing() {
 }
 const deleting = ref(false);
 /** Delete asks in place, at the foot of Edit, saying what goes with it and what stays. */
-const confirmingDelete = ref(false);
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const deleteWhat = computed(() => {
   const parts = [
@@ -462,7 +467,10 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               <span class="min-w-0 break-words">{{ folder.title }}</span>
             </h1>
             <p v-if="folder.description" class="m-0 mt-1 max-w-[44rem] pl-[15px] font-ui text-sm text-muted">{{ folder.description }}</p>
-            <p class="m-0 mt-1 pl-[15px] font-ui text-xs text-muted">{{ space }}</p>
+            <p class="m-0 mt-1 flex flex-wrap gap-x-2 pl-[15px] font-ui text-xs text-muted">
+              <span>{{ space }}</span>
+              <template v-if="folder.repo"><span aria-hidden="true">·</span><span>Repo <span class="font-code text-fg">{{ folder.repo }}</span></span></template>
+            </p>
           </div>
           <div v-if="!editing" class="flex flex-wrap gap-2">
             <button class="btn sm" type="button" @click="editing = true">Edit</button>
@@ -479,6 +487,10 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
             <label class="flex flex-col gap-2 font-ui text-sm">
               <span class="text-muted">What it is, in a line</span>
               <input name="description" maxlength="400" :value="folder.description" />
+            </label>
+            <label class="flex flex-col gap-2 font-ui text-sm md:col-span-2">
+              <span class="text-muted">Repo <span class="text-muted">· if it has one</span></span>
+              <input name="repo" maxlength="200" class="code-field" spellcheck="false" :value="folder.repo || ''" placeholder="github.com/acme/billing" />
             </label>
           </div>
           <fieldset class="m-0 flex flex-wrap items-center gap-2 border-0 p-0 font-ui text-sm">

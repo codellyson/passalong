@@ -1353,7 +1353,8 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "With `id`, one project: its documents, files and the projects inside it. With `query`, " +
         "the projects whose name, description or any document mentions those words, each naming " +
         "its matching documents. With neither, every project you can see. Each answer's `space` " +
-        "says where it lives: private, or a named team.",
+        'says where it lives: private, or a named team; `repo` is the repo it is built from, "" ' +
+        "when it has none. Read that repo when you write or check its documents.",
       inputSchema: {
         id: z.string().optional().describe("project id"),
         query: z.string().optional().describe("words to look for in projects and their documents"),
@@ -1377,9 +1378,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       outputSchema: projectOut,
       description:
         "With no `id`, make a project, after find_projects shows none fits: a `title` and a short " +
-        "`description`. Leave out `team` for a private one, and pass a team slug only when the " +
-        "person wants it shared; `parent` puts it inside another, in that one's space. With " +
-        '`id`, change its title, description, colour or place (`parent` "" for the top level); ' +
+        "`description`, and its `repo` when it has one. Leave out `team` for a private one, and " +
+        "pass a team slug only when the person wants it shared; `parent` puts it inside another, " +
+        'in that one\'s space. With `id`, change its title, description, repo ("" for none), ' +
+        'colour or place (`parent` "" for the top level); ' +
         "its space never changes. The answer's `space` says where it is: tell the person.",
       inputSchema: {
         id: z.string().optional().describe("the project to change; leave out to make one"),
@@ -1388,12 +1390,23 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         team: z.string().optional().describe("new project only: team slug; omit for private"),
         parent: z.string().optional().describe('project to put it inside; "" for the top level'),
         color: z.enum(["", "coral", "amber", "green", "blue", "violet"]).optional(),
+        repo: z
+          .string()
+          .optional()
+          .describe('the repo it is built from, e.g. github.com/acme/billing; "" for none'),
       },
     },
-    async ({ id, title, description, team, parent, color }) => {
+    async ({ id, title, description, team, parent, color, repo }) => {
       if (!id) {
         if (!title) return failed("a new project needs a `title`");
-        return relay(call, "POST", "/v1/folders", { title, description, team, parent, color });
+        return relay(call, "POST", "/v1/folders", {
+          title,
+          description,
+          team,
+          parent,
+          color,
+          repo,
+        });
       }
       if (team) return failed("a project's space does not change; leave out `team`");
       return relay(
@@ -1401,7 +1414,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "PATCH",
         `/v1/folders/${encodeURIComponent(id)}`,
         Object.fromEntries(
-          Object.entries({ title, description, parent, color }).filter(([, v]) => v !== undefined),
+          Object.entries({ title, description, parent, color, repo }).filter(
+            ([, v]) => v !== undefined,
+          ),
         ),
       );
     },

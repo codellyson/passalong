@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { findVisible, moveProblem, wouldCycle } from "../src/folder-tree.ts";
+import { findVisible, moveProblem, repoOf, wouldCycle } from "../src/folder-tree.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 const T0 = "2026-10-10T00:00:00.000Z";
@@ -108,4 +108,18 @@ test("a team folder is visible to every member and to nobody else", async () => 
   assert.equal(await findVisible(db, "me", "theirs"), null);
   db.raw.exec("DELETE FROM membership WHERE account_id = 'them'");
   assert.equal(await findVisible(db, "them", "shared"), null);
+});
+
+test("a project's repo is a column: absent is none, a token is kept trimmed, anything else is refused", async () => {
+  const db = world();
+  assert.equal((await at(db, "root")).repo, "");
+  db.raw
+    .prepare("UPDATE folder SET repo = ? WHERE id = 'root'")
+    .run(repoOf("  github.com/acme/billing "));
+  assert.equal((await at(db, "root")).repo, "github.com/acme/billing");
+  assert.equal(repoOf(undefined), "");
+  assert.equal(repoOf(""), "");
+  assert.equal(repoOf("git hub"), null);
+  assert.equal(repoOf("x".repeat(201)), null);
+  assert.equal(repoOf(42), null);
 });

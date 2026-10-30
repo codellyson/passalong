@@ -412,21 +412,29 @@ danger callout with Try again, and an empty register says what will appear and h
 First-run setup (`/hub/start`, 70rem) is a calm page, never a modal: "Set up <team>" at the headline
 size over one muted line ("2 of 7 done · skip anything, it's saved as you go") with **Finish later**
 as a muted link at its right, then a 13rem step rail beside a 44rem step column. The rail is an
-ordered side list over a 1px hairline at its left edge: each step a 14px row with its number in muted
+ordered side list over a 1px hairline at its left edge: each step a 32px row with its number in muted
 tabular figures, or an ink check once done; the current step is ink at 500 with the 2px ink bar
 beside it (the Chosen Rule); a skipped step adds "Skipped" in muted text. Under 768px the rail is a
-row over a hairline that scrolls sideways, the bar under the current step, which is kept in view.
-Each step is its name at the title size, one muted line saying why, its controls (fields, settings
-rows, a register of what is already made with ink checks), then a hairline and **Continue** as the one
-primary with **Skip** beside it — Continue is disabled until there is something to act on, and the
-last step says **Finish**. A note that a step needs another is a muted line beside them. Per project,
-what to know is a block divided by hairlines: the 3×14 mark and name, then either the sentence for
-the person's agent in a field-white well with Copy as a flush `sm` button at its right, or two chosen
-chips (Answer three questions, Paste what you have) over the questions. Long machine strings (the
-inbound addresses) wrap inside their well rather than scroll. Done, Needs you leads with "You're set
-up." over a muted line, "Ready: Northwind, invites, 2 projects… Left: connect an agent" with each step
-left a link, and Continue setup and Dismiss as `sm` buttons; until every step is done or it is
-dismissed, the same line reads "Finish setting up". No celebration, no progress bar, no coral.
+row of 40px steps over a hairline that scrolls sideways, snapping each step to its left edge, fading
+out at its right edge so no step reads as a fragment, the bar under the current step, which is kept
+in view. Each step is its name at the title size, one muted line saying why, its controls (fields,
+settings rows, a register of what is already made with ink checks), then a hairline and **Continue**
+as the one primary with **Skip** beside it. Continue is the step's act and is disabled until there is
+something to act on; on the last step it says **Finish**, or **Finish without an agent** when nothing
+can act as the person yet. Skipping what someone typed asks in place, in that same strip ("Skip and
+lose what you wrote for Website?", **Skip and lose it** in outline danger, **Keep writing**). A
+project row's 3×14 mark appears as soon as it has a name, in the tone it keeps. Choosing who is in a
+group is a row of toggle chips (`aria-pressed`, ink when chosen). Per project, what to know is a block
+divided by hairlines: the 3×14 mark and name, then either the sentence for the person's agent in a
+field-white well with Copy as a flush `sm` button at its right, or two chosen chips (Answer three
+questions, Paste what you have) over full-width answers that grow with what is typed (no resize
+handle). A field for a machine string (a repo, an invite link) shows its value in mono and its hint in
+the sans. The inbound addresses wrap only between their parts, after each `+` and before the `@`.
+On Needs you, setup is the seven steps as a short register in two columns over hairlines: done steps
+in ink with a check and what they made where cheap ("Your team · Northwind", "2 projects"), steps
+left as muted links with an open mark. Its heading is "You're set up." only when nothing is left, and
+"Finish setting up" with how many steps are left otherwise, with Continue setup and Dismiss as `sm`
+buttons. No celebration, no progress bar, no coral.
 
 ### Back link
 A page reached from a list leads with a muted link back to it ("Support", "Work", "All

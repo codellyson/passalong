@@ -18,12 +18,16 @@ import { useQuery } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 import { projectsFrom } from "~/utils/projects";
 import {
+  draftBody,
+  type KnowDraft,
   NO_SETUP,
-  repoStub,
+  newDraft,
   resumeAt,
   type SetupState,
   type SetupStep,
   STEPS,
+  toneForName,
+  typed,
 } from "~/utils/setup";
 
 usePage({
@@ -81,8 +85,15 @@ async function mark(as: "done" | "skipped") {
   if (next) await router.push({ query: { step: next.id } });
   else await navigateTo({ path: "/hub", query: { setup: "done" } });
 }
+/** Skip on "What to know" with words typed asks first, naming whose words would go. */
+const skipAsk = ref(false);
 async function skip() {
   problem.value = "";
+  if (step.value === "know" && unsaved.value.length && !skipAsk.value) {
+    skipAsk.value = true;
+    return;
+  }
+  skipAsk.value = false;
   try {
     await mark("skipped");
   } catch (e) {
@@ -91,6 +102,7 @@ async function skip() {
 }
 watch(step, () => {
   problem.value = "";
+  skipAsk.value = false;
   if (import.meta.client) window.scrollTo({ top: 0 });
 });
 /** On a phone the steps are a row that scrolls sideways: keep the current one in view in it. */
@@ -98,7 +110,7 @@ const rail = ref<HTMLElement | null>(null);
 watch([rail, step], () =>
   nextTick(() => {
     const at = rail.value?.querySelector<HTMLElement>('[aria-current="step"]');
-    if (rail.value && at) rail.value.scrollLeft = at.offsetLeft - 16;
+    if (rail.value && at) rail.value.scrollLeft = at.parentElement?.offsetLeft ?? 0;
   }),
 );
 
@@ -271,7 +283,10 @@ const projects = computed(() => {
   );
   return projectsFrom(folders.value)
     .filter((p) => ids.has(p.id))
-    .map((p) => ({ ...p, color: folders.value.find((f) => f.id === p.id)?.color || "" }));
+    .map((p) => {
+      const f = folders.value.find((x) => x.id === p.id);
+      return { ...p, color: f?.color || "", repo: f?.repo || "" };
+    });
 });
 const MAX = 5;
 const rows = ref([{ title: "", line: "", repo: "" }]);
@@ -281,29 +296,52 @@ const projectsReady = computed(() => projects.value.length > 0 || filled.value.l
 const saveProjects = () =>
   act(async () => {
     for (const r of filled.value) {
-      const got = await api<{ folder: { id: string } }>(
+      await api(
         "/v1/folders",
-        json("POST", { title: r.title.trim(), description: r.line.trim(), team: slug.value }),
+        json("POST", {
+          title: r.title.trim(),
+          description: r.line.trim(),
+          repo: r.repo.trim(),
+          team: slug.value,
+          // The colour its mark showed while it was being named, so it keeps it.
+          color: toneForName(r.title),
+        }),
       );
-      // The repo is written where the agent asked to fill the README will read it first.
-      if (got && r.repo.trim())
-        await api(
-          `/v1/folders/${got.folder.id}/documents`,
-          json("POST", {
-            name: "README",
-            body: repoStub(r.title.trim(), r.line.trim(), r.repo.trim()),
-          }),
-        );
     }
     rows.value = [{ title: "", line: "", repo: "" }];
     await projectsQ.refetch();
   });
 
 // ---- 5. What to know ------------------------------------------------------------------------
-const handled = ref(new Set<string>());
-const onHandled = (id: string) => {
-  handled.value = new Set(handled.value).add(id);
+/** What the person typed per project, kept here so Continue writes them all and Skip can ask. */
+const drafts = reactive<Record<string, KnowDraft>>({});
+const draftOf = (id: string) => {
+  drafts[id] ??= newDraft();
+  return drafts[id];
 };
+/** Projects whose typed words have not been written yet. */
+const unsaved = computed(() =>
+  projects.value.filter((p) => drafts[p.id] && !drafts[p.id]!.written && typed(drafts[p.id]!)),
+);
+const knowReady = computed(() =>
+  projects.value.some((p) => {
+    const d = drafts[p.id];
+    return Boolean(d && (d.copied || d.written || typed(d)));
+  }),
+);
+const saveKnow = () =>
+  act(async () => {
+    for (const p of unsaved.value) {
+      const d = drafts[p.id]!;
+      await api(
+        `/v1/folders/${p.id}/documents`,
+        json("POST", { name: "README", body: draftBody(p.title, d, p.description) }),
+      );
+      d.written = true;
+    }
+  });
+const list = (xs: string[]) =>
+  xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
 
 // ---- 6. Where work comes in -----------------------------------------------------------------
 const inbound = ref<{
@@ -372,7 +410,7 @@ const ready = computed<Record<SetupStep, boolean>>(() => ({
   people: Boolean(slug.value) && peopleReady.value,
   groups: Boolean(slug.value) && groupsReady.value,
   projects: projectsReady.value,
-  know: handled.value.size > 0,
+  know: knowReady.value,
   inbox: Boolean(inbound.value?.addresses),
   agents: true,
 }));
@@ -382,10 +420,13 @@ const onContinue = () =>
     people: savePeople,
     groups: saveGroups,
     projects: saveProjects,
-    know: () => act(async () => {}),
+    know: saveKnow,
     inbox: saveInbox,
     agents: finish,
   })[step.value]();
+
+/** An address in the parts it may break between: after each `+`, and before the `@`. */
+const unitsOf = (a: string) => a.split(/(?<=\+)|(?=@)/);
 
 const stateOf = (id: SetupStep) =>
   setup.value.done.includes(id) ? "done" : setup.value.skipped.includes(id) ? "skipped" : "";
@@ -416,12 +457,12 @@ const label = "font-ui text-sm font-medium text-fg";
       <div v-else class="grid grid-cols-[minmax(0,1fr)] items-start gap-x-12 gap-y-6 md:grid-cols-[13rem_minmax(0,1fr)]">
         <!-- The steps: a side list from 768px, a row that scrolls sideways on a phone. -->
         <nav aria-label="Setup steps" class="min-w-0 md:sticky md:top-6">
-          <ol ref="rail" class="relative m-0 flex list-none gap-1 overflow-x-auto border-b border-line p-0 md:flex-col md:gap-0 md:overflow-visible md:border-b-0 md:border-l">
-            <li v-for="(s, i) in STEPS" :key="s.id" class="shrink-0">
+          <ol ref="rail" class="setup-rail relative m-0 flex snap-x snap-mandatory list-none gap-1 overflow-x-auto border-b border-line p-0 pr-8 md:snap-none md:flex-col md:gap-0 md:overflow-visible md:border-b-0 md:border-l md:pr-0">
+            <li v-for="(s, i) in STEPS" :key="s.id" class="shrink-0 snap-start">
               <NuxtLink
                 :to="{ query: { step: s.id } }"
                 :aria-current="s.id === step ? 'step' : undefined"
-                class="relative flex items-center gap-2 px-2 py-2 font-ui text-sm whitespace-nowrap no-underline md:py-1.5 md:pl-4"
+                class="relative flex h-10 items-center gap-2 px-2 font-ui text-sm whitespace-nowrap no-underline md:h-8 md:pl-4"
                 :class="s.id === step ? 'font-medium text-fg' : stateOf(s.id) === 'done' ? 'text-fg hover:underline' : 'text-muted hover:text-fg'"
               >
                 <span
@@ -490,7 +531,7 @@ const label = "font-ui text-sm font-medium text-fg";
                 </div>
               </HubSettingRow>
               <HubSettingRow label="Or by email" hint="Separate addresses with commas or new lines." for="setup-emails">
-                <textarea id="setup-emails" v-model="emails" rows="3" class="w-full" :disabled="!slug" placeholder="kemi@acme.com, bola@acme.com" />
+                <textarea id="setup-emails" v-model="emails" class="min-h-[4.5rem] w-full resize-none [field-sizing:content]" :disabled="!slug" placeholder="kemi@acme.com, bola@acme.com" />
                 <div>
                   <button class="btn sm" type="button" :disabled="busy || !addresses.length" @click="sendNow">Send invites</button>
                 </div>
@@ -532,9 +573,14 @@ const label = "font-ui text-sm font-medium text-fg";
                   </div>
                   <div v-if="s.on && members.length" class="flex flex-wrap items-center gap-2 pl-7">
                     <span class="font-ui text-xs text-muted">Who's in it</span>
-                    <label v-for="m in members" :key="m.handle" class="chip-pick font-ui text-sm">
-                      <input type="checkbox" :checked="s.people.includes(m.handle)" @change="togglePerson(s, m.handle)">{{ memberName(m) }}
-                    </label>
+                    <button
+                      v-for="m in members"
+                      :key="m.handle"
+                      type="button"
+                      class="chip-pick font-ui text-sm"
+                      :aria-pressed="s.people.includes(m.handle)"
+                      @click="togglePerson(s, m.handle)"
+                    >{{ memberName(m) }}</button>
                   </div>
                 </li>
               </ul>
@@ -564,7 +610,11 @@ const label = "font-ui text-sm font-medium text-fg";
                 <fieldset v-for="(r, i) in rows.slice(0, room)" :key="i" class="m-0 grid gap-3 border-0 border-b border-line px-0 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
                   <legend class="sr-only">Project {{ projects.length + i + 1 }}</legend>
                   <label class="flex flex-col gap-2 font-ui text-sm">
-                    <span class="font-medium text-fg">Name</span>
+                    <span class="flex items-center gap-2 font-medium text-fg">
+                      <!-- Its line colour from the moment it has a name, kept when it is made. -->
+                      <span v-if="r.title.trim()" class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="toneForName(r.title)" aria-hidden="true" />
+                      Name
+                    </span>
                     <input v-model="r.title" maxlength="100" :placeholder="i ? 'Website' : 'Billing app'">
                   </label>
                   <label class="flex flex-col gap-2 font-ui text-sm">
@@ -573,7 +623,7 @@ const label = "font-ui text-sm font-medium text-fg";
                   </label>
                   <label class="flex flex-col gap-2 font-ui text-sm md:col-span-2">
                     <span class="font-medium text-fg">Repo <span class="font-normal text-muted">· if it has one</span></span>
-                    <input v-model="r.repo" class="font-code text-sm" spellcheck="false" :placeholder="i ? 'Leave empty if it has none' : 'github.com/acme/billing'">
+                    <input v-model="r.repo" class="code-field" spellcheck="false" maxlength="200" :placeholder="i ? 'Leave empty if it has none' : 'github.com/acme/billing'">
                   </label>
                 </fieldset>
                 <div class="mt-3">
@@ -592,7 +642,7 @@ const label = "font-ui text-sm font-medium text-fg";
               Each project's README says what it is, who uses it and the words you use. Every person and agent who picks up its work reads it first.
             </p>
             <div class="mt-6 flex flex-col">
-              <HubSetupKnow v-for="p in projects" :key="p.id" :project="p" @handled="onHandled(p.id)" />
+              <HubSetupKnow v-for="p in projects" :key="p.id" :project="p" :draft="draftOf(p.id)" />
               <p v-if="!projects.length" class="m-0 border-t border-line py-3 font-ui text-sm text-muted">
                 No projects yet. <NuxtLink :to="{ query: { step: 'projects' } }">Add one</NuxtLink> first, then come back.
               </p>
@@ -619,7 +669,8 @@ const label = "font-ui text-sm font-medium text-fg";
               <template v-else>
                 <HubSettingRow v-for="k in inboxRows" :key="k.id" :label="k.label" :hint="k.hint">
                   <div class="flex flex-wrap items-center gap-2">
-                    <code class="flex min-h-[var(--control-h)] min-w-0 flex-1 basis-64 items-center rounded-2 border border-line-strong bg-field px-3 py-2 font-code text-sm break-all text-fg">{{ k.value }}</code>
+                    <!-- Breaks only between its parts: after each +, and before the @. -->
+                    <code class="block min-h-[var(--control-h)] min-w-0 flex-1 basis-64 rounded-2 border border-line-strong bg-field px-3 py-2 font-code text-sm leading-6 text-fg"><template v-for="(u, n) in unitsOf(k.value)" :key="n"><wbr v-if="n">{{ u }}</template></code>
                     <button class="btn" type="button" @click="copy(k.value, $event.currentTarget)">
                       <AppIcon name="copy" /><span data-label>Copy</span>
                     </button>
@@ -649,13 +700,19 @@ const label = "font-ui text-sm font-medium text-fg";
             <p class="m-0 font-ui text-sm text-danger">{{ problem }}</p>
           </div>
 
-          <div class="mt-8 flex flex-wrap items-center gap-3 border-t border-line pt-5">
+          <!-- Skipping words someone typed asks first, in place. -->
+          <div v-if="skipAsk" class="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-5" role="alert">
+            <p class="m-0 min-w-0 grow basis-64 font-ui text-sm">Skip and lose what you wrote for {{ list(unsaved.map((p) => p.title)) }}?</p>
+            <button class="btn outline danger" type="button" @click="skip">Skip and lose it</button>
+            <button class="btn" type="button" @click="skipAsk = false">Keep writing</button>
+          </div>
+          <div v-else class="mt-8 flex flex-wrap items-center gap-3 border-t border-line pt-5">
             <button class="btn primary" type="button" :disabled="busy || !ready[step]" @click="onContinue">
-              {{ busy ? "Saving…" : step === "agents" ? "Finish" : "Continue" }}
+              {{ busy ? "Saving…" : step !== "agents" ? "Continue" : connected ? "Finish" : "Finish without an agent" }}
             </button>
             <button class="btn" type="button" :disabled="busy" @click="skip">Skip</button>
             <span v-if="step === 'agents' && !connected" class="font-ui text-sm text-muted">
-              Nothing is connected yet, so this stays on your list.
+              Connect one any time from Settings, Agents.
             </span>
             <span v-if="(step === 'people' || step === 'groups') && !slug" class="font-ui text-sm text-muted">
               This needs a team. <NuxtLink :to="{ query: { step: 'team' } }">Name it first</NuxtLink>.

@@ -14,11 +14,24 @@ export type Folder = {
   description: string;
   parent_id: string;
   color: string;
+  /** The repo it is built from, as the person wrote it ("github.com/acme/billing"); '' for none. */
+  repo: string;
   /** The secret in the folder's share link; empty when it is not shared (migration 0048). */
   share_key: string;
   created: string;
   updated: string;
 };
+
+/**
+ * A repo as a person or agent wrote it: trimmed, one token, at most 200 characters; '' clears it.
+ * `null` when it cannot be one (spaces inside, too long, not a string), so the route says so.
+ */
+export function repoOf(value: unknown): string | null {
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string") return null;
+  const repo = value.trim();
+  return repo.length > 200 || /\s/.test(repo) ? null : repo;
+}
 
 /** A personal folder is its creator's alone; a team folder is every current member's. */
 export async function findVisible(db: Db, account: string, folderId: string) {

@@ -27,6 +27,8 @@ export interface ProjectFolder {
   id: string;
   title: string;
   color: string;
+  /** The repo it is built from; '' for none. */
+  repo?: string;
   parent_id: string | null;
   /** The team it belongs to; '' for one of your own. */
   team_slug?: string;

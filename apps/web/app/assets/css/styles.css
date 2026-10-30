@@ -2598,14 +2598,40 @@ table.rows thead th {
   opacity: 0;
   pointer-events: none;
 }
-.chip-pick:has(input:checked) {
+/* The same chip as a toggle button, for picking several (who is in a group): aria-pressed says it. */
+button.chip-pick {
+  background: transparent;
+  font: inherit;
+}
+.chip-pick:has(input:checked),
+.chip-pick[aria-pressed="true"] {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--on-ink);
 }
-.chip-pick:has(input:focus-visible) {
+.chip-pick:has(input:focus-visible),
+button.chip-pick:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* A field that takes a machine string (a repo): the value in mono, the hint in the sans, because a
+   placeholder is words to a person and not a value yet. The invite paste is the same. */
+.code-field {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+}
+.code-field::placeholder,
+.invite-paste input::placeholder {
+  font-family: var(--font-sans);
+}
+
+/* Setup's steps on a phone: a row that scrolls sideways, fading at its right edge to say it goes on. */
+@media (max-width: 767px) {
+  .setup-rail {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+    scrollbar-width: none;
+  }
 }
 
 /* A register's column labels in Settings: named once over the top, uppercase at the label size. */

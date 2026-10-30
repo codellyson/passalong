@@ -13,15 +13,15 @@ export interface SetupState {
   dismissed: boolean;
 }
 
-/** In order. `left` is how a step is named in "what's left" on Needs you. */
-export const STEPS: { id: SetupStep; name: string; left: string }[] = [
-  { id: "team", name: "Your team", left: "name your team" },
-  { id: "people", name: "Who's on it", left: "invite your team" },
-  { id: "groups", name: "Who does what", left: "make groups" },
-  { id: "projects", name: "What you work on", left: "add projects" },
-  { id: "know", name: "What to know", left: "write each project's README" },
-  { id: "inbox", name: "Where work comes in", left: "get your addresses" },
-  { id: "agents", name: "Connect your agents", left: "connect an agent" },
+/** In order. */
+export const STEPS: { id: SetupStep; name: string }[] = [
+  { id: "team", name: "Your team" },
+  { id: "people", name: "Who's on it" },
+  { id: "groups", name: "Who does what" },
+  { id: "projects", name: "What you work on" },
+  { id: "know", name: "What to know" },
+  { id: "inbox", name: "Where work comes in" },
+  { id: "agents", name: "Connect your agents" },
 ];
 
 export const NO_SETUP: SetupState = { done: [], skipped: [], dismissed: false };
@@ -38,15 +38,6 @@ export const answered = (s: SetupState) =>
 
 /** Steps not done yet, in order: what "Finish setting up" names. */
 export const leftOf = (s: SetupState) => STEPS.filter((x) => !s.done.includes(x.id));
-
-/** The README a project with a repo starts with, so the agent asked to fill it finds the repo. */
-export const repoStub = (title: string, line: string, repo: string) =>
-  `# ${title}\n\n${line ? `${line}\n\n` : ""}Repo: ${repo}\n`;
-
-/** The repo a README names on its own `Repo:` line, or "". */
-export function repoOf(body: string): string {
-  return body.match(/^Repo:\s*(\S+)\s*$/m)?.[1] ?? "";
-}
 
 /**
  * A README from the three questions, in the person's own words: each answer under its heading, the
@@ -66,4 +57,65 @@ export function readmeFromAnswers(
   if (a.who.trim()) parts.push(`## Who uses it\n\n${a.who.trim()}`);
   if (words.length) parts.push(`## Words we use\n\n${words.map((w) => `- ${w}`).join("\n")}`);
   return `${parts.join("\n\n")}\n`;
+}
+
+/** What a person has typed for one project's README in setup, before it is saved. */
+export interface KnowDraft {
+  how: "questions" | "paste";
+  what: string;
+  who: string;
+  words: string;
+  pasted: string;
+  /** The repo prompt was copied for their agent. */
+  copied: boolean;
+  /** The project has a README already, by anyone. */
+  written: boolean;
+}
+export const newDraft = (): KnowDraft => ({
+  how: "questions",
+  what: "",
+  who: "",
+  words: "",
+  pasted: "",
+  copied: false,
+  written: false,
+});
+
+/** Whether the way they chose holds anything to write. */
+export const typed = (d: KnowDraft) =>
+  d.how === "paste"
+    ? Boolean(d.pasted.trim())
+    : Boolean(d.what.trim() || d.who.trim() || d.words.trim());
+
+/**
+ * The README a draft writes, in the person's words; "" when there is nothing to write. "What is it?"
+ * left empty opens with the line they gave the project, which is their words too.
+ */
+export function draftBody(title: string, d: KnowDraft, line = ""): string {
+  if (!typed(d)) return "";
+  if (d.how === "paste") return `${d.pasted.trim()}\n`;
+  return readmeFromAnswers(title, { ...d, what: d.what.trim() || line });
+}
+
+/** Someone with no team who never started or put away setup: they set up before anything else. */
+export const needsSetup = (
+  me: { teams: unknown[]; setup?: SetupState } | null | undefined,
+): boolean =>
+  Boolean(
+    me?.setup &&
+      !me.teams.length &&
+      !me.setup.dismissed &&
+      !me.setup.done.length &&
+      !me.setup.skipped.length,
+  );
+
+/**
+ * A project's line colour picked as soon as it is named, and sent with it, so the mark shown while
+ * typing is the one it keeps. Never coral (DESIGN.md, The Line Colour Rule).
+ */
+const TONES = ["amber", "green", "blue", "violet", "teal", "stone"] as const;
+export function toneForName(name: string): (typeof TONES)[number] {
+  let h = 0;
+  for (const ch of name.trim().toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return TONES[h % TONES.length]!;
 }

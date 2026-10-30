@@ -17,9 +17,31 @@ import { age, toneOf } from "~/utils/projects";
 
 // Inline: definePageMeta is lifted out of this script and cannot see its variables.
 definePageMeta({
-  middleware: (to) => {
+  middleware: async (to) => {
     if (["tab", "q", "follows", "done"].some((k) => k in to.query))
       return navigateTo({ path: "/hub/work", query: to.query }, { replace: true });
+    // Someone with no team who never touched setup sets up before Needs you renders, so the
+    // register never flashes on the way (pages/hub/start.vue). On a first load the server asks,
+    // with the session cookie the request carried, and answers with a redirect; a redirect made
+    // while the client hydrates left a blank page. Moving here inside the app, the client asks, and
+    // the answer is cached as the shell's own `me`.
+    type MeLike = Parameters<typeof needsSetup>[0];
+    const app = useNuxtApp();
+    let me: MeLike = null;
+    if (import.meta.server) {
+      me = await useRequestFetch()<MeLike>("/v1/me").catch(() => null);
+    } else if (!app.isHydrating) {
+      const hub = useHub();
+      hub.adoptToken();
+      me = await app.$queryClient
+        .fetchQuery({
+          queryKey: hubKeys.me,
+          queryFn: () => hub.api<MeLike>("/v1/me"),
+          staleTime: 30_000,
+        })
+        .catch(() => null);
+    }
+    if (needsSetup(me)) return navigateTo("/hub/start", { replace: true });
   },
 });
 
@@ -31,18 +53,6 @@ usePage({
 
 const { data, needsQ, readAll, onReopen, refresh } = useHub();
 const noTeam = computed(() => Boolean(data.value.me) && !data.value.me?.teams.length);
-// Someone with no team who has never started setup is not looking at a register yet: they set up
-// first (pages/hub/start.vue). Once started, skipped or put away, Needs you is theirs.
-watch(
-  () => data.value.me,
-  (me) => {
-    const s = me?.setup;
-    if (me && s && !me.teams.length && !s.dismissed && !s.done.length && !s.skipped.length)
-      navigateTo("/hub/start", { replace: true });
-  },
-  { immediate: true },
-);
-
 const needs = computed<Needs | null>(() => needsQ.data.value ?? null);
 const rows = computed(() => needs.value?.rows ?? []);
 const now = ref(Date.now());

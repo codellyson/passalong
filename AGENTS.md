@@ -183,7 +183,8 @@ change. Its README says how.
     `conversationOn()` must match every pattern a body can carry a stored thing by (`/v1/shots/` and
     `/v1/attachments/`), or the author's next edit releases whatever the missing one named.
   - `src/folders.ts` — project folders (migrations 0046 and 0047; **projects** to people and
-    agents), nestable at any depth within one private or team space, with optional grouping colors:
+    agents), nestable at any depth within one private or team space, with optional grouping colors
+    and the repo a project is built from (`folder.repo`, migration 0067):
     Markdown documents, private R2 assets, and links to work. A folder's files belong to the folder,
     never to linked work; removing work must not remove a tutorial's script or screens. Personal
     folders belong to their creator; every current team member may read and edit a team folder, and
@@ -746,8 +747,11 @@ change. Its README says how.
   `/v1/me`), so it resumes on any device. Accounts already in a team when 0066 ran start with it put
   away, and someone only invited is never offered it: setup is for a team's starter. Invite by email
   says "Not emailed" when the server has no mailer, with that person's own link to copy, rather than
-  pretending. A repo is written into the project's README as a `Repo:` line, because that is what the
-  agent asked to fill the README reads first; Passalong never runs that agent.
+  pretending. A project's repo is `folder.repo` (migration 0067, `repoOf()` in folder-tree.ts), set
+  by POST and PATCH `/v1/folders` and carried by both MCP servers' `save_project`/`find_projects`
+  through those routes; the README prompt names it for the person's own agent, which Passalong never
+  runs. `/hub` sends a teamless, never-started account to setup from its route middleware — on the
+  server, with the session cookie, on a first load — so Needs you never renders on the way.
 - **Needs you (`GET /v1/needs`, `apps/api/src/needs.ts`) is the hub's first screen, ranked on the
   server.** What waits on the signed-in person, each piece of work once under its most pressing
   reason, in this order: a customer waiting on us (no `answered` since they last wrote; longest

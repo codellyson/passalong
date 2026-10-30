@@ -4,6 +4,8 @@ export interface Folder {
   description: string;
   parent_id: string;
   color: string;
+  /** The repo it is built from (migration 0067); '' for none. */
+  repo?: string;
   team_id: string;
   team_slug?: string;
   team_name?: string;

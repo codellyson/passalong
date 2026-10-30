@@ -19,10 +19,9 @@ export const projectAsk = (project: { id: string; title: string; team?: string }
 export const newProjectAsk = (team?: string) =>
   `Make a Passalong project for <the product or repo>${team ? ` for the team ${team}` : ""}, and write its README: what it is, who uses it, the words we use for things and how it is built.`;
 
-/** A project's first documents, written by an agent that can read the product. */
-export const readmeAsk = (project: { id: string; title: string }) =>
-  `Write the README for the Passalong project "${project.title}" (${project.id}): what the product is, who uses it, the words we use for things and how it is built. Then add a page for each area someone working on it needs to know, and a Log page.`;
-
-/** A project's first documents from its repo, for the agent that can read it (first-run setup). */
-export const repoReadmeAsk = (project: { id: string; title: string; repo: string }) =>
-  `Read the repo ${project.repo} and write the README for the Passalong project "${project.title}" (${project.id}): what the product is, who uses it, the words we use for things and how it is built. Then add a page for each area someone working on it needs to know, and a Log page of what changed.`;
+/**
+ * A project's first documents, written by an agent that can read the product: from its repo when it
+ * has one (`folder.repo`), which the agent is told to read first.
+ */
+export const readmeAsk = (project: { id: string; title: string; repo?: string }) =>
+  `${project.repo ? `Read the repo ${project.repo} and write` : "Write"} the README for the Passalong project "${project.title}" (${project.id}): what the product is, who uses it, the words we use for things and how it is built. Then add a page for each area someone working on it needs to know, and a Log page of what changed.`;

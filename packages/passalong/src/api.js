@@ -262,8 +262,15 @@ export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 
 export const folders = (scope = "all", query = "") => call(`/v1/folders${q({ scope, q: query })}`);
-export const createFolder = (title, description = "", team = "", parent = "", color = "") =>
-  call("/v1/folders", { method: "POST", body: { title, description, team, parent, color } });
+export const createFolder = (
+  title,
+  description = "",
+  team = "",
+  parent = "",
+  color = "",
+  repo = "",
+) =>
+  call("/v1/folders", { method: "POST", body: { title, description, team, parent, color, repo } });
 export const folder = (id) => call(`/v1/folders/${encodeURIComponent(id)}`);
 export const updateFolder = (id, changes) =>
   call(`/v1/folders/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });

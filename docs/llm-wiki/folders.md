@@ -16,6 +16,10 @@ on is work (create_work)"), and `packages/passalong/test/folder-rule.test.js` ho
 ("private …" or "team …"), and agents are told to report that — an agent once told a person a folder
 was in the team space when it had made it private.
 
+A project carries the repo it is built from (`repo`, migration 0067, '' for none — a marketing project
+has none), set by `save_project` and the hub's Edit and setup forms through POST/PATCH `/v1/folders`,
+and returned by `find_projects`; an agent writing or checking its documents reads that repo.
+
 What an agent learns goes into a project's documents, not into a piece of work for one person: the
 capture skill and the server instructions say to read the README and the page for that area, update
 the page that already covers it, and add a line to its Log.

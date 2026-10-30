@@ -253,6 +253,10 @@ export function openapi(origin: string) {
                     title: { type: "string" },
                     description: { type: "string" },
                     team: { type: "string", description: "Team slug; omit for a private folder." },
+                    repo: {
+                      type: "string",
+                      description: "The repo it is built from; omit for none.",
+                    },
                   },
                 },
               },
