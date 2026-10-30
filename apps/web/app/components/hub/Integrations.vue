@@ -7,6 +7,8 @@
   overwhelming already, and four sources' instructions at once would be the worst of it.
 -->
 <script setup lang="ts">
+import { age } from "~/utils/projects";
+
 interface Sender {
   sender: string;
   state: "pending" | "allowed" | "blocked";
@@ -33,12 +35,12 @@ const ROWS = [
   {
     id: "new" as const,
     label: "Anything",
-    note: "the agent sorts it and reads its pictures; on a phone, share a screenshot to Mail and send it here",
+    note: "The agent sorts it and reads its pictures. On a phone, share a screenshot to Mail and send it here.",
   },
   {
     id: "support" as const,
     label: "Customer support",
-    note: "anyone can write; they get a tracking number, and you answer from the work",
+    note: "Anyone can write. They get a tracking number, and you answer from the work.",
   },
 ];
 const busy = ref("");
@@ -69,7 +71,7 @@ const shown = computed(() =>
           {
             id: "hook",
             label: "Webhook URL",
-            note: "the agent sorts what arrives",
+            note: "The agent sorts what arrives.",
             value: hook.value,
           },
         ],
@@ -77,13 +79,22 @@ const shown = computed(() =>
 /** Replacing or removing the addresses breaks whatever uses them, so it asks in place first. */
 const confirming = ref<"" | "new" | "off">("");
 
-const pending = computed(() => state.value?.senders.filter((s) => s.state === "pending") ?? []);
-const decided = computed(() => state.value?.senders.filter((s) => s.state !== "pending") ?? []);
+/** Asking first, then the ones already decided: a pending sender is the only row that waits on you. */
+const senders = computed(() =>
+  [...(state.value?.senders ?? [])].sort(
+    (a, b) => Number(b.state === "pending") - Number(a.state === "pending"),
+  ),
+);
+const STATE_WORD = { pending: "Asking", allowed: "Allowed", blocked: "Blocked" } as const;
 
 async function load() {
   state.value = await api("/v1/inbound");
 }
-onMounted(() => load().catch((e) => (problem.value = (e as Error).message)));
+const retry = () => {
+  problem.value = "";
+  load().catch((e) => (problem.value = (e as Error).message));
+};
+onMounted(retry);
 
 async function run(what: string, fn: () => Promise<unknown>) {
   busy.value = what;
@@ -115,52 +126,49 @@ const choices = [
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 font-ui text-sm">
-    <p v-if="problem" class="m-0 text-danger" role="alert">{{ problem }}</p>
-    <HubSkeleton v-if="!state && !problem" variant="lines" :rows="2" label="Loading integrations" />
-    <p v-else-if="state && !state.available" class="m-0 text-muted">
-      Integrations aren't set up on this server yet.
-    </p>
+  <div class="flex flex-col gap-10">
+    <HubSettingsSection
+      id="integrations"
+      title="Email, Sentry and PostHog"
+      blurb="Errors from Sentry and PostHog, and emails sent to you, arrive here as work, sorted by Passalong's agent and ready for whoever it is for."
+    >
+      <div v-if="problem && !state" role="alert" class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
+        <p class="m-0 min-w-0 grow font-ui text-sm text-danger">Integrations didn't load. {{ problem }}</p>
+        <button class="btn outline danger sm" type="button" @click="retry">Try again</button>
+      </div>
+      <HubSkeleton v-else-if="!state" variant="lines" :rows="3" label="Loading integrations" />
+      <p v-else-if="!state.available" class="m-0 border-b border-line py-3 font-ui text-sm text-muted">
+        Integrations aren't set up on this server yet.
+      </p>
 
-    <template v-else-if="state">
-      <div v-if="!state.addresses" class="flex flex-wrap items-center gap-3">
-        <button class="btn primary" type="button" :disabled="Boolean(busy)" @click="make">
+      <HubSettingRow v-else-if="!state.addresses" label="Addresses" hint="For email, Sentry, PostHog and your own code.">
+        <button class="btn primary sm self-start" type="button" :disabled="Boolean(busy)" @click="make">
           {{ busy === "make" ? "Making…" : "Get your addresses" }}
         </button>
-        <span class="text-muted">For email, Sentry, PostHog and your own code.</span>
-      </div>
+      </HubSettingRow>
 
       <template v-else>
-        <fieldset class="m-0 flex flex-col gap-3 border-0 p-0">
-          <legend class="mb-2 p-0 font-medium text-fg">Where does the work come from?</legend>
-          <div class="flex flex-wrap gap-2" role="radiogroup">
-            <label
-              v-for="c in choices"
-              :key="c.id"
-              class="btn sm static"
-              :class="source === c.id ? 'primary' : ''"
-            >
-              <input v-model="source" class="sr-only" type="radio" name="work-source" :value="c.id" />
+        <HubSettingRow label="Where it comes from">
+          <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Where does the work come from?">
+            <label v-for="c in choices" :key="c.id" class="chip-pick font-ui text-sm">
+              <input v-model="source" type="radio" name="work-source" :value="c.id" />
               <AppMark :name="c.mark" :size="14" />
               {{ c.label }}
             </label>
           </div>
+        </HubSettingRow>
 
-          <ul v-if="shown.length" class="m-0 flex list-none flex-col gap-3 p-0">
-            <li v-for="k in shown" :key="k.id" class="flex flex-col gap-2">
-              <span><b class="font-medium text-fg">{{ k.label }}</b> <span class="text-muted">· {{ k.note }}</span></span>
-              <div class="flex flex-wrap items-center gap-2">
-                <code
-                  class="flex h-[var(--control-h)] min-w-0 flex-1 items-center overflow-x-auto rounded-1 border border-line-strong bg-field px-3 font-code text-sm whitespace-nowrap text-fg"
-                >{{ k.value }}</code>
-                <button class="btn" type="button" @click="copy(k.value, $event.currentTarget)">
-                  <AppIcon name="copy" /><span data-label>Copy</span>
-                </button>
-              </div>
-            </li>
-          </ul>
+        <HubSettingRow v-for="k in shown" :key="k.id" :label="k.label" :hint="k.note">
+          <div class="flex flex-wrap items-center gap-2">
+            <code class="flex h-[var(--control-h)] min-w-0 flex-1 basis-64 items-center overflow-x-auto rounded-2 border border-line-strong bg-field px-3 font-code text-sm whitespace-nowrap text-fg">{{ k.value }}</code>
+            <button class="btn" type="button" @click="copy(k.value, $event.currentTarget)">
+              <AppIcon name="copy" /><span data-label>Copy</span>
+            </button>
+          </div>
+        </HubSettingRow>
 
-          <div v-if="source === 'email'" class="flex flex-col gap-2 text-muted">
+        <HubSettingRow label="Setting it up">
+          <div v-if="source === 'email'" class="flex max-w-[44rem] flex-col gap-2 text-muted">
             <p class="m-0">
               Give an address to anything that sends email — an uptime monitor, a form, a colleague —
               or add it as a BCC where your backend sends mail. A sender's first email asks to be
@@ -176,7 +184,7 @@ const choices = [
               code shows up below as a sender. Then make a filter for the mail you want.
             </p>
           </div>
-          <ol v-else-if="source === 'sentry'" class="m-0 flex flex-col gap-1 pl-5 text-muted">
+          <ol v-else-if="source === 'sentry'" class="m-0 flex max-w-[44rem] flex-col gap-1 pl-5 text-muted">
             <li>
               In Sentry, open <b class="font-medium text-fg">Settings → Developer Settings → Custom
               Integrations</b> and create an <b class="font-medium text-fg">Internal Integration</b>.
@@ -192,7 +200,7 @@ const choices = [
               are ignored. Add <code>{{ team ? "&" : "?" }}repo=owner/repo</code> so it arrives pointed at that repo.
             </li>
           </ol>
-          <ol v-else-if="source === 'posthog'" class="m-0 flex flex-col gap-1 pl-5 text-muted">
+          <ol v-else-if="source === 'posthog'" class="m-0 flex max-w-[44rem] flex-col gap-1 pl-5 text-muted">
             <li>
               In PostHog, open <b class="font-medium text-fg">Error tracking → Configuration →
               Alerting</b> and add an <b class="font-medium text-fg">HTTP Webhook</b> for issues created.
@@ -204,17 +212,17 @@ const choices = [
               work. The URL takes <code>{{ team ? "&" : "?" }}repo=owner/repo</code> too.
             </li>
           </ol>
-          <div v-else class="flex flex-col gap-2 text-muted">
-            <p class="m-0">
+          <div v-else class="flex min-w-0 flex-col gap-2 text-muted">
+            <p class="m-0 max-w-[44rem]">
               POST JSON to the URL above. Only <code>title</code> is required; send the same
               <code>id</code> again and it adds to the open work instead of making a new one. Add
               <code>{{ team ? "&" : "?" }}repo=owner/repo</code> to say which repo it is for.
             </p>
-            <code class="block overflow-x-auto rounded-1 border border-line bg-field px-3 py-2 font-code text-sm whitespace-pre text-fg">curl -X POST {{ hook }} \
+            <code class="block overflow-x-auto rounded-2 border border-line bg-field px-3 py-2 font-code text-sm whitespace-pre text-fg">curl -X POST {{ hook }} \
   -H 'content-type: application/json' \
   -d '{"title": "Checkout is down", "text": "500s since 09:12", "url": "https://…", "id": "checkout-500"}'</code>
           </div>
-          <p class="m-0 text-muted">
+          <p class="m-0 max-w-[44rem] text-muted">
             <template v-if="team">
               These {{ source === "email" ? "addresses" : "URLs" }} put what arrives on
               <b class="font-medium text-fg">{{ team }}</b>'s board.
@@ -223,62 +231,56 @@ const choices = [
             </template>
             <template v-else>Pick a team at the top to get {{ source === "email" ? "addresses" : "URLs" }} that file onto its board; without one, what arrives is only yours.</template>
           </p>
-        </fieldset>
+        </HubSettingRow>
 
-      </template>
-
-      <div v-if="pending.length" class="flex flex-col gap-2">
-        <h4 class="m-0 font-medium text-fg">Asking to email you work</h4>
-        <ul class="m-0 flex list-none flex-col gap-2 p-0">
-          <li
-            v-for="s in pending"
-            :key="s.sender"
-            class="flex flex-wrap items-center gap-3 rounded-2 bg-field px-4 py-3 shadow-edge"
-          >
-            <div class="min-w-0 grow basis-64">
-              <b class="block font-medium break-all text-fg">{{ s.sender }}</b>
-              <span class="block text-xs text-muted">"{{ s.subject || "no subject" }}" · {{ rel(s.last_at) }}</span>
-            </div>
-            <button class="btn primary sm" type="button" :disabled="Boolean(busy)" @click="decide(s, 'allowed')">Allow</button>
-            <button class="btn outline danger sm" type="button" :disabled="Boolean(busy)" @click="decide(s, 'blocked')">Block</button>
-          </li>
-        </ul>
-        <p class="m-0 text-xs text-muted">Allowing one doesn't turn what it already sent into work; its next email does.</p>
-      </div>
-
-      <div v-if="decided.length" class="flex flex-col gap-2">
-        <h4 class="m-0 font-medium text-fg">Senders</h4>
-        <ul class="m-0 flex list-none flex-col p-0">
-          <li v-for="s in decided" :key="s.sender" class="flex flex-wrap items-center gap-3 border-0 border-b border-b-line py-2">
-            <span class="min-w-0 grow break-all text-fg">{{ s.sender }}</span>
-            <span class="text-xs text-muted">{{ s.state === "allowed" ? "Allowed" : "Blocked" }}</span>
-            <button
-              class="btn sm"
-              type="button"
-              :disabled="Boolean(busy)"
-              @click="decide(s, s.state === 'allowed' ? 'blocked' : 'allowed')"
-            >
-              {{ s.state === "allowed" ? "Block" : "Allow" }}
+        <!-- Replacing or removing the addresses breaks whatever uses them, so it asks in place. -->
+        <HubSettingRow label="Replace or turn off" hint="Whatever uses the current addresses stops reaching you.">
+          <div v-if="confirming" class="flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
+            <p class="m-0 min-w-0 grow basis-64">
+              {{ confirming === "new" ? "Make new addresses? The old ones stop working at once." : "Turn them off? Email and webhooks sent to them stop arriving." }}
+            </p>
+            <button class="btn outline danger sm" type="button" :disabled="Boolean(busy)" @click="confirming === 'new' ? make() : off()">
+              {{ confirming === "new" ? "Make new addresses" : "Turn off" }}
             </button>
+            <button class="btn sm" type="button" @click="confirming = ''">Keep them</button>
+          </div>
+          <div v-else class="flex flex-wrap gap-2">
+            <button class="btn sm" type="button" @click="confirming = 'new'">New addresses…</button>
+            <button class="btn sm outline danger" type="button" @click="confirming = 'off'">Turn off…</button>
+          </div>
+        </HubSettingRow>
+      </template>
+      <p v-if="problem && state" class="m-0 mt-2 font-ui text-sm text-danger" role="alert">{{ problem }}</p>
+    </HubSettingsSection>
+
+    <HubSettingsSection
+      v-if="state?.available && state.addresses"
+      id="email-in"
+      title="Senders"
+      blurb="Who may email you work. A sender's first email asks here; allowing one doesn't turn what it already sent into work, its next email does."
+    >
+      <div v-if="senders.length" class="@container">
+        <div aria-hidden="true" class="register-label hidden grid-cols-[minmax(0,1fr)_minmax(0,14rem)_3.5rem_5rem_9rem] gap-x-4 border-b border-line pt-3 pb-2 @2xl:grid">
+          <span>Sender</span><span>Last subject</span><span class="text-right">When</span><span>State</span><span />
+        </div>
+        <ul class="m-0 list-none p-0">
+          <li v-for="snd in senders" :key="snd.sender" class="border-b border-line py-3 last:border-b-0">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-ui text-sm @2xl:grid @2xl:gap-x-4 @2xl:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_3.5rem_5rem_9rem]">
+              <span class="min-w-0 basis-full font-medium break-all text-fg @2xl:basis-auto">{{ snd.sender }}</span>
+              <span class="min-w-0 truncate text-muted">“{{ snd.subject || "no subject" }}”</span>
+              <span class="text-muted tabular-nums @2xl:text-right @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(snd.last_at) }}</span>
+              <span :class="snd.state === 'pending' ? 'font-medium text-fg' : 'text-muted'"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ STATE_WORD[snd.state] }}</span>
+              <span class="ml-auto flex gap-2 @2xl:ml-0 @2xl:justify-end">
+                <button v-if="snd.state !== 'allowed'" class="btn sm" type="button" :disabled="Boolean(busy)" @click="decide(snd, 'allowed')">Allow</button>
+                <button v-if="snd.state !== 'blocked'" class="btn sm outline danger" type="button" :disabled="Boolean(busy)" @click="decide(snd, 'blocked')">Block</button>
+              </span>
+            </div>
           </li>
         </ul>
       </div>
-
-      <div v-if="state.addresses" class="flex flex-wrap items-center gap-2">
-        <template v-if="confirming">
-          <span class="text-muted">
-            {{ confirming === "new" ? "The old addresses stop working at once." : "Email and webhooks sent to them stop arriving." }}
-          </span>
-          <button class="btn outline danger sm" type="button" :disabled="Boolean(busy)" @click="confirming === 'new' ? make() : off()">
-            {{ confirming === "new" ? "Make new addresses" : "Turn it off" }}
-          </button>
-          <button class="btn sm" type="button" @click="confirming = ''">Cancel</button>
-        </template>
-        <template v-else>
-          <button class="btn sm" type="button" @click="confirming = 'new'">New addresses</button>
-          <button class="btn destructive sm" type="button" @click="confirming = 'off'">Turn off</button>
-        </template>
-      </div>
-    </template>
+      <p v-else class="m-0 border-b border-line py-3 font-ui text-sm text-muted">
+        No senders yet. The first email from someone new waits here for you to allow it.
+      </p>
+    </HubSettingsSection>
   </div>
 </template>

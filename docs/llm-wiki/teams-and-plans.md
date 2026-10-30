@@ -39,6 +39,9 @@ work, not the person who missed a payment.
   older than the stored plan is dropped. An event from another subscription never ends the stored one
   or replaces one still paying; a second paying subscription alerts admins (`billed_twice`) to refund.
   A cancelled plan stays paid to the end of its period, and the hub says when it ends (`plan_ends`). Test or live is read off the key itself.
+  In Settings a plan is shown as facts in labelled rows — Plan (with a "Test mode" label when the
+  key is a sandbox one), Seats or Work used, Ends on, Billing with the one primary action — and a
+  team's checkout is drawn for its owner only; everyone else reads who can change it (2026-10-30).
 - **Gifts** end on their date, and never touch a subscription.
 
 ## Roles

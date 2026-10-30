@@ -35,12 +35,10 @@ const ends = computed(() => day(data.value.me?.plan_ends));
 const sync = computed(() => data.value.me?.sync ?? "free");
 const onATeamSeat = computed(() => sync.value === "unlimited" && plan.value !== "solo");
 
-const COPY: Record<string, { label: string; tone: string }> = {
-  free: { label: "Free", tone: "bg-surface text-muted" },
-  solo: { label: "Solo", tone: "bg-ok-soft text-ok" },
-  lapsed: { label: "Payment lapsed", tone: "bg-warn-soft text-warn" },
-};
-const badge = computed(() => COPY[plan.value] ?? COPY.free);
+const LABEL: Record<string, string> = { free: "Free", solo: "Solo", lapsed: "Payment lapsed" };
+const label = computed(() => LABEL[plan.value] ?? "Free");
+const used = computed(() => data.value.me?.guides ?? 0);
+const limit = computed(() => data.value.me?.limit ?? 0);
 /** Paid for by a subscription, rather than given: only then is there a billing page to open. */
 const paying = computed(() => plan.value === "solo" && !until.value);
 
@@ -61,88 +59,87 @@ async function go(path: string) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <div class="flex flex-wrap items-baseline gap-x-3 gap-y-2">
-      <span
-        class="rounded-pill px-2 py-0.5 text-xs font-semibold uppercase tracking-wide"
-        :class="badge?.tone"
-      >{{ badge?.label }}</span>
-      <span
-        v-if="testing"
-        class="rounded-pill bg-warn-soft px-2 py-0.5 font-ui text-xs font-semibold text-warn"
-      >Test mode: no real money is charged</span>
-    </div>
+  <div class="flex flex-col">
+    <HubSettingRow label="Plan">
+      <p class="m-0 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span class="font-medium text-fg">{{ label }}</span>
+        <!-- Read off the key, never a setting beside it: a sandbox key takes no real money. -->
+        <span v-if="testing" class="rounded-1 border border-warn px-1.5 font-ui text-xs font-medium text-warn">Test mode · no real money is charged</span>
+      </p>
+      <p v-if="plan === 'solo'" class="m-0 max-w-[44rem] text-muted">
+        You can keep as much work as you like, on every device you use, and connect your own
+        assistants to them.
+      </p>
+      <p v-else-if="plan === 'lapsed'" class="m-0 max-w-[44rem] text-muted">
+        Nothing has been taken away: all your work is still here and still yours. New work past the
+        free limit has to wait until you renew.
+      </p>
+      <!-- The case that would otherwise read as a contradiction: Free here, no limit anywhere else.
+           Saying which one is doing the lifting is the whole point of showing both. -->
+      <p v-else-if="onATeamSeat" class="m-0 max-w-[44rem] text-muted">
+        You're in a paid team, so you can already keep as much work as you like. Solo is for when
+        you're not.
+      </p>
+      <!-- Careful with the tense: an account reaches this state by a plan lapsing as well as by
+           arriving without one, so it may well have work already synced. -->
+      <p v-else-if="sync === 'none'" class="m-0 max-w-[44rem] text-muted">
+        New work can't be sent until you're on a plan. Work you already have stays where it is.
+      </p>
+      <p v-else class="m-0 text-muted">You're on the free plan. Solo removes the limit.</p>
+    </HubSettingRow>
 
-    <p v-if="plan === 'solo'" class="m-0 font-ui text-sm text-muted">
-      You can keep as much work as you like, on every device you use, and connect your own
-      assistants to them.<template v-if="until">
-        {{ " " }}This one was given to you and runs until {{ until }}, after which it lapses —
-        nothing is taken away, and new work past the free limit waits until you subscribe.
-      </template><template v-if="ends">
-        {{ " " }}You cancelled it, so it ends on {{ ends }} and won't renew. Nothing is taken away
-        then, and new work past the free limit waits until you subscribe again. To keep it, open
-        Manage billing.
-      </template>
-    </p>
-    <p v-else-if="plan === 'lapsed'" class="m-0 font-ui text-sm text-muted">
-      Your Solo plan has lapsed. Nothing has been taken away: all your work is still here and still
-      yours. New work past the free limit has to wait until you renew.
-    </p>
-    <!-- The case that would otherwise read as a contradiction: Free on the badge, no limit in the
-         footer. Saying which one is doing the lifting is the whole point of showing both. -->
-    <p v-else-if="onATeamSeat" class="m-0 font-ui text-sm text-muted">
-      You're in a paid team, so you can already keep as much work as you like. Solo is for when
-      you're not.
-    </p>
-    <!-- Careful with the tense: an account reaches this state by a plan lapsing as well as by
-         arriving without one, so it may well have work already synced. Saying "nothing is synced"
-         would be false for exactly the person most likely to be reading it. -->
-    <p v-else-if="sync === 'none'" class="m-0 font-ui text-sm text-muted">
-      New work can't be sent until you're on a plan. Work you already have stays where it is.
-    </p>
-    <div v-else class="flex max-w-md flex-col gap-2">
-      <div class="flex justify-between font-ui text-sm text-muted tabular-nums">
-        <span><b class="font-semibold text-fg">{{ data.me?.guides }}</b> of {{ data.me?.limit }} pieces of work</span>
-        <span>{{ Math.max(0, (data.me?.limit ?? 0) - (data.me?.guides ?? 0)) }} left</span>
-      </div>
+    <HubSettingRow v-if="plan !== 'solo' && !onATeamSeat && sync === 'free'" label="Work" hint="Archived work takes up no room.">
+      <p class="m-0 flex max-w-sm justify-between text-muted tabular-nums">
+        <span><b class="font-medium text-fg">{{ used }}</b> of {{ limit }} pieces of work</span>
+        <span>{{ Math.max(0, limit - used) }} left</span>
+      </p>
       <!-- A bar, because "18 of 25" is a distance to a wall and reads faster as one. -->
       <div
-        class="h-1.5 overflow-hidden rounded-pill bg-line"
+        class="h-1 max-w-sm overflow-hidden rounded-1 bg-line"
         role="meter"
-        :aria-valuenow="data.me?.guides"
+        :aria-valuenow="used"
         aria-valuemin="0"
-        :aria-valuemax="data.me?.limit"
+        :aria-valuemax="limit"
         aria-label="Work used"
       >
         <div
-          class="h-full rounded-pill"
-          :class="
-            (data.me?.guides ?? 0) >= (data.me?.limit ?? 1)
-              ? 'bg-danger'
-              : (data.me?.guides ?? 0) >= (data.me?.limit ?? 1) * 0.8
-                ? 'bg-warn'
-                : 'bg-fg'
-          "
-          :style="{ width: `${Math.min(100, ((data.me?.guides ?? 0) / Math.max(1, data.me?.limit ?? 1)) * 100)}%` }"
+          class="h-full"
+          :class="used >= limit ? 'bg-danger' : used >= limit * 0.8 ? 'bg-warn' : 'bg-fg'"
+          :style="{ width: `${Math.min(100, (used / Math.max(1, limit)) * 100)}%` }"
         />
       </div>
-      <p class="m-0 font-ui text-sm text-muted">You're on the free plan. Solo removes the limit.</p>
-    </div>
+    </HubSettingRow>
 
-    <p v-if="!available" class="m-0 font-ui text-sm text-muted">
-      Paid plans aren't available yet. Check back later.
-    </p>
-    <div v-else-if="paying" class="flex flex-wrap items-center gap-3">
-      <button class="btn" :disabled="busy" @click="go('/v1/billing/portal')">Manage billing</button>
-      <span class="font-ui text-sm text-muted">Card, invoices and cancelling.</span>
-    </div>
-    <!-- A gift is still a plan you do not own: the button stays, so it can be bought before the
-         gift runs out rather than after it has. -->
-    <div v-else class="flex flex-wrap items-center gap-3">
-      <button class="btn primary" :disabled="busy" @click="go('/v1/subscribe')">
-        {{ plan === "lapsed" ? "Renew Solo" : "Subscribe to Solo" }}
-      </button>
-      <span class="font-ui text-sm text-muted">$5 a month.</span>
-    </div>
+    <!-- When it stops, said plainly rather than left to be discovered on the day it ends. -->
+    <HubSettingRow v-if="until" label="Given until">
+      <p class="m-0 text-fg tabular-nums">{{ until }}</p>
+      <p class="m-0 max-w-[44rem] text-muted">
+        It was given to you and lapses then. Nothing is taken away; new work past the free limit waits
+        until you subscribe.
+      </p>
+    </HubSettingRow>
+    <HubSettingRow v-else-if="ends" label="Ends on">
+      <p class="m-0 text-fg tabular-nums">{{ ends }}</p>
+      <p class="m-0 max-w-[44rem] text-muted">
+        You cancelled it, so it won't renew. Nothing is taken away then, and new work past the free
+        limit waits until you subscribe again. To keep it, open Manage billing.
+      </p>
+    </HubSettingRow>
+
+    <HubSettingRow label="Billing" hint="Paid through Bachs, on its own page: Passalong never sees your card.">
+      <p v-if="!available" class="m-0 text-muted">Paid plans aren't available yet. Check back later.</p>
+      <div v-else-if="paying" class="flex flex-wrap items-center gap-3">
+        <button class="btn primary sm" type="button" :disabled="busy" @click="go('/v1/billing/portal')">Manage billing</button>
+        <span class="text-muted">Card, invoices and cancelling.</span>
+      </div>
+      <!-- A gift is still a plan you do not own: the button stays, so it can be bought before the
+           gift runs out rather than after it has. -->
+      <div v-else class="flex flex-wrap items-center gap-3">
+        <button class="btn primary sm" type="button" :disabled="busy" @click="go('/v1/subscribe')">
+          {{ plan === "lapsed" ? "Renew Solo" : "Subscribe to Solo" }}
+        </button>
+        <span class="text-muted tabular-nums">$5 a month.</span>
+      </div>
+    </HubSettingRow>
   </div>
 </template>

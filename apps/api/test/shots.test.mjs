@@ -271,7 +271,7 @@ test("strike replaces an image or a bare link to a removed shot, and nothing els
   );
 });
 
-test("a closed guide says when its proof goes, and an author who keeps everything keeps it", async () => {
+test("a closed guide says when its proof goes, and the rule is the same for every account", async () => {
   const db = d1();
   closedWithProof(db);
   const due = await proofExpiry(db, ["g1"]);
@@ -281,8 +281,16 @@ test("a closed guide says when its proof goes, and an author who keeps everythin
   assert.equal((await proofExpiry(db, ["g1"])).size, 0, "an open guide's proof is not on a clock");
   db.raw.prepare("UPDATE guide SET status = 'consumed' WHERE id = 'g1'").run();
 
-  db.raw.prepare("UPDATE account SET keep_forever = 1").run();
-  assert.equal((await proofExpiry(db, ["g1"])).size, 0, "nor is a keeper's");
-  assert.deepEqual(await sweepProof({ DB: db }, { at: later(90) }), { removed: 0, deferred: 0 });
-  assert.equal(owner(db, "prf222"), "g1", "and the sweep leaves it");
+  // Migration 0065 dropped the switch that let an account keep its proof for good: nothing can
+  // store the choice any more, so nothing can read it.
+  const columns = db.raw
+    .prepare("PRAGMA table_info(account)")
+    .all()
+    .map((c) => c.name);
+  assert.ok(!columns.includes("keep_forever"), "the column is gone");
+  assert.ok(columns.includes("token_hash"), "and account was altered in place, not rebuilt");
+  assert.deepEqual(await sweepProof({ DB: db }, { at: later(PROOF_DAYS + 1) }), {
+    removed: 1,
+    deferred: 0,
+  });
 });

@@ -90,7 +90,6 @@ function build(queryClient: QueryClient) {
   const maybe = useState("hub:maybe", () =>
     Boolean(import.meta.server && useRequestHeaders(["cookie"]).cookie?.includes(`${COOKIE}=`)),
   );
-  const editing = useState("hub:editing", () => false);
 
   function setToken(t: string | null) {
     store.set(t);
@@ -585,7 +584,6 @@ function build(queryClient: QueryClient) {
     failed,
     scope,
     error,
-    editing,
     adoptToken,
     setToken,
     setMe,

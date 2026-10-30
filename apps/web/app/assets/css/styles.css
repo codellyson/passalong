@@ -2578,3 +2578,40 @@ table.rows thead th {
     animation: none;
   }
 }
+
+/* A choice among a few, drawn as chips: unchosen is a hairline edge and muted text, chosen is ink
+   (the Chosen Rule). The radio inside stays in the page for the keyboard and a screen reader.
+   Used for a project's line colour and for where work comes from in Integrations. */
+.chip-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 2rem;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  color: var(--muted);
+  cursor: pointer;
+}
+.chip-pick input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.chip-pick:has(input:checked) {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.chip-pick:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* A register's column labels in Settings: named once over the top, uppercase at the label size. */
+.register-label {
+  font: 500 0.6875rem / 1.4 var(--font-sans);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

@@ -28,6 +28,8 @@ const endpoint = ref("");
 const busy = ref("");
 const problem = ref("");
 const tested = ref(false);
+/** Which other device is asking "remove it?". It can only be added back from that device. */
+const removing = ref("");
 
 const supported = ref(true);
 const permission = ref<NotificationPermission>("default");
@@ -158,27 +160,26 @@ async function test(d: Device) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 font-ui text-sm">
-    <p v-if="!supported" class="m-0 text-muted">This browser can't show notifications from websites.</p>
-    <p v-else-if="state && !state.available" class="m-0 text-muted">
-      Notifications aren't set up on this server yet.
-    </p>
-    <p v-else-if="iosTab" class="m-0 text-muted">
-      On an iPhone or iPad, notifications work once Passalong is on your home screen: tap Share, then
-      <b class="font-medium text-fg">Add to Home Screen</b>, and open it from there.
-    </p>
-    <p v-else-if="permission === 'denied'" class="m-0 text-muted">
-      This browser is set to block notifications from Passalong. Allow them in the site settings
-      (the icon beside the address), then come back here.
-    </p>
+  <div class="flex flex-col">
+    <HubSettingRow label="This device" :hint="here ? here.label : 'Only what needs you: sent to you, handed in, didn\'t work, sent back, gone quiet, stuck on you.'">
+      <p v-if="!supported" class="m-0 text-muted">This browser can't show notifications from websites.</p>
+      <p v-else-if="state && !state.available" class="m-0 text-muted">
+        Notifications aren't set up on this server yet.
+      </p>
+      <p v-else-if="iosTab" class="m-0 text-muted">
+        On an iPhone or iPad, notifications work once Passalong is on your home screen: tap Share, then
+        <b class="font-medium text-fg">Add to Home Screen</b>, and open it from there.
+      </p>
+      <p v-else-if="permission === 'denied'" class="m-0 text-muted">
+        This browser is set to block notifications from Passalong. Allow them in the site settings
+        (the icon beside the address), then come back here.
+      </p>
+      <HubSkeleton v-else-if="!state && !problem" variant="lines" :rows="1" label="Loading notifications" />
 
-    <template v-else-if="state">
-      <!-- This device. -->
-      <div v-if="here" class="flex flex-col gap-3 rounded-2 bg-field px-4 py-3 shadow-edge">
-        <p class="m-0 flex flex-wrap items-center gap-2">
-          <span class="size-2 rounded-pill bg-ok" aria-hidden="true" />
-          <b class="font-medium">On for this device</b>
-          <span class="text-muted">· {{ here.label }}</span>
+      <template v-else-if="state && here">
+        <p class="m-0 flex items-center gap-2 text-fg">
+          <span class="size-1.5 rounded-pill bg-ok" aria-hidden="true" />
+          <span class="font-medium">On</span>
         </p>
         <label class="flex items-start gap-2">
           <input type="checkbox" :checked="here.private" class="mt-1" @change="setPrivate(here, ($event.target as HTMLInputElement).checked)" />
@@ -191,36 +192,37 @@ async function test(d: Device) {
           <button class="btn sm" type="button" :disabled="Boolean(busy)" @click="test(here)">
             {{ busy === `test:${here.id}` ? "Sending…" : "Send a test" }}
           </button>
-          <button class="btn outline danger sm" type="button" :disabled="Boolean(busy)" @click="turnOff(here)">Turn off</button>
-          <span v-if="tested" class="text-xs text-muted">Sent — it should appear in a few seconds.</span>
+          <button class="btn sm" type="button" :disabled="Boolean(busy)" @click="turnOff(here)">Turn off</button>
+          <span v-if="tested" class="text-xs text-muted" role="status">Sent — it should appear in a few seconds.</span>
         </div>
-      </div>
-      <div v-else class="flex flex-wrap items-center gap-3">
-        <button class="btn primary" type="button" :disabled="Boolean(busy)" @click="turnOn">
+      </template>
+      <!-- Permission is asked on this button and nowhere else: a refused prompt cannot be asked again. -->
+      <div v-else-if="state" class="flex flex-wrap items-center gap-3">
+        <button class="btn primary sm" type="button" :disabled="Boolean(busy)" @click="turnOn">
           {{ busy === "on" ? "Turning on…" : "Turn on for this device" }}
         </button>
         <span class="text-muted">Your browser will ask first.</span>
       </div>
+      <p v-if="problem" class="m-0 text-danger" role="alert">{{ problem }}</p>
+    </HubSettingRow>
 
-      <!-- Your other devices. -->
-      <div v-if="others.length" class="flex flex-col gap-2">
-        <p class="m-0 text-xs font-semibold tracking-widest text-muted uppercase">Your other devices</p>
-        <ul class="m-0 list-none rounded-2 bg-raised p-0 shadow-edge">
-          <li
-            v-for="d in others"
-            :key="d.id"
-            class="flex items-center gap-3 px-4 py-3 shadow-[inset_0_1px_0_var(--line)] first:shadow-none"
-          >
-            <span class="min-w-0 flex-1">
+    <HubSettingRow v-if="others.length" label="Your other devices" hint="Each turned on from that device.">
+      <ul class="m-0 list-none p-0">
+        <li v-for="d in others" :key="d.id" class="border-b border-line py-2 first:pt-0 last:border-b-0">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span class="min-w-0 grow text-fg">
               {{ d.label || "A device" }}
-              <span class="text-xs text-muted">· {{ d.last_ok ? `last reached ${rel(d.last_ok)}` : `added ${rel(d.created)}` }}{{ d.private ? " · titles hidden" : "" }}</span>
+              <span class="block text-xs text-muted tabular-nums">{{ d.last_ok ? `Last reached ${rel(d.last_ok)}` : `Added ${rel(d.created)}` }}{{ d.private ? " · titles hidden" : "" }}</span>
             </span>
-            <button class="btn sm" type="button" :disabled="Boolean(busy)" @click="turnOff(d)">Remove</button>
-          </li>
-        </ul>
-      </div>
-    </template>
-
-    <p v-if="problem" class="m-0 text-danger" role="alert">{{ problem }}</p>
+            <button v-if="removing !== d.id" class="btn sm" type="button" :disabled="Boolean(busy)" @click="removing = d.id">Remove…</button>
+          </div>
+          <div v-if="removing === d.id" class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
+            <p class="m-0 min-w-0 grow">Remove {{ d.label || "this device" }}? It stops getting notifications until it is turned on there again.</p>
+            <button class="btn sm outline danger" type="button" :disabled="Boolean(busy)" @click="turnOff(d).then(() => (removing = ''))">Remove</button>
+            <button class="btn sm" type="button" @click="removing = ''">Keep it</button>
+          </div>
+        </li>
+      </ul>
+    </HubSettingRow>
   </div>
 </template>

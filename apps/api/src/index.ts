@@ -226,7 +226,6 @@ import {
   COUNTED,
   ceilingFor,
   isFull,
-  mayKeep,
   planNow,
   seatsFull,
 } from "./quota.js";
@@ -1777,7 +1776,7 @@ app.delete("/v1/admin/gifts/:id", async (c) => {
 app.get("/v1/me", async (c) => {
   const account = c.get("account");
   const me = await c.env.DB.prepare(
-    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, plan_ends, role, keep_forever FROM account WHERE id = ?",
+    "SELECT id, handle, name, email, email_verified, password_hash, plan, plan_until, plan_ends, role FROM account WHERE id = ?",
   )
     .bind(account)
     .first<
@@ -1788,7 +1787,6 @@ app.get("/v1/me", async (c) => {
         plan_until: string;
         plan_ends: string;
         role: string;
-        keep_forever: number;
       }
     >();
   // A gift that has run out is `lapsed` here too, so the hub says what the ceiling already does.
@@ -1836,10 +1834,6 @@ app.get("/v1/me", async (c) => {
     has_password: Boolean(me?.password_hash),
     // Whether the email on the account was proven to reach its owner. See migrations/0050.
     email_verified: Boolean(me?.email_verified),
-    // Whether its guides are kept for good rather than tidied away on a clock, and whether it may
-    // choose that. See migrations/0044_keep_forever.sql and quota.ts.
-    keep_forever: Boolean(me?.keep_forever),
-    may_keep: mayKeep(ownPlan),
   });
 });
 
@@ -1896,19 +1890,9 @@ app.patch("/v1/me", async (c) => {
     handle?: string;
     name?: string;
     email?: string;
-    keep_forever?: boolean;
   };
   const sets: string[] = [];
   const binds: unknown[] = [];
-  if (patch.keep_forever !== undefined) {
-    if (typeof patch.keep_forever !== "boolean")
-      return err(c, 400, "keep_forever is true or false.");
-    // Turning the clean-up back on is always allowed; turning it off is what a plan will buy.
-    if (patch.keep_forever && !mayKeep(undefined))
-      return err(c, 402, "Keeping all your work for good is part of a paid plan.");
-    sets.push("keep_forever = ?");
-    binds.push(patch.keep_forever ? 1 : 0);
-  }
   if (patch.handle !== undefined) {
     const h = patch.handle.trim().toLowerCase().replace(/^@/, "");
     if (!HANDLE_RE.test(h))
@@ -1944,11 +1928,7 @@ app.patch("/v1/me", async (c) => {
     }
   }
   if (!sets.length)
-    return err(
-      c,
-      400,
-      "There was nothing to save. Change your handle, name, email or clean-up first.",
-    );
+    return err(c, 400, "There was nothing to save. Change your handle, name or email first.");
   await c.env.DB.prepare(`UPDATE account SET ${sets.join(", ")} WHERE id = ?`)
     .bind(...binds, account)
     .run();

@@ -190,17 +190,25 @@ touches, and anything that needs you arrives as a toast. See [notifications.md](
 ## Settings
 
 Five pages, one topic each, at `/hub/settings/[[tab]]`:
-- **Account** (`/hub/settings`): profile, sign-in, notifications (push, per device), clean-up.
-- **Plan**: the plan.
-- **Teams**: the team cards.
+- **Account** (`/hub/settings`): profile, sign-in, notifications (push, per device).
+- **Plan**: your own plan, as facts (plan, work used, ends on, billing), sandbox badge when the key
+  is a sandbox one.
+- **Teams**: each team under its name — members as a register with remove/leave asked in place,
+  invite link, groups and channels (owners), and the team's plan; checkout owner only, everyone
+  else told who can.
 - **Agents** (`/connections`, the address it had before the split): connected apps and API tokens,
   what acts as you.
 - **Integrations** (`/integrations`): email, Sentry, PostHog and webhooks, what sends work to you.
 
-It was one scroll of ten sections, and people found it overwhelming. The sidebar lists the four
-pages, each with its own state ("2 need you", "1 failing"), and each page opens with only the
-"Needs you" items that belong to it. An old `/hub/settings#anchor` link is forwarded to the page
-holding that anchor (`tabOf()`).
+It was one scroll of ten sections, and people found it overwhelming. Since 2026-10-30 the pages
+are the hub's tabs (each its own address, an ink bar, a status dot on a tab with something broken)
+under a heading and a one-line summary of facts, and each page opens with only the "Needs you"
+items that belong to it. Every block is `HubSettingsSection` (a title over one ink rule, a line
+saying what it is for) holding `HubSettingRow`s (label left, control right; stacked on a phone) or a
+register; every destructive act asks in place and names what breaks. An old
+`/hub/settings#anchor` link is forwarded to the page holding that anchor (`tabOf()`); a
+`#token=` fragment is not an anchor. There is no Clean-up section: proof clean-up is a fixed rule
+(work.md).
 
 ## Sources
 - `apps/web/app/pages/hub/index.vue` (Needs you), `components/hub/Sidebar.vue`, `utils/projects.ts`, `apps/api/src/needs.ts`, `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/projects/`, `components/hub/ProjectDocument.vue`, `apps/api/src/project.ts`, `pages/hub/settings/[[tab]].vue`

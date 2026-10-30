@@ -8,7 +8,8 @@
 -->
 <script setup lang="ts">
 /** `bare` on Settings: just the form, inside a section that already says what it is for. */
-defineProps<{ bare?: boolean }>();
+const props = defineProps<{ bare?: boolean }>();
+const emit = defineEmits<{ cancel: [] }>();
 
 const { data, api, json, setToken, load } = useHub();
 const error = ref<string | null>(null);
@@ -50,6 +51,12 @@ const onEmail = computed(() =>
 
 const label = "block font-ui text-sm font-medium text-fg mb-2";
 const box = "block w-full max-w-sm";
+
+function cancel() {
+  error.value = null;
+  if (props.bare) emit("cancel");
+  else open.value = false;
+}
 
 async function submit(e: Event) {
   // Read first, then set state — the inputs are uncontrolled, as everywhere else in the hub.
@@ -126,11 +133,9 @@ async function submit(e: Event) {
       </div>
 
       <div class="flex flex-wrap gap-2">
-        <button class="primary" type="submit">Save</button>
-        <!-- Opened from the notice, so it can be put away again without saving anything. -->
-        <button v-if="!bare" class="btn" type="button" @click="open = false; error = null">
-          Cancel
-        </button>
+        <button class="btn primary" :class="{ sm: bare }" type="submit">Save password</button>
+        <!-- Opened from a notice or a button, so it can be put away again without saving anything. -->
+        <button class="btn" :class="{ sm: bare }" type="button" @click="cancel">Cancel</button>
       </div>
     </form>
 

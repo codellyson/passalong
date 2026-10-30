@@ -123,55 +123,51 @@ async function drop(g: Group) {
 </script>
 
 <template>
-  <!-- A hairline and an indent, the same as the channels below it: this belongs to the team above
-       rather than being a card inside a card inside a section. -->
-  <div class="mt-2 border-t border-line pt-2 pl-3">
+  <div class="@container flex flex-col">
     <HubSkeleton v-if="loadingGroups" variant="lines" :rows="2" label="Loading groups" />
-    <ul v-else-if="groups.length" class="m-0 flex list-none flex-col gap-3 p-0">
-      <li v-for="g in groups" :key="g.id" class="flex flex-col gap-2">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <b class="font-ui text-sm font-semibold text-fg">{{ g.name || g.slug }}</b>
-          <span v-if="g.members.length" class="font-ui text-sm text-muted">
-            {{ g.members.map(nameOf).join(", ") }}
-          </span>
-          <!-- An empty group reaches nobody, and a guide sent to it lands with no one at all.
-               Said plainly, because it looks like it is working. -->
-          <span v-else class="font-ui text-sm text-warn">Nobody in it yet, so work sent here reaches no one</span>
-          <span class="ml-auto flex flex-wrap items-center gap-2">
-            <button class="btn sm" :disabled="busy" @click="edit(g)">
-              {{ editing === g.id ? "Cancel" : "Choose who's in it" }}
-            </button>
-            <template v-if="removing === g.id">
-              <span class="font-ui text-sm text-muted">Work already sent keeps the name.</span>
-              <button class="btn outline danger sm" @click="drop(g)">Remove it</button>
-              <button class="btn sm" @click="removing = null">Keep it</button>
-            </template>
-            <button v-else class="btn destructive sm" @click="removing = g.id">Remove</button>
-          </span>
-        </div>
+    <template v-else-if="groups.length">
+      <div aria-hidden="true" class="register-label hidden grid-cols-[12rem_minmax(0,1fr)_auto] gap-x-4 border-b border-line pt-3 pb-2 @2xl:grid">
+        <span>Group</span><span>People</span><span />
+      </div>
+      <ul class="m-0 list-none p-0">
+        <li v-for="g in groups" :key="g.id" class="border-b border-line py-3">
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-ui text-sm @2xl:grid @2xl:gap-x-4 @2xl:grid-cols-[12rem_minmax(0,1fr)_auto]">
+            <span class="min-w-0 basis-full font-medium break-words text-fg @2xl:basis-auto">#{{ g.slug }}</span>
+            <span v-if="g.members.length" class="min-w-0 grow text-muted @2xl:text-fg">{{ g.members.map(nameOf).join(", ") }}</span>
+            <!-- An empty group reaches nobody, and work sent to it lands with no one at all. Said
+                 plainly, because it looks like it is working. -->
+            <span v-else class="flex min-w-0 grow items-center gap-2 text-fg">
+              <span class="size-1.5 shrink-0 rounded-pill bg-warn" aria-hidden="true" />Nobody yet, so work sent here reaches no one
+            </span>
+            <span class="flex basis-full flex-wrap gap-2 pt-1 @2xl:basis-auto @2xl:justify-end @2xl:pt-0">
+              <button class="btn sm" type="button" :disabled="busy" :aria-expanded="editing === g.id" @click="edit(g)">
+                {{ editing === g.id ? "Cancel" : "Choose people" }}
+              </button>
+              <button v-if="removing !== g.id" class="btn sm" type="button" @click="removing = g.id">Remove…</button>
+            </span>
+          </div>
 
-        <div v-if="editing === g.id" class="appears flex flex-wrap items-center gap-2">
-          <label
-            v-for="h in handles"
-            :key="h"
-            class="flex cursor-pointer items-center gap-2 rounded-pill border border-line px-3 py-1 font-ui text-sm"
-            :class="picked.has(h) ? 'border-ink bg-ink text-on-ink accent-[var(--on-ink)]' : 'text-muted'"
-          >
-            <input
-              type="checkbox"
-              :checked="picked.has(h)"
-              @change="toggle(h)"
-            >{{ nameOf(h) }}
-          </label>
-          <button class="btn primary sm" :disabled="busy" @click="save(g)">Save</button>
-        </div>
-      </li>
-    </ul>
-    <p v-else class="m-0 font-ui text-sm text-muted">
+          <div v-if="editing === g.id" class="appears mt-3 flex flex-wrap items-center gap-2">
+            <label v-for="h in handles" :key="h" class="chip-pick font-ui text-sm">
+              <input type="checkbox" :checked="picked.has(h)" @change="toggle(h)">{{ nameOf(h) }}
+            </label>
+            <p v-if="!handles.length" class="m-0 font-ui text-sm text-muted">Nobody in the team has an @name yet.</p>
+            <button class="btn primary sm" type="button" :disabled="busy" @click="save(g)">Save</button>
+          </div>
+
+          <div v-if="removing === g.id" class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
+            <p class="m-0 min-w-0 grow basis-64 font-ui text-sm">Remove #{{ g.slug }}? Nobody receives work sent to it any more; work already sent keeps the name.</p>
+            <button class="btn sm outline danger" type="button" @click="drop(g)">Remove</button>
+            <button class="btn sm" type="button" @click="removing = null">Keep it</button>
+          </div>
+        </li>
+      </ul>
+    </template>
+    <p v-else class="m-0 border-b border-line py-3 font-ui text-sm text-muted">
       No groups yet. Without one, work goes to one person or to the whole team.
     </p>
 
-    <form v-if="adding" class="appears mt-2 flex flex-wrap items-end gap-3" @submit.prevent="add">
+    <form v-if="adding" class="appears mt-3 flex flex-wrap items-end gap-3" @submit.prevent="add">
       <div class="grow basis-48">
         <label class="mb-2 block font-ui text-sm font-medium text-fg" for="group-slug">
           What do these people do?
@@ -182,15 +178,12 @@ async function drop(g: Group) {
         {{ busy ? "Adding…" : "Add group" }}
       </button>
       <button class="btn" type="button" @click="adding = false; slug = ''">Cancel</button>
-      <p class="m-0 basis-full font-ui text-sm text-muted">
-        Work sent to the group reaches everyone in it, and the first person to take it takes it
-        off everyone else's list. Agents can send to it by name too.
-      </p>
+      <p class="m-0 basis-full font-ui text-xs text-muted">Agents can send to it by name too.</p>
     </form>
-    <button v-else class="btn sm mt-2" @click="adding = true">
+    <button v-else class="btn sm mt-3 self-start" type="button" @click="adding = true">
       <AppIcon name="plus" />New group
     </button>
 
-    <p v-if="trouble" class="mt-2 mb-0 font-ui text-sm text-danger">{{ trouble }}</p>
+    <p v-if="trouble" class="mt-2 mb-0 font-ui text-sm text-danger" role="alert">{{ trouble }}</p>
   </div>
 </template>

@@ -253,7 +253,7 @@ Precise and quiet; the shape says "control" by its edge, not its roundness.
 - **States:** every button presses to `scale(0.96)` over 0.15s; outline danger for a retry inside a danger callout. A tonal or outline button with no status tone is ink (`--emphasis`). Focus is the 2px ink ring.
 
 ### Chosen chips
-Ink fill, cream text, 4px corners; unchosen is a 1px hairline edge with muted text. Used for an app picked in Connections and the people picked for a group.
+Ink fill, cream text, 4px corners; unchosen is a 1px hairline edge with muted text. Used for an app picked in Connections, the people picked for a group and where work comes from in Integrations.
 
 ### Shown-once callout
 A secret the server cannot give back (a new token, a client secret, an admin's credentials) sits in a deeper-cream box with a 1px ink border, and the "Copy it now" line is ink at 500.
@@ -382,6 +382,31 @@ list. Undo deletes it in one press and puts the words back in the editor with on
 only what holds: "Undone: it's deleted. Your words are still here.", and, when someone may already
 have heard, "2 people may already have been told by email or on their phone." Below everything, "Filed from here by you" is a short register — Work, Project 9rem, For 9rem,
 Filed 3.5rem right-aligned in tabular figures — collapsing on a phone like every register.
+
+### Settings
+Settings (`/hub/settings/[[tab]]`, 70rem) is "Settings" at the headline size over one muted line of
+facts for the page in view ("Ada Lovelace · @ada", "Free plan · 19 of 25 pieces of work used"), then
+the five pages — Account, Plan, Teams, Agents, Integrations — as the world's Tabs, each its own
+address. A tab with something broken carries a 6px warn or danger dot instead of a count; Plan and
+Teams carry a muted tabular fact. The page's "Needs you" items lead it as standing notices: a status
+dot, the sentence, where it is muted, and one `sm` verb, on hairline rows.
+
+Each block is a section title at 550 (1rem; 0.875rem for a block inside a team) over the block's one
+ink rule, an optional action at the rule's right ("Connect an app", "New token", "Copy invite
+link"), one muted line saying what it is for, then labelled rows: the label at 500 with a muted hint
+under it in a 13rem column on the left and the control on the right, 32px apart, rows divided by
+hairlines; stacked under 768px. A register inside a block names its columns once in uppercase
+labels over a hairline, not an ink rule — one ink rule per block — and wraps into a title, a muted
+fact line and its verbs in a container under 42rem. A team is its name at the title size with a
+muted fact line ("You're an admin · 4 people · 12 pieces of work") over its blocks (Members,
+Groups, Channels, Plan), 48px between teams. A plan is facts, never a badge: Plan (and the "Test
+mode · no real money is charged" label, 1px warn edge, 2px corners, when the key is a sandbox one),
+Seats or Work used, Ends on, and Billing with the one primary action; for anyone who cannot change
+it, a line naming who can. Every destructive act — revoke, disconnect, remove, leave, turn off —
+is a quiet `sm` control ending in "…" that opens a line under its row naming what breaks and what
+stays, with the act in outline danger and Keep it. A new secret is the Shown-once callout. Choices
+among a few (where work comes from) are chosen chips. Loading is the skeleton, a failed load is the
+danger callout with Try again, and an empty register says what will appear and how.
 
 ### Back link
 A page reached from a list leads with a muted link back to it ("Support", "Work", "All

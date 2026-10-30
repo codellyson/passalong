@@ -18,10 +18,6 @@ export interface Me {
   has_password: boolean;
   /** Whether the email was proven to reach its owner (migrations/0050). Absent from an older server. */
   email_verified?: boolean;
-  /** Work is kept for good rather than tidied away on a clock. */
-  keep_forever?: boolean;
-  /** Whether this account may choose that. Everybody today; a plan will decide. */
-  may_keep?: boolean;
   guides: number;
   /** Only meaningful when `sync` is "free". See apps/api/src/quota.ts. */
   limit: number;

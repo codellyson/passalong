@@ -770,31 +770,6 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
 </template>
 
 <style scoped>
-.chip-pick {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  height: 2rem;
-  padding: 0 var(--s-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-3);
-  color: var(--muted);
-  cursor: pointer;
-}
-.chip-pick input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.chip-pick:has(input:checked) {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--on-ink);
-}
-.chip-pick:has(input:focus-visible) {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
 /* A document's headings sit below the page's own, in order. */
 .project-prose {
   max-width: 46rem;

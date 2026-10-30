@@ -59,9 +59,9 @@ One clock tidies, swept hourly (`apps/web/server/plugins/sweep.ts`): the proof s
 work are **deleted** 5 days after it closed (`PROOF_DAYS`); the work and its own document stay. Work
 sent and taken by nobody stays Ready, and after three days (`UNTAKEN_MS`) a person is told
 (2026-10-28, docs/LOOP.md); it used to go back to Draft after 14 days, where it reached nobody.
-Clean-up is on by default and stops for an account that sets `account.keep_forever` (migration 0044,
-`PATCH /v1/me`, Settings → Clean-up). `quota.ts`'s `mayKeep` is the one place a plan will gate
-turning it off; it says yes to everybody today.
+The proof clean-up holds for every account. It used to stop for an account that set
+`account.keep_forever` (migration 0044, Settings → Clean-up); the switch, `mayKeep` and the column
+were removed on 2026-10-30 (migration 0065), so there is one rule and nothing re-decides it.
 
 The deadline is shown, not just enforced: list rows and the work page carry `proof_expires`,
 computed by `shots.proofExpiry` from the same conditions the sweep deletes on, so a date on screen is

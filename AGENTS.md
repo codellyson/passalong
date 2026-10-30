@@ -724,7 +724,9 @@ change. Its README says how.
   `evidenceOn` reads the standing verdict's `detail` as well as claim evidence so an author's edit
   cannot release them. `sweepProof` (hourly, `shots.ts`) deletes closed work's proof `PROOF_DAYS`
   (5) after it closed — anything the work holds that its own markdown does not name — and rewrites
-  the text that pointed at it to say it was removed rather than leave a broken image.
+  the text that pointed at it to say it was removed rather than leave a broken image. It is a fixed
+  rule for every account: the Settings switch that turned it off (`keep_forever`, migration 0044)
+  was removed on 2026-10-30 and its column dropped (0065), so nothing can re-decide it per account.
 - **The share page is the document, once.** `/g/:id/:key` renders the markdown in its author's
   order, with the work it came from and the work made from it as links, and nothing about who
   answered it: the key in the URL is the whole authorisation, so the page is public to whoever
