@@ -157,7 +157,7 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
         <div v-if="order.length" class="flex flex-wrap items-center gap-2">
           <span v-if="done" class="font-ui text-sm font-medium text-fg" role="status">{{ sent === id ? "Sent" : "Off your list" }}</span>
           <span class="font-ui text-sm text-muted tabular-nums">{{ at + 1 }} of {{ order.length }}</span>
-          <button type="button" class="btn sm" :disabled="at <= 0" aria-keyshortcuts="k" @click="go(at - 1)">Previous</button>
+          <button type="button" class="btn sm" :disabled="at <= 0" aria-keyshortcuts="k" @click="go(at - 1)">Previous <kbd aria-hidden="true" class="rounded-1 border border-current/40 px-1 font-ui text-xs leading-4 opacity-70 max-md:hidden">k</kbd></button>
           <NuxtLink v-if="done && last" to="/hub" class="btn sm primary">Back to Needs you</NuxtLink>
           <button
             v-else
@@ -169,7 +169,7 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
             aria-keyshortcuts="j"
             @click="go(at + 1)"
           >
-            Next
+            Next <kbd aria-hidden="true" class="rounded-1 border border-current/40 px-1 font-ui text-xs leading-4 opacity-70 max-md:hidden">j</kbd>
           </button>
         </div>
       </header>
@@ -261,7 +261,6 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
           </section>
         </template>
 
-        <p class="m-0 font-ui text-xs text-muted max-md:hidden">j and k move to the next and the previous.</p>
       </article>
     </div>
   </HubShell>
