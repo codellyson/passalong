@@ -713,7 +713,9 @@ button.primary[disabled],
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 20;
+  /* Above sticky page chrome (the board's column heads sit at 20), level with the phone's top bar
+     and the bulk bar, below drawers, toasts and the phone's rail. */
+  z-index: 30;
   margin-top: var(--s-1);
   width: 18rem;
   display: flex;
