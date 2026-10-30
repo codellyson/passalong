@@ -710,7 +710,8 @@ const label = "font-ui text-sm font-medium text-fg";
             <button class="btn primary" type="button" :disabled="busy || !ready[step]" @click="onContinue">
               {{ busy ? "Saving…" : step !== "agents" ? "Continue" : connected ? "Finish" : "Finish without an agent" }}
             </button>
-            <button class="btn" type="button" :disabled="busy" @click="skip">Skip</button>
+            <!-- With nothing connected, "Finish without an agent" is the skip: one control per act. -->
+            <button v-if="step !== 'agents' || connected" class="btn" type="button" :disabled="busy" @click="skip">Skip</button>
             <span v-if="step === 'agents' && !connected" class="font-ui text-sm text-muted">
               Connect one any time from Settings, Agents.
             </span>
