@@ -16,10 +16,10 @@
 -->
 <script setup lang="ts">
 import { APEX } from "#api/hosts";
-import { published } from "#shared/pages";
+import { isPublic } from "#shared/pages";
 
 /** The closer points at the docs once they are written, and not before. */
-const docsPublished = published("/docs");
+const docsPublished = isPublic("/docs");
 
 usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
@@ -158,8 +158,8 @@ const SPECIMEN = {
 
 /**
  * A number from real use, for the proof line under the specimen — and nothing until there is one.
- * The page states no figure it cannot stand behind: set this from the dogfooding metric in
- * docs/V2.md §7 once it exists.
+ * The page states no figure it cannot stand behind: set this from `pnpm metrics` once real
+ * use gives one.
  */
 const PROOF = null as { figure: string; says: string } | null;
 </script>
@@ -173,13 +173,12 @@ const PROOF = null as { figure: string; says: string } | null;
            description, which is where a search engine reads it; the small label that carried it
            here said nothing a reader needed. -->
       <h1>
-        Your team’s agents know your product.
-        <span class="turn">Nothing that comes in gets dropped.</span>
+        Get things done fast.
+        <span class="turn">Leave nothing behind.</span>
       </h1>
       <p class="lede">
-        Requests, bug reports, alerts and customer emails reach the right person or group. Each
-        project’s documents tell any agent what the product is before it starts, and every piece of
-        work is followed until it comes back done, with the evidence.
+        Customer emails, bug reports, alerts and requests are sorted to the right person or agent the
+        moment they arrive, and followed until they’re done, with proof you can check.
       </p>
       <!-- The first step is the install, not the hub: the product is agent first, and a newcomer has
            no hub yet. No copy button — this page runs no script — so the command is set to select
@@ -201,7 +200,7 @@ const PROOF = null as { figure: string; says: string } | null;
       software nobody photographed. Then it was the markdown source, which is the aesthetic of a
       config file and argues that what this product makes is a text file.
 
-      What it makes is the page at `/g/:id/:key`: what needs doing and how to know it is done — set
+      What it makes is the page at `/w/:id/:key`: what needs doing and how to know it is done — set
       so a person can read it and shaped so an agent can act on it. That is a real surface of this product, built here from the same devices that page uses:
       the fact row, the tags, the sectioning. Nothing is invented and nothing claims to be a
       screenshot.
