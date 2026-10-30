@@ -345,8 +345,9 @@ change. Its README says how.
   card fades until the board reloads from the server. A project filter (`?project=`, the
   `project` on each row) and Only mine (`?mine=1`) narrow the cards and never move one. A column
   per person with By person on by default (`?by=stage` to turn it off) was tried first (2026-10-16)
-  and scrolled sideways once a team had more than a few people; it is gone, and so is bulk
-  selection.
+  and scrolled sideways once a team had more than a few people; it is gone. Ticking cards brings
+  up a bulk bar (Give to…, Move to…, Archive…, each asked in place) that sends the single acts'
+  routes four at a time and reloads once (`onBulk` in useHub.ts).
 - **Finishing is final, and needs proof; there is no review stage (2026-10-15, docs/REVIEW.md).**
   In production 64% of hand-ins were archived with nobody answering them and none was ever sent
   back, so the stage cost more than it caught. `hand_in` ends the work: `claims.handIn()` then

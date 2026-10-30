@@ -67,7 +67,12 @@ unarchives; between To do's groups gives it to that person or group (`POST
 /v1/guides/:id/assign`), and while a To do card is dragged every teammate and group shows as a
 place to drop it. Nothing is dropped into In progress: taking is "I'll do this" on the work page.
 A moved card fades until the board has reloaded from the server, and a polite live region says what
-happened. Bulk selection is gone.
+happened, and it then settles into its new place. Four columns hold from a 1024px window, and
+each column's head stays at the top while To do scrolls. A card with no project says "Not in a
+project", the phrase Needs you uses too. A quiet tick on each card (shown on hover, focus, touch,
+or once any card is ticked; not on Done) selects it for the **bulk bar**: Give to…, Move to… (To do
+or Draft, with how many each applies to) and Archive…, each confirmed in place, said in the live
+region, then reloaded (`onBulk`, the single acts' routes four at a time).
 
 It replaced four tabs (Needs you, Being worked on, Open, Done) worked out per viewer, which put the
 same work in different places for different teammates and counted it differently.
@@ -151,5 +156,5 @@ holding that anchor (`tabOf()`).
 
 ## Sources
 - `apps/web/app/pages/hub/index.vue` (Needs you), `components/hub/Sidebar.vue`, `utils/projects.ts`, `apps/api/src/needs.ts`, `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/projects/`, `components/hub/ProjectDocument.vue`, `apps/api/src/project.ts`, `pages/hub/settings/[[tab]].vue`
-- `apps/web/app/components/hub/Board.vue`, `BoardCard.vue`, `CardMenu.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
+- `apps/web/app/components/hub/Board.vue`, `BoardCard.vue`, `BulkBar.vue`, `CardMenu.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
 - [AGENTS.md](../../AGENTS.md): "A team's board is one board", "The hub shows a guide by framing it…", "The hub is live…"
