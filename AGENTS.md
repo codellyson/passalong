@@ -255,7 +255,7 @@ change. Its README says how.
     `work.ts` (the format) and `analytics.ts`. Aliased rather than copied — the format is already
     defined twice, in `packages/passalong/src/work.js` and mirrored in `apps/api/src/work.ts`,
     and a third copy is one more place to forget.
-  - `scripts/probe.sh` — the port's load-bearing assumption, asserted against a deployed `/`:
+  - `scripts/probe.sh` — the port's load-bearing assumption, asserted against a deployed `/docs`:
     that a route can be served with no script at all (`noScripts`) and with the stylesheet as a
     `<link>` rather than an inline `<style>` (`features.inlineStyles: false`). Share pages render
     markdown a stranger wrote and that CSP is the product's one real security property — if this
@@ -884,9 +884,9 @@ change. Its README says how.
   `/learn/:slug` is the same reader over `content/learn` (`postBySlug(slug, "learn")`) for topic
   pages rather than dated posts. Its one publish switch is the page's entry in shared/pages.ts:
   unlisted or draft there, it renders noindex with no canonical or JSON-LD, whatever its frontmatter says.
-- **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
-  `application/ld+json` when deciding whether a page runs script; without that the landing would
-  get the hub's nonce policy.
+- **JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips `application/ld+json`
+  when deciding whether a page runs script; without that a prose page carrying one would get the
+  hub's nonce policy in place of its stricter one.
 
 ## Workflow
 
@@ -927,9 +927,11 @@ ships scripts and inlines styles whatever the config says.
   CDN never caches a Worker's own response whatever its `cache-control` says. The markup is the
   card, so an edit is a new key and nothing needs purging; bump `DRAWN_WITH` when a change to the
   renderer (fonts, size, format) would draw the same markup differently.
-- `/hub`, `/join/:code` and `/reset` are the only pages allowed to run script. Their header is
-  written per response by `apps/web/server/plugins/csp.ts` with a nonce; `/` and `/w/**` are
-  `noScripts` with no `script-src` at all (`shared/csp.ts`). Share pages render markdown someone
+- `/hub`, `/join/:code`, `/reset` and the landing `/` run script. Their header is written per
+  response by `apps/web/server/plugins/csp.ts` with a nonce, so only scripts the server emitted
+  can run; the landing holds nothing anyone else wrote, which is why it may (2026-10-30, the
+  author's call). Share pages (`/w/**`, `/p/**`) and the prose pages (docs, `/learn`, the blog,
+  `/connect`, `/faq`) are `noScripts` with no `script-src` at all (`shared/csp.ts`). Share pages render markdown someone
   else wrote and that CSP is the only thing making it safe — never relax it to add a feature.
   `passalong hub` passes the token in the URL fragment, which the page stores and scrubs on load.
 - Saved work carries its own **share URL** in the frontmatter, and that URL needs no account

@@ -102,55 +102,6 @@ const STRUCTURED = {
 useHead({ script: [{ type: "application/ld+json", innerHTML: JSON.stringify(STRUCTURED) }] });
 
 /**
- * The specimen: one thing that came in, followed to done.
- *
- * Three moments of one customer email, left to right: what arrived, where Passalong's agent sent it
- * and why, and how it ended — a fix handed in with proof, and a reply a person read and sent. The
- * times carry the order, so there are no step numbers. It is an example and says so underneath;
- * nobody here is a real customer.
- *
- * Built from the devices the product's own pages use — the fact row, the checked lines — so it is a
- * surface of this product rather than a drawing of one. Nothing claims to be a screenshot.
- */
-const TRAIL = [
-  {
-    when: "Came in · 09:12",
-    title: "“Charged twice this month”",
-    facts: [
-      { label: "From", value: "Maya, a customer" },
-      { label: "To", value: "Your support address" },
-    ],
-    quote: "Hi, I was charged twice for October. Can you refund one of them?",
-  },
-  {
-    when: "Sorted · 09:12",
-    title: "Billing, for the billing group",
-    facts: [
-      { label: "Project", value: "Billing app" },
-      { label: "For", value: "#billing" },
-    ],
-    done: [
-      "The agent’s reason: a duplicate charge, so billing",
-      "Maya got her tracking number, R‑K7Q2M9",
-      "Nobody had to read it first to route it",
-    ],
-  },
-  {
-    when: "Done · 11:40",
-    title: "Refunded, and Maya heard back",
-    facts: [
-      { label: "Fixed by", value: "Bola’s agent" },
-      { label: "Sent by", value: "Ada" },
-    ],
-    done: [
-      "Charge check fixed, with the test run as proof",
-      "Reply drafted by the agent",
-      "Read and sent by Ada, in the same thread",
-    ],
-  },
-];
-
-/**
  * A number from real use, for the proof line under the specimen — and nothing until there is one.
  * The page states no figure it cannot stand behind: set this from `pnpm metrics` once real
  * use gives one.
@@ -187,27 +138,8 @@ const PROOF = null as { figure: string; says: string } | null;
       </p>
     </header>
 
-    <!-- One thing that came in, followed to done: the hero's promise, shown. -->
-    <section class="specimen trail" aria-label="One customer email, followed from arrival to done">
-      <article v-for="step in TRAIL" :key="step.when">
-        <p class="when">{{ step.when }}</p>
-        <h2>{{ step.title }}</h2>
-        <dl class="facts">
-          <div v-for="f in step.facts" :key="f.label">
-            <dt>{{ f.label }}</dt>
-            <dd>{{ f.value }}</dd>
-          </div>
-        </dl>
-        <blockquote v-if="step.quote" class="said">{{ step.quote }}</blockquote>
-        <ul v-else class="checks met">
-          <li v-for="line in step.done" :key="line">{{ line }}</li>
-        </ul>
-      </article>
-    </section>
-    <p class="under">
-      One email, followed to done: nobody had to sort it, chase it or remember to reply, and every
-      step is on the request’s thread. An example; Maya is not a real customer.
-    </p>
+    <!-- The hero's promise, played: one thing that came in, followed to done. -->
+    <LandingStory />
     <p v-if="PROOF" class="proof"><b>{{ PROOF.figure }}</b> {{ PROOF.says }}</p>
 
     <!--

@@ -11,7 +11,7 @@ sent from the Worker with categorical props only — never an id, handle, title 
 
 A share page renders markdown a stranger wrote, and there is no sanitiser behind it — only the policy
 `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' https: data:`. That is the
-product's one real security property. The landing, docs, FAQ, connect and blog get it too (`noScripts`).
+product's one real security property. The docs, FAQ, connect, /learn and blog get it too (`noScripts`). The landing runs script under the hub's per-request nonce policy (2026-10-30): it holds nothing anyone else wrote, so only the scripts the server emitted can run, and agents read `llms.txt` and the raw `.md` of a share link, never the landing.
 A shared project (`/p/:id/:key`) gets the same rule, `noindex` and a `robots.txt` disallow, and its
 documents also go through the sanitising project renderer; its files are served as downloads only.
 `apps/web/test/share-links.test.mjs` pins both prefixes to these rules.

@@ -9,7 +9,7 @@ const BASE = {
 };
 
 /**
- * Work pages and the landing: no script at all. This is `VIEW_HEADERS` from apps/api, unchanged,
+ * Work pages and the prose pages (docs, /learn, the blog): no script at all. This is `VIEW_HEADERS` from apps/api, unchanged,
  * and it is the product's one real security property — a work page renders markdown a stranger
  * wrote, and there is no sanitiser behind this, only the CSP. Pair it with the `noScripts` route
  * rule; without that Nuxt emits a bootstrap script the policy will (correctly) refuse.

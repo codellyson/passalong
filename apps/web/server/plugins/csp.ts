@@ -6,7 +6,7 @@
 // to the markup it describes.
 //
 // It only acts when it actually finds an inline script, so a `noScripts` route — a work page,
-// the landing — keeps the stricter header its route rule already set and never sees a nonce it
+// the docs — keeps the stricter header its route rule already set and never sees a nonce it
 // has no use for. That also means this needs no list of routes to keep in step with nuxt.config:
 // whether a page runs script is decided by whether one is there.
 import { hubHeaders } from "../../shared/csp";
@@ -25,8 +25,8 @@ export default defineNitroPlugin((nitroApp) => {
     // Every `<script` the renderer wrote, including the JSON payload block. Tagging an external
     // <script src> too is harmless and keeps this from having to reason about which is which.
     //
-    // Except JSON-LD. The landing carries a `application/ld+json` block for search engines, which
-    // no browser executes and no CSP governs. Counting it as script would hand the landing the
+    // Except JSON-LD. Prose pages carry `application/ld+json` blocks for search engines, which
+    // no browser executes and no CSP governs. Counting them as script would hand those pages the
     // hub's nonce policy in place of its stricter one.
     const stamp = (chunk: string) =>
       chunk.replace(/<script(?![^>]*\bnonce=)(?![^>]*type="application\/ld\+json")/g, () => {

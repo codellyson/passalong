@@ -111,14 +111,10 @@ export default defineNuxtConfig({
   },
 
   routeRules: {
-    // Work pages render markdown a stranger wrote, and the CSP is what makes that safe rather
-    // than a sanitiser. `noScripts` drops the entry script, the import map, the inlined payload
-    // and the JS resource hints, so the page can be served with no `script-src` at all. It also
-    // means the route never hydrates: nothing on it may be interactive.
-    //
-    // The headers are `VIEW_HEADERS` from apps/api/src/index.ts, verbatim. They move here from
-    // being a hand-spread object literal on every `c.html()` call.
-    "/": { noScripts: true, headers: PUBLIC_HEADERS },
+    // The landing runs script: it holds nothing anyone else wrote, so the no-script rule that keeps
+    // share pages safe buys it nothing. Its policy is the hub's, written per response with a nonce
+    // by server/plugins/csp.ts, so only the scripts the server itself emitted can run.
+    "/": { headers: { vary: "Cookie" } },
     // A work page renders markdown a stranger wrote. There is no sanitiser behind this — the CSP
     // is what makes it safe, and `noScripts` is what lets the CSP name no `script-src` at all.
     //

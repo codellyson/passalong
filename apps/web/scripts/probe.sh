@@ -12,8 +12,9 @@
 #
 #   sh scripts/probe.sh https://passalong-web.<subdomain>.workers.dev [path]
 #
-# It runs against the landing page by default — a real page under the real route rule, rather than
-# a fixture that could drift from one. Pass a path to check another, e.g. a work page:
+# It runs against /docs by default — a real page under the real route rule, rather than a fixture
+# that could drift from one. (The landing runs script now, under the hub's nonce policy.) Pass a
+# path to check another, e.g. a work page:
 #
 #   sh scripts/probe.sh https://passalong.dev /w/<id>/<key>
 #
@@ -22,7 +23,7 @@
 set -eu
 
 origin=${1:?usage: probe.sh <origin> [path]}
-path=${2:-/}
+path=${2:-/docs}
 html=$(curl -fsS "$origin$path")
 fail=0
 
@@ -56,7 +57,7 @@ esac
 # brand link is the marker because every page under this rule carries one, so the check does not
 # have to know which page it was pointed at.
 case $html in
-  *'class="brand"'*) check ok "markup is server-rendered" ;;
+  *'class="brand'*) check ok "markup is server-rendered" ;;
   *) check no "markup is server-rendered" ;;
 esac
 

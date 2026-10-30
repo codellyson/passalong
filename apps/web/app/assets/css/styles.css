@@ -1547,167 +1547,196 @@ form.join label {
   text-wrap: pretty;
 }
 
-/* The artifact. Not a rendering of a piece of work, not a screenshot of one: the file. */
-/* A piece of work as the product renders one, on the page that has to make it look worth having.
-
-   Deliberately not the markdown source. A slab of monospace is what a config file looks like, and
-   it made the loudest claim on this page "we produce text files" — which is both true and the
-   smallest possible reading of the thing. The document is the product; the file format is the
-   promise underneath it, and it is stated in one line below rather than shown at full size.
-
-   Everything here is a device the work page already uses, so this is the product rather than a
-   picture of it: the serif headings, the labelled fact row, the tags. */
-.specimen {
-  margin: var(--gap) 0 var(--s-4);
+/* The landing's story (LandingStory.vue): one thing that came in, followed to done, played. A card
+   drawn from the product's own anatomy — a title with its state, then a thread of what happened —
+   with a track of the five moments under it, and a box to try it with your own words. Rows that
+   have not happened yet keep their place, faded, so the card never jumps while it plays. */
+.story {
+  margin: var(--gap) auto var(--s-4);
+  max-width: 46rem;
+}
+.story-card {
   border-radius: var(--r-3);
   box-shadow: var(--edge-shadow);
   background: var(--surface-raised);
-  padding: var(--s-6) var(--s-6) var(--s-7);
+  padding: var(--s-5) var(--s-6) var(--s-4);
 }
-.specimen article {
-  max-width: 42rem;
-  margin: 0 auto;
+.story-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line);
 }
-.specimen h2 {
+.story-head h3 {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: clamp(1.35rem, 1.1rem + 1vw, 1.75rem);
+  font-size: clamp(1.25rem, 1.05rem + 0.8vw, 1.6rem);
   font-weight: 600;
-  line-height: 1.2;
   letter-spacing: -0.015em;
   text-wrap: balance;
 }
-/* The same labelled row the work page carries, and for the same reason: the repo a piece of work came out
-   of and the stack it assumes are different facts, and a reader should not have to tell two grey
-   strings apart by guessing. */
-.specimen .facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: var(--s-3) var(--s-6);
-  margin: var(--s-4) 0;
-  padding: var(--s-3) 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-/* The landing's small labels are set in the sans, in sentence case. Tracked mono capitals read as
-   decoration on a page whose headings already say what each block is. */
-.specimen dt {
-  font: 500 var(--t-sm) / 1.3 var(--font-sans);
-  color: var(--muted);
-}
-.specimen dd {
-  margin: var(--s-1) 0 0;
-  font-size: var(--t-sm);
+.story-status {
+  border-radius: var(--r-pill);
+  padding: 0.125rem var(--s-3);
+  font: 500 var(--t-xs) / 1.6 var(--font-sans);
+  background: var(--surface);
   color: var(--fg);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
-.specimen .tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  margin: var(--s-3) 0 0;
+.story-status.done {
+  background: var(--accent);
+  color: var(--accent-fg);
 }
-/* The five headings every piece of work has. They are the argument this block makes — that finished work
-   arrives in the same shape every time — so they carry the serif and the weight. */
-.specimen .sec {
-  margin-top: var(--s-5);
-}
-.specimen h3 {
-  margin: 0 0 var(--s-2);
-  font-family: var(--font-serif);
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: normal;
-}
-.specimen .sec p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.7;
-  text-wrap: pretty;
-}
-
-/* One thing that came in, followed to done: three moments side by side from 56rem, a hairline
-   between them, each moment's when, title, facts and body sharing rows with the others so the facts
-   and the lists start level. Stacked on a narrow screen, in the order it happened. */
-.specimen.trail {
-  display: grid;
-  gap: var(--s-7) var(--s-6);
-  grid-template-columns: minmax(0, 1fr);
-}
-.specimen.trail article {
-  max-width: none;
-  margin: 0;
-}
-@media (min-width: 56rem) {
-  .specimen.trail {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-rows: repeat(4, auto);
-    row-gap: 0;
-  }
-  .specimen.trail article {
-    display: grid;
-    grid-row: span 4;
-    grid-template-rows: subgrid;
-    align-content: start;
-  }
-  .specimen.trail article + article {
-    padding-inline-start: var(--s-6);
-    border-inline-start: 1px solid var(--line);
-  }
-}
-/* When it happened, and what happened: the times carry the order. Tabular, so 09:12 and 11:40
-   line up as times rather than as words. */
-.specimen .when {
-  margin: 0 0 var(--s-2);
-  font: 500 var(--t-sm) / 1.3 var(--font-sans);
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-/* The customer's own words, as they wrote them: the serif, and nothing that makes them look like code. */
-.specimen .said {
-  align-self: start;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  font-family: var(--font-serif);
-  font-size: 1.0625rem;
-  line-height: 1.6;
-  color: var(--fg);
-  text-wrap: pretty;
-}
-.specimen .checks {
+.story-rows {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.story-row {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: var(--s-3);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
   color: var(--muted);
-  line-height: 1.6;
+  transition:
+    opacity 0.45s cubic-bezier(0.2, 0, 0, 1),
+    translate 0.45s cubic-bezier(0.2, 0, 0, 1);
 }
-.specimen .checks li {
+.story-row.later {
+  opacity: 0;
+  translate: 0 0.375rem;
+}
+.story-row > svg {
+  margin-top: 0.2rem;
+}
+.story-row p {
+  margin: 0;
+}
+.story-what {
+  font: 500 var(--t-sm) / 1.5 var(--font-sans);
+  color: var(--fg);
+}
+.story-what b {
+  font-weight: 600;
+}
+.story-at {
+  margin-inline-start: var(--s-2);
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.story-said {
+  margin-top: var(--s-1);
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.story-note {
+  margin-top: var(--s-1);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+}
+/* The five moments: a segment each, done ones full, the current one filling while it plays. */
+.story-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.story-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  border: 0;
+  padding: 0 0 var(--s-1);
+  background: transparent;
+  font: 500 var(--t-xs) / 1.3 var(--font-sans);
+  color: var(--muted);
+  text-align: start;
+  cursor: pointer;
+}
+.story-step:hover,
+.story-step.now {
+  color: var(--fg);
+}
+.story-bar {
   position: relative;
-  padding-inline-start: 1.5em;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  overflow: hidden;
 }
-.specimen .checks li + li {
-  margin-top: var(--s-2);
-}
-/* An open box for a line of done, a tick for a line checked: the two columns differ in exactly the
-   mark, which is what a reviewer compares. */
-.specimen .checks li::before {
+.story-bar::after {
   content: "";
   position: absolute;
-  inset-inline-start: 0;
-  top: 0.35em;
-  width: 0.8em;
-  height: 0.8em;
-  border: 1.5px solid var(--line-strong);
-  border-radius: 3px;
+  inset: 0;
+  background: var(--accent);
+  transform-origin: left;
+  scale: 0 1;
 }
-.specimen .checks.met li::before {
-  content: "\2713";
-  border: 0;
-  top: 0;
-  width: auto;
-  height: auto;
-  color: var(--ok);
-  font-weight: 700;
+.story-step.past .story-bar::after,
+.story-step.now .story-bar::after {
+  scale: 1 1;
+}
+.story-step.running .story-bar::after {
+  animation: story-fill 2.6s linear both;
+}
+@keyframes story-fill {
+  from {
+    scale: 0 1;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+/* Try it: your own words, the same way. */
+.story-try {
+  margin-top: var(--s-5);
+}
+.story-try label {
+  display: block;
+  margin-bottom: var(--s-2);
+  font: 500 var(--t-sm) / 1.4 var(--font-sans);
+}
+.story-try-row {
+  display: flex;
+  gap: var(--s-2);
+}
+.story-try-row input {
+  flex: 1;
+  min-width: 0;
+}
+.story-small {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+@media (max-width: 34rem) {
+  .story-card {
+    padding: var(--s-4) var(--s-4) var(--s-3);
+  }
+  .story-try-row {
+    flex-direction: column;
+  }
+  .story-try-row input {
+    flex: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-row,
+  .story-status {
+    transition: none;
+  }
 }
 .proof {
   max-width: 40rem;
@@ -1718,19 +1747,6 @@ form.join label {
 }
 .proof b {
   color: var(--fg);
-}
-
-.under {
-  max-width: 40rem;
-  margin: 0 auto;
-  font: var(--t-sm) / 1.65 var(--font-sans);
-  color: var(--muted);
-  text-align: center;
-  text-wrap: pretty;
-}
-/* A command broken across two lines stops being a command you could type. */
-.under code {
-  white-space: nowrap;
 }
 
 /* The five ideas, as a register: the heading on the left, what it means on the right, a hairline

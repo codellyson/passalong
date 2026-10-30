@@ -12,7 +12,10 @@
 -->
 <script setup lang="ts">
 const route = useRoute();
-const theme = useCookie<string | undefined>("theme", { readonly: true });
+// Read on the server and carried to the browser, as AppThemeToggle does: the cookie is HttpOnly, so
+// a browser-side read comes back empty and the links would disagree with the page they were drawn on.
+const cookie = useCookie<string | undefined>("theme", { readonly: true });
+const theme = useState<string | undefined>("theme:choice", () => cookie.value);
 
 /** Where to come back to. Always a path, never an origin — see server/routes/theme.get.ts. */
 const back = computed(() => encodeURIComponent(route.fullPath));
@@ -27,11 +30,13 @@ const modes = [
 
 <template>
   <div class="theme-pick">
+    <!-- nofollow: every page links here three times with its own `back`, which is an endless
+         supply of redirect URLs to a crawler. robots.txt disallows /theme as well. Kept out of the
+         v-for: a comment between v-if and v-else renders on the server and not in the browser,
+         which is a hydration mismatch on every page that runs script. -->
     <p class="modes">
       <template v-for="m in modes" :key="m.to">
         <span v-if="now === m.to" class="here" aria-current="true">{{ m.label }}</span>
-        <!-- nofollow: every page links here three times with its own `back`, which is an endless
-             supply of redirect URLs to a crawler. robots.txt disallows /theme as well. -->
         <a v-else :href="`/theme?to=${m.to}&back=${back}`" rel="nofollow">{{ m.label }}</a>
       </template>
     </p>
