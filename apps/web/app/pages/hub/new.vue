@@ -8,6 +8,7 @@
   Undo in place, and the last few filings below.
 -->
 <script setup lang="ts">
+import { useQueryClient } from "@tanstack/vue-query";
 import type { Guide } from "~/types/hub";
 import { age, byLine, toneOf } from "~/utils/projects";
 import { shorten } from "~/utils/shorten";
@@ -18,6 +19,9 @@ usePage({
   noindex: true,
 });
 const { api, json, data } = useHub();
+const queryClient = useQueryClient();
+/** The rail counts each project's open work: what this page files, moves or undoes changes it. */
+const recount = () => queryClient.invalidateQueries({ queryKey: hubKeys.projects });
 
 const teams = computed(() => data.value.me?.teams ?? []);
 const team = ref("");
@@ -314,6 +318,7 @@ async function file() {
     if (got) {
       filed.value = got;
       justFiled.value = got.id;
+      recount();
       filedTo.value = got.route ? `#${got.route.slug}` : "";
       now.value = Date.now();
       loadRecent();
@@ -347,6 +352,7 @@ async function moveProject(to: string) {
         method: "DELETE",
       });
     filed.value = { ...f, project: f.projects.find((p) => p.id === to) ?? null };
+    recount();
     loadRecent();
   } catch (err) {
     problem.value = (err as Error).message;
@@ -369,6 +375,7 @@ async function undo() {
     const told = got?.told ?? 0;
     filed.value = null;
     moving.value = false;
+    recount();
     // Its unread feed lines go with it; mail and phone alerts already sent cannot be recalled.
     undone.value = `Undone: it's deleted. Your words are still here.${
       told
