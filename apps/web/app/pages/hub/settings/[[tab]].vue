@@ -61,6 +61,14 @@ function go(item: (typeof items.value)[number]) {
   );
 }
 
+/** The Plan tab's one fact: work used on the free plan, else the plan's name. */
+const planNote = computed(() => {
+  const m = me.value;
+  if (!m) return "";
+  if (m.sync === "free") return `${m.guides} of ${m.limit}`;
+  return m.plan === "solo" ? "Solo" : m.plan === "lapsed" ? "lapsed" : "no limit";
+});
+
 const TABS = [
   { id: "account", label: "Account", path: "/hub/settings" },
   { id: "plan", label: "Plan", path: "/hub/settings/plan" },
@@ -104,8 +112,12 @@ onMounted(() => {
 const nav = computed(() =>
   TABS.map((t) => {
     const n = items.value.filter((i) => tabOf(i.anchor) === t.id).length;
-    // Usage is said in the Plan page's summary and its Work row, not a third time on the tab.
-    const fact = t.id === "teams" ? String(me.value?.teams?.length || "") : "";
+    const fact =
+      t.id === "plan"
+        ? planNote.value
+        : t.id === "teams"
+          ? String(me.value?.teams?.length || "")
+          : "";
     const bad = items.value.some((i) => i.tone === "bad" && tabOf(i.anchor) === t.id);
     return { ...t, needs: n, tone: bad ? "bad" : n ? "warn" : "", note: n ? "" : fact };
   }),
