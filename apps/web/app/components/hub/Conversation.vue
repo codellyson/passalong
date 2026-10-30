@@ -162,8 +162,9 @@ async function send() {
  * it after a send. Whatever scrolls — the window on a phone, an inner container if a layout adds
  * one — is scrolled so the last message's foot sits the box's height above the bottom of the view.
  * The editor and pictures arrive after the thread does and change the heights, so for a moment
- * after each trigger it is placed again whenever the box resizes or a picture loads. The page's
- * scroll-padding-bottom is the box's height too, so focus and find-in-page stop above it.
+ * after each trigger it is placed again whenever the box resizes or a picture loads — until the
+ * reader moves (wheel, touch or a key), which ends it at once so nothing pulls them back down. The
+ * page's scroll-padding-bottom is the box's height too, so focus and find-in-page stop above it.
  */
 const list = ref<HTMLElement | null>(null);
 const composer = ref<HTMLElement | null>(null);
@@ -189,14 +190,24 @@ function toLatest() {
   settling = Date.now() + 2500;
   void nextTick(() => {
     place();
-    requestAnimationFrame(place);
-    setTimeout(place, 400);
+    requestAnimationFrame(again);
+    setTimeout(again, 400);
   });
 }
 const again = () => {
   if (Date.now() < settling) place();
 };
 let sized: ResizeObserver | undefined;
+const moved = () => {
+  settling = 0;
+};
+const MOVES = ["wheel", "touchstart", "keydown"] as const;
+onMounted(() => {
+  for (const e of MOVES) window.addEventListener(e, moved, { passive: true });
+});
+onBeforeUnmount(() => {
+  for (const e of MOVES) window.removeEventListener(e, moved);
+});
 onMounted(() => {
   if (!composer.value || typeof ResizeObserver === "undefined") return;
   sized = new ResizeObserver(([e]) => {
@@ -209,6 +220,17 @@ onBeforeUnmount(() => {
   sized?.disconnect();
   document.documentElement.style.scrollPaddingBottom = "";
 });
+// Solved: a draft nobody touched no longer has anyone to go to, so it leaves the box and the next
+// waiting customer is the obvious move.
+watch(
+  () => props.state,
+  (s) => {
+    if (s !== "solved" || !untouched.value) return;
+    writer.value?.clear();
+    reply.value = "";
+    drafted.value = "";
+  },
+);
 let shown = 0;
 watch(
   () => said.value.length,
