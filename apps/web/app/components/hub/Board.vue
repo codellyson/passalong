@@ -372,7 +372,7 @@ const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:gr
         :aria-selected="shown === c.id"
         :aria-controls="`col-${c.id}`"
         class="tab -mb-px flex cursor-pointer items-baseline gap-1 border-0 border-b-2 bg-transparent px-0 py-2 font-ui text-sm"
-        :class="shown === c.id ? 'border-fg font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
+        :class="shown === c.id ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
         @click="picked = c.id"
       >
         {{ c.label }} <span class="text-xs text-muted tabular-nums">{{ c.cards.length }}</span>

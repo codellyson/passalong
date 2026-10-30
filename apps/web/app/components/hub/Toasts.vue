@@ -33,8 +33,8 @@ const DOT: Record<string, string> = {
         :key="t.key"
         class="pointer-events-auto flex items-start gap-3 rounded-2 bg-field px-4 py-3 font-ui text-sm shadow-[0_0_0_1px_var(--edge-ring),var(--shadow-2)]"
       >
-        <!-- A toast is news you have not looked at yet, so a kind with no status colour is coral. -->
-        <span class="mt-1.5 size-2 shrink-0 rounded-pill" :class="DOT[t.kind] || 'bg-coral'" aria-hidden="true" />
+        <!-- A toast is news you have not looked at yet, so a kind with no status colour wears the change mark. -->
+        <span class="mt-1.5 size-2 shrink-0 rounded-pill" :class="DOT[t.kind] || 'bg-changed'" aria-hidden="true" />
         <NuxtLink
           v-if="t.guide"
           :to="`/hub/g/${t.guide}`"

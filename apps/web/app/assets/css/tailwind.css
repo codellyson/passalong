@@ -49,6 +49,8 @@
   --color-image-edge: var(--image-edge);
   --color-field: var(--field);
   --color-coral: var(--coral);
+  /* Changed since you last looked: ink in the hub, where coral means active. */
+  --color-changed: var(--changed);
   --color-ink: var(--ink);
   --color-on-ink: var(--on-ink);
   /* The hub's ink sidebar. Defined on .hub-app in styles.css. */

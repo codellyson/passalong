@@ -469,7 +469,7 @@
       "name": "Register Row with Change Mark",
       "kind": "custom",
       "refersTo": "register-row",
-      "description": "The signature row: coral bar and label when changed, project mark, with, tabular age, one verb.",
+      "description": "The signature row: ink bar and label when changed, project mark, with, tabular age, one verb.",
       "html": "<div class=\"ds-reg\"><div class=\"ds-head\"><span>Work</span><span>Project</span><span>With</span><span class=\"ds-r\">Waiting</span><span></span></div><div class=\"ds-row\"><i class=\"ds-chg\"></i><div><a href=\"#\" class=\"ds-t\">The invoices page is blank</a> <span class=\"ds-lbl\">Changed · Customer wrote</span><p class=\"ds-sub\">“Thanks, the page loads now! But the totals look doubled.”</p></div><span class=\"ds-proj\"><i class=\"ds-mark\"></i>Billing app</span><span>Sam Lee</span><span class=\"ds-r ds-age\">26h</span><a href=\"#\" class=\"ds-verb\">Reply</a></div></div>",
       "css": ".ds-reg{font:400 .875rem/1.25rem 'Onest', ui-sans-serif, system-ui, sans-serif;color:#252522;max-width:760px}.ds-head,.ds-row{display:grid;grid-template-columns:minmax(0,1fr) 8.5rem 8rem 3.5rem 4.75rem;column-gap:12px;padding-left:16px}.ds-head{padding-bottom:8px;border-bottom:1px solid #252522;font:500 .6875rem 'Onest', ui-sans-serif, system-ui, sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6e6c68}.ds-row{position:relative;padding-top:12px;padding-bottom:12px;border-bottom:1px solid #efe6dc;align-items:start}.ds-chg{position:absolute;top:0;bottom:0;left:0;width:3px;background:#f2805d}.ds-t{font-weight:500;color:#252522;text-decoration:none}.ds-t:hover{text-decoration:underline}.ds-lbl{font-size:.8125rem;font-weight:500;color:#b8481f}.ds-sub{margin:2px 0 0;font-size:.8125rem;color:#6e6c68}.ds-proj{display:flex;align-items:center;gap:8px}.ds-mark{width:3px;height:14px;border-radius:1px;background:#3e6fa6}.ds-r{text-align:right}.ds-age{font-variant-numeric:tabular-nums}.ds-verb{justify-self:end;display:inline-flex;align-items:center;height:32px;padding:0 14px;border:1px solid #e0d4c7;border-radius:4px;color:#252522;text-decoration:none;font-weight:500}.ds-verb:hover{background:#f2ebe3}.ds-verb:focus-visible{outline:2px solid #252522;outline-offset:2px}"
     },
@@ -484,13 +484,13 @@
   ],
   "narrative": {
     "northStar": "The Drawing Set",
-    "overview": "The hub is a register of what moved and who must act. It keeps Passalong's cream ground, ink and coral, and draws them with a drawing set's discipline: a solid ink rail down the left, one-pixel rules where other products put soft cards, corners of two to four pixels, a grotesque for every piece of chrome, and figures that line up in columns. Hierarchy comes from an ink rule over a list and a deeper cream behind a panel, never from shadow or fill colour.\n\nCoral means one thing here: changed since you last looked. It is a 3px bar at a row's left edge with a label naming what changed, and a dot beside a project on the rail, and it stays until the work is opened. Each project owns a line colour from a fixed set of six, shown as a short vertical mark wherever the project is named, so a project reads the same in the rail, in a register row and in a side panel.\n\nThis world covers every signed-in screen under `/hub`: `.hub-app` on `<body>` restates the root tokens. The landing, the blog and the share pages keep the root tokens (24px cards, pill buttons, the serif as an editorial accent) and are not part of this system.",
+    "overview": "The hub is a register of what moved and who must act. It keeps Passalong's cream ground, ink and coral, and draws them with a drawing set's discipline: a solid ink rail down the left, one-pixel rules where other products put soft cards, corners of two to four pixels, a grotesque for every piece of chrome, and figures that line up in columns. Hierarchy comes from an ink rule over a list and a deeper cream behind a panel, never from shadow or fill colour.\n\nCoral means active here: where you are, what you chose, and the one action to press. A change since you last looked is ink: a 3px ink bar at a row's left edge with a label naming what changed, and a light dot beside a project on the rail, held until the work is opened. Each project owns a line colour from a fixed set of six, shown as a short vertical mark wherever the project is named, so a project reads the same in the rail, in a register row and in a side panel.\n\nThis world covers every signed-in screen under `/hub`: `.hub-app` on `<body>` restates the root tokens. The landing, the blog and the share pages keep the root tokens (24px cards, pill buttons, the serif as an editorial accent) and are not part of this system.",
     "keyCharacteristics": [
       "Solid ink rail, 240px, in both themes; light-on-dark project marks on it.",
       "Registers, not cards: rows divided by hairlines under an ink rule, with column labels once at the top.",
       "Square-ish geometry (2, 3, 4px); nothing round but a dot.",
       "Onest for everything, JetBrains Mono for machine strings, no serif.",
-      "Coral reserved for unseen change; six project line colours, none near coral.",
+      "Coral for active (current place, chosen, primary action); ink for unseen change; six project line colours, none near coral.",
       "Tabular figures wherever a count or an age stands in a column."
     ],
     "rules": [
@@ -531,7 +531,7 @@
       }
     ],
     "dos": [
-      "**Do** reserve coral for change since you last looked: the 3px left-edge bar, the \"Changed · …\" label, the rail dot.",
+      "**Do** use coral for what is active: the current place on the rail and the dock, the current tab's bar, a chosen chip or checkbox, the primary button and New.",
       "**Do** show a project by its 3×14px line mark in one of the six tones, wherever it is named.",
       "**Do** draw structure with 1px rules: ink over a list's head, hairline between rows.",
       "**Do** keep corners at 2, 3 or 4px; only dots are round.",
@@ -540,7 +540,7 @@
       "**Do** draw focus, a chosen state, a current tab and an emphasised link in ink."
     ],
     "donts": [
-      "**Don't** use coral for a project, a selected or current state, a focus ring, a link, a primary button, a progress fill or an emphasis. The one coral outside a change mark is the dot on a toast with no status colour, because a toast is news you have not looked at yet.",
+      "**Don't** use coral for a change since you last looked (that is ink), a project, a focus ring, a link, a progress fill or an emphasis; and never as small text on cream, where `--coral` is 2.6:1 — a coral fill takes `--accent` with `--accent-fg` text.",
       "**Don't** give an in-page surface a soft shadow; only floating menus lift.",
       "**Don't** use pill shapes or 24px card corners in the hub; those belong to the landing and share pages.",
       "**Don't** set any hub text in the serif, or a heading above 550.",

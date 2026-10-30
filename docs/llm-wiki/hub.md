@@ -15,7 +15,7 @@ sent to you or your group that nobody took, your work that came back. It is a re
 "Changed · what" after it, a line under it (the customer's own latest words, the question asked, or
 the state where the action does not already say it), and one action on the title's line. Beside
 it: work finished this week with **Reopen** (which asks why), then requests waiting on the customer.
-A coral bar marks work with an unread notification on it; opening the work
+An ink bar marks work with an unread notification on it; opening the work
 (`markSeen`) clears it, and **Mark all seen** clears everything. Empty, it says nothing needs you
 and lists what closed in the last day; with no team it also offers the invite paste. Someone with
 no team who never started setup is sent to `/hub/start` first (below), and while setup has steps
@@ -56,11 +56,11 @@ started") and the `ASKS`/`CONNECT`/`teamAsk` sentences it used are gone.
 
 Every signed-in page sits beside a 240px solid ink rail (`HubSidebar`): the mark, **Go to id**,
 Needs you with its count, Projects (each top-level folder, with its line colour, its open work and a
-coral dot when something in it changed), Work, Support, **New** (the box at `/hub/new`), and
+light dot when something in it changed), Work, Support, **New** (the box at `/hub/new`), and
 Settings and the account menu at the foot. On a phone the places are docked along the bottom as
 in a phone app (`HubDock`, 2026-10-30, the author's call): Needs you with its count, Projects, New,
 Work and Support on a 56px ink bar that clears the home indicator (`viewport-fit=cover` on hub pages
-only); the current one is on-rail text with a 2px bar along its top. The rest of the rail — Go to id,
+only); the current one is coral with a 2px coral bar along its top. The rest of the rail — Go to id,
 each project, Settings, you — is a drawer behind the top bar's menu, beside the mark. Anything fixed
 or sticky at the foot (toasts, the bulk bar, a conversation's composer) stands `--dock` clear of it,
 which is 0 from 768px up.
@@ -80,7 +80,7 @@ several named people shows under each of them, as one card. The page picks the v
 they have only one; across all teams the groups are named from the cards themselves.
 
 A card (`HubBoardCard`) has the register's anatomy: its title (the link covers the card), "Changed ·
-<what>" in coral text with the coral bar at its left edge when something changed since you last
+<what>" in ink with the ink bar at its left edge when something changed since you last
 looked (`changed` on every row, from unread notifications, worded as Needs you words it), then the
 project's 3×14 line mark and name (`project` on every row, the top folder it is linked into) and
 its age in tabular figures. In progress adds one muted line: "Went quiet" or "Waiting on you" when
@@ -148,7 +148,7 @@ author.
 
 A project is a folder (docs/LOOP.md §0); the hub never says "folder". `/hub/projects` is a register
 like Needs you: each top-level project with its line colour, its line of description, open work,
-documents and last change rolled up over the folders inside it (`projectsFrom()`), coral when
+documents and last change rolled up over the folders inside it (`projectsFrom()`), the change mark when
 something in it changed since you last looked, a plain create form and the agent's ask.
 `/hub/projects/:id` has three tabs at their own addresses (`?tab=documents|work|history`):
 **Documents** leads with the README rendered in full, then the other documents (last editor, person
@@ -179,7 +179,7 @@ lands with the shared words and pictures already in the editor.
 newest first, with no counts. Work and History come from one read, `GET /v1/folders/:id/project`
 (`apps/api/src/project.ts`), which owns no table.
 
-Coral on a project, a document or a History line is the server's answer, said one way, "Changed ·
+The change mark on a project, a document or a History line is the server's answer, said one way, "Changed ·
 <what>": unread news on its work, or a document version someone else saved after you last opened
 that document (`folder_document_seen`, migration 0064, `docChange()` in project.ts). Opening the
 document clears it (`PUT /v1/folders/:id/documents/:doc/seen`); "Mark all seen" on Needs you clears
@@ -197,8 +197,8 @@ customer's own latest words on one line), its project (3×14 mark, or "Not in a 
 never stored; an unanswered customer is New whatever development is doing, and With development
 needs our word last — and how long they have waited while the next word is ours, ink in tabular
 figures; past the four hours `customer_waiting` uses (`late`) the summary line counts it. The last
-message is decided by time (`at`, then id), as the thread and Needs you decide it. Coral is the
-change mark, from unread notifications ("Changed · Customer wrote"). Views are tabs at their own
+message is decided by time (`at`, then id), as the thread and Needs you decide it. The ink
+change mark comes from unread notifications ("Changed · Customer wrote"). Views are tabs at their own
 addresses: Waiting on us (default), With development, Waiting on them, Solved, All, each with its
 count; a search filters across them. Nobody written yet: the team's support address with Copy.
 The owner's **Tell the customer when a fix is done** is a quiet setting row at the foot.

@@ -2,8 +2,8 @@
 // line colour and how long something has waited.
 //
 // A project is a top-level folder for now (docs/LOOP.md §0). Each owns one line colour, shown as a
-// mark wherever the project appears. Coral is not one of them: in the hub coral means only "changed
-// since you last looked", so a folder someone coloured coral is drawn stone.
+// mark wherever the project appears. Coral is not one of them: in the hub coral means active, so a
+// folder someone coloured coral is drawn stone.
 
 export const TONES = ["amber", "green", "blue", "violet", "teal", "stone"] as const;
 export type Tone = (typeof TONES)[number];

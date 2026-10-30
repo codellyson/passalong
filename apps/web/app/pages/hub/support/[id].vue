@@ -331,12 +331,12 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
             <p :class="label">Work made from it</p>
             <ul class="m-0 flex list-none flex-col p-0">
               <li v-for="w in work" :key="w.id" class="relative flex flex-col gap-0.5 border-t border-line py-2 pl-3 first:border-t-0 first:pt-1">
-                <span v-if="w.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+                <span v-if="w.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
                 <NuxtLink :to="`/hub/g/${w.id}`" class="font-ui text-sm font-medium break-words text-fg no-underline hover:underline">{{ w.title }}</NuxtLink>
                 <span class="font-ui text-xs text-muted">
                   <span class="text-fg">{{ w.stage }}</span><template v-if="w.who"> · {{ w.who }}</template>
                 </span>
-                <span v-if="w.changed" class="font-ui text-xs font-medium text-accent">Changed · {{ w.changed }}</span>
+                <span v-if="w.changed" class="font-ui text-xs font-medium text-changed">Changed · {{ w.changed }}</span>
               </li>
             </ul>
           </div>

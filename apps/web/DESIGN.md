@@ -94,7 +94,7 @@ components:
     height: "32px"
     padding: "0 14px"
   button-primary:
-    backgroundColor: "{colors.ink}"
+    backgroundColor: "{colors.coral-text}"
     textColor: "{colors.cream-ground}"
     rounded: "{rounded.r-3}"
     height: "40px"
@@ -142,7 +142,7 @@ components:
     width: "3px"
     height: "14px"
   change-mark:
-    backgroundColor: "{colors.coral}"
+    backgroundColor: "{colors.ink}"
     width: "3px"
 ---
 
@@ -154,7 +154,7 @@ components:
 
 The hub is a register of what moved and who must act. It keeps Passalong's cream ground, ink and coral, and draws them with a drawing set's discipline: a solid ink rail down the left, one-pixel rules where other products put soft cards, corners of two to four pixels, a grotesque for every piece of chrome, and figures that line up in columns. Hierarchy comes from an ink rule over a list and a deeper cream behind a panel, never from shadow or fill colour.
 
-Coral means one thing here: changed since you last looked. It is a 3px bar at a row's left edge with a label naming what changed, and a dot beside a project on the rail, and it stays until the work is opened. Each project owns a line colour from a fixed set of six, shown as a short vertical mark wherever the project is named, so a project reads the same in the rail, in a register row and in a side panel.
+Coral means active here: where you are, what you chose, and the one action to press. A change since you last looked is ink: a 3px ink bar at a row's left edge with a label naming what changed, and a light dot beside a project on the rail, held until the work is opened. Each project owns a line colour from a fixed set of six, shown as a short vertical mark wherever the project is named, so a project reads the same in the rail, in a register row and in a side panel.
 
 This world covers every signed-in screen under `/hub`: `.hub-app` on `<body>` restates the root tokens. The landing, the blog and the share pages keep the root tokens (24px cards, pill buttons, the serif as an editorial accent) and are not part of this system.
 
@@ -163,17 +163,17 @@ This world covers every signed-in screen under `/hub`: `.hub-app` on `<body>` re
 - Registers, not cards: rows divided by hairlines under an ink rule, with column labels once at the top.
 - Square-ish geometry (2, 3, 4px); nothing round but a dot.
 - Onest for everything, JetBrains Mono for machine strings, no serif.
-- Coral reserved for unseen change; six project line colours, none near coral.
+- Coral for active (current place, chosen, primary action); ink for unseen change; six project line colours, none near coral.
 - Tabular figures wherever a count or an age stands in a column.
 
 ## Colors
 
-Warm cream and ink carry the whole interface; coral and the six project lines are marks, never fills of text blocks or buttons. Every colour except coral is a `light-dark()` pair; the frontmatter holds the light half and the sidecar holds the pair.
+Warm cream and ink carry the whole interface; coral marks what is active, and the six project lines are marks, never fills of text blocks. Every colour except coral is a `light-dark()` pair; the frontmatter holds the light half and the sidecar holds the pair.
 
 ### Primary
-- **Ink** (`ink`): text, the primary button's fill, the rule over a register or a panel heading. The highest-contrast thing on the page is the one to press.
-- **Change Coral** (`coral`): the change mark (3px bar), the rail's unseen-change dot, the brand mark. At 2.6:1 on cream it is never used as text.
-- **Coral Text** (`coral-text`): the same hue at a readable 5:1, for the "Changed · …" label beside a row's title.
+- **Ink** (`ink`): text, the change mark (3px bar) and its "Changed · …" label, the rule over a register or a panel heading.
+- **Active Coral** (`coral`): on the ink rail and dock, the current place's text and the New fill; the current tab's 2px bar; the brand mark. At 2.6:1 on cream it is never used as text there.
+- **Coral Text** (`coral-text`, `--accent`): the same hue at a readable 5:1, the primary button's and a chosen chip's fill (with `--accent-fg` text), and a checked control. In dark mode it is the light coral with dark text.
 
 ### Secondary
 - **Project line colours** (`project-amber`, `project-green`, `project-blue`, `project-violet`, `project-teal`, `project-stone`): one per project, shown as a 3×14px mark. A folder with its own colour keeps it; otherwise one is picked from its id, the same every time. On the rail they take their dark-theme halves, because they sit on ink in both themes.
@@ -190,13 +190,13 @@ Warm cream and ink carry the whole interface; coral and the six project lines ar
 - **Status** (`ok`, `warn`, `danger`, `danger-soft`): meaning only. A load failure is a danger-bordered danger-soft callout; a standing notice is a warn dot on a hairline row.
 
 ### Named Rules
-**The One Meaning Rule.** Coral in the hub says "changed since you last looked" and nothing else. It appears as the left-edge bar, the "Changed" label and the rail dot, and it clears when the work is opened or marked seen.
+**The Active Rule.** Coral in the hub says "this is active": where you are, what you chose, the one action to press (2026-10-30, the author's call: white as the active state in dark mode said nothing). A change since you last looked is ink (`--changed`; on-rail cream on the rail): the left-edge bar, the "Changed" label and the rail dot, cleared when the work is opened or marked seen.
 
 **The Line Colour Rule.** A project's colour is one of six and never coral or near it; a folder someone coloured coral is drawn stone, and the folder colour picker does not offer coral.
 
 **The Ink Focus Rule.** Keyboard focus is a 2px ink ring at a 2px offset (on the rail, the same ring in on-rail cream). A focused field takes an ink border and a 3px ink halo at 14%. Both are `--focus` and `--focus-halo`, which the root defines as coral for the landing and `.hub-app` redefines as ink.
 
-**The Chosen Rule.** A thing someone picked is ink: a chosen chip or tile is an ink fill with cream text (a checkbox inside it takes the cream as its accent), a checked checkbox or radio is ink (`--chosen`), a selected or drop-target card has a 2px ink ring, the current tab is a 2px ink bar (under it in a tab row, beside it in a side list), and a menu's chosen item is an ink check.
+**The Chosen Rule.** A thing someone picked is coral: a chosen chip or tile is an `--accent` fill with `--accent-fg` text (`--primary`), a checked checkbox or radio is coral (`--chosen`), the current tab is a 2px coral bar (under it in a tab row, beside it in a side list). A selected or drop-target card keeps its 2px ink ring and a menu's chosen item its ink check.
 
 ## Typography
 
@@ -221,7 +221,7 @@ Warm cream and ink carry the whole interface; coral and the six project lines ar
 
 ## Layout
 
-A two-column shell: the 240px ink rail is sticky and full height from 768px up; below that the places (Needs you with its count, Projects, New, Work, Support) are a 56px solid ink dock fixed along the bottom, as in a phone app — each a 28px mark holder over a `text-xs` label, the current one on-rail at 500 with a 2px on-rail bar along its top edge, New's holder filled on-rail — and the rest of the rail is a drawer behind a 56px top bar holding the menu and the mark. `--dock` (its height plus the safe-area inset, 0 from 768px) is what toasts, the bulk bar and a conversation's composer stand clear of. The page's measure depends on what it holds: Needs you reads at 78rem, project, guide, support (the register and a request) and settings pages at 70rem, the board takes the full width, everything else 54rem.
+A two-column shell: the 240px ink rail is sticky and full height from 768px up; below that the places (Needs you with its count, Projects, New, Work, Support) are a 56px solid ink dock fixed along the bottom, as in a phone app — each a 28px mark holder over a `text-xs` label, the current one coral at 500 with a 2px coral bar along its top edge, New's holder filled coral — and the rest of the rail is a drawer behind a 56px top bar holding the menu and the mark. `--dock` (its height plus the safe-area inset, 0 from 768px) is what toasts, the bulk bar and a conversation's composer stand clear of. The page's measure depends on what it holds: Needs you reads at 78rem, project, guide, support (the register and a request) and settings pages at 70rem, the board takes the full width, everything else 54rem.
 
 Needs you is a register beside a side column (18rem from 1280px up). The register becomes a five-column grid when its own container passes 42rem: work, project (8.5rem), with (8rem), waiting (3.5rem, right-aligned), action (4.75rem). Below that each row wraps into a title, its second line, and a single muted fact line separated by middots.
 
@@ -240,7 +240,7 @@ The hub is flat. A raised surface's edge is a one-pixel ring in the stronger rul
 
 ## Shapes
 
-Square-ish throughout: 2px for a rail item or a small control, 3px for a field or a callout, 4px for a panel and every button (the hub redefines the pill radius as 4px, so no control is a pill). The project mark is a 3×14px bar at 1px. The only round shapes are dots: the coral change dot and a status dot.
+Square-ish throughout: 2px for a rail item or a small control, 3px for a field or a callout, 4px for a panel and every button (the hub redefines the pill radius as 4px, so no control is a pill). The project mark is a 3×14px bar at 1px. The only round shapes are dots: the change dot and a status dot.
 
 ## Components
 
@@ -248,12 +248,12 @@ Square-ish throughout: 2px for a rail item or a small control, 3px for a field o
 Precise and quiet; the shape says "control" by its edge, not its roundness.
 - **Shape:** 4px corners.
 - **Default (ghost):** transparent with a 1px rule edge, ink text, 40px tall with 20px sides; `sm` is 32px with 14px sides and is the size inside a row.
-- **Primary:** ink fill, cream text; one per view. Hover drops to 90% opacity, press to 80%.
-- **Rail New:** the primary inverted on the rail: on-rail fill, rail-ink text.
+- **Primary:** coral fill (`--accent`), `--accent-fg` text; one per view. Hover drops to 90% opacity, press to 80%.
+- **Rail New:** coral fill, rail-ink text, on the rail and in the phone dock.
 - **States:** every button presses to `scale(0.96)` over 0.15s; outline danger for a retry inside a danger callout. A tonal or outline button with no status tone is ink (`--emphasis`). Focus is the 2px ink ring.
 
 ### Chosen chips
-Ink fill, cream text, 4px corners; unchosen is a 1px hairline edge with muted text. Used for an app picked in Connections, the people picked for a group and where work comes from in Integrations.
+Coral fill (`--accent`), `--accent-fg` text, 4px corners; unchosen is a 1px hairline edge with muted text. Used for an app picked in Connections, the people picked for a group and where work comes from in Integrations.
 
 ### Shown-once callout
 A secret the server cannot give back (a new token, a client secret, an admin's credentials) sits in a deeper-cream box with a 1px ink border, and the "Copy it now" line is ink at 500.
@@ -263,10 +263,10 @@ A secret the server cannot give back (a new token, a client secret, an admin's c
 - **Focus:** an ink border and a 3px ink halo at 14% (`--focus`, `--focus-halo`); see the Ink Focus Rule.
 
 ### Navigation
-The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px; the current one is on-rail text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
+The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px; the current one is coral text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
 
 ### Register row
-The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in coral text, a second muted line (a state such as "Went quiet" in ink, then the customer's own words in quotes), the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
+The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (a state such as "Went quiet" in ink, then the customer's own words in quotes), the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
 
 ### Work board
 Four columns, people inside, and never a sideways scroll. Draft, To do, In progress and Done sit
@@ -285,8 +285,8 @@ from a 28rem board. In progress never cuts a holder's name: the line wraps, and 
 narrower than the 60rem board's the progress note is the part left out.
 
 A card is deeper cream at 3px corners with the Edge ring and 8px of vertical padding, as short as
-a title and one fact line allow (a 24px menu button sets the first line): the title at 500 (the whole card opens it), then "Changed · <what>" in coral
-text with the 3px coral bar at its left edge, then the project's 3×14 mark and name — or "Not in a
+a title and one fact line allow (a 24px menu button sets the first line): the title at 500 (the whole card opens it), then "Changed · <what>" in ink
+at 500 with the 3px ink bar at its left edge, then the project's 3×14 mark and name — or "Not in a
 project" in muted, the one phrase the hub uses for work in no project — with the age
 right-aligned in tabular figures. In progress adds one
 muted line — a state word in ink at 500 when the hold needs somebody ("Went quiet", "Waiting on
@@ -444,12 +444,11 @@ never a "←" glyph.
 
 ### Tabs
 A page with several views of one thing (a project's Documents, Work and History) is a row of links,
-each its own address (`?tab=`), over a hairline: the current one is ink at 500 with a 2px ink bar
-under it, the rest muted until hovered. A count beside a tab is muted, tabular. Never a pill group,
-never coral.
+each its own address (`?tab=`), over a hairline: the current one is ink at 500 with a 2px coral bar
+under it, the rest muted until hovered. A count beside a tab is muted, tabular. Never a pill group.
 
 ### Change mark
-A 3px coral bar the full height of a row at its left edge, with the label "Changed · <what>" in coral text beside the title: what changed on work ("Changed · Finished"), on a document ("Changed · version 3 by Bola"), in a project ("Changed · Pricing"). One wording everywhere; never "New" or "Changed" alone. Used in the register and in side-panel rows; persists until that thing is opened. Whether something changed is always the server's answer (unread notifications for work, `folder_document_seen` for documents), never kept in the browser.
+A 3px ink bar the full height of a row at its left edge (on-rail cream on the rail), with the label "Changed · <what>" in ink at 500 beside the title: what changed on work ("Changed · Finished"), on a document ("Changed · version 3 by Bola"), in a project ("Changed · Pricing"). One wording everywhere; never "New" or "Changed" alone. Used in the register and in side-panel rows; persists until that thing is opened. Whether something changed is always the server's answer (unread notifications for work, `folder_document_seen` for documents), never kept in the browser.
 
 ### Danger
 A destructive control is never a peer of the everyday ones. It sits alone at the foot of the form that edits the thing (a project's Delete at the foot of Edit), or in a row's own place for a row (a file's Delete), outline danger, and pressing it asks in place: a line naming what goes and what stays ("Delete Billing app and its 3 documents and 1 file? Work in it is kept."), then Delete and Keep it. The same holds for every question the hub asks before an act: stopping an agent or reopening finished work (a strip above the board when a card is dragged out of In progress or Done), stopping sharing, discarding edits, loading a newer version over yours. No browser `confirm()` anywhere in the hub.
@@ -469,16 +468,16 @@ Deeper cream, 4px corners, 1px hairline border, 12px 16px padding; a 14px headin
 ## Do's and Don'ts
 
 ### Do:
-- **Do** reserve coral for change since you last looked: the 3px left-edge bar, the "Changed · …" label, the rail dot.
+- **Do** use coral for what is active: the current place on the rail and the dock, the current tab's bar, a chosen chip or checkbox, the primary button and New.
 - **Do** show a project by its 3×14px line mark in one of the six tones, wherever it is named.
 - **Do** draw structure with 1px rules: ink over a list's head, hairline between rows.
 - **Do** keep corners at 2, 3 or 4px; only dots are round.
 - **Do** set ages and counts in a column with tabular figures, in the one unit that reads at a glance (12m, 5h, 3d, 6w).
 - **Do** give a row one verb, at `sm` size, in its last column.
-- **Do** draw focus, a chosen state, a current tab and an emphasised link in ink.
+- **Do** draw focus, a change mark and an emphasised link in ink.
 
 ### Don't:
-- **Don't** use coral for a project, a selected or current state, a focus ring, a link, a primary button, a progress fill or an emphasis. The one coral outside a change mark is the dot on a toast with no status colour, because a toast is news you have not looked at yet.
+- **Don't** use coral for a change since you last looked (that is ink), a project, a focus ring, a link, a progress fill or an emphasis; and never as small text on cream, where `--coral` is 2.6:1 — a coral fill takes `--accent` with `--accent-fg` text.
 - **Don't** give an in-page surface a soft shadow; only floating menus lift.
 - **Don't** use pill shapes or 24px card corners in the hub; those belong to the landing and share pages.
 - **Don't** set any hub text in the serif, or a heading above 550.

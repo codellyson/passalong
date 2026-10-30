@@ -4,8 +4,8 @@
   to you that nobody took, an agent gone quiet, your work that came back — and beside it the
   customers waiting and what was finished lately, each with Reopen.
 
-  A coral bar at a row's left edge, with a line naming what changed, is the one meaning coral has in
-  the hub: changed since you last looked. It stays until the work is opened (`markSeen`).
+  An ink bar at a row's left edge, with a line naming what changed, says changed since you last
+  looked (coral is the hub's active state). It stays until the work is opened (`markSeen`).
 
   `/hub` was the Work page, so links carrying a work query (`?tab=`, `?q=`, `?follows=`,
   `?done=1`) are still out in the world. They go on to /hub/work with that query. `?verified=` and
@@ -206,11 +206,11 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
               class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline"
               :class="cols"
             >
-              <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+              <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
                 <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
                   <NuxtLink :to="href(r)" class="font-medium text-fg no-underline hover:underline">{{ r.title }}</NuxtLink>
-                  <span v-if="r.changed" class="text-xs font-medium text-accent">Changed · {{ r.changed }}</span>
+                  <span v-if="r.changed" class="text-xs font-medium text-changed">Changed · {{ r.changed }}</span>
                 </p>
                 <p v-if="STATE[r.reason] || secondLine(r)" class="m-0 mt-0.5 font-ui text-xs text-muted">
                   <span v-if="STATE[r.reason]" class="font-medium text-fg">{{ STATE[r.reason] }}</span>
@@ -246,7 +246,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
           <p v-else-if="!needs?.closed.length" class="m-0 py-3 font-ui text-sm text-muted">Nothing was finished this week.</p>
           <ul v-else class="m-0 flex list-none flex-col p-0">
             <li v-for="c in needs.closed" :key="c.id" class="relative flex flex-col gap-1 border-b border-line py-3 pl-3 last:border-b-0">
-              <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+              <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <span class="flex items-baseline gap-3">
                 <NuxtLink :to="`/hub/g/${c.id}`" class="min-w-0 grow font-ui text-sm font-medium break-words text-fg no-underline hover:underline">{{ c.title }}</NuxtLink>
                 <span class="shrink-0 font-ui text-xs text-muted tabular-nums">{{ age(c.at, now) }}</span>
@@ -290,7 +290,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
           </div>
           <ul class="m-0 flex list-none flex-col p-0">
             <li v-for="c in needs.customers" :key="c.id" class="relative border-b border-line py-3 pl-3 last:border-b-0">
-              <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+              <span v-if="c.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <NuxtLink :to="`/hub/support/${c.id}`" class="flex flex-col gap-0.5 no-underline">
                 <span class="flex items-baseline gap-3">
                   <span class="min-w-0 grow font-ui text-sm font-medium break-words text-fg">{{ c.customer }}</span>

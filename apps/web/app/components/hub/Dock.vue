@@ -1,7 +1,7 @@
 <!--
   The hub's places on a phone, docked along the bottom as in a phone app: Needs you, Projects, the
   box, Work and Support, each a thumb's reach away. Solid ink like the rail it stands in for; the
-  current place is on-rail text with a 2px bar along its top edge. Everything else the rail holds
+  current place is coral, with a 2px coral bar along its top edge. Everything else the rail holds
   (Go to id, each project, Settings, you) stays in the drawer behind the top bar's menu.
 -->
 <script setup lang="ts">
@@ -45,13 +45,13 @@ const tabs = computed<Tab[]>(() => {
           :to="t.to"
           :aria-current="t.on ? 'page' : undefined"
           class="relative flex h-full flex-col items-center justify-center gap-0.5 font-ui text-xs no-underline"
-          :class="t.on ? 'font-medium text-on-rail' : 'text-on-rail-muted'"
+          :class="t.on ? 'font-medium text-coral' : 'text-on-rail-muted'"
         >
-          <span v-if="t.on" class="absolute inset-x-4 top-0 h-[2px] bg-on-rail" aria-hidden="true" />
+          <span v-if="t.on" class="absolute inset-x-4 top-0 h-[2px] bg-coral" aria-hidden="true" />
           <!-- One 28px holder for every mark, so the labels share a line; the box's is filled. -->
           <span
             class="grid size-7 place-items-center rounded-1"
-            :class="t.box ? 'bg-on-rail text-rail' : ''"
+            :class="t.box ? 'bg-coral text-rail' : ''"
           >
             <AppIcon :name="t.icon" />
           </span>

@@ -196,6 +196,9 @@
      always the highest-contrast thing on the page, which is what makes it the one to press. */
   --ink: var(--fg);
   --on-ink: var(--bg);
+  /* The filled action and a chosen chip. Ink here; the hub makes them coral (.hub-app). */
+  --primary: var(--ink);
+  --on-primary: var(--on-ink);
   --danger: light-dark(#b8322a, #ef7a6c);
   /* Semantic status, deliberately separate from the brand accent. Rust coral is the brand; these
      three carry meaning, and each is taken to a readable text weight on the cream. */
@@ -272,11 +275,15 @@
   --project-teal: light-dark(#2f8582, #5fb3ae);
   --project-stone: light-dark(#7b6e5f, #b8aa98);
 
-  /* Everything the landing marks in coral that is not a change is ink here. Focus is a 2px ink ring;
-     a focused field takes an ink border and a faint ink halo; a chosen control is ink. */
+  /* Coral means active in the hub: where you are, what you chose, the one action to take. A change
+     since you last looked is ink (`--changed`), a bar and a "Changed" line. Focus stays a 2px ink
+     ring, because coral is too light against the ground to be the only edge a keyboard user sees. */
+  --primary: var(--accent);
+  --on-primary: var(--accent-fg);
+  --changed: var(--fg);
   --focus: var(--fg);
   --focus-halo: color-mix(in oklab, var(--fg) 14%, transparent);
-  --chosen: var(--ink);
+  --chosen: var(--accent);
   --link-hover: var(--fg);
   --emphasis: var(--fg);
   --emphasis-hover: var(--muted);
@@ -291,6 +298,7 @@
   --project-teal: #5fb3ae;
   --project-stone: #b8aa98;
   --focus: var(--on-rail);
+  --changed: var(--on-rail);
 }
 .project-mark {
   background: var(--muted);
@@ -646,16 +654,16 @@ button.primary,
    the ink the same ink. */
 button.primary,
 .btn.primary {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--on-ink);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
   font-weight: 500;
 }
 button.primary:hover,
 .btn.primary:hover {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--on-ink);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
   opacity: 0.9;
 }
 button.primary:active,
@@ -2607,9 +2615,9 @@ button.chip-pick {
 }
 .chip-pick:has(input:checked),
 .chip-pick[aria-pressed="true"] {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--on-ink);
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .chip-pick:has(input:focus-visible),
 button.chip-pick:focus-visible {

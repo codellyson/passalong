@@ -180,7 +180,7 @@ const sep = (i: number) =>
           :key="t.id"
           :to="t.path"
           class="tab flex shrink-0 items-baseline gap-2 border-b-2 py-2 font-ui text-sm whitespace-nowrap no-underline"
-          :class="tab === t.id ? 'border-fg font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
+          :class="tab === t.id ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
           :aria-current="tab === t.id ? 'page' : undefined"
         >
           {{ t.label }}

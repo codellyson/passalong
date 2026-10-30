@@ -467,7 +467,7 @@ const label = "font-ui text-sm font-medium text-fg";
               >
                 <span
                   v-if="s.id === step"
-                  class="absolute inset-x-0 bottom-0 h-[2px] bg-fg md:inset-x-auto md:inset-y-1 md:-left-px md:h-auto md:w-[2px]"
+                  class="absolute inset-x-0 bottom-0 h-[2px] bg-accent md:inset-x-auto md:inset-y-1 md:-left-px md:h-auto md:w-[2px]"
                   aria-hidden="true"
                 />
                 <span class="flex w-4 shrink-0 justify-center tabular-nums" :class="stateOf(s.id) === 'done' ? 'text-fg' : 'text-muted'">

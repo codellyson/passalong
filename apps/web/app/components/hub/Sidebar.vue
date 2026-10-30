@@ -2,8 +2,8 @@
   The hub's places, on a solid ink rail: what needs you, each project with its line colour and its
   open work, the team's work and support, the box, and you at the foot.
 
-  A project is a top-level folder for now. The coral dot beside one means something in it changed
-  since you last looked, which is the only thing coral means in the hub.
+  A project is a top-level folder for now. The light dot beside one means something in it changed
+  since you last looked. Coral is where you are, and the box.
 -->
 <script setup lang="ts">
 import { projectsFrom } from "~/utils/projects";
@@ -18,7 +18,7 @@ const item =
   "flex min-h-8 items-center gap-3 rounded-1 px-3 py-1 font-ui text-sm leading-5 no-underline transition-colors";
 const tone = (on: boolean) =>
   on
-    ? "bg-rail-current font-medium text-on-rail"
+    ? "bg-rail-current font-medium text-coral"
     : "text-on-rail-muted hover:bg-rail-hover hover:text-on-rail";
 
 const at = {
@@ -78,7 +78,7 @@ const isProject = (id: string) => currentProject.value === id;
             >
               <span class="project-mark h-3.5 w-[3px] shrink-0 rounded-[1px]" :data-tone="p.tone" aria-hidden="true" />
               <span class="min-w-0 grow break-words">{{ p.title }}</span>
-              <span v-if="p.changed" class="size-1.5 shrink-0 rounded-full bg-coral" role="img" aria-label="Changed since you last looked" />
+              <span v-if="p.changed" class="size-1.5 shrink-0 rounded-full bg-changed" role="img" aria-label="Changed since you last looked" />
               <span v-if="p.open" class="text-xs tabular-nums">{{ p.open }}</span>
             </NuxtLink>
           </li>
@@ -106,7 +106,7 @@ const isProject = (id: string) => currentProject.value === id;
       <!-- The box: say it in your own words and the agent files it. -->
       <NuxtLink
         to="/hub/new"
-        class="btn border-on-rail bg-on-rail text-rail hover:border-on-rail hover:bg-on-rail hover:opacity-90"
+        class="btn border-coral bg-coral text-rail hover:border-coral hover:bg-coral hover:opacity-90"
         :aria-current="route.path === '/hub/new' ? 'page' : undefined"
       >
         <AppIcon name="plus" />New

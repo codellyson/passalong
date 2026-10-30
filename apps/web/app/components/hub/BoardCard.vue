@@ -1,6 +1,6 @@
 <!--
   One card on the Work board. The register's anatomy in a card: the title (its link covers the
-  card), "Changed · <what>" in coral text with the coral bar at the left edge when something changed
+  card), "Changed · <what>" in ink with the ink bar at the left edge when something changed
   since you last looked (the server's `changed`), then the project's line mark and name and the
   age in tabular figures. In progress adds one muted line: the state word when the hold needs
   somebody ("Went quiet", "Waiting on you"), who holds it, and their last progress note. Done is
@@ -88,7 +88,7 @@ function fromContext(e: MouseEvent) {
     @dragend="emit('dragend')"
     @contextmenu.prevent="fromContext"
   >
-    <span v-if="g.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+    <span v-if="g.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
     <div class="flex items-start gap-2">
       <NuxtLink
         :to="`/hub/g/${g.id}`"
@@ -115,7 +115,7 @@ function fromContext(e: MouseEvent) {
         <AppIcon name="more" />
       </button>
     </div>
-    <p v-if="g.changed" class="m-0 font-ui text-xs font-medium text-accent">Changed · {{ g.changed }}</p>
+    <p v-if="g.changed" class="m-0 font-ui text-xs font-medium text-changed">Changed · {{ g.changed }}</p>
     <!-- Wraps rather than cutting a person off; in a narrow column the note goes first. -->
     <p v-if="g.stage === 'working' && lead" class="m-0 pr-2 font-ui text-xs text-muted">
       <template v-if="lead.health === 'quiet' || lead.health === 'asking'">

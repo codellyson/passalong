@@ -171,12 +171,12 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)_4.75re
             class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline"
             :class="cols"
           >
-            <span v-if="p.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+            <span v-if="p.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
             <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
               <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="p.tone" aria-hidden="true" />
                 <NuxtLink :to="`/hub/projects/${p.id}`" class="font-medium text-fg no-underline hover:underline">{{ p.title }}</NuxtLink>
-                <span v-if="p.changed" class="text-xs font-medium text-accent">Changed · {{ p.changed }}</span>
+                <span v-if="p.changed" class="text-xs font-medium text-changed">Changed · {{ p.changed }}</span>
               </p>
               <p v-if="p.description" class="m-0 mt-0.5 pl-[11px] font-ui text-xs text-muted">{{ p.description }}</p>
             </div>

@@ -451,27 +451,28 @@ change. Its README says how.
   `mt-8` between sections. Half-steps are off the scale — `-1.5`, `-2.5` and `-3.5` were all in use
   and one relationship had four different values, which is what made the interface look unfinished
   before anyone could say why. `-0.5` is the one exception: 2px inside a chip is a sub-unit.
-- **Ink decides, coral means changed (the hub, 2026-10-29).** The palette is kept — cream ground,
+- **Coral is active, ink is changed (the hub, 2026-10-29; active since 2026-10-30).** The palette is kept — cream ground,
   ink, coral — and the signed-in hub draws it like a drawing set. Its tokens are `.hub-app` in
   styles.css, put on `<body>` by `HubShell` so teleported menus and drawers inherit them; the
   landing and the share pages keep the `:root` tokens. In the hub: corners are 2, 3 and 4px
   (`--r-1`..`--r-3`, and `--r-pill` is 4px too, so no button or chip is a pill — only a dot is
   round); there is no serif (`--font-serif` is the grotesque; the share page in its iframe keeps
-  its own); counts and ages are tabular figures. The primary action is an ink button
-  (`.btn.primary`). **Coral means one thing in the hub: changed since you last looked** — a 3px
-  coral bar at a row's left edge with a "Changed" line naming what changed, and a coral dot on a
-  project in the rail. It is held until the work is opened (`markSeen` in useHub posts
-  `/v1/notifications/read` with `{ guide }`), and "changed" is an unread notification on that
-  work. Never use coral or `--accent` for a state that is not a change: "waiting on us" is ink, and
-  so is everything else the landing marks in coral. Global rules the two worlds share read intent
-  tokens — `--focus`/`--focus-halo` (the ring and a focused field), `--chosen` (a checked control),
-  `--link-hover`, `--emphasis` (`.linkish`, a toneless tonal/outline button) — which `:root` sets to
-  coral and `.hub-app` to ink. A chosen chip is an ink fill with on-ink text, a selected card an ink
-  ring, the current tab an ink bar. The
-  "Changed · what" words sit on the title's line, after the title, and every notification kind
-  has its words (`CHANGE_WORDS` in needs.ts, held to `KINDS` by its test).
-  `--coral` is 2.6:1 on the canvas, so it stays a mark; `--accent` is the readable 5:1 for the
-  word "Changed". The rail is solid ink (`--rail`) in both themes. Each project owns one line
+  its own); counts and ages are tabular figures. **Coral means active in the hub**: the current place on the
+  rail and the phone dock (coral text), New (a coral fill), the primary action (`.btn.primary`
+  reads `--primary`, which `.hub-app` sets to `--accent` with `--accent-fg` text), a chosen chip
+  (`--primary` too), a checked control (`--chosen`) and the current tab's 2px bar. White as the
+  active state in dark mode said nothing (2026-10-30, the author's call). **A change since you last
+  looked is ink** (`--changed`, `bg-changed`/`text-changed`; on-rail cream on the rail): a 3px bar
+  at a row's left edge with a "Changed" line naming what changed, and a dot on a project in the
+  rail. It is held until the work is opened (`markSeen` in useHub posts `/v1/notifications/read`
+  with `{ guide }`), and "changed" is an unread notification on that work. Focus stays a 2px ink
+  ring (`--focus`/`--focus-halo`): coral is too light against the ground to be a keyboard user's
+  only edge. `--link-hover` and `--emphasis` (`.linkish`, a toneless tonal/outline button) are ink
+  in the hub and coral on the landing; a selected card keeps an ink ring. The "Changed · what"
+  words sit on the title's line, after the title, and every notification kind has its words
+  (`CHANGE_WORDS` in needs.ts, held to `KINDS` by its test). `--coral` is 2.6:1 on the canvas, so
+  on cream it is a bar or a fill under dark text, never small text; `--accent` is the readable
+  5:1. The rail is solid ink (`--rail`) in both themes. Each project owns one line
   colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the folder's own colour,
   a folder coloured coral drawn stone (nothing near coral or blue), and one derived from its id when it has
   none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.

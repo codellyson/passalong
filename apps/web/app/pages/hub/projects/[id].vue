@@ -545,7 +545,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           :key="t.key"
           :to="{ query: { tab: t.key } }"
           class="tab -mb-px flex items-baseline gap-2 border-b-2 py-2 font-ui text-sm no-underline"
-          :class="tab === t.key ? 'border-fg font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
+          :class="tab === t.key ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
           :aria-current="tab === t.key ? 'page' : undefined"
         >
           {{ t.label }}
@@ -589,7 +589,7 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fg pb-2">
                 <h2 id="readme-h" class="m-0 flex items-baseline gap-2 font-ui text-sm font-semibold tracking-normal">
                   README
-                  <span v-if="readmeRow?.changed" class="text-xs font-medium text-accent">Changed · {{ readmeRow.changed }}</span>
+                  <span v-if="readmeRow?.changed" class="text-xs font-medium text-changed">Changed · {{ readmeRow.changed }}</span>
                 </h2>
                 <span class="flex items-baseline gap-3 font-ui text-xs text-muted">
                   <span v-if="readmeRow">{{ lastEdit(readmeRow) }} · <span class="tabular-nums">{{ age(readmeRow.updated, now) }}</span></span>
@@ -625,10 +625,10 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               </div>
               <ol v-if="others.length" class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
                 <li v-for="d in others" :key="d.id" class="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_16rem_3.5rem]">
-                  <span v-if="d.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+                  <span v-if="d.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
                   <p class="m-0 flex min-w-0 grow basis-full flex-wrap items-baseline gap-x-2 font-ui text-sm @2xl:basis-auto">
                     <NuxtLink :to="{ query: { tab: 'documents', doc: d.id } }" class="font-medium break-words text-fg no-underline hover:underline">{{ d.name }}</NuxtLink>
-                    <span v-if="d.changed" class="text-xs font-medium text-accent">Changed · {{ d.changed }}</span>
+                    <span v-if="d.changed" class="text-xs font-medium text-changed">Changed · {{ d.changed }}</span>
                   </p>
                   <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">{{ lastEdit(d) }}<span class="tabular-nums @2xl:hidden"> · {{ age(d.updated, now) }}</span></span>
                   <span class="hidden font-ui text-sm text-fg tabular-nums @2xl:block @2xl:text-right">{{ age(d.updated, now) }}</span>
@@ -713,11 +713,11 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
               </div>
               <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
                 <li v-for="w in group.rows" :key="w.id" class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline" :class="cols">
-                  <span v-if="w.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+                  <span v-if="w.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
                   <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
                     <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
                       <NuxtLink :to="`/hub/g/${w.id}`" class="font-medium text-fg no-underline hover:underline">{{ w.title || "Untitled" }}</NuxtLink>
-                      <span v-if="w.changed" class="text-xs font-medium text-accent">Changed · {{ w.changed }}</span>
+                      <span v-if="w.changed" class="text-xs font-medium text-changed">Changed · {{ w.changed }}</span>
                     </p>
                     <p v-if="secondLine(w)" class="m-0 mt-0.5 font-ui text-xs text-muted">{{ secondLine(w) }}</p>
                   </div>
@@ -762,11 +762,11 @@ const hcols = "@2xl:grid-cols-[minmax(0,1fr)_12rem_3.5rem]";
           </div>
           <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
             <li v-for="h in history" :key="`${h.kind}-${h.id}-${h.version}`" class="relative flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid" :class="hcols">
-              <span v-if="h.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+              <span v-if="h.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <div class="min-w-0 grow basis-full @2xl:basis-auto">
                 <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
                   <NuxtLink :to="historyHref(h)" class="font-medium break-words text-fg no-underline hover:underline">{{ h.title || "Untitled" }}</NuxtLink>
-                  <span v-if="h.changed" class="text-xs font-medium text-accent">Changed · {{ h.changed }}</span>
+                  <span v-if="h.changed" class="text-xs font-medium text-changed">Changed · {{ h.changed }}</span>
                 </p>
                 <p class="m-0 mt-0.5 font-ui text-xs text-muted">{{ historyLine(h) }}</p>
                 <p v-if="h.note" class="m-0 mt-0.5 font-ui text-xs text-muted">“{{ h.note }}”</p>

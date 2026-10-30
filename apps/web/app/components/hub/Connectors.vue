@@ -246,7 +246,7 @@ const tone = {
           >
             <span
               class="grid size-8 place-items-center rounded-1 border"
-              :class="a.id === connect.app ? 'border-transparent bg-ink text-on-ink' : 'border-line bg-surface text-fg'"
+              :class="a.id === connect.app ? 'border-transparent bg-accent text-accent-fg' : 'border-line bg-surface text-fg'"
             >
               <AppMark :name="a.mark" :size="18" />
             </span>

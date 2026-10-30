@@ -218,7 +218,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
             :key="t.key"
             :to="{ query: t.key === 'ours' ? {} : { tab: t.key } }"
             class="tab flex shrink-0 items-baseline gap-2 border-b-2 py-2 font-ui text-sm whitespace-nowrap no-underline"
-            :class="tab.key === t.key ? 'border-fg font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
+            :class="tab.key === t.key ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
             :aria-current="tab.key === t.key ? 'page' : undefined"
           >
             {{ t.label }}
@@ -249,7 +249,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
               class="group relative grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1 border-b border-line py-3 pl-4 hover:bg-surface @2xl:grid-rows-1"
               :class="cols"
             >
-              <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-coral" aria-hidden="true" />
+              <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
               <!-- Customer -->
               <p class="m-0 min-w-0 font-ui text-sm">
                 <span class="block break-words text-fg">{{ who(r) }}</span>
@@ -270,7 +270,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
                     :to="`/hub/support/${r.id}`"
                     class="font-medium text-fg no-underline after:absolute after:inset-0 group-hover:underline"
                   >{{ r.title }}</NuxtLink>
-                  <span v-if="r.changed" class="text-xs font-medium text-accent">Changed · {{ r.changed }}</span>
+                  <span v-if="r.changed" class="text-xs font-medium text-changed">Changed · {{ r.changed }}</span>
                 </p>
                 <p v-if="r.said" class="m-0 mt-0.5 font-ui text-xs break-words text-muted">“{{ shorten(r.said, 110).text }}”</p>
               </div>
