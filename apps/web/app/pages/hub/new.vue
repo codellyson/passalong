@@ -54,6 +54,7 @@ watchEffect(() => {
 const text = ref("");
 const writer = ref<{
   addPicture: (f: File) => Promise<void>;
+  addFile: (f: File) => Promise<void>;
   clear: () => void;
   insert: (t: string) => void;
 } | null>(null);
@@ -99,7 +100,7 @@ async function attach(e: Event) {
   uploading.value = true;
   problem.value = "";
   try {
-    for (const f of files.slice(0, 5)) await writer.value?.addPicture(f);
+    for (const f of files.slice(0, 5)) await writer.value?.addFile(f);
   } finally {
     uploading.value = false;
   }
@@ -555,9 +556,9 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                        words kept for screen readers, so File it is never pushed onto a line of its own. -->
                   <span class="flex items-center gap-1">
                     <label class="btn sm cursor-pointer border-transparent max-sm:w-8 max-sm:px-0" :class="filed || busy ? 'pointer-events-none opacity-50' : ''">
-                      <input type="file" accept="image/*" multiple class="sr-only" :disabled="Boolean(filed) || busy" @change="attach" />
-                      <AppIcon name="image" />
-                      <span class="max-sm:sr-only">{{ uploading ? "Adding picture…" : "Picture" }}</span>
+                      <input type="file" accept="image/*,.pdf,.zip,.txt,.csv,.json,.md" multiple class="sr-only" :disabled="Boolean(filed) || busy" @change="attach" />
+                      <AppIcon name="attach" />
+                      <span class="max-sm:sr-only">{{ uploading ? "Adding…" : "Attachment" }}</span>
                     </label>
                     <button type="button" class="btn sm border-transparent max-sm:w-8 max-sm:px-0" :disabled="Boolean(filed) || busy" @mousedown.prevent @click="writer?.insert('@')">
                       <span aria-hidden="true">@</span><span class="max-sm:sr-only">Person</span>

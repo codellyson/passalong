@@ -37,9 +37,9 @@ const PATHS = {
   moon: "M13 9.75A5.25 5.25 0 1 1 6.25 3a4.25 4.25 0 0 0 6.75 6.75z",
   /** The hub's places, in its sidebar. */
   inbox: "M2.75 9.25h3l1 1.5h2.5l1-1.5h3M2.75 9.25l1.5-5.5h7.5l1.5 5.5v3h-10.5z",
-  /** A picture: a frame with a hill and a sun. */
-  image:
-    "M2.75 3.25h10.5v9.5h-10.5zM2.75 11l3.5-3.5 3 3 1.5-1.5 2.5 2.5M10.25 5.75a.75.75 0 1 0 0 .01",
+  /** An attachment: a paper clip. */
+  attach:
+    "M10.5 5.25 6.4 9.35a1.25 1.25 0 0 0 1.77 1.77l4.6-4.6a2.5 2.5 0 0 0-3.54-3.54l-4.6 4.6a3.75 3.75 0 0 0 5.3 5.3l3.32-3.32",
   /** A project: a folder, the one shape everybody reads as a place things are kept. */
   folder: "M2.75 4.25h4l1.25 1.5h5.25v7h-10.5z",
   board: "M2.75 2.75h3v10.5h-3zM6.5 2.75h3v7h-3zM10.25 2.75h3v4.5h-3z",

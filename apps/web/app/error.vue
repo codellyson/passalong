@@ -11,6 +11,9 @@ import type { NuxtError } from "#app";
 
 const props = defineProps<{ error: NuxtError }>();
 const path = useRequestURL().pathname;
+const inApp = computed(
+  () => path.startsWith("/hub") || path.startsWith("/join/") || path === "/reset",
+);
 
 const kind = computed(() => {
   if (props.error?.statusMessage === "invite" || path.startsWith("/join/")) return "invite";
@@ -45,6 +48,8 @@ usePage({
   description: "",
   noindex: true,
 });
+// Inside the app (an invite, a hub address) the page wears the hub's tokens; on the public site, the landing's.
+useHead({ bodyAttrs: { class: kind.value === "invite" || inApp.value ? "hub-app" : "" } });
 </script>
 
 <template>

@@ -351,8 +351,8 @@ in place under its fact as a menu surface set static in the panel; a refusal is 
 ### The box
 "What do you need?" (`/hub/new`) is a writing surface at the 70rem measure: the heading with one
 muted line, then the editor as the page's centre — the TipTap writer in its field-white well,
-20rem tall from 1024px (11rem on a phone), Picture, @ Person and # Group as borderless ghost `sm`
-buttons inside its foot (a picture mark, `@` and `#`; below 640px the marks alone, the words kept
+20rem tall from 1024px (11rem on a phone), Attachment, @ Person and # Group as borderless ghost `sm`
+buttons inside its foot (a paper clip, `@` and `#`; below 640px the marks alone, the words kept
 for screen readers, so the foot stays one row) and **File it** as the one primary at its right with
 the shortcut beside it in muted text ("⌘ Enter", "Ctrl Enter" elsewhere). While it is empty, starter lines sit under it as
 quiet underlined words after "Start from", middot-separated, never pills. A team picker sits beside

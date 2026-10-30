@@ -175,7 +175,7 @@ opens the box with `?project=`, which files into that project's team and links i
 ## The box
 
 `/hub/new` is a writing surface: one tall editor (`HubWriter`, `class="box"`) under "What do you
-need?", with Picture, @ Person and # Group inside it and **File it** (or ⌘/Ctrl+Enter, caught
+need?", with Attachment (a picture is drawn inline; a PDF, zip or text file is kept as an attachment the work claims), @ Person and # Group inside it and **File it** (or ⌘/Ctrl+Enter, caught
 before the editor turns it into a line break). Starter lines sit under it as quiet text while it is
 empty; a team picker shows only for someone in several teams. Beside it (under it on a phone) is
 the agent's reading, refreshed as you write from `POST /v1/compose/preview`: Work (title and tag),

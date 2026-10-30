@@ -30,6 +30,8 @@ usePage({
   description: `Invitation to the ${team.value} team on Passalong.`,
   noindex: true,
 });
+// The signed-in world's tokens (square corners, coral primary, ink focus), as the hub draws them.
+useHead({ bodyAttrs: { class: "hub-app" } });
 
 const KEY = "passalong.token";
 const token = {
