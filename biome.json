@@ -9,6 +9,7 @@
       "!**/.nuxt",
       "!**/.output",
       "!**/.claude",
+      "!**/.impeccable",
       "!apps/api/public/vendor"
     ]
   },
