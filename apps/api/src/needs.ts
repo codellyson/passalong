@@ -3,7 +3,7 @@
 // One read rather than five on the client, because the ranking is a statement about the product —
 // a customer waiting outranks an agent's question, which outranks work nobody took — and a rule
 // like that belongs in one place. Each piece of work appears once, under the most pressing reason
-// it has. It owns no table: every row is derived from guide, claim, task_event and notification,
+// it has. It owns no table: every row is derived from work, claim, task_event and notification,
 // so it cannot disagree with the board.
 //
 // Imports no sibling, so test/needs.test.mjs can run it against real SQLite with every migration.
@@ -64,9 +64,9 @@ export interface Customer {
 const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
   (SELECT team_id FROM membership WHERE account_id = ?1)))`;
 
-/** The latest unread notification on the guide for ?1: what makes a row "changed". */
+/** The latest unread notification on the work for ?1: what makes a row "changed". */
 const CHANGED = `COALESCE((SELECT n.kind FROM notification n
-  WHERE n.account_id = ?1 AND n.guide_id = g.id AND n.read_at = ''
+  WHERE n.account_id = ?1 AND n.work_id = g.id AND n.read_at = ''
   ORDER BY n.at DESC LIMIT 1), '')`;
 
 /**
@@ -74,19 +74,18 @@ const CHANGED = `COALESCE((SELECT n.kind FROM notification n
  * changed. A kind added to notify.ts later and not here still marks the row, as "Changed".
  */
 const CHANGE_WORDS: Record<string, string> = {
-  handoff: "Sent to you",
+  sent_to_you: "Sent to you",
   shared: "Shared",
-  declined: "Passed back",
+  passed: "Passed back",
   pulled: "Opened",
-  consumed: "Archived",
+  archived: "Archived",
   reopened: "Reopened",
   joined: "Someone joined",
-  promoted: "Promoted",
+  made_admin: "Made admin",
   removed: "Removed",
   task_claimed: "Taken",
   task_finished: "Finished",
   task_released: "Let go",
-  sent_back: "Reopened",
   reassigned: "Given to you",
   stalled: "Went quiet",
   shelved: "Moved to Draft",
@@ -148,12 +147,12 @@ export async function needs(
       }
     >(
       `SELECT g.id, g.title, g.summary, g.customer, g.customer_name, ${CHANGED} AS changed,
-              COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'customer'), g.created) AS wrote,
-              COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'answered'), '') AS answered,
-              COALESCE((SELECT e.body FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'customer'
+              COALESCE((SELECT MAX(at) FROM task_event e WHERE e.work_id = g.id AND e.kind = 'customer'), g.created) AS wrote,
+              COALESCE((SELECT MAX(at) FROM task_event e WHERE e.work_id = g.id AND e.kind = 'answered'), '') AS answered,
+              COALESCE((SELECT e.body FROM task_event e WHERE e.work_id = g.id AND e.kind = 'customer'
                          ORDER BY e.at DESC, e.id DESC LIMIT 1), '') AS words
-         FROM guide g
-        WHERE g.customer <> '' AND g.status = 'published' AND ${VISIBLE}`,
+         FROM work g
+        WHERE g.customer <> '' AND g.status = 'ready' AND ${VISIBLE}`,
       account,
     ),
     // Held work an agent is asking about, or that went quiet: the holder's own account and the
@@ -172,14 +171,14 @@ export async function needs(
       `SELECT g.id, g.title, g.summary, ${CHANGED} AS changed, c.lease_until, c.agent_id,
               c.account_id AS holder, COALESCE(a.name, '') AS by_name, COALESCE(a.handle, '') AS by_handle,
               COALESCE(e.body, '') AS asking, COALESCE(e.at, '') AS asked_at
-         FROM claim c JOIN guide g ON g.id = c.guide_id
+         FROM claim c JOIN work g ON g.id = c.work_id
          LEFT JOIN account a ON a.id = c.account_id
          LEFT JOIN task_event e ON e.id = (SELECT x.id FROM task_event x
-            WHERE x.guide_id = c.guide_id AND x.kind = 'asked' AND x.at >= c.claimed_at
-              AND NOT EXISTS (SELECT 1 FROM task_event r WHERE r.guide_id = x.guide_id
+            WHERE x.work_id = c.work_id AND x.kind = 'asked' AND x.at >= c.claimed_at
+              AND NOT EXISTS (SELECT 1 FROM task_event r WHERE r.work_id = x.work_id
                                AND r.kind = 'replied' AND r.id > x.id)
             ORDER BY x.id DESC LIMIT 1)
-        WHERE c.state = 'claimed' AND g.status <> 'consumed'
+        WHERE c.state = 'claimed' AND g.status <> 'done'
           AND (c.account_id = ?1 OR g.account_id = ?1)
           AND (e.id IS NOT NULL OR c.lease_until <= ?2)`,
       account,
@@ -189,11 +188,11 @@ export async function needs(
     q<Base & { created: string; group_slug: string }>(
       `SELECT g.id, g.title, g.summary, ${CHANGED} AS changed, g.created,
               COALESCE(tg.slug, '') AS group_slug
-         FROM guide g LEFT JOIN team_group tg ON tg.id = g.to_group_id AND g.to_group_id <> ''
-        WHERE g.status = 'published' AND g.customer = ''
+         FROM work g LEFT JOIN team_group tg ON tg.id = g.to_group_id AND g.to_group_id <> ''
+        WHERE g.status = 'ready' AND g.customer = ''
           AND (g.to_account_id = ?1 OR (g.to_group_id <> '' AND g.to_group_id IN
                  (SELECT group_id FROM group_member WHERE account_id = ?1)))
-          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)`,
+          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id)`,
       account,
     ),
     // Yours, and the last thing that happened to it is somebody else passing it back or reopening it.
@@ -209,13 +208,13 @@ export async function needs(
     >(
       `SELECT g.id, g.title, g.summary, ${CHANGED} AS changed, e.kind, e.body, e.at,
               e.account_id AS by_id, COALESCE(a.name, '') AS by_name, COALESCE(a.handle, '') AS by_handle
-         FROM guide g
-         JOIN task_event e ON e.id = (SELECT MAX(x.id) FROM task_event x WHERE x.guide_id = g.id
+         FROM work g
+         JOIN task_event e ON e.id = (SELECT MAX(x.id) FROM task_event x WHERE x.work_id = g.id
                                         AND x.kind NOT IN ('progress', 'noted', 'customer', 'answered'))
          LEFT JOIN account a ON a.id = e.account_id
-        WHERE g.account_id = ?1 AND g.status = 'published'
+        WHERE g.account_id = ?1 AND g.status = 'ready'
           AND e.kind IN ('passed', 'reopened') AND e.account_id <> ?1
-          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)`,
+          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id)`,
       account,
     ),
     // Finished lately, by whoever handed it in.
@@ -231,11 +230,11 @@ export async function needs(
       `SELECT g.id, g.title, g.summary, ${CHANGED} AS changed, g.updated,
               COALESCE(e.agent_id, '') AS agent_id, COALESCE(e.account_id, '') AS by_id,
               COALESCE(a.name, '') AS by_name, COALESCE(a.handle, '') AS by_handle
-         FROM guide g
+         FROM work g
          LEFT JOIN task_event e ON e.id = (SELECT MAX(x.id) FROM task_event x
-                                             WHERE x.guide_id = g.id AND x.kind = 'handed_in')
+                                             WHERE x.work_id = g.id AND x.kind = 'handed_in')
          LEFT JOIN account a ON a.id = e.account_id
-        WHERE g.status = 'consumed' AND g.outcome = 'finished' AND ${VISIBLE}
+        WHERE g.status = 'done' AND g.outcome = 'finished' AND ${VISIBLE}
           AND g.updated >= strftime('%Y-%m-%dT%H:%M:%fZ', ?2, '-${CLOSED_DAYS} days')
         ORDER BY g.updated DESC LIMIT 8`,
       account,
@@ -343,9 +342,9 @@ export async function needs(
 }
 
 /**
- * The project each guide belongs to: the top folder above the folder it is linked into. A project
- * is a top-level folder for now (docs/LOOP.md §0: today's folders become projects). Only folders
- * this account can see count, so a link into somebody's private folder names nothing.
+ * The project each piece of work belongs to: the top project above the project it is linked into. A project
+ * is a top-level project for now (docs/LOOP.md §0: today's projects become projects). Only projects
+ * this account can see count, so a link into somebody's private project names nothing.
  */
 async function projectsOf(
   db: D1Database,
@@ -354,38 +353,38 @@ async function projectsOf(
 ): Promise<Map<string, Project>> {
   const out = new Map<string, Project>();
   if (!ids.length) return out;
-  const { results: folders } = await db
+  const { results: projects } = await db
     .prepare(
-      `SELECT f.id, f.title, f.color, f.parent_id FROM folder f
+      `SELECT f.id, f.title, f.color, f.parent_id FROM project f
         WHERE (f.team_id = '' AND f.created_by = ?1)
            OR f.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1)`,
     )
     .bind(account)
     .all<{ id: string; title: string; color: string; parent_id: string | null }>();
-  const byId = new Map(folders.map((f) => [f.id, f]));
+  const byId = new Map(projects.map((f) => [f.id, f]));
   const root = (id: string) => {
     let f = byId.get(id);
     for (let hops = 0; f?.parent_id && byId.has(f.parent_id) && hops < 64; hops++)
       f = byId.get(f.parent_id);
     return f ? { id: f.id, title: f.title, color: f.color || "" } : null;
   };
-  const links: { guide_id: string; folder_id: string }[] = [];
+  const links: { work_id: string; project_id: string }[] = [];
   for (const slice of slices(ids))
     links.push(
       ...(
         await db
           .prepare(
-            `SELECT guide_id, folder_id FROM folder_guide WHERE guide_id IN (${slice.map(() => "?").join(",")})
+            `SELECT work_id, project_id FROM project_work WHERE work_id IN (${slice.map(() => "?").join(",")})
               ORDER BY added`,
           )
           .bind(...slice)
-          .all<{ guide_id: string; folder_id: string }>()
+          .all<{ work_id: string; project_id: string }>()
       ).results,
     );
   for (const l of links) {
-    if (out.has(l.guide_id)) continue;
-    const p = root(l.folder_id);
-    if (p) out.set(l.guide_id, p);
+    if (out.has(l.work_id)) continue;
+    const p = root(l.project_id);
+    if (p) out.set(l.work_id, p);
   }
   return out;
 }
@@ -397,7 +396,7 @@ const slices = (ids: string[], size = 90) =>
   );
 
 /**
- * The two facts every board card shows beside its title, for a page of guides: its project, and
+ * The two facts every board card shows beside its title, for a page of work: its project, and
  * what changed on it since this account last looked, worded as the register words it.
  */
 export async function marksOf(
@@ -410,14 +409,14 @@ export async function marksOf(
   for (const slice of slices(ids)) {
     const { results } = await db
       .prepare(
-        `SELECT guide_id, kind FROM notification
-          WHERE account_id = ? AND read_at = '' AND guide_id IN (${slice.map(() => "?").join(",")})
+        `SELECT work_id, kind FROM notification
+          WHERE account_id = ? AND read_at = '' AND work_id IN (${slice.map(() => "?").join(",")})
           ORDER BY at`,
       )
       .bind(account, ...slice)
-      .all<{ guide_id: string; kind: string }>();
+      .all<{ work_id: string; kind: string }>();
     // Oldest first, so the latest unread one is what is left: the same one the register names.
-    for (const r of results) latest.set(r.guide_id, r.kind);
+    for (const r of results) latest.set(r.work_id, r.kind);
   }
   return new Map(
     ids.map((id) => [
@@ -483,17 +482,17 @@ export async function supportRequests(
   waitMs: number,
 ): Promise<{ requests: SupportRequest[]; teams: { slug: string; name: string; tell: boolean }[] }> {
   const LAST = (col: string, kinds = "'customer', 'answered'") =>
-    `(SELECT ${col} FROM task_event WHERE guide_id = g.id AND kind IN (${kinds}) ORDER BY at DESC, id DESC LIMIT 1)`;
+    `(SELECT ${col} FROM task_event WHERE work_id = g.id AND kind IN (${kinds}) ORDER BY at DESC, id DESC LIMIT 1)`;
   const { results } = await db
     .prepare(
       `SELECT g.id, g.title, g.ref, g.customer, g.customer_name, g.status, g.created, g.updated,
-              (SELECT MAX(at) FROM task_event WHERE guide_id = g.id AND kind = 'answered') AS answered_at,
+              (SELECT MAX(at) FROM task_event WHERE work_id = g.id AND kind = 'answered') AS answered_at,
               ${LAST("kind")} AS last_kind, ${LAST("body")} AS last_body, ${LAST("at")} AS last_at,
               ${LAST("body", "'customer'")} AS said,
-              (SELECT COUNT(*) FROM guide k WHERE k.parent_id = g.id
-                AND k.status NOT IN ('consumed', 'draft')) AS open_work,
+              (SELECT COUNT(*) FROM work k WHERE k.parent_id = g.id
+                AND k.status NOT IN ('done', 'draft')) AS open_work,
               COALESCE(t.tell_customer, 0) AS tell
-         FROM guide g LEFT JOIN team t ON t.id = g.team_id
+         FROM work g LEFT JOIN team t ON t.id = g.team_id
         WHERE g.customer <> '' AND ${VISIBLE}
         ORDER BY g.updated DESC
         LIMIT 500`,
@@ -536,7 +535,7 @@ export async function supportRequests(
       const lastBy =
         r.last_kind === "customer" ? "customer" : r.last_kind === "answered" ? "team" : "";
       const state = supportState({
-        done: r.status === "consumed",
+        done: r.status === "done",
         lastBy,
         answered: Boolean(r.answered_at),
         openWork: Number(r.open_work),

@@ -2,7 +2,7 @@
 // so these are sentences for people: what happened, and what to do next.
 //
 // Most refusals live in index.ts, which is not importable from a test (see the note in hosts.ts),
-// so those are pinned against its source, the way guide.test.mjs pins its rules.
+// so those are pinned against its source, the way work.test.mjs pins its rules.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
@@ -24,7 +24,7 @@ test("the old machine phrasings are gone from everything a person can reach", as
   const src = await source();
   for (const old of [
     "no such team, or you are not a member",
-    "no such guide (or it is not in one of your teams)",
+    "no such work (or it is not in one of your teams)",
     "invite not found",
     "email or password is wrong",
     "handle: 2–31 chars",

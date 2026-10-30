@@ -50,14 +50,14 @@ test("the surface is the seventeen tools, and nothing else", async () => {
   assert.deepEqual([...(await tools()).keys()].sort(), [...TOOLS].sort());
 });
 
-test("no tool name, description or instruction says guide: four nouns, work, project, document, file", async () => {
+test("no tool name, description or instruction uses an old word: four nouns, work, project, document, file", async () => {
   const [left, right] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test", version: "0" });
   await Promise.all([buildServer().connect(right), client.connect(left)]);
   const { tools: listed } = await client.listTools();
   const said = JSON.stringify({ instructions: client.getInstructions(), listed });
   await client.close();
-  assert.doesNotMatch(said, /guide/i);
+  assert.doesNotMatch(said, /guide|folder|handoff|transfer|verdict/i);
 });
 
 test("every tool says what it does to the world", async () => {
@@ -211,10 +211,10 @@ test("find_work reads large work by outline, by section, or whole", async () => 
     file,
     [
       "---",
-      "id: bigguide",
+      "id: bigw0rk1",
       "title: A big one",
       "summary: Work with a lot in it.",
-      "status: published",
+      "status: ready",
       "---",
       "",
       "## Background",
@@ -236,7 +236,7 @@ test("find_work reads large work by outline, by section, or whole", async () => 
   assert.match(first, /Sections:/);
   assert.match(first, /- Background \(/);
   assert.match(first, /Work with a lot in it\./, "the summary comes first");
-  assert.match(first, /find_work id=bigguide section=/);
+  assert.match(first, /find_work id=bigw0rk1 section=/);
   assert.ok(first.length < 1500, "large work comes back as an outline");
 
   const part = await read({ section: "what to" });
@@ -249,7 +249,7 @@ test("find_work reads large work by outline, by section, or whole", async () => 
 
   const whole = await read({ full: true });
   assert.ok(whole.includes(filler), "full gives all of it");
-  assert.match(whole, /call take bigguide/, "and reading it is not taking it");
+  assert.match(whole, /call take bigw0rk1/, "and reading it is not taking it");
   await client.close();
 });
 

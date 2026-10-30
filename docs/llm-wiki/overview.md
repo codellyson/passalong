@@ -1,13 +1,13 @@
 # Overview
 
 **Passalong keeps a team's work and what it knows, for people and their agents.** Four nouns:
-**work** (what someone must still do), **projects** (today's folders, one per product or repo),
+**work** (what someone must still do), **projects** (today's projects, one per product or repo),
 their **documents** (what to know about it) and **files**. A piece of work is markdown with
 frontmatter — a title, a one-line summary for a person, and whatever the next reader needs — that an
 agent can act on directly.
 
 > **Direction since 2026-10-29** ([LOOP.md §0](../LOOP.md)): build step 1, **one thing: work**, is
-> built — no kinds, sections, handovers or write-up guides, 17 agent tools over the four nouns
+> built — no kinds, sections or write-up work, 17 agent tools over the four nouns
 > ([docs/WORK.md](../WORK.md)). Next: the agent tidies the board (closing finished work, judging
 > hand-ins), then onboarding, then projects as the home of all work.
 
@@ -17,7 +17,7 @@ Every AI coding session starts from zero, and a mixed team drops work: the agent
 know what another found out yesterday, a request from a customer sits in an inbox, and when an agent
 says "done", its author mostly takes its word for it. What people actually use today is Slack
 messages, notes to self, pasted snippets and re-prompting from scratch (PRD §9). Usage moved from
-passing documents between contexts to tracking work: 162 of 200 guides were really tasks and bugs.
+passing documents between contexts to tracking work: 162 of 200 pieces of work were really tasks and bugs.
 
 ## The loop
 
@@ -32,7 +32,7 @@ passing documents between contexts to tracking work: 162 of 200 guides were real
 
 Everything else in the repo exists to make that loop cheap: the CLI and MCP server so an agent can
 do it without a human, the hub and share links so a person can, teams so it can be addressed,
-folders so a project supplies its documents to every piece of work in it, and notifications so
+projects so a project supplies its documents to every piece of work in it, and notifications so
 nobody has to go and look.
 
 ## Who it is for

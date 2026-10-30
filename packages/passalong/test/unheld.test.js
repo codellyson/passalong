@@ -38,11 +38,11 @@ test("publish refuses frontmatter it would empty, naming each field, and stores 
   );
   const stored = readdirSync(HOME, { recursive: true }).filter((f) => String(f).endsWith(".md"));
   assert.deepEqual(stored, []);
-  assert.equal(server.guides.size, 0, "and sends nothing");
+  assert.equal(server.work.size, 0, "and sends nothing");
 });
 
 test("the same content moved into the body is sent, and keeps every line", async () => {
   const md = `---\ntitle: Supabase design system\nsummary: Said to a person for the test.\n---\n\n\`\`\`yaml\ncolors:\n  primary: "#3ECF8E"\n\`\`\`\n`;
-  const { guide } = await publish(md);
-  assert.match(guide.body, /primary: "#3ECF8E"/);
+  const { work } = await publish(md);
+  assert.match(work.body, /primary: "#3ECF8E"/);
 });

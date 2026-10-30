@@ -8,7 +8,7 @@
  * pointing one of them at Passalong meant hand-writing schemas.
  *
  * WHAT IS AND IS NOT IN HERE. This describes the surface the MCP server exposes — read and write
- * work, edit project-folder documents, and take, report on and finish work — and deliberately not
+ * work, edit project-project documents, and take, report on and finish work — and deliberately not
  * account administration, or a person's calls on work (release, reopen), which have no MCP tool
  * for the same reason. Signup, login,
  * password reset and token management are real routes and stay undescribed: an action schema is a
@@ -27,7 +27,7 @@ const SCOPE_PARAMETER = {
   description: "`all` (default), `mine`, or a team slug.",
 };
 
-const GUIDE = {
+const WORK = {
   type: "object",
   description:
     "One piece of work: what to do, in plain words, with whatever came with it. It has no kinds and no required sections; read it and work out what done means.",
@@ -37,9 +37,7 @@ const GUIDE = {
     summary: { type: "string", description: "What it is, in a sentence or two, for a person." },
     status: {
       type: "string",
-      enum: ["draft", "published", "consumed", "promoted"],
-      description:
-        "`promoted` is read-only: work that carries it keeps it, and no write can set it.",
+      enum: ["draft", "ready", "done"],
     },
     url: {
       type: "string",
@@ -185,14 +183,14 @@ const NOT_HELD = {
     "You do not hold that: a person took it back, or it was never yours. Stop working on it.",
 };
 
-const guideList = {
+const workList = {
   200: {
     description: "Work.",
     content: {
       "application/json": {
         schema: {
           type: "object",
-          properties: { guides: { type: "array", items: { $ref: "#/components/schemas/Guide" } } },
+          properties: { work: { type: "array", items: { $ref: "#/components/schemas/Work" } } },
         },
       },
     },
@@ -208,8 +206,8 @@ export function openapi(origin: string) {
       description:
         "Work for a team and its agents: markdown with frontmatter, saying what to do in plain " +
         "words. Work has no kinds and no required sections — read it and work out what done " +
-        "means. It is worked with four calls: POST /v1/take, PUT /v1/guides/{id}/progress, " +
-        "POST /v1/guides/{id}/hand_in and POST /v1/guides/{id}/pass. Each answer ends with " +
+        "means. It is worked with four calls: POST /v1/take, PUT /v1/work/{id}/progress, " +
+        "POST /v1/work/{id}/hand_in and POST /v1/work/{id}/pass. Each answer ends with " +
         "`next`, what to call now, and `say` when the move is to stop.",
     },
     servers: [{ url: origin }],
@@ -222,7 +220,7 @@ export function openapi(origin: string) {
           description: "An API token, minted in the hub under Settings.",
         },
       },
-      schemas: { Guide: GUIDE, Task: TASK, Next: NEXT },
+      schemas: { Work: WORK, Task: TASK, Next: NEXT },
     },
     paths: {
       "/v1/me": {
@@ -232,16 +230,16 @@ export function openapi(origin: string) {
           responses: { 200: { description: "The account." } },
         },
       },
-      "/v1/folders": {
+      "/v1/projects": {
         get: {
-          operationId: "listFolders",
-          summary: "List project folders this account can use.",
+          operationId: "listProjects",
+          summary: "List projects this account can use.",
           parameters: [SCOPE_PARAMETER],
-          responses: { 200: { description: "Visible folders." } },
+          responses: { 200: { description: "Visible projects." } },
         },
         post: {
-          operationId: "createFolder",
-          summary: "Create a private or team project folder.",
+          operationId: "createProject",
+          summary: "Create a private or team project.",
           requestBody: {
             required: true,
             content: {
@@ -252,7 +250,7 @@ export function openapi(origin: string) {
                   properties: {
                     title: { type: "string" },
                     description: { type: "string" },
-                    team: { type: "string", description: "Team slug; omit for a private folder." },
+                    team: { type: "string", description: "Team slug; omit for a private project." },
                     repo: {
                       type: "string",
                       description: "The repo it is built from; omit for none.",
@@ -262,25 +260,25 @@ export function openapi(origin: string) {
               },
             },
           },
-          responses: { 201: { description: "The new folder." } },
+          responses: { 201: { description: "The new project." } },
         },
       },
-      "/v1/folders/{folder}": {
+      "/v1/projects/{project}": {
         get: {
-          operationId: "getFolder",
-          summary: "List a folder's documents, files and linked work.",
-          parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
+          operationId: "getProject",
+          summary: "List a project's documents, files and linked work.",
+          parameters: [{ name: "project", in: "path", required: true, schema: { type: "string" } }],
           responses: {
-            200: { description: "Folder contents." },
-            404: { description: "Unavailable folder." },
+            200: { description: "Project contents." },
+            404: { description: "Unavailable project." },
           },
         },
       },
-      "/v1/folders/{folder}/documents": {
+      "/v1/projects/{project}/documents": {
         post: {
-          operationId: "createFolderDocument",
-          summary: "Add a Markdown document to a folder.",
-          parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
+          operationId: "createProjectDocument",
+          summary: "Add a Markdown document to a project.",
+          parameters: [{ name: "project", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
             content: {
@@ -296,21 +294,21 @@ export function openapi(origin: string) {
           responses: { 201: { description: "The new document and its version." } },
         },
       },
-      "/v1/folders/{folder}/documents/{document}": {
+      "/v1/projects/{project}/documents/{document}": {
         get: {
-          operationId: "getFolderDocument",
-          summary: "Read a folder document and its current version.",
+          operationId: "getProjectDocument",
+          summary: "Read a project document and its current version.",
           parameters: [
-            { name: "folder", in: "path", required: true, schema: { type: "string" } },
+            { name: "project", in: "path", required: true, schema: { type: "string" } },
             { name: "document", in: "path", required: true, schema: { type: "string" } },
           ],
           responses: { 200: { description: "Document Markdown and version." } },
         },
         put: {
-          operationId: "saveFolderDocument",
+          operationId: "saveProjectDocument",
           summary: "Save a new version, refusing a stale editor with 409.",
           parameters: [
-            { name: "folder", in: "path", required: true, schema: { type: "string" } },
+            { name: "project", in: "path", required: true, schema: { type: "string" } },
             { name: "document", in: "path", required: true, schema: { type: "string" } },
           ],
           requestBody: {
@@ -331,30 +329,30 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/folders/{folder}/assets/{asset}/agent": {
+      "/v1/projects/{project}/files/{file}/agent": {
         get: {
-          operationId: "getFolderAsset",
-          summary: "Read a bounded image or text asset for agent context.",
+          operationId: "getProjectFile",
+          summary: "Read a bounded image or text file for agent context.",
           parameters: [
-            { name: "folder", in: "path", required: true, schema: { type: "string" } },
-            { name: "asset", in: "path", required: true, schema: { type: "string" } },
+            { name: "project", in: "path", required: true, schema: { type: "string" } },
+            { name: "file", in: "path", required: true, schema: { type: "string" } },
           ],
           responses: { 200: { description: "Image as base64, or text." } },
         },
       },
-      "/v1/folders/{folder}/guides": {
+      "/v1/projects/{project}/work": {
         post: {
-          operationId: "linkFolderGuide",
-          summary: "Link existing work to a folder without changing it.",
-          parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
+          operationId: "linkProjectWork",
+          summary: "Link existing work to a project without changing it.",
+          parameters: [{ name: "project", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
             content: {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["guide"],
-                  properties: { guide: { type: "string" } },
+                  required: ["work"],
+                  properties: { work: { type: "string" } },
                 },
               },
             },
@@ -362,20 +360,20 @@ export function openapi(origin: string) {
           responses: { 201: { description: "The linked work's id." } },
         },
       },
-      "/v1/guides": {
+      "/v1/work": {
         get: {
-          operationId: "searchGuides",
+          operationId: "searchWork",
           summary: "Search work by words in the title, tags, stack, or body.",
           parameters: [
             { name: "q", in: "query", schema: { type: "string" }, description: "Search words." },
             SCOPE_PARAMETER,
           ],
-          responses: guideList,
+          responses: workList,
         },
       },
-      "/v1/guides/{id}": {
+      "/v1/work/{id}": {
         get: {
-          operationId: "getGuide",
+          operationId: "getWork",
           summary: "One piece of work's full markdown.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
@@ -384,7 +382,7 @@ export function openapi(origin: string) {
           },
         },
         put: {
-          operationId: "publishGuide",
+          operationId: "publishWork",
           summary: "Create or update work. The body is the whole document.",
           description:
             "Frontmatter carries `title:`, `summary:` and the addressing: `team:` and `to:` hand it " +
@@ -397,7 +395,7 @@ export function openapi(origin: string) {
             required: true,
             content: {
               // JSON first, because the tools that read this document can only send JSON. The
-              // markdown body is what the CLI uses and stays the honest shape: the guide is the
+              // markdown body is what the CLI uses and stays the honest shape: the work is the
               // body.
               "application/json": {
                 schema: {
@@ -438,7 +436,7 @@ export function openapi(origin: string) {
             "While you hold it nobody else can take it. You may hold several — taking what you " +
             "hold resumes it. When somebody else has it the 409 names them in `holder`: tell the " +
             "user rather than doing the work twice. With no id, the next ready work for `repo`, or " +
-            "`guide: null` and `say` when nothing is waiting.",
+            "`work: null` and `say` when nothing is waiting.",
           requestBody: agentBody({
             id: { type: "string", description: "The work to take. Leave out for the next one." },
             repo: { type: "string", description: "owner/repo you are in; omit for no repo." },
@@ -450,7 +448,7 @@ export function openapi(origin: string) {
             200: json200(
               "What you now hold, with its markdown — or null — and what to call next.",
               withNext({
-                guide: {
+                work: {
                   oneOf: [
                     {
                       type: "object",
@@ -476,7 +474,7 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/progress": {
+      "/v1/work/{id}/progress": {
         put: {
           operationId: "progress",
           summary: "Still on it: renews your hold, and `note` is the line the hub shows.",
@@ -491,7 +489,7 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/hand_in": {
+      "/v1/work/{id}/hand_in": {
         post: {
           operationId: "handIn",
           summary: "Done here.",
@@ -519,7 +517,7 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/pass": {
+      "/v1/work/{id}/pass": {
         post: {
           operationId: "pass",
           summary: "Not yours, or stuck: give it back with the reason.",
@@ -535,7 +533,7 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/ask": {
+      "/v1/work/{id}/ask": {
         post: {
           operationId: "ask",
           summary: "Ask the person a question and wait, keeping what you hold.",
@@ -553,7 +551,7 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/reply": {
+      "/v1/work/{id}/reply": {
         post: {
           operationId: "reply",
           summary: "A person writes to whoever holds a piece of work.",
@@ -579,7 +577,7 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/assign": {
+      "/v1/work/{id}/assign": {
         post: {
           operationId: "assign",
           summary: "Give work to someone else in its team.",
@@ -806,10 +804,10 @@ export function openapi(origin: string) {
       "/v1/uploads": {
         post: {
           operationId: "createUploadLink",
-          summary: "Get a one-time link that takes a screenshot, file or folder asset.",
+          summary: "Get a one-time link that takes a screenshot, file or project file.",
           description:
             "For an agent's code sandbox that holds a file but cannot send your token with it. " +
-            "Set folder to an accessible folder id to store an image or file there. " +
+            "Set project to an accessible project id to store an image or file there. " +
             "The link works once and expires in 10 minutes.",
           requestBody: {
             required: false,
@@ -820,9 +818,9 @@ export function openapi(origin: string) {
                   properties: {
                     name: { type: "string" },
                     kind: { type: "string", enum: ["image", "file"] },
-                    folder: {
+                    project: {
                       type: "string",
-                      description: "Store the upload in this folder instead.",
+                      description: "Store the upload in this project instead.",
                     },
                   },
                 },
@@ -841,7 +839,7 @@ export function openapi(origin: string) {
           summary: "Send raw bytes to an upload link. POST works too.",
           description:
             "The minted link decides whether to store a screenshot (5 MB), a file on work (10 MB), " +
-            "or a folder asset (10 MB). Types are checked from the bytes. Returns the stored item.",
+            "or a project file (10 MB). Types are checked from the bytes. Returns the stored item.",
           security: [],
           parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
           requestBody: { required: true, content: { "application/octet-stream": {} } },
@@ -852,9 +850,9 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/g/{id}/{key}.md": {
+      "/w/{id}/{key}.md": {
         get: {
-          operationId: "readSharedGuide",
+          operationId: "readSharedWork",
           summary: "Work's markdown from its share link. No account needed.",
           description:
             "The key in the share URL is the whole authorization. Reading one records a pull, " +

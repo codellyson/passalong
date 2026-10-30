@@ -3,8 +3,8 @@
 A piece of work is the unit of everything (built 2026-10-29, [docs/WORK.md](../WORK.md)): what
 someone must still do, as **markdown with frontmatter**, strings and string lists only, so it
 round-trips through the parser byte for byte and `passalong export` is always a complete backup.
-People and agents see "work"; the table is still `guide`, the routes `/v1/guides/...` and share links
-`/g/:id/:key`, because renaming what nobody sees buys nothing and risks the data.
+People and agents see "work"; the table is still `work`, the routes `/v1/work/...` and share links
+`/w/:id/:key`, because renaming what nobody sees buys nothing and risks the data.
 
 ## One thing, no kinds
 
@@ -12,12 +12,10 @@ There is no `kind:`, no required section, no template and no heading that is ref
 free markdown: whatever the next reader needs, in whatever shape fits, and the agent reads it and
 works out what done means. A writer may say "done when"; nothing requires it.
 
-**Why:** there were three kinds (task, bug, transfer), each with its own sections. In use 162 of 200
-guides were tasks and bugs filed under the wrong kind, handovers that followed their template went
-unread, and agents padded two-line notes into six sections. Splitting work into kinds was the system
-doing the agent's reading in advance. A document still carrying `kind:` (an old export, an old
-client) is refused by name, like any field the parser cannot hold; migration 0061 stripped it from
-every stored document.
+**Why:** sorting work into types, each with its own required sections, was the system doing the
+agent's reading in advance. In real use 162 of 200 pieces of work were filed under the wrong type,
+documents that followed their template went unread, and agents padded two-line notes into six
+sections. A document carrying `kind:` is refused by name, like any field the parser cannot hold.
 
 ## Fields
 
@@ -29,27 +27,25 @@ every stored document.
   rule ever turns on a tag.
 - `to:` / `team:` — the address: `@handle`, `#group`, several, or the whole team (see
   [teams-and-plans.md](teams-and-plans.md)).
-- `parent:` — the work this came from (a customer request, a bigger piece of work). It replaced bug
-  report sets: migration 0061 made each `report` row a parent piece of work its bugs name, and
-  dropped `report`, `area` and `severity`.
+- `parent:` — the work this came from (a customer request, a bigger piece of work). A set of issues is a parent and its children.
 - `blocked_by:` — work that must be Done first.
-- `status:` — draft, published (Ready), and `consumed` (archived, reversible, out of the free-tier
-  count). `promoted` still parses and can no longer be set.
+- `status:` — `draft`, `ready` and `done` (archived or finished, reversible, out of the free-tier
+  count); nothing else parses.
 - `target` — the repo, when known, is a column, not frontmatter.
 
 ## Where the format is defined
 
-Twice, kept in step on purpose: `packages/passalong/src/guide.js` defines it; `apps/api/src/guide.ts`
-mirrors its parsing. `packages/passalong/fixtures/guides/` is the corpus that holds the two parsers
+Twice, kept in step on purpose: `packages/passalong/src/work.js` defines it; `apps/api/src/work.ts`
+mirrors its parsing. `packages/passalong/fixtures/work/` is the corpus that holds the two parsers
 to each other — edit it deliberately, never to make a test pass.
 
 ## How big, and read in parts
 
 Six of 123 documents held 72% of the stored text, so the lever is size, not prose. Over 20,000
-characters (`GUIDE_WARN`) the author is warned and `find_work` with an id returns an outline (headings
+characters (`WORK_WARN`) the author is warned and `find_work` with an id returns an outline (headings
 and their sizes) unless asked for a `section` or `full`; `take` still returns the whole document,
-because that is the one an agent acts on. New work over 60,000 (`GUIDE_MAX`) is refused with 413; one
-stored larger before keeps its size. The outline and section logic is in `guide.js`,
+because that is the one an agent acts on. New work over 60,000 (`WORK_MAX`) is refused with 413; one
+stored larger before keeps its size. The outline and section logic is in `work.js`,
 `apps/api/src/sections.ts` and a copy in `mcp-http.ts` (which takes no sibling import);
 `apps/api/test/sections.test.mjs` holds the three to the same answers.
 
@@ -69,7 +65,7 @@ a date that happens.
 
 ## Sources
 - [docs/WORK.md](../WORK.md), [docs/LOOP.md](../LOOP.md) §0
-- [AGENTS.md](../../AGENTS.md): "src/guide.js", "Status lifecycle", "Tags are a controlled vocabulary"
-- `packages/passalong/src/guide.js`, `apps/api/src/guide.ts`, `packages/passalong/test/one-place.test.js`
+- [AGENTS.md](../../AGENTS.md): "src/work.js", "Status lifecycle", "Tags are a controlled vocabulary"
+- `packages/passalong/src/work.js`, `apps/api/src/work.ts`, `packages/passalong/test/one-place.test.js`
 - `apps/api/migrations/0061_one_thing.sql`
 - `/docs/work-format` on the site

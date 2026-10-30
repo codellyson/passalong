@@ -1,5 +1,5 @@
 /**
- * Work an agent can take: the queue, the claim, the lease. See docs/V2.md, docs/WORK.md and
+ * Work an agent can take: the queue, the claim, the lease. See docs/WORK.md and
  * migrations/0021_claims.sql and 0061_one_thing.sql.
  *
  * The one rule this module exists to keep: no two agents ever hold the same work. One piece of work
@@ -36,7 +36,7 @@ const isPerson = (agent: string) => agent.startsWith("person-");
 function dropPersonHold(db: D1Database, id: string, account: string) {
   return db
     .prepare(
-      "DELETE FROM claim WHERE guide_id = ? AND account_id = ? AND agent_id LIKE 'person-%' AND state = 'claimed'",
+      "DELETE FROM claim WHERE work_id = ? AND account_id = ? AND agent_id LIKE 'person-%' AND state = 'claimed'",
     )
     .bind(id, account)
     .run();
@@ -75,14 +75,14 @@ export const EVIDENCE_MAX = 4000;
 export const WRITEUP_MAX = 4000;
 
 /**
- * The longest write-up a hand-in may send (docs/REVIEW.md §3): what had to be adapted and why, in a
+ * The longest write-up a hand-in may send: what had to be adapted and why, in a
  * few lines. Hand-ins averaged 5,400 characters and most were never read; anything longer belongs
  * in the diff or a follow-up. Refused rather than cut, so the agent says it shorter itself.
  */
 export const WRITEUP_CAP = 500;
 
 /**
- * Finishing is final, so it has to show something a person can look at (docs/REVIEW.md §3): a
+ * Finishing is final, so it has to show something a person can look at: a
  * screenshot, a before and after, or the one command and the line of output that decides it.
  * Checks already answer for themselves — each is run here or shown (checksProblem) — so this is the
  * rule for evidence sent as one block, where sixteen characters of anything used to pass.
@@ -108,13 +108,13 @@ export function proofProblem(evidence: string, checks: Check[]): string | null {
 }
 
 /**
- * What a hand-in has to bring, in the words an agent is refused with. See docs/V2.md §11.
+ * What a hand-in has to bring, in the words an agent is refused with.
  *
  * "Done" is the agent's word for its own work, and a write-up is the agent's word written longer.
  * Neither tells the person at the gate what actually ran. Evidence is the other side of that: the
  * command and what came back, a test summary, a link to the change, a screenshot url.
  *
- * The rule is deliberately one rule — something was sent, and it is longer than a verdict — rather
+ * The rule is deliberately one rule — something was sent, and it is longer than a proof — rather
  * than a parser that decides what real output looks like. Anything cleverer refuses honest evidence
  * in a shape nobody thought of, and the refusal itself is what teaches: it says what counts.
  */
@@ -129,7 +129,7 @@ export function evidenceProblem(text: string): string | null {
 }
 
 /**
- * Where work is, as a column name. Derived from the guide and its claim on every read, never
+ * Where work is, as a column name. Derived from the work and its claim on every read, never
  * stored: `stalled` in particular is only "claimed, and the lease is in the past", and storing it
  * would need something running on a clock to write it.
  */
@@ -138,7 +138,7 @@ export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | 
 /** A hub list's selected scope. The API resolves team slugs to a membership-checked id. */
 export type WorkScope = { kind: "all" } | { kind: "mine" } | { kind: "team"; id: string };
 
-function scopedGuide(scope: WorkScope, account: string): { sql: string; binds: string[] } {
+function scopedWork(scope: WorkScope, account: string): { sql: string; binds: string[] } {
   if (scope.kind === "mine") return { sql: " AND g.account_id = ?", binds: [account] };
   if (scope.kind === "team") return { sql: " AND g.team_id = ?", binds: [scope.id] };
   return { sql: "", binds: [] };
@@ -172,7 +172,7 @@ const verified = (c: Check): boolean =>
  * A screenshot or an upload, in text. `add_file` ends at the same address whichever way the
  * bytes came, so one pattern answers for all of them.
  *
- * Written out here rather than imported from guide.ts, which owns the same regex: this module
+ * Written out here rather than imported from work.ts, which owns the same regex: this module
  * takes no sibling `.ts` import on purpose — see the note at the top — because it is tested against
  * a real SQLite and Node's type stripping cannot follow a value import. A test holds the two
  * copies to the same pattern.
@@ -249,7 +249,7 @@ export const flatten = (checks: Check[]): string =>
     .join("\n\n");
 
 export interface ClaimRow {
-  guide_id: string;
+  work_id: string;
   account_id: string;
   agent_id: string;
   host: string;
@@ -293,8 +293,8 @@ interface TaskRow {
  * The last part of a path, for either kind of separator.
  *
  * A worktree was stored and shown whole, so a claim read "/Users/<login>/Desktop/work/shop" or
- * "C:\\laragon\\www\\khaime": the person's login name and their folder layout, in a hub their
- * whole team reads. What tells two checkouts apart is the folder's own name.
+ * "C:\\laragon\\www\\khaime": the person's login name and their project layout, in a hub their
+ * whole team reads. What tells two checkouts apart is the project's own name.
  */
 export const leaf = (path: string) =>
   String(path ?? "")
@@ -320,7 +320,7 @@ export interface Agent {
  *
  * A remote URL becomes `owner/repo` whichever form it came in — `git@github.com:o/r.git`,
  * `https://github.com/o/r`, `ssh://git@host/o/r` — because the same repo checked out in two
- * worktrees has two folder names and one remote. Anything else is kept as written, lowercase.
+ * worktrees has two project names and one remote. Anything else is kept as written, lowercase.
  * Mirrored by `repoKey()` in packages/passalong/src/capture.js.
  */
 export function repoKey(raw: unknown): string {
@@ -338,13 +338,13 @@ export function repoKey(raw: unknown): string {
 
 /** The column work is in. `claim` is null when nobody has taken it. */
 export function stateOf(
-  guide: { status: string; blocked?: number | boolean },
+  work: { status: string; blocked?: number | boolean },
   claim: Pick<ClaimRow, "state" | "lease_until"> | null,
   at: string,
 ): TaskState {
-  if (guide.status === "consumed") return "done";
-  if (guide.status === "draft") return "draft";
-  if (!claim) return guide.blocked ? "blocked" : "ready";
+  if (work.status === "done") return "done";
+  if (work.status === "draft") return "draft";
+  if (!claim) return work.blocked ? "blocked" : "ready";
   return claim.lease_until > at ? "claimed" : "stalled";
 }
 
@@ -361,13 +361,13 @@ const leaseFrom = (at: string, ms = LEASE_MS) => new Date(Date.parse(at) + ms).t
 async function nextFence(db: D1Database, id: string): Promise<number> {
   await db
     .prepare(
-      `INSERT INTO claim_fence (guide_id, held) VALUES (?, 1)
-       ON CONFLICT(guide_id) DO UPDATE SET held = held + 1`,
+      `INSERT INTO claim_fence (work_id, held) VALUES (?, 1)
+       ON CONFLICT(work_id) DO UPDATE SET held = held + 1`,
     )
     .bind(id)
     .run();
   const row = await db
-    .prepare("SELECT held FROM claim_fence WHERE guide_id = ?")
+    .prepare("SELECT held FROM claim_fence WHERE work_id = ?")
     .bind(id)
     .first<{ held: number }>();
   return row?.held ?? 1;
@@ -389,7 +389,7 @@ const STALE =
   "this agent no longer holds that: it was released and taken again since. Take it again — " +
   "what you did is still in the worktree, and nothing here was overwritten.";
 
-/** The teams this account owns: the rooms where it may act on anyone's guide. */
+/** The teams this account owns: the rooms where it may act on anyone's work. */
 export async function ownedTeams(db: D1Database, account: string): Promise<Set<string>> {
   const { results } = await db
     .prepare("SELECT team_id FROM membership WHERE account_id = ? AND role = 'owner'")
@@ -417,11 +417,9 @@ const VISIBLE = `(g.account_id = ?1 OR (g.team_id <> '' AND g.team_id IN
 // (index.ts) filters on this and every row carries it as `answered_elsewhere`, so the board and the
 // lists cannot disagree about it. A claim counts: a teammate's agent holding it is an answer.
 export const ANSWERED_ELSEWHERE = `(to_account_id <> ?
-  AND id NOT IN (SELECT guide_id FROM ack WHERE taken = 1 AND account_id = ?)
-  AND (id IN (SELECT guide_id FROM ack WHERE taken = 1 AND account_id <> ?)
-       OR id IN (SELECT guide_id FROM verdict WHERE account_id <> ?)
-       OR id IN (SELECT guide_id FROM claim WHERE account_id <> ?)))`;
-export const answeredBinds = (account: string) => Array(5).fill(account) as string[];
+  AND (id IN (SELECT work_id FROM proof WHERE account_id <> ?)
+       OR id IN (SELECT work_id FROM claim WHERE account_id <> ?)))`;
+export const answeredBinds = (account: string) => Array(3).fill(account) as string[];
 
 // Addressed to this account, or to nobody in particular: work assigned to one person or to one
 // group is theirs to take, and the queue does not hand it to anyone else's agent.
@@ -432,14 +430,14 @@ const FOR_ME = `(g.to_account_id = '' OR g.to_account_id = ?1) AND (g.to_group_i
 // is: the latest `asked` since the claim was taken that no `replied` has followed. Nothing moves a
 // card to "waiting" and nothing has to move it back. See docs/CONVERSATION.md §4.2.
 export const ASKING = `(SELECT e.body FROM task_event e
-   WHERE e.guide_id = c.guide_id AND e.kind = 'asked' AND e.at >= c.claimed_at
+   WHERE e.work_id = c.work_id AND e.kind = 'asked' AND e.at >= c.claimed_at
      AND NOT EXISTS (SELECT 1 FROM task_event r
-                      WHERE r.guide_id = e.guide_id AND r.kind = 'replied' AND r.id > e.id)
+                      WHERE r.work_id = e.work_id AND r.kind = 'replied' AND r.id > e.id)
    ORDER BY e.id DESC LIMIT 1)`;
 
 // Waiting on work that is not Done yet. See migrations/0022_blocks.sql.
-const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN guide x ON x.id = b.blocker_id
-  WHERE b.guide_id = g.id AND x.status <> 'consumed')`;
+const BLOCKED = `EXISTS (SELECT 1 FROM task_block b JOIN work x ON x.id = b.blocker_id
+  WHERE b.work_id = g.id AND x.status <> 'done')`;
 
 /**
  * Hand this agent new work, or `null` when there is nothing for it.
@@ -467,9 +465,9 @@ export async function next(
   const { results } = await db
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created
-         FROM guide g
-        WHERE g.status = 'published' AND ${VISIBLE} AND ${FOR_ME} ${where}
-          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id) AND NOT ${BLOCKED}
+         FROM work g
+        WHERE g.status = 'ready' AND ${VISIBLE} AND ${FOR_ME} ${where}
+          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id) AND NOT ${BLOCKED}
         ORDER BY g.created, g.id LIMIT 20`,
     )
     .bind(...(any ? [who.account] : [who.account, repo]))
@@ -481,10 +479,10 @@ export async function next(
     const fence = await nextFence(db, task.id);
     const res = await db
       .prepare(
-        `INSERT INTO claim (guide_id, account_id, agent_id, host, repo, worktree, state,
+        `INSERT INTO claim (work_id, account_id, agent_id, host, repo, worktree, state,
                             claimed_at, lease_until, updated, fence)
          VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?, ?)
-         ON CONFLICT(guide_id) DO NOTHING`,
+         ON CONFLICT(work_id) DO NOTHING`,
       )
       .bind(
         task.id,
@@ -517,13 +515,13 @@ export async function next(
 
 /** The claim on one piece of work, or null. */
 export function claimOf(db: D1Database, id: string): Promise<ClaimRow | null> {
-  return db.prepare("SELECT * FROM claim WHERE guide_id = ?").bind(id).first<ClaimRow>();
+  return db.prepare("SELECT * FROM claim WHERE work_id = ?").bind(id).first<ClaimRow>();
 }
 
 /** This agent's claim on a piece of work, or null. */
 function claimFor(db: D1Database, id: string, who: Agent): Promise<ClaimRow | null> {
   return db
-    .prepare("SELECT * FROM claim WHERE guide_id = ? AND agent_id = ? AND account_id = ?")
+    .prepare("SELECT * FROM claim WHERE work_id = ? AND agent_id = ? AND account_id = ?")
     .bind(id, who.agent, who.account)
     .first<ClaimRow>();
 }
@@ -540,13 +538,13 @@ export type EventKind =
   | "replied"
   | "noted"
   // A support request's conversation with its customer (docs/LOOP.md): what the customer wrote,
-  // and what a person sent them. Recorded under the guide's author for `customer`, because the
+  // and what a person sent them. Recorded under the work's author for `customer`, because the
   // column must name an account and the customer has none; the hub says it was the customer.
   | "customer"
   | "answered";
 
 /**
- * Tell a parent that a guide made from it reached Done (docs/LOOP.md step 3): a note on its thread,
+ * Tell a parent that a piece of work made from it reached Done (docs/LOOP.md step 3): a note on its thread,
  * which `deliver()` hands to whoever holds it and to whoever takes it next. Once per child — the
  * child's id is in the line and a second call finds it — because several routes can end the same
  * piece of work in one act. Returns whether it wrote. Never throws.
@@ -560,7 +558,7 @@ export async function wakeParent(
     const mark = `(${child.id})`;
     const seen = await db
       .prepare(
-        "SELECT 1 FROM task_event WHERE guide_id = ? AND kind = 'noted' AND instr(body, ?) > 0",
+        "SELECT 1 FROM task_event WHERE work_id = ? AND kind = 'noted' AND instr(body, ?) > 0",
       )
       .bind(child.parent_id, mark)
       .first();
@@ -579,9 +577,9 @@ export async function wakeParent(
 
 /**
  * A customer wrote again on a support request that is Done, so it is not (docs/LOOP.md): back to
- * Ready, however it reached Done. This is the one way an archived guide goes straight to Ready
+ * Ready, however it reached Done. This is the one way an archived work goes straight to Ready
  * rather than to Draft (`unarchiveProblem`): a Draft reaches nobody, and a customer waiting on an
- * answer is exactly the work that must not be left behind. Only for a guide with a customer — the
+ * answer is exactly the work that must not be left behind. Only for a piece of work with a customer — the
  * caller has matched the tracking number and the sender. Returns whether it moved.
  */
 export async function reopenForCustomer(
@@ -590,17 +588,17 @@ export async function reopenForCustomer(
   { account, at }: { account: string; at: string },
 ): Promise<boolean> {
   const g = await db
-    .prepare("SELECT markdown FROM guide WHERE id = ? AND status = 'consumed' AND customer <> ''")
+    .prepare("SELECT markdown FROM work WHERE id = ? AND status = 'done' AND customer <> ''")
     .bind(id)
     .first<{ markdown: string }>();
   if (!g) return false;
   const reason = "The customer wrote again.";
   await db
     .prepare(
-      "UPDATE guide SET status = 'published', outcome = '', markdown = ?, updated = ? WHERE id = ?",
+      "UPDATE work SET status = 'ready', outcome = '', markdown = ?, updated = ? WHERE id = ?",
     )
     .bind(
-      withStatus(withNote(g.markdown, `${at.slice(0, 10)} reopened: ${reason}`), "published"),
+      withStatus(withNote(g.markdown, `${at.slice(0, 10)} reopened: ${reason}`), "ready"),
       at,
       id,
     )
@@ -609,7 +607,7 @@ export async function reopenForCustomer(
   return true;
 }
 
-/** A note on a guide's thread, handed to its holder and next taker. Never throws, as `event`. */
+/** A note on a piece of work's thread, handed to its holder and next taker. Never throws, as `event`. */
 export async function noteOn(
   db: D1Database,
   id: string,
@@ -629,7 +627,7 @@ export async function customerEvent(
 }
 
 /**
- * Add one line to a guide's thread. Written after the transition it describes has succeeded, never
+ * Add one line to a piece of work's thread. Written after the transition it describes has succeeded, never
  * before and never in its place, and it never throws: a thread that loses a bubble is a smaller
  * harm than a hand-in refused because the history could not be written.
  */
@@ -657,9 +655,9 @@ export async function event(
   try {
     await db
       .prepare(
-        `INSERT INTO task_event (guide_id, kind, account_id, agent_id, host, body, at)
+        `INSERT INTO task_event (work_id, kind, account_id, agent_id, host, body, at)
          SELECT ?, ?, ?, ?, ?, ?, ?
-          WHERE (SELECT COUNT(*) FROM task_event WHERE guide_id = ?) < ?`,
+          WHERE (SELECT COUNT(*) FROM task_event WHERE work_id = ?) < ?`,
       )
       .bind(
         id,
@@ -707,7 +705,7 @@ export async function take(
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.status, g.target, g.markdown, g.created,
               ${BLOCKED} AS blocked, ${FOR_ME} AS for_me
-         FROM guide g WHERE g.id = ?2 AND ${VISIBLE}`,
+         FROM work g WHERE g.id = ?2 AND ${VISIBLE}`,
     )
     .bind(who.account, id)
     .first<TaskRow & { blocked: number; for_me: number }>();
@@ -715,16 +713,16 @@ export async function take(
 
   const held = await db
     .prepare(
-      "SELECT guide_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' AND guide_id = ?",
+      "SELECT work_id FROM claim WHERE agent_id = ? AND account_id = ? AND state = 'claimed' AND work_id = ?",
     )
     .bind(who.agent, who.account, id)
-    .first<{ guide_id: string }>();
+    .first<{ work_id: string }>();
   if (held) {
     const claim = await renew(db, id, who, { at, note: null });
     if (claim) return { task: g, claim, resumed: true };
   }
 
-  if (g.status !== "published")
+  if (g.status !== "ready")
     return {
       status: 409,
       error: `${id} is not open to take: it is ${g.status === "draft" ? "a draft" : "done"}`,
@@ -743,10 +741,10 @@ export async function take(
   const fence = await nextFence(db, id);
   const res = await db
     .prepare(
-      `INSERT INTO claim (guide_id, account_id, agent_id, host, repo, worktree, state,
+      `INSERT INTO claim (work_id, account_id, agent_id, host, repo, worktree, state,
                           claimed_at, lease_until, updated, fence)
        VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?, ?, ?, ?)
-       ON CONFLICT(guide_id) DO NOTHING`,
+       ON CONFLICT(work_id) DO NOTHING`,
     )
     .bind(
       id,
@@ -777,7 +775,7 @@ export async function take(
   };
 }
 
-/** Where a held guide is: live, or stalled because its agent went quiet. */
+/** Where a held work is: live, or stalled because its agent went quiet. */
 export type HeldState = "claimed" | "stalled";
 
 /**
@@ -791,7 +789,7 @@ export async function working(
   scope: WorkScope = { kind: "all" },
 ): Promise<
   {
-    guide: {
+    work: {
       id: string;
       title: string;
       /** What it says to a person. */
@@ -806,7 +804,7 @@ export async function working(
     by: { handle: string; name: string; you: boolean };
   }[]
 > {
-  const scoped = scopedGuide(scope, account);
+  const scoped = scopedWork(scope, account);
   const { results } = await db
     .prepare(
       `SELECT c.*, g.title AS g_title, g.target AS g_target,
@@ -814,12 +812,12 @@ export async function working(
               g.summary AS g_summary,
               COALESCE(${ASKING}, '') AS asking,
               (SELECT COUNT(*) FROM task_event r
-                WHERE r.guide_id = c.guide_id AND r.kind IN ('replied', 'noted')
+                WHERE r.work_id = c.work_id AND r.kind IN ('replied', 'noted')
                   AND r.id > c.replied_through
                   AND (r.kind = 'noted' OR r.at >= c.claimed_at)) AS waiting_replies,
               COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
          FROM claim c
-         JOIN guide g ON g.id = c.guide_id
+         JOIN work g ON g.id = c.work_id
          LEFT JOIN account a ON a.id = c.account_id
         WHERE c.state = 'claimed' AND ${VISIBLE}${scoped.sql}
         ORDER BY c.lease_until DESC LIMIT 200`,
@@ -849,8 +847,8 @@ export async function working(
       by_name,
       ...claim
     }) => ({
-      guide: {
-        id: claim.guide_id,
+      work: {
+        id: claim.work_id,
         title: g_title,
         summary: g_summary,
         target: g_target,
@@ -887,7 +885,7 @@ export async function renew(
   const res = await db
     .prepare(
       `UPDATE claim SET lease_until = ?, updated = ?, note = COALESCE(?, note)
-        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
+        WHERE work_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
       leaseFrom(at, leaseMs),
@@ -936,7 +934,7 @@ export async function ask(
   const res = await db
     .prepare(
       `UPDATE claim SET lease_until = ?, updated = ?, note = ?
-        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
+        WHERE work_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
       leaseFrom(at, ASK_LEASE_MS),
@@ -975,11 +973,11 @@ export async function ask(
  * Not a comment box, and these are the rules that keep it from becoming one: there has to be a
  * holder, because a message with nobody to hear it is a comment; only the people on the asking side
  * may write — the author, whoever it is assigned to, and the holder's own account, which is the
- * common case of somebody replying to their own agent — and not anyone who can read the guide; and
+ * common case of somebody replying to their own agent — and not anyone who can read the work; and
  * it is plain text with no edit and no delete. See docs/CONVERSATION.md §2.
  *
  * Does not extend the lease: only the agent speaking does. Returns who holds it, to tell them.
- * Whether the caller can read the guide at all is the route's to settle first.
+ * Whether the caller can read the work at all is the route's to settle first.
  */
 export async function reply(
   db: D1Database,
@@ -993,12 +991,12 @@ export async function reply(
     .slice(0, MESSAGE_MAX);
   if (!text) return { status: 400, error: "write the message: send `body`" };
   const g = await db
-    .prepare("SELECT account_id, to_account_id, to_group_id, status FROM guide WHERE id = ?")
+    .prepare("SELECT account_id, to_account_id, to_group_id, status FROM work WHERE id = ?")
     .bind(id)
     .first<{ account_id: string; to_account_id: string; to_group_id: string; status: string }>();
   if (!g) return { status: 404, error: "no such work" };
   const { results: held } = await db
-    .prepare("SELECT account_id FROM claim WHERE guide_id = ? AND state = 'claimed'")
+    .prepare("SELECT account_id FROM claim WHERE work_id = ? AND state = 'claimed'")
     .bind(id)
     .all<{ account_id: string }>();
   const inGroup =
@@ -1020,10 +1018,10 @@ export async function reply(
   // file the work needs, a thing they thought of after writing it. It is the work's own, not a message
   // to anybody, so it is its own kind and every taker is handed all of it. Done work takes no more.
   const noted = !held.length;
-  if (noted && g.status === "consumed")
+  if (noted && g.status === "done")
     return { status: 409, error: "this is done, so there is nobody to leave a note for" };
   const full = await db
-    .prepare("SELECT COUNT(*) AS n FROM task_event WHERE guide_id = ?")
+    .prepare("SELECT COUNT(*) AS n FROM task_event WHERE work_id = ?")
     .bind(id)
     .first<{ n: number }>();
   if ((full?.n ?? 0) >= EVENTS_MAX * 2)
@@ -1064,7 +1062,7 @@ export async function deliver(
   if (resume) {
     const q = await db
       .prepare(
-        "SELECT COALESCE(MAX(id), 0) AS id FROM task_event WHERE guide_id = ? AND kind = 'asked' AND at >= ?",
+        "SELECT COALESCE(MAX(id), 0) AS id FROM task_event WHERE work_id = ? AND kind = 'asked' AND at >= ?",
       )
       .bind(id, c.claimed_at)
       .first<{ id: number }>();
@@ -1076,7 +1074,7 @@ export async function deliver(
       `SELECT e.id, e.kind, e.at, e.body, e.account_id, COALESCE(a.name, '') AS name,
               COALESCE(a.handle, '') AS handle
          FROM task_event e LEFT JOIN account a ON a.id = e.account_id
-        WHERE e.guide_id = ? AND e.kind IN ('replied', 'noted', 'customer', 'answered') AND e.id > ?
+        WHERE e.work_id = ? AND e.kind IN ('replied', 'noted', 'customer', 'answered') AND e.id > ?
           AND (e.kind <> 'replied' OR e.at >= ?)
         ORDER BY e.id LIMIT 50`,
     )
@@ -1095,7 +1093,7 @@ export async function deliver(
     await db
       .prepare(
         `UPDATE claim SET replied_through = MAX(replied_through, ?)
-          WHERE guide_id = ? AND agent_id = ? AND account_id = ?`,
+          WHERE work_id = ? AND agent_id = ? AND account_id = ?`,
       )
       .bind(last.id, id, who.agent, who.account)
       .run();
@@ -1115,7 +1113,7 @@ export async function deliver(
 
 /** A hold nobody has heard from, and who should be told about it. See stalled(). */
 export interface Stall {
-  guide_id: string;
+  work_id: string;
   title: string;
   /** The work's author. */
   author: string;
@@ -1133,7 +1131,7 @@ export interface Stall {
  * existence when a person opens the hub, so work goes quiet and stays quiet until somebody
  * happens to look. This is the one read that happens without a person, so the state reaches them.
  *
- * It does not release anything. A lapsed lease still holds its card (docs/V2.md §5) and this does
+ * It does not release anything. A lapsed lease still holds its card and this does
  * not change that; it only stops the silence being the author's job to notice.
  *
  * `since` is what makes this an announcement rather than a nag. Without it every run would return
@@ -1150,9 +1148,9 @@ export interface Stall {
 export async function stalled(db: D1Database, at: string, since = ""): Promise<Stall[]> {
   const { results } = await db
     .prepare(
-      `SELECT c.guide_id, c.note, c.lease_until, c.host, c.worktree,
+      `SELECT c.work_id, c.note, c.lease_until, c.host, c.worktree,
               g.title, g.account_id AS author
-         FROM claim c JOIN guide g ON g.id = c.guide_id
+         FROM claim c JOIN work g ON g.id = c.work_id
         WHERE c.state = 'claimed' AND c.lease_until <= ?1
           AND (?2 = '' OR c.lease_until > ?2)
         ORDER BY c.lease_until ASC
@@ -1160,7 +1158,7 @@ export async function stalled(db: D1Database, at: string, since = ""): Promise<S
     )
     .bind(at, since)
     .all<{
-      guide_id: string;
+      work_id: string;
       note: string;
       lease_until: string;
       host: string;
@@ -1169,7 +1167,7 @@ export async function stalled(db: D1Database, at: string, since = ""): Promise<S
       author: string;
     }>();
   return results.map((r) => ({
-    guide_id: r.guide_id,
+    work_id: r.work_id,
     title: r.title,
     author: r.author,
     where: [r.host, r.worktree].filter(Boolean).join(":"),
@@ -1203,7 +1201,7 @@ export async function list(
     by: { handle: string; name: string; you: boolean } | null;
   }[]
 > {
-  const scoped = scopedGuide(scope, account);
+  const scoped = scopedWork(scope, account);
   const [tasks, claims] = await Promise.all([
     db
       .prepare(
@@ -1213,7 +1211,7 @@ export async function list(
                   (SELECT group_id FROM group_member WHERE account_id = ?1))) AS for_me,
                 COALESCE(ta.handle, '') AS to_handle, COALESCE(tg.slug, '') AS to_group_slug,
                 COALESCE(tg.name, '') AS to_group_name
-           FROM guide g
+           FROM work g
            LEFT JOIN team t ON t.id = g.team_id
            LEFT JOIN account ta ON ta.id = g.to_account_id AND g.to_account_id <> ''
            LEFT JOIN team_group tg ON tg.id = g.to_group_id AND g.to_group_id <> ''
@@ -1237,14 +1235,14 @@ export async function list(
         `SELECT c.*, COALESCE(${ASKING}, '') AS asking,
                 COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
            FROM claim c
-           JOIN guide g ON g.id = c.guide_id
+           JOIN work g ON g.id = c.work_id
            LEFT JOIN account a ON a.id = c.account_id
           WHERE ${VISIBLE}`,
       )
       .bind(account)
       .all<ClaimRow & { by_handle: string; by_name: string }>(),
   ]);
-  const byTask = new Map(claims.results.map((c) => [c.guide_id, c]));
+  const byTask = new Map(claims.results.map((c) => [c.work_id, c]));
   return tasks.results.map((task) => {
     const claim = byTask.get(task.id) || null;
     return {
@@ -1265,7 +1263,7 @@ async function movable(
   account: string,
 ): Promise<{ markdown: string } | { error: string; status: 404 }> {
   const g = await db
-    .prepare(`SELECT markdown FROM guide WHERE id = ?1 AND ${MAY_MOVE}`)
+    .prepare(`SELECT markdown FROM work WHERE id = ?1 AND ${MAY_MOVE}`)
     .bind(id, account)
     .first<{ markdown: string }>();
   return (
@@ -1281,9 +1279,9 @@ const withStatus = (markdown: string, status: string) =>
   markdown.replace(/^(---\r?\n[\s\S]*?^)status:[^\n]*$/m, `$1status: ${status}`);
 
 /**
- * The end of a hand-in, now that nothing reviews it (docs/REVIEW.md): finishing is final.
+ * The end of a hand-in: finishing is final.
  *
- * What was shown is kept as a standing verdict, so it is still on the work — first, on its page —
+ * What was shown is kept as a standing proof, so it is still on the work — first, on its page —
  * after the claim that carried it is gone. The hand-in's claim is let go and the work goes to Done,
  * `outcome = finished`, unless it is Done already (a person said so first).
  */
@@ -1295,36 +1293,35 @@ export async function complete(
   await db.batch([
     db
       .prepare(
-        `INSERT INTO verdict (guide_id, account_id, ok, note, detail, checks, writeup, at)
-         SELECT guide_id, account_id, ?, note, evidence, checks, writeup, ? FROM claim
-          WHERE guide_id = ? AND account_id = ? AND state = 'review'
-         ON CONFLICT(guide_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note,
+        `INSERT INTO proof (work_id, account_id, ok, note, detail, checks, writeup, at)
+         SELECT work_id, account_id, ?, note, evidence, checks, writeup, ? FROM claim
+          WHERE work_id = ? AND account_id = ? AND state = 'review'
+         ON CONFLICT(work_id, account_id) DO UPDATE SET ok = excluded.ok, note = excluded.note,
            detail = excluded.detail, checks = excluded.checks,
-           writeup = CASE WHEN excluded.writeup <> '' THEN excluded.writeup ELSE verdict.writeup END,
+           writeup = CASE WHEN excluded.writeup <> '' THEN excluded.writeup ELSE proof.writeup END,
            at = excluded.at`,
       )
       .bind(1, at, id, account),
     db
-      .prepare("DELETE FROM claim WHERE guide_id = ? AND account_id = ? AND state = 'review'")
+      .prepare("DELETE FROM claim WHERE work_id = ? AND account_id = ? AND state = 'review'")
       .bind(id, account),
   ]);
   const g = await db
-    .prepare("SELECT markdown FROM guide WHERE id = ? AND status <> 'consumed'")
+    .prepare("SELECT markdown FROM work WHERE id = ? AND status <> 'done'")
     .bind(id)
     .first<{ markdown: string }>();
   if (!g) return { done: false };
   await db
     .prepare(
-      "UPDATE guide SET status = 'consumed', outcome = 'finished', markdown = ?, updated = ? WHERE id = ?",
+      "UPDATE work SET status = 'done', outcome = 'finished', markdown = ?, updated = ? WHERE id = ?",
     )
-    .bind(withStatus(g.markdown, "consumed"), at, id)
+    .bind(withStatus(g.markdown, "done"), at, id)
     .run();
   return { done: true };
 }
 
 /**
- * Put finished work back in To do, with why (docs/REVIEW.md §4): what Ask for changes was meant to
- * be, after the fact instead of in front of every piece of work. Anyone in its team may; the reason
+ * Put finished work back in To do, with why. Anyone in its team may; the reason
  * goes on the work for whoever takes it next. Only finished work: archived work
  * comes back through Unarchive, to Draft. Returns who finished it, to tell them.
  */
@@ -1338,30 +1335,30 @@ export async function reopen(
     .slice(0, 1000);
   if (!reason) return { status: 400, error: "say why: whoever takes it next reads it first" };
   const g = await db
-    .prepare(`SELECT markdown, status, outcome FROM guide g WHERE id = ?1 AND ${MAY_MOVE}`)
+    .prepare(`SELECT markdown, status, outcome FROM work g WHERE id = ?1 AND ${MAY_MOVE}`)
     .bind(id, account)
     .first<{ markdown: string; status: string; outcome: string }>();
   if (!g) return { status: 404, error: "no such work in your teams" };
-  if (g.status !== "consumed" || g.outcome === "archived")
+  if (g.status !== "done" || g.outcome === "archived")
     return {
       status: 409,
       error:
-        g.status === "consumed"
+        g.status === "done"
           ? "it was archived, not finished: unarchive it instead (it goes to Draft)"
           : "it isn't finished, so there is nothing to reopen",
     };
   const markdown = withStatus(
     withNote(g.markdown, `${at.slice(0, 10)} reopened: ${reason}`),
-    "published",
+    "ready",
   );
   await db
     .prepare(
-      "UPDATE guide SET status = 'published', outcome = '', markdown = ?, updated = ? WHERE id = ?",
+      "UPDATE work SET status = 'ready', outcome = '', markdown = ?, updated = ? WHERE id = ?",
     )
     .bind(markdown, at, id)
     .run();
   const { results } = await db
-    .prepare("SELECT DISTINCT account_id FROM verdict WHERE guide_id = ? AND ok = 1")
+    .prepare("SELECT DISTINCT account_id FROM proof WHERE work_id = ? AND ok = 1")
     .bind(id)
     .all<{ account_id: string }>();
   await event(db, id, "reopened", { account, body: reason, at });
@@ -1407,8 +1404,8 @@ export async function release(
     "error" in authored
       ? await db
           .prepare(
-            `SELECT markdown FROM guide g WHERE id = ?
-                AND EXISTS (SELECT 1 FROM claim WHERE guide_id = g.id AND account_id = ? AND state = 'claimed')`,
+            `SELECT markdown FROM work g WHERE id = ?
+                AND EXISTS (SELECT 1 FROM claim WHERE work_id = g.id AND account_id = ? AND state = 'claimed')`,
           )
           .bind(id, account)
           .first<{ markdown: string }>()
@@ -1416,7 +1413,7 @@ export async function release(
   if (!g) return authored as { error: string; status: 404 };
 
   const c = await db
-    .prepare("SELECT * FROM claim WHERE guide_id = ? AND state = 'claimed'")
+    .prepare("SELECT * FROM claim WHERE work_id = ? AND state = 'claimed'")
     .bind(id)
     .first<ClaimRow>();
   if (!c) return { status: 409, error: "nobody holds this" };
@@ -1427,8 +1424,8 @@ export async function release(
   const said = c.note ? `; last progress: "${c.note}"` : "";
   const markdown = withNote(g.markdown, `${at.slice(0, 10)} released from ${where}${said}`);
   await db.batch([
-    db.prepare("DELETE FROM claim WHERE guide_id = ? AND state = 'claimed'").bind(id),
-    db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
+    db.prepare("DELETE FROM claim WHERE work_id = ? AND state = 'claimed'").bind(id),
+    db.prepare("UPDATE work SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
   ]);
   await event(db, id, "released", { account, host: c.host, body: c.note, at });
   return { state: "ready", claimant: c.account_id };
@@ -1452,15 +1449,15 @@ export async function blockOn(
   const kept: string[] = [];
   for (const b of wanted) {
     const ok = await db
-      .prepare(`SELECT 1 FROM guide g WHERE g.id = ?2 AND ${VISIBLE}`)
+      .prepare(`SELECT 1 FROM work g WHERE g.id = ?2 AND ${VISIBLE}`)
       .bind(account, b)
       .first();
     if (ok) kept.push(b);
   }
   await db.batch([
-    db.prepare("DELETE FROM task_block WHERE guide_id = ?").bind(id),
+    db.prepare("DELETE FROM task_block WHERE work_id = ?").bind(id),
     ...kept.map((b) =>
-      db.prepare("INSERT INTO task_block (guide_id, blocker_id) VALUES (?, ?)").bind(id, b),
+      db.prepare("INSERT INTO task_block (work_id, blocker_id) VALUES (?, ?)").bind(id, b),
     ),
   ]);
   return kept;
@@ -1488,7 +1485,7 @@ export async function pass(
   // Passing gives the card back, so a stale one would hand back work somebody else is doing.
   if (c && typeof fence === "number" && c.fence !== fence) return { status: 409, error: STALE };
   const g = await db
-    .prepare("SELECT account_id, markdown FROM guide WHERE id = ?")
+    .prepare("SELECT account_id, markdown FROM work WHERE id = ?")
     .bind(id)
     .first<{ account_id: string; markdown: string }>();
   if (!c || c.state !== "claimed" || !g)
@@ -1496,8 +1493,8 @@ export async function pass(
   const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
   const markdown = withNote(g.markdown, `${at.slice(0, 10)} passed from ${where}: ${reason}`);
   await db.batch([
-    db.prepare("DELETE FROM claim WHERE guide_id = ? AND agent_id = ?").bind(id, who.agent),
-    db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
+    db.prepare("DELETE FROM claim WHERE work_id = ? AND agent_id = ?").bind(id, who.agent),
+    db.prepare("UPDATE work SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
   ]);
   await event(db, id, "passed", {
     account: who.account,
@@ -1564,7 +1561,7 @@ export async function handIn(
     .prepare(
       `UPDATE claim SET state = 'review', evidence = ?, checks = ?, writeup = ?, risk = ?, pr = ?,
               note = COALESCE(NULLIF(?, ''), note), updated = ?
-        WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
+        WHERE work_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'${heldBy(fence)}`,
     )
     .bind(
       String(said ?? "")
@@ -1646,7 +1643,7 @@ export type StepEvent =
   | "not_held";
 
 /**
- * What an agent should do next, attached to every answer it gets. See docs/V2.md §11.
+ * What an agent should do next, attached to every answer it gets.
  *
  * Instructions an agent read at the start of a long session are the first thing it forgets; the
  * answer to the call it just made is the last thing it read. So the next move rides on that answer,
@@ -1734,9 +1731,9 @@ export interface ThreadItem {
 
 /**
  * A piece of work's thread: what happened to it, in order, as the conversation a person would read.
- * `task_event` is the whole of it (migration 0062 moved the old verdicts and acks in).
+ * `task_event` is the whole of it (migration 0062 moved the older records in).
  *
- * Who may read it is the caller's to settle — this is a query, and the route asks `readableGuide`.
+ * Who may read it is the caller's to settle — this is a query, and the route asks `readableWork`.
  */
 export async function thread(db: D1Database, id: string, viewer: string): Promise<ThreadItem[]> {
   const { results } = await db
@@ -1744,7 +1741,7 @@ export async function thread(db: D1Database, id: string, viewer: string): Promis
       `SELECT e.id, e.kind, e.at, e.body, e.account_id, e.agent_id, e.host,
               COALESCE(a.name, '') AS name, COALESCE(a.handle, '') AS handle
          FROM task_event e LEFT JOIN account a ON a.id = e.account_id
-        WHERE e.guide_id = ? ORDER BY e.at, e.id LIMIT 500`,
+        WHERE e.work_id = ? ORDER BY e.at, e.id LIMIT 500`,
     )
     .bind(id)
     .all<{
@@ -1788,7 +1785,7 @@ export async function thread(db: D1Database, id: string, viewer: string): Promis
  * runs out after a day like anything else and the author is told it stalled.
  *
  * The delete checks the lease it read, so an agent that came back between the read and the write
- * keeps its work. `times` counts how often the clock has let go of this guide, this one included:
+ * keeps its work. `times` counts how often the clock has let go of this work, this one included:
  * a second time means the work is not getting done by whoever picks it up, and a person is told.
  */
 export const REQUEUE_AFTER_MS = 2 * 60 * 60 * 1000;
@@ -1800,12 +1797,12 @@ export async function requeueStalled(
   db: D1Database,
   at: string,
   before: string,
-): Promise<{ guide_id: string; title: string; author: string; team_id: string; times: number }[]> {
+): Promise<{ work_id: string; title: string; author: string; team_id: string; times: number }[]> {
   const { results } = await db
     .prepare(
-      `SELECT c.guide_id, c.account_id, c.agent_id, c.host, c.worktree, c.note,
+      `SELECT c.work_id, c.account_id, c.agent_id, c.host, c.worktree, c.note,
               c.lease_until, g.title, g.markdown, g.account_id AS author, g.team_id
-         FROM claim c JOIN guide g ON g.id = c.guide_id
+         FROM claim c JOIN work g ON g.id = c.work_id
         WHERE c.state = 'claimed' AND c.lease_until <= ? AND ${ASKING} IS NULL
         ORDER BY c.lease_until ASC
         LIMIT 100`,
@@ -1816,23 +1813,23 @@ export async function requeueStalled(
   for (const c of results) {
     const res = await db
       .prepare(
-        `DELETE FROM claim WHERE guide_id = ? AND account_id = ?
+        `DELETE FROM claim WHERE work_id = ? AND account_id = ?
             AND state = 'claimed' AND lease_until = ?`,
       )
-      .bind(c.guide_id, c.account_id, c.lease_until)
+      .bind(c.work_id, c.account_id, c.lease_until)
       .run();
     if (res.meta.changes !== 1) continue;
     const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
     const said = c.note ? `; last progress: "${c.note}"` : "";
     await db
-      .prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?")
+      .prepare("UPDATE work SET markdown = ?, updated = ? WHERE id = ?")
       .bind(
         withNote(c.markdown, `${at.slice(0, 10)} went quiet at ${where}${said}; back in the queue`),
         at,
-        c.guide_id,
+        c.work_id,
       )
       .run();
-    await event(db, c.guide_id, "released", {
+    await event(db, c.work_id, "released", {
       account: c.account_id,
       agent: c.agent_id,
       host: c.host,
@@ -1841,12 +1838,12 @@ export async function requeueStalled(
     });
     const n = await db
       .prepare(
-        "SELECT COUNT(*) AS n FROM task_event WHERE guide_id = ? AND kind = 'released' AND body = ?",
+        "SELECT COUNT(*) AS n FROM task_event WHERE work_id = ? AND kind = 'released' AND body = ?",
       )
-      .bind(c.guide_id, REQUEUED)
+      .bind(c.work_id, REQUEUED)
       .first<{ n: number }>();
     out.push({
-      guide_id: c.guide_id,
+      work_id: c.work_id,
       title: c.title,
       author: c.author,
       team_id: c.team_id,
@@ -1874,13 +1871,13 @@ export async function customersWaiting(
     .prepare(
       `SELECT id, title, account_id, team_id FROM (
          SELECT g.id, g.title, g.account_id, g.team_id,
-                COALESCE((SELECT MAX(at) FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'customer'), g.created) AS wrote
-           FROM guide g
-          WHERE g.customer <> '' AND g.status = 'published'
-            AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
+                COALESCE((SELECT MAX(at) FROM task_event e WHERE e.work_id = g.id AND e.kind = 'customer'), g.created) AS wrote
+           FROM work g
+          WHERE g.customer <> '' AND g.status = 'ready'
+            AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id)
        ) w
        WHERE w.wrote <= ?1 AND w.wrote > ?2
-         AND NOT EXISTS (SELECT 1 FROM task_event a WHERE a.guide_id = w.id AND a.kind = 'answered' AND a.at >= w.wrote)
+         AND NOT EXISTS (SELECT 1 FROM task_event a WHERE a.work_id = w.id AND a.kind = 'answered' AND a.at >= w.wrote)
        LIMIT 200`,
     )
     .bind(before, since)
@@ -1900,7 +1897,7 @@ export async function customersWaiting(
  * says must never happen. Now a person hears instead — its author and the team's owners, once —
  * and decides: give it to someone else, take it, or archive it.
  *
- * It repeats every day until someone acts (the author's call, docs/LOOP.md §1a): a guide is returned
+ * It repeats every day until someone acts (the author's call, docs/LOOP.md §1a): a piece of work is returned
  * in the one run each day that its age crosses UNTAKEN_MS plus a whole number of days. `window` is
  * that run's width; pass one wider than the gap between runs, as `stalled` does. The feed and the
  * phone hear it each day; the mail goes once, because a row coalesces and mail is only its first.
@@ -1920,13 +1917,13 @@ export async function untaken(
     .prepare(
       `SELECT g.id, g.account_id, g.title, g.team_id, g.to_account_id AS to_id, g.to_group_id,
               g.updated
-         FROM guide g
-        WHERE g.status = 'published' AND g.updated <= ?1
+         FROM work g
+        WHERE g.status = 'ready' AND g.updated <= ?1
           AND (g.to_account_id <> '' OR g.to_group_id <> '')
-          AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id AND p.account_id <> g.account_id)
-          AND NOT EXISTS (SELECT 1 FROM ack a WHERE a.guide_id = g.id)
-          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.guide_id = g.id)
-          AND NOT EXISTS (SELECT 1 FROM verdict v WHERE v.guide_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM pull p WHERE p.work_id = g.id AND p.account_id <> g.account_id)
+          AND NOT EXISTS (SELECT 1 FROM task_event a WHERE a.work_id = g.id AND a.kind = 'passed')
+          AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.work_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM proof v WHERE v.work_id = g.id)
         ORDER BY g.updated ASC
         LIMIT 500`,
     )
@@ -1940,7 +1937,7 @@ export async function untaken(
       to_group_id: string;
       updated: string;
     }>();
-  // The run, each day, in which this guide's age crossed the threshold plus whole days.
+  // The run, each day, in which this work's age crossed the threshold plus whole days.
   const due = (updated: string) => (now - Date.parse(updated) - UNTAKEN_MS) % DAY_MS < window;
   return results
     .filter((r) => due(r.updated))
@@ -1954,7 +1951,7 @@ export async function untaken(
 }
 
 /**
- * How long a guide sits untouched in Draft before its author is reminded. Every new guide is a
+ * How long a piece of work sits untouched in Draft before its author is reminded. Every new work is a
  * draft and only a person's Ready sends it on, so one somebody meant to send and forgot to mark
  * Ready waits forever with nothing saying so.
  */
@@ -1972,7 +1969,7 @@ export async function staleDrafts(
 ): Promise<{ id: string; account_id: string; team_id: string }[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, account_id, team_id FROM guide
+      `SELECT id, account_id, team_id FROM work
         WHERE status = 'draft' AND updated <= ?1 AND updated > ?2
         ORDER BY updated ASC
         LIMIT 200`,
@@ -1996,22 +1993,22 @@ export async function dropOutside(
 ): Promise<string[]> {
   if (accounts === null) return [];
   const { results } = await db
-    .prepare("SELECT * FROM claim WHERE guide_id = ? AND state = 'claimed'")
+    .prepare("SELECT * FROM claim WHERE work_id = ? AND state = 'claimed'")
     .bind(id)
     .all<ClaimRow>();
   const out = results.filter((c) => !accounts.includes(c.account_id));
   if (!out.length) return [];
   const g = await db
-    .prepare("SELECT markdown, account_id FROM guide WHERE id = ?")
+    .prepare("SELECT markdown, account_id FROM work WHERE id = ?")
     .bind(id)
     .first<{ markdown: string; account_id: string }>();
   const c = out[0]!;
-  const drops = [db.prepare("DELETE FROM claim WHERE guide_id = ?").bind(id)];
+  const drops = [db.prepare("DELETE FROM claim WHERE work_id = ?").bind(id)];
   if (g) {
     const where = [c.host, c.worktree].filter(Boolean).join(":") || `agent ${c.agent_id}`;
     const markdown = withNote(g.markdown, `${at.slice(0, 10)} ${why}; it was with ${where}`);
     drops.push(
-      db.prepare("UPDATE guide SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
+      db.prepare("UPDATE work SET markdown = ?, updated = ? WHERE id = ?").bind(markdown, at, id),
     );
   }
   await db.batch(drops);

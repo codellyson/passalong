@@ -3,8 +3,8 @@
 One file per shape the format has to keep working: work written as plain prose with no headings,
 work written in sections, a bug filed under a parent, the quoting edges, and the smallest document
 there is. They are read by `packages/passalong/test/corpus.test.js` and by
-`apps/api/test/corpus.test.mjs`, which is the point — `packages/passalong/src/guide.js` defines the
-format and `apps/api/src/guide.ts` mirrors it, and until this existed nothing checked that the two
+`apps/api/test/corpus.test.mjs`, which is the point — `packages/passalong/src/work.js` defines the
+format and `apps/api/src/work.ts` mirrors it, and until this existed nothing checked that the two
 agreed on anything.
 
 **Every file here is in canonical form**: `serialize(parse(x))` returns it byte for byte. That is

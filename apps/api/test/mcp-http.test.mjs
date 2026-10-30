@@ -179,14 +179,14 @@ test("take hands over the work with the lead, its parent in front, and where lea
     "POST /v1/take": {
       status: 200,
       text: JSON.stringify({
-        guide: { id: "abc12345", markdown },
+        work: { id: "abc12345", markdown },
         next: [{ tool: "progress", when: "at each milestone", why: "or it stalls" }],
       }),
     },
-    "GET /v1/guides/abc12345/parent": {
+    "GET /v1/work/abc12345/parent": {
       status: 200,
       text: JSON.stringify({
-        guide: { id: "par12345", title: "Bigger", state: "open", markdown: "the big one" },
+        work: { id: "par12345", title: "Bigger", state: "open", markdown: "the big one" },
       }),
     },
   });
@@ -204,7 +204,7 @@ test("nothing waiting says to stop, and someone else holding it is the route's o
   const none = recorder({
     "POST /v1/take": {
       status: 200,
-      text: JSON.stringify({ guide: null, next: [], say: "Nothing is waiting. Stop." }),
+      text: JSON.stringify({ work: null, next: [], say: "Nothing is waiting. Stop." }),
     },
   });
   assert.match(textOf(await tool(none.call, "take", { agent: "chat-7f3k2m9q" })), /Stop\./);
@@ -236,10 +236,10 @@ test("progress, pass, ask and hand_in each reach their route with what they carr
   assert.deepEqual(
     seen.map((s) => `${s.method} ${s.path}`),
     [
-      "PUT /v1/guides/abc12345/progress",
-      "POST /v1/guides/abc12345/pass",
-      "POST /v1/guides/abc12345/ask",
-      "POST /v1/guides/abc12345/hand_in",
+      "PUT /v1/work/abc12345/progress",
+      "POST /v1/work/abc12345/pass",
+      "POST /v1/work/abc12345/ask",
+      "POST /v1/work/abc12345/hand_in",
     ],
   );
   assert.deepEqual(seen[1].body, { agent, why: "not mine" });
@@ -348,11 +348,11 @@ test("find_work reads by id without taking it, with what it came out of in front
   const markdown =
     "---\nid: abc12345\ntitle: x\nsummary: s\n---\n\nThe upload button does nothing.\n";
   const { call, seen } = recorder({
-    "GET /v1/guides/abc12345": { status: 200, text: markdown },
-    "GET /v1/guides/abc12345/parent": { status: 200, text: '{"guide":null}' },
+    "GET /v1/work/abc12345": { status: 200, text: markdown },
+    "GET /v1/work/abc12345/parent": { status: 200, text: '{"work":null}' },
   });
   const r = await tool(call, "find_work", { id: "abc12345" });
-  assert.equal(seen[0].path, "/v1/guides/abc12345?peek=1", "reading records nothing");
+  assert.equal(seen[0].path, "/v1/work/abc12345?peek=1", "reading records nothing");
   assert.equal(r.content[0].text, markdown, "the document as it came");
   assert.match(textOf(r), /to work on it, call take abc12345/);
   assert.equal(r.structuredContent.markdown, markdown);
@@ -361,7 +361,7 @@ test("find_work reads by id without taking it, with what it came out of in front
 test("find_work reads large work by its outline, or one section", async () => {
   const filler = "x".repeat(25_000);
   const markdown = `---\nid: big12345\ntitle: x\nsummary: s\n---\n\n## Background\n${filler}\n\n## What to change\nthe one thing\n`;
-  const { call } = recorder({ "GET /v1/guides/big12345": { status: 200, text: markdown } });
+  const { call } = recorder({ "GET /v1/work/big12345": { status: 200, text: markdown } });
   const outline = textOf(await tool(call, "find_work", { id: "big12345" }));
   assert.match(outline, /- Background \(/);
   assert.match(outline, /find_work id=big12345 section=/);
@@ -373,7 +373,7 @@ test("find_work reads large work by its outline, or one section", async () => {
 
 test("find_work with words searches, and answers with work", async () => {
   const { call, seen } = recorder({
-    "GET /v1/guides": { status: 200, text: '{"guides":[{"id":"abc12345","title":"t"}]}' },
+    "GET /v1/work": { status: 200, text: '{"work":[{"id":"abc12345","title":"t"}]}' },
   });
   const r = await tool(call, "find_work", { query: "webhook", scope: "mine" });
   assert.match(seen[0].path, /q=webhook/);
@@ -387,7 +387,7 @@ test("find_work with nothing is the board, drawn as an app where the host can", 
     title: `work ${id}`,
     state,
     mine: true,
-    url: `https://passalong.dev/g/${id}/k`,
+    url: `https://passalong.dev/w/${id}/k`,
     claim: null,
     ...extra,
   });
@@ -440,7 +440,7 @@ test("find_work with nothing is the board, drawn as an app where the host can", 
       ["b1", "stuck on you: need the key"],
     ],
   );
-  assert.equal(b.needs[0].url, "https://passalong.dev/hub/g/d1");
+  assert.equal(b.needs[0].url, "https://passalong.dev/hub/w/d1");
   assert.deepEqual(b.working, [
     { id: "a1", title: "work a1", who: "Ada", note: "on it", stalled: false, url: "u" },
   ]);
@@ -486,12 +486,12 @@ test("the board page is served as an MCP App, and calls only find_work and updat
 
 test("update_work moves, gives and rewrites, each through its own route", async () => {
   const { call, seen } = recorder({
-    "PUT /v1/guides/abc12345": {
+    "PUT /v1/work/abc12345": {
       status: 200,
-      text: '{"url":"https://passalong.dev/g/abc12345/k"}',
+      text: '{"url":"https://passalong.dev/w/abc12345/k"}',
     },
-    "POST /v1/guides/abc12345/assign": { status: 200, text: '{"id":"abc12345","to":"#backend"}' },
-    "PATCH /v1/guides/abc12345/status": { status: 200, text: '{"ok":true}' },
+    "POST /v1/work/abc12345/assign": { status: 200, text: '{"id":"abc12345","to":"#backend"}' },
+    "PATCH /v1/work/abc12345/status": { status: 200, text: '{"ok":true}' },
   });
   const r = await tool(call, "update_work", {
     id: "abc12345",
@@ -501,16 +501,12 @@ test("update_work moves, gives and rewrites, each through its own route", async 
   });
   assert.deepEqual(
     seen.map((s) => `${s.method} ${s.path}`),
-    [
-      "PUT /v1/guides/abc12345",
-      "POST /v1/guides/abc12345/assign",
-      "PATCH /v1/guides/abc12345/status",
-    ],
+    ["PUT /v1/work/abc12345", "POST /v1/work/abc12345/assign", "PATCH /v1/work/abc12345/status"],
   );
-  assert.deepEqual(seen[2].body, { status: "consumed" });
+  assert.deepEqual(seen[2].body, { status: "done" });
   assert.deepEqual(r.structuredContent, {
     id: "abc12345",
-    url: "https://passalong.dev/g/abc12345/k",
+    url: "https://passalong.dev/w/abc12345/k",
     to: "#backend",
     status: "archived",
   });
@@ -523,21 +519,21 @@ test("update_work moves, gives and rewrites, each through its own route", async 
 
 test("a route's refusal is the tool's error, and a non-object answer is one too", async () => {
   const refusing = recorder({
-    "PATCH /v1/guides/abc12345/status": { status: 403, text: '{"message":"only its author"}' },
+    "PATCH /v1/work/abc12345/status": { status: 403, text: '{"message":"only its author"}' },
   });
   const r = await tool(refusing.call, "update_work", { id: "abc12345", status: "ready" });
   assert.equal(r.isError, true);
   assert.match(textOf(r), /only its author/);
-  const odd = recorder({ "GET /v1/folders": { status: 200, text: "[]" } });
+  const odd = recorder({ "GET /v1/projects": { status: 200, text: "[]" } });
   assert.equal((await tool(odd.call, "find_projects")).isError, true);
 });
 
 // ---- projects, documents and files --------------------------------------------------------------
 
-test("projects are found, made and changed through the folder routes", async () => {
+test("projects are found, made and changed through the project routes", async () => {
   const { call, seen } = recorder({
-    "POST /v1/folders": { status: 201, text: '{"folder":{"id":"f1"},"space":"private"}' },
-    "PATCH /v1/folders/f1": { status: 200, text: '{"folder":{"id":"f1"}}' },
+    "POST /v1/projects": { status: 201, text: '{"project":{"id":"f1"},"space":"private"}' },
+    "PATCH /v1/projects/f1": { status: 200, text: '{"project":{"id":"f1"}}' },
   });
   await tool(call, "find_projects", { query: "billing" });
   await tool(call, "find_projects", { id: "f1" });
@@ -545,7 +541,12 @@ test("projects are found, made and changed through the folder routes", async () 
   await tool(call, "save_project", { id: "f1", parent: "" });
   assert.deepEqual(
     seen.map((s) => `${s.method} ${s.path}`),
-    ["GET /v1/folders?q=billing", "GET /v1/folders/f1", "POST /v1/folders", "PATCH /v1/folders/f1"],
+    [
+      "GET /v1/projects?q=billing",
+      "GET /v1/projects/f1",
+      "POST /v1/projects",
+      "PATCH /v1/projects/f1",
+    ],
   );
   assert.deepEqual(seen[3].body, { parent: "" }, "only what was said changes");
   const moved = await tool(call, "save_project", { id: "f1", team: "khaime" });
@@ -563,21 +564,21 @@ test("documents are read with their history, and saved, renamed and moved with t
   await tool(call, "save_document", { project, document: "d1", body: "new", version: 4 });
   await tool(call, "save_document", { project, document: "d1", name: "Billing", move_to: "f2" });
   await tool(call, "delete_document", { project, document: "d1" });
-  const doc = "/v1/folders/f1/documents/d1";
+  const doc = "/v1/projects/f1/documents/d1";
   assert.deepEqual(
     seen.map((s) => `${s.method} ${s.path}`),
     [
       `GET ${doc}`,
       `GET ${doc}/revisions`,
       `GET ${doc}/revisions/3`,
-      "POST /v1/folders/f1/documents",
+      "POST /v1/projects/f1/documents",
       `PUT ${doc}`,
       `PATCH ${doc}`,
       `DELETE ${doc}`,
     ],
   );
   assert.deepEqual(seen[4].body, { version: 4, body: "new" });
-  assert.deepEqual(seen[5].body, { name: "Billing", folder: "f2" });
+  assert.deepEqual(seen[5].body, { name: "Billing", project: "f2" });
   const blind = await tool(call, "save_document", { project, document: "d1", body: "x" });
   assert.equal(blind.isError, true, "an edit without the version read is refused here");
   assert.match(textOf(blind), /version/);
@@ -585,7 +586,7 @@ test("documents are read with their history, and saved, renamed and moved with t
 
 test("a project's picture reaches the agent as an image, and files are removed by one route", async () => {
   const { call, seen } = recorder({
-    "GET /v1/folders/f1/assets/a1/agent": {
+    "GET /v1/projects/f1/files/a1/agent": {
       status: 200,
       text: JSON.stringify({ id: "a1", name: "screen.png", type: "image/png", data: "iVBORw==" }),
     },
@@ -595,7 +596,7 @@ test("a project's picture reaches the agent as an image, and files are removed b
   assert.equal(r.structuredContent.data, undefined, "the bytes are not also in the metadata");
   await tool(call, "delete_file", { project: "f1", file: "a1" });
   assert.equal(seen[1].method, "DELETE");
-  assert.equal(seen[1].path, "/v1/folders/f1/assets/a1");
+  assert.equal(seen[1].path, "/v1/projects/f1/files/a1");
 });
 
 test("add_file with no file mints a one-time link, for work or for a project", async () => {
@@ -616,7 +617,7 @@ test("add_file with no file mints a one-time link, for work or for a project", a
     /curl .*-X PUT --data-binary @FILE_PATH 'https:\/\/passalong\.dev\/v1\/uploads\/up_x'/,
   );
   await tool(call, "add_file", { project: "f1", name: "brief.pdf" });
-  assert.deepEqual(seen[1].body, { folder: "f1", name: "brief.pdf" });
+  assert.deepEqual(seen[1].body, { project: "f1", name: "brief.pdf" });
   const refusing = recorder({ "POST /v1/uploads": { status: 429, text: "Too many upload links" } });
   const no = await tool(refusing.call, "add_file", {});
   assert.equal(no.isError, true);
@@ -637,7 +638,7 @@ test("add_file stores a picture as one, anything else as a download, and a proje
     assert.equal(seen[0].body.byteLength, 4, "the bytes go up, not a description of them");
     assert.equal(r.structuredContent.markdown, "![shot.png](https://passalong.dev/v1/shots/s1)");
     await tool(call, "add_file", { file: FILE, project: "f1" });
-    assert.equal(seen[1].path, "/v1/folders/f1/assets");
+    assert.equal(seen[1].path, "/v1/projects/f1/files");
     assert.equal(seen[1].raw.headers["x-file-name"], "shot.png");
   });
   await withDownload(new Uint8Array([37, 80, 68, 70]), "application/pdf", async () => {

@@ -10,7 +10,7 @@ const route = index.slice(
   index.indexOf('app.get("/v1/export"'),
   index.indexOf("\n});\n", index.indexOf('app.get("/v1/export"')),
 );
-const SQL = route.match(/`(SELECT id, markdown FROM guide[\s\S]*?)`/)[1];
+const SQL = route.match(/`(SELECT id, markdown FROM work[\s\S]*?)`/)[1];
 const PAGE = Number(index.match(/const EXPORT_PAGE = (\d+);/)[1]);
 
 test("export is a backup, not a reading: it records no pull", () => {
@@ -27,20 +27,20 @@ test("export pages through everything the account can read, and nothing else", (
   for (const id of ["me", "mate", "stranger"]) acct.run(id, `h-${id}`, at);
   db.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('t', 't', 'T', 'mate', '${at}');
     INSERT INTO membership (team_id, account_id, joined) VALUES ('t', 'me', '${at}'), ('t', 'mate', '${at}');`);
-  const guide = db.prepare(
-    `INSERT INTO guide (id, account_id, team_id, share_key, title, status, source_context, tags, stack,
+  const work = db.prepare(
+    `INSERT INTO work (id, account_id, team_id, share_key, title, status, source_context, tags, stack,
                         markdown, created, updated)
-     VALUES (?, ?, ?, 'k', 't', 'published', '', '[]', '[]', ?, ?, ?)`,
+     VALUES (?, ?, ?, 'k', 't', 'ready', '', '[]', '[]', ?, ?, ?)`,
   );
   const mine = [];
   for (let i = 0; i < PAGE + 5; i++) {
     const id = `m${String(i).padStart(4, "0")}`;
-    guide.run(id, "me", "", `# ${id}`, at, at);
+    work.run(id, "me", "", `# ${id}`, at, at);
     mine.push(id);
   }
-  guide.run("team0001", "mate", "t", "# team", at, at);
-  guide.run("priv0001", "mate", "", "# private", at, at);
-  guide.run("strg0001", "stranger", "", "# stranger", at, at);
+  work.run("team0001", "mate", "t", "# team", at, at);
+  work.run("priv0001", "mate", "", "# private", at, at);
+  work.run("strg0001", "stranger", "", "# stranger", at, at);
 
   const page = (after) => {
     const rows = db.prepare(SQL).all("me", after, PAGE);
@@ -54,5 +54,5 @@ test("export pages through everything the account can read, and nothing else", (
     after = p.next;
   } while (after);
   assert.deepEqual(seen.sort(), [...mine, "team0001"].sort());
-  assert.equal(new Set(seen).size, seen.length, "no guide twice across pages");
+  assert.equal(new Set(seen).size, seen.length, "no work twice across pages");
 });

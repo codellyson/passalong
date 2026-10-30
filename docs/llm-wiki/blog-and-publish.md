@@ -12,7 +12,7 @@ because a Worker has no filesystem.
   feed; the sitemap lists posts once `/blog` is published.
 - No script and the strict policy, like docs.
 - Rendered by the same remark pipeline as share pages (`renderMarkdown` in
-  `server/utils/guide-html.ts`), so tables, task lists, footnotes and `> [!NOTE]` alerts work in posts.
+  `server/utils/work-html.ts`), so tables, task lists, footnotes and `> [!NOTE]` alerts work in posts.
 - A draft renders at its address, noindex, and appears nowhere else. `/blog` is itself a draft in
   `shared/pages.ts`.
 - **Publishing:** `draft: false` on the post and on `/blog`, and a `/blog` line in
@@ -20,10 +20,10 @@ because a Worker has no filesystem.
 
 The first post, *Hand work to your agents, and see it come back*, is a draft awaiting edits.
 
-## Learn pages — long-lived guides on the same reader
+## Learn pages — long-lived work on the same reader
 
-`/learn/:slug` is the blog's machinery for pages that are not dated posts: topic guides written
-for search, the first being `/learn/ai-agent-handoff`. Markdown in `apps/web/content/learn/`,
+`/learn/:slug` is the blog's machinery for pages that are not dated posts: topic work written
+for search, the first being `/learn/ai-agent-work sent to you`. Markdown in `apps/web/content/learn/`,
 read by the same `server/utils/blog.ts` with the collection named (`"learn"`), served at
 `/api/learn/:slug`, no script and the strict policy.
 
@@ -31,7 +31,7 @@ read by the same `server/utils/blog.ts` with the collection named (`"learn"`), s
   renders noindex with no canonical and no JSON-LD; published, it gets a canonical, `TechArticle`
   and `BreadcrumbList` JSON-LD, the sitemap and the edge page cache. The frontmatter `draft` is not
   read for this.
-- No index page at `/learn` yet: each guide is linked from where it is relevant.
+- No index page at `/learn` yet: each work is linked from where it is relevant.
 
 ## Publish — planned, nothing built
 

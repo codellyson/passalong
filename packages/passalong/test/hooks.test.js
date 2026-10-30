@@ -1,5 +1,5 @@
 // The Claude Code hooks `passalong setup` installs, as pure functions: what a session is told when
-// it starts, whether it may stop, and how the hooks are merged into settings. See docs/V2.md §11.
+// it starts, whether it may stop, and how the hooks are merged into settings.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -7,7 +7,7 @@ import {
   nowText,
   STATUS_LINE,
   statusText,
-  stopVerdict,
+  stopDecision,
   withHooks,
   withStatusLine,
 } from "../src/hooks.js";
@@ -39,15 +39,15 @@ test("a stalled hold says it went quiet, so the agent knows to report before any
 });
 
 test("a session holding work is stopped once, told what to call, then let go", () => {
-  const v = stopVerdict({ held: [HELD], input: { stop_hook_active: false } });
+  const v = stopDecision({ held: [HELD], input: { stop_hook_active: false } });
   assert.equal(v.decision, "block");
   assert.match(v.reason, /k3mq2xa7/);
   assert.match(v.reason, /hand_in/);
   assert.match(v.reason, /pass/);
   assert.match(v.reason, /progress/, "stopping mid-way is allowed, with a note saying where");
   // Already continuing because of this hook: never twice, or a session could not end at all.
-  assert.equal(stopVerdict({ held: [HELD], input: { stop_hook_active: true } }), null);
-  assert.equal(stopVerdict({ held: [], input: {} }), null);
+  assert.equal(stopDecision({ held: [HELD], input: { stop_hook_active: true } }), null);
+  assert.equal(stopDecision({ held: [], input: {} }), null);
 });
 
 test("setup adds both hooks once, and keeps everything else in settings", () => {
@@ -64,7 +64,7 @@ test("setup adds both hooks once, and keeps everything else in settings", () => 
   assert.equal(before.hooks.Stop.length, 1, "the settings passed in are not changed");
 });
 
-// ---- the status line (docs/V2.md §11) -------------------------------------------------------------
+// ---- the status line -------------------------------------------------------------
 
 test("the status line names what you hold, and what needs you", () => {
   const line = statusText({ held: [HELD], needs: 2, ready: 5 });
@@ -102,11 +102,11 @@ test("setup adds the status line only where there is none, and never replaces on
 test("an agent that asked a question is allowed to stop and wait", () => {
   // It was told to stop after `ask`; blocking it would make the instruction and the hook disagree.
   assert.equal(
-    stopVerdict({ held: [{ ...HELD, asking: "Settings or the header?" }], input: {} }),
+    stopDecision({ held: [{ ...HELD, asking: "Settings or the header?" }], input: {} }),
     null,
   );
   // The older way of saying the same thing is not heard as a question, so it is still stopped once.
-  assert.ok(stopVerdict({ held: [{ ...HELD, note: "BLOCKED: which?" }], input: {} }));
+  assert.ok(stopDecision({ held: [{ ...HELD, note: "BLOCKED: which?" }], input: {} }));
 });
 
 test("the session-start line says when the person has written, because nothing else will", () => {
@@ -128,7 +128,7 @@ test("several held: a session is shown them all and told to carry on only with i
   assert.match(said, /holds 2 things/);
   assert.match(said, /t2: Other — stalled/);
   assert.match(said, /leave the rest to the sessions on them/);
-  assert.match(stopVerdict({ held: two, input: {} }).reason, new RegExp(`${HELD.id}, t2`));
-  assert.equal(stopVerdict({ held: [{ ...HELD, asking: "?" }], input: {} }), null);
+  assert.match(stopDecision({ held: two, input: {} }).reason, new RegExp(`${HELD.id}, t2`));
+  assert.equal(stopDecision({ held: [{ ...HELD, asking: "?" }], input: {} }), null);
   assert.match(statusText({ held: two }), /▸ 2 held \(1 stalled\)/);
 });

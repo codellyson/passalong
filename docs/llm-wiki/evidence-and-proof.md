@@ -15,7 +15,7 @@ finishing is final there is no reviewer after it, which is why the proof is aske
   records the exit code, so the result is the process's and not the agent's. It never runs a command
   read out of a piece of work — work comes from somebody else's account, and that would make every
   take remote code execution. Over HTTP (a Worker, no shell) the prose gate holds.
-- **Kept.** What was shown stays on the work as its standing verdict after the claim goes, and the
+- **Kept.** What was shown stays on the work as its standing proof after the claim goes, and the
   work page leads with it as "Finished with". A person's own hand-in in the hub takes screenshots by
   pick, paste or drop.
 
@@ -32,6 +32,6 @@ the account that uploaded a shot can claim it.
 
 ## Sources
 - `apps/api/src/shots.ts` (`holdShots`, `evidenceOn`, `sweepProof`, `sweepOrphans`, `PROOF_DAYS`)
-- `apps/api/src/index.ts`: `/v1/guides/:id/hand_in` (`proofProblem`), `/v1/shots`, `/v1/uploads`
+- `apps/api/src/index.ts`: `/v1/work/:id/hand_in` (`proofProblem`), `/v1/shots`, `/v1/uploads`
 - `packages/passalong/src/checks.js`, `apps/web/app/components/hub/Evidence.vue`
 - [AGENTS.md](../../AGENTS.md): "src/checks.js", "Finishing is final", "Screenshots are claimed…"

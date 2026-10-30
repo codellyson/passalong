@@ -31,7 +31,7 @@ const C = {
 const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
 const MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace";
 
-/** Guide titles and verdict notes are somebody's typing, and they are going into markup. */
+/** Work titles and proof notes are somebody's typing, and they are going into markup. */
 export function esc(s: unknown): string {
   return String(s ?? "").replace(
     /[&<>"']/g,
@@ -69,7 +69,7 @@ export const command = (label: string, cmd: string) =>
   `background:${C.code};font:400 14px/1.5 ${MONO};color:${C.fg};word-break:break-all;">` +
   `${esc(cmd)}</div>`;
 
-/** Somebody's own words — a verdict's reason, a decline's. Set apart, never paraphrased. */
+/** Somebody's own words — a proof's reason, a decline's. Set apart, never paraphrased. */
 export const quote = (text: string, tone: keyof typeof C = "line") =>
   `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" ` +
   `style="margin:0 0 16px;"><tr>` +
@@ -102,7 +102,7 @@ const HOME = "https://passalong.dev";
 export interface Layout {
   /** The grey line beside the subject in an inbox list. Written, not inherited from the body. */
   preview: string;
-  /** What happened, as a heading. Usually the guide's title. */
+  /** What happened, as a heading. Usually the work's title. */
   heading: string;
   /** One line above the heading: who did it, and where. */
   eyebrow?: string;

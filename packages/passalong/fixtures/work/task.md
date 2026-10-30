@@ -7,7 +7,7 @@ author: rae
 source_context: "passalong@master"
 target_context: passalong
 blocked_by: [t4skb4se]
-status: published
+status: ready
 to: "@sam"
 stack_assumptions: []
 tags: [hub, tasks]

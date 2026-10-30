@@ -19,7 +19,7 @@ bearer tokens for the CLI and MCP servers. Only SHA-256 hashes are stored — of
 and reset codes alike. `POST /v1/accounts` mints an account with no email, and only for a valid
 team invite link: it answers 400 to anything else.
 
-**Mail.** Handoff, pull, consumed and invite emails go through Cloudflare Email Service via the
+**Mail.** Sent-to-you, pull, archived and invite emails go through Cloudflare Email Service via the
 `send_email` binding (`EMAIL` in `wrangler.jsonc`). There is no API key — the binding is the
 credential — but two things must be true, or every send fails silently:
 
@@ -43,7 +43,7 @@ Nothing else depends on this: every mail is a delivery of a `notification` row t
 way, so with mail off the hub's feed still works.
 
 **Migration 0005 rewrote how identity works** and runs against live data. It was tested locally
-against a seeded pre-auth database: accounts, guides, teams, memberships and notifications all
+against a seeded pre-auth database: accounts, work, teams, memberships and notifications all
 survive, and every existing `account.token_hash` becomes a row in `token` named "CLI (existing)",
 so tokens people already hold keep working. If you ever need to re-test that, seed a database from
 migrations 0001–0004 first — running 0005 against an empty one proves nothing.
@@ -107,11 +107,15 @@ pnpm -C apps/web build          # the dry run needs the build output to exist
 pnpm -C apps/web deploy:check   # wrangler dry run: bindings, assets, routes
 ```
 
-## Cutover: one thing, work (migrations 0061–0062, passalong 0.22.0)
+## Cutover: 1.0 (migrations 0061–0068, passalong 0.22.0)
 
-This release removes kinds, report sets, write-up guides and about forty-five agent tools
-(docs/WORK.md), and the old CLIs cannot work against it. Do it in this order, by hand, not through
-an unattended CI push:
+1.0 is one model and one set of words: work, projects, documents, files and proof; the statuses
+`draft`, `ready` and `done`; `/v1/work` and `/v1/projects`; share links `/w/:id/:key` and
+`/p/:id/:key`. It removes kinds and about forty-five agent tools (docs/WORK.md), and **migration
+0068 renames the tables, columns, indexes, statuses and notification kinds** to those words. Two
+things stop working, by decision: **every share link minted before 0068** (the old link paths are
+not served) and **every CLI below 0.22.0** (the routes it calls are gone). Do it in this order, by
+hand, not through an unattended CI push:
 
 1. **Bookmark the database.** D1 Time Travel restores to any minute in the last 30 days, but a
    bookmark taken now is the exact point to go back to:
@@ -120,30 +124,46 @@ an unattended CI push:
    cd apps/web && npx wrangler d1 time-travel info passalong   # note the bookmark it prints
    ```
 
-2. **Migrate.** `pnpm -C apps/api db:migrate:remote` applies 0061 (strips `kind:` from every
-   document, turns report sets into parent work, rebuilds `claim` and `claim_fence` on one holder,
-   drops `kind`, `report_of`, `report_id`, `area`, `severity` and the `report` table) and 0062
-   (moves old verdicts and acks into the thread). Check it:
+2. **Migrate.** `pnpm -C apps/api db:migrate:remote` applies everything pending. 0061 strips
+   `kind:` from every document, makes each issue set parent work and rebuilds `claim` and
+   `claim_fence` on one holder; 0062 moves every earlier answer into the thread; 0068 renames the
+   tables to `work`, `project`, `document`, `document_revision`, `document_seen`, `project_file`,
+   `project_work`, `inbound_work` and `proof`, every `*_id` column to `work_id`/`project_id`, rewrites
+   statuses to `ready`/`done` in the column and in each document's `status:` line, renames the
+   notification kinds (`sent_to_you`, `passed`, `archived`, `made_admin`, `reopened`) and drops
+   the table of old answers. Check it:
 
    ```sh
    npx wrangler d1 execute passalong --remote --command \
-     "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 2"   # 0062_one_thread, 0061_one_thing
+     "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1"   # 0068_work
    npx wrangler d1 execute passalong --remote --command \
-     "SELECT COUNT(*) AS n FROM pragma_table_info('guide') WHERE name = 'kind'"   # 0
+     "SELECT status, COUNT(*) AS n FROM work GROUP BY status"     # draft, ready, done only
    ```
 
 3. **Deploy the Worker** (`pnpm -C apps/web build && pnpm -C apps/web run deploy`) and run the
-   checks under "Verify" below. Installed CLIs below 0.22.0 still pass the floor and get the new
-   rules' refusals; that window should be minutes.
-4. **Publish the CLI.** `passalong` 0.22.0 to npm (section 2), approve the staged version, and
-   check `npx -y passalong@latest version` prints 0.22.0.
-5. **Raise the floor.** Set `MIN_CLIENT` in `apps/api/src/clients.ts` to `"0.22.0"`, commit, and
-   deploy again. Every older CLI now gets the 426 with the install command. Never before step 4:
-   a floor above what npm hands out refuses every agent with nothing it can install.
+   checks under "Verify" below. From here installed CLIs below 0.22.0 fail on every call; that
+   window should be minutes.
+4. **Move the project files.** R2 keeps each project file at `projects/<project>/<file>` now; until
+   this runs, a project's files answer 404. Look first, then act (it copies, reads the copy back,
+   and only then deletes the old key; run again, it skips what is already moved):
 
-To undo before step 5: `npx wrangler rollback` in `apps/web` and
+   ```sh
+   node scripts/move-project-files.mjs           # dry run: what would move
+   node scripts/move-project-files.mjs --apply   # ends "failed 0"
+   ```
+
+5. **Release the CLI.** `passalong` 0.22.0 to npm (section 2), approve the staged version, and
+   check `npx -y passalong@latest version` prints 0.22.0.
+6. **Raise the floor.** Set `MIN_CLIENT` in `apps/api/src/clients.ts` to `"0.22.0"`, commit, and
+   deploy again. Every older CLI now gets the 426 with the install command instead of a bare
+   failure. Never before step 5: a floor above what npm hands out refuses every agent with nothing
+   it can install.
+
+To undo before step 6: `npx wrangler rollback` in `apps/web` and
 `npx wrangler d1 time-travel restore passalong --bookmark=<bookmark>`. A restore discards every
-write since the bookmark, so after real use, write a forward migration instead.
+write since the bookmark, so after real use, write a forward migration instead. The old Worker reads
+project files under `folders/`, so after step 4 a rollback leaves them unreachable until they are
+copied back.
 
 ## 1. Worker
 
@@ -183,7 +203,7 @@ a page, and check that share pages still carry the CSP that makes them safe:
 
 ```sh
 sh apps/web/scripts/probe.sh https://passalong.dev
-sh apps/web/scripts/probe.sh https://passalong.dev /g/<id>/<key>
+sh apps/web/scripts/probe.sh https://passalong.dev /w/<id>/<key>
 ```
 
 If either probe fails, **stop and roll back** — a share page that ships script has lost the one
@@ -287,8 +307,7 @@ and runs `claude mcp add passalong -- passalong mcp`, so those two paths are par
 
 ## 3. After deploy
 
-- Update `docs/PRD.md` status and the README install line if the package name changes (the
-  naming question in the PRD is still open: Passalong, Handoff, Baton, JustPassalong).
+- Update the README install line if the package name changes.
 - The free-tier cap is `FREE_SYNC_LIMIT` in `wrangler.jsonc`; account creation is throttled to
   5 per IP per minute via the `ACCOUNT_LIMIT` rate-limit binding.
 
@@ -303,8 +322,8 @@ pnpm -C apps/api exec wrangler d1 execute passalong --remote \
   --command "UPDATE account SET sync_limit = 200 WHERE handle = 'someone'"
 ```
 
-Put it back on the default with `sync_limit = 0`. Only work that is `published` or `promoted`
-count against it, so archiving in the hub is what makes room — see `COUNTED` in
+Put it back on the default with `sync_limit = 0`. Only work that is `ready`
+counts against it, so archiving in the hub is what makes room — see `COUNTED` in
 `apps/api/src/quota.ts`, which is the one definition both the warning and the refusal read.
 
 There is no plan or subscription behind this. When there is, a plan resolves to a number and this

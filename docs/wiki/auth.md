@@ -45,7 +45,7 @@ account instead — no email, no password — which meant the CLI quietly made a
 ever be reached from the one file they were written to. `POST /v1/accounts` still makes those, for
 the invite page, which mints before it claims — and only when the body names a real invite code (a
 link is not used up by the first person through it). Open, it made 96 accounts in two days from callers that were not people, none with
-an email or a published guide.
+an email or any work.
 
 ## Several accounts on one machine
 
@@ -79,9 +79,9 @@ different response is an account-existence oracle.
 
 ## What each credential can do
 
-| | Read guides | Publish | Manage tokens | Change password |
+| | Read work | Publish | Manage tokens | Change password |
 | --- | --- | --- | --- | --- |
-| Share link (`/g/:id/:key`) | that one guide | no | no | no |
+| Share link (`/w/:id/:key`) | that one work | no | no | no |
 | Bearer token | yes | yes | yes | yes |
 | Session cookie | yes | yes | yes | yes |
 

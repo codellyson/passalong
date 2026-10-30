@@ -38,7 +38,7 @@ export const READER_PROVIDERS = ["anthropic", "openai", "google", "openai-compat
  */
 export const READER_TAGS = ["bug", "feature", "question"] as const;
 
-export interface Verdict {
+export interface Reading {
   title: string;
   summary: string;
   /** One of READER_TAGS, or "" when none says more than the title already does. */
@@ -167,7 +167,7 @@ function system(from: "customer" | "team"): string {
   ].join("\n");
 }
 
-/** The messages sent to the model. The customer's text is fenced, the way a guide quotes it. */
+/** The messages sent to the model. The customer's text is fenced, the way a piece of work quotes it. */
 export function readerMessages(input: ReaderInput): { role: string; content: string }[] {
   const groups = input.groups.length
     ? input.groups.map((g) => `- ${g.slug}: ${g.name || g.slug}`).join("\n")
@@ -201,11 +201,11 @@ const line = (v: unknown, max: number) =>
  * shape, a tag or group that is not on the list — and the caller falls back to its fixed rule.
  * Nothing is guessed or patched here: an answer is used whole or not at all.
  */
-export function readVerdict(
+export function checkReading(
   raw: unknown,
   groups: { slug: string }[],
   projects: { id: string }[] = [],
-): Verdict | null {
+): Reading | null {
   let o: Record<string, unknown> | null = null;
   if (typeof raw === "string") {
     const m = /\{[\s\S]*\}/.exec(raw);
@@ -225,7 +225,7 @@ export function readVerdict(
   if (route && !groups.some((g) => g.slug === route)) return null;
   const project = line(o.project, 32);
   if (project && !projects.some((p) => p.id === project)) return null;
-  const v: Verdict = {
+  const v: Reading = {
     title,
     summary,
     tag,
@@ -243,15 +243,15 @@ export function readVerdict(
 
 /**
  * Ask the configured model. Null when there is no reader, the call fails or times out, or the
- * answer does not pass `readVerdict` — every one of which the caller treats the same way.
+ * answer does not pass `checkReading` — every one of which the caller treats the same way.
  */
 export async function askReader(
   env: ReaderEnv,
   input: ReaderInput,
   doFetch: typeof fetch = fetch,
-): Promise<Verdict | null> {
+): Promise<Reading | null> {
   const text = await ask(env, readerMessages(input), doFetch, "reader", input.images);
-  return text === null ? null : readVerdict(text, input.groups, input.projects);
+  return text === null ? null : checkReading(text, input.groups, input.projects);
 }
 
 // ---- drafting a reply to a customer ---------------------------------------------------------
@@ -280,7 +280,7 @@ const DRAFT_SYSTEM = [
 
 const FENCE = "```";
 
-/** The messages for a draft. Every part from outside the team is fenced, as a guide quotes it. */
+/** The messages for a draft. Every part from outside the team is fenced, as a piece of work quotes it. */
 export function draftMessages(input: DraftInput): { role: string; content: string }[] {
   const fence = (t: string) =>
     `${FENCE}\n${String(t || "")

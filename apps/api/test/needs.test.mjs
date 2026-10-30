@@ -43,10 +43,10 @@ function world() {
        ('t', 'ada', '${ago(500)}'), ('t', 'bo', '${ago(500)}');
      INSERT INTO team_group (id, team_id, slug, name, created) VALUES ('gw', 't', 'web', 'Web', '${ago(500)}');
      INSERT INTO group_member (group_id, account_id) VALUES ('gw', 'ada');`);
-  const guide = (id, o = {}) =>
+  const work = (id, o = {}) =>
     db.raw
       .prepare(
-        `INSERT INTO guide (id, account_id, share_key, title, status, markdown, created, updated, team_id,
+        `INSERT INTO work (id, account_id, share_key, title, status, markdown, created, updated, team_id,
                             to_account_id, to_group_id, customer, customer_name, outcome, summary)
          VALUES (?, ?, 'k', ?, ?, '', ?, ?, 't', ?, ?, ?, ?, ?, ?)`,
       )
@@ -54,7 +54,7 @@ function world() {
         id,
         o.by ?? "bo",
         `work ${id}`,
-        o.status ?? "published",
+        o.status ?? "ready",
         o.created ?? ago(10),
         o.updated ?? ago(10),
         o.to ?? "",
@@ -64,57 +64,57 @@ function world() {
         o.outcome ?? "",
         o.summary ?? "",
       );
-  const ev = (guideId, kind, at, account = "bo", body = "", agent = "") =>
+  const ev = (workId, kind, at, account = "bo", body = "", agent = "") =>
     db.raw
       .prepare(
-        "INSERT INTO task_event (guide_id, kind, account_id, agent_id, body, at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO task_event (work_id, kind, account_id, agent_id, body, at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(guideId, kind, account, agent, body, at);
-  const claim = (guideId, account, agent, claimed, lease) =>
+      .run(workId, kind, account, agent, body, at);
+  const claim = (workId, account, agent, claimed, lease) =>
     db.raw
       .prepare(
-        `INSERT INTO claim (guide_id, account_id, agent_id, state, claimed_at, lease_until, updated)
+        `INSERT INTO claim (work_id, account_id, agent_id, state, claimed_at, lease_until, updated)
          VALUES (?, ?, ?, 'claimed', ?, ?, ?)`,
       )
-      .run(guideId, account, agent, claimed, lease, claimed);
-  return { db, x, guide, ev, claim };
+      .run(workId, account, agent, claimed, lease, claimed);
+  return { db, x, work, ev, claim };
 }
 
 test("the register ranks customers, questions, stalls, untaken work and work that came back", async () => {
-  const { db, guide, ev, claim } = world();
+  const { db, work, ev, claim } = world();
   // Two customers waiting; the older one first. A third was answered after they last wrote.
-  guide("c1", { customer: "a@x.com", customer_name: "Ann", created: ago(30) });
+  work("c1", { customer: "a@x.com", customer_name: "Ann", created: ago(30) });
   ev("c1", "customer", ago(30), "bo", "First message");
   ev("c1", "customer", ago(26), "bo", "Still   broken,\n  please help");
-  guide("c2", { customer: "b@x.com", created: ago(3) });
-  guide("c3", { customer: "c@x.com", created: ago(40) });
+  work("c2", { customer: "b@x.com", created: ago(3) });
+  work("c3", { customer: "c@x.com", created: ago(40) });
   ev("c3", "customer", ago(40));
   ev("c3", "answered", ago(39), "ada");
   // My agent is asking me something.
-  guide("q1", { by: "bo" });
+  work("q1", { by: "bo" });
   claim("q1", "ada", "agent-7", ago(5), new Date(Date.parse(NOW) + 3600e3).toISOString());
   ev("q1", "asked", ago(4), "ada", "Which database?", "agent-7");
   // Work I wrote whose agent went quiet.
-  guide("s1", { by: "ada" });
+  work("s1", { by: "ada" });
   claim("s1", "bo", "agent-9", ago(8), ago(2));
   // A live hold that is fine: not mine to worry about.
-  guide("ok", { by: "ada" });
+  work("ok", { by: "ada" });
   claim("ok", "bo", "agent-2", ago(1), new Date(Date.parse(NOW) + 3600e3).toISOString());
   // Sent to me and to my group, nobody took it.
-  guide("u1", { to: "ada", created: ago(50) });
-  guide("u2", { group: "gw", created: ago(20) });
+  work("u1", { to: "ada", created: ago(50) });
+  work("u2", { group: "gw", created: ago(20) });
   // Sent to somebody else: not mine.
-  guide("u3", { to: "bo" });
+  work("u3", { to: "bo" });
   // Mine, passed back by Bo.
-  guide("b1", { by: "ada" });
+  work("b1", { by: "ada" });
   ev("b1", "taken", ago(6), "bo");
   ev("b1", "passed", ago(5), "bo", "Not my area");
   // Mine, I passed it myself: not "came back".
-  guide("b2", { by: "ada" });
+  work("b2", { by: "ada" });
   ev("b2", "passed", ago(5), "ada", "later");
   // Drafts and Done work wait on nobody.
-  guide("d1", { to: "ada", status: "draft" });
-  guide("d2", { to: "ada", status: "consumed", outcome: "finished" });
+  work("d1", { to: "ada", status: "draft" });
+  work("d2", { to: "ada", status: "done", outcome: "finished" });
 
   const { rows } = await needs(db, "ada", NOW);
   assert.deepEqual(
@@ -143,18 +143,18 @@ test("the register ranks customers, questions, stalls, untaken work and work tha
 });
 
 test("one customer asking the same thing twice is one row, at the place of the older ask", async () => {
-  const { db, x, guide, ev } = world();
-  guide("o1", { customer: "ola@x.com", customer_name: "Ola Ben", created: ago(9) });
+  const { db, x, work, ev } = world();
+  work("o1", { customer: "ola@x.com", customer_name: "Ola Ben", created: ago(9) });
   ev("o1", "customer", ago(9), "bo", "Login fails");
-  guide("n1", { customer: "ann@x.com", created: ago(6) });
+  work("n1", { customer: "ann@x.com", created: ago(6) });
   ev("n1", "customer", ago(6), "bo", "Hi");
-  guide("o2", { customer: "OLA@x.com ", customer_name: "Ola Ben", created: ago(2) });
+  work("o2", { customer: "OLA@x.com ", customer_name: "Ola Ben", created: ago(2) });
   ev("o2", "customer", ago(2), "bo", "Still fails");
-  guide("o3", { customer: "ola@x.com", customer_name: "Ola Ben", created: ago(1) });
+  work("o3", { customer: "ola@x.com", customer_name: "Ola Ben", created: ago(1) });
   ev("o3", "customer", ago(1), "bo", "Another thing");
-  x(`UPDATE guide SET title = 'Login fails' WHERE id IN ('o1', 'o2');
-     UPDATE guide SET title = 'Invoice' WHERE id = 'o3';
-     INSERT INTO notification (account_id, kind, guide_id, at, read_at) VALUES
+  x(`UPDATE work SET title = 'Login fails' WHERE id IN ('o1', 'o2');
+     UPDATE work SET title = 'Invoice' WHERE id = 'o3';
+     INSERT INTO notification (account_id, kind, work_id, at, read_at) VALUES
        ('ada', 'customer_wrote', 'o2', '${ago(2)}', '');`);
   const { rows } = await needs(db, "ada", NOW);
   assert.deepEqual(
@@ -170,35 +170,39 @@ test("one customer asking the same thing twice is one row, at the place of the o
 });
 
 test("a row is changed while an unread notification is on it, and names the project", async () => {
-  const { db, x, guide } = world();
-  guide("u1", { to: "ada" });
-  guide("u2", { to: "ada" });
-  x(`INSERT INTO notification (account_id, kind, guide_id, at, read_at) VALUES
-       ('ada', 'handoff', 'u1', '${ago(1)}', ''), ('ada', 'reassigned', 'u2', '${ago(1)}', '${ago(0.5)}');
-     INSERT INTO folder (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
+  const { db, x, work } = world();
+  work("u1", { to: "ada" });
+  work("u2", { to: "ada" });
+  x(`INSERT INTO notification (account_id, kind, work_id, at, read_at) VALUES
+       ('ada', 'sent_to_you', 'u1', '${ago(1)}', ''), ('ada', 'reassigned', 'u2', '${ago(1)}', '${ago(0.5)}');
+     INSERT INTO project (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
        ('top', 'bo', 't', 'Website', '${ago(9)}', '${ago(9)}', 'blue', ''),
        ('sub', 'bo', 't', 'Pages', '${ago(9)}', '${ago(9)}', '', 'top'),
        ('hid', 'cy', '', 'Private', '${ago(9)}', '${ago(9)}', 'green', '');
-     INSERT INTO folder_guide (folder_id, guide_id, added_by, added) VALUES
+     INSERT INTO project_work (project_id, work_id, added_by, added) VALUES
        ('sub', 'u1', 'bo', '${ago(9)}'), ('hid', 'u2', 'cy', '${ago(9)}');`);
   const { rows } = await needs(db, "ada", NOW);
   const by = Object.fromEntries(rows.map((r) => [r.id, r]));
   assert.equal(by.u1.changed, "Sent to you");
   assert.equal(by.u2.changed, "", "read already");
-  assert.deepEqual(by.u1.project, { id: "top", title: "Website", color: "blue" }, "the top folder");
-  assert.equal(by.u2.project, null, "a folder you cannot see names nothing");
+  assert.deepEqual(
+    by.u1.project,
+    { id: "top", title: "Website", color: "blue" },
+    "the top project",
+  );
+  assert.equal(by.u2.project, null, "a project you cannot see names nothing");
 });
 
 test("a board card is marked with its project and its latest unread change, past D1's bind limit", async () => {
-  const { db, x, guide } = world();
+  const { db, x, work } = world();
   const ids = Array.from({ length: 120 }, (_, i) => `g${i}`);
-  for (const id of ids) guide(id);
-  x(`INSERT INTO notification (account_id, kind, guide_id, at, read_at) VALUES
+  for (const id of ids) work(id);
+  x(`INSERT INTO notification (account_id, kind, work_id, at, read_at) VALUES
        ('ada', 'task_claimed', 'g110', '${ago(3)}', ''), ('ada', 'task_finished', 'g110', '${ago(1)}', ''),
-       ('ada', 'handoff', 'g1', '${ago(1)}', '${ago(0.5)}'), ('bo', 'handoff', 'g2', '${ago(1)}', '');
-     INSERT INTO folder (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
+       ('ada', 'sent_to_you', 'g1', '${ago(1)}', '${ago(0.5)}'), ('bo', 'sent_to_you', 'g2', '${ago(1)}', '');
+     INSERT INTO project (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
        ('top', 'bo', 't', 'Billing app', '${ago(9)}', '${ago(9)}', 'teal', '');
-     INSERT INTO folder_guide (folder_id, guide_id, added_by, added) VALUES ('top', 'g115', 'bo', '${ago(9)}');`);
+     INSERT INTO project_work (project_id, work_id, added_by, added) VALUES ('top', 'g115', 'bo', '${ago(9)}');`);
   const marks = await marksOf(db, "ada", ids);
   assert.equal(marks.size, 120);
   assert.equal(marks.get("g110").changed, "Finished", "the latest unread one");
@@ -209,15 +213,15 @@ test("a board card is marked with its project and its latest unread change, past
 });
 
 test("customers and recent closes come beside the register", async () => {
-  const { db, guide, ev } = world();
-  guide("c1", { customer: "a@x.com", created: ago(30) });
+  const { db, work, ev } = world();
+  work("c1", { customer: "a@x.com", created: ago(30) });
   ev("c1", "customer", ago(30));
   ev("c1", "answered", ago(29), "ada");
-  guide("c2", { customer: "b@x.com", created: ago(2) });
-  guide("f1", { status: "consumed", outcome: "finished", updated: ago(8) });
+  work("c2", { customer: "b@x.com", created: ago(2) });
+  work("f1", { status: "done", outcome: "finished", updated: ago(8) });
   ev("f1", "handed_in", ago(8), "bo", "", "agent-3");
-  guide("f2", { status: "consumed", outcome: "archived", updated: ago(8) });
-  guide("f3", { status: "consumed", outcome: "finished", updated: ago(24 * 9) });
+  work("f2", { status: "done", outcome: "archived", updated: ago(8) });
+  work("f3", { status: "done", outcome: "finished", updated: ago(24 * 9) });
   const { customers, closed } = await needs(db, "ada", NOW);
   assert.deepEqual(
     customers.map((c) => [c.id, c.since]),
@@ -258,39 +262,39 @@ test("a request's place in the Support table comes from what happened to it", ()
 });
 
 test("the Support list: state, their latest words, how long and whether too long, project and change", async () => {
-  const { db, x, guide, ev } = world();
+  const { db, x, work, ev } = world();
   const WAIT = 4 * 3600e3;
-  guide("r1", { customer: "a@x.com", customer_name: "Ann", created: ago(30) });
+  work("r1", { customer: "a@x.com", customer_name: "Ann", created: ago(30) });
   ev("r1", "customer", ago(30), "bo", "It   broke");
   ev("r1", "answered", ago(29), "ada", "Looking");
   ev("r1", "customer", ago(6), "bo", "Still\nbroken");
-  guide("r2", { customer: "b@x.com", created: ago(2) });
+  work("r2", { customer: "b@x.com", created: ago(2) });
   ev("r2", "customer", ago(2), "bo", "Hello");
-  guide("r3", { customer: "c@x.com", created: ago(20) });
+  work("r3", { customer: "c@x.com", created: ago(20) });
   ev("r3", "customer", ago(20), "bo", "Where is it");
   ev("r3", "answered", ago(19), "ada", "On its way");
-  guide("r4", { customer: "d@x.com", status: "consumed", outcome: "archived" });
-  guide("w1");
+  work("r4", { customer: "d@x.com", status: "done", outcome: "archived" });
+  work("w1");
   // Unanswered with a fix open: still New, still waiting on us.
-  guide("r5", { customer: "e@x.com", created: ago(9) });
+  work("r5", { customer: "e@x.com", created: ago(9) });
   ev("r5", "customer", ago(9), "bo", "Broken");
-  x(`UPDATE guide SET parent_id = 'r5' WHERE id = 'w1'`);
+  x(`UPDATE work SET parent_id = 'r5' WHERE id = 'w1'`);
   // Answered with a fix open: with development.
-  guide("r6", { customer: "f@x.com", created: ago(9) });
+  work("r6", { customer: "f@x.com", created: ago(9) });
   ev("r6", "customer", ago(9), "bo", "Also broken");
   ev("r6", "answered", ago(8), "ada", "On it");
-  guide("w2");
-  x(`UPDATE guide SET parent_id = 'r6' WHERE id = 'w2'`);
+  work("w2");
+  x(`UPDATE work SET parent_id = 'r6' WHERE id = 'w2'`);
   // Event ids that run opposite to their times (an import, a backfill): time decides.
-  guide("r7", { customer: "g@x.com", created: ago(9) });
+  work("r7", { customer: "g@x.com", created: ago(9) });
   ev("r7", "customer", ago(3), "bo", "Wrote last");
   ev("r7", "answered", ago(5), "ada", "Answered first");
-  x(`UPDATE guide SET team_id = '' , account_id = 'cy' WHERE id = 'r4';
-     INSERT INTO notification (account_id, kind, guide_id, at, read_at) VALUES
+  x(`UPDATE work SET team_id = '' , account_id = 'cy' WHERE id = 'r4';
+     INSERT INTO notification (account_id, kind, work_id, at, read_at) VALUES
        ('ada', 'customer_wrote', 'r1', '${ago(6)}', '');
-     INSERT INTO folder (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
+     INSERT INTO project (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
        ('p', 'bo', 't', 'Billing app', '${ago(9)}', '${ago(9)}', 'teal', '');
-     INSERT INTO folder_guide (folder_id, guide_id, added_by, added) VALUES ('p', 'r2', 'bo', '${ago(9)}');
+     INSERT INTO project_work (project_id, work_id, added_by, added) VALUES ('p', 'r2', 'bo', '${ago(9)}');
      UPDATE membership SET role = 'owner' WHERE account_id = 'ada';
      UPDATE team SET tell_customer = 1;`);
   const { requests, teams } = await supportRequests(db, "ada", NOW, WAIT);

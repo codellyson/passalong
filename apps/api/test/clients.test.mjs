@@ -47,7 +47,7 @@ test("a CLI that cannot state its version is below today's floor, and is told to
   assert.equal(tooOld(MIN_CLIENT, "node"), "", "the floor itself is served");
 });
 
-test("what wrote a guide: the surface from the credential, the CLI by the version it said", () => {
+test("what wrote a piece of work: the surface from the credential, the CLI by the version it said", () => {
   assert.equal(writtenBy("internal", "0.13.0", "node"), "mcp");
   assert.equal(writtenBy("session", "0.13.0", "node"), "hub");
   assert.equal(writtenBy("token", "0.13.0", "node"), "cli@0.13.0");

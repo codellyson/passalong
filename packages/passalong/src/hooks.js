@@ -1,4 +1,4 @@
-// The Claude Code hooks `passalong setup` installs. See docs/V2.md §11.
+// The Claude Code hooks `passalong setup` installs.
 //
 // Two moments an agent forgets what it holds: when a session starts (a restart, a /clear, a
 // compaction), and when it decides it is done. SessionStart runs `passalong now --hook session`
@@ -72,7 +72,7 @@ export function nowText({ held = [], ready = 0 }) {
  * would leave it no way to end. The hook cannot tell which session took what, so it names
  * everything still open here and lets the session settle its own.
  */
-export function stopVerdict({ held = [], input = {} }) {
+export function stopDecision({ held = [], input = {} }) {
   // An agent that asked a question was told to stop and wait, so it must be let: blocking it would
   // make the instruction and the hook contradict each other, and the agent would pick one.
   const open = held.filter((h) => !h.asking);

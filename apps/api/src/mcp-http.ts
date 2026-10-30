@@ -26,8 +26,8 @@ import { z } from "zod";
 /**
  * How a tool reaches the rest of the API: the app's own fetch, with the caller's credential.
  *
- * `raw` is for the routes that do not take JSON. `POST /v1/shots`, `/v1/attachments` and a folder's
- * assets read the body as bytes and the content type as the declaration of what they are, so a tool
+ * `raw` is for the routes that do not take JSON. `POST /v1/shots`, `/v1/attachments` and a project's
+ * files read the body as bytes and the content type as the declaration of what they are, so a tool
  * uploading a file has to be able to say both.
  */
 type Call = (
@@ -194,12 +194,12 @@ const AFTER =
   "What you did and how you checked it goes on hand_in. -->";
 
 // ---- reading work in parts ---------------------------------------------------------------------
-// A copy of apps/api/src/sections.ts and packages/passalong/src/guide.js, because this file takes no
+// A copy of apps/api/src/sections.ts and packages/passalong/src/work.js, because this file takes no
 // sibling import (it is loaded straight by node's test runner). test/sections.test.mjs holds the
 // three to the same answers.
 
 /** Over this, work is read by its outline first: six of 123 held 72% of the stored text. */
-const GUIDE_WARN = 20_000;
+const WORK_WARN = 20_000;
 
 interface Heading {
   heading: string;
@@ -286,10 +286,10 @@ export function sectionOf(
 async function parentOf(call: Call, id: string): Promise<{ text: string; id: string }> {
   const none = { text: "", id: "" };
   try {
-    const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}/parent?markdown=1`);
+    const res = await call("GET", `/v1/work/${encodeURIComponent(id)}/parent?markdown=1`);
     if (res.status >= 400) return none;
-    const { guide } = JSON.parse(res.text) as {
-      guide?: {
+    const { work } = JSON.parse(res.text) as {
+      work?: {
         id?: string;
         title?: string;
         state?: string;
@@ -297,16 +297,16 @@ async function parentOf(call: Call, id: string): Promise<{ text: string; id: str
         markdown?: unknown;
       } | null;
     };
-    if (!guide?.id) return none;
-    const who = guide.by?.name || (guide.by?.handle ? `@${guide.by.handle}` : "");
-    const state = guide.state === "held" && who ? `held by ${who}` : guide.state || "open";
+    if (!work?.id) return none;
+    const who = work.by?.name || (work.by?.handle ? `@${work.by.handle}` : "");
+    const state = work.state === "held" && who ? `held by ${who}` : work.state || "open";
     return {
-      id: String(guide.id),
+      id: String(work.id),
       text:
-        `THIS CAME OUT OF ${guide.id}: ${guide.title || "untitled"} — ${state}. It is part of that ` +
+        `THIS CAME OUT OF ${work.id}: ${work.title || "untitled"} — ${state}. It is part of that ` +
         "work, which is below; read it first. If this depends on " +
-        `${guide.id} being done and it is not, say so rather than starting.\n\n` +
-        `--- the work it came out of: ${guide.id} ---\n${String(guide.markdown ?? "").trimEnd()}`,
+        `${work.id} being done and it is not, say so rather than starting.\n\n` +
+        `--- the work it came out of: ${work.id} ---\n${String(work.markdown ?? "").trimEnd()}`,
     };
   } catch {
     return none;
@@ -316,7 +316,7 @@ async function parentOf(call: Call, id: string): Promise<{ text: string; id: str
 /**
  * The product's own vocabulary, handed in rather than imported.
  *
- * Importing it would make this module untestable: a sibling imported as `./guide.js` is what Node's
+ * Importing it would make this module untestable: a sibling imported as `./work.js` is what Node's
  * type stripping cannot resolve, so a test that touches this file would not load at all — the same
  * reason the app itself is not importable, noted in hosts.ts. Passing it in keeps one source.
  */
@@ -468,7 +468,7 @@ async function addProjectFile(call: Call, project: string, file: FileInput) {
   const got = await fetched(file);
   if ("error" in got) return failed(got.error);
   if (got.bytes.byteLength > 10 * 1024 * 1024) return failed("That file is over 10 MB.");
-  return relayRaw(call, `/v1/folders/${encodeURIComponent(project)}/assets`, got.bytes, {
+  return relayRaw(call, `/v1/projects/${encodeURIComponent(project)}/files`, got.bytes, {
     contentType: got.type,
     headers: { "x-file-name": got.name || "file" },
   });
@@ -489,7 +489,7 @@ async function relayRaw(
 async function projectFile(call: Call, project: string, file: string) {
   const res = await call(
     "GET",
-    `/v1/folders/${encodeURIComponent(project)}/assets/${encodeURIComponent(file)}/agent`,
+    `/v1/projects/${encodeURIComponent(project)}/files/${encodeURIComponent(file)}/agent`,
   );
   if (res.status >= 400) return failed(res.text);
   const got = JSON.parse(res.text) as {
@@ -547,7 +547,7 @@ const findOut = z
   .passthrough();
 const updateOut = z.object({ id: z.string() }).passthrough();
 const projectsOut = z.object({}).passthrough();
-const projectOut = z.object({ folder: z.object({ id: z.string() }).passthrough() }).passthrough();
+const projectOut = z.object({ project: z.object({ id: z.string() }).passthrough() }).passthrough();
 const documentOut = z.object({}).passthrough();
 const removedOut = z.object({ removed: z.boolean() }).passthrough();
 const fileOut = z
@@ -573,7 +573,7 @@ const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false
 // Removes or replaces something that cannot be brought back. Only a person's request should lead here.
 const REMOVES = { readOnlyHint: false, destructiveHint: true, openWorldHint: false } as const;
 
-const STATUS = { ready: "published", draft: "draft", archived: "consumed" } as const;
+const STATUS = { ready: "ready", draft: "draft", archived: "done" } as const;
 
 /** Why a piece of work needs its author, or "". Mirrors needsWhy() in the local passalong.js. */
 function needsWhy(t: {
@@ -595,7 +595,7 @@ const quote = (value: string) =>
 
 /**
  * A piece of work from the fields an agent gave, as the document the route stores. The format's
- * own serializer is in guide.ts, which this file cannot import (see Vocabulary); every value here
+ * own serializer is in work.ts, which this file cannot import (see Vocabulary); every value here
  * is a string or a list of strings, quoted the way that serializer quotes them.
  */
 function workDocument(w: {
@@ -612,7 +612,7 @@ function workDocument(w: {
   const front = [`title: ${quote(w.title)}`, `summary: ${quote(w.summary)}`];
   if (w.repo) front.push(`target_context: ${quote(w.repo)}`);
   if (w.blocked.length) front.push(`blocked_by: [${w.blocked.join(", ")}]`);
-  front.push(`status: ${w.draft ? "draft" : "published"}`);
+  front.push(`status: ${w.draft ? "draft" : "ready"}`);
   if (w.team) front.push(`team: ${quote(w.team)}`);
   if (w.to) front.push(`to: ${quote(w.to.replace(/^@/, ""))}`);
   if (w.tags?.length) front.push(`tags: [${w.tags.map(quote).join(", ")}]`);
@@ -753,7 +753,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     const who = (b: { name?: string; handle?: string; you?: boolean }) =>
       b.you ? "You" : b.name || (b.handle ? `@${b.handle}` : "A teammate");
     const needs = tasks
-      .map((t) => ({ id: t.id, title: t.title, why: needsWhy(t), url: `${hub}/g/${t.id}` }))
+      .map((t) => ({ id: t.id, title: t.title, why: needsWhy(t), url: `${hub}/w/${t.id}` }))
       .filter((t) => t.why);
     const ready = tasks.filter((t) => t.state === "ready");
     // What you may give to someone else — yours, or for you, and in a team — carries its team, and
@@ -871,10 +871,10 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       });
       if (res.status >= 400) return refused(res.text);
       const parsed = JSON.parse(res.text) as Answer & {
-        guide: { id: string; markdown?: string; resumed?: boolean } | null;
+        work: { id: string; markdown?: string; resumed?: boolean } | null;
         replies?: unknown;
       };
-      const g = parsed.guide;
+      const g = parsed.work;
       if (!g)
         return {
           ...text(nextNote(parsed) || "Nothing is waiting for you. Tell the user, and stop."),
@@ -923,7 +923,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       },
     },
     async ({ id, agent, note }) =>
-      answer(call, "PUT", `/v1/guides/${encodeURIComponent(id)}/progress`, id, {
+      answer(call, "PUT", `/v1/work/${encodeURIComponent(id)}/progress`, id, {
         agent,
         ...(note ? { note } : {}),
       }),
@@ -1000,7 +1000,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       },
     },
     async (args) =>
-      answer(call, "POST", `/v1/guides/${encodeURIComponent(args.id)}/hand_in`, args.id, {
+      answer(call, "POST", `/v1/work/${encodeURIComponent(args.id)}/hand_in`, args.id, {
         agent: args.agent,
         note: args.note,
         evidence: args.evidence ?? "",
@@ -1028,7 +1028,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       },
     },
     async ({ id, agent, why }) =>
-      answer(call, "POST", `/v1/guides/${encodeURIComponent(id)}/pass`, id, { agent, why }),
+      answer(call, "POST", `/v1/work/${encodeURIComponent(id)}/pass`, id, { agent, why }),
   );
 
   server.registerTool(
@@ -1056,7 +1056,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       },
     },
     async ({ id, agent, question }) =>
-      answer(call, "POST", `/v1/guides/${encodeURIComponent(id)}/ask`, id, { agent, question }),
+      answer(call, "POST", `/v1/work/${encodeURIComponent(id)}/ask`, id, { agent, question }),
   );
 
   // ---- work: create_work, find_work, update_work ------------------------------------------------
@@ -1188,7 +1188,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         });
         const res = await call(
           "PUT",
-          `/v1/guides/${id}`,
+          `/v1/work/${id}`,
           w.parent ? { markdown, parent: w.parent } : { markdown },
         );
         if (res.status >= 400)
@@ -1239,11 +1239,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     },
     async ({ id, query, scope, section, full }) => {
       if (id) {
-        const res = await call("GET", `/v1/guides/${encodeURIComponent(id)}?peek=1`);
+        const res = await call("GET", `/v1/work/${encodeURIComponent(id)}?peek=1`);
         if (res.status >= 400) return failed(res.text);
         // Work over 20,000 characters is read by its outline first, and one part at a time.
         // Mirrors find_work in packages/passalong/src/mcp.js.
-        if (section || (!full && res.text.length > GUIDE_WARN)) {
+        if (section || (!full && res.text.length > WORK_WARN)) {
           const part = section ? sectionOf(res.text, section) : null;
           const rows = outlineOf(res.text)
             .filter((h) => h.level <= 3)
@@ -1279,9 +1279,9 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       }
       if (query) {
         const params = new URLSearchParams({ q: query, ...(scope ? { scope } : {}) });
-        const res = await call("GET", `/v1/guides?${params}`);
+        const res = await call("GET", `/v1/work?${params}`);
         if (res.status >= 400) return failed(res.text);
-        const result = { work: (JSON.parse(res.text) as { guides: unknown[] }).guides };
+        const result = { work: (JSON.parse(res.text) as { work: unknown[] }).work };
         return { ...text(JSON.stringify(result, null, 2)), structuredContent: result };
       }
       const b = await board();
@@ -1325,7 +1325,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     async ({ id, status, to, markdown }) => {
       if (!markdown && !status && to === undefined)
         return failed("say what to change: status, to, or markdown");
-      const at = `/v1/guides/${encodeURIComponent(id)}`;
+      const at = `/v1/work/${encodeURIComponent(id)}`;
       const done: Record<string, unknown> = { id };
       for (const [method, path, body, key] of [
         markdown ? ["PUT", at, { markdown }, "url"] : null,
@@ -1362,11 +1362,11 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       },
     },
     async ({ id, query, scope }) => {
-      if (id) return relay(call, "GET", `/v1/folders/${encodeURIComponent(id)}`);
+      if (id) return relay(call, "GET", `/v1/projects/${encodeURIComponent(id)}`);
       const params = new URLSearchParams(
         Object.entries({ scope: scope || "", q: query || "" }).filter(([, v]) => v),
       ).toString();
-      return relay(call, "GET", `/v1/folders${params ? `?${params}` : ""}`);
+      return relay(call, "GET", `/v1/projects${params ? `?${params}` : ""}`);
     },
   );
 
@@ -1399,7 +1399,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     async ({ id, title, description, team, parent, color, repo }) => {
       if (!id) {
         if (!title) return failed("a new project needs a `title`");
-        return relay(call, "POST", "/v1/folders", {
+        return relay(call, "POST", "/v1/projects", {
           title,
           description,
           team,
@@ -1412,7 +1412,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       return relay(
         call,
         "PATCH",
-        `/v1/folders/${encodeURIComponent(id)}`,
+        `/v1/projects/${encodeURIComponent(id)}`,
         Object.fromEntries(
           Object.entries({ title, description, parent, color, repo }).filter(
             ([, v]) => v !== undefined,
@@ -1423,7 +1423,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
   );
 
   const doc = (project: string, document: string) =>
-    `/v1/folders/${encodeURIComponent(project)}/documents/${encodeURIComponent(document)}`;
+    `/v1/projects/${encodeURIComponent(project)}/documents/${encodeURIComponent(document)}`;
 
   server.registerTool(
     "read_document",
@@ -1485,7 +1485,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
     async ({ project, document, name, body, version, move_to }) => {
       if (!document) {
         if (!name || body === undefined) return failed("a new document needs `name` and `body`");
-        return relay(call, "POST", `/v1/folders/${encodeURIComponent(project)}/documents`, {
+        return relay(call, "POST", `/v1/projects/${encodeURIComponent(project)}/documents`, {
           name,
           body,
         });
@@ -1501,7 +1501,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       if (name || move_to)
         saved = await relay(call, "PATCH", doc(project, document), {
           ...(name ? { name } : {}),
-          ...(move_to ? { folder: move_to } : {}),
+          ...(move_to ? { project: move_to } : {}),
         });
       return saved as Awaited<ReturnType<typeof relay>>;
     },
@@ -1580,7 +1580,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
         "POST",
         "/v1/uploads",
         project
-          ? { folder: project, name: name ?? "" }
+          ? { project: project, name: name ?? "" }
           : { name: name ?? "", kind: kind ?? "image" },
       );
       if (res.status >= 400) return failed(res.text);
@@ -1633,7 +1633,7 @@ export function buildServer(call: Call, vocabulary: Vocabulary, origin = "https:
       relay(
         call,
         "DELETE",
-        `/v1/folders/${encodeURIComponent(project)}/assets/${encodeURIComponent(file)}`,
+        `/v1/projects/${encodeURIComponent(project)}/files/${encodeURIComponent(file)}`,
       ),
   );
 

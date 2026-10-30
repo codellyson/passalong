@@ -2,9 +2,9 @@
 
 The signed-in web app at `/hub`, and one of only three pages allowed to run script (with `/join` and
 `/reset`). It covers everything a browser-only person needs. The box at `/hub/new` writes work from
-a person's own words, which the reader shapes ([notifications.md](notifications.md)); folder
+a person's own words, which the reader shapes ([notifications.md](notifications.md)); project
 documents have a Markdown editor for corrections. Everything a person reads says work, project,
-document or file, never guide.
+document or file, never work.
 
 ## Needs you
 
@@ -38,7 +38,7 @@ for someone meant to join instead), **Who's on it** (copy an invite link, or inv
 `POST /v1/teams/:slug/invites` mails when the server has a mailer and says "Not emailed" with the
 person's own link when it does not), **Who does what** (Developers, Support and Marketing as
 editable starters, with who is in each as toggle chips), **What you work on** (up to five projects:
-name, one line, repo — `folder.repo`, migration 0067 — each row's line mark showing as soon as it is
+name, one line, repo — `project.repo`, migration 0067 — each row's line mark showing as soon as it is
 named, in the colour it is made with), **What to know** (per project: with a repo the sentence to
 paste into the person's own agent, `readmeAsk()` naming the repo; without, three questions or pasted
 docs, all written as READMEs by Continue in the person's own words, `draftBody()`; Skip with words
@@ -61,7 +61,7 @@ started") and the `ASKS`/`CONNECT`/`teamAsk` sentences it used are gone.
 ## The rail
 
 Every signed-in page sits beside a 240px solid ink rail (`HubSidebar`): the mark, **Go to id**,
-Needs you with its count, Projects (each top-level folder, with its line colour, its open work and a
+Needs you with its count, Projects (each top-level project, with its line colour, its open work and a
 light dot when something in it changed), Work, Support, **New** (the box at `/hub/new`), and
 Settings and the account menu at the foot. On a phone the places are docked along the bottom as
 in a phone app (`HubDock`, 2026-10-30, the author's call): Needs you with its count, Projects, New,
@@ -73,7 +73,7 @@ which is 0 from 768px up.
 
 ## Work
 
-**Go to id** on the rail (`HubGoTo`, ⌘K or Ctrl+K) opens work by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`guideIdFrom()` in `utils/goto.ts`). On a phone it is in the drawer, with no shortcut hint. A work page is under Work on the rail, and opens with a ← Work link back to the board.
+**Go to id** on the rail (`HubGoTo`, ⌘K or Ctrl+K) opens work by the id an agent named it by — a bare id, one in backticks, or a share or hub link (`workIdFrom()` in `utils/goto.ts`). On a phone it is in the drawer, with no shortcut hint. A work page is under Work on the rail, and opens with a ← Work link back to the board.
 
 `/hub/work` is the team board (`HubBoard`): **four columns, people inside** (2026-10-30). Draft,
 To do, In progress and Done always fit the page — Draft and Done narrower — and never scroll
@@ -88,7 +88,7 @@ they have only one; across all teams the groups are named from the cards themsel
 A card (`HubBoardCard`) has the register's anatomy: its title (the link covers the card), "Changed ·
 <what>" in ink with the ink bar at its left edge when something changed since you last
 looked (`changed` on every row, from unread notifications, worded as Needs you words it), then the
-project's 3×14 line mark and name (`project` on every row, the top folder it is linked into) and
+project's 3×14 line mark and name (`project` on every row, the top project it is linked into) and
 its age in tabular figures. In progress adds one muted line: "Went quiet" or "Waiting on you" when
 the hold needs somebody, who holds it ("Bola, an agent", or a person plainly) and their last
 progress note (`held_by[].note`). Done is quiet and shows the latest twenty by finish time, with
@@ -105,7 +105,7 @@ under its rules. Dragging does the same acts: Draft to To do is Ready (keeping t
 To do to Draft, In progress to To do stops the agent (asked above the board), into Done archives,
 finished work back to To do reopens (its reason asked above the board), out of Done to Draft
 unarchives; between To do's groups gives it to that person or group (`POST
-/v1/guides/:id/assign`), and while a To do card is dragged every teammate and group shows as a
+/v1/work/:id/assign`), and while a To do card is dragged every teammate and group shows as a
 place to drop it. Nothing is dropped into In progress: taking is "I'll do this" on the work page.
 A moved card fades until the board has reloaded from the server, and a polite live region says what
 happened, and it then settles into its new place. Four columns hold from a 1024px window, and
@@ -139,34 +139,34 @@ only from shots it still claims. The hub loads it from its own origin.
 Team admins can select, archive, unarchive and delete teammates' work in the same lists as the
 author.
 
-## The work page — `/hub/g/:id`
+## The work page — `/hub/w/:id`
 
 - **Acts** lead the header: one for the work's state (Ready, I'll do this, Give to…, Stop this agent,
   Reopen, Unarchive to Draft) and at most one beside it (Give to… or Archive). Everything else is under
   **More**: Not for me, Move to Draft, Make it private again (the author's recall), Ask someone to
   check, the share link and page, Copy the command for an agent, Let an always-on agent take this on
-  its own (`guide.alone`), and Delete, asked in place.
+  its own (`work.alone`), and Delete, asked in place.
 - **The document** is the share page at `?embed=1` in a sandboxed same-origin frame with no scripts. The
   hub never renders a stranger's markdown as its own HTML (see [security-model.md](security-model.md)).
 - **Progress** leads the sidebar: what happened, in order — sent, opened, taken and where, what they
   said, what they handed in and showed, work made from it — ending on a coral *Now* line. Built from
-  `GET /v1/guides/:id/context`, which records no pull.
-- **The thread** (`HubThread`, `GET /v1/guides/:id/thread`) is the conversation: every
+  `GET /v1/work/:id/context`, which records no pull.
+- **The thread** (`HubThread`, `GET /v1/work/:id/thread`) is the conversation: every
   `task_event` line as chat, and a reply box to whoever holds it.
-- **Who has it** and **Tied to** (its parent, work made from it, blockers, folders) follow.
+- **Who has it** and **Tied to** (its parent, work made from it, blockers, projects) follow.
 
 ## Projects — `/hub/projects`
 
-A project is a folder (docs/LOOP.md §0); the hub never says "folder". `/hub/projects` is a register
+A project is a project (docs/LOOP.md §0); the hub never says "project". `/hub/projects` is a register
 like Needs you: each top-level project with its line colour, its line of description, open work,
-documents and last change rolled up over the folders inside it (`projectsFrom()`), "Changed · …" leading
+documents and last change rolled up over the projects inside it (`projectsFrom()`), "Changed · …" leading
 the second line when something in it changed since you last looked (no left bar: the line colour already
 marks the row), a plain create form and the agent's ask. The title and New project share a line with
 the summary under them; the labels sit over a hairline; the whole row opens the project, with no Open
 button.
 `/hub/projects/:id` has three tabs at their own addresses (`?tab=documents|work|history`):
 **Documents** leads with the README rendered in full, then the other documents (last editor, person
-or agent, and when), folders inside it listed quietly, and files; a document opens in place
+or agent, and when), projects inside it listed quietly, and files; a document opens in place
 (`?doc=`, `HubProjectDocument`), is edited as rich text (`HubDocEditor`, Markdown on the server), saves a new version with the version it opened and refuses a stale
 one, and an earlier version is read-only at `?doc=…&v=…` with "Put this version back". **Work** is
 the project's register (Work · With · State · Age · one action), Open then Done recently; "New work"
@@ -184,22 +184,22 @@ unsure, what is kept as it came, and Looks like (work already on the board, each
 holder or state and age); on a phone the editor's foot repeats the reading in one line. Filing turns
 the page into "Filed: <title>" with Project, For and Why, and Open it, Write another, Move… (project
 and who it is for, in place) and, set apart, Undo: it deletes the work, which takes its unread feed
-lines with it (`forgetGuide()` in notify.ts, from `DELETE /v1/guides/:id`, which answers `told`), and
+lines with it (`forgetWork()` in notify.ts, from `DELETE /v1/work/:id`, which answers `told`), and
 says how many people may already have been told by mail or push, which cannot be recalled. The last
 five filings are a register below. An empty preview answering 501 means there is no reader, and the
 page says "Writing it down here isn't set up" before anyone writes. `?shared=1` (a phone's Share)
 lands with the shared words and pictures already in the editor.
 **History** merges work finished (who, person or agent, and what was shown) and document versions,
-newest first, with no counts. Work and History come from one read, `GET /v1/folders/:id/project`
+newest first, with no counts. Work and History come from one read, `GET /v1/projects/:id/project`
 (`apps/api/src/project.ts`), which owns no table.
 
 The change mark on a project, a document or a History line is the server's answer, said one way, "Changed ·
 <what>": unread news on its work, or a document version someone else saved after you last opened
-that document (`folder_document_seen`, migration 0064, `docChange()` in project.ts). Opening the
-document clears it (`PUT /v1/folders/:id/documents/:doc/seen`); "Mark all seen" on Needs you clears
+that document (`document_seen`, migration 0064, `docChange()` in project.ts). Opening the
+document clears it (`PUT /v1/projects/:id/documents/:doc/seen`); "Mark all seen" on Needs you clears
 documents too. Nothing is kept in the browser. Deleting a project or a file asks in place at the foot
-of Edit or on the file's row, naming what goes. There is no `/hub/folders`:
-nothing outside the hub linked to it. See [folders.md](folders.md).
+of Edit or on the file's row, naming what goes. There is no `/hub/projects`:
+nothing outside the hub linked to it. See [projects.md](projects.md).
 
 ## Support — `/hub/support`
 
@@ -260,6 +260,6 @@ register; every destructive act asks in place and names what breaks. An old
 (work.md).
 
 ## Sources
-- `apps/web/app/pages/hub/index.vue` (Needs you), `components/hub/Sidebar.vue`, `utils/projects.ts`, `apps/api/src/needs.ts`, `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/g/[id].vue`, `pages/hub/projects/`, `components/hub/ProjectDocument.vue`, `apps/api/src/project.ts`, `pages/hub/settings/[[tab]].vue`
+- `apps/web/app/pages/hub/index.vue` (Needs you), `components/hub/Sidebar.vue`, `utils/projects.ts`, `apps/api/src/needs.ts`, `pages/hub/work.vue`, `composables/useWorkLists.ts`, `pages/hub/w/[id].vue`, `pages/hub/projects/`, `components/hub/ProjectDocument.vue`, `apps/api/src/project.ts`, `pages/hub/settings/[[tab]].vue`
 - `apps/web/app/components/hub/Board.vue`, `BoardCard.vue`, `BulkBar.vue`, `CardMenu.vue`, `app/composables/useWorkLists.ts`, `app/utils/progress.ts`, `app/composables/useHub.ts`, `useLive.ts`
-- [AGENTS.md](../../AGENTS.md): "A team's board is one board", "The hub shows a guide by framing it…", "The hub is live…"
+- [AGENTS.md](../../AGENTS.md): "A team's board is one board", "The hub shows a piece of work by framing it…", "The hub is live…"

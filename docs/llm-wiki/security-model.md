@@ -2,8 +2,8 @@
 
 ## The share key is the secret
 
-Work's id is an address; the key in `/g/:id/:key` is the authorisation. So it must never leave:
-share pages are `noindex`, `robots.txt` disallows `/g/`, `x-robots-tag` is set on the raw `.md`, team
+Work's id is an address; the key in `/w/:id/:key` is the authorisation. So it must never leave:
+share pages are `noindex`, `robots.txt` disallows `/w/`, `x-robots-tag` is set on the raw `.md`, team
 channels get a built card instead of an unfurl, the unfurl cache is keyed without it, and analytics are
 sent from the Worker with categorical props only — never an id, handle, title or URL.
 
@@ -12,8 +12,8 @@ sent from the Worker with categorical props only — never an id, handle, title 
 A share page renders markdown a stranger wrote, and there is no sanitiser behind it — only the policy
 `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' https: data:`. That is the
 product's one real security property. The landing, docs, FAQ, connect and blog get it too (`noScripts`).
-A shared folder (`/f/:id/:key`) gets the same rule, `noindex` and a `robots.txt` disallow, and its
-documents also go through the sanitising folder renderer; its files are served as downloads only.
+A shared project (`/p/:id/:key`) gets the same rule, `noindex` and a `robots.txt` disallow, and its
+documents also go through the sanitising project renderer; its files are served as downloads only.
 `apps/web/test/share-links.test.mjs` pins both prefixes to these rules.
 
 Only `/hub`, `/join` and `/reset` run script, with a per-request nonce (`server/plugins/csp.ts`) —
@@ -40,6 +40,6 @@ controls load exactly as without it.
 - **Push** payloads are encrypted to the browser's keys; the push service cannot read them.
 
 ## Sources
-- `apps/web/shared/csp.ts`, `server/plugins/csp.ts`, `app/pages/g/[id]/[key].vue`, `app/pages/hub/g/[id].vue`
+- `apps/web/shared/csp.ts`, `server/plugins/csp.ts`, `app/pages/g/[id]/[key].vue`, `app/pages/hub/w/[id].vue`
 - [docs/wiki/web-view.md](../wiki/web-view.md), [docs/wiki/auth.md](../wiki/auth.md)
-- [AGENTS.md](../../AGENTS.md): "CSP on the web view", "Guide pages are noindex", "Analytics are sent from the Worker", "Password strength…", "A billing webhook…"
+- [AGENTS.md](../../AGENTS.md): "CSP on the web view", "Work pages are noindex", "Analytics are sent from the Worker", "Password strength…", "A billing webhook…"

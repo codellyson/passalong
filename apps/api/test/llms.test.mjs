@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { STATUSES } from "../src/guide.ts";
+import { STATUSES } from "../src/work.ts";
 
 // llms.txt moved to apps/web with the rest of what a browser or a crawler fetches; the test stays
 // here because what it pins llms.txt against — STATUSES — is defined here.

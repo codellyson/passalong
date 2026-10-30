@@ -6,7 +6,7 @@
 //
 // The rules every mail here follows:
 //   - the subject and the preview say who did what, by name, and never carry an id;
-//   - the one thing to do is open the guide, and anything the reader answers is answered there;
+//   - the one thing to do is open the work, and anything the reader answers is answered there;
 //   - a CLI command is a footnote for whoever uses a terminal or an agent, never the instruction.
 
 export interface Copy {
@@ -23,7 +23,7 @@ export interface Copy {
 export const hubUrl = (origin?: string) =>
   `${(origin || "https://passalong.dev").replace(/\/$/, "")}/hub`;
 
-export function handoffCopy(o: {
+export function sentToYouCopy(o: {
   fromName: string;
   title: string;
   id: string;

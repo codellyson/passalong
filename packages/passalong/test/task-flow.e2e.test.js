@@ -37,9 +37,9 @@ function setup() {
     process.env.PASSALONG_API = API;
     process.env.PASSALONG_TOKEN = token;
     process.env.PASSALONG_HOME = mkdtempSync(join(tmpdir(), "passalong-e2e-"));
-    const guide = await import("../src/guide.js");
+    const work = await import("../src/work.js");
     const p = await import("../src/passalong.js");
-    return { account, p, ...guide };
+    return { account, p, ...work };
   })();
   return ready;
 }
@@ -87,7 +87,7 @@ async function readyTask({ account, p, serialize }, title) {
   execFileSync("git", ["init", "-q", dir]);
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:e2e/${account}.git`]);
   const md = work(serialize, title, { status: "draft", target_context: `e2e/${account}` });
-  const id = (await p.publish(md, { cwd: dir })).guide.meta.id;
+  const id = (await p.publish(md, { cwd: dir })).work.meta.id;
   await p.ready(id);
   return { id, dir };
 }
@@ -97,12 +97,12 @@ const skip = !API && "PASSALONG_E2E_API not set";
 /** What every hand-in carries: the run, not the agent's word for it. */
 const PROOF = "npm test -w apps/api → 285 pass, 0 fail";
 
-test("an agent can create a folder and upload an asset with a scoped one-time link", {
+test("an agent can create a project and upload a file with a scoped one-time link", {
   skip,
 }, async () => {
   await setup();
   const api = await import("../src/api.js");
-  const { folder } = await api.createFolder("Tutorial video", "Script and screens");
+  const { project } = await api.createProject("Tutorial video", "Script and screens");
   const minted = await fetch(`${API}/v1/uploads`, {
     method: "POST",
     headers: {
@@ -110,27 +110,27 @@ test("an agent can create a folder and upload an asset with a scoped one-time li
       "x-passalong-version": VERSION,
       authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
     },
-    body: JSON.stringify({ folder: folder.id, name: "screen.png" }),
+    body: JSON.stringify({ project: project.id, name: "screen.png" }),
   });
   if (minted.status !== 201)
     throw new Error(`upload link: ${minted.status} ${await minted.text()}`);
   const { upload_url, kind } = await minted.json();
-  assert.equal(kind, `folder:${folder.id}`);
+  assert.equal(kind, `project:${project.id}`);
   const wrong = await fetch(upload_url, { method: "PUT", body: new Uint8Array([0, 1, 2]) });
   assert.equal(wrong.status, 415, "invalid bytes do not spend the link");
   const uploaded = await fetch(upload_url, { method: "PUT", body: PNG });
   if (uploaded.status !== 201)
-    throw new Error(`asset upload: ${uploaded.status} ${await uploaded.text()}`);
-  const { asset } = await uploaded.json();
-  assert.equal(asset.name, "screen.png");
-  assert.equal((await api.folder(folder.id)).assets[0].id, asset.id);
+    throw new Error(`file upload: ${uploaded.status} ${await uploaded.text()}`);
+  const { file } = await uploaded.json();
+  assert.equal(file.name, "screen.png");
+  assert.equal((await api.project(project.id)).files[0].id, file.id);
   assert.equal((await fetch(upload_url, { method: "PUT", body: PNG })).status, 410);
 });
 
-test("nested folders keep their space, color and subtree when moved", { skip }, async () => {
+test("nested projects keep their space, color and subtree when moved", { skip }, async () => {
   await setup();
   const api = await import("../src/api.js");
-  const { folder: root } = await api.createFolder(
+  const { project: root } = await api.createProject(
     "Video series",
     "Scripts and footage",
     "",
@@ -139,35 +139,35 @@ test("nested folders keep their space, color and subtree when moved", { skip }, 
   );
   // Where it landed is said in the answer, so an agent reports that rather than what it meant.
   assert.match(root.space, /^private/);
-  const { folder: script } = await api.createFolder("Episode one", "Draft script", "", root.id);
+  const { project: script } = await api.createProject("Episode one", "Draft script", "", root.id);
   assert.match(script.space, /^private/);
-  assert.match((await api.folder(script.id)).folder.space, /^private/);
-  const { folder: scenes0 } = await api.createFolder("Cutaways", "", "", script.id);
-  await api.createFolderDocument(script.id, "Outline", "");
-  // A grouping folder says what each folder inside it holds, so it does not read as empty.
-  const child = (await api.folder(root.id)).children.find((c) => c.id === script.id);
+  assert.match((await api.project(script.id)).project.space, /^private/);
+  const { project: scenes0 } = await api.createProject("Cutaways", "", "", script.id);
+  await api.createProjectDocument(script.id, "Outline", "");
+  // A grouping project says what each project inside it holds, so it does not read as empty.
+  const child = (await api.project(root.id)).children.find((c) => c.id === script.id);
   assert.equal(child.documents, 1);
-  assert.equal(child.subfolders, 1);
+  assert.equal(child.subprojects, 1);
   assert.ok(scenes0.id);
-  const { folder: scenes } = await api.createFolder("Scenes", "Screens and cuts", "", script.id);
+  const { project: scenes } = await api.createProject("Scenes", "Screens and cuts", "", script.id);
   assert.equal(script.parent_id, root.id);
   assert.equal(scenes.parent_id, script.id);
   assert.equal(
-    (await api.folder(script.id)).breadcrumbs.map((part) => part.id).join("/"),
+    (await api.project(script.id)).breadcrumbs.map((part) => part.id).join("/"),
     `${root.id}/${script.id}`,
   );
-  assert.equal((await api.folders()).folders.find((part) => part.id === root.id).color, "blue");
+  assert.equal((await api.projects()).projects.find((part) => part.id === root.id).color, "blue");
 
-  const moved = await api.updateFolder(script.id, { color: "coral", parent: "" });
-  assert.equal(moved.folder.parent_id, "");
-  assert.equal(moved.folder.color, "coral");
+  const moved = await api.updateProject(script.id, { color: "coral", parent: "" });
+  assert.equal(moved.project.parent_id, "");
+  assert.equal(moved.project.color, "coral");
   assert.equal(
-    (await api.folder(scenes.id)).breadcrumbs.map((part) => part.id).join("/"),
+    (await api.project(scenes.id)).breadcrumbs.map((part) => part.id).join("/"),
     `${script.id}/${scenes.id}`,
   );
 
-  await assert.rejects(api.updateFolder(script.id, { parent: scenes.id }), /inside itself/);
-  const deleted = await fetch(`${API}/v1/folders/${encodeURIComponent(script.id)}`, {
+  await assert.rejects(api.updateProject(script.id, { parent: scenes.id }), /inside itself/);
+  const deleted = await fetch(`${API}/v1/projects/${encodeURIComponent(script.id)}`, {
     method: "DELETE",
     headers: {
       "x-passalong-version": VERSION,
@@ -175,57 +175,57 @@ test("nested folders keep their space, color and subtree when moved", { skip }, 
     },
   });
   assert.equal(deleted.status, 200);
-  await assert.rejects(api.folder(scenes.id), /isn't available/);
+  await assert.rejects(api.project(scenes.id), /isn't available/);
 });
 
-test("a folder's share link opens it and what is inside it, and nothing else", {
+test("a project's share link opens it and what is inside it, and nothing else", {
   skip,
 }, async () => {
   await setup();
   const api = await import("../src/api.js");
-  const { folder: root } = await api.createFolder("Launch kit", "Everything for the launch");
-  const { folder: inner } = await api.createFolder("Screens", "", "", root.id);
-  const { folder: other } = await api.createFolder("Unrelated", "Not shared");
-  await api.createFolderDocument(
+  const { project: root } = await api.createProject("Launch kit", "Everything for the launch");
+  const { project: inner } = await api.createProject("Screens", "", "", root.id);
+  const { project: other } = await api.createProject("Unrelated", "Not shared");
+  await api.createProjectDocument(
     root.id,
     "Brief",
     "# Launch brief\n\n> [!NOTE]\n> Read this first.",
   );
-  const file = join(mkdtempSync(join(tmpdir(), "passalong-share-")), "home.png");
-  writeFileSync(file, PNG);
-  const { asset } = await api.addFolderAsset(inner.id, file);
+  const path = join(mkdtempSync(join(tmpdir(), "passalong-share-")), "home.png");
+  writeFileSync(path, PNG);
+  const { file } = await api.addProjectFile(inner.id, path);
 
-  const { url } = await call("POST", `/v1/folders/${root.id}/share`);
-  const [, id, key] = new URL(url).pathname.match(/^\/f\/([a-z0-9]+)\/([a-z0-9]+)$/) || [];
+  const { url } = await call("POST", `/v1/projects/${root.id}/share`);
+  const [, id, key] = new URL(url).pathname.match(/^\/p\/([a-z0-9]+)\/([a-z0-9]+)$/) || [];
   assert.equal(id, root.id);
   // Asking again returns the same link rather than breaking the one already sent.
-  assert.equal((await call("POST", `/v1/folders/${root.id}/share`)).url, url);
+  assert.equal((await call("POST", `/v1/projects/${root.id}/share`)).url, url);
 
   const read = (path) => fetch(`${API}${path}`);
-  const page = await (await read(`/api/folder/${id}/${key}`)).json();
-  assert.equal(page.folder.title, "Launch kit");
+  const page = await (await read(`/api/project/${id}/${key}`)).json();
+  assert.equal(page.project.title, "Launch kit");
   assert.deepEqual(
     page.children.map((c) => c.title),
     ["Screens"],
   );
   assert.match(page.document.html, /markdown-alert-note/);
-  // A folder inside the shared one opens with the same key, and its files download.
-  const insidePage = await (await read(`/api/folder/${id}/${key}?in=${inner.id}`)).json();
+  // A project inside the shared one opens with the same key, and its files download.
+  const insidePage = await (await read(`/api/project/${id}/${key}?in=${inner.id}`)).json();
   assert.deepEqual(
     insidePage.files.map((f) => f.id),
-    [asset.id],
+    [file.id],
   );
-  const download = await read(`/f/${id}/${key}/files/${asset.id}`);
+  const download = await read(`/p/${id}/${key}/files/${file.id}`);
   assert.equal(download.status, 200);
   assert.match(download.headers.get("content-disposition") || "", /^attachment/);
 
   // The key opens nothing outside its subtree, and a wrong key opens nothing at all.
-  assert.equal((await read(`/api/folder/${id}/${key}?in=${other.id}`)).status, 404);
-  assert.equal((await read(`/api/folder/${id}/${"x".repeat(22)}`)).status, 404);
-  assert.equal((await read(`/api/folder/${other.id}/${key}`)).status, 404);
+  assert.equal((await read(`/api/project/${id}/${key}?in=${other.id}`)).status, 404);
+  assert.equal((await read(`/api/project/${id}/${"x".repeat(22)}`)).status, 404);
+  assert.equal((await read(`/api/project/${other.id}/${key}`)).status, 404);
 
   // Stopping clears it: the old link dies, and a new share is a different link.
-  const stopped = await fetch(`${API}/v1/folders/${root.id}/share`, {
+  const stopped = await fetch(`${API}/v1/projects/${root.id}/share`, {
     method: "DELETE",
     headers: {
       "x-passalong-version": VERSION,
@@ -233,45 +233,45 @@ test("a folder's share link opens it and what is inside it, and nothing else", {
     },
   });
   assert.equal(stopped.status, 200);
-  assert.equal((await read(`/api/folder/${id}/${key}`)).status, 404);
-  assert.equal((await read(`/f/${id}/${key}/files/${asset.id}`)).status, 404);
-  assert.notEqual((await call("POST", `/v1/folders/${root.id}/share`)).url, url);
+  assert.equal((await read(`/api/project/${id}/${key}`)).status, 404);
+  assert.equal((await read(`/p/${id}/${key}/files/${file.id}`)).status, 404);
+  assert.notEqual((await call("POST", `/v1/projects/${root.id}/share`)).url, url);
 });
 
-test("a document moves between folders with its history, and only within its space", {
+test("a document moves between projects with its history, and only within its space", {
   skip,
 }, async () => {
   await setup();
   const api = await import("../src/api.js");
-  const { folder: from } = await api.createFolder("Drafts", "Unsorted");
-  const { folder: to } = await api.createFolder("Episode one", "Scripts");
-  const { document } = await api.createFolderDocument(from.id, "Script", "v1");
-  await api.saveFolderDocument(from.id, document.id, 1, "v2");
+  const { project: from } = await api.createProject("Drafts", "Unsorted");
+  const { project: to } = await api.createProject("Episode one", "Scripts");
+  const { document } = await api.createProjectDocument(from.id, "Script", "v1");
+  await api.saveProjectDocument(from.id, document.id, 1, "v2");
 
-  const moved = await api.patchFolderDocument(from.id, document.id, { folder: to.id });
+  const moved = await api.patchProjectDocument(from.id, document.id, { project: to.id });
   assert.equal(moved.document.id, document.id);
-  assert.equal((await api.folder(from.id)).documents.length, 0);
+  assert.equal((await api.project(from.id)).documents.length, 0);
   assert.deepEqual(
-    (await api.folder(to.id)).documents.map((d) => d.id),
+    (await api.project(to.id)).documents.map((d) => d.id),
     [document.id],
   );
   // Its versions came with it.
   assert.deepEqual(
-    (await api.folderDocumentHistory(to.id, document.id)).revisions.map((r) => r.version),
+    (await api.projectDocumentHistory(to.id, document.id)).revisions.map((r) => r.version),
     [2, 1],
   );
 
   // Back again under a new name; and a name the target already has is refused.
-  await api.patchFolderDocument(to.id, document.id, { folder: from.id, name: "Script, rough" });
-  assert.equal((await api.folder(from.id)).documents[0].name, "Script, rough");
-  await api.createFolderDocument(to.id, "Script, rough", "");
+  await api.patchProjectDocument(to.id, document.id, { project: from.id, name: "Script, rough" });
+  assert.equal((await api.project(from.id)).documents[0].name, "Script, rough");
+  await api.createProjectDocument(to.id, "Script, rough", "");
   await assert.rejects(
-    api.patchFolderDocument(from.id, document.id, { folder: to.id }),
+    api.patchProjectDocument(from.id, document.id, { project: to.id }),
     /already in the project/,
   );
-  // A folder this account cannot see is refused the same way as one that does not exist.
+  // A project this account cannot see is refused the same way as one that does not exist.
   await assert.rejects(
-    api.patchFolderDocument(from.id, document.id, { folder: "nosuchfolder" }),
+    api.patchProjectDocument(from.id, document.id, { project: "nosuchproject" }),
     /isn't available/,
   );
 });
@@ -281,45 +281,45 @@ test("an agent finds projects by words, renames, recovers and removes", {
 }, async () => {
   await setup();
   const api = await import("../src/api.js");
-  const { folder } = await api.createFolder("Checkout research", "Payments notes");
-  const { document } = await api.createFolderDocument(folder.id, "Notes", "The 50%_off coupon");
+  const { project } = await api.createProject("Checkout research", "Payments notes");
+  const { document } = await api.createProjectDocument(project.id, "Notes", "The 50%_off coupon");
 
-  // Words in a document's text find its folder and name the document; LIKE's own wildcards in the
+  // Words in a document's text find its project and name the document; LIKE's own wildcards in the
   // words are taken literally, so "0%_o" matches only the text that says exactly that.
-  const found = (await api.folders("all", "0%_o")).folders;
+  const found = (await api.projects("all", "0%_o")).projects;
   assert.deepEqual(
     found.map((f) => f.id),
-    [folder.id],
+    [project.id],
   );
   assert.deepEqual(found[0].matches, [{ id: document.id, name: "Notes" }]);
-  assert.equal((await api.folders("all", "50xxoff")).folders.length, 0);
+  assert.equal((await api.projects("all", "50xxoff")).projects.length, 0);
 
   // A bad edit is put back from history.
-  await api.saveFolderDocument(folder.id, document.id, 1, "Rewritten by mistake");
-  const history = await api.folderDocumentHistory(folder.id, document.id);
+  await api.saveProjectDocument(project.id, document.id, 1, "Rewritten by mistake");
+  const history = await api.projectDocumentHistory(project.id, document.id);
   assert.deepEqual(
     history.revisions.map((r) => r.version),
     [2, 1],
   );
-  const first = await api.folderDocumentHistory(folder.id, document.id, 1);
-  await api.saveFolderDocument(folder.id, document.id, 2, first.revision.body);
+  const first = await api.projectDocumentHistory(project.id, document.id, 1);
+  await api.saveProjectDocument(project.id, document.id, 2, first.revision.body);
   assert.equal(
-    (await api.folderDocument(folder.id, document.id)).document.body,
+    (await api.projectDocument(project.id, document.id)).document.body,
     "The 50%_off coupon",
   );
 
-  // A rename keeps the id and history, and refuses a name the folder already has.
-  const renamed = await api.patchFolderDocument(folder.id, document.id, { name: "Coupon notes" });
+  // A rename keeps the id and history, and refuses a name the project already has.
+  const renamed = await api.patchProjectDocument(project.id, document.id, { name: "Coupon notes" });
   assert.equal(renamed.document.id, document.id);
   assert.equal(renamed.document.name, "Coupon notes");
-  await api.createFolderDocument(folder.id, "Other", "");
+  await api.createProjectDocument(project.id, "Other", "");
   await assert.rejects(
-    api.patchFolderDocument(folder.id, document.id, { name: "Other" }),
+    api.patchProjectDocument(project.id, document.id, { name: "Other" }),
     /already/,
   );
 
-  await api.deleteFolderDocument(folder.id, document.id);
-  await assert.rejects(api.folderDocument(folder.id, document.id), /isn't in this project/);
+  await api.deleteProjectDocument(project.id, document.id);
+  await assert.rejects(api.projectDocument(project.id, document.id), /isn't in this project/);
 });
 
 test("work goes round: taken, taken back, done, reopened", { skip }, async () => {
@@ -342,7 +342,7 @@ test("work goes round: taken, taken back, done, reopened", { skip }, async () =>
   const { id } = await readyTask(env, "Add dark mode");
 
   // One worktree takes it, says where it is, and it is taken back from it.
-  assert.equal((await p.take(id, { cwd: a })).guide.id, id);
+  assert.equal((await p.take(id, { cwd: a })).work.id, id);
   await p.progress(id, "safari fix in progress", { cwd: a });
   await p.release(id);
   assert.equal(await stateOf(id), "ready");
@@ -350,14 +350,14 @@ test("work goes round: taken, taken back, done, reopened", { skip }, async () =>
 
   // Another picks it up with a pointer to where it was left, and finishes: Done at once.
   const second = await p.take(id, { cwd: b });
-  assert.match(second.guide.markdown, /safari fix in progress/);
+  assert.match(second.work.markdown, /safari fix in progress/);
   await p.handIn(id, { note: "Dark mode works.", evidence: PROOF, cwd: b });
   assert.equal(await stateOf(id), "done");
 
   // It is not right after all: back in To do with why, for whoever takes it next.
   await p.reopen(id, "toggle does nothing on Safari");
   assert.equal(await stateOf(id), "ready");
-  assert.match((await p.take(id, { cwd: a })).guide.markdown, /toggle does nothing on Safari/);
+  assert.match((await p.take(id, { cwd: a })).work.markdown, /toggle does nothing on Safari/);
   await p.pass(id, "testing the round", { cwd: a });
 });
 
@@ -370,7 +370,7 @@ test("blocked_by holds work until what it waits on is Done", { skip }, async () 
     target_context: `e2e/${account}`,
     blocked_by: [first.id],
   });
-  const second = (await p.publish(waits, { cwd: first.dir })).guide.meta.id;
+  const second = (await p.publish(waits, { cwd: first.dir })).work.meta.id;
   await p.ready(second);
   assert.equal(await stateOf(second), "blocked");
 
@@ -384,7 +384,7 @@ test("every draft you wrote can be made ready at once", { skip }, async () => {
   const { p, serialize, account } = env;
   const draft = async (title) =>
     (await p.publish(work(serialize, title, { status: "draft", target_context: `e2e/${account}` })))
-      .guide.meta.id;
+      .work.meta.id;
   const ids = [await draft("Plan step one"), await draft("Plan step two")];
   const made = await p.readyDrafts();
   for (const id of ids) assert.ok(made.includes(id), `${id} was made ready`);
@@ -723,14 +723,14 @@ test("a task's evidence can arrive against the line it answers", { skip }, async
   // Finishing is final: Done, and what was run stays on the work as what it was finished with.
   assert.equal(await stateOf(id), "done");
   const ctx = await (
-    await fetch(`${API}/v1/guides/${id}/context`, {
+    await fetch(`${API}/v1/work/${id}/context`, {
       headers: {
         authorization: `Bearer ${process.env.PASSALONG_TOKEN}`,
         "x-passalong-version": VERSION,
       },
     })
   ).json();
-  const shown = ctx.verdicts.find((v) => v.ok);
+  const shown = ctx.proofs.find((v) => v.ok);
   assert.match(shown.detail, /the hub follows the OS setting/, "filed under the line it answers");
   assert.match(shown.detail, /58 pass, 0 fail/, "and kept its output, not an account");
 });
@@ -778,8 +778,8 @@ test("work is never handed over alone: what it came out of comes with it", { ski
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
   const parent = (
     await p.publish(work(serialize, "Store Hours UI", {}, "open/close per day"), { cwd: dir })
-  ).guide.meta.id;
-  const child = (await p.publish(work(serialize, "Confirmation email"), { cwd: dir, parent })).guide
+  ).work.meta.id;
+  const child = (await p.publish(work(serialize, "Confirmation email"), { cwd: dir, parent })).work
     .meta.id;
 
   const lead = await p.parentWork({ id: child, parent });
@@ -794,7 +794,7 @@ test("work is never handed over alone: what it came out of comes with it", { ski
   assert.equal(await p.parentWork({ id: parent }), "");
 });
 
-test("a screenshot handed in as evidence belongs to the guide, so the nightly sweep leaves it", {
+test("a screenshot handed in as evidence belongs to the work, so the nightly sweep leaves it", {
   skip,
 }, async () => {
   const env = await setup();
@@ -814,8 +814,8 @@ test("a screenshot handed in as evidence belongs to the guide, so the nightly sw
   ).json();
   assert.ok(shot.id, "the screenshot uploaded");
   // Unclaimed on upload: it belongs to nothing until a document points at it.
-  assert.deepEqual(await rows(`SELECT guide_id FROM shot WHERE id = '${shot.id}'`), [
-    { guide_id: "" },
+  assert.deepEqual(await rows(`SELECT work_id FROM shot WHERE id = '${shot.id}'`), [
+    { work_id: "" },
   ]);
 
   await p.take(id, { cwd: dir });
@@ -828,8 +828,8 @@ test("a screenshot handed in as evidence belongs to the guide, so the nightly sw
   // Claimed by the task it answers. Evidence is not markdown and lives on the claim, so nothing
   // used to claim it — and sweepOrphans() deleted it a day later, leaving a broken image where the
   // one part of a hand-in a reviewer cannot reconstruct used to be.
-  assert.deepEqual(await rows(`SELECT guide_id FROM shot WHERE id = '${shot.id}'`), [
-    { guide_id: id },
+  assert.deepEqual(await rows(`SELECT work_id FROM shot WHERE id = '${shot.id}'`), [
+    { work_id: id },
   ]);
 });
 
@@ -855,13 +855,13 @@ test("in a team, each side hears what the other did to work — and anyone in it
   as(owner);
   const md = (title) =>
     work(serialize, title, { status: "draft", target_context: `e2e/${account}` });
-  const id = (await p.publish(md("Team work"), { to: team.slug })).guide.meta.id;
+  const id = (await p.publish(md("Team work"), { to: team.slug })).work.meta.id;
   await p.ready(id);
-  const draft = (await p.publish(md("Still a draft"), { to: team.slug })).guide.meta.id;
+  const draft = (await p.publish(md("Still a draft"), { to: team.slug })).work.meta.id;
 
   // The teammate can take it, but cannot archive it by status: that is its author's or an admin's.
   as(mate.token);
-  await assert.rejects(api.setStatus(id, "consumed"), (e) => e.status === 403);
+  await assert.rejects(api.setStatus(id, "done"), (e) => e.status === 403);
   const dir = mkdtempSync(join(tmpdir(), "passalong-wt-"));
   execFileSync("git", ["init", "-q", dir]);
   execFileSync("git", ["-C", dir, "remote", "add", "origin", `git@github.com:e2e/${account}.git`]);
@@ -957,14 +957,14 @@ test("one set of verbs for all work: take, progress, hand_in, pass, each saying 
   skip,
 }, async () => {
   const { p, serialize } = await setup();
-  const h = (await p.publish(work(serialize, "Stream the PDF"))).guide.meta.id;
+  const h = (await p.publish(work(serialize, "Stream the PDF"))).work.meta.id;
   const a = { agent: "e2e-agent-aaaa", repo: "e2e/one", host: "mac", worktree: "/w/a" };
   const b = { agent: "e2e-agent-bbbb", repo: "e2e/one" };
   const c = { agent: "e2e-agent-cccc", repo: "e2e/two" };
 
   const took = await call("POST", "/v1/take", { ...a, id: h });
-  assert.equal(took.guide.kind, undefined, "work has no kind");
-  assert.match(took.guide.markdown, /Stream the PDF/);
+  assert.equal(took.work.kind, undefined, "work has no kind");
+  assert.match(took.work.markdown, /Stream the PDF/);
   assert.deepEqual(
     took.next.map((s) => s.tool),
     ["progress", "hand_in", "pass"],
@@ -975,7 +975,7 @@ test("one set of verbs for all work: take, progress, hand_in, pass, each saying 
   assert.equal(
     clash.holder.worktree,
     "a",
-    "the refusal says who has it, by its folder's name and not its whole path",
+    "the refusal says who has it, by its project's name and not its whole path",
   );
   assert.equal(
     (await call("POST", "/v1/take", { ...c, id: h })).status,
@@ -983,24 +983,21 @@ test("one set of verbs for all work: take, progress, hand_in, pass, each saying 
     "one holder at a time, whatever the repo",
   );
 
-  const said = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "halfway" });
+  const said = await call("PUT", `/v1/work/${h}/progress`, { ...a, note: "halfway" });
   assert.equal(said.note, "halfway");
   assert.ok(said.next.length);
 
   // Your own work can be finished too — nothing reviews it — but never without proof.
-  assert.equal(
-    (await call("POST", `/v1/guides/${h}/hand_in`, { ...a, note: "Done." })).status,
-    400,
-  );
-  const passed = await call("POST", `/v1/guides/${h}/pass`, { ...a, why: "wrong repo after all" });
+  assert.equal((await call("POST", `/v1/work/${h}/hand_in`, { ...a, note: "Done." })).status, 400);
+  const passed = await call("POST", `/v1/work/${h}/pass`, { ...a, why: "wrong repo after all" });
   assert.deepEqual(
     passed.next.map((s) => s.tool),
     ["take"],
   );
-  const gone = await call("PUT", `/v1/guides/${h}/progress`, { ...a, note: "still going" });
+  const gone = await call("PUT", `/v1/work/${h}/progress`, { ...a, note: "still going" });
   assert.equal(gone.status, 409);
   assert.match(gone.say, /stop/i, "an agent that lost its claim is told to stop");
-  assert.equal((await call("POST", "/v1/take", { ...b, id: h })).guide.agent, b.agent);
+  assert.equal((await call("POST", "/v1/take", { ...b, id: h })).work.agent, b.agent);
 });
 
 test("the CLI's verbs: take, progress, hand_in and pass", { skip }, async () => {
@@ -1011,8 +1008,8 @@ test("the CLI's verbs: take, progress, hand_in and pass", { skip }, async () => 
   // No id: the next thing waiting in this repo — oldest first, so maybe work an earlier test left
   // ready. The document comes back in the answer; asked to, it is saved in the worktree.
   const took = await p.take(undefined, { cwd: dir, save: true });
-  const id = took.guide.id;
-  assert.match(readFileSync(took.path, "utf8"), new RegExp(took.guide.title));
+  const id = took.work.id;
+  assert.match(readFileSync(took.path, "utf8"), new RegExp(took.work.title));
   assert.deepEqual(
     took.next.map((s) => s.tool),
     ["progress", "hand_in", "pass"],
@@ -1032,8 +1029,8 @@ test("the CLI's verbs: take, progress, hand_in and pass", { skip }, async () => 
   );
 
   // Another by id: taken, then passed with the reason, and free for the next agent.
-  const h = (await p.publish(work(serialize, "Another"), { cwd: dir })).guide.meta.id;
-  assert.equal((await p.take(h, { cwd: dir })).guide.id, h);
+  const h = (await p.publish(work(serialize, "Another"), { cwd: dir })).work.meta.id;
+  assert.equal((await p.take(h, { cwd: dir })).work.id, h);
   await assert.rejects(p.pass(h, "", { cwd: dir }), /why/);
   assert.deepEqual(
     (await p.pass(h, "not mine", { cwd: dir })).next.map((s) => s.tool),
@@ -1049,8 +1046,8 @@ test("now says what this worktree holds, for the session-start and stop hooks", 
   const { dir } = await readyTask(env, "Held across a restart");
   const took = await p.take(undefined, { cwd: dir });
   const now = await p.now({ cwd: dir });
-  assert.equal(now.held[0]?.id, took.guide.id);
-  await p.pass(took.guide.id, "testing now", { cwd: dir });
+  assert.equal(now.held[0]?.id, took.work.id);
+  await p.pass(took.work.id, "testing now", { cwd: dir });
   assert.equal((await p.now({ cwd: dir })).held.length, 0);
 });
 
@@ -1073,17 +1070,17 @@ test("the hook commands: a session is told what it holds, and stopped once befor
   assert.equal(started.hookSpecificOutput.hookEventName, "SessionStart");
   assert.match(
     started.hookSpecificOutput.additionalContext,
-    new RegExp(`This worktree holds ${took.guide.id}`),
+    new RegExp(`This worktree holds ${took.work.id}`),
   );
 
   const stop = JSON.parse(run("stop", JSON.stringify({ stop_hook_active: false })));
   assert.equal(stop.decision, "block");
   assert.equal(run("stop", JSON.stringify({ stop_hook_active: true })), "", "never twice");
 
-  await p.pass(took.guide.id, "testing the hooks", { cwd: dir });
+  await p.pass(took.work.id, "testing the hooks", { cwd: dir });
   assert.equal(run("stop", "{}"), "", "nothing held: free to stop");
 
-  // A repo that never took anything is not given a .passalong/ folder for being asked.
+  // A repo that never took anything is not given a .passalong/ project for being asked.
   const bare = mkdtempSync(join(tmpdir(), "passalong-bare-"));
   execFileSync("git", ["init", "-q", bare]);
   execFileSync(process.execPath, [bin, "now", "--hook", "session"], {
@@ -1104,28 +1101,28 @@ test("an agent cannot hand in work it does not hold", { skip }, async () => {
   process.env.PASSALONG_TOKEN = mate.token;
   await api.join(code);
   process.env.PASSALONG_TOKEN = owner;
-  const id = (await p.publish(work(serialize, "Check the invoice PDF"), { to: team.slug })).guide
+  const id = (await p.publish(work(serialize, "Check the invoice PDF"), { to: team.slug })).work
     .meta.id;
   process.env.PASSALONG_TOKEN = mate.token;
   try {
     const agent = { agent: "e2e-hand-in-agent", repo: "e2e/hand-in" };
     const answer = (who) =>
-      call("POST", `/v1/guides/${id}/hand_in`, {
+      call("POST", `/v1/work/${id}/hand_in`, {
         ...who,
         evidence: PROOF,
         note: "Done, it holds.",
       });
-    const verdicts = () => rows(`SELECT ok FROM verdict WHERE guide_id = '${id}'`);
+    const proofs = () => rows(`SELECT ok FROM proof WHERE work_id = '${id}'`);
 
     assert.equal((await answer(agent)).status, 409);
-    assert.deepEqual(await verdicts(), []);
+    assert.deepEqual(await proofs(), []);
 
     assert.equal((await call("POST", "/v1/take", { ...agent, id })).status, 200);
     assert.equal((await answer({ ...agent, agent: "e2e-other-agent" })).status, 409);
-    assert.deepEqual(await verdicts(), []);
+    assert.deepEqual(await proofs(), []);
 
     assert.equal((await answer(agent)).status, 200);
-    assert.deepEqual(await verdicts(), [{ ok: 1 }], "what it was finished with stays on it");
+    assert.deepEqual(await proofs(), [{ ok: 1 }], "what it was finished with stays on it");
     assert.equal((await answer(agent)).status, 409);
   } finally {
     process.env.PASSALONG_TOKEN = owner;
@@ -1163,9 +1160,9 @@ test("the status line shows what this worktree holds, from a cache it refreshes 
     input,
     env: process.env,
   }).toString();
-  assert.match(line, new RegExp(`▸ ${took.guide.id}`));
+  assert.match(line, new RegExp(`▸ ${took.work.id}`));
   assert.doesNotMatch(line, /\n/);
-  await p.pass(took.guide.id, "testing the status line", { cwd: dir });
+  await p.pass(took.work.id, "testing the status line", { cwd: dir });
 });
 
 test("reassigning work: only the assignee's agents get it, and whoever is left out is told", {
@@ -1206,21 +1203,21 @@ test("reassigning work: only the assignee's agents get it, and whoever is left o
     status: "draft",
     target_context: `e2e/${account}`,
   });
-  const id = (await p.publish(task, { to: team.slug })).guide.meta.id;
+  const id = (await p.publish(task, { to: team.slug })).work.meta.id;
   await p.ready(id);
   assert.equal((await p.assign(id, `@${handle}`)).to, `@${handle}`);
 
   // Not the owner's agent any more: the queue skips it, and taking it by id says why.
   const mine = worktree();
   const skipped = await p.take(undefined, { cwd: mine });
-  assert.notEqual(skipped.guide?.id, id);
-  if (skipped.guide) await p.pass(skipped.guide.id, "not this one", { cwd: mine });
+  assert.notEqual(skipped.work?.id, id);
+  if (skipped.work) await p.pass(skipped.work.id, "not this one", { cwd: mine });
   await assert.rejects(p.take(id, { cwd: mine }), /assigned to someone else/);
 
   // The assignee's agent gets it.
   as(mate.token);
   const theirs = worktree();
-  assert.equal((await p.take(id, { cwd: theirs })).guide.id, id);
+  assert.equal((await p.take(id, { cwd: theirs })).work.id, id);
 
   // To the whole team: nobody is left out, so the mate keeps it.
   as(owner);
@@ -1268,7 +1265,7 @@ test("whoever it is assigned to can pass it on, even to a teammate with no @name
     status: "draft",
     target_context: `e2e/${account}`,
   });
-  const id = (await p.publish(task, { to: team.slug })).guide.meta.id;
+  const id = (await p.publish(task, { to: team.slug })).work.meta.id;
   await p.ready(id);
   await p.assign(id, `@${handle}`);
 
@@ -1321,7 +1318,7 @@ test("the server refuses a kind, takes new work Ready, and never starts it archi
 }, async () => {
   await setup();
   const rid = () => `k${Math.random().toString(36).slice(2, 9)}`;
-  const put = (md, id = rid()) => call("PUT", `/v1/guides/${id}`, { markdown: md });
+  const put = (md, id = rid()) => call("PUT", `/v1/work/${id}`, { markdown: md });
   const front = (extra) =>
     `---\ntitle: Some work\nsummary: Said to a person for the test.\n${extra}---\n\nFix it.\n`;
 
@@ -1330,23 +1327,16 @@ test("the server refuses a kind, takes new work Ready, and never starts it archi
   assert.match(kinded.message, /kind/);
 
   assert.equal((await put(front(""))).status, 201, "new work is Ready unless it says draft");
-  const shelved = await put(front("status: consumed\n"));
+  const shelved = await put(front("status: done\n"));
   assert.equal(shelved.status, 409, "but it cannot start archived");
   assert.match(shelved.message, /can't start archived/);
 
   // A draft is stored as one, then a person moves it to Ready.
   const id = rid();
   assert.equal((await put(front("status: draft\n"), id)).status, 201);
-  assert.deepEqual(await rows(`SELECT status FROM guide WHERE id = '${id}'`), [
-    { status: "draft" },
-  ]);
-  assert.equal(
-    (await call("PATCH", `/v1/guides/${id}/status`, { status: "published" })).status,
-    200,
-  );
-  assert.deepEqual(await rows(`SELECT status FROM guide WHERE id = '${id}'`), [
-    { status: "published" },
-  ]);
+  assert.deepEqual(await rows(`SELECT status FROM work WHERE id = '${id}'`), [{ status: "draft" }]);
+  assert.equal((await call("PATCH", `/v1/work/${id}/status`, { status: "ready" })).status, 200);
+  assert.deepEqual(await rows(`SELECT status FROM work WHERE id = '${id}'`), [{ status: "ready" }]);
 });
 
 test("a webhook URL with ?team= files onto that team's board; a team it can't use still files", {
@@ -1369,11 +1359,11 @@ test("a webhook URL with ?team= files onto that team's board; a team it can't us
   assert.equal((await hook(`?team=${team}`, "Team alert")).status, 200);
   assert.equal((await hook("?team=no-such-team", "Stray alert")).status, 200);
   const filed = await rows(
-    `SELECT g.title, COALESCE(t.slug, '') AS team, g.status FROM guide g LEFT JOIN team t ON t.id = g.team_id
+    `SELECT g.title, COALESCE(t.slug, '') AS team, g.status FROM work g LEFT JOIN team t ON t.id = g.team_id
       WHERE g.account_id = '${account}' AND g.title IN ('Team alert', 'Stray alert') ORDER BY g.title`,
   );
   assert.deepEqual(filed, [
-    { title: "Stray alert", team: "", status: "published" },
-    { title: "Team alert", team, status: "published" },
+    { title: "Stray alert", team: "", status: "ready" },
+    { title: "Team alert", team, status: "ready" },
   ]);
 });

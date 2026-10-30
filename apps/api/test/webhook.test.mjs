@@ -70,7 +70,7 @@ test("a decline reaches the channel, with the sentence every surface shows", asy
   const h = harness("https://hooks.slack.com/services/T0/B0/xxxx");
   try {
     const text = line({
-      kind: "declined",
+      kind: "passed",
       actor: "hybee1",
       title: "Add Paystack webhook verification",
       team: "",
@@ -78,16 +78,16 @@ test("a decline reaches the channel, with the sentence every surface shows", asy
       note: "the signature check rejects valid payloads",
     });
     await announce(h.env, {
-      kind: "declined",
+      kind: "passed",
       team_id: "t1",
       text,
-      url: "https://passalong.dev/g/abc12345/key",
+      url: "https://passalong.dev/w/abc12345/key",
     });
     assert.equal(h.posts.length, 1);
     const { body } = h.posts[0];
     assert.match(body.text, /@hybee1 passed on "Add Paystack webhook verification"/);
     assert.match(body.text, /the signature check rejects valid payloads/);
-    assert.match(body.text, /https:\/\/passalong\.dev\/g\/abc12345\/key/);
+    assert.match(body.text, /https:\/\/passalong\.dev\/w\/abc12345\/key/);
     assert.equal(
       h.posts[0].init.redirect,
       "manual",
@@ -101,14 +101,14 @@ test("a decline reaches the channel, with the sentence every surface shows", asy
 test("a channel hears about the team's work, not one person's progress", async () => {
   const h = harness("https://example.test/hook");
   try {
-    for (const kind of ["shared", "handoff", "declined"]) {
+    for (const kind of ["shared", "sent_to_you", "passed"]) {
       await announce(h.env, { kind, team_id: "t1", text: `${kind} happened` });
     }
     assert.equal(h.posts.length, 3);
 
     h.posts.length = 0;
     // A room told about every pull learns to ignore the room.
-    for (const kind of ["pulled", "consumed", "joined"]) {
+    for (const kind of ["pulled", "done", "joined"]) {
       await announce(h.env, { kind, team_id: "t1", text: `${kind} happened` });
     }
     assert.equal(h.posts.length, 0);
@@ -120,9 +120,9 @@ test("a channel hears about the team's work, not one person's progress", async (
 test("no channel, no team, and a channel that refuses are all survivable", async () => {
   const none = harness("");
   try {
-    await announce(none.env, { kind: "declined", team_id: "t1", text: "x" });
+    await announce(none.env, { kind: "passed", team_id: "t1", text: "x" });
     assert.equal(none.posts.length, 0, "nothing to post to");
-    await announce(none.env, { kind: "declined", team_id: "", text: "x" });
+    await announce(none.env, { kind: "passed", team_id: "", text: "x" });
     assert.equal(none.posts.length, 0, "no team at all");
   } finally {
     none.restore();
@@ -132,7 +132,7 @@ test("no channel, no team, and a channel that refuses are all survivable", async
   const gone = harness("https://example.test/hook", { ok: false });
   try {
     await assert.doesNotReject(() =>
-      announce(gone.env, { kind: "declined", team_id: "t1", text: "x" }),
+      announce(gone.env, { kind: "passed", team_id: "t1", text: "x" }),
     );
   } finally {
     gone.restore();
@@ -142,7 +142,7 @@ test("no channel, no team, and a channel that refuses are all survivable", async
 test("a channel that hangs does not hang the request that triggered it", async () => {
   const h = harness("https://example.test/hook");
   try {
-    await announce(h.env, { kind: "declined", team_id: "t1", text: "x" });
+    await announce(h.env, { kind: "passed", team_id: "t1", text: "x" });
     assert.ok(h.posts[0].init.signal, "the post must carry a timeout");
   } finally {
     h.restore();
@@ -194,7 +194,7 @@ test("every channel a team has gets the line", async () => {
     "https://discord.com/api/webhooks/1/a",
   ]);
   try {
-    await announce(h.env, { kind: "declined", team_id: "t1", text: "it does not work" });
+    await announce(h.env, { kind: "passed", team_id: "t1", text: "it does not work" });
     assert.equal(h.posts.length, 3, "one post per channel");
     // Each in its own dialect, decided per destination rather than sent to all three alike.
     assert.deepEqual(h.posts[0].body, { text: "it does not work" });
@@ -225,7 +225,7 @@ test("one dead channel does not withhold the line from the others", async () => 
     return { ok: true, status: 200 };
   };
   try {
-    await assert.doesNotReject(() => announce(env, { kind: "declined", team_id: "t1", text: "x" }));
+    await assert.doesNotReject(() => announce(env, { kind: "passed", team_id: "t1", text: "x" }));
     assert.ok(
       seen.some((u) => u.includes("live")),
       "the live channel still heard it",
@@ -266,10 +266,10 @@ test("a refusal is recorded, and recovery clears it", async () => {
 
 const GCHAT = "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t";
 const facts = (over = {}) => ({
-  kind: "handoff",
+  kind: "sent_to_you",
   text: 'Lukman sent "Invoice creation fails" to Hybee1 in Khaime',
   title: "Invoice creation fails: integer overflow in invoice_number sequence allocator",
-  url: "https://passalong.dev/g/jvj2vckm/r9pfeum5h9kgwbwkh2wju8",
+  url: "https://passalong.dev/w/jvj2vckm/r9pfeum5h9kgwbwkh2wju8",
   ...over,
 });
 
@@ -302,7 +302,7 @@ test("everywhere else is left alone — they unfurl, or they do not take cards",
 test("the reason gets its own paragraph, and the tone gets the button", () => {
   const card = chatCard(
     facts({
-      kind: "declined",
+      kind: "passed",
       note: "the flag it tells you to set does not exist on this version",
     }),
   )[0].card;
@@ -335,7 +335,7 @@ test("a long title is cut on a word, not mid-way through one", () => {
 });
 
 test("no card where a card would be worse than a sentence", () => {
-  assert.equal(chatCard(facts({ title: "" })), null, "an event with no guide behind it");
+  assert.equal(chatCard(facts({ title: "" })), null, "an event with no work behind it");
   assert.equal(
     chatCard(facts({ url: "", note: "" })),
     null,
@@ -351,18 +351,18 @@ test("a room with a card is not also sent the naked URL it replaced", async () =
   const h = harness(GCHAT);
   try {
     await announce(h.env, {
-      kind: "declined",
+      kind: "passed",
       team_id: "t1",
       text: '@ada says "Fix the payment link" does not work',
       title: "Fix the payment link",
       note: "every B2B invoice email fell through to app.khaime.com",
-      url: "https://passalong.dev/g/abc12345/key",
+      url: "https://passalong.dev/w/abc12345/key",
     });
     const { body } = h.posts[0];
     assert.ok(!body.text.includes("https://"), "the button is the link now");
     assert.equal(
       body.cardsV2[0].card.sections[0].widgets.at(-1).buttonList.buttons[0].onClick.openLink.url,
-      "https://passalong.dev/g/abc12345/key",
+      "https://passalong.dev/w/abc12345/key",
     );
   } finally {
     h.restore();
@@ -373,13 +373,13 @@ test("a room without a card still gets the link spelled out", async () => {
   const h = harness("https://hooks.slack.com/services/T0/B0/xxxx");
   try {
     await announce(h.env, {
-      kind: "declined",
+      kind: "passed",
       team_id: "t1",
       text: "Ada said it didn't work",
       title: "Fix the payment link",
-      url: "https://passalong.dev/g/abc12345/key",
+      url: "https://passalong.dev/w/abc12345/key",
     });
-    assert.match(h.posts[0].body.text, /https:\/\/passalong\.dev\/g\/abc12345\/key/);
+    assert.match(h.posts[0].body.text, /https:\/\/passalong\.dev\/w\/abc12345\/key/);
   } finally {
     h.restore();
   }
@@ -388,7 +388,7 @@ test("a room without a card still gets the link spelled out", async () => {
 test("nothing in the card carries a field name Chat does not know", () => {
   // Google refuses a payload whole for one unrecognised key, and the refusal is silent. So the
   // shape is pinned by name against the Chat API's own vocabulary, top to bottom.
-  const card = chatCard(facts({ kind: "declined", note: "why" }))[0];
+  const card = chatCard(facts({ kind: "passed", note: "why" }))[0];
   assert.deepEqual(Object.keys(card).sort(), ["card", "cardId"]);
   assert.deepEqual(Object.keys(card.card).sort(), ["header", "sections"]);
   assert.deepEqual(Object.keys(card.card.header).sort(), ["subtitle", "title"]);

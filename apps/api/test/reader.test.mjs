@@ -4,11 +4,11 @@ import { test } from "node:test";
 import {
   askDraft,
   askReader,
+  checkReading,
   draftMessages,
   readDraft,
   readerMessages,
   readerReady,
-  readVerdict,
 } from "../src/reader.ts";
 
 const GROUPS = [
@@ -37,47 +37,47 @@ const task = {
 };
 
 test("a sound answer is used whole", () => {
-  const v = readVerdict(JSON.stringify(bug), GROUPS);
+  const v = checkReading(JSON.stringify(bug), GROUPS);
   assert.deepEqual(v, bug);
   assert.equal(
-    readVerdict(task, GROUPS)?.route,
+    checkReading(task, GROUPS)?.route,
     "billing",
     "an object is read as well as a string",
   );
   assert.equal(
-    readVerdict(`Sure! Here it is:\n${JSON.stringify(task)}\nHope that helps`, GROUPS)?.title,
+    checkReading(`Sure! Here it is:\n${JSON.stringify(task)}\nHope that helps`, GROUPS)?.title,
     "Change billing email",
     "prose around the object is ignored",
   );
   // It names the work and sends it; it writes no body and chooses no kind. Anything else it
   // returns is not carried.
-  const extra = readVerdict({ ...bug, kind: "task", goal: "x", acceptance: ["y"] }, GROUPS);
+  const extra = checkReading({ ...bug, kind: "task", goal: "x", acceptance: ["y"] }, GROUPS);
   assert.deepEqual(Object.keys(extra).sort(), Object.keys(bug).sort());
 });
 
 test("an answer that breaks any rule is thrown away, never repaired", () => {
-  assert.equal(readVerdict("not json", GROUPS), null);
-  assert.equal(readVerdict({ ...bug, tag: "urgent" }, GROUPS), null, "a tag not on the list");
+  assert.equal(checkReading("not json", GROUPS), null);
+  assert.equal(checkReading({ ...bug, tag: "urgent" }, GROUPS), null, "a tag not on the list");
   assert.equal(
-    readVerdict({ ...bug, route: "marketing" }, GROUPS),
+    checkReading({ ...bug, route: "marketing" }, GROUPS),
     null,
     "a group that does not exist",
   );
-  assert.equal(readVerdict({ ...bug, title: "" }, GROUPS), null, "no title");
-  assert.equal(readVerdict({ ...bug, summary: "" }, GROUPS), null, "no summary");
+  assert.equal(checkReading({ ...bug, title: "" }, GROUPS), null, "no title");
+  assert.equal(checkReading({ ...bug, summary: "" }, GROUPS), null, "no summary");
   assert.equal(
-    readVerdict({ ...task, sure: false, question: "" }, GROUPS),
+    checkReading({ ...task, sure: false, question: "" }, GROUPS),
     null,
     "unsure must ask",
   );
   assert.equal(
-    readVerdict({ ...task, summary: "Email sam@example.com back" }, GROUPS),
+    checkReading({ ...task, summary: "Email sam@example.com back" }, GROUPS),
     null,
     "contact details never reach a document",
   );
-  assert.equal(readVerdict({ ...bug, route: "#Developers" }, GROUPS)?.route, "developers");
-  assert.equal(readVerdict({ ...bug, tag: "#Feature" }, GROUPS)?.tag, "feature");
-  assert.equal(readVerdict({ ...bug, route: "" }, [])?.route, "", "no group is the whole team");
+  assert.equal(checkReading({ ...bug, route: "#Developers" }, GROUPS)?.route, "developers");
+  assert.equal(checkReading({ ...bug, tag: "#Feature" }, GROUPS)?.tag, "feature");
+  assert.equal(checkReading({ ...bug, route: "" }, [])?.route, "", "no group is the whole team");
 });
 
 test("it chooses a project the way it chooses a group: from the list or not at all", () => {
@@ -86,17 +86,17 @@ test("it chooses a project the way it chooses a group: from the list or not at a
     { id: "p2site", title: "Website" },
   ];
   assert.equal(
-    readVerdict({ ...bug, project: "p1billing" }, GROUPS, PROJECTS)?.project,
+    checkReading({ ...bug, project: "p1billing" }, GROUPS, PROJECTS)?.project,
     "p1billing",
   );
-  assert.equal(readVerdict({ ...bug, project: "" }, GROUPS, PROJECTS)?.project, "", "none fits");
+  assert.equal(checkReading({ ...bug, project: "" }, GROUPS, PROJECTS)?.project, "", "none fits");
   assert.equal(
-    readVerdict({ ...bug, project: "Billing app" }, GROUPS, PROJECTS),
+    checkReading({ ...bug, project: "Billing app" }, GROUPS, PROJECTS),
     null,
     "a name is not an id, and is not guessed into one",
   );
-  assert.equal(readVerdict({ ...bug, project: "p1billing" }, GROUPS), null, "no projects given");
-  assert.equal(readVerdict(bug, GROUPS)?.project, "", "an answer without one is in no project");
+  assert.equal(checkReading({ ...bug, project: "p1billing" }, GROUPS), null, "no projects given");
+  assert.equal(checkReading(bug, GROUPS)?.project, "", "an answer without one is in no project");
   const [, user] = readerMessages({ subject: "", text: "x", groups: [], projects: PROJECTS });
   assert.match(user.content, /- p1billing: Billing app \(Invoices and plans\)/);
   assert.match(user.content, /- p2site: Website\n/);
@@ -107,7 +107,7 @@ test("it chooses a project the way it chooses a group: from the list or not at a
 });
 
 test("unsure keeps its question", () => {
-  const v = readVerdict({ ...task, sure: false, question: "Is this billing or a bug?" }, GROUPS);
+  const v = checkReading({ ...task, sure: false, question: "Is this billing or a bug?" }, GROUPS);
   assert.equal(v?.sure, false);
   assert.equal(v?.question, "Is this billing or a bug?");
 });

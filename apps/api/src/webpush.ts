@@ -4,7 +4,7 @@
  * package leans on Node's crypto, which a Worker does not have.
  *
  * The push service (Google's, Apple's, Mozilla's) learns an endpoint, a size and a time. The
- * sentence itself — which may carry a guide's title — is encrypted to keys only the subscribed
+ * sentence itself — which may carry a piece of work's title — is encrypted to keys only the subscribed
  * browser holds.
  *
  * Imports no sibling, so test/webpush.test.mjs can decrypt what this encrypts and verify what it
@@ -199,7 +199,7 @@ export async function sendPush(
       ttl: String(ttl),
       urgency,
       // A newer message on the same topic replaces an undelivered older one, so a phone that was off
-      // wakes to one notice per guide rather than a backlog.
+      // wakes to one notice per work rather than a backlog.
       ...(topic ? { topic } : {}),
     },
     body,

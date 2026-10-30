@@ -10,20 +10,20 @@ import {
   askedCopy,
   customerSubject,
   doneCopy,
-  handoffCopy,
   hubUrl,
   openedCopy,
   plainForCustomer,
   repliedCopy,
+  sentToYouCopy,
 } from "../src/mail-copy.ts";
 
 const ID = "k3mq2xa7";
-const URL_ = `https://passalong.dev/g/${ID}/dpmmerhnfh2faf9sceu58j`;
+const URL_ = `https://passalong.dev/w/${ID}/dpmmerhnfh2faf9sceu58j`;
 const HUB = hubUrl("https://passalong.dev");
 const TITLE = "Add Paystack webhook verification";
 
 const every = () => [
-  handoffCopy({ fromName: "Hybee1", title: TITLE, id: ID, url: URL_, team: "Khaime" }),
+  sentToYouCopy({ fromName: "Hybee1", title: TITLE, id: ID, url: URL_, team: "Khaime" }),
   openedCopy({ byName: "Ada", title: TITLE, url: URL_, hub: HUB }),
   doneCopy({ byName: "Ada", title: TITLE, url: URL_, hub: HUB }),
 ];
@@ -45,13 +45,13 @@ test("the preview starts with the person, and neither it nor the subject carries
 });
 
 test("the text half leads with opening the work, and a command is only a footnote", () => {
-  const handoff = every()[0].text;
-  assert.equal(handoff[0], `Hybee1 sent you "${TITLE}" in Khaime.`);
-  assert.ok(handoff.includes(`Open it: ${URL_}`));
-  assert.match(handoff.join("\n"), /Take it there/);
-  const commands = handoff.filter((l) => l.includes("passalong "));
+  const sent = every()[0].text;
+  assert.equal(sent[0], `Hybee1 sent you "${TITLE}" in Khaime.`);
+  assert.ok(sent.includes(`Open it: ${URL_}`));
+  assert.match(sent.join("\n"), /Take it there/);
+  const commands = sent.filter((l) => l.includes("passalong "));
   assert.deepEqual(commands, [`Using a terminal or an agent? passalong take ${ID}`]);
-  assert.equal(handoff.at(-1), commands[0], "the command is the last thing, not the first");
+  assert.equal(sent.at(-1), commands[0], "the command is the last thing, not the first");
 });
 
 test("see everything points at the hub, never at a command", () => {
@@ -73,7 +73,7 @@ test("no mail mentions a retired verb or calls a real person someone", async () 
   }
 });
 
-test("a question mail quotes the question and sends the reader to answer it, not to read a guide", () => {
+test("a question mail quotes the question and sends the reader to answer it, not to read a piece of work", () => {
   const c = askedCopy({
     byName: "Ada",
     title: TITLE,

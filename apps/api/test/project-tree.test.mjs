@@ -1,15 +1,15 @@
-// Moving a folder against a real SQLite with every migration applied.
+// Moving a project against a real SQLite with every migration applied.
 //
 // The hub's move menu offers only legal destinations, but the route is what agents and other
-// clients reach, so the rule has to hold there: a folder never lands inside itself or its own
-// subfolders, never crosses from one space to another, and never under a folder its mover cannot see.
+// clients reach, so the rule has to hold there: a project never lands inside itself or its own
+// subprojects, never crosses from one space to another, and never under a project its mover cannot see.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { findVisible, moveProblem, repoOf, wouldCycle } from "../src/folder-tree.ts";
+import { findVisible, moveProblem, repoOf, wouldCycle } from "../src/project-tree.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 const T0 = "2026-10-10T00:00:00.000Z";
@@ -44,8 +44,8 @@ function world() {
   for (const a of ["me", "them"]) acct.run(a, `retired:${a}`, T0);
   db.raw.exec(`INSERT INTO team (id, slug, name, created_by, created) VALUES ('tm', 'tm', 'T', 'me', '${T0}');
                INSERT INTO membership (team_id, account_id, joined) VALUES ('tm', 'me', '${T0}'), ('tm', 'them', '${T0}');`);
-  const folder = db.raw.prepare(
-    "INSERT INTO folder (id, created_by, team_id, title, parent_id, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  const project = db.raw.prepare(
+    "INSERT INTO project (id, created_by, team_id, title, parent_id, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
   for (const [id, by, team, parent] of [
     ["root", "me", "", ""],
@@ -55,13 +55,13 @@ function world() {
     ["shared", "me", "tm", ""],
     ["theirs", "them", "", ""],
   ])
-    folder.run(id, by, team, id, parent, T0, T0);
+    project.run(id, by, team, id, parent, T0, T0);
   return db;
 }
 
 const at = async (db, id) => findVisible(db, "me", id);
 
-test("a folder can move under any folder of its own space that is not beneath it", async () => {
+test("a project can move under any project of its own space that is not beneath it", async () => {
   const db = world();
   assert.equal(await moveProblem(db, "me", await at(db, "grandchild"), "other"), null);
   assert.equal(await moveProblem(db, "me", await at(db, "child"), "other"), null);
@@ -75,7 +75,7 @@ test("the top level is always a destination", async () => {
   assert.equal(await moveProblem(db, "me", await at(db, "shared"), ""), null);
 });
 
-test("a folder never moves into itself or anything beneath it", async () => {
+test("a project never moves into itself or anything beneath it", async () => {
   const db = world();
   for (const target of ["root", "child", "grandchild"]) {
     const problem = await moveProblem(db, "me", await at(db, "root"), target);
@@ -86,9 +86,9 @@ test("a folder never moves into itself or anything beneath it", async () => {
   assert.equal(await wouldCycle(db, "child", "grandchild"), true);
 });
 
-test("a folder never crosses from one space to another", async () => {
+test("a project never crosses from one space to another", async () => {
   const db = world();
-  // Personal into a team folder, and a team folder into a personal one: both refused.
+  // Personal into a team project, and a team project into a personal one: both refused.
   assert.equal((await moveProblem(db, "me", await at(db, "root"), "shared"))?.status, 404);
   assert.equal((await moveProblem(db, "me", await at(db, "shared"), "root"))?.status, 404);
 });
@@ -101,7 +101,7 @@ test("a parent the mover cannot see is refused the same way as one that does not
   assert.deepEqual(hidden, missing);
 });
 
-test("a team folder is visible to every member and to nobody else", async () => {
+test("a team project is visible to every member and to nobody else", async () => {
   const db = world();
   assert.equal((await findVisible(db, "them", "shared"))?.id, "shared");
   assert.equal(await findVisible(db, "them", "root"), null);
@@ -114,7 +114,7 @@ test("a project's repo is a column: absent is none, a token is kept trimmed, any
   const db = world();
   assert.equal((await at(db, "root")).repo, "");
   db.raw
-    .prepare("UPDATE folder SET repo = ? WHERE id = 'root'")
+    .prepare("UPDATE project SET repo = ? WHERE id = 'root'")
     .run(repoOf("  github.com/acme/billing "));
   assert.equal((await at(db, "root")).repo, "github.com/acme/billing");
   assert.equal(repoOf(undefined), "");

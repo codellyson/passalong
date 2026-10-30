@@ -310,11 +310,11 @@ test("anything else posts { title, text, url, id }, and needs a title", () => {
   const h = readHook(headers(), {
     title: "Disk 91% full on web-3",
     text: "df says so",
-    url: "https://g/1",
+    url: "https://w/1",
   });
   assert.equal(h.source, "webhook");
   assert.equal(h.id, "");
-  assert.match(h.text, /^df says so\n\nLink: https:\/\/g\/1$/);
+  assert.match(h.text, /^df says so\n\nLink: https:\/\/w\/1$/);
   // No id: repeats merge on the title with its numbers taken out, as email does.
   assert.equal(hookPrint(h), hookPrint(readHook(headers(), { title: "Disk 97% full on web-3" })));
   assert.equal(readHook(headers(), { text: "no title" }), null);

@@ -1,9 +1,9 @@
-// The local store: ~/.passalong (override with PASSALONG_HOME). Guides are one markdown file each so
+// The local store: ~/.passalong (override with PASSALONG_HOME). Work are one markdown file each so
 // the whole thing is greppable, git-friendly, and there is nothing to export that isn't
 // already a file you own.
 //
 //   ~/.passalong/config.json   api url + token
-//   ~/.passalong/guides/<id>.md
+//   ~/.passalong/work/<id>.md
 //   ~/.passalong/drafts/*.md   captured but not yet shared
 import {
   existsSync,
@@ -16,15 +16,15 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parse, serialize } from "./guide.js";
+import { parse, serialize } from "./work.js";
 
 export const HOME = process.env.PASSALONG_HOME || join(homedir(), ".passalong");
-export const GUIDES = join(HOME, "guides");
+export const WORKS = join(HOME, "work");
 export const DRAFTS = join(HOME, "drafts");
 const CONFIG = join(HOME, "config.json");
 
 function ensure() {
-  for (const d of [HOME, GUIDES, DRAFTS])
+  for (const d of [HOME, WORKS, DRAFTS])
     if (!existsSync(d)) mkdirSync(d, { recursive: true, mode: 0o700 });
 }
 
@@ -145,33 +145,33 @@ export function removeAccount(name) {
   return { removed: true, active: "" };
 }
 
-export function guidePath(id) {
-  return join(GUIDES, `${id}.md`);
+export function workPath(id) {
+  return join(WORKS, `${id}.md`);
 }
 
 export function get(id) {
-  const p = guidePath(id);
+  const p = workPath(id);
   if (!existsSync(p)) return null;
   return parse(readFileSync(p, "utf8"));
 }
 
-export function save(guide) {
+export function save(work) {
   ensure();
-  writeFileSync(guidePath(guide.meta.id), serialize(guide));
-  return guidePath(guide.meta.id);
+  writeFileSync(workPath(work.meta.id), serialize(work));
+  return workPath(work.meta.id);
 }
 
 export function remove(id) {
-  const p = guidePath(id);
+  const p = workPath(id);
   if (existsSync(p)) unlinkSync(p);
 }
 
-/** All local guides, newest first. */
+/** All local work, newest first. */
 export function list() {
   ensure();
-  return readdirSync(GUIDES)
+  return readdirSync(WORKS)
     .filter((f) => f.endsWith(".md"))
-    .map((f) => parse(readFileSync(join(GUIDES, f), "utf8")))
+    .map((f) => parse(readFileSync(join(WORKS, f), "utf8")))
     .filter((g) => g.meta.id)
     .sort((a, b) => (b.meta.created || "").localeCompare(a.meta.created || ""));
 }
@@ -186,11 +186,11 @@ export function removeDraft(path) {
 }
 
 /** Case-insensitive match on title, tags, source context, and body. */
-export function search(query, guides = list()) {
+export function search(query, work = list()) {
   const q = query.trim().toLowerCase();
-  if (!q) return guides;
+  if (!q) return work;
   const terms = q.split(/\s+/);
-  return guides.filter((g) => {
+  return work.filter((g) => {
     const hay = [
       g.meta.title,
       g.meta.source_context,

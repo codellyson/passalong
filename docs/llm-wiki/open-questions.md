@@ -13,7 +13,7 @@ page it belongs to, and into [decisions.md](decisions.md).
 - **Publish (the feature)** — five decisions in [docs/PUBLISH.md](../PUBLISH.md) §14: the page's
   address, pricing, solo pages, whether the task's author gets a say, and the name.
 
-- **Finishing with proof** — [docs/REVIEW.md](../REVIEW.md) (direction agreed 2026-10-15): no review
+- **Finishing with proof** (direction agreed 2026-10-15): no review
   stage. Finishing needs proof a person can look at and goes straight to Done; Reopen undoes it, and
   asking someone to check is a follow-up addressed to them. Open in §9: recordings, what backend proof
   looks like, and who hears about a reopen.
@@ -29,8 +29,8 @@ page it belongs to, and into [decisions.md](decisions.md).
 
 - **Hold history on Progress.** The thread keeps every hold (`task_event`), but the work page's
   Progress is built from live claims and still loses a hold once it ended.
-- **Agents cannot put work in a project.** Linking work to a folder is the hub's alone since
-  `link_folder_guide` went; it waits for work to live in its project (LOOP.md step 4).
+- **Agents cannot put work in a project.** Linking work to a project is the hub's alone since
+  `link_project_work` went; it waits for work to live in its project (LOOP.md step 4).
 - **Old words outside the product.** The `/learn` articles still teach kinds and sections.
 - **Live stream at scale.** It polls D1 every 3 s per open tab. Durable Objects are the step if that
   starts to cost.
@@ -38,5 +38,4 @@ page it belongs to, and into [decisions.md](decisions.md).
 
 ## Sources
 - [docs/PUBLISH.md](../PUBLISH.md), the PR descriptions for #60–#64
-- [docs/REVIEW.md](../REVIEW.md)
 - [docs/LOOP.md](../LOOP.md), [docs/WORK.md](../WORK.md)

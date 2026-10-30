@@ -21,20 +21,20 @@
  * customers write to, so every sender is a stranger and every one is let in. What keeps it from being
  * an open door: blocked senders stay blocked, a sender and an account each have a daily ceiling,
  * mail from a machine (an auto-reply, a list) makes nothing, and the customer's address is kept on
- * the guide's row, never in its document. Each request gets a tracking number (`ref`), and a reply
+ * the work's row, never in its document. Each request gets a tracking number (`ref`), and a reply
  * carrying it from the same address joins that request instead of opening another.
  *
- * This file imports no sibling `.ts` so its tests can import it; index.ts writes the guide.
+ * This file imports no sibling `.ts` so its tests can import it; index.ts writes the work.
  */
 import PostalMime from "postal-mime";
 
 /** Gmail's forwarding check. Its subject carries the code a person types into Gmail to finish. */
 export const GMAIL_CHECK = "forwarding-noreply@google.com";
 
-/** The most of an email's text a guide carries. An alert's useful part comes first. */
+/** The most of an email's text a piece of work carries. An alert's useful part comes first. */
 export const BODY_MAX = 8000;
 
-/** How often a repeat may write to the guide's thread. Each repeat still counts. */
+/** How often a repeat may write to the work's thread. Each repeat still counts. */
 export const NOTE_EVERY_MS = 60 * 60 * 1000;
 
 /** The address customers write to. */
@@ -129,7 +129,7 @@ export function bodyText(email: { text?: string; html?: string }): string {
 
 /**
  * The email inside a fence that it cannot close or reopen. Every outline reader (sections.ts,
- * guide.js) treats any line starting with ``` or ~~~ as a fence marker, whatever its length. So a
+ * work.js) treats any line starting with ``` or ~~~ as a fence marker, whatever its length. So a
  * longer fence alone is not enough: a line of ``` inside the email would end the fence, and what
  * came after it would read as the work's own text rather than the email's. A zero-width space
  * before each such line keeps it as text and draws the same.
@@ -223,7 +223,7 @@ export function threadHeaders(kept: string): Record<string, string> {
   return last ? { "In-Reply-To": last, References: all.join(" ") } : {};
 }
 
-/** The most files one customer message keeps; a reply to a person, not a folder. */
+/** The most files one customer message keeps; a reply to a person, not a project. */
 export const MAIL_FILES_MAX = 5;
 
 /**
@@ -276,7 +276,7 @@ export async function parseEmail(
 /**
  * The body of the work a customer's message becomes. The message is quoted as evidence, like any
  * email, and the customer is named only by what they called themselves: their address is a column
- * on the guide (migration 0057), because the document travels with every share link and agent.
+ * on the work (migration 0057), because the document travels with every share link and agent.
  * The answer goes back from the work's page, where a person sends it.
  */
 export function supportBody(a: { name: string; at: string; text: string }): string {

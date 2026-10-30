@@ -47,4 +47,3 @@ it inline in `og.ts`.
 ## Sources
 - `apps/web/app/assets/css/styles.css` (tokens), `tailwind.css` (the bridge to utilities)
 - [AGENTS.md](../../AGENTS.md): "Ink decides, coral means changed", "Spacing comes from the scale…", "A surface's edge is a one-pixel rule", "Every row in a list has the same anatomy"
-- [docs/DESIGN_BRIEF.md](../DESIGN_BRIEF.md)

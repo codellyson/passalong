@@ -4,10 +4,10 @@ import { test } from "node:test";
 import { line, SINCE_RE, summary } from "../src/log.ts";
 
 const row = (over = {}) => ({
-  act: "published",
+  act: "created",
   at: "2026-09-11T10:00:00.000Z",
   detail: "",
-  guide_id: "k3mq2xa7",
+  work_id: "k3mq2xa7",
   title: "Add Paystack webhook verification",
   source_context: "techchak-backend",
   share_key: "dpmmerhnfh2faf9sceu58j",
@@ -17,7 +17,7 @@ const row = (over = {}) => ({
 
 test("every act renders a sentence in the first person's past tense", () => {
   const said = (over) => line(row(over));
-  assert.equal(said({ act: "published" }), 'sent "Add Paystack webhook verification"');
+  assert.equal(said({ act: "created" }), 'sent "Add Paystack webhook verification"');
   assert.equal(said({ act: "pulled" }), 'opened "Add Paystack webhook verification"');
   assert.equal(said({ act: "works" }), 'said "Add Paystack webhook verification" worked');
   assert.equal(said({ act: "took" }), 'took "Add Paystack webhook verification"');
@@ -35,7 +35,7 @@ test("a negative act carries the reason, because the reason is the whole point o
 });
 
 test("the log speaks the same words as everything else, not the CLI's verbs", () => {
-  const all = ["published", "pulled", "works", "broken", "took", "passed"]
+  const all = ["created", "pulled", "works", "broken", "took", "passed"]
     .map((act) => line(row({ act, detail: "why" })))
     .join("\n");
   assert.doesNotMatch(all, /published|pulled|broken|\bworks\b/);
@@ -54,7 +54,7 @@ test("a positive act never grows a colon, even when a row carries a note", () =>
   );
 });
 
-test("a guide with no title still produces a sentence", () => {
+test("a piece of work with no title still produces a sentence", () => {
   // Title is written from the document's frontmatter, and a draft published without one is legal.
   assert.equal(line(row({ title: "" })), "sent a piece of work");
 });
@@ -67,8 +67,8 @@ test("mine is the author, not the actor: every row in a log is something you did
 
 test("a row carries the link back to the thing it is about", () => {
   const one = summary("https://passalong.dev", "acc_me")(row());
-  assert.equal(one.url, "https://passalong.dev/g/k3mq2xa7/dpmmerhnfh2faf9sceu58j");
-  assert.equal(one.guide, "k3mq2xa7");
+  assert.equal(one.url, "https://passalong.dev/w/k3mq2xa7/dpmmerhnfh2faf9sceu58j");
+  assert.equal(one.work, "k3mq2xa7");
   assert.equal(one.repo, "techchak-backend");
 });
 

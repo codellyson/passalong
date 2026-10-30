@@ -11,8 +11,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import * as api from "./api.js";
 import { refusal, runChecks } from "./checks.js";
-import { GUIDE_WARN, outlineText, parse, section as sectionOf, serialize } from "./guide.js";
 import * as passalong from "./passalong.js";
+import { outlineText, parse, section as sectionOf, serialize, WORK_WARN } from "./work.js";
 
 /**
  * What the server calls itself in the MCP handshake — read from package.json rather than written
@@ -160,7 +160,7 @@ const CWD = z
   .optional()
   .describe("the worktree you are working in; default is the server's cwd");
 
-const STATUS = { ready: "published", draft: "draft", archived: "consumed" };
+const STATUS = { ready: "ready", draft: "draft", archived: "done" };
 
 /**
  * The server, built but not connected. Split out so the tool surface can be read without a
@@ -285,15 +285,15 @@ export function buildServer() {
     async ({ id, cwd, any }) => {
       try {
         const r = await passalong.take(id, { cwd: cwd || process.cwd(), any: Boolean(any) });
-        if (!r.guide) return text(nextNote(r) || "Nothing is waiting for this agent here.");
-        const from = await passalong.parentWork(parse(r.guide.markdown).meta);
+        if (!r.work) return text(nextNote(r) || "Nothing is waiting for this agent here.");
+        const from = await passalong.parentWork(parse(r.work.markdown).meta);
         const held =
-          `<!-- passalong: ${r.guide.id} is yours` +
-          `${r.guide.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->`;
+          `<!-- passalong: ${r.work.id} is yours` +
+          `${r.work.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->`;
         const said = repliesNote(r.replies);
         return text(
-          `${said ? `${said}\n\n` : ""}${from}${LEAD}${r.guide.markdown}` +
-            `\n\n${held}\n${nextNote(r, r.guide.id)}\n${passalong.AFTER}`,
+          `${said ? `${said}\n\n` : ""}${from}${LEAD}${r.work.markdown}` +
+            `\n\n${held}\n${nextNote(r, r.work.id)}\n${passalong.AFTER}`,
         );
       } catch (err) {
         const h = err.body?.holder;
@@ -629,9 +629,9 @@ export function buildServer() {
     async ({ id, query, scope, section, full }) => {
       try {
         if (id) {
-          const { guide } = await passalong.resolve(id, { peek: true });
-          const markdown = serialize(guide);
-          const ref = guide.meta.id || id;
+          const { work } = await passalong.resolve(id, { peek: true });
+          const markdown = serialize(work);
+          const ref = work.meta.id || id;
           if (section) {
             const part = sectionOf(markdown, section);
             return text(
@@ -640,10 +640,9 @@ export function buildServer() {
                 : `No heading matching "${section}".\n\n${outlineText(markdown, { id: ref })}`,
             );
           }
-          if (!full && markdown.length > GUIDE_WARN)
-            return text(outlineText(markdown, { id: ref }));
+          if (!full && markdown.length > WORK_WARN) return text(outlineText(markdown, { id: ref }));
           return text(
-            `${await passalong.parentWork(guide.meta)}${markdown}\n\n` +
+            `${await passalong.parentWork(work.meta)}${markdown}\n\n` +
               `<!-- passalong: reading it does not make it yours: to work on it, call take ${ref}. -->`,
           );
         }
@@ -722,7 +721,9 @@ export function buildServer() {
         scope: z.string().optional().describe('"all" (default), "mine", or a team slug'),
       },
     },
-    run(({ id, query, scope }) => (id ? api.folder(id) : api.folders(scope || "all", query || ""))),
+    run(({ id, query, scope }) =>
+      id ? api.project(id) : api.projects(scope || "all", query || ""),
+    ),
   );
 
   server.registerTool(
@@ -753,7 +754,7 @@ export function buildServer() {
     run(({ id, title, description, team, parent, color, repo }) => {
       if (!id) {
         if (!title) throw new Error("a new project needs a `title`");
-        return api.createFolder(
+        return api.createProject(
           title,
           description || "",
           team || "",
@@ -768,7 +769,7 @@ export function buildServer() {
           ([, v]) => v !== undefined,
         ),
       );
-      return api.updateFolder(id, changes);
+      return api.updateProject(id, changes);
     }),
   );
 
@@ -790,8 +791,8 @@ export function buildServer() {
     },
     run(({ project, document, history, version }) =>
       history || version
-        ? api.folderDocumentHistory(project, document, version || 0)
-        : api.folderDocument(project, document),
+        ? api.projectDocumentHistory(project, document, version || 0)
+        : api.projectDocument(project, document),
     ),
   );
 
@@ -827,17 +828,17 @@ export function buildServer() {
     run(async ({ project, document, name, body, version, move_to }) => {
       if (!document) {
         if (!name || body === undefined) throw new Error("a new document needs `name` and `body`");
-        return api.createFolderDocument(project, name, body);
+        return api.createProjectDocument(project, name, body);
       }
       let saved;
       if (body !== undefined) {
         if (!version) throw new Error("send the `version` read_document gave you with `body`");
-        saved = await api.saveFolderDocument(project, document, version, body);
+        saved = await api.saveProjectDocument(project, document, version, body);
       }
       if (name || move_to)
-        saved = await api.patchFolderDocument(project, document, {
+        saved = await api.patchProjectDocument(project, document, {
           ...(name ? { name } : {}),
-          ...(move_to ? { folder: move_to } : {}),
+          ...(move_to ? { project: move_to } : {}),
         });
       if (!saved)
         throw new Error("say what to change: `body` with `version`, `name`, or `move_to`");
@@ -855,7 +856,7 @@ export function buildServer() {
         "when the person asked for that document to go; to change what it says, use save_document.",
       inputSchema: { project: z.string(), document: z.string() },
     },
-    run(({ project, document }) => api.deleteFolderDocument(project, document)),
+    run(({ project, document }) => api.deleteProjectDocument(project, document)),
   );
 
   // ---- files ----------------------------------------------------------------------------------
@@ -891,7 +892,7 @@ export function buildServer() {
       try {
         if (project) {
           if (!file) throw new Error("a file for a project needs `file`, a path on this machine");
-          return json(await api.addFolderAsset(project, file, name || ""));
+          return json(await api.addProjectFile(project, file, name || ""));
         }
         if (!file && !data)
           throw new Error(
@@ -924,7 +925,7 @@ export function buildServer() {
     },
     async ({ project, file }) => {
       try {
-        const got = await api.folderAsset(project, file);
+        const got = await api.projectFile(project, file);
         const { data, text: body, ...meta } = got;
         return {
           content: data
@@ -951,7 +952,7 @@ export function buildServer() {
         "asked for that file to go.",
       inputSchema: { project: z.string(), file: z.string().describe("file id") },
     },
-    run(({ project, file }) => api.deleteFolderAsset(project, file)),
+    run(({ project, file }) => api.deleteProjectFile(project, file)),
   );
 
   // ---- account ----------------------------------------------------------------------------------

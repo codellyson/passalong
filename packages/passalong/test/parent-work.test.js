@@ -21,7 +21,7 @@ test("what an agent learns goes into the project's documents, and new work names
 
 test("work arrives with the work it came out of, and where that has got to", async () => {
   const parent = async () => ({
-    guide: {
+    work: {
       id: "hveahejv",
       title: "Store Hours UI",
       state: "held",
@@ -58,7 +58,7 @@ test("work that came out of nothing says nothing, and neither does a failure", a
   assert.equal(
     await parentWork(
       { id: "k3mq2xa7", parent: "hveahejv" },
-      { parent: async () => ({ guide: null }), loggedIn: on },
+      { parent: async () => ({ work: null }), loggedIn: on },
     ),
     "",
     "a parent in a team you are not in is not handed over",

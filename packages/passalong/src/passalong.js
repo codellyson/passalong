@@ -8,8 +8,8 @@ import { basename, join } from "node:path";
 import * as api from "./api.js";
 import { context } from "./capture.js";
 import { refusal, runChecks } from "./checks.js";
-import { ID_RE, parse, STATUSES, serialize, stamp, unheldFields, validate } from "./guide.js";
 import * as store from "./store.js";
+import { ID_RE, parse, STATUSES, serialize, stamp, unheldFields, validate } from "./work.js";
 
 export class PassalongError extends Error {}
 
@@ -29,40 +29,40 @@ export function parseTarget(to) {
 /**
  * Store a piece of work from its markdown: fill in what is missing, validate, and send it. `to`
  * addresses it: "team", "team/@handle", or "team/#group"; with no team it goes to the account's
- * current one. `parent` names the work it came out of. Returns { guide, url, notified }.
+ * current one. `parent` names the work it came out of. Returns { work, url, notified }.
  */
 export async function publish(markdown, { cwd = process.cwd(), to, parent } = {}) {
   const c = context(cwd);
-  let guide = stamp(parse(markdown), {
+  let work = stamp(parse(markdown), {
     author: c.author,
     source_context: c.branch && c.branch !== "HEAD" ? `${c.name}@${c.branch}` : c.name,
   });
   const target = parseTarget(to);
-  if (target.team) guide.meta.team = target.team;
-  if (target.to) guide.meta.to = target.to;
-  if (!guide.meta.team && api.loggedIn()) {
+  if (target.team) work.meta.team = target.team;
+  if (target.to) work.meta.to = target.to;
+  if (!work.meta.team && api.loggedIn()) {
     const team = api.currentTeam();
-    if (team) guide.meta.team = team;
+    if (team) work.meta.team = team;
   }
   // An id is used as it is; a link or a file is read for the id in its own frontmatter. `validate()`
   // below is what refuses work that names itself.
-  if (parent) guide.meta.parent = await resolveId(String(parent).trim());
-  if (guide.meta.to && !guide.meta.team)
+  if (parent) work.meta.parent = await resolveId(String(parent).trim());
+  if (work.meta.to && !work.meta.team)
     throw new PassalongError("`to:` needs a team — address it as team/@handle");
   const errors = [
     ...unheldFields(markdown).map(
       (k) =>
         `frontmatter "${k}" holds more than a string or a list of strings, and it would be dropped — move it into the body (a fenced yaml block keeps it as written)`,
     ),
-    ...validate(guide),
+    ...validate(work),
   ];
   if (errors.length)
     throw new PassalongError(`this is not ready to send:\n  - ${errors.join("\n  - ")}`);
 
   needsSync("sending work");
-  const res = await api.publish(guide.meta.id, serialize(guide));
-  guide = { ...guide, meta: { ...guide.meta, url: res.url } };
-  return { guide, url: res.url, notified: Boolean(res.notified) };
+  const res = await api.publish(work.meta.id, serialize(work));
+  work = { ...work, meta: { ...work.meta, url: res.url } };
+  return { work, url: res.url, notified: Boolean(res.notified) };
 }
 
 /**
@@ -97,12 +97,12 @@ export async function createWork(items, { draft = false, to, cwd = process.cwd()
     };
     const after = (item.after || []).map((j) => made[j].id);
     if (after.length) meta.blocked_by = after;
-    const { guide, url } = await publish(serialize({ meta, body: item.body || "" }), {
+    const { work, url } = await publish(serialize({ meta, body: item.body || "" }), {
       cwd,
       to: item.to || to,
       parent: item.parent,
     });
-    made.push({ id: guide.meta.id, title: guide.meta.title, status: guide.meta.status, url });
+    made.push({ id: work.meta.id, title: work.meta.title, status: work.meta.status, url });
   }
   return made;
 }
@@ -125,16 +125,16 @@ export async function updateText(id, markdown, { cwd = process.cwd() } = {}) {
 export async function resolve(ref, { peek = false } = {}) {
   if (/^https?:\/\//.test(ref)) {
     const md = await api.fetchShared(ref);
-    return { guide: parse(md), from: "link" };
+    return { work: parse(md), from: "link" };
   }
   if (ref.endsWith(".md") && existsSync(ref)) {
-    return { guide: parse(readFileSync(ref, "utf8")), from: "file" };
+    return { work: parse(readFileSync(ref, "utf8")), from: "file" };
   }
   if (!ID_RE.test(ref))
     throw new PassalongError(`"${ref}" is not a passalong id, share link, or .md file`);
   needsSync("reading work by id");
   try {
-    return { guide: parse(await api.get(ref, { peek })), from: "sync" };
+    return { work: parse(await api.get(ref, { peek })), from: "sync" };
   } catch (err) {
     if (err.status === 404) throw new PassalongError(`no work "${ref}"`);
     throw err;
@@ -143,7 +143,7 @@ export async function resolve(ref, { peek = false } = {}) {
 
 /**
  * Resolve a reference to its id alone, without fetching it. A write needs an id and nothing else,
- * and `GET /v1/guides/:id` records a pull; a link or a file carries the id in its own frontmatter.
+ * and `GET /v1/work/:id` records a pull; a link or a file carries the id in its own frontmatter.
  * A bare id is not checked here: the route the write goes to answers that.
  */
 export async function resolveId(ref) {
@@ -291,9 +291,9 @@ export async function take(id, { cwd = process.cwd(), any = false, save = false 
   needsSync("taking work");
   const who = agent(cwd);
   const r = await api.take({ ...who, ...(id ? { id: await resolveId(id) } : {}), any });
-  if (!r.guide?.markdown) return r;
-  rememberFence(r.guide.id, r.guide.fence, cwd);
-  return { ...r, path: save ? saveTo(who.worktree, r.guide.id, r.guide.markdown) : null };
+  if (!r.work?.markdown) return r;
+  rememberFence(r.work.id, r.work.fence, cwd);
+  return { ...r, path: save ? saveTo(who.worktree, r.work.id, r.work.markdown) : null };
 }
 
 /** Word from the agent that holds it: the lease starts again, and `note` is what the hub shows. */
@@ -429,7 +429,7 @@ export async function board() {
   const hub = `${api.baseUrl()}/hub`;
   const who = (b = {}) => (b.you ? "You" : b.name || (b.handle ? `@${b.handle}` : "A teammate"));
   const needs = tasks
-    .map((t) => ({ id: t.id, title: t.title, why: needsWhy(t), url: `${hub}/g/${t.id}` }))
+    .map((t) => ({ id: t.id, title: t.title, why: needsWhy(t), url: `${hub}/w/${t.id}` }))
     .filter((t) => t.why);
   return {
     hub,
@@ -467,7 +467,7 @@ export async function board() {
 export async function now({ cwd = process.cwd() } = {}) {
   needsSync("seeing what you hold");
   // Read, never minted: the hooks run in every repo a session opens, and a worktree that has never
-  // taken anything has no agent — and should not be given a .passalong/ folder for asking.
+  // taken anything has no agent — and should not be given a .passalong/ project for asking.
   const who = knownAgent(cwd);
   const [w, t] = await Promise.allSettled([api.working(), api.tasks()]);
   if (w.status === "rejected") throw w.reason;
@@ -628,15 +628,15 @@ export const AFTER =
 export async function parentWork(meta = {}, { parent = api.parent, loggedIn = api.loggedIn } = {}) {
   if (!meta.id || !meta.parent || !loggedIn()) return "";
   try {
-    const { guide } = await parent(meta.id, { markdown: true });
-    if (!guide?.id) return "";
-    const who = guide.by?.name || (guide.by?.handle ? `@${guide.by.handle}` : "");
-    const state = guide.state === "held" && who ? `held by ${who}` : guide.state || "open";
+    const { work } = await parent(meta.id, { markdown: true });
+    if (!work?.id) return "";
+    const who = work.by?.name || (work.by?.handle ? `@${work.by.handle}` : "");
+    const state = work.state === "held" && who ? `held by ${who}` : work.state || "open";
     return (
-      `THIS CAME OUT OF ${guide.id}: ${guide.title || "untitled"} — ${state}. It is part of that ` +
+      `THIS CAME OUT OF ${work.id}: ${work.title || "untitled"} — ${state}. It is part of that ` +
       "work, which is below; read it first. If this depends on " +
-      `${guide.id} being done and it is not, say so rather than starting.\n\n` +
-      `--- the work it came out of: ${guide.id} ---\n${String(guide.markdown ?? "").trimEnd()}\n\n`
+      `${work.id} being done and it is not, say so rather than starting.\n\n` +
+      `--- the work it came out of: ${work.id} ---\n${String(work.markdown ?? "").trimEnd()}\n\n`
     );
   } catch {
     return "";
@@ -646,10 +646,10 @@ export async function parentWork(meta = {}, { parent = api.parent, loggedIn = ap
 /** Work on the server this account can see, newest first, optionally filtered. */
 export async function list(query = "", { scope = "" } = {}) {
   needsSync("finding work");
-  return (await api.list(query, scope)).guides;
+  return (await api.list(query, scope)).work;
 }
 
-/** Archive a piece of work (`consumed`), make it Ready (`published`), or put it in Draft. */
+/** Archive a piece of work (`done`), make it Ready, or put it in Draft. */
 export async function setStatus(id, status) {
   if (!STATUSES.includes(status))
     throw new PassalongError(`status must be one of ${STATUSES.join(", ")}`);
@@ -659,11 +659,11 @@ export async function setStatus(id, status) {
 
 /** Move work from Draft to Ready: a person has read it, and whoever it is for may take it now. */
 export async function ready(id) {
-  const { guide } = await resolve(id, { peek: true });
-  if (guide.meta.status !== "draft")
-    throw new PassalongError(`${guide.meta.id} is not in Draft (status: ${guide.meta.status})`);
-  await setStatus(guide.meta.id, "published");
-  return guide.meta.id;
+  const { work } = await resolve(id, { peek: true });
+  if (work.meta.status !== "draft")
+    throw new PassalongError(`${work.meta.id} is not in Draft (status: ${work.meta.status})`);
+  await setStatus(work.meta.id, "ready");
+  return work.meta.id;
 }
 
 /** What an agent started by `work()` is told. The work itself goes in too, so it cannot start blind. */
@@ -761,7 +761,7 @@ export async function work({
  */
 export async function readyDrafts() {
   const drafts = (await list("", { scope: "mine" })).filter((g) => g.status === "draft");
-  for (const g of drafts) await setStatus(g.id, "published");
+  for (const g of drafts) await setStatus(g.id, "ready");
   return drafts.map((g) => g.id);
 }
 
@@ -788,7 +788,7 @@ export async function exportAll(dir) {
     let after = "";
     do {
       const page = await api.exportPage(after);
-      for (const g of page.guides) paths.set(g.id, g.markdown);
+      for (const g of page.work) paths.set(g.id, g.markdown);
       after = page.next;
     } while (after);
   }
@@ -839,7 +839,7 @@ export async function tidy() {
       let after = "";
       do {
         const page = await api.exportPage(after, as);
-        for (const g of page.guides) drop(g.id);
+        for (const g of page.work) drop(g.id);
         after = page.next;
       } while (after && local.size);
     } catch {

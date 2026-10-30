@@ -10,7 +10,7 @@ const { fakeServer } = await import("./fake-server.js");
 const server = fakeServer();
 const passalong = await import("../src/passalong.js");
 const store = await import("../src/store.js");
-const { parse } = await import("../src/guide.js");
+const { parse } = await import("../src/work.js");
 
 const DOC = (id) => `---\nid: ${id}\ntitle: Note ${id}\nsummary: A note.\n---\n\nbody ${id}\n`;
 const home = () => readdirSync(process.env.PASSALONG_HOME, { recursive: true }).map(String);
@@ -21,12 +21,12 @@ test("publish and resolve write nothing, and read the server's copy", async () =
   store.save(parse(DOC("aaaa2222").replace("body", "stale")));
   const before = home();
   const repo = mkdtempSync(join(tmpdir(), "passalong-repo-"));
-  const { guide } = await passalong.resolve("aaaa2222");
-  assert.match(guide.body, /body aaaa2222/);
+  const { work } = await passalong.resolve("aaaa2222");
+  assert.match(work.body, /body aaaa2222/);
   assert.deepEqual(readdirSync(repo), [], "no .passalong/ in the repo");
   assert.deepEqual(home(), before, "nothing new under ~/.passalong");
   await passalong.resolve("aaaa2222", { peek: true });
-  assert.ok(server.asked.includes("GET /v1/guides/aaaa2222?peek=1"), "peek asks for no pull");
+  assert.ok(server.asked.includes("GET /v1/work/aaaa2222?peek=1"), "peek asks for no pull");
 });
 
 test("take --save is the one way work reaches the disk", async () => {

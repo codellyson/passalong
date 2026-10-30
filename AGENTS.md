@@ -1,17 +1,19 @@
 # Passalong — agent notes
 
 Passalong keeps a team's work and what it knows, for people and their agents, as four things:
-**work** (what someone must still do), **projects** (one per product; folders in the code today),
+**work** (what someone must still do), **projects** (one per product),
 their **documents** (what to know) and **files**. Things come in — the hub's box, email, a phone's
 share sheet, webhooks, a customer — and are worked by whoever takes them; what is learned goes into
 the project's documents. `docs/LOOP.md` is the direction: **read §0 before building anything new.**
 Step 1 of its build order, one thing called work (`docs/WORK.md`), is built (2026-10-29); the next
 steps (the agent tidying the board, onboarding, projects as the home of work) are not. `docs/PRD.md`
-is the original intent and predates both.
+is the intent, the principles and the numbers they are measured by.
 
-People and agents see **work**, **project**, **document** and **file**, never "guide". Internal
-names nobody sees stay, because renaming them buys nothing and risks the data: the `guide` and
-`claim` tables, `/v1/guides/...` paths, `fixtures/guides/`, share links `/g/:id/:key`.
+People, agents and the code say the same four words — **work**, **project**, **document** and
+**file** — and **proof** for what finished work was shown with. The names inside match: the `work`,
+`project`, `document`, `project_file`, `project_work` and `proof` tables (migration 0068), the
+`/v1/work/...` and `/v1/projects/...` routes, `fixtures/work/`, share links `/w/:id/:key` and
+`/p/:id/:key`. A status is `draft`, `ready` or `done`, and nothing else parses.
 
 This file is the **conventions**: the rules and the sharp edges, and it is what to read first.
 Reference material lives beside it — `docs/wiki/` has the schema, the `/v1` surface, the auth
@@ -27,27 +29,27 @@ change. Its README says how.
 
 - `packages/passalong` — the `passalong` CLI and the MCP server. Plain ESM JavaScript, no build step,
   no runtime deps beyond `@modelcontextprotocol/sdk` + `zod`. Published to npm as `passalong`.
-  - `src/guide.js` — the work format: frontmatter parse/serialize, validation, ids. **Work has no
+  - `src/work.js` — the work format: frontmatter parse/serialize, validation, ids. **Work has no
     kinds, sections or templates**: the body is free markdown, and only `title` and `summary` are
     required. A document carrying `kind:` (an old export, an old client) is refused by name
-    (`RETIRED`; `retiredFields()` in `apps/api/src/guide.ts` at `PUT /v1/guides/:id`, the half that
+    (`RETIRED`; `retiredFields()` in `apps/api/src/work.ts` at `PUT /v1/work/:id`, the half that
     runs for every client). Kinds were the system doing the agent's reading in advance: 162 of 200
-    guides in real use were tasks and bug reports filed under the wrong kind, handovers that followed
-    their template went unread, and two-line notes were padded into six sections.
+    pieces of work in real use were tasks and bug reports filed under the wrong kind, write-ups that
+    followed their template went unread, and two-line notes were padded into six sections.
     **The rule for every field whose absence means something**: either the author states it and
     the boundary normalises it, or absence is refused. What is never allowed is inventing the
     answer and writing it into the record — **a silent default is a fabrication the product commits
     on the author's behalf** — and nothing downstream may re-decide. `kind` was the field that
-    taught this: it was seeded `transfer` while agents were told `task` was the default.
+    taught this: the database seeded one value while agents were told another was the default.
     `packages/passalong/test/one-place.test.js` enforces it by reading the source; add a field to
     its `GUARDED` list the day absence starts speaking for it.
-    **This file defines the format.** `apps/api/src/guide.ts` mirrors its parsing rules; change both,
-    and `fixtures/guides/` is what now checks you did.
+    **This file defines the format.** `apps/api/src/work.ts` mirrors its parsing rules; change both,
+    and `fixtures/work/` is what now checks you did.
     **Every piece of work has two forms, and `summary:` is the human one** (migration 0041). The
     document is the agent's: exact, dense, full of ids and paths. The summary is a sentence or two a
     person can read in the hub, 400 characters at most (`SUMMARY_MAX`), said by the author and
-    refused when absent — `validate()` locally, `summaryProblem()` in `apps/api/src/guide.ts` at
-    `PUT /v1/guides/:id` — because a summary written afterwards by something that was not there is
+    refused when absent — `validate()` locally, `summaryProblem()` in `apps/api/src/work.ts` at
+    `PUT /v1/work/:id` — because a summary written afterwards by something that was not there is
     a second voice that can say what nobody claimed. One exception, on purpose: work stored before
     summaries existed, written again by a client that has not heard of them, is let through as it
     came. New work is never let through. Code that builds work states it (`create_work` takes
@@ -77,24 +79,24 @@ change. Its README says how.
     `create_work`, `find_work`, `update_work`; projects — `find_projects`, `save_project`,
     `read_document`, `save_document`, `delete_document`; files — `add_file`, `read_file`,
     `delete_file`; and `accounts`. About forty-five went: ten tools for four jobs, each pair
-    described almost the same way, is a list a model misreads — which is how a session published a
-    guide for work already pushed. One tool per job, one implementation each. Each carries
+    described almost the same way, is a list a model misreads — which is how a session created
+    work for something already pushed. One tool per job, one implementation each. Each carries
     `annotations` saying what it does to the world, and `progress`, `hand_in` and `pass` carry an
     `outputSchema` — pass the zod object, never its `.shape`, which advertises a closed object.
     Each answer ends with the server's `next` (`steps()` in apps/api/src/claims.ts). `take` is the
     one an agent reaches for on work it means to do; `find_work` only reads (an id), searches
-    (words) or shows the board (nothing). No name, description or instruction says "guide".
+    (words) or shows the board (nothing).
     `add_file` is shaped for where it runs — a path locally, a client-passed file over HTTP
     (`openai/fileParams`, which only accepts top-level fields, so each `create_work` item names its
     files by position in a top-level `files` array) — and, because only ChatGPT fills file inputs,
     over HTTP it also mints a one-time link (`POST /v1/uploads`, spent by `PUT /v1/uploads/:token`
     without a credential) that an agent's sandbox sends the file to with curl. See
     `apps/api/src/uploads.ts`.
-  - `fixtures/guides/` — the corpus: one file per shape the format has to keep working, each in
+  - `fixtures/work/` — the corpus: one file per shape the format has to keep working, each in
     canonical form so `serialize(parse(x))` returns it byte for byte. `test/corpus.test.js` holds
-    guide.js to it and `apps/api/test/corpus.test.mjs` reads the same files to hold the two
+    work.js to it and `apps/api/test/corpus.test.mjs` reads the same files to hold the two
     parsers to each other. A change that makes these drift is a change to all work already
-    published: edit them deliberately, never to make a test go green. Not published to npm.
+    stored: edit them deliberately, never to make a test go green. Not on npm.
   - `src/checks.js` — runs a check's command at hand-in and records the exit code, so
     the result is the process's and not the agent's word. Local only: `mcp-http.ts` is a Worker
     with no shell, so a hand-in over HTTP keeps the prose gate. It never reads a command out of
@@ -114,16 +116,16 @@ change. Its README says how.
   - `skill/SKILL.md` — the Claude Code capture skill. `passalong setup` copies it to
     `~/.claude/skills/passalong-capture`. It hands in what the session holds, then writes what was
     learned into the project's documents (the page that covers it, and a line on its Log) — never
-    a handover to one person.
+    a write-up for one person.
 - `apps/api` — Hono + D1: the sync API (`/v1/*`), `/health`, and the two machine routes on a share
-  link (`/g/:id/:key.md`, `/g/:id/:key/og.png`). **Not a deployed Worker.** apps/web mounts it, so
+  link (`/w/:id/:key.md`, `/w/:id/:key/og.png`). **Not a deployed Worker.** apps/web mounts it, so
   there is one Worker, one origin and one deploy. It has no `public/` and no pages: everything a
   person looks at is apps/web's. Its `wrangler.jsonc` survives only because
   `wrangler d1 migrations` reads it.
-  - `src/guide.ts` mirrors the format defined in `packages/passalong/src/guide.js` — change both.
+  - `src/work.ts` mirrors the format defined in `packages/passalong/src/work.js` — change both.
     apps/web aliases this file and `analytics.ts` as `#api/*`.
   - `src/og.ts` reads its fonts through the `ASSETS` binding, which is **apps/web's** assets now.
-  - `src/claims.ts` — the task queue (`docs/V2.md`): claim, lease, gate, `blocked_by`. Imports no
+  - `src/claims.ts` — the task queue: claim, lease, gate, `blocked_by`. Imports no
     sibling so `test/claims.test.mjs` can run it against real SQLite with every migration. The lock
     is `claim`'s primary key; a lapsed lease is `stalled`, derived on read and still locked — until
     the hourly sweep puts it back in the queue `REQUEUE_AFTER_MS` (two hours) later
@@ -134,19 +136,17 @@ change. Its README says how.
     CLI keeps it in `.passalong/held.json`, and `progress`, `hand_in` and `pass` send it back, so
     the same agent's write from a claim that was since released and re-taken is refused. It is
     optional on the way in and checked when present — an older CLI has none to send.
-    **One holder at a time** for all work: `claim`'s primary key is `guide_id` (migration 0061
-    dropped the per-repo `place`). `release()` takes it back from whoever holds it, at
-    `POST /v1/guides/:id/release`. The old aliases under `/v1/tasks/:id/*` went with the CLIs that
+    **One holder at a time** for all work: `claim`'s primary key is `work_id` (the per-repo `place`
+    is gone). `release()` takes it back from whoever holds it, at
+    `POST /v1/work/:id/release`. The old aliases under `/v1/tasks/:id/*` went with the CLIs that
     called them; only `/v1/tasks/next` and the hub's `person-*` routes remain there.
   - `task_event` (migration 0037) is the thread: an append-only line per `take`, `progress` note,
     hand-in, pass, release, reopen, question and reply, written by `event()` in `claims.ts` *after*
     the transition it describes and never throwing. `claim` is only the present — `note` is
     overwritten by every progress call and the row is deleted on release, pass and finishing — so
     without this nothing says an agent ever held the work. **`thread()` reads this table alone**:
-    migration 0062 moved the old verdicts and acks in as hand-ins, takes, passes and reopens, and
-    renamed the kinds nobody writes any more (`sent_back` to `reopened`, `approved` and `closed` to
-    `handed_in`), so the hub renders only kinds still written. A decline ("not for me") writes its
-    `passed` line as well as its `ack` row. `GET /v1/guides/:id/thread` serves it and `HubThread`
+    migration 0062 moved every earlier answer in as hand-ins, takes, passes and reopens, so the hub
+    renders only kinds still written. "Not for me" is a `passed` line. `GET /v1/work/:id/thread` serves it and `HubThread`
     renders it as chat. A missing row costs a bubble, never a lock.
     **`ask` and `reply` (migration 0038, `docs/CONVERSATION.md`) make it two-way.** `ask` keeps the
     claim, extends the lease to a day and tells the agent to stop; `reply` is a person writing to
@@ -182,27 +182,26 @@ change. Its README says how.
     per-viewer tabs. `plain()` (`utils/taken.ts`) still turns a message into one quoted line.
     `conversationOn()` must match every pattern a body can carry a stored thing by (`/v1/shots/` and
     `/v1/attachments/`), or the author's next edit releases whatever the missing one named.
-  - `src/folders.ts` — project folders (migrations 0046 and 0047; **projects** to people and
-    agents), nestable at any depth within one private or team space, with optional grouping colors
-    and the repo a project is built from (`folder.repo`, migration 0067):
-    Markdown documents, private R2 assets, and links to work. A folder's files belong to the folder,
+  - `src/projects.ts` — projects (migrations 0046 and 0047), nestable at any depth within one private or team space, with optional grouping colors
+    and the repo a project is built from (`project.repo`, migration 0067):
+    Markdown documents, private R2 files, and links to work. A project's files belong to the project,
     never to linked work; removing work must not remove a tutorial's script or screens. Personal
-    folders belong to their creator; every current team member may read and edit a team folder, and
-    its creator or a team owner may delete it. Moving a folder refuses cycles and cross-space
+    projects belong to their creator; every current team member may read and edit a team project, and
+    its creator or a team owner may delete it. Moving a project refuses cycles and cross-space
     parents; deleting a parent removes its descendants and their R2 files. Every document save
     carries the version read and refuses a stale one, so a person's edit and an agent's edit cannot
     silently replace each other. Linked work comes back with its `tags`, so the hub shows its label.
-    Linking, unlinking and sharing a folder are the hub's: agents have no tool for them (work will
+    Linking, unlinking and sharing a project are the hub's: agents have no tool for them (work will
     live in its project, LOOP.md step 4). `read_file` returns only bounded image or text content.
     **A project is a place, its documents are what to know, work is what to do**: anything someone
     must still act on is work, never only a document, which has no owner or state and tells nobody.
-    Both servers lead with that rule and say a project's `space`; `test/folder-rule.test.js` keeps
-    them and llms.txt in step. In the hub a folder is a **project** (`/hub/projects`, `/hub/projects/:id`
-    with Documents, Work and History tabs; the hub never says "folder"), and its Work and History are
-    one read, `GET /v1/folders/:id/project` (`src/project.ts`, imports no sibling, tested against
+    Both servers lead with that rule and say a project's `space`; `test/project-rule.test.js` keeps
+    them and llms.txt in step. In the hub a project is `/hub/projects/:id`
+    (listed at `/hub/projects`) with Documents, Work and History tabs, and its Work and History are
+    one read, `GET /v1/projects/:id/project` (`src/project.ts`, imports no sibling, tested against
     SQLite). Each document version records what saved it (`client`, migration 0063): `hub` is a
     person, `mcp`/`cli@…` an agent, `api` and '' unknown. A document's change mark is
-    `folder_document_seen` (migration 0064), written when the hub opens it (`PUT
+    `document_seen` (migration 0064), written when the hub opens it (`PUT
     …/documents/:id/seen`, never on an agent's read), on a save for the saver, and by "Mark all seen". The hub leads creation with an agent prompt
     and keeps a plain form and its editor for corrections. A document is edited in TipTap
     (`components/hub/DocEditor.vue`, configured as Writer.vue is) and stays Markdown on the server:
@@ -214,11 +213,11 @@ change. Its README says how.
     local server (`npm run test:e2e`, skipped by `npm test`). It puts its accounts on a plan in the
     *local* D1 with `wrangler d1 execute --local`, so it refuses any API that is not localhost.
 - `apps/web` — Nuxt 4 on a Cloudflare Worker. **This is the deployed Worker**: every page (`/`,
-  `/g/:id/:key`, `/hub`, `/join/:code`, `/reset`, and the 404 in `app/error.vue`), the static
+  `/w/:id/:key`, `/hub`, `/join/:code`, `/reset`, and the 404 in `app/error.vue`), the static
   assets, and — mounted — the whole of `apps/api`. It owns the three custom domains and is what CI
   deploys from master. `passalong-web.codellyson.workers.dev` stays reachable for checking a deploy
   before anyone hits it on the real host.
-  - `server/middleware/1.api.ts` — the mount. Hands `/v1/*`, `/health` and the two `/g/**` machine
+  - `server/middleware/1.api.ts` — the mount. Hands `/v1/*`, `/health` and the two `/w/**` machine
     routes to the Hono app and lets everything else fall through to Nuxt. The match is written out
     rather than delegated to Hono's router, because a miss has to fall through here instead of
     becoming Hono's 404. `0.canonical.ts` is the `www` → apex redirect, which had to leave Hono for
@@ -253,23 +252,23 @@ change. Its README says how.
     as markup, so hydration finds a text node where it expected a `<p>` — a real mismatch, and one
     that only shows up in the dev console.
   - `#api/*` is an alias to `apps/api/src`, for the two leaf modules both halves need:
-    `guide.ts` (the format) and `analytics.ts`. Aliased rather than copied — the format is already
-    defined twice, in `packages/passalong/src/guide.js` and mirrored in `apps/api/src/guide.ts`,
+    `work.ts` (the format) and `analytics.ts`. Aliased rather than copied — the format is already
+    defined twice, in `packages/passalong/src/work.js` and mirrored in `apps/api/src/work.ts`,
     and a third copy is one more place to forget.
   - `scripts/probe.sh` — the port's load-bearing assumption, asserted against a deployed `/`:
     that a route can be served with no script at all (`noScripts`) and with the stylesheet as a
     `<link>` rather than an inline `<style>` (`features.inlineStyles: false`). Share pages render
     markdown a stranger wrote and that CSP is the product's one real security property — if this
-    stops passing, `/g/**` cannot move. `nuxt dev` cannot answer it; only a built, deployed
+    stops passing, `/w/**` cannot move. `nuxt dev` cannot answer it; only a built, deployed
     response can.
 
 ## Contracts
 
-- **What wrote work is a column, not a field (migration 0035).** `guide.client` is
+- **What wrote work is a column, not a field (migration 0035).** `work.client` is
   `cli@<version>` (from `x-passalong-version`), `mcp`, `hub`, `api` or `email` (work from email, see inbound.ts), decided by `writtenBy()`
   in `clients.ts` from the credential the middleware already checked, and replaced on every
-  `PUT /v1/guides/:id` because the last write produced the markdown stored now. Never frontmatter:
-  a field in the document travels with it and is re-published by whichever client pulls it next,
+  `PUT /v1/work/:id` because the last write produced the markdown stored now. Never frontmatter:
+  a field in the document travels with it and is re-sent by whichever client pulls it next,
   naming the wrong writer. `""` is every row from before it — unknown, not guessed.
   `pnpm metrics` prints it. Frontmatter the parser cannot hold (a nested map, a `|` block, a list
   under a field that is not a list) is refused by name through `unheldFields()` in both parsers,
@@ -286,35 +285,32 @@ change. Its README says how.
   summary, and whatever text, pictures and files the next reader needs. A writer may say "done
   when"; nothing requires it. `tags` may describe it (`bug`, `feature`, `question`) and the hub
   shows the first as its label (`HubWorkTag`), but **no rule ever turns on a tag**. `parent:` says
-  what it came out of — a customer request, a bigger piece of work, the old bug report sets
-  (migration 0061 turned each `report` into parent work and dropped the table). `blocked_by:` is
+  what it came out of — a customer request, or a bigger piece of work holding several issues. `blocked_by:` is
   work that must be Done first; the parser defaults `stack_assumptions` and `tags` and nothing
   else, because defaulting `blocked_by` would write `blocked_by: []` into everything re-sent.
-  Migration 0061 stripped `kind:` from every stored document and dropped `guide.kind`, `report_of`,
-  `report_id`, `area` and `severity`. Handovers went with kinds: what an agent learned goes into
-  the project's documents, where everyone finds it, not into a one-off document for one person.
+  A `kind:` line is refused by name (`RETIRED`). What an agent learned goes into the project's
+  documents, where everyone finds it, not into a one-off document for one person.
 - **Every piece of work moves the same way.** Draft, Ready, In progress, Done. **New work is Ready
   unless whoever wrote it says `status: draft`** (2026-10-15): Draft-first was tried, and addressed
   work sat forgotten in it — every draft in production was a task sent to somebody, untouched for
   over a day. Draft is for what a person should read first: a plan (`create_work` with
-  `draft: true`), or anything an agent is unsure of. `publishProblem()` in `guide.ts` refuses new
+  `draft: true`), or anything an agent is unsure of. `publishProblem()` in `work.ts` refuses new
   work that starts archived, and an edit that changes status. Whoever it is addressed to is told
   when it is Ready — at creation, or when a person marks a draft Ready on the status route
-  (`announceGuide()`) — never while it is a draft. Marking it Ready may also say which repo it is
+  (`announceWork()`) — never while it is a draft. Marking it Ready may also say which repo it is
   for. Anyone in the team moves work between Draft and Ready; nothing held moves to Draft until it
   is taken back; only its author or an admin archives it; and archived work comes back to Draft,
   never straight to Ready (`unarchiveProblem()`), because archived includes finished. Email and
   webhooks file Ready (2026-10-17: alerts held in Draft reached nobody; who may send is already
   gated by the allowed senders and the key), and the day-old Draft reminder covers everything.
   **Done says how it got there**: `outcome` (migration 0054) is `finished` (a hand-in), `archived`
-  (the status route, closing with nothing handed in) or, on work closed before 0061, `approved`;
-  it is cleared when work leaves Done. **Ready work nobody took stays Ready, and a person is told**
+  (the status route, closing with nothing handed in); it is cleared when work leaves Done. **Ready work nobody took stays Ready, and a person is told**
   (2026-10-28, docs/LOOP.md): after `UNTAKEN_MS` (three days) the author and the team's owners are
   reminded every day until someone acts (`untaken()`, kind `untaken`; mailed the first time, feed
   and push each day after). It used to go back to Draft after a fortnight, and a draft reaches
   nobody — the product shelving work itself. Work for nobody in particular is a backlog and is not
   counted. **Not for me** is `pass` on work you do not hold: the sender is told why, it leaves your
-  list (an `ack` row with `taken = 0`), and the thread gets a `passed` line.
+  list (its `passed` thread line), and the author is told.
 - **A CLI too old for the server's rules is refused, not warned.** Every CLI call carries
   `x-passalong-version` (`VERSION` in `src/api.js`), and the token branch of the auth middleware
   answers **426** below `MIN_CLIENT` (`apps/api/src/clients.ts`) with the install command and the
@@ -323,7 +319,7 @@ change. Its README says how.
   the other. `passalong mcp` prints no update notice and an agent never reads stderr, so the
   refusal on the call it just made is the one text it is sure to see. CLIs up to 0.11.0 send no
   header and are known by Node's own `user-agent: node`; browsers, curl, SDKs and `/v1/mcp` are
-  never gated. The floor is 0.20.0 until 0.22.0 — the CLI and tools that speak work — is published;
+  never gated. The floor is 0.20.0 until 0.22.0 — the CLI and tools that speak work — is on npm;
   then it is raised to 0.22.0 at once (docs/DEPLOY.md, the cutover). **Raise `MIN_CLIENT` only
   after that version is `latest` on npm** — a floor above what npm hands out refuses every agent
   with nothing it can install.
@@ -332,9 +328,9 @@ change. Its README says how.
   and a card's column is the server's `stage` (`boardPlace()` in index.ts), never re-derived per
   viewer — four per-viewer tabs put one piece of work in different places for different teammates, which
   is what this replaced. Anyone in the team marks work Ready or Draft, stops an agent, gives it to
-  someone else ("Give to…" on a card, `POST /v1/guides/:id/assign`) and reopens finished work
-  (`MAY_MOVE` in claims.ts). Archiving and deleting stay with the author or a team admin
-  (`MAY_DECIDE`). **Four columns, people inside (2026-10-30, the author's decision):** the four
+  someone else ("Give to…" on a card, `POST /v1/work/:id/assign`) and reopens finished work
+  (`MAY_MOVE` in claims.ts). Archiving and deleting stay with the author or a team admin.
+  **Four columns, people inside (2026-10-30, the author's decision):** the four
   columns always fit the page and never scroll sideways; inside To do, work is grouped under who it
   is for — you first, then each teammate, each group, then Anyone (nobody in particular) — from
   `lanes` (`lanesOf()` in index.ts: a person, `#group`, or each of several named people, shown once
@@ -349,33 +345,32 @@ change. Its README says how.
   and scrolled sideways once a team had more than a few people; it is gone. Ticking cards brings
   up a bulk bar (Give to…, Move to…, Archive…, each asked in place) that sends the single acts'
   routes four at a time and reloads once (`onBulk` in useHub.ts).
-- **Finishing is final, and needs proof; there is no review stage (2026-10-15, docs/REVIEW.md).**
+- **Finishing is final, and needs proof; there is no review stage (2026-10-15).**
   In production 64% of hand-ins were archived with nobody answering them and none was ever sent
   back, so the stage cost more than it caught. `hand_in` ends the work: `claims.handIn()` then
-  `complete()` keeps what was shown as a standing verdict (the work page leads with it as
+  `complete()` keeps what was shown as a standing proof (the work page leads with it as
   "Finished with"), lets go of the claim, and puts the work in Done with `outcome = finished`. A
   hand-in carries its `writeup` (capped at 500 characters, `WRITEUP_CAP`) and its evidence or
-  checks — there are no write-up guides any more (`report_of` went in 0061). It is refused without
+  checks; it is never a separate piece of work. It is refused without
   proof a person can look at (`proofProblem()`): a screenshot, or a command and its line of
   output; checks answer for themselves, each run or shown. LOOP.md step 2 replaces that gate with
   the agent's judgement; it is unchanged until then. What could go wrong after is **Reopen**
-  (`POST /v1/guides/:id/reopen`, for anyone in the team): back to To do with the reason at the
+  (`POST /v1/work/:id/reopen`, for anyone in the team): back to To do with the reason at the
   top, a `reopened` thread line, and whoever finished it is told. Wanting another person's eyes is
   a request, not a stage: **Ask someone to check** on the work page makes more work for them, with
-  this as its `parent`. Approve, send-back, verdicts, acks, mark-done and the In review column are
-  gone, routes and all.
+  this as its `parent`. There is no approving, sending back or In review column.
 - **A customer is a column, never a field (migration 0057, docs/LOOP.md).** `key+support@` takes
   mail from anyone and makes a task (`receiveSupport()` in index.ts); who wrote it — address, name,
-  and the tracking number `ref` they were sent — is stored on the `guide` row, because a field in the
+  and the tracking number `ref` they were sent — is stored on the `work` row, because a field in the
   document would travel with every share link and every agent. The tracking number is its own value,
   not the work's id, and a reply joins a request only from the address that opened it, **and** with
   the number in its subject or a Message-ID of theirs in its References. Mail to a customer answers
   the subject they wrote under (`customerSubject()`, number at the end) and names their messages in
   `In-Reply-To`/`References` (`customer_subject`, `customer_mids`, migration 0060), so it is one
   conversation in their inbox. The reply box says where Send goes before it is pressed — "To <name>
-  <address> · <subject>", the subject from `customer.subject` on `GET /v1/guides/:id/context` (built
+  <address> · <subject>", the subject from `customer.subject` on `GET /v1/work/:id/context` (built
   by `customerSubject()`, so it is exactly what is sent) — and after a send says "Sent to <name> ·
-  <time>" in the same place, with the next request waiting on us. Mail to a customer goes out only from `POST /v1/guides/:id/customer`, which has no CLI command
+  <time>" in the same place, with the next request waiting on us. Mail to a customer goes out only from `POST /v1/work/:id/customer`, which has no CLI command
   or MCP tool and refuses the remote MCP server: nothing reaches a customer until a person presses
   Send. It is the deliberate exception to every answer existing in all three places.
   A customer writing again on a request that is Done puts it straight back in Ready
@@ -403,7 +398,7 @@ change. Its README says how.
   spoke it natively. It is shown the pictures as well as the words (`readerImages()`: up to three,
   PNG/JPEG/GIF/WebP, 4 MB each; from the box, only shots the writer uploaded), because a screenshot
   of an error is often the whole report and a reader that cannot see it asks the person to type out
-  what the picture already says. Every answer passes `readVerdict()` or is thrown away whole — a
+  what the picture already says. Every answer passes `checkReading()` or is thrown away whole — a
   tag from the list, a group that exists, lengths capped, no contact details — never patched.
   What was sent — a customer's words, an email, a webhook — is quoted into the body by code, not
   by the model, and when it arrived is said as a person reads it ("28 Oct 2026, 20:21 UTC",
@@ -411,8 +406,8 @@ change. Its README says how.
   owners get `reader_unsure`, pushed and mailed, with its one question. The same reader is the
   hub's box (`/hub/new`, `POST /v1/compose`): a teammate's own words become work, filed at once as
   theirs with no confirm step, and into one of the team's projects when the reader picks one
-  (`projects` in `ReaderInput`: a top-level folder's id from the list, or none; `?project=` wins and
-  the reader is not asked), linked through `POST /v1/folders/:id/guides` so who may link what stays
+  (`projects` in `ReaderInput`: a top-level project's id from the list, or none; `?project=` wins and
+  the reader is not asked), linked through `POST /v1/projects/:id/work` so who may link what stays
   in that route; the page offers Move (project, and `assign` for group or person) and Undo
   (delete, the words put back in the editor), and when the
   reader is unsure it files its best reading anyway, with its question on the thread and on the
@@ -421,20 +416,20 @@ change. Its README says how.
   directly (`components/hub/Writer.vue`), not Nuxt UI, so it keeps the hub's look and policy:
   TipTap's injected stylesheet is off (`injectCSS: false`; the hub allows styles from its own
   stylesheet only) and its rules are `.writer` in styles.css; it renders inside `<ClientOnly>`.
-  The same reader drafts replies to customers (`askDraft()`, `POST /v1/guides/:id/customer/draft`):
+  The same reader drafts replies to customers (`askDraft()`, `POST /v1/work/:id/customer/draft`):
   written into the reply box for a person to edit and send, never sent and never stored, and checked
   by `readDraft()` (length, no contact details, no tracking number of its own). This reverses "the
   hub has no editor" for writing from scratch, by the author's decision (docs/LOOP.md §1a).
 - **The runner takes only what a person marked (migration 0058, docs/LOOP.md §1a).** `passalong work
   --watch` on an always-on machine asks `/v1/tasks/next` with `alone: true`, so `next()` hands out only
-  work with `guide.alone = 1`; it waits when there is none and keeps going past unfinished work
+  work with `work.alone = 1`; it waits when there is none and keeps going past unfinished work
   (the requeue and `stuck` handle that one). The mark is a column a person sets from the work page
   (in its More menu, as **Let an always-on agent take this on its own**)
-  (`PUT /v1/guides/:id/alone`), never frontmatter, and the route refuses the CLI and both MCP servers
+  (`PUT /v1/work/:id/alone`), never frontmatter, and the route refuses the CLI and both MCP servers
   by name: work marking itself safe for the agent about to run it is what the mark exists to stop.
   Plain `passalong work` is unchanged — a person running it takes any ready work.
 - **A finished child wakes its parent, from one place (docs/LOOP.md step 3).** A middleware after
-  every write to `/v1/guides/:id/*` and `/v1/tasks/:id/*` calls `wakeFrom()`: when that work is now
+  every write to `/v1/work/:id/*` and `/v1/tasks/:id/*` calls `wakeFrom()`: when that work is now
   Done and its `parent:` is not, the parent gets a `noted` thread line (handed to its holder and next
   taker by `deliver()`) and its author and holders a `child_done` notification. One place, not six
   routes, because a new way to finish would otherwise be a parent that never hears; `wakeParent()`
@@ -445,7 +440,7 @@ change. Its README says how.
   and "four of these are fixed" has no way to be said. `create_work` takes several in one call, each
   its own piece of work.
 - **Screenshots are claimed by the document that names them.** A shot is uploaded before the work
-  exists, so `shot.guide_id` is written on every write from the URLs in the markdown
+  exists, so `shot.work_id` is written on every write from the URLs in the markdown
   (`shotIds()`), never by the client. The `account_id` in that WHERE is load-bearing: without it,
   naming someone else's shot id in your markdown would claim their image, and deleting your work
   would delete it. Deleting work takes its shots; an hourly cron sweeps uploads nothing ever
@@ -471,7 +466,7 @@ change. Its README says how.
   looked is ink** (`--changed`, `bg-changed`/`text-changed`; on-rail cream on the rail): a 3px bar
   at a row's left edge with a "Changed" line naming what changed, and a dot on a project in the
   rail. It is held until the work is opened (`markSeen` in useHub posts `/v1/notifications/read`
-  with `{ guide }`), and "changed" is an unread notification on that work. Focus stays a 2px ink
+  with `{ work }`), and "changed" is an unread notification on that work. Focus stays a 2px ink
   ring (`--focus`/`--focus-halo`): coral is too light against the ground to be a keyboard user's
   only edge. `--link-hover` and `--emphasis` (`.linkish`, a toneless tonal/outline button) are ink
   in the hub and coral on the landing; a selected card keeps an ink ring. The "Changed · what"
@@ -481,8 +476,8 @@ change. Its README says how.
   5:1, and it is the one fill for a primary everywhere, the rail's and dock's New included (light
   coral stays only as text and a bar on the ink rail). Settings marks what needs you with the ink
   change dot; amber is never a "needs you" mark. The rail is solid ink (`--rail`) in both themes. Each project owns one line
-  colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the folder's own colour,
-  a folder coloured coral drawn stone (nothing near coral or blue), and one derived from its id when it has
+  colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the project's own colour,
+  a project coloured coral drawn stone (nothing near coral or blue), and one derived from its id when it has
   none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.
 - **A surface's edge is a one-pixel rule.** In the hub `--edge-shadow` is a 1px ring of
   `--line-strong` and a raised surface keeps the deeper cream (`--surface-raised`) against the pale
@@ -510,7 +505,7 @@ change. Its README says how.
   wears an icon **and** calls `copy()` needs `<span data-label>` around its text: `copy()` swaps
   that element, and swapping the button's own `textContent` would eat the icon for good.
 - **Tags are a controlled vocabulary, so they are normalised at both ends.** `tag()`/`tagList()`
-  (in `apps/api/src/guide.ts`, mirrored in `packages/passalong/src/guide.js`) lowercase a tag and
+  (in `apps/api/src/work.ts`, mirrored in `packages/passalong/src/work.js`) lowercase a tag and
   join its words with a hyphen. `parseMeta`/`parseFrontmatter` normalise what they read and the
   publish path writes the result back into the document with `setList`, so work written before
   there was a rule reads as one style everywhere immediately and stores as one style the next time
@@ -573,7 +568,7 @@ change. Its README says how.
   `plan` is **one column with three values** (`free`, `team`, `lapsed`) rather than a plan beside a
   status, because `free` + `lapsed` is not a state a team can be in and two columns can store it.
   **Lapsed is read-only, and read-only is narrower than it sounds**: what stops is work flowing *in*
-  — new work addressed to the team, a new member joining, a change to its folders. What must never
+  — new work addressed to the team, a new member joining, a change to its projects. What must never
   stop is work already in flight closing, so taking, handing in and passing still go through: they
   belong to whoever does the work, who is not the person who missed the payment. Reading, export and
   share links are untouched, because
@@ -618,15 +613,14 @@ change. Its README says how.
   unset) and `isFull()`; `quota()` in index.ts is the only query, and both `/v1/me` and the publish
   refusal read it. They were separate before and disagreed — the banner counted all the work the
   account had and warned people at a number the server was not enforcing.
-- **`consumed` means archived or Done, never "I implemented it".** It is the shelf: off the board,
+- **`done` means Done, never "I implemented it".** It is the shelf: off the board,
   out of the free tier's count, reversible, and hidden from every cut on the work page except
   `archived`; `outcome` says which way it got there. Whether it works is the hand-in's evidence,
   not a status.
-- **Not for me is a row, and it says why.** `pass` on work you do not hold (`recordDecline()`)
-  writes an `ack` row with `taken = 0` and a required note — "not me" without "why" leaves the
-  sender exactly where the silence did — which takes it off the decliner's list, tells the author,
-  reaches the team channel, and writes a `passed` thread line. The `ack` table is otherwise history:
-  readers no longer answer "I'll do it" (that is `take`), and nothing writes `taken = 1` any more.
+- **Not for me is a thread line, and it says why.** `pass` on work you do not hold
+  (`recordDecline()`) writes a `passed` line with a required note — "not me" without "why" leaves
+  the sender exactly where the silence did — which takes it off the passer's list, tells the
+  author (`passed`) and reaches the team channel. Saying "I'll do it" is `take`.
 - **Being named outranks being in the room.** The inbox orders `to_account_id = you` before
   everything else, then by age: someone writing your handle chose you, while work sent to a team
   you happen to be in chose nobody, and sorting both by age alone buried the one addressed to you
@@ -635,7 +629,7 @@ change. Its README says how.
 - **Nothing a non-author does to work happens in silence.** Taking, passing and handing in tell
   the author (`taskEvent()`), and so do archiving and un-archiving. `reopened` exists because archiving told them
   and un-archiving did not, so work could move off somebody's board on another person's say-so without a word;
-  the pinning test in `apps/api/test/guide.test.mjs` walks the routes a non-owner can reach and
+  the pinning test in `apps/api/test/work.test.mjs` walks the routes a non-owner can reach and
   fails if one stops telling them.
 - **Three addresses, and the inbox ranks them.** `to:` inside a `team:` is `@handle` (one person),
   `#group` (the people who do a thing, `team_group` + `group_member`), or absent (the whole team).
@@ -657,9 +651,7 @@ change. Its README says how.
   `progress`, `hand_in`, `pass` and `ask` for whoever does the work, reopen for finished work that
   is not right, Ready and Move to Draft, archive. A signal that exists in only two of them is one a
   third of the product's users cannot send, and the mail that tells someone what to do next can
-  only name commands that exist. The reader's old answers — the ack and the verdict — went with
-  their routes (`ack`, `verdict`, `approve`, `finish`, `mark_done`); `/hub/answer/:id` still
-  forwards an old mail's link to the work's page.
+  only name commands that exist.
   The hub says each in plain words rather than the command's name, and says them the same way on
   every surface of the hub: `take` is **I'll do this**, `release` is **Stop this agent**, archiving
   is **Archive** and **Unarchive to Draft**, finishing is **Finish**, and finished work comes back
@@ -671,7 +663,7 @@ change. Its README says how.
 - **Google Chat gets a card; nothing else does.** Chat cannot unfurl a link — previews there come
   from a Chat app registering URL patterns, and a team connects an incoming webhook — so `chatCard()`
   in `notify.ts` builds the preview from what we already know. It must stay built rather than
-  scraped: the share key in a share link is its authorisation, `robots.txt` disallows `/g/` for
+  scraped: the share key in a share link is its authorisation, `robots.txt` disallows `/w/` for
   that reason, and an unfurl hands the key to somebody else's fetcher to cache. No image on the
   card for the same reason. Only bedrock `cardsV2` fields, and only for `chat.googleapis.com` —
   Google refuses a payload carrying a field it does not know, and a refused post is a silent one.
@@ -688,7 +680,7 @@ change. Its README says how.
   never mints one); `POST /v1/auth/password` claims it. Everything secret
   is stored as a SHA-256: tokens, session ids and reset codes are all bearer credentials.
 - **Analytics are sent from the Worker, never the browser** (`src/analytics.ts`). A share link is
-  `/g/:id/:key` where the key is the secret, and every web analytics SDK reports the page URL — the
+  `/w/:id/:key` where the key is the secret, and every web analytics SDK reports the page URL — the
   obvious integration would have posted users' share keys to a third party. Share pages also run no
   script, and that CSP is the product's one real security property. So: **event names and
   categorical props only**. Never an id, handle, email, team name, title or URL fragment. The
@@ -713,37 +705,27 @@ change. Its README says how.
   membership or fails on `team.created_by`, which has no cascade. `PRAGMA defer_foreign_keys` does
   not save it — D1 rolls the whole migration back. Both were tested. Inserts write a `retired:`
   marker that can never equal a SHA-256; nothing reads the column.
-- **Status lifecycle**: draft → published, with `consumed` as the author's shelf. **What is
-  accepted and what may be set are two different lists**, and `guide.ts` holds both: `STATUSES` is
-  what parses, `SETTABLE` is what a write may choose. `promoted` is in the first and not the second
-  — work carrying it keeps it and still re-sends, and nothing can acquire it. Shrinking
-  `STATUSES` instead would have been the obvious move and the wrong one: the value lives in
-  frontmatter inside markdown in other people's repositories, and `validate()` refuses a status it
-  does not know, so work exported a month ago would stop re-sending today. Both write paths
-  enforce it and they enforce it differently, because they are asked different things: `PATCH
-  /v1/guides/:id/status` refuses `promoted` **by name**, since an installed CLI still calls it and
-  "must be one of …" reads as a typo rather than as a retirement; `PUT /v1/guides/:id` silently
-  keeps `promoted` when the stored row already had it and downgrades to `published` when it did
-  not, checked against the row rather than the markdown somebody just sent. That second check is
-  also what keeps the free tier honest — `quota.ts` counts `published` and `promoted` as the
-  statuses occupying room, so a settable `promoted` was an unlimited free tier for anyone who
-  noticed. The server stores status both in the `guide.status` column and inside the markdown
-  (`setField`) so a fetched `.md` is truthful.
+- **Status lifecycle**: `draft` → `ready` → `done`, and `STATUSES` in `work.ts` is the whole
+  list: what parses is exactly what may be set, so there is no status a document can carry and a
+  write cannot choose. `validate()` refuses any other value, which is why migration 0068 rewrote the
+  `status:` line inside every stored document as well as the column. `quota.ts` counts `ready` as
+  occupying room. The server stores status both in the `work.status` column and inside the
+  markdown (`setField`) so a fetched `.md` is truthful.
 - **Teams (M2).** `team`/`membership`/`invite`/`pull` tables (migration 0002). Work's `team_id`
   makes it readable by members; `to_account_id` addresses one member. Only the author or a team
   admin archives or deletes. Every fetch by id is a `pull` row; the sender sees them as
   `pulled_by`. Handles are global and unique.
 - **Proof does not outlive the work.** A hand-in's screenshots are claimed for the work, and
-  `evidenceOn` reads the standing verdict's `detail` as well as claim evidence so an author's edit
+  `evidenceOn` reads the standing proof's `detail` as well as claim evidence so an author's edit
   cannot release them. `sweepProof` (hourly, `shots.ts`) deletes closed work's proof `PROOF_DAYS`
   (5) after it closed — anything the work holds that its own markdown does not name — and rewrites
   the text that pointed at it to say it was removed rather than leave a broken image. It is a fixed
   rule for every account: the Settings switch that turned it off (`keep_forever`, migration 0044)
   was removed on 2026-10-30 and its column dropped (0065), so nothing can re-decide it per account.
-- **The share page is the document, once.** `/g/:id/:key` renders the markdown in its author's
+- **The share page is the document, once.** `/w/:id/:key` renders the markdown in its author's
   order, with the work it came from and the work made from it as links, and nothing about who
   answered it: the key in the URL is the whole authorisation, so the page is public to whoever
-  holds it. There is one view; `?view=verify` and its layout went with kinds. It runs no script.
+  holds it. There is one view. It runs no script.
 - **Joining is web-first.** `/join/:code` mints an account, claims a handle and accepts the
   invite in the browser (`public/join.js`), because the person opening an invite is often the one
   who has never used the tool — a tester, a designer. The hub covers the rest of what used to need
@@ -753,14 +735,14 @@ change. Its README says how.
 - **Setting up is a page, run once by whoever starts the team (`/hub/start`, docs/LOOP.md §0
   step 3).** Seven steps — team, who's on it, who does what, projects, what to know, where work
   comes in, agents — each skippable, each writing through the routes that already exist (teams,
-  invites, groups, folders, documents, inbound, connectors). The one thing added is where the person
+  invites, groups, projects, documents, inbound, connectors). The one thing added is where the person
   got to: `account.setup` (migration 0066), JSON of steps done and skipped and whether it was put
   away, read and written only by `apps/api/src/setup.ts` (`PUT /v1/me/setup`, `setup` on
   `/v1/me`), so it resumes on any device. Accounts already in a team when 0066 ran start with it put
   away, and someone only invited is never offered it: setup is for a team's starter. Invite by email
   says "Not emailed" when the server has no mailer, with that person's own link to copy, rather than
-  pretending. A project's repo is `folder.repo` (migration 0067, `repoOf()` in folder-tree.ts), set
-  by POST and PATCH `/v1/folders` and carried by both MCP servers' `save_project`/`find_projects`
+  pretending. A project's repo is `project.repo` (migration 0067, `repoOf()` in project-tree.ts), set
+  by POST and PATCH `/v1/projects` and carried by both MCP servers' `save_project`/`find_projects`
   through those routes; the README prompt names it for the person's own agent, which Passalong never
   runs. `/hub` sends a teamless, never-started account to setup from its route middleware — on the
   server, with the session cookie, on a first load — so Needs you never renders on the way.
@@ -770,11 +752,11 @@ change. Its README says how.
   first), an agent asking (the holder's account or the author), a hold gone quiet (lease run out),
   work sent to you or a group you are in that nobody took, and your work whose last act was
   someone else passing it back or reopening it. Beside it, open customer requests (ours first) and
-  work finished in the last seven days with Reopen. Each row carries its project (the top folder
-  above the folder it is linked into, one this account can see) and `changed`, the latest unread
+  work finished in the last seven days with Reopen. Each row carries its project (the top project
+  above the project it is linked into, one this account can see) and `changed`, the latest unread
   notification on it in a few words. It owns no table and imports no sibling, so
   `test/needs.test.mjs` runs it against real SQLite. The rank is the server's; the hub never
-  re-sorts it. `GET /v1/folders` carries `open` and `changed` per folder for the rail's projects.
+  re-sorts it. `GET /v1/projects` carries `open` and `changed` per project for the rail's projects.
   Open requests from the same customer under the same title fold into one row at the older one's
   place, the others' ids in `also` (needs.ts), so one person writing twice is one thing to answer.
   The hub leads with the first row as **Next** and groups the rest by reason without re-sorting;
@@ -790,8 +772,8 @@ change. Its README says how.
 - **The log (`GET /v1/log`) is the only surface ordered by time, and it owns no table.** Everything
   else is ordered by state — the board's queues, the work page's rank — so nothing could answer
   "what did I get done in September", and the one thing the product recorded everywhere and showed
-  nowhere was your own work. `log.ts` is a `UNION ALL` over rows that already exist: `guide.created`
-  for a publish, and the `pull`, `verdict` and `ack` rows for the rest. **Never give it a table.**
+  nowhere was your own work. `log.ts` is a `UNION ALL` over rows that already exist: `work.created`
+  for creating work, and the `pull`, `proof` and `task_event` rows for the rest. **Never give it a table.**
   The moment it has its own rows it can disagree with the board, and the whole reason it cannot
   today is that there is nothing to keep in step. Two rules follow from what it is. It renders
   **no counts** — no totals, no streak, no per-month number: a count of work sent is a metric of
@@ -799,7 +781,7 @@ change. Its README says how.
   surface printing it **must say it is what went through Passalong, not everything you did** —
   work never written down has no row, so an empty month is indistinguishable from a quiet one, and
   a page that does not say so lies about the exact thing people open it to check. The pull arm is
-  `GROUP BY guide_id` on purpose: `recordPull` writes a row per fetch of `/v1/guides/:id` and the
+  `GROUP BY work_id` on purpose: `recordPull` writes a row per fetch of `/v1/work/:id` and the
   CLI resolves an id by fetching, so one `take` can leave two rows seconds apart. The board wants
   both; a log rendering both says you opened the same thing twice in a minute. Nothing in the hub
   shows it now (Activities went with Needs you, 2026-10-29); agents have no tool for it.
@@ -814,13 +796,13 @@ change. Its README says how.
   by scanning rather than hardcoded because the file is named for the `database_id`. Two of the four
   metrics also cannot be computed as §14 originally worded them, and the script **prints the caveat
   beside the number every run** — activation undercounts for CLIs older than 2026-10-14, whose
-  `pull` served a local copy without calling the API unless the work had a team, and the quality proxy asked for
-  `consumed`, which changed meaning. A report that quietly substitutes a near-miss is worse than
-  one that says so.
+  `pull` served a local copy without calling the API unless the work had a team, and the quality
+  proxy's status now means Done rather than "implemented". A report that quietly substitutes
+  a near-miss is worse than one that says so.
 - **The hub is live, and the stream owns no table.** `GET /v1/events` (`src/events.ts`) is
   Server-Sent Events for the signed-in account: `note` for each notification addressed to it (a
   toast in the hub, `HubToasts`) and `change` for any work it can see whose hold, progress note
-  or standing verdict moved (a quiet refresh — progress notes never toast). It polls D1 every 3 seconds
+  or standing proof moved (a quiet refresh — progress notes never toast). It polls D1 every 3 seconds
   from a cursor that is a **time, not a row id**, because notifications coalesce by bumping `at` on
   an existing row; migration 0033 indexes the three times it reads. Each connection ends after four
   minutes and the client resumes from `Last-Event-ID`. The hub reads it with fetch
@@ -861,10 +843,10 @@ change. Its README says how.
   and shows a "Confirm your email" callout with a resend while it is unproven. Nothing is refused to an unverified account; accounts that
   had an email before 0050 were marked verified as of their creation.
 - **Notifications (migration 0003).** Every loop-closing moment is a `notification` row addressed
-  to whoever should hear it: `handoff` (work sent to you), `task_claimed`, `task_finished`,
-  `sent_back` (reopened), `declined`, `asked`, `joined` and the rest in `KINDS`. Rows first,
+  to whoever should hear it: `sent_to_you` (work sent to you), `task_claimed`, `task_finished`,
+  `reopened`, `passed`, `asked`, `joined` and the rest in `KINDS`. Rows first,
   delivery second — mail is a channel over the row, so the feed works with no mailer configured.
-  A unique index on `(account_id, kind, guide_id, actor_id)` coalesces repeats (bumping `at` and
+  A unique index on `(account_id, kind, work_id, actor_id)` coalesces repeats (bumping `at` and
   `times`), and mail goes out only on the first occurrence. `notify()` never throws: a
   notification must not fail the action that caused it. `line()` in `notify.ts` is the single
   place the wording lives — CLI, MCP and hub all print the server's `text`.
@@ -875,14 +857,14 @@ change. Its README says how.
   rendering owner markdown for other viewers safe. Don't loosen it to add scripts or inline
   styles; put styles in `public/styles.css`. `font-src` is same-origin only: fonts are served
   from `public/fonts`, never a CDN, for the same reason Preact is vendored.
-- **Share pages are `noindex`** and `robots.txt` disallows `/g/`. The share key is the secret, so
-  the page must never end up in a search index. Everything under `/g/` also sends
+- **Share pages are `noindex`** and `robots.txt` disallows `/w/`. The share key is the secret, so
+  the page must never end up in a search index. Everything under `/w/` also sends
   `x-robots-tag: noindex, nofollow, noarchive` (route rule in `nuxt.config.ts`, and `VIEW_HEADERS`
   in `apps/api/src/index.ts` for the raw `.md`): a disallowed page's meta is never read, and the
   `.md` has no `<head>`. No canonical link on a noindex page either.
-- **The hub shows work by framing it, never by rendering it.** `/hub/g/:id` is the work's
+- **The hub shows work by framing it, never by rendering it.** `/hub/w/:id` is the work's
   signed-in page: who holds it, the thread, what it was finished with, and all the work it is tied
-  to, from `GET /v1/guides/:id/context`, which records no pull. The document itself is the share
+  to, from `GET /v1/work/:id/context`, which records no pull. The document itself is the share
   page at `?embed=1` in a sandboxed same-origin iframe with no `allow-scripts`, which is why the
   hub's policy carries `frame-src 'self'` and nothing wider. Turning its markdown into the hub's own
   HTML would put a stranger's document on the one page that runs script and holds the token. Row
@@ -890,7 +872,7 @@ change. Its README says how.
   **Progress** (`utils/progress.ts`): what happened to it in order, built from that same context —
   claims, hand-ins with their screenshots, follow-ups — and ending on where it stands. It owns no
   table, for the reason the log owns none, so a hold that was released is gone from it with its
-  claim row; receipts written by a retired verdict or an archive are not "opened".
+  claim row; a proof or an archive is not "opened".
 - **The blog is markdown in the repo, bundled into the Worker.** Posts are
   `apps/web/content/blog/<slug>.md` with `title`, `date`, `description`, `author` and `draft`.
   A Worker has no filesystem, so they are Nitro server assets (`nitro.serverAssets` in
@@ -900,7 +882,7 @@ change. Its README says how.
   shared/pages.ts until its first post goes out: publishing is `draft: false` on the post, on
   `/blog`, and a line in public/llms.txt (test/public-pages.test.mjs insists).
   `/learn/:slug` is the same reader over `content/learn` (`postBySlug(slug, "learn")`) for topic
-  guides rather than dated posts. Its one publish switch is the page's entry in shared/pages.ts:
+  pages rather than dated posts. Its one publish switch is the page's entry in shared/pages.ts:
   unlisted or draft there, it renders noindex with no canonical or JSON-LD, whatever its frontmatter says.
 - **The landing's JSON-LD is a data block, not script.** `server/plugins/csp.ts` skips
   `application/ld+json` when deciding whether a page runs script; without that the landing would
@@ -938,7 +920,7 @@ ships scripts and inlines styles whatever the config says.
 - The stylesheet is lint-clean under `biome check`, including `noDescendingSpecificity`. Leaf
   overrides live in the section at the bottom; a new `.x h2`-shaped rule added mid-file will
   usually trip that rule, and the fix is ordering, not `!important`.
-- `src/og.ts` renders each share link's unfurl card (`/g/:id/:key/og.png`). `workers-og` is ~1.7MB of
+- `src/og.ts` renders each share link's unfurl card (`/w/:id/:key/og.png`). `workers-og` is ~1.7MB of
   JS and wasm, so it is behind a dynamic `import()`: every other route would otherwise pay for it
   on a cold start. Satori's parser does not decode HTML entities — write literal characters.
   A drawn card is kept in the edge cache (`cached()`), keyed by a hash of its markup, because the
@@ -946,7 +928,7 @@ ships scripts and inlines styles whatever the config says.
   card, so an edit is a new key and nothing needs purging; bump `DRAWN_WITH` when a change to the
   renderer (fonts, size, format) would draw the same markup differently.
 - `/hub`, `/join/:code` and `/reset` are the only pages allowed to run script. Their header is
-  written per response by `apps/web/server/plugins/csp.ts` with a nonce; `/` and `/g/**` are
+  written per response by `apps/web/server/plugins/csp.ts` with a nonce; `/` and `/w/**` are
   `noScripts` with no `script-src` at all (`shared/csp.ts`). Share pages render markdown someone
   else wrote and that CSP is the only thing making it safe — never relax it to add a feature.
   `passalong hub` passes the token in the URL fragment, which the page stores and scrubs on load.

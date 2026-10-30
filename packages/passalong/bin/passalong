@@ -58,7 +58,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as api from "../src/api.js";
 import { workScaffold } from "../src/capture.js";
-import { parse, serialize } from "../src/guide.js";
+import { parse, serialize } from "../src/work.js";
 import * as passalong from "../src/passalong.js";
 import * as store from "../src/store.js";
 
@@ -267,7 +267,7 @@ const commands = {
     if (tty && !f["no-edit"]) edit(path);
     const g = parse(readFileSync(path, "utf8"));
     if (f.draft) g.meta.status = "draft";
-    const { guide, url } = await passalong
+    const { work, url } = await passalong
       .publish(serialize(g), {
         to: typeof f.to === "string" ? f.to : undefined,
         parent: typeof f.parent === "string" ? f.parent : undefined,
@@ -275,9 +275,9 @@ const commands = {
       .catch((e) => die(`${e.message}\nkept at ${path} — fix it and run \`passalong new ${path}\``));
     // A draft that went out is spent. removeDraft() touches nothing outside the drafts directory.
     store.removeDraft(resolve(path));
-    console.log(guide.meta.id);
-    const where = guide.meta.team ? ` for ${guide.meta.team}${guide.meta.to ? `/${guide.meta.to}` : ""}` : "";
-    console.error(`"${guide.meta.title}" is ${guide.meta.status === "draft" ? "in Draft" : "Ready"}${where}`);
+    console.log(work.meta.id);
+    const where = work.meta.team ? ` for ${work.meta.team}${work.meta.to ? `/${work.meta.to}` : ""}` : "";
+    console.error(`"${work.meta.title}" is ${work.meta.status === "draft" ? "in Draft" : "Ready"}${where}`);
     console.error(`link: ${url}`);
   },
 
@@ -305,13 +305,13 @@ const commands = {
 
   async open(f) {
     const id = f._[0] || die("usage: passalong open <id>");
-    const { guide } = await passalong.resolve(id).catch((e) => die(e.message));
-    if (guide.meta.url && tty && !f.print) {
-      openInBrowser(guide.meta.url);
-      console.error(guide.meta.url);
+    const { work } = await passalong.resolve(id).catch((e) => die(e.message));
+    if (work.meta.url && tty && !f.print) {
+      openInBrowser(work.meta.url);
+      console.error(work.meta.url);
     } else {
-      process.stdout.write(serialize(guide));
-      if (guide.meta.url) console.error(`\nlink: ${guide.meta.url}`);
+      process.stdout.write(serialize(work));
+      if (work.meta.url) console.error(`\nlink: ${work.meta.url}`);
     }
   },
 
@@ -321,10 +321,10 @@ const commands = {
    */
   async take(f) {
     const r = await passalong.take(f._[0], { save: Boolean(f.save) }).catch((e) => die(e.message));
-    if (!r.guide?.markdown) return console.error(r.say || "nothing to take");
-    process.stdout.write(r.guide.markdown);
+    if (!r.work?.markdown) return console.error(r.say || "nothing to take");
+    process.stdout.write(r.work.markdown);
     if (r.path) console.error(`\nsaved to ${r.path}`);
-    console.error(`\nyou hold ${r.guide.id} — hand it in when it is done, or pass it with the reason`);
+    console.error(`\nyou hold ${r.work.id} — hand it in when it is done, or pass it with the reason`);
   },
 
   async progress(f) {
@@ -420,7 +420,7 @@ const commands = {
   /** Archive: off the board, and out of what the free tier counts. It comes back to Draft. */
   async archive(f) {
     const id = f._[0] || die("usage: passalong archive <id>");
-    await passalong.setStatus(id, "consumed").catch((e) => die(e.message));
+    await passalong.setStatus(id, "done").catch((e) => die(e.message));
     console.error(`${id} archived — off the board, and it no longer counts against your plan`);
   },
 
@@ -650,7 +650,7 @@ const commands = {
         : who.sync === "none"
           ? " (no plan — nothing is syncing)"
           : " (no limit on your plan)";
-    console.log(`work     ${who.guides} active${ceiling}`);
+    console.log(`work     ${who.work} active${ceiling}`);
     const current = api.currentTeam();
     console.log(
       `teams    ${who.teams.length ? who.teams.map((t) => `${t.slug}${t.slug === current ? "*" : ""} (${t.role})`).join(", ") : "(none — passalong team create <name>)"}`,
@@ -667,7 +667,7 @@ const commands = {
         return console.error(`you are in ${teams.map((t) => t.slug).join(", ")}; pick one: passalong team use <slug>`);
       }
       const t = await api.team(cfg.team).catch((e) => die(e.message));
-      console.log(`${t.name} (${t.slug}) — ${t.members.length} member${t.members.length === 1 ? "" : "s"}, ${t.guides} piece${t.guides === 1 ? "" : "s"} of work`);
+      console.log(`${t.name} (${t.slug}) — ${t.members.length} member${t.members.length === 1 ? "" : "s"}, ${t.work} piece${t.work === 1 ? "" : "s"} of work`);
       for (const m of t.members)
         console.log(`  ${m.handle ? `@${m.handle}` : "(no handle)"}${m.name ? `  ${m.name}` : ""}  ${m.role === "owner" ? "admin" : m.role}  joined ${relDate(m.joined)}`);
       return;
@@ -779,7 +779,7 @@ const commands = {
    * nothing at all when anything goes wrong — a hook must never get in the way of a session.
    */
   async now(f) {
-    const { nowText, statusText, stopVerdict } = await import("../src/hooks.js");
+    const { nowText, statusText, stopDecision } = await import("../src/hooks.js");
     // The status line: printed from a cache, refreshed behind it. Claude Code cancels a status
     // line still running when the next update comes, so this never waits on the network.
     if (f.statusline) return statusLine(f);
@@ -836,7 +836,7 @@ const commands = {
             }),
           );
       } else if (f.hook === "stop") {
-        const v = stopVerdict({ held: r.held, input });
+        const v = stopDecision({ held: r.held, input });
         if (v) console.log(JSON.stringify(v));
       }
     } catch {}

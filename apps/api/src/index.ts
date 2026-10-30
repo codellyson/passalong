@@ -18,32 +18,32 @@
 //   GET    /v1/teams/:slug             one team with members (members only)
 //   POST   /v1/teams/:slug/invites     { email? } → invite link (mailed when an email is given)
 //   POST   /v1/invites/:code/accept    join the team behind an invite
-//   GET    /v1/guides?q=&scope=        list/search: scope=all (default) | mine | <team slug>
+//   GET    /v1/work?q=&scope=        list/search: scope=all (default) | mine | <team slug>
 //   GET    /v1/board                   the queues: waiting, in flight, landed
 //   GET    /v1/needs                   what waits on you, ranked, with customers and recent closes
 //   GET    /v1/log?repo=&since=       what you did, newest first
 //   GET    /v1/notifications?unread=   what happened while you were away
-//   POST   /v1/notifications/read      { ids?, guide? } → mark read (everything unread when both omitted)
-//   GET    /v1/events                  live notifications and guide changes, as Server-Sent Events
+//   POST   /v1/notifications/read      { ids?, work? } → mark read (everything unread when both omitted)
+//   GET    /v1/events                  live notifications and work changes, as Server-Sent Events
 //   GET    /v1/push                    push set up here?, its key, and your devices
 //   POST   /v1/push/subscriptions      { endpoint, keys, label?, private? } turn push on for a device
 //   PATCH  /v1/push/subscriptions/:id  { private } · DELETE removes it · POST …/test sends a test
-//   PUT    /v1/guides/:id              upsert a guide (body: text/markdown; frontmatter team/to)
-//   GET    /v1/guides/:id?peek=        guide as markdown (owner or team member); records a pull unless peek=1
-//   GET    /v1/guides/:id/context      everything around a guide, for the hub; records no pull
-//   GET    /v1/export?after=           every guide you can read, as markdown, a page at a time; no pull
-//   PATCH  /v1/guides/:id/status       { status }  owner: any; team member: consumed/published
-//   DELETE /v1/guides/:id              owner only
+//   PUT    /v1/work/:id              upsert a piece of work (body: text/markdown; frontmatter team/to)
+//   GET    /v1/work/:id?peek=        work as markdown (owner or team member); records a pull unless peek=1
+//   GET    /v1/work/:id/context      everything around a piece of work, for the hub; records no pull
+//   GET    /v1/export?after=           every piece of work you can read, as markdown, a page at a time; no pull
+//   PATCH  /v1/work/:id/status       { status }  owner: any; team member: draft/ready
+//   DELETE /v1/work/:id              owner only
 //   GET    /v1/tasks                   all work you can see, with its column and its claim
 //   POST   /v1/tasks/next              { agent, host, repo, worktree, any, alone } → take work, or null
 //   POST   /v1/take                    { agent, id? } take one piece of work, or the next one
-//   PUT    /v1/guides/:id/progress     { agent, note? }  renew the lease, set the board's line
-//   POST   /v1/guides/:id/hand_in      { agent, note, evidence|checks, writeup? } → done
-//   POST   /v1/guides/:id/pass         { agent, why }  not mine, with the reason
-//   POST   /v1/guides/:id/release      take it back from whoever holds it, with where it was left
-//   POST   /v1/guides/:id/reopen       { why }  finished work back to To do
-//   GET    /g/:id/:key.md              a guide's raw markdown (share link); records a pull
-//   GET    /og.png                     the site's own unfurl card\n//   GET    /g/:id/:key/og.png          the unfurl card for that link
+//   PUT    /v1/work/:id/progress     { agent, note? }  renew the lease, set the board's line
+//   POST   /v1/work/:id/hand_in      { agent, note, evidence|checks, writeup? } → done
+//   POST   /v1/work/:id/pass         { agent, why }  not mine, with the reason
+//   POST   /v1/work/:id/release      take it back from whoever holds it, with where it was left
+//   POST   /v1/work/:id/reopen       { why }  finished work back to To do
+//   GET    /w/:id/:key.md              a piece of work's raw markdown (share link); records a pull
+//   GET    /og.png                     the site's own unfurl card\n//   GET    /w/:id/:key/og.png          the unfurl card for that link
 //   GET    /health                     what CI waits on after a deploy
 //
 // **This app is not deployed on its own.** apps/web mounts it — see
@@ -51,9 +51,9 @@
 // same origin as the pages. That is what lets one middleware accept either credential without the
 // browser ever making a cross-origin call.
 //
-// Every page a person looks at is apps/web's: `/`, the guide page at `/g/:id/:key`, `/hub`,
+// Every page a person looks at is apps/web's: `/`, the work page at `/w/:id/:key`, `/hub`,
 // `/join/:code`, `/reset`, and the 404. What is left here is the machine surface, plus the two
-// `/g/**` routes that stayed because a crawler and an agent fetch them, not a browser — and
+// `/w/**` routes that stayed because a crawler and an agent fetch them, not a browser — and
 // because `workers-og` is ~1.7MB of wasm that only the card should ever pay for.
 import { Hono } from "hono";
 import { alertAdmins, alertPeople } from "./alerts.js";
@@ -95,23 +95,17 @@ import * as claims from "./claims.js";
 import { CLIENT_HEADER, tooOld, writtenBy } from "./clients.js";
 import {
   type MailEnv,
+  sendArchived,
   sendAsked,
-  sendConsumed,
-  sendHandoff,
   sendInvite,
   sendMail,
   sendPulled,
   sendReplied,
   sendReset,
+  sendSentToYou,
   sendVerify,
 } from "./email.js";
 import { eventStream, startAt } from "./events.js";
-import folderRoutes, {
-  folderAssetType,
-  storeFolderAsset,
-  visible as visibleFolder,
-  writable as writableFolder,
-} from "./folders.js";
 import {
   findPeople,
   findSubject,
@@ -124,27 +118,6 @@ import {
   superAccounts,
   unSuper,
 } from "./gifts.js";
-import {
-  clipFollowUp,
-  dropField,
-  type Meta,
-  parseMeta,
-  publishProblem,
-  retiredFields,
-  SETTABLE,
-  STATUSES,
-  SUMMARY_MAX,
-  setField,
-  setList,
-  shotIds,
-  summaryProblem,
-  tag,
-  tagList,
-  unarchiveProblem,
-  unheldFields,
-  unreachableImages,
-} from "./guide.js";
-import { guidePreview } from "./guide-preview.js";
 import { mintOrigin } from "./hosts.js";
 import {
   ANYTHING,
@@ -178,7 +151,7 @@ import {
   displayName,
   feed,
   feedSince,
-  forgetGuide,
+  forgetWork,
   line,
   markRead,
   summary as notifSummary,
@@ -221,6 +194,12 @@ import { grantFor, issueCode, issueTokens } from "./oauth-store.js";
 import { renderOgImage, renderSiteOgImage } from "./og.js";
 import { openapi } from "./openapi.js";
 import { seeAllDocuments } from "./project.js";
+import projectRoutes, {
+  projectFileType,
+  storeProjectFile,
+  visible as visibleProject,
+  writable as writableProject,
+} from "./projects.js";
 import {
   acceptsNewWork,
   type Ceiling,
@@ -250,6 +229,26 @@ import {
   UPLOAD_TTL_MS,
 } from "./uploads.js";
 import { type Sent, sendPush, type Vapid } from "./webpush.js";
+import {
+  clipFollowUp,
+  dropField,
+  type Meta,
+  parseMeta,
+  publishProblem,
+  retiredFields,
+  STATUSES,
+  SUMMARY_MAX,
+  setField,
+  setList,
+  shotIds,
+  summaryProblem,
+  tag,
+  tagList,
+  unarchiveProblem,
+  unheldFields,
+  unreachableImages,
+} from "./work.js";
+import { workPreview } from "./work-preview.js";
 
 type RateLimiter = { limit(opts: { key: string }): Promise<{ success: boolean }> };
 
@@ -296,7 +295,7 @@ type Env = MailEnv &
     DEMO_LOGIN?: string;
     ENVIRONMENT: string;
     PUBLIC_ORIGIN?: string;
-    /** The domain Email Routing sends guides to (inbound.ts). Unset: Settings says it is not set up. */
+    /** The domain Email Routing sends work to (inbound.ts). Unset: Settings says it is not set up. */
     INBOUND_DOMAIN?: string;
     /** The reader (reader.ts): provider, its key (a secret), the model, and an address if needed. */
     READER_PROVIDER?: string;
@@ -349,7 +348,7 @@ function count(
 const err = (c: { json: (o: unknown, s: number) => Response }, status: number, message: string) =>
   c.json({ message }, status);
 
-const GUIDE_GONE =
+const WORK_GONE =
   "This work isn't available any more. It may have been deleted or moved to a team you're not in.";
 const NOT_AN_EMAIL = "That doesn't look like an email address. Check it and try again.";
 
@@ -378,7 +377,7 @@ interface TeamRow {
   /** When a cancelled plan stops; '' when nothing is ending (migration 0055). */
   plan_ends: string;
 }
-interface GuideRow {
+interface WorkRow {
   id: string;
   account_id: string;
   share_key: string;
@@ -393,7 +392,7 @@ interface GuideRow {
   pulls: number;
   team_id: string;
   to_account_id: string;
-  /** A group inside the team, when the guide was handed to one. See migrations/0014_groups.sql. */
+  /** A group inside the team, when the work was handed to one. See migrations/0014_groups.sql. */
   to_group_id: string;
   /** The work this came out of. See migrations/0015_lineage.sql. */
   parent_id: string;
@@ -401,9 +400,9 @@ interface GuideRow {
   target: string;
   /** What last wrote it: `cli@<version>`, `mcp`, `hub`, `api`, or "" from before 0035. */
   client: string;
-  /** What it says to a person. See migrations/0041_summary.sql. Empty on a guide from before it. */
+  /** What it says to a person. See migrations/0041_summary.sql. Empty on a piece of work from before it. */
   summary: string;
-  /** How it reached Done: 'approved', 'finished', 'archived', or '' (0054_outcome.sql). */
+  /** How it reached Done: 'finished', 'archived', or '' (0054_outcome.sql). */
   outcome?: string;
   /** A person marked this safe to run with nobody watching (0058_alone.sql). */
   alone?: number;
@@ -416,15 +415,15 @@ interface GuideRow {
   customer_mids?: string;
 }
 interface PullRow {
-  guide_id: string;
+  work_id: string;
   account_id: string;
   via: string;
   at: string;
   handle: string;
 }
 
-const shareUrl = (base: string, row: Pick<GuideRow, "id" | "share_key">) =>
-  `${base}/g/${row.id}/${row.share_key}`;
+const shareUrl = (base: string, row: Pick<WorkRow, "id" | "share_key">) =>
+  `${base}/w/${row.id}/${row.share_key}`;
 
 // ---- lookups ----------------------------------------------------------------------------
 
@@ -491,7 +490,7 @@ async function ownerName(c: { env: Env }, teamId: string): Promise<string> {
 
 /**
  * D1 refuses a statement binding more than 100 parameters ("too many SQL variables"), and a page of
- * guides is up to 200 rows, so every `IN (?, …)` over a page runs in slices and the results are
+ * work is up to 200 rows, so every `IN (?, …)` over a page runs in slices and the results are
  * joined. `extra` is how many parameters the statement binds besides the ids. A LIMIT in the
  * statement applies per slice, which only ever returns more, never less.
  */
@@ -527,8 +526,8 @@ async function accounts(c: { env: Env }, ids: string[]): Promise<Map<string, Acc
   return map;
 }
 
-/** Last few pulls per guide, excluding the owner's own, with the puller's handle. */
-async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<string, PullRow[]>> {
+/** Last few pulls per work, excluding the owner's own, with the puller's handle. */
+async function recentPulls(c: { env: Env }, rows: WorkRow[]): Promise<Map<string, PullRow[]>> {
   const map = new Map<string, PullRow[]>();
   if (!rows.length) return map;
   const results = await inSlices(
@@ -538,9 +537,9 @@ async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<strin
       (
         await db(c)
           .prepare(
-            `SELECT p.guide_id, p.account_id, p.via, p.at, COALESCE(a.handle, '') AS handle
+            `SELECT p.work_id, p.account_id, p.via, p.at, COALESCE(a.handle, '') AS handle
              FROM pull p LEFT JOIN account a ON a.id = p.account_id
-             WHERE p.guide_id IN (${marks})
+             WHERE p.work_id IN (${marks})
              ORDER BY p.at DESC LIMIT 500`,
           )
           .bind(...slice)
@@ -549,17 +548,17 @@ async function recentPulls(c: { env: Env }, rows: GuideRow[]): Promise<Map<strin
   );
   const owner = new Map(rows.map((r) => [r.id, r.account_id]));
   for (const p of results) {
-    if (p.account_id && p.account_id === owner.get(p.guide_id)) continue;
-    const list = map.get(p.guide_id) || [];
+    if (p.account_id && p.account_id === owner.get(p.work_id)) continue;
+    const list = map.get(p.work_id) || [];
     if (list.length < 5) list.push(p);
-    map.set(p.guide_id, list);
+    map.set(p.work_id, list);
   }
   return map;
 }
 
 /**
  * A person by id, as a sentence names them — see `displayName`. '' when there is no id at all, so
- * an unaddressed guide reads as unaddressed. An id whose account row is gone still names somebody.
+ * an unaddressed work reads as unaddressed. An id whose account row is gone still names somebody.
  */
 function nameOf(people: Map<string, AccountRow>, id: string): string {
   if (!id) return "";
@@ -581,12 +580,12 @@ type BoardClaim = {
 };
 
 /**
- * Who a guide is for, as the board's To do column groups it: whoever holds it (account ids), else
+ * Who a piece of work is for, as the board's To do column groups it: whoever holds it (account ids), else
  * whoever it was sent to — one person, a group as `#slug`, or each of several named people. Empty is
- * Anyone: work sent to the whole team sits once. One guide shown under several people, never copies.
+ * Anyone: work sent to the whole team sits once. One piece of work shown under several people, never copies.
  */
 function lanesOf(
-  r: GuideRow,
+  r: WorkRow,
   claimRows: BoardClaim[],
   groups: Map<string, { slug: string }>,
   members: Map<string, string[]>,
@@ -599,9 +598,9 @@ function lanesOf(
   return members.get(r.to_group_id) ?? [];
 }
 
-function boardPlace(r: GuideRow, claimRows: BoardClaim[], me: string, at: string) {
+function boardPlace(r: WorkRow, claimRows: BoardClaim[], me: string, at: string) {
   const stage =
-    r.status === "consumed"
+    r.status === "done"
       ? "done"
       : r.status === "draft"
         ? "draft"
@@ -628,7 +627,7 @@ function boardPlace(r: GuideRow, claimRows: BoardClaim[], me: string, at: string
   };
 }
 
-async function summaries(c: Ctx, rows: GuideRow[]) {
+async function summaries(c: Ctx, rows: WorkRow[]) {
   const me = c.get("account");
   const base = origin(c);
   const teams = new Map((await myTeams(c)).map((t) => [t.id, t]));
@@ -637,8 +636,8 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     rows.flatMap((r) => [r.account_id, r.to_account_id]),
   );
   const pulls = await recentPulls(c, rows);
-  // A row can show the first image the guide carries without sending its document to the hub.
-  // Check the shot's guide_id, so a pasted URL for somebody else's image is never a preview.
+  // A row can show the first image the work carries without sending its document to the hub.
+  // Check the shot's work_id, so a pasted URL for somebody else's image is never a preview.
   const ownedShots = new Map<string, { id: string; name: string }[]>();
   const shotRows = await inSlices(
     rows.map((r) => r.id),
@@ -646,15 +645,15 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     async (slice, marks) =>
       (
         await c.env.DB.prepare(
-          `SELECT guide_id, id, name FROM shot WHERE guide_id IN (${marks}) ORDER BY created ASC`,
+          `SELECT work_id, id, name FROM shot WHERE work_id IN (${marks}) ORDER BY created ASC`,
         )
           .bind(...slice)
-          .all<{ guide_id: string; id: string; name: string }>()
+          .all<{ work_id: string; id: string; name: string }>()
       ).results,
   );
   for (const shot of shotRows)
-    ownedShots.set(shot.guide_id, [...(ownedShots.get(shot.guide_id) || []), shot]);
-  // One lookup for the page, not one per row. A guide handed to a group has to say which one, or
+    ownedShots.set(shot.work_id, [...(ownedShots.get(shot.work_id) || []), shot]);
+  // One lookup for the page, not one per row. A piece of work handed to a group has to say which one, or
   // its row reads as a team-wide share and nobody treats it as theirs.
   const groupIds = [...new Set(rows.map((r) => r.to_group_id).filter(Boolean))];
   const groups = new Map<string, { slug: string; name: string }>();
@@ -684,7 +683,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       ).results,
   ))
     members.set(m.group_id, [...(members.get(m.group_id) || []), m.account_id]);
-  // Who holds each guide and how far it got, so the board can place it in one column that is the
+  // Who holds each piece of work and how far it got, so the board can place it in one column that is the
   // same for everyone who opens it.
   const held = new Map<string, BoardClaim[]>();
   for (const k of await inSlices(
@@ -693,17 +692,17 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     async (slice, marks) =>
       (
         await c.env.DB.prepare(
-          `SELECT c.guide_id, c.account_id, c.state, c.agent_id, c.lease_until, c.updated, c.note,
+          `SELECT c.work_id, c.account_id, c.state, c.agent_id, c.lease_until, c.updated, c.note,
                   COALESCE(NULLIF(a.name, ''), NULLIF(a.handle, ''), '') AS name,
                   ${claims.ASKING} IS NOT NULL AS asking
              FROM claim c LEFT JOIN account a ON a.id = c.account_id
-            WHERE c.guide_id IN (${marks})`,
+            WHERE c.work_id IN (${marks})`,
         )
           .bind(...slice)
-          .all<BoardClaim & { guide_id: string }>()
+          .all<BoardClaim & { work_id: string }>()
       ).results,
   ))
-    held.set(k.guide_id, [...(held.get(k.guide_id) || []), k]);
+    held.set(k.work_id, [...(held.get(k.work_id) || []), k]);
   const at = now();
   const marks = await marksOf(
     c.env.DB,
@@ -725,7 +724,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
         async (slice, marks) =>
           (
             await c.env.DB.prepare(
-              `SELECT id FROM guide WHERE id IN (${marks}) AND ${claims.ANSWERED_ELSEWHERE}`,
+              `SELECT id FROM work WHERE id IN (${marks}) AND ${claims.ANSWERED_ELSEWHERE}`,
             )
               .bind(...slice, ...claims.answeredBinds(me))
               .all<{ id: string }>()
@@ -748,7 +747,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     async (slice, marks) =>
       (
         await c.env.DB.prepare(
-          `SELECT id, title, share_key FROM guide WHERE id IN (${marks}) AND ${readable}`,
+          `SELECT id, title, share_key FROM work WHERE id IN (${marks}) AND ${readable}`,
         )
           .bind(...slice, me, me)
           .all<{ id: string; title: string; share_key: string }>()
@@ -769,7 +768,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
     async (slice, marks) =>
       (
         await c.env.DB.prepare(
-          `SELECT parent_id, COUNT(*) AS n FROM guide
+          `SELECT parent_id, COUNT(*) AS n FROM work
             WHERE parent_id IN (${marks}) AND status <> 'draft' AND ${readable}
             GROUP BY parent_id`,
         )
@@ -778,7 +777,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       ).results,
   );
   for (const row of childRows) childCounts.set(row.parent_id, Number(row.n));
-  // When a guide's proof screenshots will be tidied away by themselves, from the conditions the
+  // When a piece of work's proof screenshots will be tidied away by themselves, from the conditions the
   // sweep deletes on.
   const proofEnds = new Map<string, string>(
     await inSlices(
@@ -789,17 +788,17 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
   );
   return rows.map((r) => {
     const shots = ownedShots.get(r.id) || [];
-    const image = guidePreview(shotIds(r.markdown), shots);
+    const image = workPreview(shotIds(r.markdown), shots);
     return {
       id: r.id,
       title: r.title,
       status: r.status,
-      // How it reached Done: finished (a hand-in), approved (before 0061), or archived. '' while not done.
+      // How it reached Done: finished (a hand-in) or archived. '' while not done.
       outcome: r.outcome || "",
       created: r.created,
       updated: r.updated,
       source_context: r.source_context,
-      // Normalised on the way out as well as the way in: a guide stored before there was a rule
+      // Normalised on the way out as well as the way in: a piece of work stored before there was a rule
       // has its old spelling in the column until its author publishes it again.
       tags: tagList(JSON.parse(r.tags)),
       stack_assumptions: JSON.parse(r.stack) as string[],
@@ -834,7 +833,7 @@ async function summaries(c: Ctx, rows: GuideRow[]) {
       preview_image: image,
       // When its proof screenshots are deleted by themselves, or "".
       proof_expires: proofEnds.get(r.id) || "",
-      // Which release wrote it, for tracing a malformed guide back. Empty from before 0035.
+      // Which release wrote it, for tracing a malformed work back. Empty from before 0035.
       client: r.client || "",
       pulled_by: (pulls.get(r.id) || []).map((p) => ({
         handle: p.handle,
@@ -881,7 +880,7 @@ const PUBLIC = new Set([
 /**
  * Reading one screenshot, which cannot be in `PUBLIC` because the path carries an id.
  *
- * A screenshot is evidence inside a guide, and a guide travels as markdown to anyone holding its
+ * A screenshot is evidence inside a piece of work, and a piece of work travels as markdown to anyone holding its
  * share key. An image behind a login does not render in the document it was pasted into — it
  * renders as a broken image, for the reader the evidence was for. The id is the secret, which is
  * the same bargain the share key already makes.
@@ -922,7 +921,7 @@ const publicWebhook = (method: string, path: string) =>
  * it there.
  */
 const INTERNAL = Symbol("passalong.internal.account");
-/** What wrote it, when that is not the MCP server: a guide from email is `email`. */
+/** What wrote it, when that is not the MCP server: a piece of work from email is `email`. */
 const INTERNAL_CLIENT = Symbol("passalong.internal.client");
 
 type Marked = Record<symbol, unknown>;
@@ -1057,11 +1056,11 @@ app.use("/v1/*", async (c, next) => {
 });
 
 /**
- * A guide made from another reached Done, so the one it came from wakes up (docs/LOOP.md step 3).
- * After every write to one guide, rather than in each of the six routes that can finish one: a new
+ * A piece of work made from another reached Done, so the one it came from wakes up (docs/LOOP.md step 3).
+ * After every write to one piece of work, rather than in each of the six routes that can finish one: a new
  * way to finish would otherwise be a parent that never hears. `wakeParent` writes once per child.
  */
-app.use("/v1/guides/:id/*", async (c, next) => {
+app.use("/v1/work/:id/*", async (c, next) => {
   await next();
   if (c.req.method === "GET" || !c.res.ok) return;
   await wakeFrom(c.env, c.req.param("id") || "", c.get("account") || "");
@@ -1073,7 +1072,7 @@ app.use("/v1/tasks/:id/*", async (c, next) => {
 });
 
 /**
- * When `id` is Done and was made from another guide that is not, tell that parent: a note on its
+ * When `id` is Done and was made from another work that is not, tell that parent: a note on its
  * thread, and its author and holders in the feed. A support request is told to tell its customer
  * when its team asked to be (`team.tell_customer`, migration 0059). Never throws: it must not fail
  * the write that finished the child.
@@ -1084,9 +1083,9 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
     const child = await env.DB.prepare(
       `SELECT g.id, g.parent_id, g.title, g.outcome, p.account_id AS author, p.team_id, p.customer,
               COALESCE(t.tell_customer, 0) AS tell
-         FROM guide g JOIN guide p ON p.id = g.parent_id
+         FROM work g JOIN work p ON p.id = g.parent_id
          LEFT JOIN team t ON t.id = p.team_id
-        WHERE g.id = ? AND g.status = 'consumed' AND p.status <> 'consumed'`,
+        WHERE g.id = ? AND g.status = 'done' AND p.status <> 'done'`,
     )
       .bind(id)
       .first<{
@@ -1102,7 +1101,7 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
     if (!child) return;
     if (!(await claims.wakeParent(env.DB, child, { account, at: now() }))) return;
     const { results: holders } = await env.DB.prepare(
-      "SELECT DISTINCT account_id FROM claim WHERE guide_id = ?",
+      "SELECT DISTINCT account_id FROM claim WHERE work_id = ?",
     )
       .bind(child.parent_id)
       .all<{ account_id: string }>();
@@ -1112,7 +1111,7 @@ async function wakeFrom(env: Env, id: string, account: string): Promise<void> {
       await notify(env, {
         to,
         kind: "child_done",
-        guide_id: child.parent_id,
+        work_id: child.parent_id,
         actor_id: "",
         team_id: child.team_id,
         note,
@@ -1582,7 +1581,7 @@ app.delete("/v1/tokens/:id", async (c) => {
 
 // ---- giving a plan away (migrations/0026_gifts.sql) --------------------------------------------
 //
-// The operator's own routes, and the only ones in the product that are not about guides. They are
+// The operator's own routes, and the only ones in the product that are not about work. They are
 // here rather than in a separate admin service because there is one deployment and one database,
 // and a second Worker to run three statements would be a system to maintain for the rest of time.
 //
@@ -1623,7 +1622,7 @@ const NOT_THE_OWNER =
  * Make an account that exists to run the product, and hand back the two ways into it.
  *
  * A separate account on purpose: admin work is then never done by the account that also publishes
- * guides, so a compromised working session cannot comp anybody, and the log of who did what says
+ * work, so a compromised working session cannot comp anybody, and the log of who did what says
  * which hat was on. It signs in like any other account — that is the whole point of the role being
  * a column — so nothing new is issued and nothing new can leak: a token for the CLI, and a link to
  * set a password for the hub, each shown exactly once.
@@ -1810,9 +1809,9 @@ app.get("/v1/me", async (c) => {
     display: displayName({ id: account, handle: me?.handle, name: me?.name }),
     email: me?.email || "",
     teams,
-    // What is counted, not what exists: an archived guide takes up no room, so a warning drawn
+    // What is counted, not what exists: an archived work takes up no room, so a warning drawn
     // from a total would have told people to delete things that were already out of the way.
-    guides: room.used,
+    work: room.used,
     limit: room.limit,
     // The name, because the number alone cannot say the difference between "no ceiling" and "may
     // sync nothing" — both of which would be a falsy `limit` to anything reading this.
@@ -1863,7 +1862,7 @@ async function quota(c: Ctx, account: string): Promise<{ used: number } & Ceilin
   // paying removes this account's ceiling. Asked here rather than stored on the account, so the
   // answer cannot be stale — see ceilingFor().
   const row = await c.env.DB.prepare(
-    `SELECT (SELECT COUNT(*) FROM guide WHERE account_id = ? AND status IN (${marks})) AS used,
+    `SELECT (SELECT COUNT(*) FROM work WHERE account_id = ? AND status IN (${marks})) AS used,
             (SELECT sync_limit FROM account WHERE id = ?) AS own,
             (SELECT grandfathered FROM account WHERE id = ?) AS old,
             (SELECT plan FROM account WHERE id = ?) AS own_plan,
@@ -2001,7 +2000,7 @@ app.get("/v1/teams/:slug", async (c) => {
   )
     .bind(team.id)
     .all<{ id: string; handle: string; name: string; role: string; joined: string }>();
-  const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM guide WHERE team_id = ?")
+  const n = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM work WHERE team_id = ?")
     .bind(team.id)
     .first<{ n: number }>();
   const chCount = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM team_channel WHERE team_id = ?")
@@ -2019,7 +2018,7 @@ app.get("/v1/teams/:slug", async (c) => {
       // The one who made the team: never demoted or removed, so a team cannot be taken from them.
       creator: m.id === team.created_by,
     })),
-    guides: n?.n ?? 0,
+    work: n?.n ?? 0,
     channels: chCount?.n ?? 0,
     plan: team.plan,
     // Zero seats on a free plan is not "no room" — seats are simply not what limits that team, so
@@ -2074,11 +2073,11 @@ app.patch("/v1/teams/:slug/members/:who", async (c) => {
   if (role === "owner")
     await notify(c.env, {
       to: who.id,
-      kind: "promoted",
+      kind: "made_admin",
       actor_id: c.get("account"),
       team_id: team.id,
     });
-  count(c, role === "owner" ? "member_promoted" : "member_demoted", {});
+  count(c, role === "owner" ? "member_made_admin" : "member_demoted", {});
   return c.json({ id: who.id, role: role === "owner" ? "admin" : "member" });
 });
 
@@ -2101,14 +2100,14 @@ app.delete("/v1/teams/:slug/members/:who", async (c) => {
   // What they were holding in this team goes back to waiting, and they leave its groups; what they
   // wrote stays, in the team, where its readers still need it.
   const { results: held } = await c.env.DB.prepare(
-    `SELECT c.guide_id FROM claim c JOIN guide g ON g.id = c.guide_id
+    `SELECT c.work_id FROM claim c JOIN work g ON g.id = c.work_id
       WHERE c.account_id = ? AND g.team_id = ?`,
   )
     .bind(who.id, team.id)
-    .all<{ guide_id: string }>();
+    .all<{ work_id: string }>();
   await c.env.DB.batch([
     c.env.DB.prepare(
-      "DELETE FROM claim WHERE account_id = ? AND guide_id IN (SELECT id FROM guide WHERE team_id = ?)",
+      "DELETE FROM claim WHERE account_id = ? AND work_id IN (SELECT id FROM work WHERE team_id = ?)",
     ).bind(who.id, team.id),
     c.env.DB.prepare(
       "DELETE FROM group_member WHERE account_id = ? AND group_id IN (SELECT id FROM team_group WHERE team_id = ?)",
@@ -2353,7 +2352,7 @@ app.delete("/v1/teams/:slug/groups/:id", async (c) => {
   if (!team) return err(c, 404, "You're not in that team any more, or it was deleted.");
   if (team.role !== "owner")
     return err(c, 403, "Only the team's owner can change its groups. Ask them to do it.");
-  // Guides already handed to it keep the id: the row says who it went to, and rewriting history
+  // Work already handed to it keep the id: the row says who it went to, and rewriting history
   // to say it went to nobody is a worse answer than naming a group that no longer exists.
   await c.env.DB.prepare("DELETE FROM team_group WHERE id = ? AND team_id = ?")
     .bind(c.req.param("id"), team.id)
@@ -2461,17 +2460,17 @@ app.post("/v1/invites/:code/accept", async (c) => {
   });
 });
 
-// ---- guides -----------------------------------------------------------------------------
+// ---- work -----------------------------------------------------------------------------
 
 // ---- evidence ---------------------------------------------------------------------------
 
 /**
- * A screenshot, stored so a guide can point at it.
+ * A screenshot, stored so a piece of work can point at it.
  *
- * Evidence has to outlive the browser tab it was dropped into: a guide travels as markdown, an
+ * Evidence has to outlive the browser tab it was dropped into: a piece of work travels as markdown, an
  * image in markdown is a URL, and a `blob:` URL is meaningless to everyone but the person who
  * made it. So the bytes go in R2 and the issue's markdown carries `![alt](<origin>/v1/shots/id)`,
- * which the guide page already renders as a figure and its CSP already allows.
+ * which the work page already renders as a figure and its CSP already allows.
  *
  * The upload is raw bytes with a content-type, not multipart: there is one file per request and
  * parsing a multipart body to find it would be work in service of nothing.
@@ -2479,77 +2478,77 @@ app.post("/v1/invites/:code/accept", async (c) => {
 const SHOT_MAX = 5 * 1024 * 1024;
 
 /**
- * Everything a guide points a screenshot from: its own markdown, and the evidence of every hand-in
+ * Everything a piece of work points a screenshot from: its own markdown, and the evidence of every hand-in
  * on it. Both are documents somebody wrote, and either is reason enough to keep the file.
  */
-async function carriedShots(c: Ctx, guide: string, markdown: string) {
-  const said = [...(await evidenceOn(c.env.DB, guide)), ...(await conversationOn(c.env.DB, guide))];
+async function carriedShots(c: Ctx, work: string, markdown: string) {
+  const said = [...(await evidenceOn(c.env.DB, work)), ...(await conversationOn(c.env.DB, work))];
   return [...new Set([...shotIds(markdown), ...said.flatMap(shotIds)])];
 }
 
 /**
- * Everything a guide points a file at: the same three places as its screenshots. See carriedShots.
+ * Everything a piece of work points a file at: the same three places as its screenshots. See carriedShots.
  */
-async function carriedFiles(c: Ctx, guide: string, markdown: string) {
-  const said = [...(await evidenceOn(c.env.DB, guide)), ...(await conversationOn(c.env.DB, guide))];
+async function carriedFiles(c: Ctx, work: string, markdown: string) {
+  const said = [...(await evidenceOn(c.env.DB, work)), ...(await conversationOn(c.env.DB, work))];
   return [...new Set([...attachmentIds(markdown), ...said.flatMap(attachmentIds)])];
 }
 
-/** The files a piece of writing points at, claimed for the guide, and any it let go of released. */
-async function claimFiles(c: Ctx, account: string, guide: string, text: string, markdown: string) {
+/** The files a piece of writing points at, claimed for the work, and any it let go of released. */
+async function claimFiles(c: Ctx, account: string, work: string, text: string, markdown: string) {
   await holdAttachments(c.env.DB, {
     account,
-    guide,
+    work,
     mine: attachmentIds(text),
-    carried: await carriedFiles(c, guide, markdown),
+    carried: await carriedFiles(c, work, markdown),
   });
 }
 
 /** The screenshots and files a document points at, claimed for it, and any it dropped let go. */
-async function claimShots(c: Ctx, account: string, guide: string, markdown: string) {
+async function claimShots(c: Ctx, account: string, work: string, markdown: string) {
   await holdShots(c.env.DB, {
     account,
-    guide,
+    work,
     mine: shotIds(markdown),
-    carried: await carriedShots(c, guide, markdown),
+    carried: await carriedShots(c, work, markdown),
   });
-  await claimFiles(c, account, guide, markdown, markdown);
+  await claimFiles(c, account, work, markdown, markdown);
 }
 
 /**
- * The screenshots a hand-in's evidence points at, claimed for the guide it answers.
+ * The screenshots a hand-in's evidence points at, claimed for the work it answers.
  *
  * Evidence is not markdown and lives on the claim, so nothing here was claiming it: a screenshot
  * referenced only from evidence stayed unowned, and the nightly sweep deleted it a day later —
  * leaving the one part of a hand-in a reviewer cannot reconstruct as a broken image.
  */
-async function claimEvidenceShots(c: Ctx, account: string, guide: string, evidence: string) {
+async function claimEvidenceShots(c: Ctx, account: string, work: string, evidence: string) {
   const ids = shotIds(evidence);
   const files = attachmentIds(evidence);
   if (!ids.length && !files.length) return;
-  const row = await c.env.DB.prepare("SELECT markdown FROM guide WHERE id = ?")
-    .bind(guide)
+  const row = await c.env.DB.prepare("SELECT markdown FROM work WHERE id = ?")
+    .bind(work)
     .first<{ markdown: string }>();
   if (ids.length)
     await holdShots(c.env.DB, {
       account,
-      guide,
+      work,
       mine: ids,
-      carried: await carriedShots(c, guide, row?.markdown || ""),
+      carried: await carriedShots(c, work, row?.markdown || ""),
     });
-  if (files.length) await claimFiles(c, account, guide, evidence, row?.markdown || "");
+  if (files.length) await claimFiles(c, account, work, evidence, row?.markdown || "");
 }
 
 /**
- * Take a guide's evidence with it.
+ * Take a piece of work's evidence with it.
  *
  * R2 first: a bucket object with no row is invisible to everything and costs storage, while a row
  * with no object is a broken image on a page. If the delete half-fails, the second failure mode is
  * the one that is still recoverable.
  */
-async function dropShots(c: Ctx, guide: string) {
-  const { results } = await c.env.DB.prepare("SELECT id, type FROM shot WHERE guide_id = ?")
-    .bind(guide)
+async function dropShots(c: Ctx, work: string) {
+  const { results } = await c.env.DB.prepare("SELECT id, type FROM shot WHERE work_id = ?")
+    .bind(work)
     .all<{ id: string; type: string }>();
   if (!results.length) return;
   const bucket = c.env.SHOTS;
@@ -2559,18 +2558,18 @@ async function dropShots(c: Ctx, guide: string) {
       // that is gone would be worse.
     });
   }
-  await c.env.DB.prepare("DELETE FROM shot WHERE guide_id = ?").bind(guide).run();
+  await c.env.DB.prepare("DELETE FROM shot WHERE work_id = ?").bind(work).run();
 }
 
-/** Take a guide's attached files with it, bucket first, for the same reason dropShots does. */
-async function dropFiles(c: Ctx, guide: string) {
-  const { results } = await c.env.DB.prepare("SELECT id, type FROM attachment WHERE guide_id = ?")
-    .bind(guide)
+/** Take a piece of work's attached files with it, bucket first, for the same reason dropShots does. */
+async function dropFiles(c: Ctx, work: string) {
+  const { results } = await c.env.DB.prepare("SELECT id, type FROM attachment WHERE work_id = ?")
+    .bind(work)
     .all<{ id: string; type: string }>();
   if (!results.length) return;
   if (c.env.SHOTS)
     await c.env.SHOTS.delete(results.map((r) => attachmentKey(r.id, r.type))).catch(() => {});
-  await c.env.DB.prepare("DELETE FROM attachment WHERE guide_id = ?").bind(guide).run();
+  await c.env.DB.prepare("DELETE FROM attachment WHERE work_id = ?").bind(work).run();
 }
 
 app.post("/v1/shots", async (c) => {
@@ -2606,7 +2605,7 @@ async function storeShot(
   const id = rid(12);
   await bucket.put(shotKey(id, type), body, { httpMetadata: { contentType: type } });
   await c.env.DB.prepare(
-    "INSERT INTO shot (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, '', ?, ?, ?, ?)",
+    "INSERT INTO shot (id, account_id, work_id, name, type, bytes, created) VALUES (?, ?, '', ?, ?, ?, ?)",
   )
     .bind(id, account, String(name).slice(0, 120), type, body.byteLength, now())
     .run();
@@ -2627,21 +2626,21 @@ app.post("/v1/uploads", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as {
     name?: unknown;
     kind?: unknown;
-    folder?: unknown;
+    project?: unknown;
   };
   // What the link will take: a picture (the default, and what every link was before) or a file.
   let kind = body.kind === "file" ? "file" : "image";
-  if (body.folder !== undefined) {
-    if (typeof body.folder !== "string") return err(c, 400, "Send a folder id.");
-    const folder = await visibleFolder(c, body.folder);
-    if (!folder) return err(c, 404, "That project isn't available to you.");
-    if (!(await writableFolder(c, folder)))
+  if (body.project !== undefined) {
+    if (typeof body.project !== "string") return err(c, 400, "Send a project id.");
+    const project = await visibleProject(c, body.project);
+    if (!project) return err(c, 404, "That project isn't available to you.");
+    if (!(await writableProject(c, project)))
       return err(
         c,
         402,
         "This team's plan has lapsed. Its projects can still be read, but not changed.",
       );
-    kind = `folder:${folder.id}`;
+    kind = `project:${project.id}`;
   }
   const at = now();
   await c.env.DB.prepare("DELETE FROM upload WHERE account_id = ? AND (expires <= ? OR used <> '')")
@@ -2694,12 +2693,12 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
   if (!open)
     return err(c, 410, "That upload link has expired or was already used. Ask for a new one.");
   const file = open.kind === "file";
-  const folderId = open.kind.startsWith("folder:") ? open.kind.slice(7) : "";
-  if (folderId) {
-    const folder = await visibleFolder({ env: c.env, get: () => open.account_id }, folderId);
-    if (!folder)
-      return err(c, 410, "This folder is no longer available. Ask for a new upload link.");
-    if (!(await writableFolder(c, folder)))
+  const projectId = open.kind.startsWith("project:") ? open.kind.slice("project:".length) : "";
+  if (projectId) {
+    const project = await visibleProject({ env: c.env, get: () => open.account_id }, projectId);
+    if (!project)
+      return err(c, 410, "This project is no longer available. Ask for a new upload link.");
+    if (!(await writableProject(c, project)))
       return err(
         c,
         402,
@@ -2709,32 +2708,32 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
 
   const body = await c.req.arrayBuffer();
   if (!body.byteLength) return err(c, 400, "That file is empty. Check the path you sent.");
-  if (body.byteLength > (file || folderId ? ATTACH_MAX : SHOT_MAX))
+  if (body.byteLength > (file || projectId ? ATTACH_MAX : SHOT_MAX))
     return err(
       c,
       413,
-      file || folderId
+      file || projectId
         ? "That file is over 10 MB. Attach something smaller, or a link to it."
         : "That image is over 5 MB. Use a smaller screenshot.",
     );
   let type = "";
-  if (folderId) {
+  if (projectId) {
     const named = await c.env.DB.prepare("SELECT name FROM upload WHERE hash = ?")
       .bind(hash)
       .first<{ name: string }>();
     type =
-      folderAssetType(
+      projectFileType(
         new Uint8Array(body),
         c.req.header("content-type") || "",
         named?.name || "",
       ) || "";
     if (!type) return err(c, 415, "Use an image, PDF, ZIP or text file.");
     const count = await c.env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM folder_asset WHERE folder_id = ?",
+      "SELECT COUNT(*) AS n FROM project_file WHERE project_id = ?",
     )
-      .bind(folderId)
+      .bind(projectId)
       .first<{ n: number }>();
-    if ((count?.n || 0) >= 100) return err(c, 409, "This folder has 100 files already.");
+    if ((count?.n || 0) >= 100) return err(c, 409, "This project has 100 files already.");
   } else if (file) {
     // The name the link was minted with is the name it is kept under, since the sandbox's curl has
     // no good way to send one; its extension is a hint for text, and the bytes decide the rest.
@@ -2769,10 +2768,10 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
   if (!ticket) {
     return err(c, 410, "That upload link has expired or was already used. Ask for a new one.");
   }
-  if (folderId) {
-    const stored = await storeFolderAsset(
+  if (projectId) {
+    const stored = await storeProjectFile(
       c.env,
-      folderId,
+      projectId,
       ticket.account_id,
       body,
       ticket.name,
@@ -2780,7 +2779,7 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
     );
     return stored.error
       ? err(c, stored.status || 500, stored.error)
-      : c.json({ asset: stored.asset }, 201);
+      : c.json({ file: stored.file }, 201);
   }
   if (file) {
     const attachment = await storeAttachment(c, bucket, ticket.account_id, type, body, ticket.name);
@@ -2793,9 +2792,9 @@ app.on(["PUT", "POST"], "/v1/uploads/:token", async (c) => {
 });
 
 /**
- * Served to anyone with the link, like the guide that embeds it. The id is the secret — a guide's
+ * Served to anyone with the link, like the work that embeds it. The id is the secret — a piece of work's
  * share key is the same bargain, and an image behind a login is an image that does not render in
- * the markdown the guide was pasted into.
+ * the markdown the work was pasted into.
  */
 /**
  * A file that is not a picture, stored for a person to download. See attachments.ts for what is
@@ -2835,7 +2834,7 @@ const TOO_MANY_FILES = "You have a lot of files waiting to be sent. Send or remo
 /** Files an account has uploaded that nothing has claimed yet. */
 async function filesWaiting(c: Ctx, account: string): Promise<number> {
   const row = await c.env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM attachment WHERE account_id = ? AND guide_id = ''",
+    "SELECT COUNT(*) AS n FROM attachment WHERE account_id = ? AND work_id = ''",
   )
     .bind(account)
     .first<{ n: number }>();
@@ -2859,7 +2858,7 @@ async function storeAttachment(
   const name = safeName(given, type);
   await bucket.put(attachmentKey(id, type), body, { httpMetadata: { contentType: type } });
   await c.env.DB.prepare(
-    "INSERT INTO attachment (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, '', ?, ?, ?, ?)",
+    "INSERT INTO attachment (id, account_id, work_id, name, type, bytes, created) VALUES (?, ?, '', ?, ?, ?, ?)",
   )
     .bind(id, account, name, type, body.byteLength, now())
     .run();
@@ -2870,7 +2869,7 @@ async function storeAttachment(
 /**
  * Downloading one. Unlike a screenshot this needs a credential: a picture is evidence in a document
  * that travels by link, and a file is somebody's PDF or CSV. It may be read by whoever uploaded it,
- * and once a guide has claimed it by anybody who can read that guide. Anyone else is told it does not
+ * and once a piece of work has claimed it by anybody who can read that work. Anyone else is told it does not
  * exist, not that it is forbidden — a refusal would confirm the id.
  *
  * Always a download, whatever it is: `content-disposition: attachment`, `nosniff`, and a policy that
@@ -2882,13 +2881,13 @@ app.get("/v1/attachments/:id", async (c) => {
   const id = c.req.param("id");
   if (!bucket || !/^[a-z0-9]{6,16}$/.test(id)) return c.notFound();
   const row = await c.env.DB.prepare(
-    "SELECT account_id, guide_id, name, type FROM attachment WHERE id = ?",
+    "SELECT account_id, work_id, name, type FROM attachment WHERE id = ?",
   )
     .bind(id)
-    .first<{ account_id: string; guide_id: string; name: string; type: string }>();
+    .first<{ account_id: string; work_id: string; name: string; type: string }>();
   if (!row) return c.notFound();
   let allowed = row.account_id === c.get("account");
-  if (!allowed && row.guide_id) allowed = Boolean(await readableGuide(c, row.guide_id));
+  if (!allowed && row.work_id) allowed = Boolean(await readableWork(c, row.work_id));
   if (!allowed) return c.notFound();
   const object = await bucket.get(attachmentKey(id, row.type));
   if (!object) return c.notFound();
@@ -2924,7 +2923,7 @@ app.get("/v1/shots/:id", async (c) => {
   });
 });
 
-app.get("/v1/guides", async (c) => {
+app.get("/v1/work", async (c) => {
   const account = c.get("account");
   const q = (c.req.query("q") || "").trim().toLowerCase();
   const scope = (c.req.query("scope") || "all").trim();
@@ -2951,7 +2950,7 @@ app.get("/v1/guides", async (c) => {
     where = "team_id = ?";
     binds.push(team.id);
   }
-  let sql = `SELECT * FROM guide WHERE ${where}`;
+  let sql = `SELECT * FROM work WHERE ${where}`;
   for (const t of q ? q.split(/\s+/) : []) {
     sql +=
       " AND (lower(title) LIKE ? OR lower(tags) LIKE ? OR lower(stack) LIKE ? OR lower(source_context) LIKE ? OR lower(markdown) LIKE ?)";
@@ -2961,12 +2960,12 @@ app.get("/v1/guides", async (c) => {
   sql += " ORDER BY created DESC LIMIT 200";
   const { results } = await c.env.DB.prepare(sql)
     .bind(...binds)
-    .all<GuideRow>();
-  return c.json({ guides: await summaries(c, results) });
+    .all<WorkRow>();
+  return c.json({ work: await summaries(c, results) });
 });
 
 // Handed to me (or to a team I'm in, by someone else) and not yet pulled by me.
-async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
+async function inboxRows(c: Ctx, limit = 100): Promise<WorkRow[]> {
   const account = c.get("account");
   const ids = (await myTeams(c)).map((t) => t.id);
   // Three addresses reach you, and they are not the same ask:
@@ -2975,22 +2974,22 @@ async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
   //   to_group_id in your groups somebody addressed the people who do a thing, and you are one
   //   team, addressed to nobody  it was put in a room you are in
   //
-  // The team clause has to exclude both of the others, or a guide handed to #frontend would also
+  // The team clause has to exclude both of the others, or a piece of work handed to #frontend would also
   // land on every other member of the team as if it had been shared with all of them.
   const teamClause = ids.length
     ? `OR (team_id IN (${ids.map(() => "?").join(",")}) AND to_account_id = '' AND to_group_id = '')`
     : "";
   const MY_GROUPS = "SELECT group_id FROM group_member WHERE account_id = ?";
   const { results } = await c.env.DB.prepare(
-    `SELECT * FROM guide
-     WHERE account_id <> ? AND status = 'published'
+    `SELECT * FROM work
+     WHERE account_id <> ? AND status = 'ready'
        AND (to_account_id = ? OR (to_group_id <> '' AND to_group_id IN (${MY_GROUPS})) ${teamClause})
-       AND id NOT IN (SELECT guide_id FROM pull WHERE account_id = ?)
+       AND id NOT IN (SELECT work_id FROM pull WHERE account_id = ?)
        -- Passing on something takes it off your board and puts it back on its author's. Saying
        -- "on it" does not: you still owe the work, so it stays where you will see it.
-       AND id NOT IN (SELECT guide_id FROM ack WHERE account_id = ? AND taken = 0)
+       AND id NOT IN (SELECT work_id FROM task_event WHERE account_id = ? AND kind = 'passed')
        AND NOT ${claims.ANSWERED_ELSEWHERE}
-     -- Named beats dropped. Someone writing your handle chose you; a guide shared with a team you
+     -- Named beats dropped. Someone writing your handle chose you; a piece of work shared with a team you
      -- happen to be in chose nobody, and a group sits between the two — so the lane reads in that
      -- order rather than by age alone, which buried what was addressed to you under the rest.
      ORDER BY CASE WHEN to_account_id = ? THEN 0 WHEN to_group_id <> '' THEN 1 ELSE 2 END,
@@ -3007,7 +3006,7 @@ async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
       account,
       limit,
     )
-    .all<GuideRow>();
+    .all<WorkRow>();
   return results;
 }
 
@@ -3019,10 +3018,10 @@ async function inboxRows(c: Ctx, limit = 100): Promise<GuideRow[]> {
 // Someone else pulling is what counts everywhere here — your own pull from another machine is
 // not the work landing.
 const STALE_DAYS = 7;
-const PULLED_BY_OTHERS = `EXISTS (SELECT 1 FROM pull p WHERE p.guide_id = g.id
+const PULLED_BY_OTHERS = `EXISTS (SELECT 1 FROM pull p WHERE p.work_id = g.id
      AND p.account_id <> '' AND p.account_id <> g.account_id)`;
 // Addressed to someone and still untouched by them. Named because the buckets below are tested in
-// order and the first match wins (DESIGN_BRIEF §2), so the later ones have to say what they are
+// order and the first match wins, so the later ones have to say what they are
 // not: each query carries the negation of every bucket above it rather than trusting the reader —
 // or the CLI, or the agent tool — to apply the order themselves.
 const IN_FLIGHT = `(g.to_account_id <> '' OR g.team_id <> '') AND NOT ${PULLED_BY_OTHERS}`;
@@ -3032,21 +3031,21 @@ app.get("/v1/board", async (c) => {
   const mine = (sql: string, ...binds: unknown[]) =>
     c.env.DB.prepare(sql)
       .bind(account, ...binds)
-      .all<GuideRow>();
+      .all<WorkRow>();
 
   const [waiting, flight, landed] = await Promise.all([
     inboxRows(c, 20),
     // Handed to a person or a team, and still untouched by anyone but you.
     mine(
-      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published' AND ${IN_FLIGHT}
+      `SELECT g.* FROM work g WHERE g.account_id = ? AND g.status = 'ready' AND ${IN_FLIGHT}
        ORDER BY g.created ASC LIMIT 20`,
     ).then((r) => r.results),
-    // Someone else has it. This used to stop at three pulls, above which a guide moved to a
+    // Someone else has it. This used to stop at three pulls, above which a piece of work moved to a
     // "worth keeping" queue of its own — but that was a counter with a bucket around it, and it
     // meant something nobody acts on. The pull count is on the row; being pulled by someone else
     // is itself the negation of `in_flight`, so this needs no separate guard against it.
     mine(
-      `SELECT g.* FROM guide g WHERE g.account_id = ? AND g.status = 'published'
+      `SELECT g.* FROM work g WHERE g.account_id = ? AND g.status = 'ready'
          AND ${PULLED_BY_OTHERS}
        ORDER BY g.updated DESC LIMIT 20`,
     ).then((r) => r.results),
@@ -3056,7 +3055,7 @@ app.get("/v1/board", async (c) => {
   // (teams, people, recent pulls) are per-call, not per-row.
   const all = [...waiting, ...flight, ...landed];
   const byId = new Map((await summaries(c, all)).map((s) => [s.id, s]));
-  const pick = (rows: GuideRow[]) => rows.map((r) => byId.get(r.id)).filter(Boolean);
+  const pick = (rows: WorkRow[]) => rows.map((r) => byId.get(r.id)).filter(Boolean);
   const cutoff = Date.now() - STALE_DAYS * 864e5;
 
   return c.json({
@@ -3084,8 +3083,8 @@ app.get("/v1/needs", async (c) => {
 // ---- log --------------------------------------------------------------------------------
 
 // What you did, newest first. The opposite face of `/v1/notifications`: that one is what other
-// people did to your guides and it clears when you read it, this one is your own acts and it never
-// clears. Neither the buckets of the board nor the rank of the guides page — the only order here
+// people did to your work and it clears when you read it, this one is your own acts and it never
+// clears. Neither the buckets of the board nor the rank of the work page — the only order here
 // is time, which is the one axis nothing else in the product offers.
 //
 // See log.ts for why this invents no table, and for the one thing it cannot honestly claim to be.
@@ -3402,8 +3401,8 @@ interface PushRow {
 
 /**
  * Tell every device this account turned push on for. A private device gets one line that names
- * nothing; the rest get the feed's sentence. One guide per topic, so a phone that was off wakes to
- * the latest word on each guide rather than a backlog. A device the push service says is gone is
+ * nothing; the rest get the feed's sentence. One piece of work per topic, so a phone that was off wakes to
+ * the latest word on each piece of work rather than a backlog. A device the push service says is gone is
  * forgotten.
  */
 async function deliverPush(
@@ -3428,15 +3427,15 @@ async function deliverPush(
         {
           title: "Passalong",
           body: d.private ? "Something needs you in Passalong." : m.text,
-          url: m.guide ? `/hub/g/${m.guide}` : "/hub",
-          tag: m.guide || m.kind,
+          url: m.work ? `/hub/w/${m.work}` : "/hub",
+          tag: m.work || m.kind,
           // A test is shown even to somebody looking at the hub, where a real one becomes a toast:
           // the test is sent from Settings, inside the hub, so otherwise nobody ever sees one.
           ...(always ? { always: true } : {}),
         },
         vapid,
         {
-          topic: (m.guide || m.kind).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32),
+          topic: (m.work || m.kind).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32),
           urgency: m.kind === "blocked" ? "high" : "normal",
         },
       );
@@ -3551,7 +3550,7 @@ app.post("/v1/push/subscriptions/:id/test", async (c) => {
   const [out] = await deliverPush(
     c.env,
     c.get("account"),
-    { text: "Notifications are on for this device.", guide: "", kind: "handoff" },
+    { text: "Notifications are on for this device.", work: "", kind: "sent_to_you" },
     c.req.param("id"),
     true,
   );
@@ -3575,7 +3574,7 @@ app.post("/v1/push/subscriptions/:id/test", async (c) => {
 });
 
 /**
- * The live stream: notifications and changes to guides you can see, as Server-Sent Events. See
+ * The live stream: notifications and changes to work you can see, as Server-Sent Events. See
  * events.ts for the shape and why it polls. `Last-Event-ID` (or `?since`) resumes from a cursor.
  */
 app.get("/v1/events", (c) => {
@@ -3584,21 +3583,21 @@ app.get("/v1/events", (c) => {
   const source = {
     notes: async (after: string) =>
       (await feedSince(c.env, account, after)).map((r) => notifSummary(r)),
-    // Anything that moved on a guide this account can read: a hold or its progress note, a verdict,
-    // an ack. The hub refreshes that guide; it is not news on its own, so it is never a toast.
+    // Anything that moved on a piece of work this account can read: a hold or its progress note, a proof,
+    // a thread line. The hub refreshes that work; it is not news on its own, so it is never a toast.
     changes: async (after: string) =>
       (
         await c.env.DB.prepare(
-          `SELECT x.guide_id, MAX(x.at) AS at FROM (
-             SELECT guide_id, updated AS at FROM claim WHERE updated > ?1
-             UNION ALL SELECT guide_id, at FROM verdict WHERE at > ?1
-             UNION ALL SELECT guide_id, at FROM ack WHERE at > ?1
-           ) x JOIN guide g ON g.id = x.guide_id
+          `SELECT x.work_id, MAX(x.at) AS at FROM (
+             SELECT work_id, updated AS at FROM claim WHERE updated > ?1
+             UNION ALL SELECT work_id, at FROM proof WHERE at > ?1
+             UNION ALL SELECT work_id, at FROM task_event WHERE at > ?1
+           ) x JOIN work g ON g.id = x.work_id
            WHERE g.account_id = ?2 OR g.team_id IN (SELECT team_id FROM membership WHERE account_id = ?2)
-           GROUP BY x.guide_id ORDER BY at LIMIT 50`,
+           GROUP BY x.work_id ORDER BY at LIMIT 50`,
         )
           .bind(after, account)
-          .all<{ guide_id: string; at: string }>()
+          .all<{ work_id: string; at: string }>()
       ).results,
   };
   return new Response(eventStream(source, since, { signal: c.req.raw.signal }), {
@@ -3614,18 +3613,18 @@ app.post("/v1/notifications/read", async (c) => {
   const requested = c.req.query("scope") || "all";
   const scope = await workScope(c, requested);
   if (!scope) return err(c, 404, `You're not in a team called "${requested}".`);
-  const { ids, guide } = (await c.req.json().catch(() => ({}))) as {
+  const { ids, work } = (await c.req.json().catch(() => ({}))) as {
     ids?: number[];
-    guide?: unknown;
+    work?: unknown;
   };
   let clean = (ids || []).map(Number).filter(Number.isInteger).slice(0, 200);
   // Opening a piece of work marks what happened to it seen, and nothing else: with no unread rows
   // on it there is nothing to mark, and an empty id list would mean everything.
-  if (typeof guide === "string" && guide) {
+  if (typeof work === "string" && work) {
     const { results } = await c.env.DB.prepare(
-      "SELECT id FROM notification WHERE account_id = ? AND guide_id = ? AND read_at = ''",
+      "SELECT id FROM notification WHERE account_id = ? AND work_id = ? AND read_at = ''",
     )
-      .bind(c.get("account"), guide)
+      .bind(c.get("account"), work)
       .all<{ id: number }>();
     clean = results.map((r) => r.id);
     if (!clean.length)
@@ -3633,12 +3632,12 @@ app.post("/v1/notifications/read", async (c) => {
   }
   const read = await markRead(c.env, c.get("account"), clean, scope);
   // "Mark all seen" clears the documents' marks too: they are the same coral.
-  if (!clean.length && !guide) await seeAllDocuments(c.env.DB, c.get("account"), now());
+  if (!clean.length && !work) await seeAllDocuments(c.env.DB, c.get("account"), now());
   return c.json({ read, unread: await unreadCount(c.env, c.get("account"), scope) });
 });
 
 /**
- * How far a chain of guides is allowed to run.
+ * How far a chain of work is allowed to run.
  *
  * A rendering limit before it is a storage one: eight hops back is already a history nobody opens,
  * and a page that has to draw an arbitrary number of ancestors draws none of them well. It doubles
@@ -3648,15 +3647,15 @@ app.post("/v1/notifications/read", async (c) => {
 const LINEAGE_MAX = 8;
 
 /**
- * Tell whoever a guide just reached: a named person (mailed), each person in a group, the team's
- * feed, and the team's channel. Called when a guide goes Ready — from Draft on the status route, or
+ * Tell whoever a piece of work just reached: a named person (mailed), each person in a group, the team's
+ * feed, and the team's channel. Called when a piece of work goes Ready — from Draft on the status route, or
  * on a re-publish that changes the address of one already Ready. Never for a draft: nobody can take
  * one, and "sent you" about work a person has not released yet is news about nothing.
  *
  * `addressed`, `handedToGroup` and `newlyShared` say which of those are new, because an unchanged
  * address re-published is not a new event. Returns whether the named person was mailed.
  */
-async function announceGuide(
+async function announceWork(
   c: Ctx,
   {
     id,
@@ -3689,13 +3688,13 @@ async function announceGuide(
     if (addressed && toAccount) {
       await notify(c.env, {
         to: toAccount.id,
-        kind: "handoff",
-        guide_id: id,
+        kind: "sent_to_you",
+        work_id: id,
         actor_id: account,
         team_id: team?.id,
-        // A handoff to a named person is the one event worth an email: it is addressed work.
+        // Work sent to a named person is the one event worth an email: it is addressed work.
         mail: async () => {
-          notified = await sendHandoff(c.env, {
+          notified = await sendSentToYou(c.env, {
             to: toAccount.email,
             fromName,
             title: title,
@@ -3708,7 +3707,7 @@ async function announceGuide(
       });
     }
     // A group is addressed work for each of its people, so each of them is told the way a named
-    // person is — the same `handoff`, not the team's `shared`. No mail: one guide reaching six
+    // person is — the same `sent_to_you`, not the team's `shared`. No mail: one piece of work reaching six
     // inboxes is six emails, and a group exists precisely because the sender does not know which
     // of them will take it.
     if (handedToGroup && toGroup) {
@@ -3720,7 +3719,7 @@ async function announceGuide(
       await notifyAll(
         c.env,
         results.map((m) => m.account_id),
-        { kind: "handoff", guide_id: id, actor_id: account, team_id: team?.id },
+        { kind: "sent_to_you", work_id: id, actor_id: account, team_id: team?.id },
       );
     }
     // A team-wide share reaches the whole team's feed, but nobody's inbox: it is addressed to
@@ -3734,7 +3733,7 @@ async function announceGuide(
       const others = results.map((m) => m.account_id).filter((mid) => mid !== toAccount?.id);
       await notifyAll(c.env, others, {
         kind: "shared",
-        guide_id: id,
+        work_id: id,
         actor_id: account,
         team_id: team.id,
       });
@@ -3742,7 +3741,7 @@ async function announceGuide(
     if (team) {
       // The room hears who it went to: a person, a group, or the team itself. Never "you" — a
       // channel is read by everyone in it, so "sent you" would be wrong for all but one of them.
-      const kind = toAccount || toGroup ? "handoff" : "shared";
+      const kind = toAccount || toGroup ? "sent_to_you" : "shared";
       const to = toAccount
         ? displayName(toAccount)
         : toGroup
@@ -3767,14 +3766,14 @@ async function announceGuide(
   return notified;
 }
 
-app.put("/v1/guides/:id", async (c) => {
+app.put("/v1/work/:id", async (c) => {
   const account = c.get("account");
   const id = c.req.param("id");
   if (!ID_RE.test(id))
     return err(c, 400, "That isn't a valid id. Use 6 to 12 lowercase letters and numbers.");
   // The document, either as itself or wrapped in JSON.
   //
-  // `text/markdown` is the honest shape and what the CLI sends: the guide *is* the body. But an
+  // `text/markdown` is the honest shape and what the CLI sends: the work *is* the body. But an
   // agent platform that builds its calls from an OpenAPI document — a ChatGPT action, Gemini
   // function calling — only knows how to send JSON, so without this the one route that publishes
   // anything is the one route those agents cannot reach.
@@ -3785,7 +3784,7 @@ app.put("/v1/guides/:id", async (c) => {
     const wrapper = await c.req.json<{ markdown?: unknown; parent?: unknown }>().catch(() => null);
     if (typeof wrapper?.markdown === "string") markdown = wrapper.markdown;
     // A caller composing a tool call can name the parent beside the document rather than edit
-    // frontmatter by hand. It is written *into* the frontmatter, so the stored guide is exactly the
+    // frontmatter by hand. It is written *into* the frontmatter, so the stored work is exactly the
     // document it would be had the author typed `parent:` — the markdown stays the one source.
     if (markdown.trim() && typeof wrapper?.parent === "string" && wrapper.parent.trim())
       markdown = setField(markdown, "parent", wrapper.parent.trim());
@@ -3801,8 +3800,8 @@ app.put("/v1/guides/:id", async (c) => {
         : 'The work is empty. Send it as text/markdown, or as JSON: {"markdown": "..."}.',
     );
   }
-  // A hard ceiling before anything is read; the working limit is checked below, once the guide's
-  // current size is known, because a guide stored before it existed may keep the size it has.
+  // A hard ceiling before anything is read; the working limit is checked below, once the work's
+  // current size is known, because a piece of work stored before it existed may keep the size it has.
   if (markdown.length > 512 * 1024)
     return err(c, 413, "This work is over 512 KB. Move large logs or files out and link to them.");
   // Before anything reads the meta: what it lacks is exactly what this is about. Refused rather
@@ -3829,7 +3828,7 @@ app.put("/v1/guides/:id", async (c) => {
     return err(c, 400, "The id in the frontmatter doesn't match the id it is saved under.");
   if (!meta.title) return err(c, 400, "It needs a title. Add title: to its frontmatter.");
 
-  // Addressing: `team: <slug>` puts the guide in a team; `to: <handle>` hands it to a member.
+  // Addressing: `team: <slug>` puts the work in a team; `to: <handle>` hands it to a member.
   let team: (TeamRow & { role: string }) | null = null;
   let toAccount: AccountRow | null = null;
   if (meta.team) {
@@ -3900,10 +3899,10 @@ app.put("/v1/guides/:id", async (c) => {
   // `parent:` is the work this came out of. A parent that does not resolve is dropped rather than
   // refused, for three separate reasons that all land in the same place.
   //
-  // It belongs to somebody else, so a guide you were handed before you left a team has to keep
-  // publishing after you leave. Refusing "not yours" separately from "no such guide" would turn
+  // It belongs to somebody else, so a piece of work you were handed before you left a team has to keep
+  // publishing after you leave. Refusing "not yours" separately from "no such work" would turn
   // publish into an oracle for which ids exist. And `parent:` was not a reserved field name until
-  // lineage existed, so a guide written months ago may carry one meaning something else — a value
+  // lineage existed, so a piece of work written months ago may carry one meaning something else — a value
   // that is not an id at all is that, not a typo, and rejecting it would make somebody's own
   // document unpublishable by them. A dropped parent costs lineage that does not apply; a refused
   // publish costs the work.
@@ -3913,10 +3912,10 @@ app.put("/v1/guides/:id", async (c) => {
   if (meta.parent) {
     const wanted = String(meta.parent);
     if (wanted === id)
-      return err(c, 400, "A guide can't follow itself. Point parent: at a different guide.");
-    const parent = ID_RE.test(wanted) ? await readableGuide(c, wanted) : null;
+      return err(c, 400, "A piece of work can't follow itself. Point parent: at a different work.");
+    const parent = ID_RE.test(wanted) ? await readableWork(c, wanted) : null;
     if (parent) {
-      // Walk up from the parent. Two things end the walk: reaching this guide, which would close a
+      // Walk up from the parent. Two things end the walk: reaching this work, which would close a
       // loop that every reader of the chain then follows forever, and running out of hops. The cap
       // is a rendering limit before it is a storage one — past it the chain is a history nobody
       // opens — and it is also what keeps this walk bounded on data that already went wrong.
@@ -3928,7 +3927,7 @@ app.put("/v1/guides/:id", async (c) => {
             400,
             "That parent would make this work its own ancestor. Point parent: at different work.",
           );
-        const up = await c.env.DB.prepare("SELECT parent_id FROM guide WHERE id = ?")
+        const up = await c.env.DB.prepare("SELECT parent_id FROM work WHERE id = ?")
           .bind(at)
           .first<{ parent_id: string }>();
         at = up?.parent_id || "";
@@ -3944,7 +3943,7 @@ app.put("/v1/guides/:id", async (c) => {
   }
 
   // An image nobody but the author's own client can load is not evidence, and a publish that
-  // accepts one stores a guide with a dead picture in it. Refused rather than stripped: the
+  // accepts one stores a piece of work with a dead picture in it. Refused rather than stripped: the
   // screenshot is usually the most useful thing in a report of a bug, so the answer is to upload it,
   // not to quietly drop the line naming it.
   const unreachable = unreachableImages(markdown);
@@ -3957,12 +3956,12 @@ app.put("/v1/guides/:id", async (c) => {
     );
 
   const existing = await c.env.DB.prepare(
-    "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id, summary, length(markdown) AS size FROM guide WHERE id = ?",
+    "SELECT id, account_id, share_key, created, status, team_id, to_account_id, to_group_id, summary, length(markdown) AS size FROM work WHERE id = ?",
   )
     .bind(id)
     .first<
       Pick<
-        GuideRow,
+        WorkRow,
         | "id"
         | "account_id"
         | "share_key"
@@ -3979,17 +3978,8 @@ app.put("/v1/guides/:id", async (c) => {
   const tooBig = sizeProblem(markdown.length, existing?.size ?? 0);
   if (tooBig) return err(c, 413, tooBig);
 
-  // Frontmatter still round-trips `promoted`, because the document is the record and a guide shared
-  // a month ago must re-share today. It cannot be acquired, though: only a guide already carrying
-  // the status keeps it, and that is read from the stored row rather than the markdown just sent.
-  const asked =
-    meta.status && (STATUSES as readonly string[]).includes(meta.status) ? meta.status : "";
   const status =
-    asked === "promoted"
-      ? existing?.status === "promoted"
-        ? "promoted"
-        : "published"
-      : asked || "published";
+    meta.status && (STATUSES as readonly string[]).includes(meta.status) ? meta.status : "ready";
 
   if (!existing) {
     const room = await quota(c, account);
@@ -4015,7 +4005,7 @@ app.put("/v1/guides/:id", async (c) => {
    * What it says to a person. Required of all new work, and refused by name when absent here,
    * because this runs for every client whatever version it is on.
    *
-   * The one exception is a guide stored before summaries existed, written again by a client that has
+   * The one exception is a piece of work stored before summaries existed, written again by a client that has
    * not heard of them. That is let through as it came, or every old CLI's re-share of work in flight
    * would be refused for a field it cannot know about.
    */
@@ -4035,7 +4025,7 @@ app.put("/v1/guides/:id", async (c) => {
   const created = String(meta.created || existing?.created || t);
 
   await c.env.DB.prepare(
-    `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, parent_id, target, client, summary)
+    `INSERT INTO work (id, account_id, share_key, title, status, source_context, tags, stack, markdown, created, updated, team_id, to_account_id, to_group_id, parent_id, target, client, summary)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status, source_context=excluded.source_context,
        tags=excluded.tags, stack=excluded.stack, markdown=excluded.markdown, updated=excluded.updated,
@@ -4072,13 +4062,13 @@ app.put("/v1/guides/:id", async (c) => {
   // What it waits for is rewritten from its frontmatter on every publish, like the rest of it.
   await claims.blockOn(c.env.DB, id, meta.blocked_by || [], { account });
 
-  // Nobody hears about a draft: a guide reaches people when a person marks it Ready, and the status
+  // Nobody hears about a draft: a piece of work reaches people when a person marks it Ready, and the status
   // route announces it then. Re-publishing an unchanged address is not a new event either, so only
   // a *newly* addressed person or a newly shared team hears anything.
   const notified =
     status === "draft"
       ? false
-      : await announceGuide(c, {
+      : await announceWork(c, {
           id,
           account,
           title: String(meta.title),
@@ -4092,7 +4082,7 @@ app.put("/v1/guides/:id", async (c) => {
           handedToGroup: Boolean(toGroup && existing?.to_group_id !== toGroup.id),
           newlyShared: Boolean(team && existing?.team_id !== team.id),
         });
-  count(c, existing ? "guide_updated" : "guide_shared", {
+  count(c, existing ? "work_updated" : "work_shared", {
     addressed: Boolean(toAccount),
     team: Boolean(team),
   });
@@ -4106,8 +4096,8 @@ app.put("/v1/guides/:id", async (c) => {
       // page that can do it, over either transport.
       ...(status === "draft"
         ? {
-            ready_at: `${base}/hub/g/${id}`,
-            next: `in Draft: ask the person to read it and mark it Ready at ${base}/hub/g/${id}`,
+            ready_at: `${base}/hub/w/${id}`,
+            next: `in Draft: ask the person to read it and mark it Ready at ${base}/hub/w/${id}`,
           }
         : {}),
       created: !existing,
@@ -4120,7 +4110,7 @@ app.put("/v1/guides/:id", async (c) => {
 });
 
 /**
- * `to: @ada,@bola` — several named people on one guide.
+ * `to: @ada,@bola` — several named people on one piece of work.
  *
  * Kept as a group the team never sees: its slug starts with `~`, which a person cannot type into a
  * group name (`tag()` drops it), and is a hash of who is in it, so the same people always resolve to
@@ -4146,7 +4136,7 @@ async function adhocGroup(
   if (handles.length < 2) return { error: "Name at least two people, like @ada,@bola." };
   if (handles.length > ADHOC_MAX)
     return {
-      error: `Up to ${ADHOC_MAX} people on one guide. For more, ask the team owner for a group.`,
+      error: `Up to ${ADHOC_MAX} people on one piece of work. For more, ask the team owner for a group.`,
     };
   const people: { id: string; handle: string }[] = [];
   for (const handle of handles) {
@@ -4194,7 +4184,7 @@ async function adhocGroup(
 }
 
 /** Whether the caller owns the team the work belongs to, and so may archive it for its author. */
-async function ownsTeam(c: Ctx, row: GuideRow): Promise<boolean> {
+async function ownsTeam(c: Ctx, row: WorkRow): Promise<boolean> {
   if (!row.team_id) return false;
   const m = await db(c)
     .prepare("SELECT 1 FROM membership WHERE team_id = ? AND account_id = ? AND role = 'owner'")
@@ -4203,12 +4193,9 @@ async function ownsTeam(c: Ctx, row: GuideRow): Promise<boolean> {
   return Boolean(m);
 }
 
-/** A guide the caller may read: their own, or one in a team they belong to. */
-async function readableGuide(
-  c: Ctx,
-  id: string,
-): Promise<{ row: GuideRow; owner: boolean } | null> {
-  const row = await db(c).prepare("SELECT * FROM guide WHERE id = ?").bind(id).first<GuideRow>();
+/** A piece of work the caller may read: their own, or one in a team they belong to. */
+async function readableWork(c: Ctx, id: string): Promise<{ row: WorkRow; owner: boolean } | null> {
+  const row = await db(c).prepare("SELECT * FROM work WHERE id = ?").bind(id).first<WorkRow>();
   if (!row) return null;
   const me = c.get("account");
   if (row.account_id === me) return { row, owner: true };
@@ -4228,23 +4215,23 @@ async function readableGuide(
  */
 async function recordPull(
   c: { env: Env; req: { url: string } },
-  row: GuideRow,
+  row: WorkRow,
   account: string,
   via: string,
 ) {
   await db(c).batch([
     db(c)
-      .prepare("INSERT INTO pull (guide_id, account_id, via, at) VALUES (?, ?, ?, ?)")
+      .prepare("INSERT INTO pull (work_id, account_id, via, at) VALUES (?, ?, ?, ?)")
       .bind(row.id, account, via, now()),
-    db(c).prepare("UPDATE guide SET pulls = pulls + 1 WHERE id = ?").bind(row.id),
+    db(c).prepare("UPDATE work SET pulls = pulls + 1 WHERE id = ?").bind(row.id),
   ]);
-  count(c as { env: Env }, "guide_pulled", { via, own: row.account_id === account });
-  if (row.account_id === account) return; // pulling your own guide on another machine
+  count(c as { env: Env }, "work_pulled", { via, own: row.account_id === account });
+  if (row.account_id === account) return; // pulling your own work on another machine
   const people = await accounts(c, [account, row.account_id]);
   await notify(c.env, {
     to: row.account_id,
     kind: "pulled",
-    guide_id: row.id,
+    work_id: row.id,
     actor_id: account,
     team_id: row.team_id,
     // Only a named person's pull is worth an inbox. An anonymous link read has no "who" to
@@ -4262,41 +4249,41 @@ async function recordPull(
 }
 
 /**
- * Proof a guide reached someone who never runs `pull`. Saying it works, or marking it consumed,
- * is not something you can do without having had the guide — but for a browser-only receiver
+ * Proof a piece of work reached someone who never runs `pull`. Saying it works, or archiving it,
+ * is not something you can do without having had the work — but for a browser-only receiver
  * (a tester, a designer) no pull row exists, so the sender's board says "never picked up" about
  * work that has already been checked, and the receiver's inbox never clears.
  *
- * No notification: the verdict or the status change is the news, and "@x pulled" alongside
+ * No notification: the proof or the status change is the news, and "@x pulled" alongside
  * "@x verified" is the same fact told twice.
  */
-async function recordReceipt(c: Ctx, row: GuideRow, via: string) {
+async function recordReceipt(c: Ctx, row: WorkRow, via: string) {
   const account = c.get("account");
   if (!account || row.account_id === account) return;
   const seen = await db(c)
-    .prepare("SELECT 1 AS n FROM pull WHERE guide_id = ? AND account_id = ?")
+    .prepare("SELECT 1 AS n FROM pull WHERE work_id = ? AND account_id = ?")
     .bind(row.id, account)
     .first();
   if (seen) return;
   await db(c).batch([
     db(c)
-      .prepare("INSERT INTO pull (guide_id, account_id, via, at) VALUES (?, ?, ?, ?)")
+      .prepare("INSERT INTO pull (work_id, account_id, via, at) VALUES (?, ?, ?, ?)")
       .bind(row.id, account, via, now()),
-    db(c).prepare("UPDATE guide SET pulls = pulls + 1 WHERE id = ?").bind(row.id),
+    db(c).prepare("UPDATE work SET pulls = pulls + 1 WHERE id = ?").bind(row.id),
   ]);
 }
 
-app.get("/v1/guides/:id", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
-  // `peek=1` reads without receiving: the CLI checks a guide's status before `ready` or
+app.get("/v1/work/:id", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
+  // `peek=1` reads without receiving: the CLI checks a piece of work's status before `ready` or
   // archiving it, and that is not anybody opening the work.
   if (c.req.query("peek") !== "1") await recordPull(c, found.row, c.get("account"), "cli");
   return c.text(found.row.markdown, 200, { "content-type": "text/markdown; charset=utf-8" });
 });
 
 /**
- * `passalong export`: every guide this account can read — its own, and its teams' — as the
+ * `passalong export`: every piece of work this account can read — its own, and its teams' — as the
  * markdown stored now, a page at a time in id order, `next` naming where the following page
  * starts. A signed-in CLI keeps no local copies, so this is what makes export a complete backup.
  * It records no pull: a backup is not anybody opening the work, and a pull would tell its author
@@ -4308,7 +4295,7 @@ app.get("/v1/export", async (c) => {
   const after = c.req.query("after") || "";
   const { results } = await db(c)
     .prepare(
-      `SELECT id, markdown FROM guide
+      `SELECT id, markdown FROM work
         WHERE (account_id = ?1 OR team_id IN (SELECT team_id FROM membership WHERE account_id = ?1))
           AND id > ?2
         ORDER BY id LIMIT ?3`,
@@ -4316,43 +4303,43 @@ app.get("/v1/export", async (c) => {
     .bind(me, after, EXPORT_PAGE)
     .all<{ id: string; markdown: string }>();
   const next = results.length === EXPORT_PAGE ? (results.at(-1)?.id ?? "") : "";
-  return c.json({ guides: results, next });
+  return c.json({ work: results, next });
 });
 
 /**
- * The guide this one came out of, with its content and where it has got to.
+ * The work this one came out of, with its content and where it has got to.
  *
- * Follow-ups travelled one way. Opening a guide handed over the guides written under it, and
+ * Follow-ups travelled one way. Opening a piece of work handed over the work written under it, and
  * opening one of those handed over nothing: an agent given a follow-up got a document that assumes
  * a piece of work it has never read, and had to go and find the original itself — or, worse, act
- * as though the follow-up were the whole job. A follow-up is more context for a guide, so the
- * guide travels with it.
+ * as though the follow-up were the whole job. A follow-up is more context for a piece of work, so the
+ * work travels with it.
  *
  * `state` is what decides whether this follow-up can be acted on at all, so it is answered here
  * rather than left to another call: a follow-up to work nobody has done yet is not work to start.
  * `draft`, `open`, `held` (by whom), `handed in` or `done`.
  *
  * Readable on the follow-up is not enough: the parent is filtered again on its own, so a follow-up
- * shared with your team does not hand you a guide from a team you are not in. Like the children
- * route, this records no pull — reading context for a guide is not opening that guide.
+ * shared with your team does not hand you a piece of work from a team you are not in. Like the children
+ * route, this records no pull — reading context for a piece of work is not opening that work.
  */
-app.get("/v1/guides/:id/parent", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
-  const none = { guide: null };
+app.get("/v1/work/:id/parent", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
+  const none = { work: null };
   if (!found.row.parent_id) return c.json(none);
-  const parent = await readableGuide(c, found.row.parent_id);
+  const parent = await readableWork(c, found.row.parent_id);
   if (!parent) return c.json(none);
 
   const claim = await c.env.DB.prepare(
     `SELECT c.state, COALESCE(a.name, '') AS name, COALESCE(a.handle, '') AS handle
        FROM claim c LEFT JOIN account a ON a.id = c.account_id
-      WHERE c.guide_id = ? ORDER BY c.updated DESC LIMIT 1`,
+      WHERE c.work_id = ? ORDER BY c.updated DESC LIMIT 1`,
   )
     .bind(parent.row.id)
     .first<{ state: string; name: string; handle: string }>();
   const state =
-    parent.row.status === "consumed"
+    parent.row.status === "done"
       ? "done"
       : parent.row.status === "draft"
         ? "draft"
@@ -4364,7 +4351,7 @@ app.get("/v1/guides/:id/parent", async (c) => {
   const [summary] = await summaries(c, [parent.row]);
   const withMarkdown = ["1", "true"].includes(c.req.query("markdown") || "");
   return c.json({
-    guide: {
+    work: {
       ...summary,
       state,
       by: claim ? { name: claim.name, handle: claim.handle } : null,
@@ -4374,22 +4361,22 @@ app.get("/v1/guides/:id/parent", async (c) => {
 });
 
 /**
- * Everything around one guide, for the hub's page about it: where it is, who has it, what was
- * handed in, and the guides it is tied to. No markdown and no pull.
+ * Everything around one piece of work, for the hub's page about it: where it is, who has it, what was
+ * handed in, and the work it is tied to. No markdown and no pull.
  *
- * The hub reads a guide's content from its share page in a script-less frame, never through this,
- * because the hub runs script and a guide is markdown somebody else wrote. And looking at your own
- * board is not opening the guide: a pull row moves it into its author's "landed" queue and mails
+ * The hub reads a piece of work's content from its share page in a script-less frame, never through this,
+ * because the hub runs script and a piece of work is markdown somebody else wrote. And looking at your own
+ * board is not opening the work: a pull row moves it into its author's "landed" queue and mails
  * them, so this route answers from rows that already exist and writes none.
  *
- * Every related guide is filtered on its own, as /parent is: being able to read
+ * Every related work is filtered on its own, as /parent is: being able to read
  * this one does not hand you the title of a blocker in a team you are not in. `risk` is the
  * reviewer's (migration 0032), so only the author sees it; the rest of a hand-in is what
  * `GET /v1/tasks` already shows anyone who can see the task.
  */
-app.get("/v1/guides/:id/context", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+app.get("/v1/work/:id/context", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const me = c.get("account");
   const at = now();
   const row = found.row;
@@ -4399,31 +4386,31 @@ app.get("/v1/guides/:id/context", async (c) => {
     (
       await c.env.DB.prepare(sql)
         .bind(...bind, me, me)
-        .all<GuideRow>()
+        .all<WorkRow>()
     ).results;
   const [held, parentRows, childRows, blockerRows, blocksRows, said] = await Promise.all([
     c.env.DB.prepare(
       `SELECT c.*, COALESCE(a.handle, '') AS by_handle, COALESCE(a.name, '') AS by_name
          FROM claim c LEFT JOIN account a ON a.id = c.account_id
-        WHERE c.guide_id = ? ORDER BY c.updated DESC`,
+        WHERE c.work_id = ? ORDER BY c.updated DESC`,
     )
       .bind(row.id)
       .all<claims.ClaimRow & { by_handle: string; by_name: string }>(),
     row.parent_id
-      ? related(`SELECT g.* FROM guide g WHERE g.id = ? AND ${readable}`, row.parent_id)
-      : Promise.resolve([] as GuideRow[]),
+      ? related(`SELECT g.* FROM work g WHERE g.id = ? AND ${readable}`, row.parent_id)
+      : Promise.resolve([] as WorkRow[]),
     related(
-      `SELECT g.* FROM guide g WHERE g.parent_id = ? AND g.status <> 'draft' AND ${readable}
+      `SELECT g.* FROM work g WHERE g.parent_id = ? AND g.status <> 'draft' AND ${readable}
         ORDER BY g.created DESC LIMIT 100`,
       row.id,
     ),
     related(
-      `SELECT g.* FROM task_block b JOIN guide g ON g.id = b.blocker_id
-        WHERE b.guide_id = ? AND ${readable} ORDER BY g.created`,
+      `SELECT g.* FROM task_block b JOIN work g ON g.id = b.blocker_id
+        WHERE b.work_id = ? AND ${readable} ORDER BY g.created`,
       row.id,
     ),
     related(
-      `SELECT g.* FROM task_block b JOIN guide g ON g.id = b.guide_id
+      `SELECT g.* FROM task_block b JOIN work g ON g.id = b.work_id
         WHERE b.blocker_id = ? AND ${readable} ORDER BY g.created`,
       row.id,
     ),
@@ -4431,8 +4418,8 @@ app.get("/v1/guides/:id/context", async (c) => {
     c.env.DB.prepare(
       `SELECT v.ok, v.note, v.detail, v.writeup, v.at, COALESCE(a.handle, '') AS handle,
               COALESCE(a.name, '') AS name
-         FROM verdict v LEFT JOIN account a ON a.id = v.account_id
-        WHERE v.guide_id = ? ORDER BY v.at DESC`,
+         FROM proof v LEFT JOIN account a ON a.id = v.account_id
+        WHERE v.work_id = ? ORDER BY v.at DESC`,
     )
       .bind(row.id)
       .all<{
@@ -4449,24 +4436,24 @@ app.get("/v1/guides/:id/context", async (c) => {
 
   const all = [row, ...parentRows, ...childRows, ...blockerRows, ...blocksRows];
   const views = new Map((await summaries(c, all)).map((v) => [v.id, v]));
-  // The folders holding this guide, so its page leads to the script and screens beside it. Only
-  // the ones this caller could open: a private folder linking a team guide is its owner's business.
-  const { results: folderRows } = await c.env.DB.prepare(
-    `SELECT f.id, f.title, f.color FROM folder_guide fg JOIN folder f ON f.id = fg.folder_id
-      WHERE fg.guide_id = ?
+  // The projects holding this work, so its page leads to the script and screens beside it. Only
+  // the ones this caller could open: a private project linking a team work is its owner's business.
+  const { results: projectRows } = await c.env.DB.prepare(
+    `SELECT f.id, f.title, f.color FROM project_work fg JOIN project f ON f.id = fg.project_id
+      WHERE fg.work_id = ?
         AND ((f.team_id = '' AND f.created_by = ?)
           OR f.team_id IN (SELECT team_id FROM membership WHERE account_id = ?))
       ORDER BY f.title`,
   )
     .bind(row.id, me, me)
     .all<{ id: string; title: string; color: string }>();
-  const pick = (rows: GuideRow[]) => rows.map((r) => views.get(r.id)).filter(Boolean);
+  const pick = (rows: WorkRow[]) => rows.map((r) => views.get(r.id)).filter(Boolean);
 
   // The repos this account's work and agents already use, so whoever marks it Ready can say which
   // repo it is for by picking rather than typing.
   const repos = (
     await c.env.DB.prepare(
-      `SELECT target AS repo FROM guide WHERE account_id = ?1 AND target <> ''
+      `SELECT target AS repo FROM work WHERE account_id = ?1 AND target <> ''
        UNION SELECT repo FROM claim WHERE account_id = ?1 AND repo <> ''
        LIMIT 50`,
     )
@@ -4474,7 +4461,7 @@ app.get("/v1/guides/:id/context", async (c) => {
       .all<{ repo: string }>()
   ).results.map((r) => r.repo);
   return c.json({
-    guide: views.get(row.id),
+    work: views.get(row.id),
     target: row.target,
     repos,
     // Marked safe for the runner to take with nobody watching (0058_alone.sql).
@@ -4513,12 +4500,12 @@ app.get("/v1/guides/:id/context", async (c) => {
       lease_until: k.lease_until,
       updated: k.updated,
     })),
-    verdicts: said.results.map((v) => ({
+    proofs: said.results.map((v) => ({
       ok: Boolean(v.ok),
       by: { handle: v.handle, name: v.name },
       note: v.note,
       detail: v.detail,
-      // What finishing it took, in the finisher's words: shown under the proof on a Done guide.
+      // What finishing it took, in the finisher's words: shown under the proof on a Done work.
       writeup: v.writeup,
       at: v.at,
     })),
@@ -4526,40 +4513,30 @@ app.get("/v1/guides/:id/context", async (c) => {
     children: pick(childRows),
     blocked_by: pick(blockerRows),
     blocks: pick(blocksRows),
-    folders: folderRows,
+    projects: projectRows,
   });
 });
 
-app.patch("/v1/guides/:id/status", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+app.patch("/v1/work/:id/status", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const { status, target } = (await c.req.json().catch(() => ({}))) as {
     status?: string;
     target?: unknown;
   };
   const author = found.owner || (await ownsTeam(c, found.row));
-  // `promoted` is readable and no longer settable, so it is refused by name rather than by being
-  // missing from a list — an installed CLI still calls this, and "must be one of ..." would read
-  // as a typo rather than as a status that was retired.
-  if (status === "promoted")
-    return err(
-      c,
-      400,
-      "Promoted was retired: how often work is opened already says how far it has travelled. " +
-        "Work that carries it keeps it.",
-    );
-  if (!status || !(SETTABLE as readonly string[]).includes(status))
-    return err(c, 400, `Work's status can only be ${SETTABLE.join(", ")}.`);
+  if (!status || !(STATUSES as readonly string[]).includes(status))
+    return err(c, 400, `Work's status can only be ${STATUSES.join(", ")}.`);
   // A team's board is everyone's: anyone in the team moves work between Draft and Ready
-  // (readableGuide has already said they are in it). Archiving stays with its author or an admin.
-  if (!author && status === "consumed")
+  // (readableWork has already said they are in it). Archiving stays with its author or an admin.
+  if (!author && status === "done")
     return err(c, 403, "Only its author, or a team admin, archives this.");
   const back = unarchiveProblem(found.row.status, status);
   if (back) return err(c, 409, back);
   // Moving occupied work to Draft would hide it while somebody still held a live claim. The author
   // has Stop this agent for that transition.
   if (status === "draft") {
-    const held = await c.env.DB.prepare("SELECT 1 FROM claim WHERE guide_id = ? LIMIT 1")
+    const held = await c.env.DB.prepare("SELECT 1 FROM claim WHERE work_id = ? LIMIT 1")
       .bind(found.row.id)
       .first();
     if (held) return err(c, 409, "Stop the agent before moving this to Draft.");
@@ -4569,43 +4546,43 @@ app.patch("/v1/guides/:id/status", async (c) => {
   // doing is the moment they know where. Written into the document as well as the column, so a
   // pulled copy says the same thing the queue does. Only when sent.
   let repo = found.row.target;
-  if (status === "published" && typeof target === "string") {
+  if (status === "ready" && typeof target === "string") {
     repo = claims.repoKey(target).slice(0, 200);
     markdown = repo
       ? setField(markdown, "target_context", repo)
       : dropField(markdown, "target_context");
   }
-  // Archiving lets go of everyone on it. A hand-in left waiting on a guide that is already Done is
+  // Archiving lets go of everyone on it. A hand-in left waiting on a piece of work that is already Done is
   // one nobody can answer: it sat in Needs you and on the board's In review lists, and 61 were
   // stuck that way in production (0055_archive_claims.sql). Whoever held it or handed it in hears
   // it is done with — not "accepted", which closing a hand-in says; nobody reviewed this one.
-  if (status === "consumed") {
+  if (status === "done") {
     const { results: held } = await c.env.DB.prepare(
-      "SELECT DISTINCT account_id FROM claim WHERE guide_id = ?",
+      "SELECT DISTINCT account_id FROM claim WHERE work_id = ?",
     )
       .bind(found.row.id)
       .all<{ account_id: string }>();
     if (held.length) {
-      await c.env.DB.prepare("DELETE FROM claim WHERE guide_id = ?").bind(found.row.id).run();
+      await c.env.DB.prepare("DELETE FROM claim WHERE work_id = ?").bind(found.row.id).run();
       for (const { account_id } of held)
         await notify(c.env, {
           to: account_id,
-          kind: "consumed",
-          guide_id: found.row.id,
+          kind: "archived",
+          work_id: found.row.id,
           actor_id: c.get("account"),
           team_id: found.row.team_id,
         });
     }
   }
-  // Archived by a person, not approved: Done says which (0054_outcome.sql). Leaving Done clears it.
+  // Archived by a person, not finished: Done says which (0054_outcome.sql). Leaving Done clears it.
   await c.env.DB.prepare(
-    "UPDATE guide SET status = ?, outcome = ?, markdown = ?, target = ?, updated = ? WHERE id = ?",
+    "UPDATE work SET status = ?, outcome = ?, markdown = ?, target = ?, updated = ? WHERE id = ?",
   )
-    .bind(status, status === "consumed" ? "archived" : "", markdown, repo, now(), found.row.id)
+    .bind(status, status === "done" ? "archived" : "", markdown, repo, now(), found.row.id)
     .run();
-  // Ready is when a guide reaches people: whoever it is addressed to is told now, never while it
-  // was a draft (announceGuide). Everything about the address is new to them.
-  if (found.row.status === "draft" && status === "published") {
+  // Ready is when a piece of work reaches people: whoever it is addressed to is told now, never while it
+  // was a draft (announceWork). Everything about the address is new to them.
+  if (found.row.status === "draft" && status === "ready") {
     const r = found.row;
     const team = r.team_id
       ? await c.env.DB.prepare("SELECT * FROM team WHERE id = ?").bind(r.team_id).first<TeamRow>()
@@ -4620,7 +4597,7 @@ app.patch("/v1/guides/:id/status", async (c) => {
           .bind(r.to_group_id)
           .first<{ id: string; slug: string; name: string }>()
       : null;
-    await announceGuide(c, {
+    await announceWork(c, {
       id: r.id,
       account: r.account_id,
       title: r.title,
@@ -4633,31 +4610,31 @@ app.patch("/v1/guides/:id/status", async (c) => {
       newlyShared: Boolean(team),
     });
   }
-  // Anything a person who is not the author does to a guide, its author hears about. Archiving
-  // told them and un-archiving did not, which is the asymmetry that let a guide move on somebody
+  // Anything a person who is not the author does to a piece of work, its author hears about. Archiving
+  // told them and un-archiving did not, which is the asymmetry that let a piece of work move on somebody
   // else's say-so in silence.
-  if (!found.owner && found.row.status === "consumed" && status !== "consumed") {
+  if (!found.owner && found.row.status === "done" && status !== "done") {
     await notify(c.env, {
       to: found.row.account_id,
       kind: "reopened",
-      guide_id: found.row.id,
+      work_id: found.row.id,
       actor_id: c.get("account"),
       team_id: found.row.team_id,
     });
   }
   // The end of the loop: someone else shipped what you handed them.
-  if (!found.owner && status === "consumed") {
+  if (!found.owner && status === "done") {
     await recordReceipt(c, found.row, "web");
     const account = c.get("account");
     const people = await accounts(c, [account, found.row.account_id]);
     await notify(c.env, {
       to: found.row.account_id,
-      kind: "consumed",
-      guide_id: found.row.id,
+      kind: "archived",
+      work_id: found.row.id,
       actor_id: account,
       team_id: found.row.team_id,
       mail: () =>
-        sendConsumed(c.env, {
+        sendArchived(c.env, {
           to: people.get(found.row.account_id)?.email || "",
           byName: nameOf(people, account),
           title: found.row.title,
@@ -4675,22 +4652,16 @@ const NOTE_MAX = 280;
  * "Not me, and why", from somebody passing work they do not hold — stored and told to the author
  * and the room.
  */
-async function recordDecline(c: Ctx & { env: Env }, row: GuideRow, note: string) {
+async function recordDecline(c: Ctx & { env: Env }, row: WorkRow, note: string) {
   const account = c.get("account");
-  await c.env.DB.prepare(
-    `INSERT INTO ack (guide_id, account_id, taken, note, at) VALUES (?, ?, 0, ?, ?)
-     ON CONFLICT(guide_id, account_id) DO UPDATE SET taken = 0, note = excluded.note, at = excluded.at`,
-  )
-    .bind(row.id, account, note, now())
-    .run();
-  // The ack keeps it off this person's list; the thread line is what everyone reads.
+  // The thread line keeps it off this person's list, and it is what everyone reads.
   await claims.event(c.env.DB, row.id, "passed", { account, body: note, at: now() });
 
   const people = await accounts(c, [account, row.account_id]);
   await notify(c.env, {
     to: row.account_id,
-    kind: "declined",
-    guide_id: row.id,
+    kind: "passed",
+    work_id: row.id,
     actor_id: account,
     team_id: row.team_id,
     note,
@@ -4698,10 +4669,10 @@ async function recordDecline(c: Ctx & { env: Env }, row: GuideRow, note: string)
   // And once for the room. Work nobody will take is the thing a channel is for: it has stopped
   // moving, and whoever picks it up is probably reading there.
   await announce(c.env, {
-    kind: "declined",
+    kind: "passed",
     team_id: row.team_id,
     text: line({
-      kind: "declined",
+      kind: "passed",
       actor_name: nameOf(people, account),
       title: row.title,
       times: 1,
@@ -4710,7 +4681,7 @@ async function recordDecline(c: Ctx & { env: Env }, row: GuideRow, note: string)
     note,
     url: shareUrl(origin(c), row),
   });
-  count(c, "guide_acked", { taken: false });
+  count(c, "work_acked", { taken: false });
 }
 
 const personAgent = claims.personAgent;
@@ -4817,7 +4788,7 @@ async function asOwner(
 
 /**
  * Make the work something sent in, or count it against the open one it repeats. Shared by email
- * and webhooks, so both obey the same rules: published through PUT /v1/guides/:id as the account,
+ * and webhooks, so both obey the same rules: published through PUT /v1/work/:id as the account,
  * Ready at once so whoever it is for can pick it up, and a repeat one piece of work with at most
  * one note an hour on its thread.
  */
@@ -4842,20 +4813,20 @@ async function intake(
   const me = g.account;
   const at = now();
   const open = await env.DB.prepare(
-    `SELECT a.guide_id, a.times, a.noted_at FROM inbound_guide a JOIN guide g ON g.id = a.guide_id
-      WHERE a.account_id = ? AND a.fingerprint = ? AND g.status <> 'consumed'`,
+    `SELECT a.work_id, a.times, a.noted_at FROM inbound_work a JOIN work g ON g.id = a.work_id
+      WHERE a.account_id = ? AND a.fingerprint = ? AND g.status <> 'done'`,
   )
     .bind(me, g.print)
-    .first<{ guide_id: string; times: number; noted_at: string }>();
+    .first<{ work_id: string; times: number; noted_at: string }>();
   if (open) {
     const times = open.times + 1;
     const quiet = !open.noted_at || Date.parse(at) - Date.parse(open.noted_at) >= NOTE_EVERY_MS;
     await env.DB.prepare(
-      "UPDATE inbound_guide SET times = ?, last_at = ?, noted_at = ? WHERE account_id = ? AND fingerprint = ?",
+      "UPDATE inbound_work SET times = ?, last_at = ?, noted_at = ? WHERE account_id = ? AND fingerprint = ?",
     )
       .bind(times, at, quiet ? at : open.noted_at, me, g.print)
       .run();
-    // A note on the guide's thread, so whoever holds it hears it is still happening. At most
+    // A note on the work's thread, so whoever holds it hears it is still happening. At most
     // hourly: an alert storm is one line, not a hundred.
     if (quiet)
       await asOwner(
@@ -4863,11 +4834,11 @@ async function intake(
         ctx,
         me,
         "POST",
-        `/v1/guides/${open.guide_id}/reply`,
+        `/v1/work/${open.work_id}/reply`,
         JSON.stringify({ body: `${g.again}: ${times} times in all, latest at ${at}.` }),
         "application/json",
       );
-    return { id: open.guide_id, created: false };
+    return { id: open.work_id, created: false };
   }
 
   const id = rid(8);
@@ -4876,29 +4847,29 @@ async function intake(
   if (g.tags?.length) markdown = setList(markdown, "tags", g.tags);
   // Ready at once, like all new work: an alert held in Draft reached nobody (2026-10-17). Who may
   // send is already decided — an email sender has to be allowed, a webhook needs the key.
-  markdown = setField(markdown, "status", "published");
+  markdown = setField(markdown, "status", "ready");
   if (g.target) markdown = setField(markdown, "target_context", g.target);
   if (g.team) markdown = setField(markdown, "team", g.team);
   if (g.team && g.to) markdown = setField(markdown, "to", g.to);
-  let made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, markdown, "text/markdown");
+  let made = await asOwner(env, ctx, me, "PUT", `/v1/work/${id}`, markdown, "text/markdown");
   // A team the URL named that the account cannot file in (a typo, a team it left) must not lose the
   // alert: it is filed as the account's own, saying why, rather than dropped.
   if (!made.ok && g.team) {
-    console.error("inbound guide refused for its team", made.status, made.text.slice(0, 200));
+    console.error("inbound work refused for its team", made.status, made.text.slice(0, 200));
     let mine = dropField(dropField(markdown, "team"), "to");
     mine = mine.replace(
       /\n---\n/,
       `\n---\n\n> Not filed in ${g.team}: ${made.text.slice(0, 200)}\n`,
     );
-    made = await asOwner(env, ctx, me, "PUT", `/v1/guides/${id}`, mine, "text/markdown");
+    made = await asOwner(env, ctx, me, "PUT", `/v1/work/${id}`, mine, "text/markdown");
   }
   if (!made.ok) {
-    console.error("inbound guide refused", made.status, made.text.slice(0, 200));
+    console.error("inbound work refused", made.status, made.text.slice(0, 200));
     return { id: "", created: false };
   }
   await env.DB.prepare(
-    `INSERT INTO inbound_guide (account_id, fingerprint, guide_id, last_at) VALUES (?, ?, ?, ?)
-     ON CONFLICT(account_id, fingerprint) DO UPDATE SET guide_id = excluded.guide_id,
+    `INSERT INTO inbound_work (account_id, fingerprint, work_id, last_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(account_id, fingerprint) DO UPDATE SET work_id = excluded.work_id,
        times = 1, last_at = excluded.last_at, noted_at = ''`,
   )
     .bind(me, g.print, id, at)
@@ -4960,7 +4931,7 @@ app.post("/v1/in/:key", async (c) => {
     await notify(c.env, {
       to: box.account_id,
       kind: "hooked",
-      guide_id: made.id,
+      work_id: made.id,
       actor_id: "",
       note: `${from}, ready to pick up`,
     });
@@ -5034,7 +5005,7 @@ export async function receiveEmail(
       await notify(env, {
         to: me,
         kind: "emailed",
-        guide_id: made.id,
+        work_id: made.id,
         actor_id: "",
         note: "ready to pick up",
       });
@@ -5108,7 +5079,7 @@ async function receiveSupport(
   type Joined = { id: string; status: string; team_id: string; customer_mids: string };
   let g: Joined | null = ref
     ? await env.DB.prepare(
-        "SELECT id, status, team_id, customer_mids FROM guide WHERE ref = ? AND account_id = ? AND customer = ?",
+        "SELECT id, status, team_id, customer_mids FROM work WHERE ref = ? AND account_id = ? AND customer = ?",
       )
         .bind(ref, me, mail.sender)
         .first<Joined>()
@@ -5116,7 +5087,7 @@ async function receiveSupport(
   for (const m of [...mail.refs].reverse()) {
     if (g) break;
     g = await env.DB.prepare(
-      `SELECT id, status, team_id, customer_mids FROM guide
+      `SELECT id, status, team_id, customer_mids FROM work
         WHERE account_id = ? AND customer = ? AND instr(customer_mids, ?) > 0
         ORDER BY created DESC LIMIT 1`,
     )
@@ -5124,11 +5095,11 @@ async function receiveSupport(
       .first<Joined>();
   }
   if (g) {
-    await env.DB.prepare("UPDATE guide SET customer_mids = ? WHERE id = ?")
+    await env.DB.prepare("UPDATE work SET customer_mids = ? WHERE id = ?")
       .bind(withMid(g.customer_mids, mail.mid), g.id)
       .run();
     // Finished or archived, it is not done any more: the customer is waiting again.
-    if (g.status === "consumed") await claims.reopenForCustomer(env.DB, g.id, { account: me, at });
+    if (g.status === "done") await claims.reopenForCustomer(env.DB, g.id, { account: me, at });
     const kept = await keepCustomerFiles(env, me, g.id, mail.files);
     await claims.customerEvent(env.DB, g.id, "customer", {
       account: me,
@@ -5140,7 +5111,7 @@ async function receiveSupport(
     await notify(env, {
       to: me,
       kind: "customer_wrote",
-      guide_id: g.id,
+      work_id: g.id,
       actor_id: "",
       team_id: g.team_id,
     });
@@ -5152,7 +5123,7 @@ async function receiveSupport(
   const day = new Date(Date.parse(at) - 24 * 60 * 60 * 1000).toISOString();
   const counts = await env.DB.prepare(
     `SELECT COUNT(*) AS everyone, SUM(CASE WHEN customer = ? THEN 1 ELSE 0 END) AS them
-       FROM guide WHERE account_id = ? AND customer <> '' AND created > ?`,
+       FROM work WHERE account_id = ? AND customer <> '' AND created > ?`,
   )
     .bind(mail.sender, me, day)
     .first<{ everyone: number; them: number | null }>();
@@ -5175,28 +5146,28 @@ async function receiveSupport(
           .all<{ slug: string; name: string }>()
       ).results
     : [];
-  const verdict = await askReader(env, {
+  const proof = await askReader(env, {
     subject: withoutRef(mail.subject),
     text: mail.text,
     groups,
     images: mail.files.map((f) => ({ type: f.type, bytes: f.bytes })),
   });
-  const title = verdict?.title || titleOf(withoutRef(mail.subject)) || "A message from a customer";
+  const title = proof?.title || titleOf(withoutRef(mail.subject)) || "A message from a customer";
   const made = await intake(env, ctx, {
     account: me,
     target: "",
     team: box.team,
-    to: verdict?.route ? `#${verdict.route}` : "",
+    to: proof?.route ? `#${proof.route}` : "",
     // Keyed on what the customer sent, not on how it was sorted, so a repeat merges either way.
     print: fingerprint(mail.sender, `support ${mail.subject}`),
     title,
     // Without the reader, their own first words: "<name> asks: <title>" only said the title again.
     summary:
-      verdict?.summary ||
+      proof?.summary ||
       mail.text.replace(/\s+/g, " ").trim().slice(0, 300) ||
       `${mail.name || "A customer"} wrote with no message.`,
     body: supportBody({ name: mail.name, at, text: mail.text }),
-    tags: verdict?.tag ? [verdict.tag] : [],
+    tags: proof?.tag ? [proof.tag] : [],
     again: "The customer sent the same message again",
   });
   if (!made.created) return;
@@ -5205,8 +5176,8 @@ async function receiveSupport(
   for (let i = 0; i < 3 && !number; i++) {
     const tried = `R-${rand(6, ID_ALPHABET).toUpperCase()}`;
     const set = await env.DB.prepare(
-      `UPDATE guide SET customer = ?, customer_name = ?, ref = ?, customer_subject = ?, customer_mids = ?
-        WHERE id = ? AND NOT EXISTS (SELECT 1 FROM guide WHERE ref = ?)`,
+      `UPDATE work SET customer = ?, customer_name = ?, ref = ?, customer_subject = ?, customer_mids = ?
+        WHERE id = ? AND NOT EXISTS (SELECT 1 FROM work WHERE ref = ?)`,
     )
       .bind(mail.sender, mail.name, tried, withoutRef(mail.subject), mail.mid, made.id, tried)
       .run();
@@ -5240,24 +5211,24 @@ async function receiveSupport(
   await notify(env, {
     to: me,
     kind: "emailed",
-    guide_id: made.id,
+    work_id: made.id,
     actor_id: "",
     note: "a customer's request that is ready to pick up",
   });
-  if (!verdict) return;
+  if (!proof) return;
   // Why it was sorted this way, on the request's thread: a person can see the reader decided it, and
   // move it if it is wrong. Handed to whoever takes it, as any note is.
-  const where = verdict.route
-    ? `sent to ${groups.find((g) => g.slug === verdict.route)?.name || `#${verdict.route}`}`
+  const where = proof.route
+    ? `sent to ${groups.find((g) => g.slug === proof.route)?.name || `#${proof.route}`}`
     : "for the whole team";
   await claims.noteOn(env.DB, made.id, {
     account: me,
-    body: `Sorted by the agent, ${where}${verdict.reason ? `: ${verdict.reason}` : "."}`,
+    body: `Sorted by the agent, ${where}${proof.reason ? `: ${proof.reason}` : "."}`,
     at,
   });
   // Unsure is rare, and it must not be missed: the author and the team's owners hear it by push and
   // by mail, with the one question that would settle it.
-  if (!verdict.sure) {
+  if (!proof.sure) {
     const team = box.team
       ? await env.DB.prepare("SELECT id FROM team WHERE slug = ?")
           .bind(box.team)
@@ -5277,10 +5248,10 @@ async function receiveSupport(
       [me, ...owners],
       {
         kind: "reader_unsure",
-        guide_id: made.id,
+        work_id: made.id,
         actor_id: "",
         team_id: team?.id || "",
-        note: verdict.question,
+        note: proof.question,
       },
       "A customer's request needs you",
       title,
@@ -5299,7 +5270,7 @@ async function receiveSupport(
 async function keepCustomerFiles(
   env: Env,
   account: string,
-  guide: string,
+  work: string,
   files: { name: string; type: string; bytes: Uint8Array }[],
 ): Promise<string[]> {
   const bucket = env.SHOTS;
@@ -5312,9 +5283,9 @@ async function keepCustomerFiles(
     if (SHOT_TYPES[f.type] && body.byteLength <= SHOT_MAX) {
       await bucket.put(shotKey(id, f.type), body, { httpMetadata: { contentType: f.type } });
       await env.DB.prepare(
-        "INSERT INTO shot (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO shot (id, account_id, work_id, name, type, bytes, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
-        .bind(id, account, guide, f.name, f.type, body.byteLength, now())
+        .bind(id, account, work, f.name, f.type, body.byteLength, now())
         .run();
       lines.push(`![${f.name.replace(/[\][()]/g, "") || "screenshot"}](${base}/v1/shots/${id})`);
       continue;
@@ -5327,9 +5298,9 @@ async function keepCustomerFiles(
     const name = safeName(f.name, type);
     await bucket.put(attachmentKey(id, type), body, { httpMetadata: { contentType: type } });
     await env.DB.prepare(
-      "INSERT INTO attachment (id, account_id, guide_id, name, type, bytes, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO attachment (id, account_id, work_id, name, type, bytes, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, account, guide, name, type, body.byteLength, now())
+      .bind(id, account, work, name, type, body.byteLength, now())
       .run();
     lines.push(`[${name.replace(/[\][()]/g, "")}](${base}/v1/attachments/${id})`);
   }
@@ -5356,12 +5327,12 @@ async function supportFrom(env: Env, account: string, team: string): Promise<{ n
 
 /**
  * The box (docs/LOOP.md §1a, problem 2): someone writes or pastes what they have in the hub, and the
- * reader turns it into a guide — task, bug or handover, with its sections, routed to a group of the
- * team — and it is filed at once, as theirs. No confirm step, by the author's decision: the guide
+ * reader turns it into a piece of work — with a title and a summary, routed to a group of the
+ * team — and it is filed at once, as theirs. No confirm step, by the author's decision: the work
  * records that the reader sorted it (a note with its reason), and moving or undoing it is one click
  * on the page that answers. When the reader is unsure it still files its best reading, and its
  * question goes on the thread and back to the page: asking first made people fill in a form for
- * work the agent was there to shape. Their words are quoted into the guide by code, as written.
+ * work the agent was there to shape. Their words are quoted into the work by code, as written.
  */
 /** The team someone is writing for, if they are in it, and its groups the reader may route to. */
 async function composeTeam(c: Ctx, me: string, slug: string) {
@@ -5381,11 +5352,11 @@ async function composeTeam(c: Ctx, me: string, slug: string) {
           .all<{ slug: string; name: string }>()
       ).results
     : [];
-  // A team's projects are its top-level folders (docs/LOOP.md §0); the reader may put work in one.
+  // A team's projects are its top-level projects (docs/LOOP.md §0); the reader may put work in one.
   const projects = team
     ? (
         await c.env.DB.prepare(
-          "SELECT id, title, description, color FROM folder WHERE team_id = ? AND parent_id = '' ORDER BY title",
+          "SELECT id, title, description, color FROM project WHERE team_id = ? AND parent_id = '' ORDER BY title",
         )
           .bind(team.id)
           .all<ComposeProject & { description: string }>()
@@ -5408,7 +5379,7 @@ async function composeProject(
   projects: ComposeProject[],
 ): Promise<ComposeProject | null> {
   if (typeof preset === "string" && preset) {
-    const f = await visibleFolder(c, preset);
+    const f = await visibleProject(c, preset);
     return f ? { id: f.id, title: f.title, color: f.color } : null;
   }
   const p = projects.find((x) => x.id === chosen);
@@ -5491,13 +5462,13 @@ app.get("/v1/compose/recent", async (c) => {
     `SELECT g.id, g.title, g.created, COALESCE(tg.name, tg.slug, ta.name, '@' || ta.handle, '') AS routed,
             COALESCE(f.id, '') AS project_id, COALESCE(f.title, '') AS project,
             COALESCE(f.color, '') AS project_color, COALESCE(t.name, '') AS team_name
-       FROM guide g LEFT JOIN team t ON t.id = g.team_id
+       FROM work g LEFT JOIN team t ON t.id = g.team_id
        LEFT JOIN team_group tg ON tg.id = g.to_group_id
        LEFT JOIN account ta ON ta.id = g.to_account_id
-       LEFT JOIN folder f ON f.id = (SELECT fg.folder_id FROM folder_guide fg WHERE fg.guide_id = g.id
+       LEFT JOIN project f ON f.id = (SELECT fg.project_id FROM project_work fg WHERE fg.work_id = g.id
                                       ORDER BY fg.added LIMIT 1)
       WHERE g.account_id = ? AND g.client = 'hub'
-        AND EXISTS (SELECT 1 FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'noted'
+        AND EXISTS (SELECT 1 FROM task_event e WHERE e.work_id = g.id AND e.kind = 'noted'
                      AND (e.body LIKE 'Sorted by the agent%' OR e.body LIKE 'Sorted by the reader%'))
       ORDER BY g.created DESC LIMIT 5`,
   )
@@ -5541,7 +5512,7 @@ app.post("/v1/compose", async (c) => {
   const slug = typeof body.team === "string" ? body.team.trim() : "";
   const { team, groups, projects } = await composeTeam(c, me, slug);
   if (slug && !team) return err(c, 404, "You aren't in that team.");
-  const verdict = await askReader(c.env, {
+  const proof = await askReader(c.env, {
     subject: "",
     text,
     groups,
@@ -5549,13 +5520,13 @@ app.post("/v1/compose", async (c) => {
     from: "team",
     images: await shotsToRead(c, me, pasted),
   });
-  if (!verdict)
+  if (!proof)
     return err(
       c,
       502,
       "That couldn't be sorted just now. Try again, or say a little more about it.",
     );
-  const unsure = verdict.sure ? "" : verdict.question;
+  const unsure = proof.sure ? "" : proof.question;
 
   const who = await c.env.DB.prepare("SELECT name, handle FROM account WHERE id = ?")
     .bind(me)
@@ -5571,16 +5542,16 @@ app.post("/v1/compose", async (c) => {
     text,
   });
   if (pictures.length) markdown = `${markdown.trimEnd()}\n\n${pictures.join("\n")}\n`;
-  markdown = setField(markdown, "title", verdict.title);
-  markdown = setField(markdown, "summary", verdict.summary.slice(0, SUMMARY_MAX));
-  if (verdict.tag) markdown = setList(markdown, "tags", [verdict.tag]);
-  markdown = setField(markdown, "status", "published");
+  markdown = setField(markdown, "title", proof.title);
+  markdown = setField(markdown, "summary", proof.summary.slice(0, SUMMARY_MAX));
+  if (proof.tag) markdown = setList(markdown, "tags", [proof.tag]);
+  markdown = setField(markdown, "status", "ready");
   if (team) markdown = setField(markdown, "team", team.slug);
-  if (team && verdict.route) markdown = setField(markdown, "to", `#${verdict.route}`);
+  if (team && proof.route) markdown = setField(markdown, "to", `#${proof.route}`);
   const id = rid(8);
   const res = await app.fetch(
     asAccount(
-      new Request(`${origin(c)}/v1/guides/${id}`, {
+      new Request(`${origin(c)}/v1/work/${id}`, {
         method: "PUT",
         headers: { "content-type": "text/markdown" },
         body: markdown,
@@ -5599,16 +5570,16 @@ app.post("/v1/compose", async (c) => {
     })(),
   );
   if (!res.ok) return err(c, res.status, (await res.text()).slice(0, 300));
-  const routed = verdict.route ? groups.find((g) => g.slug === verdict.route) : undefined;
+  const routed = proof.route ? groups.find((g) => g.slug === proof.route) : undefined;
   // Into its project through the project route, so who may link what is decided in one place.
-  let project = await composeProject(c, me, body.project, verdict.project, projects);
+  let project = await composeProject(c, me, body.project, proof.project, projects);
   if (project) {
     const linked = await app.fetch(
       asAccount(
-        new Request(`${origin(c)}/v1/folders/${project.id}/guides`, {
+        new Request(`${origin(c)}/v1/projects/${project.id}/work`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ guide: id }),
+          body: JSON.stringify({ work: id }),
         }),
         me,
         "hub",
@@ -5619,18 +5590,18 @@ app.post("/v1/compose", async (c) => {
   }
   await claims.noteOn(c.env.DB, id, {
     account: me,
-    body: `Sorted by the agent${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${verdict.reason ? `: ${verdict.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
+    body: `Sorted by the agent${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${proof.reason ? `: ${proof.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
     at: now(),
   });
   count(c, "composed", {});
   return c.json(
     {
       id,
-      tag: verdict.tag,
-      title: verdict.title,
-      summary: verdict.summary,
+      tag: proof.tag,
+      title: proof.title,
+      summary: proof.summary,
       route: routed ? { slug: routed.slug, name: routed.name } : null,
-      reason: verdict.reason,
+      reason: proof.reason,
       unsure,
       groups,
       project,
@@ -5670,21 +5641,21 @@ app.put("/v1/teams/:slug/tell-customer", async (c) => {
  * the task stands, and what finished work made from it reported. Only ever shown to a person, who
  * edits it and presses Send — this route sends nothing and stores nothing.
  */
-app.post("/v1/guides/:id/customer/draft", async (c) => {
+app.post("/v1/work/:id/customer/draft", async (c) => {
   if (!readerReady(c.env)) return err(c, 501, "Drafting replies isn't set up on this server yet.");
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const row = found.row;
   if (!row.customer) return err(c, 409, "This work has no customer to answer.");
   const { results: said } = await c.env.DB.prepare(
-    "SELECT kind, body FROM task_event WHERE guide_id = ? AND kind IN ('customer', 'answered') ORDER BY id",
+    "SELECT kind, body FROM task_event WHERE work_id = ? AND kind IN ('customer', 'answered') ORDER BY id",
   )
     .bind(row.id)
     .all<{ kind: string; body: string }>();
   const { results: kids } = await c.env.DB.prepare(
     `SELECT g.title, g.status, g.outcome,
-            (SELECT note FROM verdict v WHERE v.guide_id = g.id ORDER BY v.at DESC LIMIT 1) AS note
-       FROM guide g WHERE g.parent_id = ? AND g.status <> 'draft'`,
+            (SELECT note FROM proof v WHERE v.work_id = g.id ORDER BY v.at DESC LIMIT 1) AS note
+       FROM work g WHERE g.parent_id = ? AND g.status <> 'draft'`,
   )
     .bind(row.id)
     .all<{ title: string; status: string; outcome: string; note: string | null }>();
@@ -5696,7 +5667,7 @@ app.post("/v1/guides/:id/customer/draft", async (c) => {
       )?.slug ?? "")
     : "";
   const from = await supportFrom(c.env, row.account_id, team);
-  const open = kids.filter((k) => k.status !== "consumed").length;
+  const open = kids.filter((k) => k.status !== "done").length;
   const draft = await askDraft(c.env, {
     customer: row.customer_name || "",
     from: from.name,
@@ -5711,14 +5682,14 @@ app.post("/v1/guides/:id/customer/draft", async (c) => {
       title: row.title,
       summary: row.summary || "",
       state:
-        row.status === "consumed"
+        row.status === "done"
           ? "done"
           : open
             ? `being worked on (${open} piece${open === 1 ? "" : "s"} of work still open)`
             : "not started",
     },
     finished: kids
-      .filter((k) => k.status === "consumed" && k.outcome !== "archived")
+      .filter((k) => k.status === "done" && k.outcome !== "archived")
       .map((k) => ({ title: k.title, note: k.note || "" })),
   });
   if (!draft)
@@ -5730,11 +5701,11 @@ app.post("/v1/guides/:id/customer/draft", async (c) => {
  * A person answers a support request's customer (docs/LOOP.md §4). Only a person: an agent drafts,
  * and nothing reaches a customer until somebody has read it and pressed Send, so this route has no
  * CLI or MCP tool on purpose — the one exception to every-answer-in-all-three-places, because the
- * answer is the act of a person by decision. Anyone who can read the guide may send.
+ * answer is the act of a person by decision. Anyone who can read the work may send.
  */
-app.post("/v1/guides/:id/customer", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+app.post("/v1/work/:id/customer", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const row = found.row;
   if (!row.customer || !row.ref) return err(c, 409, "This work has no customer to answer.");
   // The remote MCP server dispatches through here; an agent there never sends. A token can still
@@ -5785,7 +5756,7 @@ app.post("/v1/guides/:id/customer", async (c) => {
 
 // ---- work --------------------------------------------------------------------------------
 
-// The queue an agent takes work from. See docs/V2.md and claims.ts, which holds every rule; these
+// The queue an agent takes work from. See claims.ts, which holds every rule; these
 // routes only read the request and say what happened. `agent` is the id a worktree minted for
 // itself, and it is what a claim belongs to — the account alone cannot tell two of its own agents
 // apart, and telling them apart is the whole point of a lock.
@@ -5819,7 +5790,7 @@ async function taskEvent(
   note = "",
 ) {
   const row = await db(c)
-    .prepare("SELECT account_id, team_id FROM guide WHERE id = ?")
+    .prepare("SELECT account_id, team_id FROM work WHERE id = ?")
     .bind(id)
     .first<{ account_id: string; team_id: string }>();
   if (!row) return;
@@ -5827,7 +5798,7 @@ async function taskEvent(
   await notify(c.env, {
     to: recipient,
     kind,
-    guide_id: id,
+    work_id: id,
     // Your own agent finishing your work is the hand-in you most need to hear about, and with you
     // as its actor notify() would drop it as something you did to yourself. It is sent without an
     // actor and reads "Your agent finished …". Every other event keeps its actor.
@@ -5942,9 +5913,9 @@ app.get("/v1/tasks", async (c) => {
  * What happened to a piece of work, in order, as the conversation it was: taken, progress said,
  * handed in, reopened, answered. Readable by whoever can read it. See claims.thread().
  */
-app.get("/v1/guides/:id/thread", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+app.get("/v1/work/:id/thread", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   return c.json({
     id: found.row.id,
     // Who opened it, so the first bubble can sit on the right when it was you.
@@ -5968,15 +5939,15 @@ app.get("/v1/working", async (c) => {
   const owned = await claims.ownedTeams(c.env.DB, c.get("account"));
   return c.json({
     working: rows.map((r) => ({
-      id: r.guide.id,
-      title: r.guide.title,
-      summary: r.guide.summary || "",
-      target: r.guide.target,
-      url: shareUrl(base, r.guide),
+      id: r.work.id,
+      title: r.work.title,
+      summary: r.work.summary || "",
+      target: r.work.target,
+      url: shareUrl(base, r.work),
       state: r.state,
       // Whether the person reading this wrote it. A team's owner counts: they can take back, finish
       // or release anyone's in their team.
-      mine: r.guide.account_id === c.get("account") || owned.has(r.guide.team_id),
+      mine: r.work.account_id === c.get("account") || owned.has(r.work.team_id),
       by: r.by,
       agent: r.claim.agent_id,
       host: r.claim.host,
@@ -5996,8 +5967,8 @@ app.get("/v1/working", async (c) => {
 // person the same lifecycle without asking them to manufacture an agent id.
 app.post("/v1/tasks/:id/person-take", async (c) => {
   const account = c.get("account");
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const who = { account, agent: personAgent(account), repo: "", any: true };
   const at = now();
   const got = await claims.take(c.env.DB, c.req.param("id"), who, {
@@ -6023,7 +5994,7 @@ app.put("/v1/tasks/:id/person-progress", async (c) => {
     { at: now(), note, leaseMs: claims.PERSON_LEASE_MS },
   );
   if (!claim) return err(c, 409, "You do not hold this. Take it before updating progress.");
-  return c.json({ id: claim.guide_id, state: "claimed", note: claim.note });
+  return c.json({ id: claim.work_id, state: "claimed", note: claim.note });
 });
 
 app.post("/v1/tasks/:id/person-hand_in", async (c) => {
@@ -6050,13 +6021,13 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
   await claimEvidenceShots(
     c,
     account,
-    result.claim.guide_id,
+    result.claim.work_id,
     `${body.evidence ?? ""}\n${body.writeup ?? ""}`,
   );
-  const ended = await claims.complete(c.env.DB, result.claim.guide_id, { account, at: now() });
+  const ended = await claims.complete(c.env.DB, result.claim.work_id, { account, at: now() });
   count(c, "task_finished", {});
-  await taskEvent(c, result.claim.guide_id, "task_finished", "");
-  return c.json({ id: result.claim.guide_id, state: ended.done ? "done" : "working" });
+  await taskEvent(c, result.claim.work_id, "task_finished", "");
+  return c.json({ id: result.claim.work_id, state: ended.done ? "done" : "working" });
 });
 
 /**
@@ -6065,15 +6036,15 @@ app.post("/v1/tasks/:id/person-hand_in", async (c) => {
  * servers are refused by name — work marking itself safe for the agent about to do it is the one
  * thing the mark exists to prevent. Anyone in its team may set it, as anyone moves work.
  */
-app.put("/v1/guides/:id/alone", async (c) => {
+app.put("/v1/work/:id/alone", async (c) => {
   const client = String(c.get("client") || "");
   if (client === "mcp" || client.startsWith("cli@"))
     return err(c, 403, "Only a person marks work safe to run alone, from its page in the hub.");
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const body = (await c.req.json().catch(() => ({}))) as { on?: unknown };
   const on = body.on === true;
-  await c.env.DB.prepare("UPDATE guide SET alone = ?, alone_by = ? WHERE id = ?")
+  await c.env.DB.prepare("UPDATE work SET alone = ?, alone_by = ? WHERE id = ?")
     .bind(on ? 1 : 0, on ? c.get("account") : "", found.row.id)
     .run();
   return c.json({ id: found.row.id, alone: on });
@@ -6105,7 +6076,7 @@ app.post("/v1/tasks/next", async (c) => {
  * Somebody in its team takes work back from whoever is holding it. A returning agent is refused by
  * the fence rather than writing over whoever holds it next, which is what migration 0029 is for.
  */
-app.post("/v1/guides/:id/release", async (c) => {
+app.post("/v1/work/:id/release", async (c) => {
   const id = c.req.param("id");
   const r = await claims.release(c.env.DB, id, { account: c.get("account"), at: now() });
   if ("error" in r) return err(c, r.status, r.error);
@@ -6167,17 +6138,17 @@ app.post("/v1/take", async (c) => {
 
   if (!id) {
     const got = await claims.next(c.env.DB, who, { at, any: who.any === true });
-    if (!got) return c.json(told({ guide: null, ...claims.steps("nothing") }));
+    if (!got) return c.json(told({ work: null, ...claims.steps("nothing") }));
     count(c, "task_claimed", { resumed: got.resumed });
     if (!got.resumed) await taskEvent(c, got.task.id, "task_claimed", got.task.account_id);
-    const row = await c.env.DB.prepare("SELECT share_key FROM guide WHERE id = ?")
+    const row = await c.env.DB.prepare("SELECT share_key FROM work WHERE id = ?")
       .bind(got.task.id)
       .first<{ share_key: string }>();
     // Notes the author left on it before anyone took it, handed to whoever does.
     const replies = await claims.deliver(c.env.DB, got.task.id, who, { resume: got.resumed });
     return c.json(
       told({
-        guide: {
+        work: {
           ...heldView(base, { ...got.task, share_key: row?.share_key }, got.claim),
           resumed: got.resumed,
         },
@@ -6208,7 +6179,7 @@ app.post("/v1/take", async (c) => {
     count(c, "task_claimed", { resumed: false });
     await taskEvent(c, id, "task_claimed", got.task.account_id);
   }
-  const share = await c.env.DB.prepare("SELECT share_key FROM guide WHERE id = ?")
+  const share = await c.env.DB.prepare("SELECT share_key FROM work WHERE id = ?")
     .bind(id)
     .first<{ share_key: string }>();
   // A resume is how an agent that stopped to wait for an answer picks its work back up, so it is
@@ -6217,7 +6188,7 @@ app.post("/v1/take", async (c) => {
   const replies = await claims.deliver(c.env.DB, id, who, { resume: got.resumed });
   return c.json(
     told({
-      guide: {
+      work: {
         ...heldView(base, { ...got.task, share_key: share?.share_key }, got.claim),
         resumed: got.resumed,
       },
@@ -6227,13 +6198,13 @@ app.post("/v1/take", async (c) => {
   );
 });
 
-app.put("/v1/guides/:id/progress", async (c) => {
+app.put("/v1/work/:id/progress", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
   const note = typeof who.note === "string" ? who.note : null;
   // What it said last, to tell a new block from the same one repeated on every progress call.
   const before = await c.env.DB.prepare(
-    "SELECT note FROM claim WHERE guide_id = ? AND agent_id = ? AND account_id = ?",
+    "SELECT note FROM claim WHERE work_id = ? AND agent_id = ? AND account_id = ?",
   )
     .bind(c.req.param("id"), who.agent, who.account)
     .first<{ note: string }>();
@@ -6243,10 +6214,10 @@ app.put("/v1/guides/:id/progress", async (c) => {
     fence: fenceIn(who.fence),
   });
   if (!claim) return stopWith(c, "this agent does not hold that — stop working on it");
-  const row = await c.env.DB.prepare("SELECT account_id, team_id FROM guide WHERE id = ?")
-    .bind(claim.guide_id)
+  const row = await c.env.DB.prepare("SELECT account_id, team_id FROM work WHERE id = ?")
+    .bind(claim.work_id)
     .first<{ account_id: string; team_id: string }>();
-  const replies = await claims.deliver(c.env.DB, claim.guide_id, who);
+  const replies = await claims.deliver(c.env.DB, claim.work_id, who);
   // An agent that stops on you says so with BLOCKED:, and the hub lists it under Stuck on you. The
   // first such note is news for its author; the same block renewed is not.
   const blocked = /^BLOCKED:/i;
@@ -6254,13 +6225,13 @@ app.put("/v1/guides/:id/progress", async (c) => {
     await notify(c.env, {
       to: row.account_id,
       kind: "blocked",
-      guide_id: claim.guide_id,
+      work_id: claim.work_id,
       actor_id: "",
       team_id: row.team_id,
       note: claim.note.replace(blocked, "").trim(),
     });
   return c.json({
-    id: claim.guide_id,
+    id: claim.work_id,
     lease_until: claim.lease_until,
     note: claim.note,
     ...(replies.length ? { replies } : {}),
@@ -6316,11 +6287,11 @@ function checksIn(raw: unknown): claims.Check[] {
  * Answers like `pass` does when it is not holding: stop. What it gets on success is also a stop, but
  * a different one — the claim is kept, and `take` with this id picks it back up with the reply.
  */
-app.post("/v1/guides/:id/ask", async (c) => {
+app.post("/v1/work/:id/ask", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const question = typeof who.question === "string" ? who.question.trim() : "";
   const done = await claims.ask(c.env.DB, found.row.id, who, {
     at: now(),
@@ -6329,7 +6300,7 @@ app.post("/v1/guides/:id/ask", async (c) => {
   });
   if ("error" in done)
     return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
-  count(c, "guide_asked", {});
+  count(c, "work_asked", {});
   // The author is who is being waited on, and that includes the author whose own agent this is: the
   // commonest case, and the one the self-drop in notify() would silence, so `asked` is exempt.
   const row = found.row;
@@ -6337,7 +6308,7 @@ app.post("/v1/guides/:id/ask", async (c) => {
   await notify(c.env, {
     to: row.account_id,
     kind: "asked",
-    guide_id: row.id,
+    work_id: row.id,
     actor_id: who.account,
     team_id: row.team_id,
     note: question.slice(0, claims.NOTE_MAX),
@@ -6361,9 +6332,9 @@ app.post("/v1/guides/:id/ask", async (c) => {
  * A person writes to whoever holds a piece of work: an answer to a question, or something they thought of
  * since. Only while it is held, and only from the asking side — see claims.reply().
  */
-app.post("/v1/guides/:id/reply", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+app.post("/v1/work/:id/reply", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const body = (await c.req.json().catch(() => ({}))) as { body?: unknown };
   const done = await claims.reply(c.env.DB, found.row.id, {
     account: c.get("account"),
@@ -6371,9 +6342,9 @@ app.post("/v1/guides/:id/reply", async (c) => {
     body: typeof body.body === "string" ? body.body : "",
   });
   if ("error" in done) return err(c, done.status, done.error);
-  count(c, "guide_replied", {});
+  count(c, "work_replied", {});
   const text = (typeof body.body === "string" ? body.body : "").trim().slice(0, claims.MESSAGE_MAX);
-  // A picture on a reply is claimed by the guide it was written to, the way evidence is: nothing
+  // A picture on a reply is claimed by the work it was written to, the way evidence is: nothing
   // else names it, so without this the sweep would delete it a day later. Only what was kept, so a
   // picture past the cap — which is not on the record — is not claimed either.
   await claimEvidenceShots(c, c.get("account"), found.row.id, text);
@@ -6389,7 +6360,7 @@ app.post("/v1/guides/:id/reply", async (c) => {
     await notify(c.env, {
       to: holder,
       kind: "replied",
-      guide_id: row.id,
+      work_id: row.id,
       actor_id: me,
       team_id: row.team_id,
       note: spoken.slice(0, claims.NOTE_MAX),
@@ -6406,11 +6377,11 @@ app.post("/v1/guides/:id/reply", async (c) => {
   return c.json({ id: found.row.id, noted: done.noted });
 });
 
-app.post("/v1/guides/:id/hand_in", async (c) => {
+app.post("/v1/work/:id/hand_in", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const at = now();
   const note = typeof who.note === "string" ? who.note.trim().slice(0, NOTE_MAX) : "";
   // The line the person reads first; the evidence and write-up sit behind it.
@@ -6446,7 +6417,7 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
   if ("error" in done)
     return done.status === 409 ? stopWith(c, done.error) : err(c, done.status, done.error);
   await claimEvidenceShots(c, who.account, found.row.id, `${evidence}\n${writeup}`);
-  // Finishing is final (docs/REVIEW.md): Done, with what was shown kept on the work.
+  // Finishing is final: Done, with what was shown kept on the work.
   const ended = await claims.complete(c.env.DB, found.row.id, { account: who.account, at });
   count(c, "task_finished", {});
   await taskEvent(c, found.row.id, "task_finished", "");
@@ -6461,11 +6432,11 @@ app.post("/v1/guides/:id/hand_in", async (c) => {
  * Not this agent's to do, with the reason. What it held is open again, and its author is told why.
  * Passing work you do not hold is "not for me": its sender is told "not me, and why".
  */
-app.post("/v1/guides/:id/pass", async (c) => {
+app.post("/v1/work/:id/pass", async (c) => {
   const who = agentOf(c, await c.req.json().catch(() => ({})));
   if (!who.agent) return err(c, 400, NO_AGENT);
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const why = typeof who.why === "string" ? who.why : "";
   const r = await claims.pass(c.env.DB, found.row.id, who, {
     at: now(),
@@ -6473,10 +6444,10 @@ app.post("/v1/guides/:id/pass", async (c) => {
     fence: fenceIn(who.fence),
   });
   // Passing work nobody took is still a real answer to its sender: not me, and why.
-  const declined = "error" in r && r.status === 409 && !found.owner;
-  if ("error" in r && !declined)
+  const notMine = "error" in r && r.status === 409 && !found.owner;
+  if ("error" in r && !notMine)
     return r.status === 409 ? stopWith(c, r.error) : err(c, r.status, r.error);
-  if (declined) await recordDecline(c, found.row, why.trim().slice(0, NOTE_MAX));
+  if (notMine) await recordDecline(c, found.row, why.trim().slice(0, NOTE_MAX));
   else {
     count(c, "task_passed", {});
     await taskEvent(c, found.row.id, "task_released", found.row.account_id, why);
@@ -6495,13 +6466,13 @@ app.post("/v1/guides/:id/pass", async (c) => {
  * and is told; the queue then only hands it to the new assignee's agents. The new person, or the
  * group's members, are told it is theirs.
  */
-app.post("/v1/guides/:id/assign", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+app.post("/v1/work/:id/assign", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const row = found.row;
   const me = c.get("account");
   // Anyone in its team may give it to someone else, as anyone may move it on the board:
-  // readableGuide has already said this is its author or a member of its team.
+  // readableWork has already said this is its author or a member of its team.
   if (!row.team_id)
     return err(
       c,
@@ -6511,7 +6482,7 @@ app.post("/v1/guides/:id/assign", async (c) => {
   const team = await c.env.DB.prepare("SELECT id, slug, name FROM team WHERE id = ?")
     .bind(row.team_id)
     .first<{ id: string; slug: string; name: string }>();
-  if (!team) return err(c, 404, GUIDE_GONE);
+  if (!team) return err(c, 404, WORK_GONE);
   const body = (await c.req.json().catch(() => ({}))) as { to?: unknown };
   const raw = typeof body.to === "string" ? body.to.trim().replace(/^[^/@#]+\//, "") : "";
 
@@ -6559,27 +6530,8 @@ app.post("/v1/guides/:id/assign", async (c) => {
     at,
     why: `reassigned to ${label}`,
   });
-  // Their "on it" goes with the work: anyone the new assignment leaves out said they were taking
-  // something that is no longer theirs, and left in place it kept the guide in their Needs you as
-  // "you're taking it". The author's own answer, if any, is not theirs to lose.
-  if (accounts) {
-    const keep = new Set([...accounts, row.account_id]);
-    const { results: acks } = await c.env.DB.prepare(
-      "SELECT account_id FROM ack WHERE guide_id = ? AND taken = 1",
-    )
-      .bind(row.id)
-      .all<{ account_id: string }>();
-    const gone = acks.map((a) => a.account_id).filter((a) => !keep.has(a));
-    if (gone.length)
-      await c.env.DB.batch(
-        gone.map((a) =>
-          c.env.DB.prepare("DELETE FROM ack WHERE guide_id = ? AND account_id = ?").bind(row.id, a),
-        ),
-      );
-  }
-
   // Read again: taking work back writes a line into it.
-  const current = await c.env.DB.prepare("SELECT markdown FROM guide WHERE id = ?")
+  const current = await c.env.DB.prepare("SELECT markdown FROM work WHERE id = ?")
     .bind(row.id)
     .first<{ markdown: string }>();
   const md = current?.markdown ?? row.markdown;
@@ -6593,7 +6545,7 @@ app.post("/v1/guides/:id/assign", async (c) => {
         )
       : dropField(md, "to");
   await c.env.DB.prepare(
-    "UPDATE guide SET markdown = ?, to_account_id = ?, to_group_id = ?, updated = ? WHERE id = ?",
+    "UPDATE work SET markdown = ?, to_account_id = ?, to_group_id = ?, updated = ? WHERE id = ?",
   )
     .bind(markdown, person?.id || "", group?.id || "", at, row.id)
     .run();
@@ -6602,25 +6554,31 @@ app.post("/v1/guides/:id/assign", async (c) => {
     await notify(c.env, {
       to,
       kind: "reassigned",
-      guide_id: row.id,
+      work_id: row.id,
       actor_id: me,
       team_id: team.id,
       note: label,
     });
   for (const to of accounts ?? [])
-    await notify(c.env, { to, kind: "handoff", guide_id: row.id, actor_id: me, team_id: team.id });
+    await notify(c.env, {
+      to,
+      kind: "sent_to_you",
+      work_id: row.id,
+      actor_id: me,
+      team_id: team.id,
+    });
   // Passed on by its assignee: the author hears where their work went. notify() drops an event
   // addressed to whoever caused it, so an author reassigning their own hears nothing.
   if (!dropped.includes(row.account_id))
     await notify(c.env, {
       to: row.account_id,
       kind: "reassigned",
-      guide_id: row.id,
+      work_id: row.id,
       actor_id: me,
       team_id: team.id,
       note: label,
     });
-  count(c, "guide_reassigned", { to: person ? "person" : group ? "group" : "team" });
+  count(c, "work_reassigned", { to: person ? "person" : group ? "group" : "team" });
   return c.json({
     id: row.id,
     to: person ? address : group ? (group.slug.startsWith("~") ? label : `#${group.slug}`) : "",
@@ -6632,21 +6590,21 @@ app.post("/v1/guides/:id/assign", async (c) => {
  * Take back something you sent: it goes private again, and leaves every inbox it was in.
  *
  * Its author only, and only while nobody is on it — a hold is somebody's work in progress, and
- * pulling the guide out from under them is what "Stop this agent" is for, with its warning. Anyone
+ * pulling the work out from under them is what "Stop this agent" is for, with its warning. Anyone
  * who already opened it keeps what they pulled; there is no taking that back, and the answer says so
  * rather than promising it.
  */
-app.post("/v1/guides/:id/recall", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+app.post("/v1/work/:id/recall", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   const row = found.row;
   if (!found.owner) return err(c, 403, "Only the person who sent it can take it back.");
   if (!row.team_id)
     return err(c, 400, "It was never sent to anyone, so there is nothing to take back.");
-  if (row.status === "consumed") return err(c, 400, "It is archived already.");
+  if (row.status === "done") return err(c, 400, "It is archived already.");
   const holder = await c.env.DB.prepare(
     `SELECT COALESCE(a.handle, '') AS handle FROM claim c LEFT JOIN account a ON a.id = c.account_id
-      WHERE c.guide_id = ? LIMIT 1`,
+      WHERE c.work_id = ? LIMIT 1`,
   )
     .bind(row.id)
     .first<{ handle: string }>();
@@ -6657,68 +6615,68 @@ app.post("/v1/guides/:id/recall", async (c) => {
       `${holder.handle ? `@${holder.handle}` : "Somebody"} is on it. Stop them first, then take it back.`,
     );
   const pulled = await c.env.DB.prepare(
-    "SELECT COUNT(DISTINCT account_id) AS n FROM pull WHERE guide_id = ? AND account_id <> ?",
+    "SELECT COUNT(DISTINCT account_id) AS n FROM pull WHERE work_id = ? AND account_id <> ?",
   )
     .bind(row.id, row.account_id)
     .first<{ n: number }>();
   const markdown = dropField(dropField(row.markdown, "to"), "team");
   await c.env.DB.prepare(
-    "UPDATE guide SET markdown = ?, team_id = '', to_account_id = '', to_group_id = '', updated = ? WHERE id = ?",
+    "UPDATE work SET markdown = ?, team_id = '', to_account_id = '', to_group_id = '', updated = ? WHERE id = ?",
   )
     .bind(markdown, now(), row.id)
     .run();
-  count(c, "guide_recalled", {});
+  count(c, "work_recalled", {});
   return c.json({ id: row.id, recalled: true, already_opened_by: pulled?.n ?? 0 });
 });
 
 /**
- * Reopen finished work (docs/REVIEW.md §4): back to To do with why, for anyone in its team. The
+ * Reopen finished work: back to To do with why, for anyone in its team. The
  * reason is on the work for whoever takes it next, and whoever finished it is told.
  */
-app.post("/v1/guides/:id/reopen", async (c) => {
+app.post("/v1/work/:id/reopen", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { why?: unknown };
   const why = typeof body.why === "string" ? body.why : "";
   const id = c.req.param("id");
   const r = await claims.reopen(c.env.DB, id, { account: c.get("account"), at: now(), why });
   if ("error" in r) return err(c, r.status, r.error);
-  const found = await readableGuide(c, id);
+  const found = await readableWork(c, id);
   for (const to of r.finishers)
     await notify(c.env, {
       to,
-      kind: "sent_back",
-      guide_id: id,
+      kind: "reopened",
+      work_id: id,
       actor_id: c.get("account"),
       team_id: found?.row.team_id || "",
       note: why.trim().slice(0, 280),
     });
-  count(c, "guide_reopened", {});
+  count(c, "work_reopened", {});
   return c.json({ id, state: "ready" });
 });
 
-app.delete("/v1/guides/:id", async (c) => {
-  const found = await readableGuide(c, c.req.param("id"));
-  if (!found) return err(c, 404, GUIDE_GONE);
+app.delete("/v1/work/:id", async (c) => {
+  const found = await readableWork(c, c.req.param("id"));
+  if (!found) return err(c, 404, WORK_GONE);
   if (!found.owner && !(await ownsTeam(c, found.row)))
-    return err(c, 403, "Only the author, or the owner of its team, can delete a guide.");
-  // Before the guide, so a failure leaves the guide to try again rather than orphaning its
+    return err(c, 403, "Only the author, or the owner of its team, can delete a piece of work.");
+  // Before the work, so a failure leaves the work to try again rather than orphaning its
   // evidence with nothing left pointing at it.
   await dropShots(c, found.row.id);
   await dropFiles(c, found.row.id);
-  await c.env.DB.prepare("DELETE FROM guide WHERE id = ?").bind(found.row.id).run();
-  const { told } = await forgetGuide(c.env.DB, found.row.id);
+  await c.env.DB.prepare("DELETE FROM work WHERE id = ?").bind(found.row.id).run();
+  const { told } = await forgetWork(c.env.DB, found.row.id);
   return c.json({ id: found.row.id, deleted: true, told });
 });
 
 // ---- share links ------------------------------------------------------------------------
 
-async function shared(c: { env: Env }, id: string, key: string): Promise<GuideRow | null> {
+async function shared(c: { env: Env }, id: string, key: string): Promise<WorkRow | null> {
   if (!ID_RE.test(id) || !/^[a-z0-9]{16,32}$/.test(key)) return null;
-  return c.env.DB.prepare("SELECT * FROM guide WHERE id = ? AND share_key = ?")
+  return c.env.DB.prepare("SELECT * FROM work WHERE id = ? AND share_key = ?")
     .bind(id, key)
-    .first<GuideRow>();
+    .first<WorkRow>();
 }
 
-// A guide's raw markdown is the owner's own text, but a share link is fetched by other people —
+// A piece of work's raw markdown is the owner's own text, but a share link is fetched by other people —
 // and by agents. The CSP turns anything script-shaped in it inert instead of trusting a sanitizer.
 // The same header on the rendered page now comes from apps/web's route rules (shared/csp.ts).
 const VIEW_HEADERS = {
@@ -6730,7 +6688,7 @@ const VIEW_HEADERS = {
   "x-robots-tag": "noindex, nofollow, noarchive",
 };
 
-app.get("/g/:id/:key{.+\\.md}", async (c) => {
+app.get("/w/:id/:key{.+\\.md}", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key").replace(/\.md$/, ""));
   if (!row) return c.text("no such work", 404);
   await recordPull(c, row, "", "link");
@@ -6744,11 +6702,11 @@ app.get("/g/:id/:key{.+\\.md}", async (c) => {
 // A miss answers with a bare 404 rather than the 404 *page* — this endpoint returns an image, and
 // its caller is an unfurler that will never render HTML.
 // The site's own unfurl card. `/` is the page most people meet first and it had no image at all,
-// so a link to the product previewed as a bare text row — the same blank card the guide pages were
+// so a link to the product previewed as a bare text row — the same blank card the work pages were
 // fixed for. Static in every sense: it takes no parameters and changes only when this code does.
 app.get("/og.png", async (c) => renderSiteOgImage(c.env, origin(c), later(c)));
 
-app.get("/g/:id/:key/og.png", async (c) => {
+app.get("/w/:id/:key/og.png", async (c) => {
   const row = await shared(c, c.req.param("id"), c.req.param("key"));
   if (!row) return c.text("no such work", 404, VIEW_HEADERS);
   const people = await accounts(c, [row.account_id]);
@@ -7230,7 +7188,7 @@ app.delete("/v1/oauth/clients/:id", async (c) => {
 app.get("/health", (c) => c.json({ ok: true }));
 
 // Every route this app serves is machine-facing now, so a miss is JSON rather than a page. The
-// pages — `/`, `/g/:id/:key`, `/hub`, `/join/:code`, `/reset` and the 404 itself — are Nuxt's,
+// pages — `/`, `/w/:id/:key`, `/hub`, `/join/:code`, `/reset` and the 404 itself — are Nuxt's,
 // and a request that matches none of the routes above never reaches here: apps/web's middleware
 // only hands over `/v1/*`, `/health` and the two machine routes.
 app.notFound((c) => err(c, 404, "There's nothing at this address."));
@@ -7241,6 +7199,6 @@ app.onError((e, c) => {
   return err(c, 500, "Something went wrong on our side. Try again in a moment.");
 });
 
-app.route("/v1/folders", folderRoutes);
+app.route("/v1/projects", projectRoutes);
 
 export default app;

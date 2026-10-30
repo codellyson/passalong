@@ -261,8 +261,9 @@ export const removeMember = (slug, who) =>
 export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 
-export const folders = (scope = "all", query = "") => call(`/v1/folders${q({ scope, q: query })}`);
-export const createFolder = (
+export const projects = (scope = "all", query = "") =>
+  call(`/v1/projects${q({ scope, q: query })}`);
+export const createProject = (
   title,
   description = "",
   team = "",
@@ -270,65 +271,73 @@ export const createFolder = (
   color = "",
   repo = "",
 ) =>
-  call("/v1/folders", { method: "POST", body: { title, description, team, parent, color, repo } });
-export const folder = (id) => call(`/v1/folders/${encodeURIComponent(id)}`);
-export const updateFolder = (id, changes) =>
-  call(`/v1/folders/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });
-export const folderDocument = (folderId, documentId) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`);
-export const folderAsset = (folderId, assetId) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/assets/${encodeURIComponent(assetId)}/agent`);
-export async function addFolderAsset(folderId, path, name = "") {
+  call("/v1/projects", { method: "POST", body: { title, description, team, parent, color, repo } });
+export const project = (id) => call(`/v1/projects/${encodeURIComponent(id)}`);
+export const updateProject = (id, changes) =>
+  call(`/v1/projects/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });
+export const projectDocument = (projectId, documentId) =>
+  call(`/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}`);
+export const projectFile = (projectId, fileId) =>
+  call(`/v1/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileId)}/agent`);
+export async function addProjectFile(projectId, path, name = "") {
   const file = await stat(path);
-  if (!file.isFile()) throw new ApiError(400, "Choose a file to add to the folder.");
+  if (!file.isFile()) throw new ApiError(400, "Choose a file to add to the project.");
   if (file.size > 10 * 1024 * 1024) throw new ApiError(413, "That file is over 10 MB.");
-  return call(`/v1/folders/${encodeURIComponent(folderId)}/assets`, {
+  return call(`/v1/projects/${encodeURIComponent(projectId)}/files`, {
     method: "POST",
     body: new Uint8Array(await readFile(path)),
     uploadName: name || basename(path),
   });
 }
-export const createFolderDocument = (folderId, name, body) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents`, {
+export const createProjectDocument = (projectId, name, body) =>
+  call(`/v1/projects/${encodeURIComponent(projectId)}/documents`, {
     method: "POST",
     body: { name, body },
   });
-export const saveFolderDocument = (folderId, documentId, version, body) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
-    method: "PUT",
-    body: { version, body },
-  });
-/** Rename a document, move it to another folder (`folder`), or both. Its id and history stay. */
-export const patchFolderDocument = (folderId, documentId, changes) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
-    method: "PATCH",
-    body: changes,
-  });
-export const folderDocumentHistory = (folderId, documentId, version = 0) =>
+export const saveProjectDocument = (projectId, documentId, version, body) =>
   call(
-    `/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}/revisions${version ? `/${version}` : ""}`,
+    `/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "PUT",
+      body: { version, body },
+    },
   );
-export const deleteFolderDocument = (folderId, documentId) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
+/** Rename a document, move it to another project (`project`), or both. Its id and history stay. */
+export const patchProjectDocument = (projectId, documentId, changes) =>
+  call(
+    `/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "PATCH",
+      body: changes,
+    },
+  );
+export const projectDocumentHistory = (projectId, documentId, version = 0) =>
+  call(
+    `/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}/revisions${version ? `/${version}` : ""}`,
+  );
+export const deleteProjectDocument = (projectId, documentId) =>
+  call(
+    `/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "DELETE",
+    },
+  );
+export const deleteProjectFile = (projectId, fileId) =>
+  call(`/v1/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileId)}`, {
     method: "DELETE",
   });
-export const deleteFolderAsset = (folderId, assetId) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/assets/${encodeURIComponent(assetId)}`, {
-    method: "DELETE",
-  });
-export const publish = (id, markdown) =>
-  call(`/v1/guides/${id}`, { method: "PUT", body: markdown });
-export const list = (query = "", scope = "") => call(`/v1/guides${q({ q: query, scope })}`);
+export const publish = (id, markdown) => call(`/v1/work/${id}`, { method: "PUT", body: markdown });
+export const list = (query = "", scope = "") => call(`/v1/work${q({ q: query, scope })}`);
 export const get = (id, { peek = false, as = null } = {}) =>
-  call(`/v1/guides/${id}${q({ peek: peek ? "1" : "" })}`, { raw: true, as });
-/** One page of every guide this account can read, for `export`. Records no pull. */
+  call(`/v1/work/${id}${q({ peek: peek ? "1" : "" })}`, { raw: true, as });
+/** One page of every piece of work this account can read, for `export`. Records no pull. */
 export const exportPage = (after = "", as = null) => call(`/v1/export${q({ after })}`, { as });
 /**
  * The work this one came out of, with where it has got to. `markdown` adds its content. Reading it
  * is not opening it: no pull is recorded on the parent.
  */
 export const parent = (id, { markdown = false } = {}) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/parent${q({ markdown: markdown ? "1" : "" })}`);
+  call(`/v1/work/${encodeURIComponent(id)}/parent${q({ markdown: markdown ? "1" : "" })}`);
 /**
  * Giving a plan away, for whoever the deployment names in `ADMIN_ACCOUNTS`. Every other account
  * gets a 404 from these, so the CLI does not have to know who the operator is either.
@@ -344,29 +353,29 @@ export const listGifts = () => call("/v1/admin/gifts");
 export const takeGiftBack = (id) =>
   call(`/v1/admin/gifts/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const setStatus = (id, status) =>
-  call(`/v1/guides/${id}/status`, { method: "PATCH", body: { status } });
-export const remove = (id) => call(`/v1/guides/${id}`, { method: "DELETE" });
+  call(`/v1/work/${id}/status`, { method: "PATCH", body: { status } });
+export const remove = (id) => call(`/v1/work/${id}`, { method: "DELETE" });
 export const tasks = () => call("/v1/tasks");
 export const nextTask = (body) => call("/v1/tasks/next", { method: "POST", body });
 export const reopen = (id, why) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/reopen`, { method: "POST", body: { why } });
+  call(`/v1/work/${encodeURIComponent(id)}/reopen`, { method: "POST", body: { why } });
 /** Take work back from whoever holds it. */
 export const release = (id) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });
+  call(`/v1/work/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });
 export const working = () => call("/v1/working");
 export const assign = (id, to) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/assign`, { method: "POST", body: { to } });
+  call(`/v1/work/${encodeURIComponent(id)}/assign`, { method: "POST", body: { to } });
 export const take = (body) => call("/v1/take", { method: "POST", body });
 export const progress = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/progress`, { method: "PUT", body });
+  call(`/v1/work/${encodeURIComponent(id)}/progress`, { method: "PUT", body });
 export const handIn = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/hand_in`, { method: "POST", body });
+  call(`/v1/work/${encodeURIComponent(id)}/hand_in`, { method: "POST", body });
 export const ask = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/ask`, { method: "POST", body });
+  call(`/v1/work/${encodeURIComponent(id)}/ask`, { method: "POST", body });
 export const reply = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/reply`, { method: "POST", body: { body } });
+  call(`/v1/work/${encodeURIComponent(id)}/reply`, { method: "POST", body: { body } });
 export const pass = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/pass`, { method: "POST", body });
+  call(`/v1/work/${encodeURIComponent(id)}/pass`, { method: "POST", body });
 /**
  * Upload a file that is not a picture, and get back what the server made of it. The server decides
  * what the bytes are and refuses what it does not keep; `type` and `name` are hints. The name travels

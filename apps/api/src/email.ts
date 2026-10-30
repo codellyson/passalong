@@ -7,7 +7,14 @@
 //
 // Every name passed in here is a display name (see `displayName` in notify.ts): somebody's own
 // typing, so it is escaped wherever it lands in markup.
-import { askedCopy, doneCopy, handoffCopy, hubUrl, openedCopy, repliedCopy } from "./mail-copy.js";
+import {
+  askedCopy,
+  doneCopy,
+  hubUrl,
+  openedCopy,
+  repliedCopy,
+  sentToYouCopy,
+} from "./mail-copy.js";
 import { b, button, footnote, link, p, quote, shell } from "./mail-html.js";
 import { type MailEnv, sendMail } from "./mail-send.js";
 
@@ -20,11 +27,11 @@ const MUTED = "#6b6862";
 const seeEverything = (env: MailEnv) =>
   footnote(`See everything in one place: ${link("your hub", hubUrl(env.PUBLIC_ORIGIN))}.`);
 
-export function sendHandoff(
+export function sendSentToYou(
   env: MailEnv,
   o: { to: string; fromName: string; title: string; id: string; url: string; team: string },
 ) {
-  const copy = handoffCopy(o);
+  const copy = sentToYouCopy(o);
   return sendMail(
     env,
     o.to,
@@ -81,8 +88,8 @@ export function sendPulled(
   );
 }
 
-/** Somebody who is not the author is done with a guide. */
-export function sendConsumed(
+/** Somebody who is not the author is done with a piece of work. */
+export function sendArchived(
   env: MailEnv,
   o: { to: string; byName: string; title: string; url: string },
 ) {

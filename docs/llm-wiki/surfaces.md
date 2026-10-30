@@ -17,7 +17,7 @@ left, once per machine. Prints the id on stdout and everything else on stderr, s
   `export`… `share`, `task`, `pull`, `start`, `inbox`, `activity`, `log`, `tasks`, `recall`,
   `approve`, `reject` and `done` are gone.
 - `passalong setup` installs the Claude Code capture skill, the MCP server and hooks. The skill writes
-  what a session learned into the project's documents, with a line on its Log — never a handover.
+  what a session learned into the project's documents, with a line on its Log — never a document for one person.
 - **Too old is refused, not warned.** Every call carries `x-passalong-version`; below `MIN_CLIENT`
   (currently 0.20.0; 0.22.0 once it is `latest` on npm) the API answers 426 with the install
   command. An agent never reads stderr, so the refusal is the one text it is sure to see. The
@@ -34,10 +34,8 @@ left, once per machine. Prints the id on stdout and everything else on stderr, s
   nothing is the board), `update_work`. Projects: `find_projects`, `save_project`, `read_document`,
   `save_document`, `delete_document`. Files: `add_file` (a path over stdio; a file input or a
   one-time upload link over HTTP), `read_file`, `delete_file`. Account: `accounts`, stdio only —
-  over HTTP the bearer token is the account, so it has 16. About 45 tools went, among them
-  `publish_guide`, `file_bugs`, `plan_tasks`, `get_guide`, `search_guides`, `inbox`, `board`, `log`,
-  `activity`, `guide_template`, `set_guide_status`, `attach_screenshot` and `link_folder_guide`; no
-  tool name, description or instruction says "guide". `find_work` with nothing is still drawn as a
+  over HTTP the bearer token is the account, so it has 16. About 45 older tools went: one tool per job.
+  Tool names, descriptions and instructions use only the four nouns. `find_work` with nothing is still drawn as a
   board in hosts with MCP Apps.
 
 ## API — `/v1/*`
@@ -47,13 +45,13 @@ middleware. Full list in [docs/wiki/api.md](../wiki/api.md).
 
 ## Share links
 
-`/g/:id/:key` — the id is an address, the **key is the secret**. Renders the work plainly, with no
+`/w/:id/:key` — the id is an address, the **key is the secret**. Renders the work plainly, with no
 script, for anyone holding it; `.md` gives the raw markdown to an agent. `?embed=1` is the document alone, for the
 hub to frame.
 
 ## Unfurl cards
 
-`/g/:id/:key/og.png`, drawn with satori/resvg. Each card is drawn once and kept in the edge cache,
+`/w/:id/:key/og.png`, drawn with satori/resvg. Each card is drawn once and kept in the edge cache,
 keyed by a hash of its markup — a retitled piece of work is a new key, never a stale picture, and the share
 key never reaches the cache. The edge cache works only on the custom domains, not `workers.dev`.
 

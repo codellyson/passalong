@@ -40,22 +40,22 @@ function world() {
      INSERT INTO team (id, slug, name, created_by, created) VALUES ('t', 'acme', 'Acme', 'ada', '${ago(500)}');
      INSERT INTO membership (team_id, account_id, joined) VALUES ('t', 'ada', '${ago(500)}'), ('t', 'bo', '${ago(500)}');
      INSERT INTO team_group (id, team_id, slug, name, created) VALUES ('gw', 't', 'web', 'Web', '${ago(500)}');
-     INSERT INTO folder (id, created_by, team_id, title, created, updated) VALUES
+     INSERT INTO project (id, created_by, team_id, title, created, updated) VALUES
        ('p', 'ada', 't', 'Billing', '${ago(400)}', '${ago(1)}'),
        ('sub', 'ada', 't', 'Invoices', '${ago(400)}', '${ago(1)}'),
        ('other', 'ada', 't', 'Website', '${ago(400)}', '${ago(1)}');
-     UPDATE folder SET parent_id = 'p' WHERE id = 'sub';`);
-  const guide = (id, folder, o = {}) => {
+     UPDATE project SET parent_id = 'p' WHERE id = 'sub';`);
+  const work = (id, project, o = {}) => {
     db.raw
       .prepare(
-        `INSERT INTO guide (id, account_id, share_key, title, status, markdown, created, updated, team_id,
+        `INSERT INTO work (id, account_id, share_key, title, status, markdown, created, updated, team_id,
                             to_account_id, to_group_id, outcome, summary)
          VALUES (?, 'ada', 'k', ?, ?, '', ?, ?, 't', ?, ?, ?, '')`,
       )
       .run(
         id,
         `work ${id}`,
-        o.status ?? "published",
+        o.status ?? "ready",
         o.created ?? ago(10),
         o.updated ?? ago(10),
         o.to ?? "",
@@ -64,45 +64,45 @@ function world() {
       );
     db.raw
       .prepare(
-        "INSERT INTO folder_guide (folder_id, guide_id, added_by, added) VALUES (?, ?, 'ada', ?)",
+        "INSERT INTO project_work (project_id, work_id, added_by, added) VALUES (?, ?, 'ada', ?)",
       )
-      .run(folder, id, ago(10));
+      .run(project, id, ago(10));
   };
-  const ev = (guideId, kind, at, account = "bo", body = "", agent = "") =>
+  const ev = (workId, kind, at, account = "bo", body = "", agent = "") =>
     db.raw
       .prepare(
-        "INSERT INTO task_event (guide_id, kind, account_id, agent_id, body, at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO task_event (work_id, kind, account_id, agent_id, body, at) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(guideId, kind, account, agent, body, at);
-  const claim = (guideId, account, agent, claimed, lease) =>
+      .run(workId, kind, account, agent, body, at);
+  const claim = (workId, account, agent, claimed, lease) =>
     db.raw
       .prepare(
-        `INSERT INTO claim (guide_id, account_id, agent_id, state, claimed_at, lease_until, updated)
+        `INSERT INTO claim (work_id, account_id, agent_id, state, claimed_at, lease_until, updated)
          VALUES (?, ?, ?, 'claimed', ?, ?, ?)`,
       )
-      .run(guideId, account, agent, claimed, lease, claimed);
-  return { db, x, guide, ev, claim };
+      .run(workId, account, agent, claimed, lease, claimed);
+  return { db, x, work, ev, claim };
 }
 
-test("a project's work is everything linked into it and its subfolders, as register rows", async () => {
-  const { db, x, guide, ev, claim } = world();
-  guide("todo", "p", { to: "bo", created: ago(30) });
-  guide("grp", "sub", { group: "gw", created: ago(20) });
-  guide("draft", "p", { status: "draft", created: ago(40) });
-  guide("held", "p");
+test("a project's work is everything linked into it and its subprojects, as register rows", async () => {
+  const { db, x, work, ev, claim } = world();
+  work("todo", "p", { to: "bo", created: ago(30) });
+  work("grp", "sub", { group: "gw", created: ago(20) });
+  work("draft", "p", { status: "draft", created: ago(40) });
+  work("held", "p");
   claim("held", "bo", "agent-7", ago(3), later);
-  guide("quiet", "sub");
+  work("quiet", "sub");
   claim("quiet", "bo", "agent-9", ago(8), ago(2));
-  guide("ask", "p");
+  work("ask", "p");
   claim("ask", "ada", "agent-1", ago(5), later);
   ev("ask", "asked", ago(4), "ada", "Which plan?", "agent-1");
-  guide("mine", "p");
+  work("mine", "p");
   claim("mine", "bo", "person-bo", ago(6), ago(5));
-  guide("fin", "p", { status: "consumed", outcome: "finished", updated: ago(2) });
+  work("fin", "p", { status: "done", outcome: "finished", updated: ago(2) });
   ev("fin", "handed_in", ago(2), "bo", "Done", "agent-7");
-  guide("old", "p", { status: "consumed", outcome: "finished", updated: ago(24 * 30) });
-  guide("elsewhere", "other");
-  x(`INSERT INTO notification (account_id, kind, guide_id, actor_id, at, read_at)
+  work("old", "p", { status: "done", outcome: "finished", updated: ago(24 * 30) });
+  work("elsewhere", "other");
+  x(`INSERT INTO notification (account_id, kind, work_id, actor_id, at, read_at)
      VALUES ('ada', 'task_finished', 'fin', 'bo', '${ago(2)}', '')`);
 
   const { open, done } = await projectView(db, "ada", "p", NOW);
@@ -134,19 +134,19 @@ test("a project's work is everything linked into it and its subfolders, as regis
 });
 
 test("history merges finished work and document versions, newest first, saying person or agent", async () => {
-  const { db, x, guide, ev } = world();
-  guide("fin", "sub", { status: "consumed", outcome: "finished", updated: ago(3) });
+  const { db, x, work, ev } = world();
+  work("fin", "sub", { status: "done", outcome: "finished", updated: ago(3) });
   ev("fin", "handed_in", ago(3), "bo", "Fixed it", "agent-7");
-  x(`INSERT INTO verdict (guide_id, account_id, ok, note, detail, checks, writeup, at) VALUES
+  x(`INSERT INTO proof (work_id, account_id, ok, note, detail, checks, writeup, at) VALUES
        ('fin', 'bo', 1, 'Fixed it', '![s](https://passalong.dev/v1/shots/abc123)', '[{"ok":true}]', 'Fixed the rounding', '${ago(3)}');
-     INSERT INTO folder_document (id, folder_id, name, body, version, updated_by, created, updated) VALUES
+     INSERT INTO document (id, project_id, name, body, version, updated_by, created, updated) VALUES
        ('readme', 'p', 'README', 'v2', 2, 'ada', '${ago(10)}', '${ago(1)}'),
        ('far', 'other', 'Elsewhere', '', 1, 'ada', '${ago(10)}', '${ago(1)}');
-     INSERT INTO folder_document_revision (document_id, version, body, saved_by, saved_at, client) VALUES
+     INSERT INTO document_revision (document_id, version, body, saved_by, saved_at, client) VALUES
        ('readme', 1, 'v1', 'bo', '${ago(10)}', ''),
        ('readme', 2, 'v2', 'ada', '${ago(1)}', 'hub'),
        ('far', 1, '', 'ada', '${ago(1)}', 'mcp');`);
-  guide("archived", "p", { status: "consumed", outcome: "archived", updated: ago(2) });
+  work("archived", "p", { status: "done", outcome: "archived", updated: ago(2) });
 
   const { history } = await projectView(db, "ada", "p", NOW);
   assert.deepEqual(
@@ -162,7 +162,7 @@ test("history merges finished work and document versions, newest first, saying p
   assert.equal(fin.note, "Fixed the rounding");
   assert.equal(fin.shots, 1);
   assert.equal(fin.checks, 1);
-  assert.equal(history[0].folder, "p");
+  assert.equal(history[0].project, "p");
   assert.deepEqual(
     history.map((h) => h.changed),
     ["", "", "version 1 by @bo"],
@@ -180,11 +180,11 @@ test("a save is a person's from the hub, an agent's from MCP or the CLI, and oth
 
 test("a document is changed for you until you open it, and only by someone else's save", async () => {
   const { db, x } = world();
-  x(`INSERT INTO folder_document (id, folder_id, name, body, version, updated_by, created, updated) VALUES
+  x(`INSERT INTO document (id, project_id, name, body, version, updated_by, created, updated) VALUES
        ('price', 'p', 'Pricing', 'v3', 3, 'bo', '${ago(10)}', '${ago(1)}'),
        ('mine', 'p', 'Setup', 'v1', 1, 'ada', '${ago(10)}', '${ago(5)}'),
        ('priv', 'sub', 'Notes', 'v1', 1, 'bo', '${ago(10)}', '${ago(5)}');
-     INSERT INTO folder_document_revision (document_id, version, body, saved_by, saved_at, client) VALUES
+     INSERT INTO document_revision (document_id, version, body, saved_by, saved_at, client) VALUES
        ('price', 1, 'v1', 'ada', '${ago(10)}', 'hub'),
        ('price', 2, 'v2', 'bo', '${ago(4)}', 'mcp'),
        ('price', 3, 'v3', 'bo', '${ago(1)}', 'mcp'),
@@ -192,7 +192,7 @@ test("a document is changed for you until you open it, and only by someone else'
        ('priv', 1, 'v1', 'bo', '${ago(5)}', 'mcp');`);
   const changed = () =>
     db
-      .prepare(`SELECT d.id, ${docChange("?1")} AS changed FROM folder_document d ORDER BY d.id`)
+      .prepare(`SELECT d.id, ${docChange("?1")} AS changed FROM document d ORDER BY d.id`)
       .bind("ada")
       .all()
       .then((r) => Object.fromEntries(r.results.map((row) => [row.id, row.changed])));

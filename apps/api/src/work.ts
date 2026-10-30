@@ -1,64 +1,43 @@
-// Just enough of the guide format for the server: read the frontmatter fields it indexes, and
+// Just enough of the work format for the server: read the frontmatter fields it indexes, and
 // patch a field in place without disturbing the rest of the document. The full format lives in
-// packages/passalong/src/guide.js; this mirrors its parsing rules for strings and string lists.
+// packages/passalong/src/work.js; this mirrors its parsing rules for strings and string lists.
 
 /**
- * A guide is a draft or it is published, and `consumed` is the author's shelf — off the board, out
- * of the free tier's count, reversible. `promoted` is the one true legacy: an author lifecycle laid
- * over work that already reports itself, since a pull count says how travelled a guide is
- * without anyone having to grade it.
- *
- * This list is what is **accepted**, and it is not what may be **set** — that is `SETTABLE` below.
- * The distinction is load-bearing. A status lives in frontmatter, inside markdown files in other
- * people's repositories, and `validate()` rejects a status it does not know, so dropping a value
- * from here would make a guide shared a month ago fail to re-share today.
+ * Work is Draft, Ready or Done. Done is the shelf — off the board, out of the free tier's count,
+ * reversible — and `outcome` says how it got there.
  */
-export const STATUSES = ["draft", "published", "consumed", "promoted"] as const;
+export const STATUSES = ["draft", "ready", "done"] as const;
 export type Status = (typeof STATUSES)[number];
-
-/**
- * What a write may choose. `promoted` is absent: it cannot be set on a guide that does not already
- * carry it, from any surface.
- *
- * Two reasons, and the second is the sharper one. A status that can still be set reads as a
- * feature to whoever meets it next, however many deprecation notices sit around it. And
- * `quota.ts` counts `published` and `promoted` as the statuses that occupy room — so while
- * `promoted` remains settable, promoting every guide is an unlimited free tier. Closing the write
- * closes that, and does it without touching what the free tier counts, which still has to include
- * the guides already carrying the status.
- */
-export const SETTABLE = ["draft", "published", "consumed"] as const;
 
 /**
  * New work is Ready unless whoever wrote it said `status: draft`. Draft-first
  * was tried and addressed work sat forgotten in it: on 2026-10-15 every draft in production was a
  * task sent to somebody, untouched for over a day. Draft is for what a person should read first —
  * a plan, or anything an agent is unsure of — and anyone can move work back to it.
- * What a new guide cannot be is archived, and an edit cannot change status: that is the person's
+ * What a new work cannot be is archived, and an edit cannot change status: that is the person's
  * separate action, as it always was.
  */
 export function publishProblem(status: string, previousStatus?: string): string {
-  if (!previousStatus && status === "consumed")
+  if (!previousStatus && status === "done")
     return "New work can't start archived. Create it Ready, or with `status: draft` for the person to read first.";
   if (previousStatus && status !== previousStatus)
     return "Changing the status of work is its own action. Keep its current status in the document, then use Ready, Move to Draft or Archive.";
   return "";
 }
-export type Settable = (typeof SETTABLE)[number];
 
 /**
- * Archived work comes back to Draft, never straight to Ready. Archived covers approved as well
+ * Archived work comes back to Draft, never straight to Ready. Done covers finished as well
  * as shelved, so putting one back as Ready handed finished work to whoever takes it next. From
  * Draft a person decides, with Ready, whether it is wanted.
  */
 export function unarchiveProblem(from: string, to: string): string {
-  if (from === "consumed" && to === "published")
+  if (from === "done" && to === "ready")
     return "Archived work comes back to Draft, not straight to Ready: set it to draft, then mark it Ready if it is still wanted.";
   return "";
 }
 
 /**
- * The longest `summary:` work may carry. Mirrors SUMMARY_MAX in packages/passalong/src/guide.js,
+ * The longest `summary:` work may carry. Mirrors SUMMARY_MAX in packages/passalong/src/work.js,
  * which says why work has one: it is what a person reads, and the document is the agent's form.
  */
 export const SUMMARY_MAX = 400;
@@ -107,7 +86,7 @@ export function tag(raw: unknown): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** A guide's tags: normalised, emptied of blanks, and deduped once two spellings become one. */
+/** A piece of work's tags: normalised, emptied of blanks, and deduped once two spellings become one. */
 export function tagList(raw: unknown): string[] {
   const list = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
   return [...new Set(list.map(tag).filter(Boolean))];
@@ -127,7 +106,7 @@ function scalar(raw: string): string {
  * Split a flow sequence's inner text on the commas *between* items, not the ones inside them. The
  * writer quotes any value containing a comma, so splitting on every comma tears those items apart —
  * and the pieces keep their stray quotes, because `scalar()` only unwraps a value quoted at both
- * ends. Mirrors `items()` in packages/passalong/src/guide.js.
+ * ends. Mirrors `items()` in packages/passalong/src/work.js.
  */
 function items(inner: string): string[] {
   const out: string[] = [];
@@ -161,8 +140,8 @@ function items(inner: string): string[] {
 /**
  * The screenshots a document points at, by id.
  *
- * The document is the source of truth for which evidence belongs to which guide, the same way it
- * already is for the title and the tags. An upload happens before the guide it will belong to
+ * The document is the source of truth for which evidence belongs to which work, the same way it
+ * already is for the title and the tags. An upload happens before the work it will belong to
  * exists — a tester drops a screenshot into a form they have not submitted — so the link cannot be
  * made at upload time, and asking each client to report its own attachments would mean the CLI,
  * the hub and anything else all had to remember to. Reading it back out of the markdown means
@@ -176,10 +155,10 @@ export function shotIds(markdown: string): string[] {
 /**
  * Image targets in a document that no reader will ever load.
  *
- * A guide travels as markdown to whoever holds its link, so an image reference is only worth
+ * A piece of work travels as markdown to whoever holds its link, so an image reference is only worth
  * anything if it resolves for someone who is not the author. A client-internal handle does not:
  * ChatGPT filed a bug with `![shot](attachment://file_0000…)`, which is its own file id wrapped in
- * a scheme it invented, and the publish succeeded because nothing looked. The guide is stored with
+ * a scheme it invented, and the publish succeeded because nothing looked. The work is stored with
  * a dead image and the screenshot it names was never uploaded at all.
  *
  * Told, not inferred — the tool descriptions and the server instructions both say to attach with
@@ -190,7 +169,7 @@ export function shotIds(markdown: string): string[] {
  * Only a foreign *scheme* counts. `https:` is left alone even when it points somewhere else
  * entirely, because embedding an image you host is legitimate and this is not a link checker. A
  * relative path is left alone too: it is also broken in a document that travels, but it has
- * always been accepted and breaking it here would refuse guides that publish today.
+ * always been accepted and breaking it here would refuse work that publish today.
  */
 export function unreachableImages(markdown: string): string[] {
   const found = markdown.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)/g);
@@ -212,7 +191,7 @@ export function split(markdown: string): { front: string; body: string } | null 
 
 export function parseMeta(markdown: string): Meta {
   // Seeded here so a document with no frontmatter, or an unterminated one, returns the same shape
-  // guide.js's parse() does on that path. The corpus caught the pair disagreeing about exactly that.
+  // work.js's parse() does on that path. The corpus caught the pair disagreeing about exactly that.
   const meta: Meta = { tags: [], stack_assumptions: [] };
   const parts = split(markdown);
   if (!parts) return meta;
@@ -241,7 +220,7 @@ export function parseMeta(markdown: string): Meta {
       listKey = null;
     }
   }
-  // Tags are normalised as they are read, not only as they are written. Guides published before
+  // Tags are normalised as they are read, not only as they are written. Work published before
   // there was a rule are still stored as they were typed, and re-spelling them in the document is
   // something only their author can do — every surface that reads one shows one style meanwhile.
   meta.tags = tagList(meta.tags);
@@ -253,7 +232,7 @@ export function parseMeta(markdown: string): Meta {
  * sequence under a field that is not a list. `parseMeta` keeps only the key's own line, so each of
  * these would be stored as `""` with its content gone — a design.md's `colors:` block did exactly
  * that. The format does not grow to hold them; the publish refuses them by name, so nothing is lost
- * without its author being told. Mirrors `unheldFields` in packages/passalong/src/guide.js.
+ * without its author being told. Mirrors `unheldFields` in packages/passalong/src/work.js.
  */
 export function unheldFields(markdown: string): string[] {
   const parts = split(markdown);
@@ -278,11 +257,11 @@ export function unheldFields(markdown: string): string[] {
 }
 
 /**
- * Fields this format no longer has, refused by name. `kind` split work into task, bug and transfer,
+ * Fields this format no longer has, refused by name. `kind` split work into kinds,
  * each with its own sections, and every rule that turned on it is gone (docs/WORK.md); migration
  * 0061 stripped it from every stored document, so one arriving now is an old export or an old
  * client, and storing it would put back an answer nothing reads. Mirrors `RETIRED` in
- * packages/passalong/src/guide.js.
+ * packages/passalong/src/work.js.
  */
 const RETIRED = ["kind"];
 
@@ -355,7 +334,7 @@ export function body(markdown: string): string {
 }
 
 /**
- * How much of the work this came from `GET /v1/guides/:id/parent?markdown=1` hands over. It rides in
+ * How much of the work this came from `GET /v1/work/:id/parent?markdown=1` hands over. It rides in
  * the same context window as the work being done, so a long parent must not crowd it out.
  */
 export const FOLLOW_UP_BYTES = 32 * 1024;
@@ -377,12 +356,12 @@ export function clipFollowUp(id: string, markdown: string, max = FOLLOW_UP_BYTES
 }
 
 /**
- * Why a guide's `summary:` is refused, or null when it is fine.
+ * Why a piece of work's `summary:` is refused, or null when it is fine.
  *
- * `legacy` is a guide stored before summaries existed, written again by a client that has not heard
+ * `legacy` is a piece of work stored before summaries existed, written again by a client that has not heard
  * of them: it is let through as it came, because refusing every old CLI's re-share of work already
- * in flight would make the rule a wall rather than a request. A guide that has never had one is
- * not that — a new guide must say it, whatever client wrote it.
+ * in flight would make the rule a wall rather than a request. A piece of work that has never had one is
+ * not that — a new work must say it, whatever client wrote it.
  */
 export function summaryProblem(summary: unknown, legacy = false): string | null {
   const said = String(summary ?? "").trim();

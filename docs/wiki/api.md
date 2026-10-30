@@ -32,30 +32,30 @@ is the gate; the routes below marked **open** are the exceptions it lets through
 
 ## Work
 
-A row in `guide` is one piece of work; the paths keep the old name, the words people see do not.
+A row in `work` is one piece of work; the paths keep the old name, the words people see do not.
 
 | Route | Access | Notes |
 | --- | --- | --- |
-| `PUT /v1/guides/:id` | owner | Body is `text/markdown` (or `{ markdown }`). The markdown is the record; `team`/`to` are read from its frontmatter. `title` and `summary` are required; a `kind:` line is refused by name. New work is Ready unless it says `status: draft`. |
-| `GET /v1/guides/:id` | owner or team member | Returns markdown. **Records a pull** unless `?peek=1`. |
-| `GET /v1/guides?q=&scope=` | account | `scope=all` (default) `\| mine \| <team slug>` |
-| `GET /v1/guides/:id/parent?markdown=` | reader | The work this came out of, filtered on its own, clipped at 32 KB |
-| `GET /v1/guides/:id/context` | reader | The hub's read; see below |
-| `GET /v1/guides/:id/thread` | reader | The thread, from `task_event` alone |
-| `PATCH /v1/guides/:id/status` | team: `draft`/`published`; author or admin: `consumed` | Ready, Move to Draft, archive. Held work cannot return to Draft until it is taken back. `promoted` is refused by name (400) and cannot be acquired through `PUT` either. |
-| `DELETE /v1/guides/:id` | author or team admin | |
+| `PUT /v1/work/:id` | owner | Body is `text/markdown` (or `{ markdown }`). The markdown is the record; `team`/`to` are read from its frontmatter. `title` and `summary` are required; a `kind:` line is refused by name. New work is Ready unless it says `status: draft`. |
+| `GET /v1/work/:id` | owner or team member | Returns markdown. **Records a pull** unless `?peek=1`. |
+| `GET /v1/work?q=&scope=` | account | `scope=all` (default) `\| mine \| <team slug>` |
+| `GET /v1/work/:id/parent?markdown=` | reader | The work this came out of, filtered on its own, clipped at 32 KB |
+| `GET /v1/work/:id/context` | reader | The hub's read; see below |
+| `GET /v1/work/:id/thread` | reader | The thread, from `task_event` alone |
+| `PATCH /v1/work/:id/status` | team: `draft`/`ready`; author or admin: `done` | Ready, Move to Draft, archive. Held work cannot return to Draft until it is taken back. Any other status is refused (400). |
+| `DELETE /v1/work/:id` | author or team admin | |
 | `POST /v1/take` | account | `{ agent, id?, repo?, host?, worktree?, any? }` — hold work by id, or the next for `repo`. One holder. |
-| `PUT /v1/guides/:id/progress` | holder | `{ agent, note?, fence? }` — renew the lease, set the board's line |
-| `POST /v1/guides/:id/hand_in` | holder | `{ agent, note, evidence\|checks, writeup?, pr?, fence? }` — final: Done with what was shown. Refused without proof. |
-| `POST /v1/guides/:id/pass` | holder, or anyone it reached | `{ agent, why }` — back to the queue; on work you do not hold it is "not for me" |
-| `POST /v1/guides/:id/ask`, `POST /v1/guides/:id/reply` | holder; author, assignee or holder | The question and the answer; a reply on work nobody holds is a note for whoever takes it |
-| `POST /v1/guides/:id/release`, `/reopen`, `/assign`, `/recall` | team | Take it back; finished work back to To do with `{ why }`; give it to `{ to }`; take back what you sent |
-| `PUT /v1/guides/:id/alone` | a person in the hub | Safe for the runner; refused to the CLI and both MCP servers |
+| `PUT /v1/work/:id/progress` | holder | `{ agent, note?, fence? }` — renew the lease, set the board's line |
+| `POST /v1/work/:id/hand_in` | holder | `{ agent, note, evidence\|checks, writeup?, pr?, fence? }` — final: Done with what was shown. Refused without proof. |
+| `POST /v1/work/:id/pass` | holder, or anyone it reached | `{ agent, why }` — back to the queue; on work you do not hold it is "not for me" |
+| `POST /v1/work/:id/ask`, `POST /v1/work/:id/reply` | holder; author, assignee or holder | The question and the answer; a reply on work nobody holds is a note for whoever takes it |
+| `POST /v1/work/:id/release`, `/reopen`, `/assign`, `/recall` | team | Take it back; finished work back to To do with `{ why }`; give it to `{ to }`; take back what you sent |
+| `PUT /v1/work/:id/alone` | a person in the hub | Safe for the runner; refused to the CLI and both MCP servers |
 | `POST /v1/tasks/next` | account | The runner's and `passalong work`'s next ready work, `{ alone }` for marked work only |
 | `GET /v1/tasks`, `GET /v1/working` | account | All work you can see with its column and claim; what is held now |
 | `POST /v1/compose`, `/v1/compose/preview`, `GET /v1/compose/recent` | account | The hub's box: words and pictures become work, named by the reader |
 | `POST /v1/in/:key` | **the key is the credential** | Webhooks into email-in: Sentry, PostHog, or `{ title, text?, url?, id? }`; `?repo=`, `?team=`, `&to=` |
-| `GET /v1/support`, `POST /v1/guides/:id/customer[/draft]` | team | Customer requests; a reply to a customer is sent only by a person in the hub |
+| `GET /v1/support`, `POST /v1/work/:id/customer[/draft]` | team | Customer requests; a reply to a customer is sent only by a person in the hub |
 | `GET /v1/board` | account | The hub's queues: waiting, in flight, landed |
 | `POST /v1/subscribe` | account — → a Bachs checkout URL for Solo |
 | `POST /v1/teams/:slug/subscribe` | team **owner** — → a Bachs checkout URL for Team (flat, up to 10 people). Refused for a team already over 10, which is set up by hand |
@@ -73,25 +73,25 @@ The hub's own take, progress and finish use `POST /v1/tasks/:id/person-take`,
 `PUT /v1/tasks/:id/person-progress` and `POST /v1/tasks/:id/person-hand_in`: a person's hold, with a
 prose hand-in. The agent routes keep their `agent` identity and contract.
 
-## Project folders
+## Projects
 
 | Route | Access | Notes |
 | --- | --- | --- |
-| `GET /v1/folders?scope=`, `POST /v1/folders` | account | List visible folders or make one; `team`, `parent` and `color` are optional on creation |
-| `GET /v1/folders/:id` | creator or current team member | Folder metadata, breadcrumbs, subfolders, documents, assets and linked work (with its tags) |
-| `PATCH /v1/folders/:id` | folder writer | Rename, describe, recolor or move; cycles and moves across spaces are refused |
-| `POST /v1/folders/:id/documents` | folder reader | `{ name, body }` creates a Markdown document |
-| `GET`, `PUT`, `DELETE /v1/folders/:id/documents/:document` | folder reader | Save requires `{ body, version }`; stale version returns 409 |
-| `GET /v1/folders/:id/documents/:document/revisions[/:version]` | folder reader | List and read saved versions |
-| `POST`, `GET`, `DELETE /v1/folders/:id/assets[/:asset]` | folder reader | Raw upload, private download and removal; images, PDFs, ZIPs and text up to 10 MB |
-| `POST /v1/uploads` with `{ folder, name }`, then `PUT /v1/uploads/:token` | folder writer, then one-time link | A sandbox can send a file directly to that folder; the link expires in 10 minutes and works once |
-| `GET /v1/folders/:id/assets/:asset/agent` | folder reader | Bounded image or text for MCP context |
-| `POST /v1/folders/:id/guides`, `DELETE /v1/folders/:id/guides/:guide` | folder reader | Link or unlink work without changing it (the hub's; agents have no tool for it) |
-| `DELETE /v1/folders/:id` | creator or team owner | Deletes the folder subtree, documents and assets, never linked work; a team owner must delete a subtree with teammates' folders |
+| `GET /v1/projects?scope=`, `POST /v1/projects` | account | List visible projects or make one; `team`, `parent` and `color` are optional on creation |
+| `GET /v1/projects/:id` | creator or current team member | Project metadata, breadcrumbs, sub-project, documents, files and linked work (with its tags) |
+| `PATCH /v1/projects/:id` | project writer | Rename, describe, recolor or move; cycles and moves across spaces are refused |
+| `POST /v1/projects/:id/documents` | project reader | `{ name, body }` creates a Markdown document |
+| `GET`, `PUT`, `DELETE /v1/projects/:id/documents/:document` | project reader | Save requires `{ body, version }`; stale version returns 409 |
+| `GET /v1/projects/:id/documents/:document/revisions[/:version]` | project reader | List and read saved versions |
+| `POST`, `GET`, `DELETE /v1/projects/:id/files[/:file]` | project reader | Raw upload, private download and removal; images, PDFs, ZIPs and text up to 10 MB |
+| `POST /v1/uploads` with `{ project, name }`, then `PUT /v1/uploads/:token` | project writer, then one-time link | A sandbox can send a file directly to that project; the link expires in 10 minutes and works once |
+| `GET /v1/projects/:id/files/:file/agent` | project reader | Bounded image or text for MCP context |
+| `POST /v1/projects/:id/work`, `DELETE /v1/projects/:id/work/:work` | project reader | Link or unlink work without changing it (the hub's; agents have no tool for it) |
+| `DELETE /v1/projects/:id` | creator or team owner | Deletes the project subtree, documents and files, never linked work; a team owner must delete a subtree with teammates' projects |
 
-Folders (projects, to people and agents) may nest at multiple levels. Their files belong to the
-folder and are independent of work's attachments. A private folder is visible only to its creator; any current member may use a team
-folder. Inaccessible ids answer 404.
+Projects (projects, to people and agents) may nest at multiple levels. Their files belong to the
+project and are independent of work's attachments. A private project is visible only to its creator; any current member may use a team
+project. Inaccessible ids answer 404.
 
 ## Files
 
@@ -142,7 +142,7 @@ A file reaches this server one of two ways, because MCP has no standard file inp
   the sandbox to the API and never through the model. The sandbox has to be allowed to reach
   `passalong.dev`.
 
-`src/mcp-http.ts` takes its vocabulary as an argument rather than importing `./guide.js`: a sibling
+`src/mcp-http.ts` takes its vocabulary as an argument rather than importing `./work.js`: a sibling
 imported that way makes the module unloadable under Node's type stripping, which is what keeps the
 app itself untestable. Passing it in is what buys the tests in `test/mcp-http.test.mjs`.
 
@@ -157,7 +157,7 @@ host produces calls that 404 with no explanation.
 It deliberately omits signup, login, password reset and token management. An action schema is a
 list of things you are inviting a model to call.
 
-`GET /v1/guides/:id` recording a pull is the one side effect on a GET in this API. It is
+`GET /v1/work/:id` recording a pull is the one side effect on a GET in this API. It is
 deliberate: a pull is the event the author needs to see, and making it a separate call would mean
 trusting clients to report it. Keep it in mind when adding caching or prefetching.
 
@@ -165,8 +165,8 @@ A hand-in needs proof a person can look at: a screenshot, or a command and its l
 (`proofProblem()`). Proof on work is deleted 5 days after it is closed.
 
 `GET /v1/events` is a Server-Sent Events stream for the signed-in account: `event: note` carries a
-notification (the same shape as `GET /v1/notifications`), `event: change` carries `{ guide_id, at }`
-for work whose hold, progress note or standing verdict moved. Each event's `id` is a cursor; send it back
+notification (the same shape as `GET /v1/notifications`), `event: change` carries `{ work_id, at }`
+for work whose hold, progress note or standing proof moved. Each event's `id` is a cursor; send it back
 as `Last-Event-ID` to resume. A connection ends after about four minutes.
 
 `GET /v1/push` says whether push is set up and lists your devices; `POST /v1/push/subscriptions`
@@ -174,9 +174,9 @@ takes a browser's `PushSubscription.toJSON()` (https endpoint, 65-byte `p256dh`,
 plus `label` and `private`; `PATCH` sets `private`, `DELETE` removes one, and
 `POST /v1/push/subscriptions/:id/test` sends a test notice to it.
 
-`GET /v1/guides/:id/context` is the hub's read of a piece of work and records **no** pull: its
+`GET /v1/work/:id/context` is the hub's read of a piece of work and records **no** pull: its
 summary, every live claim with what was handed in (`risk` to the author only), what it was finished
-with (`verdicts`), the work it came out of, the work made from it, and what it blocks and is blocked
+with (`proofs`), the work it came out of, the work made from it, and what it blocks and is blocked
 by. Each related piece of work is filtered for the caller on its own, as `/parent` is. It carries
 no markdown.
 
@@ -185,22 +185,22 @@ no markdown.
 | Route | Serves |
 | --- | --- |
 | `GET /` | The landing page |
-| `GET /g/:id/:key` | The read-only share page. `?embed=1` is the document alone, for the hub to frame. |
-| `GET /g/:id/:key.md` | Raw markdown. Also records a pull. |
-| `GET /g/:id/:key/og.png` | The unfurl card. Deliberately does **not** record a pull — crawlers, not people. |
+| `GET /w/:id/:key` | The read-only share page. `?embed=1` is the document alone, for the hub to frame. |
+| `GET /w/:id/:key.md` | Raw markdown. Also records a pull. |
+| `GET /w/:id/:key/og.png` | The unfurl card. Deliberately does **not** record a pull — crawlers, not people. |
 | `GET /hub` | The hub: work, projects, support, activity and settings; talks to `/v1/*` |
 | `GET /join/:code` | Where an invite link lands |
 | `GET /reset` | Set a new password from an emailed link |
 | `GET /hub/new` | The box: say what needs doing, with pictures, and the reader files it |
 | `GET /hub/work` | The team board |
-| `GET /hub/g/:id` | One piece of work signed in: the share page framed beside who has it, the thread, what it was finished with and what it is tied to |
+| `GET /hub/w/:id` | One piece of work signed in: the share page framed beside who has it, the thread, what it was finished with and what it is tied to |
 | `GET /health` | `{"ok":true}` — what CI smoke-tests |
 
-Share pages are `noindex` and `/g/` is disallowed in `robots.txt`. The share key is the secret, so
+Share pages are `noindex` and `/w/` is disallowed in `robots.txt`. The share key is the secret, so
 the page must never reach an index.
 
 **Who serves what.** All of these are one Worker (`apps/web`), but not one router. The Hono app in
-`apps/api` handles `/v1/*`, `/health`, `/g/:id/:key.md` and `/g/:id/:key/og.png`; everything else is
+`apps/api` handles `/v1/*`, `/health`, `/w/:id/:key.md` and `/w/:id/:key/og.png`; everything else is
 a Nuxt page. `apps/web/server/middleware/1.api.ts` decides, by path, and a miss there falls through
 to Nuxt rather than becoming Hono's 404.
 

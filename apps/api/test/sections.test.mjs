@@ -1,8 +1,8 @@
-// Reading a guide in parts, and how big one may be. The same rules live in
-// packages/passalong/src/guide.js; this holds the two to the same answers.
+// Reading a piece of work in parts, and how big one may be. The same rules live in
+// packages/passalong/src/work.js; this holds the two to the same answers.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as cli from "../../../packages/passalong/src/guide.js";
+import * as cli from "../../../packages/passalong/src/work.js";
 import { outlineOf, sectionOf } from "../src/mcp-http.ts";
 import * as api from "../src/sections.ts";
 
@@ -62,8 +62,8 @@ test("the CLI's copy and the server's answer the same", () => {
   assert.deepEqual(cli.outline(DOC), api.outline(DOC));
   for (const name of ["Goal", "context", "Nested", "Acceptance", "zzz"])
     assert.deepEqual(cli.section(DOC, name), api.section(DOC, name), name);
-  assert.equal(cli.GUIDE_WARN, api.GUIDE_WARN);
-  assert.equal(cli.GUIDE_MAX, api.GUIDE_MAX);
+  assert.equal(cli.WORK_WARN, api.WORK_WARN);
+  assert.equal(cli.WORK_MAX, api.WORK_MAX);
   assert.equal(cli.sizeWarning(25_000), api.sizeWarning(25_000));
 });
 
@@ -73,11 +73,15 @@ test("the hosted MCP's copy answers the same too", () => {
     assert.deepEqual(sectionOf(DOC, name), api.section(DOC, name), name);
 });
 
-test("a new guide over the limit is refused, and one stored larger before keeps its size", () => {
-  assert.equal(api.sizeProblem(api.GUIDE_MAX), null);
-  assert.match(api.sizeProblem(api.GUIDE_MAX + 1) || "", /add_file/);
-  assert.equal(api.sizeProblem(354_338, 354_338), null, "a guide already that big may be re-saved");
+test("a new work over the limit is refused, and one stored larger before keeps its size", () => {
+  assert.equal(api.sizeProblem(api.WORK_MAX), null);
+  assert.match(api.sizeProblem(api.WORK_MAX + 1) || "", /add_file/);
+  assert.equal(
+    api.sizeProblem(354_338, 354_338),
+    null,
+    "a piece of work already that big may be re-saved",
+  );
   assert.ok(api.sizeProblem(354_339, 354_338), "but not made bigger");
-  assert.equal(api.sizeWarning(api.GUIDE_WARN), null);
-  assert.match(api.sizeWarning(api.GUIDE_WARN + 1) || "", /outline/);
+  assert.equal(api.sizeWarning(api.WORK_WARN), null);
+  assert.match(api.sizeWarning(api.WORK_WARN + 1) || "", /outline/);
 });

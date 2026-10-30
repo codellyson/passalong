@@ -25,8 +25,7 @@ the action that caused it — and drops anything addressed to whoever caused it.
 Mail can also come **in** and become work. An account gets one key from Settings (`POST /v1/inbound`,
 migration 0051), written two ways (2026-10-29, docs/WORK.md): **`key+new@`** for anything, and
 **`key+support@`** for customers. A third part names the team, `key+new+khaime@`, as `?team=` does on
-a webhook URL. Mail to the bare `key@` or any other `+tag` is dropped, and so are the old per-kind
-`key+task@`, `key+bug@` and `key+transfer@`. `key+new@` goes wherever work comes from: a tool's
+a webhook URL. Mail to the bare `key@` or any other `+tag` is dropped. `key+new@` goes wherever work comes from: a tool's
 notification settings, a BCC in the account's own backend, a Gmail forward.
 
 Email Routing sends `INBOUND_DOMAIN` to the Worker, and `receiveEmail()` in `index.ts` (helpers
@@ -43,7 +42,7 @@ email is a stranger's text that an agent will read:
   is also the iPhone's way in — Share, Mail — since an iPhone cannot share to a website; Android
   shares to the installed app directly (`share_target`, see security-model).
 - **The same thing again** (same sender, same subject with its numbers taken out, work not
-  archived) adds to `inbound_guide.times`, and leaves at most one note an hour on the work's thread.
+  archived) adds to `inbound_work.times`, and leaves at most one note an hour on the work's thread.
 
 A webhook URL can also carry `?team=<slug>` (and `&to=`): what arrives is filed in that team, which
 is what puts it on the team's board; without it, it is the account's own. The hub's copied URLs carry
@@ -52,7 +51,7 @@ account's own, with a line saying why, so an alert is never lost.
 
 The repo is chosen where it is known. A webhook URL can carry `?repo=owner/repo` (one Sentry or
 PostHog project per repo), and that becomes the work's `target`. Otherwise whoever marks it Ready
-picks the repo on its page (`PATCH /v1/guides/:id/status` with `target`, which the context route
+picks the repo on its page (`PATCH /v1/work/:id/status` with `target`, which the context route
 offers from repos the account's work and agents already use). An agent's no-id `take` only offers
 work for its own repo, so work Ready with no repo is taken by id.
 
@@ -82,22 +81,22 @@ from "<team> support", Reply-To the same address, as `Re: <their subject> [R-…
 Message-IDs in In-Reply-To/References (migration 0060), so every mail is one conversation in their
 inbox. A reply from the same address carrying the number, or naming one of their kept Message-IDs,
 joins that request (`customer` thread event, `customer_wrote` notification) and reopens it if it was
-finished. A person answers on the request's page under **Support** (`/hub/support/:id`, `POST /v1/guides/:id/customer`; Support is a register of every request, waiting-on-us first, state derived by `supportState()` in needs.ts — see [hub.md](hub.md)),
+finished. A person answers on the request's page under **Support** (`/hub/support/:id`, `POST /v1/work/:id/customer`; Support is a register of every request, waiting-on-us first, state derived by `supportState()` in needs.ts — see [hub.md](hub.md)),
 recorded as `answered`; there is no CLI command or MCP tool for it on purpose, because nothing reaches
 a customer before a person presses Send. A holding agent receives both kinds through `deliver()`.
 **The reader** (`reader.ts`) sorts each request when `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` are
 set — Anthropic, OpenAI or Google through their own AI SDK packages, or any OpenAI-compatible provider
 with `READER_URL`: a title, a summary, an optional tag (`bug`, `feature`,
 `question` — description only), the team group by name (`to: #group`) with its reason, and — in
-the box — one of the team's projects (its top-level folders) by id, judged by name and description,
+the box — one of the team's projects (its top-level projects) by id, judged by name and description,
 or none; `?project=` wins over its choice and the work is linked through the project route; it
 writes no sections and chooses no kind. It looks at pictures too — up to three on the message or pasted in
-the box — because a screenshot of an error is often the whole report. Its answer is used whole or not at all (`readVerdict()`), the
+the box — because a screenshot of an error is often the whole report. Its answer is used whole or not at all (`checkReading()`), the
 customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for
 the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the
 hub's box, `/hub/new` (`POST /v1/compose`), for writing work in your own words;
 there, when unsure, it files its best reading anyway and puts its question on the thread. Deleting
-any guide removes its unread notification rows (`forgetGuide()`); mail and push already sent stay
+any work removes its unread notification rows (`forgetWork()`); mail and push already sent stay
 sent, and the delete answers `told` so the box's Undo can say so. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When
 work made from a request (a bug sent on to development) reaches Done, the request wakes: a
 `child_done` notification, and — when the team turned the reminder on (`team.tell_customer`, migration

@@ -3,7 +3,7 @@
  * they put it away. Stored as JSON in `account.setup` (migration 0066) so it resumes on any device.
  *
  * The steps themselves write through the routes that already exist (teams, invites, groups,
- * folders, documents, inbound, connectors); this only remembers where the person got to. The hub
+ * projects, documents, inbound, connectors); this only remembers where the person got to. The hub
  * decides nothing from it but what to show next.
  *
  * Imports no sibling, so `test/setup.test.mjs` runs it against real SQLite.

@@ -1,5 +1,5 @@
-/** One image for a guide row, chosen only from screenshots still claimed by that guide. */
-export function guidePreview(
+/** One image for a piece of work row, chosen only from screenshots still claimed by that work. */
+export function workPreview(
   documentShotIds: string[],
   shots: { id: string; name: string }[],
 ): { url: string; alt: string } | null {

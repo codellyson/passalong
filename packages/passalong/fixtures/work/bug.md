@@ -6,7 +6,7 @@ created: "2026-06-20T11:02:00.000Z"
 author: sam
 source_context: "passalong@master"
 parent: rep0rt1d
-status: published
+status: ready
 stack_assumptions: []
 tags: [rate-limit]
 ---

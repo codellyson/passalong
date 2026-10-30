@@ -59,17 +59,17 @@ function seed(db) {
   for (const id of ["me", "them"]) acct.run(id, `hash-${id}`, T0);
   db.raw
     .prepare(
-      `INSERT INTO guide (id, account_id, share_key, title, status, source_context, tags, stack,
+      `INSERT INTO work (id, account_id, share_key, title, status, source_context, tags, stack,
                           markdown, created, updated, target)
-       VALUES ('g1', 'me', 'k', 'A task', 'published', '', '[]', '[]', '', ?, ?, 'o/r')`,
+       VALUES ('g1', 'me', 'k', 'A task', 'ready', '', '[]', '[]', '', ?, ?, 'o/r')`,
     )
     .run(T0, T0);
-  return (id, account, guide = "", created = T0) =>
+  return (id, account, work = "", created = T0) =>
     db.raw
       .prepare(
-        "INSERT INTO attachment (id, account_id, guide_id, name, type, created) VALUES (?, ?, ?, 'a.pdf', 'application/pdf', ?)",
+        "INSERT INTO attachment (id, account_id, work_id, name, type, created) VALUES (?, ?, ?, 'a.pdf', 'application/pdf', ?)",
       )
-      .run(id, account, guide, created);
+      .run(id, account, work, created);
 }
 
 test("the bytes decide what a file is, and the sender's word does not", () => {
@@ -153,24 +153,24 @@ test("only the uploader claims a file, and an edit that drops it lets it go", as
   add("bbb222", "them");
   await holdAttachments(db, {
     account: "me",
-    guide: "g1",
+    work: "g1",
     mine: ["aaa111", "bbb222"],
     carried: ["aaa111", "bbb222"],
   });
   const owner = (id) =>
-    db.raw.prepare("SELECT guide_id FROM attachment WHERE id = ?").get(id).guide_id;
+    db.raw.prepare("SELECT work_id FROM attachment WHERE id = ?").get(id).work_id;
   assert.equal(owner("aaa111"), "g1");
   assert.equal(
     owner("bbb222"),
     "",
     "naming somebody else's id takes nothing: the account is in the WHERE",
   );
-  // The guide stops pointing at it from anywhere: it is let go, and not deleted by a write.
-  await holdAttachments(db, { account: "me", guide: "g1", mine: [], carried: [] });
+  // The work stops pointing at it from anywhere: it is let go, and not deleted by a write.
+  await holdAttachments(db, { account: "me", work: "g1", mine: [], carried: [] });
   assert.equal(owner("aaa111"), "");
-  // Pointed at from elsewhere on the same guide, it is kept.
-  await holdAttachments(db, { account: "me", guide: "g1", mine: ["aaa111"], carried: ["aaa111"] });
-  await holdAttachments(db, { account: "me", guide: "g1", mine: [], carried: ["aaa111"] });
+  // Pointed at from elsewhere on the same work, it is kept.
+  await holdAttachments(db, { account: "me", work: "g1", mine: ["aaa111"], carried: ["aaa111"] });
+  await holdAttachments(db, { account: "me", work: "g1", mine: [], carried: ["aaa111"] });
   assert.equal(owner("aaa111"), "g1");
 });
 
@@ -216,8 +216,8 @@ test("a file is a download that needs a credential, never a page", async () => {
   assert.match(route, /private, no-store/);
   assert.match(
     route,
-    /readableGuide\(c, row\.guide_id\)/,
-    "read by whoever can read the guide it is on",
+    /readableWork\(c, row\.work_id\)/,
+    "read by whoever can read the work it is on",
   );
   assert.match(route, /return c\.notFound\(\)/, "told it does not exist, not that it is forbidden");
   // Unlike a screenshot it is not public: a picture is evidence in a document that travels by link.

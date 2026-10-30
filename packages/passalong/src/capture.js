@@ -2,7 +2,7 @@
 // branch, who is committing. Work written from inside a repo is for that repo.
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
-import { serialize } from "./guide.js";
+import { serialize } from "./work.js";
 
 function git(cwd, ...args) {
   try {
@@ -40,7 +40,7 @@ export function context(cwd = process.cwd()) {
   const branch = root ? git(cwd, "rev-parse", "--abbrev-ref", "HEAD") : "";
   const author = git(cwd, "config", "user.name");
   // The repo as the task queue names it: its remote when it has one, because two worktrees of one
-  // repo have two folder names and one remote. The folder name when there is no remote.
+  // repo have two project names and one remote. The project name when there is no remote.
   const repo = root ? repoKey(git(cwd, "remote", "get-url", "origin") || name) : "";
   return { root, name, repo, branch, author };
 }

@@ -1,23 +1,22 @@
 // The notification spine. Four moments matter, and each one is a row addressed to the account
 // that should hear about it:
 //
-//   handoff   work was addressed to you by name
-//   shared    work landed in a team you are in
-//   declined  someone said it is not theirs, and why — the one that needs re-homing
-//   pulled    someone opened your work
-//   consumed  it was archived, or is done with
-//   reopened  and put it back — the other half of that pair, which used to happen in silence
-//   joined    someone accepted your invite
-//   promoted  a team owner made you an owner of it
-//   removed   a team owner took you out of it
+//   sent_to_you  work was addressed to you by name
+//   shared       work landed in a team you are in
+//   passed       someone said it is not theirs, and why — the one that needs re-homing
+//   pulled       someone opened your work
+//   archived     it was archived
+//   reopened     finished or archived work was put back, with why
+//   joined       someone accepted your invite
+//   made_admin   a team owner made you an owner of it
+//   removed      a team owner took you out of it
 //
-// And the queue's, between whoever asked for work and whoever's agent has it (docs/V2.md). Each
+// And the queue's, between whoever asked for work and whoever's agent has it. Each
 // goes to the other party, so a person working alone hears none of them:
 //
 //   task_claimed   a teammate's agent took your work
 //   task_finished  it is done — finishing is final, so this is the news
 //   task_released  somebody took it back from your agent, which should stop
-//   sent_back      finished work was reopened, with why
 //   reassigned     somebody gave work you were on to someone else, and took it back from you
 //
 // And the conversation between whoever asked for work and whoever holds it (docs/CONVERSATION.md):
@@ -31,31 +30,30 @@
 import type { MailEnv } from "./email.js";
 
 export const KINDS = [
-  "handoff",
+  "sent_to_you",
   "shared",
-  "declined",
+  "passed",
   "pulled",
-  "consumed",
+  "archived",
   "reopened",
   "joined",
-  "promoted",
+  "made_admin",
   "removed",
   "task_claimed",
   "task_finished",
   "task_released",
-  "sent_back",
   "reassigned",
   // The one event with no actor: a lease ran out and nobody did anything, which is the news.
   "stalled",
-  // The other one. A guide sent to somebody sat untouched long enough that the clock put it back
+  // The other one. A piece of work sent to somebody sat untouched long enough that the clock put it back
   // in Draft. The id says "shelved" because rows are stored under it; the sentence says Draft.
   "shelved",
-  // Also actorless: a guide left in Draft for a day. Draft is where every guide starts, and nothing
+  // Also actorless: a piece of work left in Draft for a day. Draft is where every piece of work starts, and nothing
   // else says it never reached anyone.
   "still_draft",
   // Actorless, all three, and what keeps work from being left behind (docs/LOOP.md): a hold that
   // stayed quiet went back in the queue; it went back a second time, so a person must step in; a
-  // guide sent to somebody nobody took, so a person must decide. `shelved` above is for old rows.
+  // work sent to somebody nobody took, so a person must decide. `shelved` above is for old rows.
   "requeued",
   "stuck",
   "untaken",
@@ -66,7 +64,7 @@ export const KINDS = [
   "reader_unsure",
   // A customer has waited about four hours with no answer and nobody on it: the team lead hears.
   "customer_waiting",
-  // A guide made from yours reached Done, so yours can move (docs/LOOP.md step 3). Actorless,
+  // A piece of work made from yours reached Done, so yours can move (docs/LOOP.md step 3). Actorless,
   // because the one who finished it is most often your own agent. The note names the child, and on
   // a support request says to tell the customer.
   "child_done",
@@ -84,11 +82,11 @@ export const KINDS = [
   // A second subscription started paying for a plan another one already pays for: two open checkout
   // tabs, both completed. Somebody is being charged twice and only a refund in Bachs undoes it.
   "billed_twice",
-  // Email in (inbound.ts), both actorless: nobody with an account did them. `emailed` is the guide
+  // Email in (inbound.ts), both actorless: nobody with an account did them. `emailed` is the work
   // an email became; `email_sender` is a new sender asking to be allowed, its address in the note.
   "emailed",
   "email_sender",
-  // A webhook (Sentry, PostHog, your own code) made a guide. The note says from where, and what.
+  // A webhook (Sentry, PostHog, your own code) made a piece of work. The note says from where, and what.
   "hooked",
 ] as const;
 export type Kind = (typeof KINDS)[number];
@@ -117,11 +115,11 @@ export interface Event {
   /** Account being told. Ignored when it is the actor: nobody needs telling what they just did. */
   to: string;
   kind: Kind;
-  guide_id?: string;
+  work_id?: string;
   /** Who did it. '' is an anonymous share-link reader. */
   actor_id?: string;
   team_id?: string;
-  /** One line of context shown with the event. Currently a verdict's reason. */
+  /** One line of context shown with the event. Currently a proof's reason. */
   note?: string;
   /**
    * Optional mail for this event, run only the first time it happens. A repeat of the same event
@@ -133,7 +131,7 @@ export interface Event {
 export interface Row {
   id: number;
   kind: Kind;
-  guide_id: string;
+  work_id: string;
   actor_id: string;
   team_id: string;
   at: string;
@@ -158,7 +156,7 @@ const TELLS_ITS_OWN_ACTOR = new Set<Kind>(["asked"]);
 
 /**
  * Kinds that are new news every time, so a fresh one is unread again even when the last was read.
- * The row coalesces on (account, kind, guide, actor) like the rest, and without this a second
+ * The row coalesces on (account, kind, work, actor) like the rest, and without this a second
  * question would arrive already marked seen. Mail is still only for the first.
  */
 const ALWAYS_UNREAD = new Set<Kind>(["asked", "replied"]);
@@ -169,9 +167,9 @@ const ALWAYS_UNREAD = new Set<Kind>(["asked", "replied"]);
  * link is one somebody mutes by the end of the day.
  */
 export const PUSHED = new Set<Kind>([
-  "handoff",
+  "sent_to_you",
   "task_finished",
-  "sent_back",
+  "reopened",
   "stalled",
   "blocked",
   // Work that will be left behind unless a person steps in.
@@ -191,10 +189,10 @@ export const PUSHED = new Set<Kind>([
   "hooked",
 ]);
 
-/** What a push carries: the feed's own sentence, the guide it is about, and its kind. */
+/** What a push carries: the feed's own sentence, the work it is about, and its kind. */
 export interface PushMessage {
   text: string;
-  guide: string;
+  work: string;
   kind: Kind;
 }
 type Deliver = (env: NotifyEnv, to: string, message: PushMessage) => Promise<void>;
@@ -217,9 +215,9 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
   const at = new Date().toISOString();
   try {
     const row = await env.DB.prepare(
-      `INSERT INTO notification (account_id, kind, guide_id, actor_id, team_id, at, note)
+      `INSERT INTO notification (account_id, kind, work_id, actor_id, team_id, at, note)
        VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(account_id, kind, guide_id, actor_id)
+       ON CONFLICT(account_id, kind, work_id, actor_id)
          DO UPDATE SET at = excluded.at, times = notification.times + 1, note = excluded.note,
            read_at = CASE WHEN ? = 1 THEN '' ELSE notification.read_at END
        RETURNING id, times, emailed_at`,
@@ -227,7 +225,7 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
       .bind(
         e.to,
         e.kind,
-        e.guide_id || "",
+        e.work_id || "",
         e.actor_id || "",
         e.team_id || "",
         at,
@@ -240,7 +238,7 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
       // exactly what the feed and the toast say. A failed push never fails the action.
       const full = await env.DB.prepare(`${FEED_SQL} AND n.id = ?`).bind(e.to, row.id).first<Row>();
       if (full)
-        await deliver(env, e.to, { text: line(full), guide: e.guide_id || "", kind: e.kind }).catch(
+        await deliver(env, e.to, { text: line(full), work: e.work_id || "", kind: e.kind }).catch(
           (err) => console.error("push", e.kind, (err as Error).message),
         );
     }
@@ -260,21 +258,21 @@ export async function notify(env: NotifyEnv, e: Event): Promise<void> {
  * The events a team channel wants. Not all seven.
  *
  * A channel is a room full of people, so the bar is "everyone here would want to know", not
- * "someone here might". `pulled` and `consumed` are one person's progress on their own work, and a
+ * "someone here might". `pulled` and `done` are one person's progress on their own work, and a
  * room told about every pull learns to ignore the room.
  */
 // A decline is here because it is work that has stopped moving and somebody in the room has to
 // pick it up.
-const ANNOUNCED = new Set<Kind>(["shared", "handoff", "declined"]);
+const ANNOUNCED = new Set<Kind>(["shared", "sent_to_you", "passed"]);
 
 export interface Announcement {
   kind: Kind;
   team_id: string;
   /** The sentence, already rendered — the same one the feed, the CLI and the hub show. */
   text: string;
-  /** The guide's share link, when the event is about one. */
+  /** The work's share link, when the event is about one. */
   url?: string;
-  /** The guide's title, for a room that can render a card rather than a line. */
+  /** The work's title, for a room that can render a card rather than a line. */
   title?: string;
   /** Somebody's own words, when the event carries any. */
   note?: string;
@@ -342,7 +340,7 @@ export function channelBody(url: string, text: string, facts?: CardFacts): Recor
 // Chat does not unfurl a link the way Slack does: previews there come from a Chat app that
 // registers URL patterns and answers a message event, and what a team connects here is an incoming
 // webhook — so nothing on the other end ever reads the page's `og:` tags. And nothing should: the
-// share key in a guide's URL *is* its authorisation, `robots.txt` disallows `/g/` for exactly that
+// share key in a piece of work's URL *is* its authorisation, `robots.txt` disallows `/w/` for exactly that
 // reason, and an unfurl means handing that key to somebody else's fetcher to cache.
 //
 // So the card is built from what we already know rather than scraped from a page nobody is allowed
@@ -357,9 +355,9 @@ export interface CardFacts {
   kind: string;
   /** The sentence every other surface shows, used as the card's subtitle. */
   text: string;
-  /** The guide's title. The card's headline, when the event is about a guide. */
+  /** The work's title. The card's headline, when the event is about a piece of work. */
   title?: string;
-  /** Somebody's own words — a verdict's reason, a decline's. Never paraphrased. */
+  /** Somebody's own words — a proof's reason, a decline's. Never paraphrased. */
   note?: string;
   url?: string;
 }
@@ -386,14 +384,14 @@ const tone = (red: number, green: number, blue: number): Color => ({ red, green,
 
 const TONES: Record<string, Color> = {
   // #8a5a08 — handed back, so it has stopped moving and only its author can restart it.
-  declined: tone(0.541, 0.353, 0.031),
+  passed: tone(0.541, 0.353, 0.031),
 };
 /** #b5451b, the brand. Everything that is neither good news nor bad. */
 const BRAND = tone(0.71, 0.271, 0.106);
 
 const MAX_TITLE = 120;
 
-/** A guide title is a line, not a paragraph, and a card header does not wrap generously. */
+/** A piece of work title is a line, not a paragraph, and a card header does not wrap generously. */
 function clip(s: string, max = MAX_TITLE): string {
   const one = s.trim().replace(/\s+/g, " ");
   if (one.length <= max) return one;
@@ -407,7 +405,7 @@ type Widget = Record<string, unknown>;
 /**
  * One card, or null when there is nothing to build one from.
  *
- * Null rather than an empty card on purpose: an event with no guide behind it (somebody joining a
+ * Null rather than an empty card on purpose: an event with no work behind it (somebody joining a
  * team) is a sentence, and a sentence in a card with no title and no button is a worse sentence.
  */
 export function chatCard(a: CardFacts): Record<string, unknown>[] | null {
@@ -603,33 +601,33 @@ export async function notifyAll(env: NotifyEnv, tos: string[], e: Omit<Event, "t
   for (const to of tos) await notify(env, { ...e, to });
 }
 
-const FEED_SQL = `SELECT n.id, n.kind, n.guide_id, n.actor_id, n.team_id, n.at, n.times, n.read_at, n.note,
+const FEED_SQL = `SELECT n.id, n.kind, n.work_id, n.actor_id, n.team_id, n.at, n.times, n.read_at, n.note,
          COALESCE(g.title, '') AS title, COALESCE(a.handle, '') AS actor,
          COALESCE(a.name, '') AS actor_real, COALESCE(t.slug, '') AS team,
          COALESCE(t.name, '') AS team_name
   FROM notification n
-  LEFT JOIN guide g ON g.id = n.guide_id
+  LEFT JOIN work g ON g.id = n.work_id
   LEFT JOIN account a ON a.id = n.actor_id
   LEFT JOIN team t ON t.id = n.team_id
   WHERE n.account_id = ?`;
 
 /**
- * A guide deleted takes its unread feed rows with it, so nobody opens a line about work that is
+ * A piece of work deleted takes its unread feed rows with it, so nobody opens a line about work that is
  * gone. What already left cannot be taken back: answers how many people may have heard by mail or
  * on a device, for the page that undid it to say so. Read rows stay, as history of what was seen.
  */
-export async function forgetGuide(db: D1Database, guideId: string): Promise<{ told: number }> {
+export async function forgetWork(db: D1Database, workId: string): Promise<{ told: number }> {
   const pushed = [...PUSHED].map((k) => `'${k}'`).join(", ");
   const told = await db
     .prepare(
       `SELECT COUNT(DISTINCT account_id) AS n FROM notification
-        WHERE guide_id = ? AND (emailed_at != '' OR kind IN (${pushed}))`,
+        WHERE work_id = ? AND (emailed_at != '' OR kind IN (${pushed}))`,
     )
-    .bind(guideId)
+    .bind(workId)
     .first<{ n: number }>();
   await db
-    .prepare("DELETE FROM notification WHERE guide_id = ? AND read_at = ''")
-    .bind(guideId)
+    .prepare("DELETE FROM notification WHERE work_id = ? AND read_at = ''")
+    .bind(workId)
     .run();
   return { told: Number(told?.n ?? 0) };
 }
@@ -676,7 +674,7 @@ export async function unreadCount(
 ): Promise<number> {
   const scoped = feedScope(scope, account);
   const row = await env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM notification n LEFT JOIN guide g ON g.id = n.guide_id
+    `SELECT COUNT(*) AS n FROM notification n LEFT JOIN work g ON g.id = n.work_id
      WHERE n.account_id = ? AND n.read_at = ''${scoped.where}`,
   )
     .bind(account, ...scoped.binds)
@@ -696,7 +694,7 @@ export async function markRead(
   const permitted =
     scope.kind === "all"
       ? ""
-      : ` AND id IN (SELECT n.id FROM notification n LEFT JOIN guide g ON g.id = n.guide_id
+      : ` AND id IN (SELECT n.id FROM notification n LEFT JOIN work g ON g.id = n.work_id
        WHERE n.account_id = ?${scoped.where})`;
   const stmt = ids?.length
     ? env.DB.prepare(
@@ -725,8 +723,8 @@ export interface LineFacts {
   team?: string;
   team_name?: string;
   /**
-   * Who a guide was sent to, by name. Set only for a room: a channel is read by everyone in it, so
-   * a handoff posted there says who it went to rather than "you".
+   * Who a piece of work was sent to, by name. Set only for a room: a channel is read by everyone in it, so
+   * work sent there says who it went to rather than "you".
    */
   to?: string;
 }
@@ -734,7 +732,7 @@ export interface LineFacts {
 /**
  * The single sentence a notification reads as. Every surface shows this string.
  *
- * One vocabulary, the same everywhere a person reads about a guide: sent, opened, taking, passed
+ * One vocabulary, the same everywhere a person reads about a piece of work: sent, opened, taking, passed
  * on, worked or didn't work, done with. A person is their display name, a team is its name, and
  * "Someone" is kept for the one actor who has no account at all — an anonymous share-link reader.
  */
@@ -748,23 +746,23 @@ export function line(r: LineFacts): string {
   const team = r.team_name || r.team || "";
   const note = r.note ? `: ${r.note}` : "";
   switch (r.kind) {
-    case "handoff":
+    case "sent_to_you":
       return r.to
         ? `${who} sent ${title} to ${r.to}${team ? ` in ${team}` : ""}`
         : `${who} sent you ${title}${team ? ` in ${team}` : ""}`;
     case "shared":
       return `${who} shared ${title} with ${team || "your team"}`;
-    case "declined":
+    case "passed":
       return `${who} passed on ${title}${note}`;
     case "pulled":
       return `${who} opened ${title}${r.times > 1 ? ` ${r.times} times` : ""}`;
-    case "consumed":
-      return `${who} is done with ${title}`;
+    case "archived":
+      return `${who} archived ${title}`;
     case "reopened":
-      return `${who} put ${title} back on your list`;
+      return `${who} reopened ${title}${note}`;
     case "joined":
       return `${who} joined ${team || "your team"}`;
-    case "promoted":
+    case "made_admin":
       return `${who} made you an admin of ${team || "the team"}`;
     case "removed":
       return `${who} removed you from ${team || "the team"}`;
@@ -792,7 +790,7 @@ export function line(r: LineFacts): string {
     case "stalled":
       // No actor: nothing happened, time passed. Every other sentence here starts with who did it,
       // and "Someone" — what `who` falls back to — would read as a person having done something to
-      // the guide when the absence of anyone doing anything is the news.
+      // the work when the absence of anyone doing anything is the news.
       return `${title} has gone quiet — nobody has heard from whoever holds it${note}`;
     case "task_claimed":
       return `${who}'s agent took ${title}`;
@@ -802,8 +800,6 @@ export function line(r: LineFacts): string {
       return `${r.actor || r.actor_real ? `${who}'s agent` : "Your agent"} finished ${title}`;
     case "task_released":
       return `${who} took ${title} back from your agent`;
-    case "sent_back":
-      return `${who} reopened ${title}${note}`;
     case "blocked":
       return `The agent holding ${title} is stuck on you${note}`;
     case "reassigned":
@@ -834,7 +830,7 @@ const actorName = (r: Pick<Row, "actor_id" | "actor" | "actor_real">) =>
 export const summary = (r: Row) => ({
   id: r.id,
   kind: r.kind,
-  guide: r.guide_id,
+  work: r.work_id,
   actor: r.actor,
   actor_name: actorName(r),
   team: r.team,

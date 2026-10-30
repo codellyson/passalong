@@ -5,35 +5,15 @@
 import { randomBytes } from "node:crypto";
 
 /**
- * A guide is a draft or it is published, and `consumed` is the author's shelf — off the board, out
- * of the free tier's count, reversible. `promoted` is the one true legacy: an author lifecycle laid
- * over work that already reports itself, since a pull count says how travelled a guide is
- * without anyone having to grade it.
- *
- * This list is what is **accepted**, and it is not what may be **set** — that is `SETTABLE` below.
- * The distinction is load-bearing. A status lives in frontmatter, inside markdown files in other
- * people's repositories, and `validate()` rejects a status it does not know, so dropping a value
- * from here would make a guide shared a month ago fail to re-share today.
+ * Work is Draft, Ready or Done. Done is the shelf — off the board, out of the free tier's count,
+ * reversible. Mirrors STATUSES in apps/api/src/work.ts.
  */
-export const STATUSES = ["draft", "published", "consumed", "promoted"];
-
+export const STATUSES = ["draft", "ready", "done"];
 /**
- * What a write may choose. `promoted` is absent: it cannot be set on a guide that does not already
- * carry it, from any surface.
- *
- * Two reasons, and the second is the sharper one. A status that can still be set reads as a
- * feature to whoever meets it next, however many deprecation notices sit around it. And
- * `quota.ts` counts `published` and `promoted` as the statuses that occupy room — so while
- * `promoted` remains settable, promoting every guide is an unlimited free tier. Closing the write
- * closes that, and does it without touching what the free tier counts, which still has to include
- * the guides already carrying the status.
- */
-export const SETTABLE = ["draft", "published", "consumed"];
-/**
- * What a guide says to a person, in a sentence or two, and the longest that may be.
+ * What work says to a person, in a sentence or two, and the longest that may be.
  *
  * Everything an agent writes is written for another agent: exact, dense, full of ids and paths. A
- * person scanning their work wants "what is this, and do I need to do anything", so every guide
+ * person scanning their work wants "what is this, and do I need to do anything", so every piece of work
  * carries both — the document is the agent's form, and `summary:` is the human one, shown by default
  * in the hub with the document behind "Show details".
  *
@@ -47,9 +27,9 @@ export const SUMMARY_MAX = 400;
  * One tag, in the one style tags are written in: lowercase, words joined by a hyphen.
  *
  * Nothing used to normalise them, so `custom-fields` and `additional_information` could sit on the
- * same guide and the same idea exist twice under two spellings. A tag is a controlled vocabulary,
+ * same work and the same idea exist twice under two spellings. A tag is a controlled vocabulary,
  * not prose — its whole value is that two people who mean the same thing write the same string.
- * Mirrors `tag()` in apps/api/src/guide.ts.
+ * Mirrors `tag()` in apps/api/src/work.ts.
  */
 export function tag(raw) {
   return String(raw ?? "")
@@ -62,7 +42,7 @@ export function tag(raw) {
     .replace(/^-+|-+$/g, "");
 }
 
-/** A guide's tags: normalised, emptied of blanks, deduped once two spellings become one. */
+/** Work's tags: normalised, emptied of blanks, deduped once two spellings become one. */
 export function tagList(raw) {
   const list = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
   return [...new Set(list.map(tag).filter(Boolean))];
@@ -164,7 +144,7 @@ export function parseFrontmatter(text) {
   // Only the lists every piece of work has. `blocked_by` is optional, and defaulting it would write
   // an empty one into every document anybody re-shares.
   for (const k of ["stack_assumptions", "tags"]) if (meta[k] === undefined) meta[k] = [];
-  // Both ends of this module: what it reads and what it writes are in one style, so a guide
+  // Both ends of this module: what it reads and what it writes are in one style, so work
   // written before there was a rule comes back normalised and goes out normalised.
   meta.tags = tagList(meta.tags);
   return meta;
@@ -177,7 +157,7 @@ export function parseFrontmatter(text) {
  * exactly that, and a publish would have stored the document with every token wiped. The format
  * does not grow to hold them (strings and string lists only); the publish refuses them by name
  * instead, so nothing is lost without its author being told. Mirrors `unheldFields` in
- * apps/api/src/guide.ts, which is the refusal every client meets.
+ * apps/api/src/work.ts, which is the refusal every client meets.
  */
 export function unheldFields(markdown) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(markdown);
@@ -203,9 +183,9 @@ export function unheldFields(markdown) {
 
 /**
  * Fields this format no longer has, refused by name rather than carried. `kind` split work into
- * task, bug and transfer, each with its own sections, and every rule that turned on it is gone
+ * kinds, each with its own sections, and every rule that turned on it is gone
  * (docs/WORK.md): a document still saying it is one of them is an old export or an old client, and
- * carrying the line would put back an answer nothing reads. `retiredFields` in apps/api/src/guide.ts
+ * carrying the line would put back an answer nothing reads. `retiredFields` in apps/api/src/work.ts
  * is the refusal every client meets.
  */
 export const RETIRED = ["kind"];
@@ -269,7 +249,7 @@ export function serialize({ meta, body }) {
 }
 
 /**
- * Image targets no reader will ever load. Mirrors `unreachableImages` in apps/api/src/guide.ts,
+ * Image targets no reader will ever load. Mirrors `unreachableImages` in apps/api/src/work.ts,
  * which is the authority and refuses the publish; this lets a local share fail before the network.
  *
  * Only a foreign scheme counts — `attachment://`, `blob:`, `file:`, `data:`. `https:` is left alone
@@ -286,7 +266,7 @@ export function unreachableImages(markdown) {
   return [...new Set(bad)];
 }
 
-/** Problems that make a guide unfit to publish. Empty array means it is fine. */
+/** Problems that make work unfit to publish. Empty array means it is fine. */
 export function validate({ meta, body }) {
   const errors = [];
   if (!meta.title) errors.push("frontmatter needs a title");
@@ -294,8 +274,8 @@ export function validate({ meta, body }) {
   // A parent is optional, and a self-parent is always a mistake worth refusing.
   //
   // A malformed one is not refused, though, and that is deliberate. `parent:` is a field name this
-  // format did not reserve until now, so a guide written months ago may already carry one meaning
-  // something else entirely — and a guide shared then has to still re-share today. Rejecting the
+  // format did not reserve until now, so work written months ago may already carry one meaning
+  // something else entirely — and work shared then has to still re-share today. Rejecting the
   // value would make that document unpublishable by its own author, which is the failure the
   // STATUSES comment above describes. The server drops a parent it cannot resolve, so the worst
   // case is lineage that silently does not apply rather than work nobody can hand on.
@@ -324,28 +304,28 @@ export function validate({ meta, body }) {
   return errors;
 }
 
-/** Fill in what a fresh guide needs before it can be stored. Returns a new object. */
-export function stamp(guide, defaults = {}) {
-  const meta = { ...guide.meta };
+/** Fill in what a fresh work needs before it can be stored. Returns a new object. */
+export function stamp(work, defaults = {}) {
+  const meta = { ...work.meta };
   if (!meta.id) meta.id = newId();
   if (!meta.created) meta.created = new Date().toISOString();
-  // Ready unless whoever wrote it said draft: a guide sent to someone is meant to reach them, and
+  // Ready unless whoever wrote it said draft: work sent to someone is meant to reach them, and
   // drafts were where addressed work sat forgotten (every draft in production on 2026-10-15).
-  if (!meta.status) meta.status = "published";
+  if (!meta.status) meta.status = "ready";
   for (const [k, v] of Object.entries(defaults))
     if (meta[k] === undefined || meta[k] === "") meta[k] = v;
-  return { meta, body: guide.body };
+  return { meta, body: work.body };
 }
 
-// ---- reading a guide in parts, and how big one may be -----------------------------------------
+// ---- reading work in parts, and how big one may be -----------------------------------------
 // Mirrors apps/api/src/sections.ts — apps/api/test/sections.test.mjs holds the two to the same
-// answers. Most of what is stored is a few very large guides (six of 123 held 72% of the text), and
+// answers. Most of what is stored is a few very large work (six of 123 held 72% of the text), and
 // an agent that wants only the Acceptance of a long task should not read the rest first.
 
-/** Over this a guide is large: its readers are offered the outline first, and its author a warning. */
-export const GUIDE_WARN = 20_000;
-/** Over this a new guide is refused by the server. A guide stored before it existed may keep its size. */
-export const GUIDE_MAX = 60_000;
+/** Over this work is large: its readers are offered the outline first, and its author a warning. */
+export const WORK_WARN = 20_000;
+/** Over this a new work is refused by the server. Work stored before it existed may keep its size. */
+export const WORK_MAX = 60_000;
 
 /** Where each heading starts, outside the frontmatter and outside code fences. */
 function headingLines(markdown) {
@@ -403,15 +383,15 @@ export function section(markdown, name) {
 
 /** What the author of a piece of work is told when it is on the large side. */
 export function sizeWarning(chars) {
-  return chars > GUIDE_WARN
-    ? `this is ${chars.toLocaleString("en")} characters, and over ${GUIDE_WARN.toLocaleString("en")} ` +
+  return chars > WORK_WARN
+    ? `this is ${chars.toLocaleString("en")} characters, and over ${WORK_WARN.toLocaleString("en")} ` +
         "it is read by outline first. Put logs, dumps and long output in a file (add_file) and " +
         "link it; keep the text to what the next agent has to act on."
     : null;
 }
 
 /**
- * What an agent is shown instead of a large guide: who it is, what it is, and where its parts are.
+ * What an agent is shown instead of a large work: who it is, what it is, and where its parts are.
  * `path` is where the whole of it was written, for a search rather than a read.
  */
 export function outlineText(markdown, { id = "", path = "" } = {}) {

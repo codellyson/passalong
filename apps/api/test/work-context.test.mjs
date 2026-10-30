@@ -1,8 +1,8 @@
-// `GET /v1/guides/:id/context` — everything around one guide, for the hub's page about it.
+// `GET /v1/work/:id/context` — everything around one piece of work, for the hub's page about it.
 //
 // Pinned by reading the route's source, as follow-ups.test.mjs does and for the same reason: the
 // app is not importable under type stripping. What matters most here is easy to lose in an edit —
-// looking at your own board must not count as opening the guide, every related guide is filtered
+// looking at your own board must not count as opening the work, every related work is filtered
 // on its own, and the reviewer's risk line stays the author's.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -10,22 +10,22 @@ import { test } from "node:test";
 
 const index = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
 const route = index.slice(
-  index.indexOf('app.get("/v1/guides/:id/context"'),
-  index.indexOf('app.patch("/v1/guides/:id/status"'),
+  index.indexOf('app.get("/v1/work/:id/context"'),
+  index.indexOf('app.patch("/v1/work/:id/status"'),
 );
 
-test("the route exists and is gated on reading the guide", () => {
+test("the route exists and is gated on reading the work", () => {
   assert.ok(route.length > 0, "found the route");
-  assert.match(route, /readableGuide\(c, c\.req\.param\("id"\)\)/);
-  assert.match(route, /if \(!found\) return err\(c, 404, GUIDE_GONE\)/);
+  assert.match(route, /readableWork\(c, c\.req\.param\("id"\)\)/);
+  assert.match(route, /if \(!found\) return err\(c, 404, WORK_GONE\)/);
 });
 
-test("reading the context is not opening the guide: no pull, no receipt, no markdown", () => {
+test("reading the context is not opening the work: no pull, no receipt, no markdown", () => {
   assert.doesNotMatch(route, /recordPull|recordReceipt|INSERT INTO pull|pulls = pulls/);
   assert.doesNotMatch(route, /\.markdown\b/);
 });
 
-test("every related guide is filtered for this caller on its own", () => {
+test("every related work is filtered for this caller on its own", () => {
   const readable = route.match(/\$\{readable\}/g) ?? [];
   // parent, children, blockers and what it blocks.
   assert.equal(readable.length, 4);

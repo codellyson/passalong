@@ -5,7 +5,7 @@ Three pieces, one database, **one deployed Worker**.
 ```
 packages/passalong/          the CLI and the MCP server. Plain ESM, no build step.
   bin/passalong              argument parsing and every command's output
-  src/guide.js              the guide format: sections, frontmatter, ids, validation
+  src/work.js              the work format: sections, frontmatter, ids, validation
   src/store.js              ~/.passalong and ./.passalong — the local copy
   src/api.js                talks to the Worker; DEFAULT_API is the canonical host
   src/mcp.js                the stdio MCP server an agent drives
@@ -14,9 +14,9 @@ packages/passalong/          the CLI and the MCP server. Plain ESM, no build ste
 
 apps/api/                    the Hono app. NOT deployed on its own — apps/web mounts it.
   src/index.ts              every route; the header comment is the API surface
-  src/guide.ts              the format again, server side (parse, validate, verify layout)
+  src/work.ts              the format again, server side (parse, validate, verify layout)
   src/auth.ts               PBKDF2, tokens, sessions, breach check
-  src/og.ts                 the per-guide unfurl card (satori + resvg, wasm)
+  src/og.ts                 the per-work unfurl card (satori + resvg, wasm)
   src/hosts.ts              which hostnames serve and which redirect
   src/notify.ts             the notification feed
   src/email.ts              outbound mail through the Email Service binding
@@ -24,12 +24,12 @@ apps/api/                    the Hono app. NOT deployed on its own — apps/web 
   migrations/               D1 schema, applied in order
 
 apps/web/                    Nuxt 4 on Cloudflare. The Worker that is actually deployed.
-  app/pages/                /, /g/[id]/[key], /hub, /join/[code], /reset
+  app/pages/                /, /w/[id]/[key], /hub, /join/[code], /reset
   app/components/hub/       the hub, which used to be one 931-line file
   app/composables/useHub.ts its state and every mutation
   server/middleware/        0.canonical.ts (www → apex), 1.api.ts (the mount)
-  server/api/               the page-facing endpoints: one guide, one invite
-  server/utils/guide-html.ts markdown → HTML, server-side only
+  server/api/               the page-facing endpoints: one work, one invite
+  server/utils/work-html.ts markdown → HTML, server-side only
   shared/csp.ts             the two response policies
   public/                   static assets, served before the Worker runs
 ```
@@ -37,7 +37,7 @@ apps/web/                    Nuxt 4 on Cloudflare. The Worker that is actually d
 ## One Worker, two halves
 
 `apps/web` is the deployment. `server/middleware/1.api.ts` hands `/v1/*`, `/health` and the two
-machine routes on a share link (`/g/:id/:key.md`, `/g/:id/:key/og.png`) to the Hono app, and lets
+machine routes on a share link (`/w/:id/:key.md`, `/w/:id/:key/og.png`) to the Hono app, and lets
 everything else fall through to Nuxt.
 
 Same origin is the point, not an accident: the hub authenticates with an HttpOnly session cookie
@@ -46,7 +46,7 @@ that needs CORS on thirty routes and a cookie `Domain` — so the split does not
 
 ## Why the CLI has no build step
 
-The source in `packages/passalong/src` is the code that runs. One less thing to rot, and a guide
+The source in `packages/passalong/src` is the code that runs. One less thing to rot, and a piece of work
 about this repo can tell you to read a file rather than a bundle. The web app does have a build,
 and gets three things from it that the old hand-written HTML had to do by hand: a content hash on
 the stylesheet, `.vue` files instead of template strings, and a typecheck that has already caught
@@ -61,10 +61,10 @@ without the network anyway, and local copies only went stale and piled up.
 
 ## Where the same knowledge lives twice
 
-The work format is implemented on both sides — `packages/passalong/src/guide.js` and
-`apps/api/src/guide.ts`. That is deliberate: the CLI validates before sending so bad work never
+The work format is implemented on both sides — `packages/passalong/src/work.js` and
+`apps/api/src/work.ts`. That is deliberate: the CLI validates before sending so bad work never
 leaves the machine, and the Worker validates because it cannot trust a client. The status list,
-the retired fields and the tag rules must stay in step; `fixtures/guides/` tests both.
+the retired fields and the tag rules must stay in step; `fixtures/work/` tests both.
 
 ## The two ends
 
