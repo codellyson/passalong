@@ -1,7 +1,7 @@
 ---
 title: A bug report template for AI coding agents
 date: 2026-10-03
-description: A bug report an AI coding agent can fix from, not just read. The template, why the reproduction is not a list of steps, what evidence to attach, and what a fix must not break.
+description: A bug report an AI coding agent can fix from: the template, how to show the bug, what evidence to attach and what a fix must not break.
 draft: false
 ---
 

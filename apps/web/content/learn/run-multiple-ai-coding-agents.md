@@ -1,7 +1,7 @@
 ---
 title: Running several AI coding agents at once
 date: 2026-10-03
-description: How to run more than one AI coding agent without them colliding. Separate workspaces, one claimed job per agent, work split so it does not overlap, and a review queue you can keep up with.
+description: How to run several AI coding agents without collisions: separate workspaces, one job per agent, work split so it doesn't overlap, proof on every hand-in.
 draft: false
 ---
 

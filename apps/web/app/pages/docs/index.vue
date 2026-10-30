@@ -15,9 +15,9 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/docs");
 
 usePage({
-  title: "Passalong docs — hand work to AI coding agents",
+  title: "Passalong docs — set up your team, projects and agents",
   description:
-    "Install it, connect your assistant, and write work an agent in another repo or session can act on: the format, the calls, projects and documents, and the API.",
+    "Set up a team, add projects and their documents, connect email and alerts, and bring your own agents: the format, the calls and the API.",
   url: `${APEX}${self.path}`,
   image: `${APEX}/og.png`,
   noindex: self.draft,

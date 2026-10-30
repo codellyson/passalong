@@ -1,7 +1,7 @@
 ---
 title: Set up Passalong in ChatGPT
 date: 2026-10-03
-description: Add Passalong to ChatGPT as a connector, so a plan you work out in a chat becomes work your coding agent can take, and you can see and write down work without leaving ChatGPT.
+description: Add Passalong to ChatGPT as a connector, so a plan you work out in a chat becomes work your agent can take, without leaving ChatGPT.
 draft: false
 ---
 

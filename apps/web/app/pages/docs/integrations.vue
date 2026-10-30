@@ -15,9 +15,9 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/docs/integrations");
 
 usePage({
-  title: "Passalong integrations — email, Sentry and PostHog into work",
+  title: "Turn email, Sentry and PostHog alerts into work · Passalong",
   description:
-    "Turn errors from Sentry and PostHog, emails, customer mail and your own webhooks into Passalong work an AI coding agent can take.",
+    "Forward an email or connect an alert, and each one becomes work with a plain summary, sent to the right person or group.",
   url: `${APEX}${self.path}`,
   image: `${APEX}/og.png`,
   noindex: self.draft,

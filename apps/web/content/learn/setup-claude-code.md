@@ -1,7 +1,7 @@
 ---
 title: Set up Passalong in Claude Code
 date: 2026-10-03
-description: Connect Claude Code to Passalong in three commands, so it can take work, report progress, hand it in with evidence and write what it learned into your project's documents. Includes the hooks and status line.
+description: Connect Claude Code to Passalong in three commands: take work, report progress, hand in with evidence and write what it learned into project documents.
 draft: false
 ---
 

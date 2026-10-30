@@ -25,11 +25,11 @@ usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
   // Under ~60 characters: longer than that and a search result cuts it mid-phrase.
-  title: "Passalong — your team’s agents know your product",
+  title: "Passalong — everything your team gets, sorted and closed",
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:
-    "Everything that comes in reaches the right person, every agent knows your product, and work comes back with evidence.",
+    "Requests, bugs, alerts and customer emails sorted to the right person. Your agents know the product. Nothing gets dropped.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
   // switches on the moment there is something to show. The apex rather than the serving host, so

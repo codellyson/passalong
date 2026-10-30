@@ -115,7 +115,8 @@ export default defineNuxtConfig({
     // (docs/V2.md §11). Old links and bookmarks land on the hub, whose New menu says what to ask.
     "/hub/write": { redirect: "/hub" },
     // Work has no kinds (docs/WORK.md), so the format page is the work format; old links follow.
-    "/docs/guide-format": { redirect: "/docs/work-format" },
+    // Permanent, so search engines move the old address's standing to the new one.
+    "/docs/guide-format": { redirect: { to: "/docs/work-format", statusCode: 301 } },
     // Guide pages render markdown a stranger wrote, and the CSP is what makes that safe rather
     // than a sanitiser. `noScripts` drops the entry script, the import map, the inlined payload
     // and the JS resource hints, so the page can be served with no `script-src` at all. It also

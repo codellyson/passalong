@@ -10,9 +10,9 @@ const self = publicPage("/mcp-server");
 const url = `${APEX}${self.path}`;
 
 usePage({
-  title: "Task management MCP server for AI coding agents · Passalong",
+  title: "MCP server for Claude Code and Codex · Passalong",
   description:
-    "One MCP server your agents take work from, one agent per job, with progress you can see, evidence on every hand-in, and project documents they read and keep current. For Claude Code, Codex, ChatGPT and Claude.",
+    "Your agents take work from Passalong, read the project's documents, report as they go and hand in with proof: a screenshot or a command's output.",
   url,
   image: `${APEX}/og.png`,
   noindex: self.draft,

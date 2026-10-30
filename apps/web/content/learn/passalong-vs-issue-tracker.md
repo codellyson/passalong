@@ -1,7 +1,7 @@
 ---
 title: Passalong or an issue tracker for AI coding agents?
 date: 2026-10-03
-description: Issue trackers like Linear, Jira and GitHub Issues are built for people planning work. What changes when the one doing the work is an AI coding agent, and where Passalong fits beside your tracker.
+description: Linear, Jira and GitHub Issues are built for people planning work. What changes when an AI agent does the work, and where Passalong fits beside them.
 draft: false
 ---
 

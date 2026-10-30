@@ -1,7 +1,7 @@
 ---
 title: Handing work to AI coding agents
 date: 2026-10-03
-description: How to hand work to an AI coding agent so it starts with what it needs, and how to check what comes back. A bug, a feature or a fix to repeat elsewhere. Works with any agent.
+description: How to hand work to an AI coding agent so it starts with what it needs, and how to check what comes back. Works with any agent.
 draft: false
 ---
 

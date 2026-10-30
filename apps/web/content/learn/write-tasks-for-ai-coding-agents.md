@@ -1,7 +1,7 @@
 ---
 title: How to write a task an AI coding agent can finish
 date: 2026-10-03
-description: Most agent tasks fail before the agent starts. How to size a task, what context to give, and how to write acceptance an agent can check itself against, with a template and a before-and-after.
+description: Most agent tasks fail before the agent starts. How to size a task, what context to give and how to say what done means, with a before-and-after.
 draft: false
 ---
 

@@ -16,9 +16,9 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/faq");
 
 usePage({
-  title: "Passalong FAQ — handing work between AI agents",
+  title: "Passalong FAQ — your team and its agents in one place",
   description:
-    "What Passalong is, what it costs, who can read a share link, which assistants it works with, and what happens to your work if you leave.",
+    "What Passalong does with what comes in, who sends replies to customers, which agents it works with, and what it costs.",
   url: `${APEX}${self.path}`,
   image: `${APEX}/og.png`,
   noindex: self.draft,

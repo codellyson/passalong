@@ -1,7 +1,7 @@
 ---
 title: Set up Passalong in Claude
 date: 2026-10-03
-description: Add Passalong to Claude on the web or desktop as a connector, so a plan you work out in a chat becomes work your coding agent can take, and you can see and write down work from Claude.
+description: Add Passalong to Claude on the web or desktop as a connector, so a plan you work out in a chat becomes work your agent can take.
 draft: false
 ---
 
