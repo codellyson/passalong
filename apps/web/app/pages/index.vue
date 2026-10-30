@@ -25,11 +25,11 @@ usePage({
   // Long enough to be worth a search result. "Passalong" alone was nine characters, which spends
   // none of the space a result gets and says nothing to somebody who has not heard of it.
   // Under ~60 characters: longer than that and a search result cuts it mid-phrase.
-  title: "Passalong — hand work to your AI coding agents",
+  title: "Passalong — your team’s agents know your product",
   // Under 125, because previews truncate around there and a sentence cut mid-clause reads as a
   // page that did not think about being shared. This one ends where it means to.
   description:
-    "Give your coding agents work in plain words. One agent per job, progress you can see, and evidence on every hand-in.",
+    "Everything that comes in reaches the right person, every agent knows your product, and work comes back with evidence.",
   // Absolute, because a crawler resolves nothing. Without it every link to the product unfurled as
   // a bare text row: no image, and `summary` rather than `summary_large_image`, which usePage
   // switches on the moment there is something to show. The apex rather than the serving host, so
@@ -83,8 +83,8 @@ const STRUCTURED = {
       name: "Passalong",
       url: `${APEX}/`,
       description:
-        "Hand work to AI coding agents in plain words and get back what they did and how they checked it, with one agent on each piece of work, everyone able to see who has what, and project documents the agents keep current. A CLI, an MCP server and a hub.",
-      applicationCategory: "DeveloperApplication",
+        "Keeps a small team's work and what it knows, for people and their agents. Requests, emails, alerts and customer messages are sorted to the right person or group; each project's documents tell any agent about the product; work is taken by one agent at a time and handed in with evidence; customer replies are drafted and sent by a person. A hub, a CLI and an MCP server.",
+      applicationCategory: "BusinessApplication",
       operatingSystem: "macOS, Linux, Windows",
       publisher: { "@id": `${APEX}/#organization` },
       offers: [
@@ -173,13 +173,13 @@ const PROOF = null as { figure: string; says: string } | null;
            description, which is where a search engine reads it; the small label that carried it
            here said nothing a reader needed. -->
       <h1>
-        Agents that never<br>
-        <span class="turn">start from zero.</span>
+        Your team’s agents know your product.
+        <span class="turn">Nothing that comes in gets dropped.</span>
       </h1>
       <p class="lede">
-        Say what you need in plain words. The agent that picks it up reads it, and what your
-        project's documents say about the product, and works out what done means. It takes the job,
-        reports as it goes, and hands it in with the evidence.
+        Requests, bug reports, alerts and customer emails reach the right person or group. Each
+        project’s documents tell any agent what the product is before it starts, and every piece of
+        work is followed until it comes back done, with the evidence.
       </p>
       <!-- The first step is the install, not the hub: the product is agent first, and a newcomer has
            no hub yet. No copy button — this page runs no script — so the command is set to select
@@ -189,8 +189,8 @@ const PROOF = null as { figure: string; says: string } | null;
         <a class="quiet" href="/hub">or open your hub</a>
       </p>
       <p class="works">
-        Works with Claude Code and Codex on your machine, and with ChatGPT and Claude
-        as a connector. Any other MCP client works too. <a href="/connect">How to connect</a>
+        Passalong never hosts your agent. Bring your own: Claude Code and Codex on your machine,
+        ChatGPT and Claude as a connector, or any other MCP client. <a href="/connect">How to connect</a>
       </p>
     </header>
 
@@ -243,62 +243,105 @@ const PROOF = null as { figure: string; says: string } | null;
     <p v-if="PROOF" class="proof"><b>{{ PROOF.figure }}</b> {{ PROOF.says }}</p>
 
     <!--
-      One loop, because work is one thing (docs/WORK.md). Told as what a person does, not as the flags that do it, and
-      every sentence is something the product does today.
-
-      Agent first: nothing here is typed into a form. You say it to your agent, and it writes it.
+      The five ideas of docs/LOOP.md §0, told as what happens to one thing that comes in, in order:
+      it arrives, it is sorted, the project tells the agent what it needs to know, the work is done
+      and shown, and a customer hears back. A register rather than numbered cards: the headings
+      carry the order, and every sentence is something the product does today.
     -->
-    <section class="steps" aria-label="How handing work to an agent works">
+    <section class="ideas" aria-labelledby="ideas-h">
+      <h2 id="ideas-h">
+        Everything that comes in
+        <span class="turn">ends somewhere.</span>
+      </h2>
       <article>
-        <p class="n">01</p>
-        <h2>Say what you need</h2>
+        <h3>Things come in</h3>
         <p>
-          <em>“Add to Passalong: dark mode in settings.”</em> A line in the hub’s box, a forwarded
-          email, a customer writing in. It reaches whoever it is for at once, and an agent says
-          <em>“pass this along”</em> to write what it learned into the project’s documents.
+          A line in the hub’s box, a forwarded email, a screenshot sent from your phone, an alert
+          from a webhook, a customer writing to your support address. Each one becomes work, in one
+          place.
         </p>
       </article>
       <article>
-        <p class="n">02</p>
-        <h2>An agent claims it</h2>
+        <h3>Passalong’s agent sorts it</h3>
         <p>
-          One of yours, in any repo, or a teammate’s. Only one agent can hold a job, and work waits
-          for what it depends on. Run <code>passalong work</code> and your agents work through the
-          queue on their own.
+          It reads each one, pictures included, and gives it a title and a sentence anyone can read.
+          It sends it to the person or group who should act, into its project when it can tell, and
+          when it is unsure it says what is worth checking.
         </p>
       </article>
       <article>
-        <p class="n">03</p>
-        <h2>You see it moving</h2>
+        <h3>Projects remember the product</h3>
         <p>
-          A one-line update at each milestone, next to who has it and where. Agents don’t wander
-          off: each step tells them the next one, and an agent that goes quiet is flagged, not
-          forgotten.
+          One project per product. Its documents say what the product is, who uses it, the words
+          your team uses and how it is built, so any agent can read them before it starts. What an
+          agent learns goes back into them, and every version is kept.
         </p>
       </article>
       <article>
-        <p class="n">04</p>
-        <h2>It comes back done</h2>
+        <h3>Work gets done, and shown</h3>
         <p>
-          It hands in what it did and how it checked, and the work goes to Done. If it is not right,
-          reopen it with a reason the next agent reads first.
+          One agent holds it at a time. It reports as it goes, asks you when it needs an answer, and
+          hands in with evidence: a screenshot, or the command it ran and what came back. Work
+          nobody takes, or an agent gone quiet, reaches a person. If it is not right, reopen it with
+          a reason the next agent reads first.
         </p>
       </article>
+      <article>
+        <h3>Customers get one conversation</h3>
+        <p>
+          A customer’s messages are one thread, and one conversation in their inbox, with a tracking
+          number. The agent drafts the reply; a person reads it and presses Send. A customer left
+          waiting is flagged before they are forgotten.
+        </p>
+      </article>
+    </section>
+
+    <!-- Who it is for (PRODUCT.md, Users): three peers, because the product only works when all
+         three are in it. -->
+    <section class="for" aria-labelledby="for-h">
+      <h2 id="for-h">
+        For the whole team,
+        <span class="turn">terminal or not.</span>
+      </h2>
+      <div>
+        <article>
+          <h3>Leads of small teams</h3>
+          <p>
+            One page in the morning: what needs you, which customers are waiting, what is stuck.
+            One board for everyone, people and agents alike.
+          </p>
+        </article>
+        <article>
+          <h3>Developers with agents</h3>
+          <p>
+            Your agents take work, read the project’s documents, report as they go and hand in with
+            evidence. Run <code>passalong work</code> and they work through what is ready.
+          </p>
+        </article>
+        <article>
+          <h3>Support, marketing, everyone else</h3>
+          <p>
+            Nothing to install and no terminal. Write in the hub’s box, forward an email, send a
+            screenshot from your phone, and answer customers from the hub.
+          </p>
+        </article>
+      </div>
     </section>
 
     <section class="statement">
       <h2>
-        One agent per job.<br>
+        One board for the team.<br>
         <span class="turn">Everyone sees who has what.</span>
       </h2>
       <p>
-        What needs you, who’s working on what, what’s open and what’s done, for every agent,
-        machine and teammate, on one page. If a second agent reaches for a job someone already has,
-        it’s told who and stops, instead of doing the work twice.
+        Draft, To do, In progress and Done, with To do grouped under who each piece is for. Anyone
+        on the team can give work to someone else, stop an agent or reopen what is finished. If a
+        second agent reaches for work someone already holds, it’s told who and stops, instead of
+        doing it twice.
       </p>
     </section>
 
-    <!-- The four questions that decide whether this is worth installing, answered in a sentence
+    <!-- The questions that decide whether this is worth installing, answered in a sentence or two
          each. Every answer is true of the product today. -->
     <section class="faq" aria-labelledby="faq-h">
       <h2 id="faq-h">Before you install it</h2>
@@ -306,15 +349,17 @@ const PROOF = null as { figure: string; says: string } | null;
         <div>
           <dt>Does Passalong run my agents?</dt>
           <dd>
-            No. They run where they run now, on your machine and in your repos. Passalong holds the
-            work, who has it, and what came back.
+            No. Passalong never hosts your agent: yours run where they run now, on your machine and
+            in your repos. Passalong’s own agent only sorts what comes in and drafts replies to
+            customers.
           </dd>
         </div>
         <div>
           <dt>Why not Linear or GitHub Issues?</dt>
           <dd>
-            A ticket waits for a person. Passalong work is taken by an agent, comes back with how it
-            was checked, and the agents keep each project’s documents current as they go.
+            A ticket waits for a person. Here, what comes in is sorted to someone as it arrives, an
+            agent takes the work with the project’s documents to read, and it comes back with the
+            evidence.
           </dd>
         </div>
         <div>
@@ -322,8 +367,19 @@ const PROOF = null as { figure: string; says: string } | null;
           <dd>Only one can take it. The other is told who has it.</dd>
         </div>
         <div>
+          <dt>Do my support and marketing people need a terminal?</dt>
+          <dd>
+            No. They work in the hub: the box, email, a screenshot from their phone, and the
+            customer’s thread. Nothing is installed for them.
+          </dd>
+        </div>
+        <div>
+          <dt>Does the agent ever write to a customer on its own?</dt>
+          <dd>No. It drafts the reply. Nothing reaches a customer until a person presses Send.</dd>
+        </div>
+        <div>
           <dt>Am I locked in?</dt>
-          <dd>Everything is plain markdown, and you can export it at any time.</dd>
+          <dd>Work is plain markdown, and you can export all of it at any time.</dd>
         </div>
       </dl>
     </section>
@@ -332,7 +388,7 @@ const PROOF = null as { figure: string; says: string } | null;
     <section class="pricing" aria-label="What it costs">
       <h2>
         Free to start.<br>
-        <span class="turn">Paid when your agents share the work.</span>
+        <span class="turn">Paid when your team shares the work.</span>
       </h2>
       <p class="note">
         A free account holds up to 25 pieces of work in your hub, so you can watch one move before
@@ -346,7 +402,7 @@ const PROOF = null as { figure: string; says: string } | null;
           <p class="figure">Talk to us</p>
           <p>
             <b>One subscription covers the whole team.</b> Hand work to a person, to the group that
-            does that kind of work, or to anyone’s agents, and see who’s on what.
+            does that kind of work, or to anyone’s agents, and answer customers from the same place.
           </p>
           <p class="ask">
             <a class="btn" :href="`mailto:${PRICING.contact}`">Contact sales</a>
@@ -358,8 +414,8 @@ const PROOF = null as { figure: string; says: string } | null;
 
     <section class="closer">
       <h2>
-        Hand it the job.<br>
-        <span class="turn">Get back the work.</span>
+        Everything in one place.<br>
+        <span class="turn">Nothing left behind.</span>
       </h2>
       <p class="ways">
         <a class="go" href="/hub">Open your hub</a>
@@ -369,7 +425,8 @@ const PROOF = null as { figure: string; says: string } | null;
            install; reading what comes back takes nothing at all, and that asymmetry is the product. -->
       <p class="reassure">
         Your agents run where they always have, on your machine and in your repos. Passalong holds
-        the work, who has it and what came back. Reading a share link needs nothing installed.
+        the work, what your team knows and what came back. Reading a share link needs nothing
+        installed.
         <template v-if="docsPublished"><a href="/docs">The docs</a> cover the rest.</template>
       </p>
     </section>

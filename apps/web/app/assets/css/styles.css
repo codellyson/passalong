@@ -1719,50 +1719,74 @@ form.join label {
   white-space: nowrap;
 }
 
-.steps {
+/* The five ideas, as a register: the heading on the left, what it means on the right, a hairline
+   between rows. Numbered cards were the template's version of this; the headings already carry the
+   order, so the numerals said nothing. */
+.ideas {
+  max-width: 46rem;
+  margin: var(--gap) auto 0;
+}
+.ideas h2,
+.for h2 {
+  margin: 0 0 var(--s-7);
+  font-family: var(--font-sans);
+  font-size: var(--t-section);
+  font-weight: 480;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  text-align: center;
+  text-wrap: balance;
+}
+.ideas article {
   display: grid;
-  gap: var(--s-3);
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  margin: var(--gap) 0 0;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  gap: var(--s-2) var(--s-6);
+  padding: var(--s-5) 0;
+  border-top: 1px solid var(--line);
 }
-.steps article {
-  max-width: none;
-  padding: var(--s-6);
-  border-radius: var(--r-3);
-  background: var(--surface-raised);
+.ideas h3,
+.for h3 {
+  margin: 0;
+  font: 500 1.0625rem / 1.4 var(--font-sans);
+  letter-spacing: normal;
+  color: var(--fg);
 }
-/* Four steps wrap as three and a stray one under auto-fit, which reads as a step left over. So a
-   row of four is two by two, and one column on a phone. Never four across: in this container that
-   is a 28-character measure, and each step became a six-line column of 14px text. */
-.steps:has(> article:nth-child(4)) {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.ideas p,
+.for p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+  text-wrap: pretty;
 }
-.steps:has(> article:nth-child(4)) article {
-  max-width: none;
-}
-@media (max-width: 36rem) {
-  .steps:has(> article:nth-child(4)) {
+@media (max-width: 40rem) {
+  .ideas article {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* A numeral, not a filled circle. The count is the only thing the number has to say, and three
-   accent discs down a page spend the accent on ordinal information. */
-.steps .n {
-  margin: 0 0 var(--s-3);
-  font: 500 var(--t-sm) / 1.3 var(--font-sans);
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
+
+/* Who it is for: three peers in columns under a hairline each, no fills, so they read as one
+   team rather than three plans to pick between. */
+.for {
+  margin: var(--gap) auto 0;
+  max-width: 58rem;
 }
-.steps h2 {
-  margin: 0 0 var(--s-2);
-  font: 500 1.0625rem / 1.4 var(--font-sans);
-  letter-spacing: normal;
+.for > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--s-6);
 }
-.steps p {
-  margin: 0;
-  color: var(--muted);
+.for article {
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line-strong);
+}
+.for h3 {
+  margin-bottom: var(--s-2);
+}
+.for p {
   font-size: var(--t-sm);
-  line-height: 1.65;
+}
+.for code {
+  white-space: nowrap;
 }
 
 /* The claim restated as a pair, once, in the middle of the page. It carries no link and asks for

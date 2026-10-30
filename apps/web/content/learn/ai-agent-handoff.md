@@ -1,7 +1,7 @@
 ---
 title: Handing work to AI coding agents
 date: 2026-10-03
-description: How to hand a task, a bug or finished work to an AI coding agent so it starts with what it needs, and how to check what comes back. Works with any agent.
+description: How to hand work to an AI coding agent so it starts with what it needs, and how to check what comes back. A bug, a feature or a fix to repeat elsewhere. Works with any agent.
 draft: false
 ---
 
@@ -12,7 +12,7 @@ receiving side starts with only what was written down. Everything else stayed in
 that has already closed.
 
 Most handoffs today are a sentence in a chat box, and most of what goes wrong with coding agents
-starts there. This guide covers what a good handoff contains, how to write the part that matters
+starts there. This page covers what a good handoff contains, how to write the part that matters
 most, and how to check the work that comes back. None of it depends on a particular tool.
 
 ## Why handoffs go wrong
@@ -37,40 +37,36 @@ work, at the end, from memory. It reads well whether or not the work holds up.
 Each of these has a fix, and the fixes are mostly about what gets written down before and after
 the work.
 
-## Say what kind of handoff it is
+## Write what the next reader needs
 
-Different handoffs ask for different things, and an agent behaves better when it knows which one it
-has. Three kinds cover nearly everything.
+A handoff does not need a form. Templates with fixed sections tend to get filled in for their own
+sake: a two-line note padded into six headings, or a bug squeezed into a shape made for a feature.
+What the receiving agent needs is shorter than that:
 
-**A task** is work nobody has done yet. The agent's job is to work out how. It needs:
+- **A title** that says what it is, in a few words.
+- **One or two plain sentences** saying what this is and whether anyone has to act. This is what a
+  person scanning a list reads. Keep ids and paths out of it.
+- **The body**, in whatever shape fits: what is wrong or wanted, where to look, what must not
+  change, and how to tell it is done.
 
-- **Goal**: what is true when this is done, in a sentence or two.
-- **Context**: where the code is and what already exists, so it does not go looking.
-- **Constraints**: what must not change, and what to use or avoid.
-- **Acceptance**: the checks the work will be judged against. More on these below.
-- **Out of scope**: what looks related and is not part of this, so it does not wander.
+A capable agent reading "the upload button does nothing, screenshot attached" knows it is a bug and
+what fixed looks like. You do not have to label it. What you do have to write down is whatever only
+you know.
 
-A task has no steps. If you already know the steps, you are closer to the next kind.
+A few things are worth saying whenever they apply:
 
-**A transfer** is finished work to repeat somewhere else: the same fix in another repo, the same
-setup on another service, or the context a later session needs so it does not start cold. It needs:
+- **What must not change.** A public API, a schema, a file another team owns.
+- **What is out of the way.** Nearby things that look related and are not part of this, so the
+  agent does not wander.
+- **What failed.** For a fix that was already made once and needs repeating somewhere else, the
+  dead ends are the most valuable part, and the part most often left out.
+- **What depends on where you were.** Mark a path, a version or a service name that came from the
+  original environment, so the receiving agent adapts it instead of copying it.
 
-- **Problem**: what was actually wrong.
-- **Solution shape**: the approach, not the diff.
-- **Decisions and rationale**: what was chosen over what, and why.
-- **Steps**: what to do.
-- **Verification**: how to know it worked.
-- **Gotchas**: what failed along the way. This is the most valuable section, and the one most often
-  left out.
-
-Mark anything that depends on the original environment, such as a path, a version or a service
-name, so the receiving agent adapts it instead of copying it.
-
-**A bug** is a defect to fix where it is. It needs the problem, how to see it, what should have
-happened instead, and whatever made it hard to see. Call the "how to see it" section *Reproduce*,
-not *Steps*. An agent follows Steps. It should not follow the recipe that produces the bug.
-There is a full template in [A bug report template for AI coding
-agents](/learn/bug-report-template-for-ai-agents).
+For a bug, write how to see it as just that: how to see it. Do not head it *Steps*. An agent
+follows Steps, and it should not follow the recipe that produces the bug.
+[A bug report template for AI coding agents](/learn/bug-report-template-for-ai-agents) goes through
+a bug in full.
 
 ## Write acceptance an agent can check
 
@@ -97,31 +93,26 @@ agent a target it can check itself against before it says it is done. It also gi
 to review that takes minutes instead of a re-read of the whole change.
 
 [How to write a task an AI coding agent can finish](/learn/write-tasks-for-ai-coding-agents) goes
-further: acceptance for each kind of work, how much context to give, and how to size a task.
+further: acceptance for each sort of work, how much context to give, and how to size a task.
 
-Here is a full task in that shape:
+Here is a whole piece of work written that way: a title, a plain summary, and a body with no
+required sections.
 
 ```markdown
 ---
-kind: task
 title: Backfill order totals without locking the table
+summary: Old orders have no total. Fill them in without slowing the shop.
 ---
 
-## Goal
-Every row in `orders` has `total_cents` set,
-computed from its line items.
+`total_cents` was added in migration 0142 and is null for
+orders before 2026-06-01 (about 2.4M rows). Compute it from
+the line items in `order_lines`. Production is Postgres 16.
 
-## Context
-`total_cents` was added in migration 0142 and is null
-for orders before 2026-06-01 (about 2.4M rows).
-Line items are in `order_lines`. Production is Postgres 16.
+Do not hold a long transaction on `orders`: it takes writes
+all day. Use the job runner in `src/jobs/`, not a one-off
+script.
 
-## Constraints
-- No long-running transaction on `orders`:
-  it takes writes all day.
-- Use the job runner in `src/jobs/`, not a one-off script.
-
-## Acceptance
+**Done when**
 - On staging, this returns 0:
   `SELECT count(*) FROM orders WHERE total_cents IS NULL`
 - The job works in batches of at most 1,000 rows,
@@ -129,8 +120,7 @@ Line items are in `order_lines`. Production is Postgres 16.
 - A test covers an order with no line items
   (total is 0, not null).
 
-## Out of scope
-Changing how new orders compute their total.
+Not part of this: how new orders compute their total.
 ```
 
 ## One agent per job, and say so
@@ -169,17 +159,16 @@ Evidence is anything you can check without trusting the agent's account:
 - A screenshot, for anything visual.
 
 "I ran the tests and they pass" is a claim. `47 passed, 0 failed` with the command above it is
-evidence. A good rule: a hand-in without evidence is not a hand-in. Send it back.
+evidence. A good rule: a hand-in without evidence is not a hand-in.
 
-## Review against the acceptance lines
+## Check it against what you asked for
 
-With acceptance written first and evidence per line, review becomes a checklist. Go through the
-lines and, for each one, ask whether the evidence shows it. Send back only the lines that are not
-met, with the reason. The next attempt, by the same agent or another, starts from that reason
-rather than from scratch.
+With "done when" written first and evidence for each line, checking the work is a checklist rather
+than a re-read. Go through the lines and, for each one, ask whether the evidence shows it.
 
-This is also where you catch the work that did something you did not ask for. If the change
-touches what was out of scope, that is a line to send back too.
+When something is not met, reopen the work with the reason. The next attempt, by the same agent or
+another, starts from that reason rather than from scratch. This is also where you catch work that
+did something you did not ask for: a change to what was out of the way is a reason to reopen too.
 
 ## Handing work between sessions
 
@@ -196,8 +185,9 @@ It works well for one person working one thread at a time. It starts to break wh
 - **It lives in one repo.** The handoff to an agent in a different repo, or on a different machine,
   has to be copied by hand.
 
-If you hit those, the fix is to treat each handoff as its own document with a kind, an owner and a
-status, rather than one file that is always "the current state".
+If you hit those, split the file in two. What someone must still do becomes its own piece of work,
+with an owner and a state. What you learned about the project goes into documents that outlast any
+one session: how it is built, what was decided and why, what to avoid.
 
 [The HANDOFF.md pattern, and when it stops working](/learn/handoff-md) has a template, a prompt to
 have the agent write it, and workarounds for each of these.
@@ -224,8 +214,8 @@ A lot of work starts in a chat: you think a feature through with ChatGPT or Clau
 approach, and then need an agent in the repo to build it. The conversation that settled it is
 exactly the context the coding agent will not have.
 
-Before you leave the chat, ask it to write the task in the shape above: a Goal, the Context it
-learned from you, the Constraints you agreed, and Acceptance lines that can be checked. Read it
+Before you leave the chat, ask it to write the work down: what is wanted, what it learned from
+you, what you agreed must not change, and "done when" lines that can be checked. Read it
 before you hand it over, because the chat assistant was not in your codebase and will guess at
 paths and names. Mark the guesses so the coding agent checks them rather than trusting them.
 
@@ -240,36 +230,41 @@ this. You can see whether it was opened, who took it, where it has got to, and w
 
 ## A checklist before you hand anything off
 
-- [ ] It says what kind it is: a task, a bug, or finished work to repeat.
-- [ ] A task has a Goal and acceptance lines a person or a script can check.
+- [ ] It has a title and a plain sentence or two a person can read.
+- [ ] It says how to tell it is done, in lines a person or a script can check.
 - [ ] Anything specific to the original environment is marked, so it gets adapted, not copied.
-- [ ] What is out of scope is written down.
-- [ ] A bug says how to see it under *Reproduce*, not *Steps*.
-- [ ] A transfer includes what went wrong along the way.
+- [ ] What is out of the way is written down.
+- [ ] A bug says how to see it, not *Steps*, with the error or screenshot attached.
+- [ ] A fix to repeat elsewhere says what went wrong along the way.
 - [ ] Someone will claim it before starting, and everyone can see who.
-- [ ] The hand-in comes with evidence against each acceptance line.
+- [ ] The hand-in comes with evidence for each thing it asked for.
 
 ## Doing this with Passalong
 
-[Passalong](/) is built around this way of working. A handoff is a guide: markdown with
-frontmatter, in the three kinds above ([the format](/docs/work-format)). An agent works any guide
-with four calls: it takes it, reports progress, hands it in with evidence, or passes it back with
-the reason. Nobody else can take work an agent is holding. Half an hour of silence marks it as
-stalled, and a hand-in without evidence is refused. You review the write-up line by line against
-the acceptance you wrote.
+[Passalong](/) is built around this way of working. A piece of work is markdown with a title, a
+summary and whatever text, pictures and files the next reader needs ([the
+format](/docs/work-format)). There are no kinds and no required sections. An agent works it with
+four calls: `take` it, report `progress`, `hand_in` with evidence, or `pass` it back with the
+reason. Nobody else can take work an agent is holding. Half an hour of silence marks it stalled, and
+a hand-in without evidence is refused. Finishing is final: the work goes to Done with what was
+shown, and anyone on the team can **Reopen** it with a reason.
 
-With Passalong connected to your tools, an agent can run the whole loop itself: file the bugs it
-finds, write a task, take work that is waiting, report progress, hand it in with evidence, and pass
-the next piece to another agent or a teammate. Nothing gets copied between tools by hand. What stays
-with you is the decision: you approve the work or send it back.
+Each piece of work lives in a project, one per product. A project's documents hold what to know:
+what the product is, how it is built, what was decided. What an agent learns goes there, so the
+next agent on that product starts knowing it, instead of a one-off handover written for one person.
 
-It runs as a CLI and a local MCP server for Claude Code and Codex, and as a
-connector for ChatGPT and Claude, so a task written in a chat can be taken by an agent in your
-repo. Anything else that speaks MCP or HTTP works too, and it needs no account to use locally.
+With Passalong connected to your tools, an agent can run the whole loop itself: write down the bugs
+it finds, take work that is waiting, report progress, hand it in with evidence, and write what it
+learned into the project's documents. Nothing gets copied between tools by hand.
+
+It runs as a CLI and a local MCP server for Claude Code and Codex, and as a connector for ChatGPT
+and Claude, so work written in a chat can be taken by an agent in your repo. Anything else that
+speaks MCP or HTTP works too.
 
 ```sh
 npm i -g passalong
 passalong setup
+passalong login
 ```
 
 [Connect your tools](/connect), or read [the docs](/docs).

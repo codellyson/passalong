@@ -27,7 +27,7 @@ export interface PublicPage {
 }
 
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "/", draft: false, updated: "2026-10-03" },
+  { path: "/", draft: false, updated: "2026-10-30" },
   { path: "/mcp-server", draft: false, updated: "2026-10-03" },
   { path: "/connect", draft: false, updated: "2026-10-03" },
   { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-14" },
@@ -43,23 +43,23 @@ export const PUBLIC_PAGES: PublicPage[] = [
     path: "/learn/ai-agent-handoff",
     draft: false,
     footer: "Handing work to agents",
-    updated: "2026-10-03",
+    updated: "2026-10-30",
   },
-  { path: "/learn/handoff-md", draft: false, updated: "2026-10-03" },
-  { path: "/learn/write-tasks-for-ai-coding-agents", draft: false, updated: "2026-10-03" },
-  { path: "/learn/bug-report-template-for-ai-agents", draft: false, updated: "2026-10-03" },
+  { path: "/learn/handoff-md", draft: false, updated: "2026-10-30" },
+  { path: "/learn/write-tasks-for-ai-coding-agents", draft: false, updated: "2026-10-30" },
+  { path: "/learn/bug-report-template-for-ai-agents", draft: false, updated: "2026-10-30" },
   {
     path: "/learn/run-multiple-ai-coding-agents",
     draft: false,
     footer: "Running several agents",
-    updated: "2026-10-03",
+    updated: "2026-10-30",
   },
-  { path: "/learn/setup-claude-code", draft: false, updated: "2026-10-03" },
-  { path: "/learn/setup-codex", draft: false, updated: "2026-10-03" },
-  { path: "/learn/setup-chatgpt", draft: false, updated: "2026-10-03" },
-  { path: "/learn/setup-claude", draft: false, updated: "2026-10-03" },
-  { path: "/learn/passalong-vs-handoff-md", draft: false, updated: "2026-10-03" },
-  { path: "/learn/passalong-vs-issue-tracker", draft: false, updated: "2026-10-03" },
+  { path: "/learn/setup-claude-code", draft: false, updated: "2026-10-30" },
+  { path: "/learn/setup-codex", draft: false, updated: "2026-10-30" },
+  { path: "/learn/setup-chatgpt", draft: false, updated: "2026-10-30" },
+  { path: "/learn/setup-claude", draft: false, updated: "2026-10-30" },
+  { path: "/learn/passalong-vs-handoff-md", draft: false, updated: "2026-10-30" },
+  { path: "/learn/passalong-vs-issue-tracker", draft: false, updated: "2026-10-30" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */

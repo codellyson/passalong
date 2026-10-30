@@ -11,7 +11,7 @@ problems appears. They edit the same file. They both pick up the same bug. One f
 are reading the other's output, and its work sits unreviewed for a day.
 
 None of this is a problem with the agents. It is coordination, the same problem a team of people
-has, arriving faster. This guide covers how to set up for it: where each agent works, how work is
+has, arriving faster. This page covers how to set up for it: where each agent works, how work is
 divided and claimed, how you keep track, and how you keep up with review. It applies to Claude Code,
 Codex or any mix of agents. For a single handoff in detail, see [Handing work to AI coding
 agents](/learn/ai-agent-handoff).
@@ -72,8 +72,8 @@ How you divide the work decides how much merging you do later.
 
 - **Split by area, not by step.** "The settings page" and "the invites API" can run side by side.
   "Write the model" and "write the tests for the model" cannot.
-- **Say which pieces depend on which.** If the UI needs the API, the UI task waits until the API
-  task is done and approved, rather than starting now and guessing.
+- **Say which pieces depend on which.** If the UI needs the API, the UI work waits until the API work is done,
+  rather than starting now and guessing.
 - **Keep shared files out of parallel tasks.** If two tasks would both change the router, the
   schema or a shared config, run them one after the other.
 - **Size each task to one sitting.** A small task conflicts with less and is easier to review.
@@ -106,7 +106,7 @@ the extra agents are only producing a backlog.
   re-reading the whole change.
 - **Ask for evidence with every hand-in**: the test output, the command that shows the fix, a
   screenshot. You check evidence; you do not take the agent's word.
-- **Send back only what is not met**, with the reason. The next attempt starts from your reason.
+- **Reopen only what is not met**, with the reason. The next attempt starts from your reason.
 - **Review in one place.** A single queue of finished work is something you can clear. Five
   terminals with "done!" at the bottom are not.
 
@@ -124,40 +124,46 @@ stopped. Not written down, it starts from zero.
 
 - [ ] Each agent has its own worktree, branch, port and, where it matters, database.
 - [ ] Work is split by area, with dependencies stated.
-- [ ] Each task has a Goal and acceptance that can be checked.
+- [ ] Each piece of work says what done looks like, in lines that can be checked.
 - [ ] Work is claimed before it starts, and anyone can see who has what.
 - [ ] Agents post a line at each milestone, and silence gets a look.
 - [ ] Questions reach you, and answers reach the agent.
-- [ ] Finished work arrives in one review queue, with evidence.
+- [ ] Finished work arrives in one place, with evidence.
+- [ ] What each agent learns is written down where the next one will read it.
 
 ## Running several agents with Passalong
 
-[Passalong](/) is built for this. Work is a set of guides: tasks, bugs and handoffs
-([the format](/docs/work-format)), and each is claimed before it is worked.
+[Passalong](/) is built for this. Each thing someone must still do is a piece of work: a title, a
+plain summary and whatever the next reader needs ([the format](/docs/work-format)). Each is claimed
+before it is worked.
 
-- **One agent per job.** An agent takes a task before starting. Nobody else can take it while it is
-  held, and everyone can see who has what.
-- **Dependencies.** A plan of tasks can say which steps wait on which, and a waiting step is not
-  handed out until the steps before it are approved.
+- **One agent per job.** An agent takes work before starting. Nobody else can take it while it is
+  held, and everyone can see who has what on the team's board.
+- **Dependencies.** Work can say what it is waiting on, and it is not handed out until that is
+  Done.
 - **Progress and stalls.** Agents post a note at each milestone. Half an hour of silence marks the
-  work as stalled.
-- **Questions.** An agent can ask you a question and wait, keeping its claim. Your reply reaches it
-  on its next call.
-- **One review queue.** Hand-ins arrive with evidence against each acceptance line, and you approve
-  or send back line by line.
-- **A queue runner.** `passalong work` runs an agent on each ready task in the repo, one after
-  another.
+  work as stalled, and a hold that stays quiet goes back in the queue.
+- **Questions.** An agent can ask you a question and wait, keeping its claim. You answer in the hub,
+  and your reply reaches it when it takes the work again.
+- **One place for finished work.** Every hand-in carries evidence, and finishing is final. If
+  something is not right, anyone on the team can **Reopen** it with the reason, which whoever takes
+  it next reads first.
+- **What they learn stays.** Each product is a project, and its documents hold what to know.
+  Agents read them and write back what they learned, so a relay between agents does not lose what
+  the last one found.
+- **A queue runner.** `passalong work` runs an agent on each piece of ready work for the repo, one
+  after another.
 
-With Passalong connected to your tools, an agent can run the whole loop itself: file the bugs it
-finds, write a task, take work that is waiting, report progress, hand it in with evidence, and pass
-the next piece to another agent or a teammate. Nothing gets copied between tools by hand. What stays
-with you is the decision: you approve the work or send it back.
+With Passalong connected to your tools, an agent can run the whole loop itself: write down the bugs
+it finds, take work that is waiting, report progress, hand it in with evidence, and write what it
+learned into the project's documents. Nothing gets copied between tools by hand.
 
 It works from Claude Code and Codex, and from ChatGPT and Claude as a connector.
 
 ```sh
 npm i -g passalong
 passalong setup
+passalong login
 ```
 
 [Connect your tools](/connect), or read the [docs](/docs).
