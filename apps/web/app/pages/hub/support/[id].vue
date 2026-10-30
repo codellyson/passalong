@@ -251,7 +251,7 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
           </template>
           <template v-if="row?.waiting_since">
             <span aria-hidden="true">·</span>
-            <span class="font-medium text-fg tabular-nums">waiting {{ age(row.waiting_since, now) }}<template v-if="row.late"> · over 4 hours</template></span>
+            <span class="font-medium text-fg tabular-nums">waiting {{ age(row.waiting_since, now) }}</span>
           </template>
         </p>
       </header>

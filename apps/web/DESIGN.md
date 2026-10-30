@@ -319,7 +319,7 @@ it) 10rem, Request (the title at 500 as the row's link, the customer's latest wo
 it), Project 8rem, State 8.5rem, Waiting 3.5rem right-aligned. The state is a word, ink at 500 when
 the next word is ours (New, Needs reply) and muted otherwise. The waiting age is ink at 500 in
 tabular figures, as on Needs you; no colour marks a long wait — the summary line counts it ("10
-waiting on us, all for more than 4 hours") and the request's header says "over 4 hours". Tabs over
+waiting on us, all for more than 4 hours"); the request's header shows the age alone. Tabs over
 it (Waiting on us, With development, Waiting on them, Solved, All) carry their counts; on a phone
 the tab row scrolls sideways and fades at its right edge to say it continues. The search sits
 beside the heading. On a phone each row is the name with the age at its right, the
@@ -335,9 +335,9 @@ exact time ("Oct 28, 08:34 PM") right-aligned in tabular figures — over a 1px-
 body: field white with the stronger rule for the customer, deeper cream for ours. The fill and the
 header carry the speaker, not a side. Pictures are drawn inside the body; a picture whose file is
 gone is a muted line ("invoice-fixed.png · no longer available"); files are `sm` buttons under the
-body, at its left ("INV-1042.pdf Download"). The page opens on the latest message, just above the
-pinned reply box (the page's scroll-padding-bottom is the box's height), and returns there after a
-send. After Send or Mark solved it offers "Next waiting · <name>": the request waiting on us
+body, at its left ("INV-1042.pdf Download"). The page opens on the latest message, its foot the reply box's height above the bottom of
+whatever scrolls (the window on a phone), placed again while the editor and pictures settle; the
+page's scroll-padding-bottom is the box's height; it returns there after a send. After Send or Mark solved it offers "Next waiting · <name>": the request waiting on us
 longest, one at a time. The reply box is the TipTap writer at 0.9375rem, 6rem
 tall and scrolling inside itself past 40vh, with Picture and Draft again as ghost `sm` buttons and
 **Send** as the one primary. The agent's draft arrives in it when the next word is ours, and the

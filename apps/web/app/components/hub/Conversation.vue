@@ -159,16 +159,49 @@ async function send() {
 
 /**
  * The conversation opens on its latest message, just above the pinned reply box, and comes back to
- * it after a send. The page is what scrolls, so its scroll-padding-bottom is the box's height:
- * scrolling a message into view then stops above the box instead of under it.
+ * it after a send. Whatever scrolls — the window on a phone, an inner container if a layout adds
+ * one — is scrolled so the last message's foot sits the box's height above the bottom of the view.
+ * The editor and pictures arrive after the thread does and change the heights, so for a moment
+ * after each trigger it is placed again whenever the box resizes or a picture loads. The page's
+ * scroll-padding-bottom is the box's height too, so focus and find-in-page stop above it.
  */
 const list = ref<HTMLElement | null>(null);
 const composer = ref<HTMLElement | null>(null);
+let settling = 0;
+function scrollerOf(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const y = getComputedStyle(p).overflowY;
+    if ((y === "auto" || y === "scroll") && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+function place() {
+  const last = list.value?.lastElementChild as HTMLElement | null | undefined;
+  if (!last || !composer.value) return;
+  const box = scrollerOf(last);
+  const bottom = box ? box.getBoundingClientRect().bottom : window.innerHeight;
+  const delta = last.getBoundingClientRect().bottom - (bottom - composer.value.offsetHeight - 16);
+  if (Math.abs(delta) < 1) return;
+  if (box) box.scrollTop += delta;
+  else window.scrollBy({ top: delta, behavior: "instant" });
+}
+function toLatest() {
+  settling = Date.now() + 2500;
+  void nextTick(() => {
+    place();
+    requestAnimationFrame(place);
+    setTimeout(place, 400);
+  });
+}
+const again = () => {
+  if (Date.now() < settling) place();
+};
 let sized: ResizeObserver | undefined;
 onMounted(() => {
   if (!composer.value || typeof ResizeObserver === "undefined") return;
   sized = new ResizeObserver(([e]) => {
     document.documentElement.style.scrollPaddingBottom = `${Math.ceil(e?.borderBoxSize?.[0]?.blockSize ?? 0) + 16}px`;
+    again();
   });
   sized.observe(composer.value);
 });
@@ -176,15 +209,11 @@ onBeforeUnmount(() => {
   sized?.disconnect();
   document.documentElement.style.scrollPaddingBottom = "";
 });
-const toLatest = () =>
-  nextTick(() =>
-    list.value?.lastElementChild?.scrollIntoView({ block: "end", behavior: "instant" }),
-  );
 let shown = 0;
 watch(
   () => said.value.length,
   (n) => {
-    if (n > shown) void toLatest();
+    if (n > shown) toLatest();
     shown = n;
   },
   { immediate: true, flush: "post" },
@@ -207,7 +236,7 @@ watchEffect(() => {
     <p v-else-if="!said.length" class="m-0 border-t border-line py-6 font-ui text-sm text-muted">
       Nothing has been said yet.
     </p>
-    <ol v-else ref="list" class="m-0 flex list-none flex-col gap-5 p-0">
+    <ol v-else ref="list" class="m-0 flex list-none flex-col gap-5 p-0" @load.capture="again">
       <li
         v-for="{ m, ours, who, msg } in lines"
         :key="m.id"
