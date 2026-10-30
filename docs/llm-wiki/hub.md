@@ -148,8 +148,11 @@ author.
 
 A project is a folder (docs/LOOP.md §0); the hub never says "folder". `/hub/projects` is a register
 like Needs you: each top-level project with its line colour, its line of description, open work,
-documents and last change rolled up over the folders inside it (`projectsFrom()`), the change mark when
-something in it changed since you last looked, a plain create form and the agent's ask.
+documents and last change rolled up over the folders inside it (`projectsFrom()`), "Changed · …" leading
+the second line when something in it changed since you last looked (no left bar: the line colour already
+marks the row), a plain create form and the agent's ask. The title and New project share a line with
+the summary under them; the labels sit over a hairline; the whole row opens the project, with no Open
+button.
 `/hub/projects/:id` has three tabs at their own addresses (`?tab=documents|work|history`):
 **Documents** leads with the README rendered in full, then the other documents (last editor, person
 or agent, and when), folders inside it listed quietly, and files; a document opens in place

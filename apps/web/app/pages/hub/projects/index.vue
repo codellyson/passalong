@@ -72,17 +72,16 @@ async function create(form: HTMLFormElement) {
 }
 
 const label = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
-const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)_4.75rem]";
+const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)]";
 </script>
 
 <template>
   <HubShell>
     <section aria-labelledby="projects-h" class="@container flex min-w-0 flex-col">
-      <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 pb-4">
-        <div class="min-w-0">
-          <h1 id="projects-h" class="m-0 text-h2 font-medium tracking-tight">Projects</h1>
-          <p v-if="projects.length" class="m-0 mt-1 font-ui text-sm text-muted">{{ summary }}</p>
-        </div>
+      <!-- The title and its one act share a line; the summary sits under them, and the list starts a
+           clear step lower, so the head reads as the page's and not as the table's. -->
+      <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 id="projects-h" class="m-0 text-h2 font-medium tracking-tight">Projects</h1>
         <button
           v-if="projects.length"
           type="button"
@@ -94,6 +93,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)_4.75re
           New project
         </button>
       </div>
+      <p v-if="projects.length" class="m-0 mt-1 font-ui text-sm text-muted">{{ summary }}</p>
+      <div class="h-8" aria-hidden="true" />
 
       <p v-if="notice" role="status" class="m-0 mb-4 border-t border-line pt-3 font-ui text-sm">{{ notice }}</p>
 
@@ -161,34 +162,37 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)_4.75re
       </div>
 
       <template v-else>
-        <div aria-hidden="true" class="hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid" :class="[cols, label]">
-          <span>Project</span><span class="text-right">Open work</span><span class="text-right">Documents</span><span class="text-right">Last change</span><span />
+        <!-- Labels once, quiet: a hairline under them, so the list belongs to the page. -->
+        <div aria-hidden="true" class="hidden gap-x-3 border-b border-line px-4 pb-2 @2xl:grid" :class="[cols, label]">
+          <span>Project</span><span class="text-right">Open work</span><span class="text-right">Documents</span><span class="text-right">Last change</span>
         </div>
-        <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
+        <ol class="m-0 list-none border-t border-line p-0 @2xl:border-t-0">
+          <!-- The whole row opens the project: the title's link is stretched over it. The project's
+               colour bar already marks each row, so a change is said in words, not a second bar. -->
           <li
             v-for="p in projects"
             :key="p.id"
-            class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline"
+            class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line px-4 py-3 hover:bg-raised @2xl:grid @2xl:items-baseline"
             :class="cols"
           >
-            <span v-if="p.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
-            <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
+            <div class="min-w-0 basis-full @2xl:basis-auto">
               <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
                 <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="p.tone" aria-hidden="true" />
-                <NuxtLink :to="`/hub/projects/${p.id}`" class="font-medium text-fg no-underline hover:underline">{{ p.title }}</NuxtLink>
-                <span v-if="p.changed" class="text-xs font-medium text-changed">Changed · {{ p.changed }}</span>
+                <NuxtLink :to="`/hub/projects/${p.id}`" class="font-medium text-fg no-underline after:absolute after:inset-0">{{ p.title }}</NuxtLink>
               </p>
-              <p v-if="p.description" class="m-0 mt-0.5 pl-[11px] font-ui text-xs text-muted">{{ p.description }}</p>
+              <p v-if="p.changed || p.description" class="m-0 mt-0.5 pl-[11px] font-ui text-xs text-muted">
+                <span v-if="p.changed" class="font-medium text-changed">Changed · {{ p.changed }}</span><span v-if="p.changed && p.description" aria-hidden="true"> · </span>{{ p.description }}
+              </p>
             </div>
-            <NuxtLink :to="`/hub/projects/${p.id}`" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">Open</NuxtLink>
             <span class="order-2 pl-[11px] font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:pl-0 @2xl:text-right @2xl:text-sm @2xl:text-fg">
               {{ p.open }}<span class="@2xl:hidden"> open</span>
             </span>
             <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
-              <span class="@2xl:hidden" aria-hidden="true">· </span>{{ p.documents }}<span class="@2xl:hidden"> {{ p.documents === 1 ? "document" : "documents" }}</span>
+              <span class="@2xl:hidden" aria-hidden="true">· </span>{{ p.documents }}<span class="@2xl:hidden">&nbsp;{{ p.documents === 1 ? "document" : "documents" }}</span>
             </span>
-            <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
-              <span class="@2xl:hidden" aria-hidden="true">· </span><template v-if="p.last">{{ p.last.name }}, by {{ p.last.by }} · <span class="tabular-nums">{{ age(p.last.at, now) }}</span></template><template v-else-if="p.updated"><span class="tabular-nums">{{ age(p.updated, now) }}</span></template><template v-else>—</template>
+            <!-- On a phone the last change is a line of its own, under the counts, on the title's edge. -->
+            <span class="order-2 min-w-0 basis-full pl-[11px] font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:basis-auto @2xl:pl-0 @2xl:text-right @2xl:text-sm @2xl:text-fg">
+              <template v-if="p.last">{{ p.last.name }}, by {{ p.last.by }} · <span class="tabular-nums">{{ age(p.last.at, now) }}</span></template><template v-else-if="p.updated"><span class="tabular-nums">{{ age(p.updated, now) }}</span></template><template v-else>—</template>
             </span>
           </li>
         </ol>
