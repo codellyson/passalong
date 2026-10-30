@@ -10,7 +10,13 @@ document or file, never guide.
 
 `/hub` is Needs you: what waits on the signed-in person, ranked by the server (`GET /v1/needs`,
 `apps/api/src/needs.ts`) — customers waiting on us, an agent's question, a hold gone quiet, work
-sent to you or your group that nobody took, your work that came back. It is a register: columns
+sent to you or your group that nobody took, your work that came back. It decides before it lists
+(2026-10-30): the first row leads as **Next** on a deeper-cream panel with **Start**, which opens
+`/hub/next`, one item at a time in the same rank (j/k, Previous/Next, "1 of 12"; a customer item is
+the conversation with the agent's draft, other work its summary and thread). The rest is grouped by
+reason (Customers waiting, Agents asking, Went quiet, Nobody took it, Came back to you), the oldest
+three each, with "All N in Support" or "Show all N". The same customer asking the same thing twice
+is one row ("Ola Ben · 2 requests", `also` from the server). The rows are a register: columns
 (Work, Project, With, Waiting) labelled once above unboxed rows; a row has its title with
 "Changed · what" after it, a line under it (the customer's own latest words, the question asked, or
 the state where the action does not already say it), and one action on the title's line. Beside
@@ -94,7 +100,7 @@ Billing app") with **Clear filter**.
 
 Each card has one control, its menu button (`HubCardMenu`, also on right-click): Open, Ready, Move
 to Draft, Give to…, Stop this agent, Reopen… (a reason asked inside the menu), copy the share link
-or the take command, Archive or Unarchive to Draft, Delete (asked in place) — the work page's acts
+or the command for an agent, Archive or Unarchive to Draft, Delete (asked in place) — the work page's acts
 under its rules. Dragging does the same acts: Draft to To do is Ready (keeping the repo it names),
 To do to Draft, In progress to To do stops the agent (asked above the board), into Done archives,
 finished work back to To do reopens (its reason asked above the board), out of Done to Draft
@@ -135,6 +141,11 @@ author.
 
 ## The work page — `/hub/g/:id`
 
+- **Acts** lead the header: one for the work's state (Ready, I'll do this, Give to…, Stop this agent,
+  Reopen, Unarchive to Draft) and at most one beside it (Give to… or Archive). Everything else is under
+  **More**: Not for me, Move to Draft, Make it private again (the author's recall), Ask someone to
+  check, the share link and page, Copy the command for an agent, Let an always-on agent take this on
+  its own (`guide.alone`), and Delete, asked in place.
 - **The document** is the share page at `?embed=1` in a sandboxed same-origin frame with no scripts. The
   hub never renders a stranger's markdown as its own HTML (see [security-model.md](security-model.md)).
 - **Progress** leads the sidebar: what happened, in order — sent, opened, taken and where, what they
@@ -196,13 +207,13 @@ nothing outside the hub linked to it. See [folders.md](folders.md).
 `GET /v1/support` (`supportRequests()` in apps/api/src/needs.ts, tested against SQLite), gives every
 column: the customer (name, tracking number quietly under it), the request (title, and the
 customer's own latest words on one line), its project (3×14 mark, or "Not in a project"), its state
-— New, Needs reply, With development, Waiting on customer, Solved, derived by `supportState()` and
-never stored; an unanswered customer is New whatever development is doing, and With development
+— New, Needs reply, With the team, Waiting on the customer, Solved, derived by `supportState()` and
+never stored; an unanswered customer is New whatever development is doing, and With the team
 needs our word last — and how long they have waited while the next word is ours, ink in tabular
 figures; past the four hours `customer_waiting` uses (`late`) the summary line counts it. The last
 message is decided by time (`at`, then id), as the thread and Needs you decide it. The ink
 change mark comes from unread notifications ("Changed · Customer wrote"). Views are tabs at their own
-addresses: Waiting on us (default), With development, Waiting on them, Solved, All, each with its
+addresses: Waiting on us (default), With the team, Waiting on the customer, Solved, All (URL keys unchanged), each with its
 count; a search filters across them. Nobody written yet: the team's support address with Copy.
 The owner's **Tell the customer when a fix is done** is a quiet setting row at the foot.
 

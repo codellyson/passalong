@@ -32,6 +32,11 @@ export interface NeedRow {
   project: Project | null;
   /** What changed since you last looked, in a few words; '' when nothing unread is on it. */
   changed: string;
+  /**
+   * The other open requests from the same customer under the same title, folded into this row
+   * (newest last): one person writing twice about one thing is one thing to answer. [] otherwise.
+   */
+  also: string[];
 }
 
 export interface Closed {
@@ -247,7 +252,7 @@ export async function needs(
   const seen = new Set<string>();
   const add = (
     r: Base,
-    rest: Omit<NeedRow, "id" | "title" | "summary" | "project" | "changed">,
+    rest: Omit<NeedRow, "id" | "title" | "summary" | "project" | "changed" | "also">,
   ) => {
     if (seen.has(r.id)) return;
     seen.add(r.id);
@@ -257,6 +262,7 @@ export async function needs(
       summary: r.summary || "",
       project: projectOf(r.id),
       changed: changeWords(r.changed),
+      also: [],
       ...rest,
     });
   };
@@ -264,7 +270,17 @@ export async function needs(
   const waiting = customers
     .filter((r) => !r.answered || r.answered < r.wrote)
     .sort((a, b) => a.wrote.localeCompare(b.wrote));
-  for (const r of waiting)
+  // Same customer, same title: one row, at the place of the one waiting longest.
+  const sameAsk = new Map<string, NeedRow>();
+  for (const r of waiting) {
+    const key = `${r.customer.trim().toLowerCase()}\n${r.title.trim().toLowerCase()}`;
+    const first = sameAsk.get(key);
+    if (first) {
+      first.also.push(r.id);
+      first.changed ||= changeWords(r.changed);
+      seen.add(r.id);
+      continue;
+    }
     add(r, {
       reason: "customer",
       with: r.customer_name || r.customer,
@@ -272,6 +288,8 @@ export async function needs(
       // Their own latest words, not the title said again.
       said: words(r.words),
     });
+    sameAsk.set(key, rows[rows.length - 1] as NeedRow);
+  }
   const holder = (r: (typeof held)[number]) =>
     r.agent_id.startsWith("person-") ? person(r.by_name, r.by_handle, r.holder) : r.agent_id;
   for (const r of held.filter((h) => h.asking).sort((a, b) => a.asked_at.localeCompare(b.asked_at)))

@@ -4,6 +4,10 @@
   to you that nobody took, an agent gone quiet, your work that came back — and beside it the
   customers waiting and what was finished lately, each with Reopen.
 
+  It decides: the server's first row leads as Next, with Start opening the rest one at a time
+  (/hub/next). The rest is grouped by reason in the server's order, the oldest three of each shown.
+  The same customer asking the same thing twice is already one row (`also`, folded in needs.ts).
+
   An ink bar at a row's left edge, with a line naming what changed, says changed since you last
   looked (coral is the hub's active state). It stays until the work is opened (`markSeen`).
 
@@ -55,6 +59,9 @@ const { data, needsQ, readAll, onReopen, refresh } = useHub();
 const noTeam = computed(() => Boolean(data.value.me) && !data.value.me?.teams.length);
 const needs = computed<Needs | null>(() => needsQ.data.value ?? null);
 const rows = computed(() => needs.value?.rows ?? []);
+/** The other requests folded into a row by needs.ts (`also`); types/hub.ts does not name it yet. */
+type Row = NeedRow;
+const lead = computed<Row | undefined>(() => rows.value[0]);
 const now = ref(Date.now());
 let tick: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
@@ -89,15 +96,6 @@ const summary = computed(() => {
   return parts.join(" · ");
 });
 
-/**
- * What the row's state says, only where the action does not already say it: Reply means it needs
- * a reply, and Answer means someone is asking.
- */
-const STATE: Partial<Record<NeedRow["reason"], string>> = {
-  stuck: "Went quiet",
-  untaken: "Nobody took it",
-  came_back: "Came back",
-};
 const VERB: Record<NeedRow["reason"], string> = {
   customer: "Reply",
   asking: "Answer",
@@ -119,6 +117,37 @@ function secondLine(r: NeedRow): string {
 }
 const href = (r: { id: string; reason?: NeedRow["reason"] }) =>
   r.reason === "customer" ? `/hub/support/${r.id}` : `/hub/g/${r.id}`;
+/** Who it is with, and how many requests when one customer asked the same thing more than once. */
+const withWho = (r: Row) =>
+  r.also?.length ? `${r.with} · ${r.also.length + 1} requests` : r.with || "Nobody";
+
+/** The groups, in the server's order of reasons; inside each, the server's rank (oldest first). */
+const GROUP: Record<NeedRow["reason"], string> = {
+  customer: "Customers waiting",
+  asking: "Agents asking",
+  stuck: "Went quiet",
+  untaken: "Nobody took it",
+  came_back: "Came back to you",
+};
+const SHOWN = 3;
+/** Requests, not rows: Support lists each one a customer opened. */
+const customerRequests = computed(() =>
+  rows.value.reduce(
+    (n, r: Row) => n + (r.reason === "customer" ? 1 + (r.also?.length ?? 0) : 0),
+    0,
+  ),
+);
+const groups = computed(() => {
+  const by = new Map<NeedRow["reason"], Row[]>();
+  for (const r of rows.value.slice(1)) by.set(r.reason, [...(by.get(r.reason) ?? []), r]);
+  return [...by].map(([reason, list]) => ({ reason, list }));
+});
+const opened = ref(new Set<string>());
+function toggle(reason: string) {
+  const next = new Set(opened.value);
+  if (!next.delete(reason)) next.add(reason);
+  opened.value = next;
+}
 
 const reopening = ref("");
 const reopenBusy = ref(false);
@@ -191,51 +220,111 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
         </div>
 
         <template v-else>
-          <!-- The column labels, once, over the register. -->
+          <!-- Next: the server's first row, said in full, and the way into the rest one at a time. -->
+          <section v-if="lead" aria-labelledby="lead-h" class="relative flex flex-col gap-3 rounded-3 border border-line bg-raised py-4 pr-4 pl-5">
+            <span v-if="lead.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
+            <h2 id="lead-h" class="m-0 flex flex-wrap items-baseline gap-x-2 text-h3 font-medium tracking-tight break-words">
+              <NuxtLink :to="href(lead)" class="text-fg no-underline hover:underline">{{ lead.title }}</NuxtLink>
+              <span v-if="lead.changed" class="font-ui text-xs font-medium text-changed">Changed · {{ lead.changed }}</span>
+            </h2>
+            <p v-if="secondLine(lead)" class="m-0 max-w-[65ch] font-ui text-sm break-words text-fg">
+              {{ lead.said ? `“${secondLine(lead)}”` : secondLine(lead) }}
+            </p>
+            <p class="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 font-ui text-xs text-muted">
+              <span class="font-medium text-fg">{{ GROUP[lead.reason] }}</span>
+              <span aria-hidden="true">·</span>
+              <span class="tabular-nums">{{ age(lead.since, now) }}</span>
+              <span aria-hidden="true">·</span>
+              <span class="break-words">{{ withWho(lead) }}</span>
+              <span aria-hidden="true">·</span>
+              <span class="inline-flex min-w-0 items-baseline gap-2">
+                <template v-if="lead.project">
+                  <span class="project-mark h-3 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(lead.project)" aria-hidden="true" />
+                  <span class="break-words">{{ lead.project.title }}</span>
+                </template>
+                <template v-else>Not in a project</template>
+              </span>
+            </p>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">
+              <NuxtLink :to="{ path: '/hub/next', query: { id: lead.id } }" class="btn primary">Start</NuxtLink>
+              <NuxtLink :to="href(lead)" class="btn">{{ VERB[lead.reason] }}</NuxtLink>
+              <span v-if="rows.length > 1" class="font-ui text-xs text-muted">
+                Start goes through all {{ rows.length }}, one at a time.
+              </span>
+            </div>
+          </section>
+
+          <!-- The column labels, once, over the groups. -->
           <div
+            v-if="groups.length"
             aria-hidden="true"
-            class="hidden gap-x-3 border-b border-fg pb-2 pl-4 @2xl:grid"
+            class="mt-8 hidden gap-x-3 pb-2 pl-4 @2xl:grid"
             :class="[cols, label]"
           >
             <span>Work</span><span>Project</span><span>With</span><span class="text-right">Waiting</span><span />
           </div>
-          <ol class="m-0 list-none border-t border-fg p-0 @2xl:border-t-0">
-            <li
-              v-for="r in rows"
-              :key="r.id"
-              class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline"
-              :class="cols"
+          <section
+            v-for="(g, gi) in groups"
+            :key="g.reason"
+            :aria-labelledby="`grp-${g.reason}`"
+            :class="gi ? 'mt-6' : 'mt-8 @2xl:mt-0'"
+          >
+            <h2 :id="`grp-${g.reason}`" class="m-0 flex items-baseline gap-2 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">
+              {{ GROUP[g.reason] }}
+              <span class="font-normal text-muted tabular-nums">{{ g.list.length }}</span>
+            </h2>
+            <ol class="m-0 list-none p-0">
+              <li
+                v-for="r in opened.has(g.reason) ? g.list : g.list.slice(0, SHOWN)"
+                :key="r.id"
+                class="relative flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-line py-3 pl-4 @2xl:grid @2xl:items-baseline"
+                :class="cols"
+              >
+                <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
+                <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
+                  <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
+                    <NuxtLink :to="href(r)" class="font-medium text-fg no-underline hover:underline">{{ r.title }}</NuxtLink>
+                    <span v-if="r.changed" class="text-xs font-medium text-changed">Changed · {{ r.changed }}</span>
+                  </p>
+                  <p v-if="secondLine(r)" class="m-0 mt-1 font-ui text-xs break-words text-muted">
+                    {{ r.said ? `“${secondLine(r)}”` : secondLine(r) }}
+                  </p>
+                </div>
+                <NuxtLink :to="href(r)" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">
+                  {{ VERB[r.reason] }}
+                </NuxtLink>
+                <span class="order-2 flex min-w-0 items-baseline gap-2 font-ui text-xs @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:text-sm">
+                  <template v-if="r.project">
+                    <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
+                    <span class="min-w-0 break-words">{{ r.project.title }}</span>
+                  </template>
+                  <span v-else class="text-muted">Not in a project</span>
+                </span>
+                <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">
+                  <span class="@2xl:hidden" aria-hidden="true">· </span>{{ withWho(r) }}
+                </span>
+                <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
+                  <span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(r.since, now) }}
+                </span>
+              </li>
+            </ol>
+            <NuxtLink
+              v-if="g.reason === 'customer' && g.list.length > SHOWN"
+              to="/hub/support"
+              class="mt-2 inline-block font-ui text-xs text-muted"
             >
-              <span v-if="r.changed" class="absolute inset-y-0 left-0 w-[3px] bg-changed" aria-hidden="true" />
-              <div class="min-w-0 grow basis-[calc(100%-6rem)] @2xl:basis-auto">
-                <p class="m-0 flex flex-wrap items-baseline gap-x-2 font-ui text-sm">
-                  <NuxtLink :to="href(r)" class="font-medium text-fg no-underline hover:underline">{{ r.title }}</NuxtLink>
-                  <span v-if="r.changed" class="text-xs font-medium text-changed">Changed · {{ r.changed }}</span>
-                </p>
-                <p v-if="STATE[r.reason] || secondLine(r)" class="m-0 mt-0.5 font-ui text-xs text-muted">
-                  <span v-if="STATE[r.reason]" class="font-medium text-fg">{{ STATE[r.reason] }}</span>
-                  <template v-if="STATE[r.reason] && secondLine(r)"> · </template>
-                  <template v-if="secondLine(r)">{{ r.said ? `“${secondLine(r)}”` : secondLine(r) }}</template>
-                </p>
-              </div>
-              <NuxtLink :to="href(r)" class="btn sm order-1 shrink-0 @2xl:order-none @2xl:col-start-5 @2xl:row-start-1 @2xl:justify-self-end">
-                {{ VERB[r.reason] }}
-              </NuxtLink>
-              <span class="order-2 flex min-w-0 items-baseline gap-2 font-ui text-xs @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:text-sm">
-                <template v-if="r.project">
-                  <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
-                  <span class="min-w-0 break-words">{{ r.project.title }}</span>
-                </template>
-                <span v-else class="text-muted">Not in a project</span>
-              </span>
-              <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">
-                <span class="@2xl:hidden" aria-hidden="true">· </span>{{ r.with || "Nobody" }}
-              </span>
-              <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
-                <span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(r.since, now) }}
-              </span>
-            </li>
-          </ol>
+              All {{ customerRequests }} in Support
+            </NuxtLink>
+            <button
+              v-else-if="g.list.length > SHOWN"
+              type="button"
+              class="linkish mt-2 font-ui text-xs text-muted"
+              :aria-expanded="opened.has(g.reason)"
+              @click="toggle(g.reason)"
+            >
+              {{ opened.has(g.reason) ? "Show fewer" : `Show all ${g.list.length}` }}
+            </button>
+          </section>
         </template>
       </section>
 
@@ -285,7 +374,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
         <!-- Only the requests waiting on the customer: the ones waiting on us are rows already. -->
         <section v-if="needs?.customers.length" aria-labelledby="cust-h" class="flex flex-col rounded-3 border border-line bg-raised px-4 pt-3 pb-1">
           <div class="flex items-baseline justify-between border-b border-fg pb-2">
-            <h2 id="cust-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Waiting on customers</h2>
+            <h2 id="cust-h" class="m-0 font-ui text-sm font-semibold tracking-normal">Waiting on the customer</h2>
             <NuxtLink to="/hub/support" class="font-ui text-xs text-muted">All requests</NuxtLink>
           </div>
           <ul class="m-0 flex list-none flex-col p-0">

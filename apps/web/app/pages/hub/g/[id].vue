@@ -22,6 +22,7 @@ const id = computed(() => String(route.params.id));
 const queryClient = useQueryClient();
 const {
   api,
+  data: hub,
   signedIn,
   markSeen,
   onTakeBack,
@@ -31,6 +32,8 @@ const {
   onRemove,
   onTaskReady,
   onTaskDraft,
+  onPersonTaskTake,
+  onPass,
 } = useHub();
 
 // Opening it is looking at it: what changed on it stops showing as changed on Needs you.
@@ -156,20 +159,10 @@ async function run(mark: string, work: () => Promise<unknown>) {
 
 const takeBack = () => run("release", () => onTakeBack({ id: id.value } as Working));
 const archive = () => run("archive", async () => g.value && (await onArchive(g.value, true)));
-/** Gone for good, with its screenshots and files: asked first, then back to the board. */
-const confirmingDelete = ref(false);
-async function remove() {
-  if (busy.value || !g.value) return;
-  confirmingDelete.value = false;
-  busy.value = "delete";
-  try {
-    if (await onRemove(g.value)) await navigateTo("/hub/work");
-  } finally {
-    busy.value = "";
-  }
-}
+const unarchive = () => run("unarchive", async () => g.value && (await onArchive(g.value, false)));
+const take = () => run("take", () => onPersonTaskTake(id.value));
 const recall = () => run("recall", async () => g.value && (await onRecall(g.value)));
-/** Sent to somebody, still unanswered, with nobody on it: the one moment taking it back makes sense. */
+/** Sent to somebody, still unanswered, with nobody on it: the one moment making it private again makes sense. */
 const recallable = computed(
   () =>
     Boolean(ctx.value?.owner) &&
@@ -177,21 +170,91 @@ const recallable = computed(
     g.value?.status !== "consumed" &&
     !ctx.value?.claims.length,
 );
-const reopen = () => run("reopen", async () => g.value && (await onArchive(g.value, false)));
+
+const holding = computed(() => Boolean(ctx.value?.claims.length));
+/** You hold it yourself: its Finish is in your work on it below, so the header leads with nothing. */
+const holdingMine = computed(() => {
+  const person = `person-${(hub.value.me?.account || "").toLowerCase().replace(/[^a-z0-9-]/g, "")}`;
+  return Boolean(ctx.value?.claims.some((c) => c.agent === person && c.state === "claimed"));
+});
+/** Sent to the whole team, or to you or a group you are in, and not yours: yours to take. */
+const canTake = computed(() => {
+  const x = g.value;
+  if (!x || ctx.value?.owner || x.status !== "published" || holding.value) return false;
+  return !((x.to || x.to_group) && !x.for_me);
+});
+const canGive = computed(() => Boolean(g.value?.team) && g.value?.status !== "consumed");
+/** Who it is for now, as the assign route names it. */
+const givenTo = computed(() =>
+  g.value?.to ? `@${g.value.to}` : g.value?.to_group ? `#${g.value.to_group}` : "",
+);
 
 /** Finished, not archived: what Reopen is for, and what leads with the proof it was finished with. */
 const finished = computed(() => g.value?.status === "consumed" && g.value.outcome !== "archived");
 /** What it was finished with: the latest hand-in, kept after its claim. */
 const shown = computed(() => (ctx.value?.verdicts ?? []).find((v) => v.ok) ?? null);
-const reopening = ref(false);
+
+/**
+ * The one act the work's state asks for, shown as the lead; everything else is under More. Draft:
+ * Ready. Ready and free: I'll do this if it is yours to take, else Give to…. Held by someone else
+ * or an agent: Stop this agent. Finished: Reopen. Archived: Unarchive to Draft.
+ */
+type Act = "ready" | "take" | "give" | "stop" | "reopen" | "unarchive" | "";
+const lead = computed<Act>(() => {
+  const x = g.value;
+  if (!x) return "";
+  if (x.status === "consumed")
+    return finished.value ? "reopen" : mayArchive.value ? "unarchive" : "";
+  if (x.status === "draft") return mayAct.value ? "ready" : "";
+  if (holding.value) return holdingMine.value ? "" : "stop";
+  if (canTake.value) return "take";
+  return canGive.value ? "give" : "";
+});
+/** At most one act beside it: Give to… with I'll do this, otherwise Archive for whoever may. */
+const beside = computed<"give" | "archive" | "">(() => {
+  if (lead.value === "take" && canGive.value) return "give";
+  return mayArchive.value && g.value?.status !== "consumed" ? "archive" : "";
+});
+
+/** The form opened in place under the acts: one at a time. */
+type Panel = "" | "reopen" | "pass" | "give" | "ask";
+const panel = ref<Panel>("");
+const panelEl = ref<HTMLElement | null>(null);
+async function show(p: Panel) {
+  panel.value = panel.value === p ? "" : p;
+  await nextTick();
+  if (panel.value)
+    panelEl.value?.querySelector<HTMLElement>("input, select, button:not([disabled])")?.focus();
+}
+const asking = computed({
+  get: () => panel.value === "ask",
+  set: (on: boolean) => {
+    if (on) panel.value = "ask";
+    else if (panel.value === "ask") panel.value = "";
+  },
+});
 function sendReopen(form: HTMLFormElement) {
   const why = field(form, "why").trim();
   if (!why) return;
   return run("reopen-why", async () => {
     const ok = await onReopen(id.value, why);
-    if (ok) reopening.value = false;
+    if (ok) panel.value = "";
     return ok;
   });
+}
+/** Not for me: the reason is required, because "not me" without "why" leaves the sender guessing. */
+function sendPass(form: HTMLFormElement) {
+  const why = field(form, "why").trim();
+  if (!why) return;
+  return run("pass", async () => {
+    const ok = await onPass(id.value, why);
+    if (ok) panel.value = "";
+    return ok;
+  });
+}
+function gave() {
+  panel.value = "";
+  void queryClient.invalidateQueries({ queryKey: hubKeys.context(id.value) });
 }
 /**
  * Ready can say which repo it is for: an agent's take with no id only offers work for the repo it
@@ -202,23 +265,90 @@ const taskReady = (form: HTMLFormElement) =>
   run("ready", () => onTaskReady({ id: id.value } as Task, field(form, "repo")));
 const taskDraft = () => run("draft", () => onTaskDraft({ id: id.value } as Task));
 
-/** One line for each button whose name alone does not say what it does. */
+/** One line for each visible button whose name alone does not say what it does. */
 const hints = computed(() => {
-  const c = ctx.value;
-  if (!c || !g.value) return [];
   const out: string[] = [];
-  if (mayAct.value && holding.value)
+  if (lead.value === "stop")
     out.push(
       "Stop this agent: it goes back to waiting and the agent is told to stop. Nothing is deleted.",
     );
-  if (mayArchive.value && g.value.status !== "consumed")
+  if (beside.value === "archive")
     out.push("Archive: moves it off your board. You can unarchive it.");
-  if (mayAct.value && g.value.status === "published" && !c.claims.length)
-    out.push("Move to Draft: keep it visible, but stop anyone from taking it.");
   return out;
 });
 
-const holding = computed(() => Boolean(ctx.value?.claims.length));
+// ---- More: every other act, in the hub's menu ------------------------------------------------
+
+const moreOpen = ref(false);
+const moreRoot = ref<HTMLElement | null>(null);
+const moreButton = ref<HTMLButtonElement | null>(null);
+const moreMenu = ref<HTMLElement | null>(null);
+const items = () => [
+  ...(moreMenu.value?.querySelectorAll<HTMLElement>("[role^=menuitem]:not([disabled])") ?? []),
+];
+async function toggleMore() {
+  moreOpen.value = !moreOpen.value;
+  confirmingDelete.value = false;
+  await nextTick();
+  if (moreOpen.value) items()[0]?.focus();
+}
+function closeMore(refocus = true) {
+  moreOpen.value = false;
+  confirmingDelete.value = false;
+  if (refocus) moreButton.value?.focus();
+}
+/** Escape closes and gives focus back to More; Tab leaves; up and down move between items. */
+function onMoreKey(e: KeyboardEvent) {
+  if (!moreOpen.value) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    return closeMore();
+  }
+  if (e.key === "Tab") return closeMore(false);
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  e.preventDefault();
+  const all = items();
+  const i = all.indexOf(document.activeElement as HTMLElement);
+  all[(i + (e.key === "ArrowDown" ? 1 : -1) + all.length) % all.length]?.focus();
+}
+function outside(e: PointerEvent) {
+  if (moreOpen.value && !moreRoot.value?.contains(e.target as Node)) closeMore(false);
+}
+onMounted(() => document.addEventListener("pointerdown", outside, true));
+onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true));
+/** An act from the menu: close it, then do it. */
+function pick(act: () => unknown) {
+  closeMore();
+  act();
+}
+/** A form from the menu: close it, and the form takes focus where it opens. */
+function open(p: Panel) {
+  closeMore(false);
+  panel.value = "";
+  void show(p);
+}
+function copyFromMenu(text: string, e: Event) {
+  copy(text, e.currentTarget);
+  setTimeout(() => closeMore(), 600);
+}
+/** Gone for good, with its screenshots and files: asked first, in the menu, then back to the board. */
+const confirmingDelete = ref(false);
+async function remove() {
+  if (busy.value || !g.value) return;
+  closeMore(false);
+  busy.value = "delete";
+  try {
+    if (await onRemove(g.value)) await navigateTo("/hub/work");
+  } finally {
+    busy.value = "";
+  }
+}
+async function askDelete() {
+  confirmingDelete.value = true;
+  await nextTick();
+  // The safe answer takes focus, so Enter does not delete.
+  items().at(-1)?.focus();
+}
 
 // ---- the frame fits the document ----------------------------------------------------------
 
@@ -281,34 +411,18 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
           :class="expiry.soon ? 'text-warn' : 'text-muted'"
         >{{ expiry.text }}</p>
         <p class="m-0 font-ui text-base text-muted">{{ standing }}</p>
-        <!-- The runner (`passalong work --watch`) takes only tasks a person marked here. -->
-        <label
-          v-if="g.status !== 'consumed'"
-          class="flex items-start gap-2 font-ui text-sm"
-        >
-          <input
-            type="checkbox"
-            class="mt-1"
-            :checked="ctx.alone"
-            :disabled="markingAlone"
-            @change="markAlone(($event.target as HTMLInputElement).checked)"
-          />
-          <span>
-            <b class="font-medium">Safe to run alone</b>
-            <span class="block text-muted">The runner may take this with nobody watching. Only mark work that needs no decision, secret or permission from a person.</span>
-          </span>
-        </label>
+        <!-- One act for where it stands, at most one beside it, and the rest under More. -->
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <form
-            v-if="mayAct && g.status === 'draft'"
-            class="flex flex-wrap items-center gap-2"
+            v-if="lead === 'ready'"
+            class="flex w-full flex-wrap items-center gap-2 sm:w-auto"
             @submit.prevent="taskReady($event.target as HTMLFormElement)"
           >
             <label class="sr-only" for="ready-repo">Which repo is this for? Leave it empty for none.</label>
             <input
               id="ready-repo"
               name="repo"
-              class="w-56"
+              class="min-w-0 flex-1 sm:w-56 sm:flex-none"
               list="ready-repos"
               placeholder="Repo, if any: owner/repo"
               :value="ctx.target || ''"
@@ -322,92 +436,139 @@ const label = "m-0 font-ui text-xs font-semibold uppercase tracking-widest text-
               {{ busy === "ready" ? "Making ready…" : "Ready" }}
             </button>
           </form>
-          <button
-            v-if="mayAct && g.status === 'published' && !ctx.claims.length"
-            class="btn"
-            type="button"
-            :disabled="Boolean(busy)"
-            @click="taskDraft"
-          >{{ busy === "draft" ? "Moving…" : "Move to Draft" }}</button>
-          <button
-            v-if="mayAct && holding"
-            class="btn outline warn"
-            type="button"
-            :disabled="Boolean(busy)"
-            @click="takeBack"
-          >{{ busy === "release" ? "Stopping…" : "Stop this agent" }}</button>
-          <button
-            v-if="mayArchive && g.status !== 'consumed'"
-            class="btn"
-            type="button"
-            :disabled="Boolean(busy)"
-            @click="archive"
-          >{{ busy === "archive" ? "Archiving…" : "Archive" }}</button>
-          <button
-            v-if="recallable"
-            class="btn"
-            type="button"
-            :disabled="Boolean(busy)"
-            title="Make it private again. It leaves everyone's inbox; anyone who already opened it keeps what they pulled."
-            @click="recall"
-          >{{ busy === "recall" ? "Taking back…" : "Take back" }}</button>
-          <button
-            v-if="mayAct && finished"
-            class="btn"
-            type="button"
-            :aria-expanded="reopening"
-            :disabled="Boolean(busy)"
-            @click="reopening = !reopening"
-          >Reopen</button>
-          <button
-            v-if="mayArchive && g.status === 'consumed'"
-            class="btn"
-            type="button"
-            :disabled="Boolean(busy)"
-            @click="reopen"
-          >{{ busy === "reopen" ? "Unarchiving…" : "Unarchive to Draft" }}</button>
-          <button
-            v-if="mayArchive"
-            class="btn outline danger"
-            type="button"
-            :disabled="Boolean(busy)"
-            :aria-expanded="confirmingDelete"
-            @click="confirmingDelete = !confirmingDelete"
-          >{{ busy === "delete" ? "Deleting…" : "Delete…" }}</button>
-          <div v-if="confirmingDelete" class="flex w-full flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-2" role="alert">
-            <p class="m-0 min-w-0 grow font-ui text-sm">Delete “{{ g.title }}” with its screenshots and files? This cannot be undone.</p>
-            <button class="btn sm outline danger" type="button" @click="remove">Delete</button>
-            <button class="btn sm" type="button" @click="confirmingDelete = false">Keep it</button>
-          </div>
-          <button class="btn" type="button" @click="copy(g.url, $event.currentTarget)">
-            <AppIcon name="copy" /><span data-label>Copy share link</span>
+          <button v-else-if="lead === 'take'" class="btn primary" type="button" :disabled="Boolean(busy)" @click="take">
+            {{ busy === "take" ? "Taking…" : "I'll do this" }}
+          </button>
+          <button v-else-if="lead === 'stop'" class="btn outline warn" type="button" :disabled="Boolean(busy)" @click="takeBack">
+            {{ busy === "release" ? "Stopping…" : "Stop this agent" }}
           </button>
           <button
-            class="btn"
+            v-else-if="lead === 'reopen'"
+            class="btn primary"
             type="button"
-            @click="copy(`passalong take ${g.id}`, $event.currentTarget)"
+            :aria-expanded="panel === 'reopen'"
+            :disabled="Boolean(busy)"
+            @click="show('reopen')"
           >
-            <AppIcon name="copy" /><span data-label>Copy take command</span>
+            Reopen<AppIcon name="reveal" class="transition-transform" :class="panel === 'reopen' ? 'rotate-180' : ''" />
           </button>
-          <a class="btn" :href="g.url" target="_blank" rel="noopener">
-            <AppIcon name="open" />Open share page
-          </a>
+          <button v-else-if="lead === 'unarchive'" class="btn primary" type="button" :disabled="Boolean(busy)" @click="unarchive">
+            {{ busy === "unarchive" ? "Unarchiving…" : "Unarchive to Draft" }}
+          </button>
+          <button
+            v-if="lead === 'give' || beside === 'give'"
+            class="btn"
+            :class="lead === 'give' ? 'primary' : ''"
+            type="button"
+            :aria-expanded="panel === 'give'"
+            @click="show('give')"
+          >
+            Give to…<AppIcon name="reveal" class="transition-transform" :class="panel === 'give' ? 'rotate-180' : ''" />
+          </button>
+          <button v-if="beside === 'archive'" class="btn" type="button" :disabled="Boolean(busy)" @click="archive">
+            {{ busy === "archive" ? "Archiving…" : "Archive" }}
+          </button>
+
+          <div ref="moreRoot" class="relative ml-auto" @keydown="onMoreKey">
+            <button
+              ref="moreButton"
+              class="btn"
+              type="button"
+              aria-haspopup="menu"
+              :aria-expanded="moreOpen"
+              aria-controls="work-more"
+              @click="toggleMore"
+            >
+              <AppIcon name="more" />More
+            </button>
+            <div v-if="moreOpen" id="work-more" ref="moreMenu" class="menu" role="menu" aria-label="More for this work">
+              <button v-if="canTake" role="menuitem" class="menu-item" type="button" @click="open('pass')">Not for me…</button>
+              <button v-if="canGive && lead !== 'give' && beside !== 'give'" role="menuitem" class="menu-item" type="button" @click="open('give')">Give to…</button>
+              <button v-if="g.status === 'published' && !holding" role="menuitem" class="menu-item" type="button" @click="pick(taskDraft)">
+                <span class="flex flex-col"><span>Move to Draft</span><span class="text-xs text-muted">Nobody can take it until it is ready again.</span></span>
+              </button>
+              <button v-if="holding && lead !== 'stop'" role="menuitem" class="menu-item" type="button" @click="pick(takeBack)">Stop this agent</button>
+              <button v-if="mayArchive && g.status !== 'consumed' && beside !== 'archive'" role="menuitem" class="menu-item" type="button" @click="pick(archive)">Archive</button>
+              <button v-if="mayArchive && g.status === 'consumed' && lead !== 'unarchive'" role="menuitem" class="menu-item" type="button" @click="pick(unarchive)">Unarchive to Draft</button>
+              <button v-if="recallable" role="menuitem" class="menu-item" type="button" @click="pick(recall)">
+                <span class="flex flex-col"><span>Make it private again</span><span class="text-xs text-muted">It leaves everyone's inbox. Anyone who opened it keeps what they read.</span></span>
+              </button>
+              <button v-if="g.team && g.status !== 'draft'" role="menuitem" class="menu-item" type="button" @click="open('ask')">Ask someone to check…</button>
+              <!-- Hidden when nothing above it was offered. -->
+              <div class="menu-rule first:hidden" role="separator" />
+              <button role="menuitem" class="menu-item" type="button" @click="copyFromMenu(g.url, $event)">
+                <AppIcon name="copy" /><span data-label>Copy share link</span>
+              </button>
+              <a role="menuitem" class="menu-item" :href="g.url" target="_blank" rel="noopener" @click="closeMore()">
+                <AppIcon name="open" />Open share page
+              </a>
+              <button role="menuitem" class="menu-item" type="button" @click="copyFromMenu(`passalong take ${g.id}`, $event)">
+                <AppIcon name="copy" /><span data-label>Copy the command for an agent</span>
+              </button>
+              <!-- The runner (`passalong work --watch`) takes only work a person marked here. -->
+              <button
+                v-if="g.status !== 'consumed'"
+                role="menuitemcheckbox"
+                class="menu-item !items-start"
+                type="button"
+                :aria-checked="Boolean(ctx.alone)"
+                :disabled="markingAlone"
+                @click="markAlone(!ctx.alone)"
+              >
+                <span class="flex h-5 shrink-0 items-center" aria-hidden="true">
+                  <span class="grid size-4 place-items-center rounded-1 border border-line-strong" :class="ctx.alone ? 'border-fg bg-fg text-bg' : ''">
+                    <AppIcon v-if="ctx.alone" name="check" :size="12" />
+                  </span>
+                </span>
+                <span class="flex flex-col">
+                  <span>Let an always-on agent take this on its own</span>
+                  <span class="text-xs text-muted">Only for work that needs no decision, secret or permission from a person.</span>
+                </span>
+              </button>
+              <template v-if="mayArchive">
+                <div class="menu-rule" role="separator" />
+                <button v-if="!confirmingDelete" role="menuitem" class="menu-item destructive" type="button" @click="askDelete">Delete…</button>
+                <div v-else class="flex flex-col gap-2 p-2" role="alert">
+                  <p class="m-0 font-ui text-sm">Delete “{{ g.title }}” with its screenshots and files? This cannot be undone.</p>
+                  <div class="flex gap-2">
+                    <button role="menuitem" class="btn sm outline danger" type="button" @click="remove">Delete</button>
+                    <button role="menuitem" class="btn sm" type="button" @click="confirmingDelete = false; void nextTick(() => items().at(-1)?.focus())">Keep it</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
-        <!-- Reopen asks why, and the reason goes at the top of the work for whoever takes it next. -->
-        <form v-if="reopening" class="flex flex-wrap items-center gap-2" @submit.prevent="sendReopen($event.target as HTMLFormElement)">
-          <label class="sr-only" for="reopen-why">Why reopen it?</label>
-          <input id="reopen-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="What's wrong — whoever finished it is told" />
-          <button class="btn primary" type="submit" :disabled="Boolean(busy)">{{ busy === "reopen-why" ? "Reopening…" : "Reopen" }}</button>
-        </form>
-        <HubAskCheck v-if="g.team && g.status !== 'draft'" :guide="g" />
+        <p v-if="busy === 'delete'" class="m-0 font-ui text-sm text-muted" role="status">Deleting…</p>
         <!-- What the less obvious buttons do, said beside them rather than in a tooltip: a title
              attribute is delayed, unstyled and never shown on a phone. -->
         <ul v-if="hints.length" class="m-0 flex list-none flex-col gap-1 p-0 font-ui text-xs text-muted">
           <li v-for="h in hints" :key="h">{{ h }}</li>
         </ul>
+        <!-- The form an act opens, in place under the acts. -->
+        <div ref="panelEl" class="contents">
+          <!-- Reopen asks why, and the reason goes at the top of the work for whoever takes it next. -->
+          <form v-if="panel === 'reopen'" class="flex flex-wrap items-center gap-2" @submit.prevent="sendReopen($event.target as HTMLFormElement)">
+            <label class="sr-only" for="reopen-why">Why reopen it?</label>
+            <input id="reopen-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="What's wrong — whoever finished it is told" />
+            <button class="btn primary" type="submit" :disabled="Boolean(busy)">{{ busy === "reopen-why" ? "Reopening…" : "Reopen" }}</button>
+          </form>
+          <form v-if="panel === 'pass'" class="flex flex-col gap-2" @submit.prevent="sendPass($event.target as HTMLFormElement)">
+            <label class="font-ui text-sm" for="pass-why">Why isn't it yours? Whoever sent it is told.</label>
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="pass-why" name="why" class="min-w-0 flex-1" required maxlength="280" placeholder="Not my area — the payments team owns this." />
+              <button class="btn outline warn" type="submit" :disabled="Boolean(busy)">{{ busy === "pass" ? "Handing back…" : "Hand it back" }}</button>
+              <button class="btn" type="button" @click="panel = ''">Cancel</button>
+            </div>
+          </form>
+          <div v-if="panel === 'give' && g.team" class="menu !static !mt-0 !w-full max-w-sm">
+            <HubAssignPicker :id="id" :team="g.team" :to="givenTo" @done="gave" />
+          </div>
+          <HubAskCheck v-if="g.team && g.status !== 'draft'" v-model:open="asking" :guide="g" />
+        </div>
       </header>
 
-      <HubTaskWork :guide="g" :claims="ctx.claims" :owner="Boolean(ctx.owner)" />
+      <HubTaskWork :guide="g" :claims="ctx.claims" />
 
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="flex min-w-0 flex-col gap-6">

@@ -142,6 +142,33 @@ test("the register ranks customers, questions, stalls, untaken work and work tha
   assert.equal(by.b1.said, "Not my area");
 });
 
+test("one customer asking the same thing twice is one row, at the place of the older ask", async () => {
+  const { db, x, guide, ev } = world();
+  guide("o1", { customer: "ola@x.com", customer_name: "Ola Ben", created: ago(9) });
+  ev("o1", "customer", ago(9), "bo", "Login fails");
+  guide("n1", { customer: "ann@x.com", created: ago(6) });
+  ev("n1", "customer", ago(6), "bo", "Hi");
+  guide("o2", { customer: "OLA@x.com ", customer_name: "Ola Ben", created: ago(2) });
+  ev("o2", "customer", ago(2), "bo", "Still fails");
+  guide("o3", { customer: "ola@x.com", customer_name: "Ola Ben", created: ago(1) });
+  ev("o3", "customer", ago(1), "bo", "Another thing");
+  x(`UPDATE guide SET title = 'Login fails' WHERE id IN ('o1', 'o2');
+     UPDATE guide SET title = 'Invoice' WHERE id = 'o3';
+     INSERT INTO notification (account_id, kind, guide_id, at, read_at) VALUES
+       ('ada', 'customer_wrote', 'o2', '${ago(2)}', '');`);
+  const { rows } = await needs(db, "ada", NOW);
+  assert.deepEqual(
+    rows.map((r) => [r.id, r.also]),
+    [
+      ["o1", ["o2"]],
+      ["n1", []],
+      ["o3", []],
+    ],
+    "folded by address and title, the rank kept; a different title stays its own row",
+  );
+  assert.equal(rows[0].changed, "Customer wrote", "a change on the folded one still marks the row");
+});
+
 test("a row is changed while an unread notification is on it, and names the project", async () => {
   const { db, x, guide } = world();
   guide("u1", { to: "ada" });

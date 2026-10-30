@@ -51,7 +51,7 @@ const tabs = computed<Tab[]>(() => {
           <!-- One 28px holder for every mark, so the labels share a line; the box's is filled. -->
           <span
             class="grid size-7 place-items-center rounded-1"
-            :class="t.box ? 'bg-coral text-rail' : ''"
+            :class="t.box ? 'bg-accent text-accent-fg' : ''"
           >
             <AppIcon :name="t.icon" />
           </span>

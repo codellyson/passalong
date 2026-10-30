@@ -64,7 +64,8 @@ const isProject = (id: string) => currentProject.value === id;
         <NuxtLink
           id="rail-projects"
           to="/hub/projects"
-          class="px-3 font-ui text-xs font-medium tracking-wide text-on-rail-muted uppercase no-underline hover:text-on-rail"
+          class="px-3 font-ui text-xs font-medium tracking-wide uppercase no-underline hover:text-on-rail"
+          :class="at.projects.value ? 'text-coral' : 'text-on-rail-muted'"
           :aria-current="at.projects.value ? 'page' : undefined"
         >
           Projects
@@ -106,7 +107,7 @@ const isProject = (id: string) => currentProject.value === id;
       <!-- The box: say it in your own words and the agent files it. -->
       <NuxtLink
         to="/hub/new"
-        class="btn border-coral bg-coral text-rail hover:border-coral hover:bg-coral hover:opacity-90"
+        class="btn border-accent bg-accent text-accent-fg hover:border-accent hover:bg-accent hover:opacity-90"
         :aria-current="route.path === '/hub/new' ? 'page' : undefined"
       >
         <AppIcon name="plus" />New

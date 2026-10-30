@@ -223,7 +223,7 @@ Warm cream and ink carry the whole interface; coral marks what is active, and th
 
 A two-column shell: the 240px ink rail is sticky and full height from 768px up; below that the places (Needs you with its count, Projects, New, Work, Support) are a 56px solid ink dock fixed along the bottom, as in a phone app — each a 28px mark holder over a `text-xs` label, the current one coral at 500 with a 2px coral bar along its top edge, New's holder filled coral — and the rest of the rail is a drawer sliding in from the right, behind a 56px top bar holding the mark at its left and the menu at its right. `--dock` (its height plus the safe-area inset, 0 from 768px) is what toasts, the bulk bar and a conversation's composer stand clear of. The page's measure depends on what it holds: Needs you reads at 78rem, project, guide, support (the register and a request) and settings pages at 70rem, the board takes the full width, everything else 54rem.
 
-Needs you is a register beside a side column (18rem from 1280px up). The register becomes a five-column grid when its own container passes 42rem: work, project (8.5rem), with (8rem), waiting (3.5rem, right-aligned), action (4.75rem). Below that each row wraps into a title, its second line, and a single muted fact line separated by middots.
+Needs you decides before it lists: the server's first row leads as Next, a deeper-cream panel with the title at 1.125rem/500, the customer's words or the summary, one muted fact line, the primary **Start** that opens triage at `/hub/next`, and its verb as a plain button. The rest is grouped by reason in the server's order, each heading at 550 with a muted tabular count over an ink rule, the oldest three shown, ending in "All N in Support" or "Show all N". Triage (`/hub/next`) is one item at a time under a sticky header (Back to Needs you, "1 of 12" in tabular figures, Previous, Next; j/k move when no field has focus); after Send, Next becomes the one primary. The groups sit beside a side column (18rem from 1280px up). The register becomes a five-column grid when its own container passes 42rem: work, project (8.5rem), with (8rem), waiting (3.5rem, right-aligned), action (4.75rem). Below that each row wraps into a title, its second line, and a single muted fact line separated by middots.
 
 Spacing is the 4px scale and the relationship picks the step: 8px between a label and its control, 12px between rows, 16px between blocks, 32px between sections, 12px of vertical padding inside a register row with 16px on its left for the change mark.
 
@@ -249,7 +249,8 @@ Precise and quiet; the shape says "control" by its edge, not its roundness.
 - **Shape:** 4px corners.
 - **Default (ghost):** transparent with a 1px rule edge, ink text, 40px tall with 20px sides; `sm` is 32px with 14px sides and is the size inside a row.
 - **Primary:** coral fill (`--accent`), `--accent-fg` text; one per view. Hover drops to 90% opacity, press to 80%.
-- **Rail New:** coral fill, rail-ink text, on the rail and in the phone dock.
+- **Rail New:** the same primary fill (`--accent`, `--accent-fg` text) on the rail and in the phone dock: one coral for a primary everywhere. Light coral stays only as text and a bar on the ink rail (the current place).
+- **Work page acts:** one act for where the work stands, at most one beside it (Give to… or Archive), and the rest under a ghost **More** at the row's right end, opening the hub menu; the share link and page, the command for an agent and the always-on mark sit below a rule, Delete… below another, asked in place.
 - **States:** every button presses to `scale(0.96)` over 0.15s; outline danger for a retry inside a danger callout. A tonal or outline button with no status tone is ink (`--emphasis`). Focus is the 2px ink ring.
 
 ### Chosen chips
@@ -266,7 +267,7 @@ A secret the server cannot give back (a new token, a client secret, an admin's c
 The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px; the current one is coral text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
 
 ### Register row
-The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (a state such as "Went quiet" in ink, then the customer's own words in quotes), the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
+The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in ink at 500, a second muted line (the customer's own words in quotes; the group heading says the state). One customer asking the same thing twice is one row, its With saying "Ola Ben · 2 requests", the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
 
 ### Work board
 Four columns, people inside, and never a sideways scroll. Draft, To do, In progress and Done sit
@@ -320,7 +321,7 @@ it), Project 8rem, State 8.5rem, Waiting 3.5rem right-aligned. The state is a wo
 the next word is ours (New, Needs reply) and muted otherwise. The waiting age is ink at 500 in
 tabular figures, as on Needs you; no colour marks a long wait — the summary line counts it ("10
 waiting on us, all for more than 4 hours"); the request's header shows the age alone. Tabs over
-it (Waiting on us, With development, Waiting on them, Solved, All) carry their counts; on a phone
+it (Waiting on us, With the team, Waiting on the customer, Solved, All) carry their counts; on a phone
 the tab row scrolls sideways and fades at its right edge to say it continues. The search sits
 beside the heading. On a phone each row is the name with the age at its right, the
 title, the quote and one muted fact line.

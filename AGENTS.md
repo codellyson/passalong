@@ -372,7 +372,10 @@ change. Its README says how.
   the number in its subject or a Message-ID of theirs in its References. Mail to a customer answers
   the subject they wrote under (`customerSubject()`, number at the end) and names their messages in
   `In-Reply-To`/`References` (`customer_subject`, `customer_mids`, migration 0060), so it is one
-  conversation in their inbox. Mail to a customer goes out only from `POST /v1/guides/:id/customer`, which has no CLI command
+  conversation in their inbox. The reply box says where Send goes before it is pressed — "To <name>
+  <address> · <subject>", the subject from `customer.subject` on `GET /v1/guides/:id/context` (built
+  by `customerSubject()`, so it is exactly what is sent) — and after a send says "Sent to <name> ·
+  <time>" in the same place, with the next request waiting on us. Mail to a customer goes out only from `POST /v1/guides/:id/customer`, which has no CLI command
   or MCP tool and refuses the remote MCP server: nothing reaches a customer until a person presses
   Send. It is the deliberate exception to every answer existing in all three places.
   A customer writing again on a request that is Done puts it straight back in Ready
@@ -403,7 +406,8 @@ change. Its README says how.
   what the picture already says. Every answer passes `readVerdict()` or is thrown away whole — a
   tag from the list, a group that exists, lengths capped, no contact details — never patched.
   What was sent — a customer's words, an email, a webhook — is quoted into the body by code, not
-  by the model. Its reason goes on the thread as a note; when it is unsure, the author and team
+  by the model, and when it arrived is said as a person reads it ("28 Oct 2026, 20:21 UTC",
+  `arrived()` in inbound.ts), never the stored ISO string; documents filed before keep theirs. Its reason goes on the thread as a note; when it is unsure, the author and team
   owners get `reader_unsure`, pushed and mailed, with its one question. The same reader is the
   hub's box (`/hub/new`, `POST /v1/compose`): a teammate's own words become work, filed at once as
   theirs with no confirm step, and into one of the team's projects when the reader picks one
@@ -425,6 +429,7 @@ change. Its README says how.
   --watch` on an always-on machine asks `/v1/tasks/next` with `alone: true`, so `next()` hands out only
   work with `guide.alone = 1`; it waits when there is none and keeps going past unfinished work
   (the requeue and `stuck` handle that one). The mark is a column a person sets from the work page
+  (in its More menu, as **Let an always-on agent take this on its own**)
   (`PUT /v1/guides/:id/alone`), never frontmatter, and the route refuses the CLI and both MCP servers
   by name: work marking itself safe for the agent about to run it is what the mark exists to stop.
   Plain `passalong work` is unchanged — a person running it takes any ready work.
@@ -472,7 +477,9 @@ change. Its README says how.
   words sit on the title's line, after the title, and every notification kind has its words
   (`CHANGE_WORDS` in needs.ts, held to `KINDS` by its test). `--coral` is 2.6:1 on the canvas, so
   on cream it is a bar or a fill under dark text, never small text; `--accent` is the readable
-  5:1. The rail is solid ink (`--rail`) in both themes. Each project owns one line
+  5:1, and it is the one fill for a primary everywhere, the rail's and dock's New included (light
+  coral stays only as text and a bar on the ink rail). Settings marks what needs you with the ink
+  change dot; amber is never a "needs you" mark. The rail is solid ink (`--rail`) in both themes. Each project owns one line
   colour from six (`--project-*`, `toneOf()` in `app/utils/projects.ts`): the folder's own colour,
   a folder coloured coral drawn stone (nothing near coral or blue), and one derived from its id when it has
   none. A project's colour is drawn as a line (a 3px bar), in the rail and in the register alike.
@@ -655,7 +662,10 @@ change. Its README says how.
   The hub says each in plain words rather than the command's name, and says them the same way on
   every surface of the hub: `take` is **I'll do this**, `release` is **Stop this agent**, archiving
   is **Archive** and **Unarchive to Draft**, finishing is **Finish**, and finished work comes back
-  with **Reopen**. A button whose name cannot say
+  with **Reopen**; recalling work you sent is **Make it private again**, `pass` on work you do not
+  hold is **Not for me**, and the take command is **Copy the command for an agent**. The work page
+  leads with one act for the work's state, at most one beside it, and keeps the rest under **More**.
+  A button whose name cannot say
   what it does gets a line of visible text beside it, never a `title` tooltip.
 - **Google Chat gets a card; nothing else does.** Chat cannot unfurl a link — previews there come
   from a Chat app registering URL patterns, and a team connects an incoming webhook — so `chatCard()`
@@ -764,6 +774,10 @@ change. Its README says how.
   notification on it in a few words. It owns no table and imports no sibling, so
   `test/needs.test.mjs` runs it against real SQLite. The rank is the server's; the hub never
   re-sorts it. `GET /v1/folders` carries `open` and `changed` per folder for the rail's projects.
+  Open requests from the same customer under the same title fold into one row at the older one's
+  place, the others' ids in `also` (needs.ts), so one person writing twice is one thing to answer.
+  The hub leads with the first row as **Next** and groups the rest by reason without re-sorting;
+  `/hub/next` walks the same rank one at a time (j/k), with no route of its own.
 - **The board (`GET /v1/board`) is the old home queues, defined in SQL.** Waiting = work sent to
   you (or your teams, by others) that you have not opened, ordered as the next contracts say. In
   flight = yours, addressed to a person or team, with `NOT EXISTS` a pull by anyone but you

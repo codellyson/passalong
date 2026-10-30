@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   addressOf,
+  arrived,
   automated,
   bodyText,
   cleanSubject,
@@ -185,6 +186,12 @@ test("a customer's request names them by what they called themselves, never by a
   assert.doesNotMatch(body, /^## /m, "no template, no headings");
   assert.match(body, /```text\nExport does nothing\n```/, "the message is fenced as evidence");
   assert.match(supportBody({ name: "", at: "x", text: "" }), /^A customer wrote in/m);
+  assert.match(body, /wrote in at 28 Oct 2026, 10:00 UTC;/, "a time a person reads, not ISO");
+});
+
+test("when something arrived reads as a date and a UTC time, and anything else as it came", () => {
+  assert.equal(arrived("2026-10-28T20:21:25.634Z"), "28 Oct 2026, 20:21 UTC");
+  assert.equal(arrived("t"), "t");
 });
 
 test("a raw message carries the sender's name and says when a machine sent it", async () => {

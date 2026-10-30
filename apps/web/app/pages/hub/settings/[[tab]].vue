@@ -184,7 +184,7 @@ const sep = (i: number) =>
           :aria-current="tab === t.id ? 'page' : undefined"
         >
           {{ t.label }}
-          <span v-if="t.needs" class="size-1.5 shrink-0 self-center rounded-pill" :class="t.tone === 'bad' ? 'bg-danger' : 'bg-warn'" aria-hidden="true" />
+          <span v-if="t.needs" class="size-1.5 shrink-0 self-center rounded-pill" :class="t.tone === 'bad' ? 'bg-danger' : 'bg-changed'" aria-hidden="true" />
           <span v-if="t.needs" class="sr-only">, {{ t.needs }} need{{ t.needs === 1 ? "s" : "" }} you</span>
           <span v-else-if="t.note" class="text-xs text-muted tabular-nums">{{ t.note }}</span>
         </NuxtLink>
@@ -199,7 +199,7 @@ const sep = (i: number) =>
             :key="i"
             class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-3 font-ui text-sm first:border-t"
           >
-            <span class="size-1.5 shrink-0 rounded-pill" :class="item.tone === 'bad' ? 'bg-danger' : 'bg-warn'" aria-hidden="true" />
+            <span class="size-1.5 shrink-0 rounded-pill" :class="item.tone === 'bad' ? 'bg-danger' : 'bg-changed'" aria-hidden="true" />
             <span class="min-w-0 grow basis-64 text-fg">{{ item.text }} <span class="text-muted">· {{ item.where }}</span></span>
             <button class="btn sm" type="button" @click="go(item)">{{ item.action }}</button>
           </li>
@@ -208,7 +208,7 @@ const sep = (i: number) =>
 
       <div v-if="tab === 'account'" class="flex flex-col gap-10">
         <HubSettingsSection v-if="needsPassword" id="signin" title="Sign-in" blurb="How you get back into Passalong from another browser.">
-          <HubSettingRow label="Password" hint="Made by an invite or the terminal tool, this account has none yet.">
+          <HubSettingRow label="Password" hint="Made by an invite or the command line, this account has none yet.">
             <template v-if="!claiming">
               <p class="m-0 text-fg">You're only signed in on this browser. Add a password to sign in anywhere else.</p>
               <button class="btn primary sm self-start" type="button" @click="claiming = true">Add a password</button>
@@ -224,7 +224,7 @@ const sep = (i: number) =>
         <HubSettingsSection
           id="notifications"
           title="Notifications"
-          blurb="When the hub isn't open: something sent to you, handed in, didn't work, sent back, gone quiet, or stuck on you. Set per device."
+          blurb="When the hub isn't open: something sent to you, finished, didn't work, reopened, gone quiet, or stuck on you. Set per device."
         >
           <HubPushSettings />
         </HubSettingsSection>

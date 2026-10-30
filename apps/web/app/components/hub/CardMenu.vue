@@ -142,7 +142,7 @@ function copyAndClose(text: string, e: Event) {
         type="button"
         @click="copyAndClose(`passalong take ${g.id}`, $event)"
       >
-        <AppIcon name="copy" /><span data-label>Copy take command</span>
+        <AppIcon name="copy" /><span data-label>Copy the command for an agent</span>
       </button>
       <template v-if="g.manage">
         <div class="menu-rule" role="separator" />

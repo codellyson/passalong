@@ -17,18 +17,23 @@ const props = defineProps<{
   thread: ThreadItem[] | null;
   /** What to call the customer in the conversation: their name, else their address. */
   name: string;
+  /** Their address, said above the box so the person sees where Send goes; shown only to the team. */
+  address?: string;
+  /** The subject the reply goes out under, tracking number included, as the server will send it. */
+  subject?: string;
   /** Work made from this request that finished since the customer was last answered, when the team asked to be told. */
   ready?: { id: string; title: string }[];
   /** Where the request stands; a draft is started by itself when the next word is ours. */
   state?: string;
-  /** The next request waiting on us, oldest first, offered once this one is answered. */
+  /** The next request waiting on us, oldest first, offered once this one is answered; else the register. */
   next?: { id: string; name: string } | null;
 }>();
 const emit = defineEmits<{ sent: [] }>();
 const { api, json, token } = useHub();
 const busy = ref(false);
 const problem = ref("");
-const done = ref(false);
+/** When the last reply went, for "Sent to … · time" in place of the To line; "" before one or once typing starts again. */
+const sentAt = ref("");
 
 /** What the customer wrote and what they were sent, oldest first. */
 const said = computed(() =>
@@ -84,6 +89,9 @@ async function save(f: { name: string; url: string }) {
 
 /** The reply as markdown from the editor; a pasted picture travels in it as a link. */
 const reply = ref("");
+watch(reply, (r) => {
+  if (r.trim()) sentAt.value = "";
+});
 const writer = ref<{
   addPicture: (f: File) => Promise<void>;
   clear: () => void;
@@ -142,13 +150,13 @@ async function send() {
   if (!body || busy.value) return;
   busy.value = true;
   problem.value = "";
-  done.value = false;
+  sentAt.value = "";
   try {
     await api(`/v1/guides/${props.guideId}/customer`, json("POST", { body }));
     writer.value?.clear();
     reply.value = "";
     drafted.value = "";
-    done.value = true;
+    sentAt.value = new Date().toISOString();
     emit("sent");
   } catch (err) {
     problem.value = (err as Error).message;
@@ -291,6 +299,17 @@ watchEffect(() => {
 
     <!-- The reply box, pinned to the foot of the window while the thread scrolls under it. -->
     <form ref="composer" class="sticky bottom-[var(--dock)] z-10 mt-8 flex flex-col gap-2 border-t border-line bg-bg pt-3 pb-4" @submit.prevent="send">
+      <!-- Where Send goes, said before it is pressed; after a send, that it went, in the same place. -->
+      <p class="m-0 font-ui text-sm break-words text-muted" role="status">
+        <template v-if="sentAt">
+          <span class="font-medium text-fg">Sent to {{ name }}</span> · <time :datetime="sentAt" class="tabular-nums">{{ when(sentAt) }}</time> ·
+          <NuxtLink v-if="next" :to="`/hub/support/${next.id}`" class="font-medium text-fg">Next request · {{ next.name }}</NuxtLink>
+          <NuxtLink v-else to="/hub/support" class="font-medium text-fg">Back to Support</NuxtLink>
+        </template>
+        <template v-else>
+          To <span class="text-fg">{{ name }}</span><template v-if="address && address !== name"> &lt;{{ address }}&gt;</template><template v-if="subject"> · {{ subject }}</template>
+        </template>
+      </p>
       <p v-for="f in ready" :key="f.id" class="m-0 font-ui text-sm" role="status">
         <NuxtLink :to="`/hub/g/${f.id}`">{{ f.title }}</NuxtLink> is done. Tell {{ name }}.
       </p>
@@ -316,9 +335,6 @@ watchEffect(() => {
               </button>
             </span>
             <span class="flex items-center gap-3">
-              <span v-if="done" class="font-ui text-sm text-muted" role="status">
-                Sent<template v-if="next"> · <NuxtLink :to="`/hub/support/${next.id}`" class="font-medium text-fg">Next waiting · {{ next.name }}</NuxtLink></template>
-              </span>
               <button class="btn primary" :disabled="busy || !reply.trim()">{{ busy ? "Sending…" : "Send" }}</button>
             </span>
           </template>

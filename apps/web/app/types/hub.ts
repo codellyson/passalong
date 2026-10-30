@@ -319,7 +319,7 @@ export interface GuideContext {
   /** A person marked it safe for the runner to take with nobody watching. */
   alone: boolean;
   /** A support request's customer and tracking number; null for any other work. */
-  customer?: { name: string; email: string; ref: string } | null;
+  customer?: { name: string; email: string; ref: string; subject?: string } | null;
   owner: boolean;
   /** The owner of its team, and not its author: may act on it as if they were. */
   admin?: boolean;
@@ -352,6 +352,8 @@ export interface NeedProject {
 /** One row of Needs you. See apps/api/src/needs.ts for the rank. */
 export interface NeedRow {
   id: string;
+  /** Other open requests from the same customer under the same title, folded into this row. */
+  also: string[];
   title: string;
   summary: string;
   reason: "customer" | "asking" | "stuck" | "untaken" | "came_back";

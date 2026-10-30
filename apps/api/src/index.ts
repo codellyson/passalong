@@ -169,7 +169,7 @@ import {
   withoutRef,
 } from "./inbound.js";
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
-import { ackCopy, answerCopy } from "./mail-copy.js";
+import { ackCopy, answerCopy, customerSubject } from "./mail-copy.js";
 import { handleMcp } from "./mcp-http.js";
 import { marksOf, needs, supportRequests } from "./needs.js";
 import { newsFor } from "./news.js";
@@ -3926,7 +3926,7 @@ app.put("/v1/guides/:id", async (c) => {
           return err(
             c,
             400,
-            "That parent would make this guide its own ancestor. Point parent: at a different guide.",
+            "That parent would make this work its own ancestor. Point parent: at different work.",
           );
         const up = await c.env.DB.prepare("SELECT parent_id FROM guide WHERE id = ?")
           .bind(at)
@@ -4481,7 +4481,16 @@ app.get("/v1/guides/:id/context", async (c) => {
     alone: Boolean(row.alone),
     // A support request's customer, for the people who answer them; never in the document.
     customer: row.customer
-      ? { name: row.customer_name || "", email: row.customer, ref: row.ref || "" }
+      ? {
+          name: row.customer_name || "",
+          email: row.customer,
+          ref: row.ref || "",
+          // The subject a reply goes out under, so the page can say it before Send.
+          subject: customerSubject({
+            subject: row.customer_subject || row.title,
+            ref: row.ref || "",
+          }),
+        }
       : null,
     owner: found.owner,
     admin: !found.owner && (await ownsTeam(c, row)),
@@ -5243,7 +5252,7 @@ async function receiveSupport(
     : "for the whole team";
   await claims.noteOn(env.DB, made.id, {
     account: me,
-    body: `Sorted by the reader, ${where}${verdict.reason ? `: ${verdict.reason}` : "."}`,
+    body: `Sorted by the agent, ${where}${verdict.reason ? `: ${verdict.reason}` : "."}`,
     at,
   });
   // Unsure is rare, and it must not be missed: the author and the team's owners hear it by push and
@@ -5489,7 +5498,7 @@ app.get("/v1/compose/recent", async (c) => {
                                       ORDER BY fg.added LIMIT 1)
       WHERE g.account_id = ? AND g.client = 'hub'
         AND EXISTS (SELECT 1 FROM task_event e WHERE e.guide_id = g.id AND e.kind = 'noted'
-                     AND e.body LIKE 'Sorted by the reader%')
+                     AND (e.body LIKE 'Sorted by the agent%' OR e.body LIKE 'Sorted by the reader%'))
       ORDER BY g.created DESC LIMIT 5`,
   )
     .bind(me)
@@ -5610,7 +5619,7 @@ app.post("/v1/compose", async (c) => {
   }
   await claims.noteOn(c.env.DB, id, {
     account: me,
-    body: `Sorted by the reader${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${verdict.reason ? `: ${verdict.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
+    body: `Sorted by the agent${routed ? `, for ${routed.name || `#${routed.slug}`}` : ""}${project ? `, in ${project.title}` : ""}${verdict.reason ? `: ${verdict.reason}` : "."}${unsure ? ` It wasn't sure, and asks: ${unsure}` : ""}`,
     at: now(),
   });
   count(c, "composed", {});

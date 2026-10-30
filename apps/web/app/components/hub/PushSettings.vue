@@ -5,7 +5,7 @@
   one people refuse by reflex, and a refused prompt cannot be asked again — the browser remembers.
 
   What reaches a device is only what needs you (PUSHED in apps/api/src/notify.ts): sent to you,
-  handed in, didn't work, sent back, went quiet, stuck on you. "Hide titles" is per device, because
+  finished, didn't work, reopened, went quiet, stuck on you. "Hide titles" is per device, because
   a lock screen is: on, the notice says only that something needs you.
 
   iOS delivers web push only to an app added to the home screen, so on an iPhone in a browser tab
@@ -161,7 +161,7 @@ async function test(d: Device) {
 
 <template>
   <div class="flex flex-col">
-    <HubSettingRow label="This device" :hint="here ? here.label : 'Only what needs you: sent to you, handed in, didn\'t work, sent back, gone quiet, stuck on you.'">
+    <HubSettingRow label="This device" :hint="here ? here.label : 'Only what needs you: sent to you, finished, didn\'t work, reopened, gone quiet, stuck on you.'">
       <p v-if="!supported" class="m-0 text-muted">This browser can't show notifications from websites.</p>
       <p v-else-if="state && !state.available" class="m-0 text-muted">
         Notifications aren't set up on this server yet.

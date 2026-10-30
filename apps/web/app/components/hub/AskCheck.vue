@@ -14,7 +14,8 @@ import type { Guide, TeamDetail } from "~/types/hub";
 const props = defineProps<{ guide: Guide }>();
 const { api, signedIn, data } = useHub();
 
-const open = ref(false);
+/** Opened from the work page's More menu, which owns the trigger. */
+const open = defineModel<boolean>("open", { default: false });
 const busy = ref(false);
 const sent = ref<{ id: string; to: string } | null>(null);
 const trouble = ref("");
@@ -92,15 +93,13 @@ async function ask(form: HTMLFormElement) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2">
+  <!-- Nothing is drawn until it is opened or has something to say: the page's gap stays even. -->
+  <div v-if="open || sent || trouble" class="flex flex-col gap-2">
     <p v-if="sent" class="m-0 font-ui text-sm text-muted" role="status">
       Asked {{ sent.to }} to check it —
       <NuxtLink :to="`/hub/g/${sent.id}`">the request</NuxtLink>.
     </p>
-    <button v-if="!open" type="button" class="linkish self-start font-ui text-sm" @click="open = true">
-      Ask someone to check
-    </button>
-    <form v-else class="flex flex-wrap items-center gap-2" @submit.prevent="ask($event.target as HTMLFormElement)">
+    <form v-if="open" class="flex flex-wrap items-center gap-2" @submit.prevent="ask($event.target as HTMLFormElement)">
       <label class="sr-only" for="check-to">Who should check it?</label>
       <select id="check-to" name="to" required class="w-48">
         <option value="" disabled selected>{{ detail.isPending.value ? "Loading the team…" : "Who checks it?" }}</option>

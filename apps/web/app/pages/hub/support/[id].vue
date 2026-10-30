@@ -61,8 +61,8 @@ onBeforeUnmount(() => clearInterval(tick));
 const STATE: Record<SupportRow["state"], string> = {
   new: "New",
   needs_reply: "Needs reply",
-  with_development: "With development",
-  waiting: "Waiting on customer",
+  with_development: "With the team",
+  waiting: "Waiting on the customer",
   solved: "Solved",
 };
 const solved = computed(() => g.value?.status === "consumed");
@@ -118,13 +118,19 @@ const ready = computed(() => {
     .reduce((last, m) => (m.at > last ? m.at : last), "");
   return work.value.filter((w) => w.done && w.at > answered);
 });
-/** Why the reader sorted it the way it did: said once, quietly. */
-const sortedNote = computed(
-  () =>
+/**
+ * Why the agent sorted it the way it did: said once, quietly. The server's note says "the reader",
+ * its internal name, so the word people see is changed here, for stored notes as well as new ones.
+ */
+const sortedNote = computed(() =>
+  (
     (threadQ.data.value ?? []).find(
-      (m) => m.kind === "noted" && m.body.startsWith("Sorted by the reader"),
-    )?.body ?? "",
+      (m) => m.kind === "noted" && /^Sorted by the (agent|reader)/.test(m.body),
+    )?.body ?? ""
+  ).replace(/^Sorted by the reader/, "Sorted by the agent"),
 );
+/** The subject a reply goes out under (GET context carries it beside the tracking number). */
+const subject = computed(() => customer.value?.subject ?? "");
 
 /** One at a time: the request waiting on us longest, after this one. */
 const next = computed(() => {
@@ -261,6 +267,8 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
           :guide-id="id"
           :thread="threadQ.data.value ?? null"
           :name="name"
+          :address="customer?.email"
+          :subject="subject"
           :ready="ready"
           :state="row?.state"
           :next="next"
@@ -368,7 +376,7 @@ const fact = "flex flex-col gap-1 border-b border-line py-3 last:border-b-0";
               </form>
               <p v-if="open === 'reopen' && problem" class="m-0 font-ui text-sm text-danger" role="alert">{{ problem }}</p>
               <NuxtLink v-if="solvedHere && next" :to="`/hub/support/${next.id}`" class="btn sm mt-1 self-start" role="status">
-                Next waiting · {{ next.name }}
+                Next request · {{ next.name }}
               </NuxtLink>
             </template>
             <template v-else-if="mayClose">

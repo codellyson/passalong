@@ -37,8 +37,8 @@ onBeforeUnmount(() => clearInterval(tick));
 const STATE: Record<SupportRow["state"], string> = {
   new: "New",
   needs_reply: "Needs reply",
-  with_development: "With development",
-  waiting: "Waiting on customer",
+  with_development: "With the team",
+  waiting: "Waiting on the customer",
   solved: "Solved",
 };
 /** The next word is ours: these states are what the page is opened to find. */
@@ -48,10 +48,14 @@ const TABS = [
   { key: "ours", label: "Waiting on us", has: ours },
   {
     key: "development",
-    label: "With development",
+    label: "With the team",
     has: (r: SupportRow) => r.state === "with_development",
   },
-  { key: "theirs", label: "Waiting on them", has: (r: SupportRow) => r.state === "waiting" },
+  {
+    key: "theirs",
+    label: "Waiting on the customer",
+    has: (r: SupportRow) => r.state === "waiting",
+  },
   { key: "solved", label: "Solved", has: (r: SupportRow) => r.state === "solved" },
   { key: "all", label: "All", has: () => true },
 ] as const;
@@ -68,6 +72,8 @@ const found = computed(() => {
       .includes(words),
   );
 });
+/** Said per row only when it tells rows apart; when every row is late the summary says so once. */
+const allLate = computed(() => list.value.every((r) => r.late));
 const countOf = (t: (typeof TABS)[number]) => found.value.filter(t.has).length;
 const list = computed(() =>
   found.value
@@ -230,7 +236,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
           <p class="m-0 text-h3 font-medium">
             <template v-if="q.trim()">Nothing matches “{{ q.trim() }}”{{ tab.key === "all" ? "" : ` in ${tab.label}` }}.</template>
             <template v-else-if="tab.key === 'ours'">Nobody is waiting on us.</template>
-            <template v-else-if="tab.key === 'development'">Nothing is with development.</template>
+            <template v-else-if="tab.key === 'development'">Nothing is with the team.</template>
             <template v-else-if="tab.key === 'theirs'">Nobody owes us an answer.</template>
             <template v-else>Nothing solved yet.</template>
           </p>
@@ -260,7 +266,7 @@ const cols = "@2xl:grid-cols-[10rem_minmax(0,1fr)_8rem_8.5rem_3.5rem]";
                 class="col-start-2 row-start-1 text-right font-ui text-sm tabular-nums @2xl:col-start-5"
                 :class="r.waiting_since ? 'font-medium text-fg' : 'text-muted'"
               >
-                <template v-if="r.waiting_since">{{ age(r.waiting_since, now) }}<span v-if="r.late" class="sr-only">, waiting too long</span></template>
+                <template v-if="r.waiting_since">{{ age(r.waiting_since, now) }}<span v-if="r.late && !allLate" class="sr-only">, waiting too long</span></template>
                 <template v-else><span aria-hidden="true">—</span><span class="sr-only">not waiting on us</span></template>
               </span>
               <!-- Request: the whole row opens it. -->

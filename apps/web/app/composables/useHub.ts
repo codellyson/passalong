@@ -459,7 +459,7 @@ function build(queryClient: QueryClient) {
       [hubKeys.working, hubKeys.tasks, hubKeys.allGuides, hubKeys.board],
     );
 
-  /** Take back something you sent: private again, and gone from the inboxes it was in. */
+  /** Make work you sent private again ("Make it private again"): gone from the inboxes it was in. */
   const onRecall = (g: Guide) =>
     change(() => api(`/v1/guides/${g.id}/recall`, json("POST")), () => {}, [
       hubKeys.allGuides,
