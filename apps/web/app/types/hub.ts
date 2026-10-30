@@ -1,6 +1,8 @@
 // The shapes `/v1/*` returns. Only the fields the hub actually reads — the API sends more, and
 // pinning the rest here would just be a second place to keep in step with apps/api.
 
+import type { SetupState } from "~/utils/setup";
+
 export interface Team {
   slug: string;
   name: string;
@@ -37,6 +39,8 @@ export interface Me {
   teams: Team[];
   /** Name, else @handle, else @account id — worked out by the API. */
   display?: string;
+  /** Where first-run setup got to (apps/api/src/setup.ts). Absent from an older server. */
+  setup?: SetupState;
 }
 
 export interface Pull {

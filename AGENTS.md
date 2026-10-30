@@ -737,6 +737,17 @@ change. Its README says how.
   a terminal: claiming or editing a handle, and creating a team. Nothing here is a new endpoint;
   `POST /v1/accounts`, `PATCH /v1/me`, `POST /v1/invites/:code/accept` and `POST /v1/teams` already
   existed. Keep it that way — a browser-only path that needs its own API is a second product.
+- **Setting up is a page, run once by whoever starts the team (`/hub/start`, docs/LOOP.md §0
+  step 3).** Seven steps — team, who's on it, who does what, projects, what to know, where work
+  comes in, agents — each skippable, each writing through the routes that already exist (teams,
+  invites, groups, folders, documents, inbound, connectors). The one thing added is where the person
+  got to: `account.setup` (migration 0066), JSON of steps done and skipped and whether it was put
+  away, read and written only by `apps/api/src/setup.ts` (`PUT /v1/me/setup`, `setup` on
+  `/v1/me`), so it resumes on any device. Accounts already in a team when 0066 ran start with it put
+  away, and someone only invited is never offered it: setup is for a team's starter. Invite by email
+  says "Not emailed" when the server has no mailer, with that person's own link to copy, rather than
+  pretending. A repo is written into the project's README as a `Repo:` line, because that is what the
+  agent asked to fill the README reads first; Passalong never runs that agent.
 - **Needs you (`GET /v1/needs`, `apps/api/src/needs.ts`) is the hub's first screen, ranked on the
   server.** What waits on the signed-in person, each piece of work once under its most pressing
   reason, in this order: a customer waiting on us (no `answered` since they last wrote; longest
@@ -926,8 +937,9 @@ ships scripts and inlines styles whatever the config says.
 - **An account is not the product; a team is.** A self-serve account with no team has an empty
   hub: its box files work, but nobody else is there to take it. The sign-in therefore offers two doors beside signing in: paste an invite link (the only
   one that leads anywhere immediately), and create an account,
-  whose copy says outright that it will be empty until someone hands you something. The empty hub
-  repeats the invite paste for the same reason. Don't add a signup flow that dead-ends. There is no
+  whose copy says outright that it will be empty until someone hands you something. A new account
+  with no team lands on setup (`/hub/start`), whose first step makes the team and offers the invite
+  paste beside it; the empty Needs you repeats the invite paste for the same reason. Don't add a signup flow that dead-ends. There is no
   token box: the CLI never shows a token, and `passalong hub` signs the page in through the link.
 - **Prefilled inputs are uncontrolled**: bound with `:value`, read back through
   `field()` on submit. Reading the form into locals before touching state was forced in the Preact

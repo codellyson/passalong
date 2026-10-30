@@ -2,7 +2,7 @@
 // that the project is named by id, and that a team project's work is addressed to its team.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { newProjectAsk, projectAsk, readmeAsk, teamAsk } from "../app/utils/asks.ts";
+import { newProjectAsk, projectAsk, readmeAsk } from "../app/utils/asks.ts";
 
 const project = { id: "fld123", title: "Feature Guide" };
 
@@ -17,7 +17,6 @@ test("a team project's work goes to that team, so the project's members can see 
     projectAsk({ ...project, team: "acme" }),
     /^Add this to Passalong for the team acme: /,
   );
-  assert.match(teamAsk("acme"), /^Add this to Passalong for the team acme: /);
   assert.match(newProjectAsk("acme"), /for the team acme/);
   assert.doesNotMatch(newProjectAsk(), /team/);
 });

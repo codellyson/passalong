@@ -8,19 +8,6 @@
  *
  * Imports nothing, so it runs under `node --test` without Nuxt.
  */
-export const ASKS = {
-  /** One piece of work, written by the agent that has the context. */
-  work: "Add this to Passalong: <what needs doing>",
-  /** A larger goal, split by the agent into pieces of work, left as drafts to read first. */
-  plan: "Plan this into Passalong work: <the goal>",
-} as const;
-
-/**
- * One piece of work addressed to a team. Work written without a team is private to whoever wrote it,
- * so the team has to be in the sentence: "add this" alone would put it where only they can see it.
- */
-export const teamAsk = (team: string) =>
-  `Add this to Passalong for the team ${team}: <what needs doing>`;
 
 /** A project's work, named by id as well as title, and addressed to its team when it has one. */
 export const projectAsk = (project: { id: string; title: string; team?: string }) => {
@@ -36,5 +23,6 @@ export const newProjectAsk = (team?: string) =>
 export const readmeAsk = (project: { id: string; title: string }) =>
   `Write the README for the Passalong project "${project.title}" (${project.id}): what the product is, who uses it, the words we use for things and how it is built. Then add a page for each area someone working on it needs to know, and a Log page.`;
 
-/** Installing the tool and signing it in, in the order they have to be run. */
-export const CONNECT = ["npm i -g passalong", "passalong login", "passalong setup"] as const;
+/** A project's first documents from its repo, for the agent that can read it (first-run setup). */
+export const repoReadmeAsk = (project: { id: string; title: string; repo: string }) =>
+  `Read the repo ${project.repo} and write the README for the Passalong project "${project.title}" (${project.id}): what the product is, who uses it, the words we use for things and how it is built. Then add a page for each area someone working on it needs to know, and a Log page of what changed.`;

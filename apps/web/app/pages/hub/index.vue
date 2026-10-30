@@ -29,10 +29,19 @@ usePage({
   noindex: true,
 });
 
-const { needsQ, readAll, onReopen, refresh } = useHub();
-const none = ref("");
-// Only for the first-run check: an account with nothing in it gets the steps instead.
-const { first } = useWorkLists(none, none);
+const { data, needsQ, readAll, onReopen, refresh } = useHub();
+const noTeam = computed(() => Boolean(data.value.me) && !data.value.me?.teams.length);
+// Someone with no team who has never started setup is not looking at a register yet: they set up
+// first (pages/hub/start.vue). Once started, skipped or put away, Needs you is theirs.
+watch(
+  () => data.value.me,
+  (me) => {
+    const s = me?.setup;
+    if (me && s && !me.teams.length && !s.dismissed && !s.done.length && !s.skipped.length)
+      navigateTo("/hub/start", { replace: true });
+  },
+  { immediate: true },
+);
 
 const needs = computed<Needs | null>(() => needsQ.data.value ?? null);
 const rows = computed(() => needs.value?.rows ?? []);
@@ -121,10 +130,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
 </script>
 
 <template>
-  <HubShell :heading="first ? 'Get started' : ''">
-    <HubFirstRun v-if="first" />
-
-    <div v-else class="grid items-start gap-x-10 gap-y-12 xl:grid-cols-[minmax(0,1fr)_18rem]">
+  <HubShell>
+    <div class="grid items-start gap-x-10 gap-y-12 xl:grid-cols-[minmax(0,1fr)_18rem]">
       <section aria-labelledby="needs-h" class="@container min-w-0">
         <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 pb-4">
           <div class="min-w-0">
@@ -135,6 +142,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             Mark all seen
           </button>
         </div>
+
+        <HubSetupNote />
 
         <HubSkeleton v-if="needsQ.isPending.value" :rows="6" label="Loading what needs you" />
 
@@ -156,6 +165,10 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             A customer waiting on an answer, an agent's question, work sent to you that nobody took,
             an agent that went quiet: each lands here, oldest first.
           </p>
+          <div v-if="noTeam" class="mt-2 flex flex-col gap-2">
+            <p class="m-0 font-ui text-sm text-muted">Someone sent you an invite? Paste it to join their team.</p>
+            <HubInvitePaste label="Invite link" />
+          </div>
           <div v-if="overnight.length" class="mt-2 flex flex-col gap-2">
             <p :class="label" class="m-0">Closed in the last day</p>
             <ul class="m-0 flex list-none flex-col p-0">

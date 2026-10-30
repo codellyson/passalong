@@ -80,7 +80,7 @@ board until someone archives it by hand; and finished work nobody moved to Done.
    asked for and closed or reopened with what is missing. The proof gate on `hand_in`
    (`proofProblem()`) goes. Stronger with GitHub connected (a merged PR naming the task), useful
    without it.
-3. **Onboarding**: a guided setup run once by whoever creates the team: the team and its people,
+3. **Onboarding** — **built 2026-10-30** (`/hub/start`; AGENTS.md, docs/llm-wiki/hub.md): a guided setup run once by whoever creates the team: the team and its people,
    its groups, its projects (name, one line, repo if any), filling each project's documents (a
    prompt to paste into an agent for a repo; a few questions or pasted docs otherwise), where work
    comes in, and connecting agents.

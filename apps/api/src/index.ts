@@ -12,6 +12,7 @@
 //   DELETE /v1/tokens/:id              revoke one
 //   GET    /v1/me                      identity, teams, counts
 //   PATCH  /v1/me                      { handle, name, email }
+//   PUT    /v1/me/setup                { step, as: done|skipped } or { dismissed } (first-run setup)
 //   POST   /v1/teams                   { name } → create a team (you become owner)
 //   GET    /v1/teams                   teams you belong to
 //   GET    /v1/teams/:slug             one team with members (members only)
@@ -231,6 +232,7 @@ import {
 } from "./quota.js";
 import { askDraft, askReader, READER_IMAGES, type ReaderImage, readerReady } from "./reader.js";
 import { sizeProblem } from "./sections.js";
+import { getSetup, type SetupChange, saveSetup, setupProblem } from "./setup.js";
 import {
   conversationOn,
   evidenceOn,
@@ -1834,7 +1836,17 @@ app.get("/v1/me", async (c) => {
     has_password: Boolean(me?.password_hash),
     // Whether the email on the account was proven to reach its owner. See migrations/0050.
     email_verified: Boolean(me?.email_verified),
+    // Where first-run setup got to (migration 0066, src/setup.ts), so the hub resumes it anywhere.
+    setup: await getSetup(c.env.DB, account),
   });
+});
+
+/** One setup step done or skipped, or setup put away: `{ step, as }` or `{ dismissed }`. */
+app.put("/v1/me/setup", async (c) => {
+  const change = await c.req.json().catch(() => ({}));
+  const problem = setupProblem(change);
+  if (problem) return err(c, 400, problem);
+  return c.json({ setup: await saveSetup(c.env.DB, c.get("account"), change as SetupChange) });
 });
 
 /**

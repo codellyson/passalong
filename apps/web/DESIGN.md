@@ -408,6 +408,26 @@ stays, with the act in outline danger and Keep it. A register leads its block an
 among a few (where work comes from) are chosen chips. Loading is the skeleton, a failed load is the
 danger callout with Try again, and an empty register says what will appear and how.
 
+### Setup
+First-run setup (`/hub/start`, 70rem) is a calm page, never a modal: "Set up <team>" at the headline
+size over one muted line ("2 of 7 done · skip anything, it's saved as you go") with **Finish later**
+as a muted link at its right, then a 13rem step rail beside a 44rem step column. The rail is an
+ordered side list over a 1px hairline at its left edge: each step a 14px row with its number in muted
+tabular figures, or an ink check once done; the current step is ink at 500 with the 2px ink bar
+beside it (the Chosen Rule); a skipped step adds "Skipped" in muted text. Under 768px the rail is a
+row over a hairline that scrolls sideways, the bar under the current step, which is kept in view.
+Each step is its name at the title size, one muted line saying why, its controls (fields, settings
+rows, a register of what is already made with ink checks), then a hairline and **Continue** as the one
+primary with **Skip** beside it — Continue is disabled until there is something to act on, and the
+last step says **Finish**. A note that a step needs another is a muted line beside them. Per project,
+what to know is a block divided by hairlines: the 3×14 mark and name, then either the sentence for
+the person's agent in a field-white well with Copy as a flush `sm` button at its right, or two chosen
+chips (Answer three questions, Paste what you have) over the questions. Long machine strings (the
+inbound addresses) wrap inside their well rather than scroll. Done, Needs you leads with "You're set
+up." over a muted line, "Ready: Northwind, invites, 2 projects… Left: connect an agent" with each step
+left a link, and Continue setup and Dismiss as `sm` buttons; until every step is done or it is
+dismissed, the same line reads "Finish setting up". No celebration, no progress bar, no coral.
+
 ### Back link
 A page reached from a list leads with a muted link back to it ("Support", "Work", "All
 documents") behind the drawn back arrow (`AppIcon` `back`, 14px at the icon set's 1.75 stroke),
