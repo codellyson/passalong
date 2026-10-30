@@ -1,15 +1,15 @@
 ---
 name: Passalong hub
-description: The signed-in hub, drawn as a register of what moved and who must act, on cream with an ink rail.
+description: The signed-in hub, drawn as a register of what moved and who must act, on white with an ink rail.
 colors:
-  cream-ground: "#fffcfa"
-  deeper-cream: "#f7f2ed"
-  recessed-cream: "#f2ebe3"
-  field-white: "#fffefe"
+  cream-ground: "#ffffff"
+  deeper-cream: "#f7f7f6"
+  recessed-cream: "#f1f1ef"
+  field-white: "#ffffff"
   ink: "#252522"
   muted-ink: "#6e6c68"
-  hairline: "#efe6dc"
-  rule: "#e0d4c7"
+  hairline: "#ececea"
+  rule: "#dcdbd7"
   coral: "#f2805d"
   coral-text: "#b8481f"
   rail-ink: "#252522"

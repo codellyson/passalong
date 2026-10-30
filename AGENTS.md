@@ -451,8 +451,9 @@ change. Its README says how.
   `mt-8` between sections. Half-steps are off the scale — `-1.5`, `-2.5` and `-3.5` were all in use
   and one relationship had four different values, which is what made the interface look unfinished
   before anyone could say why. `-0.5` is the one exception: 2px inside a chip is a sub-unit.
-- **Coral is active, ink is changed (the hub, 2026-10-29; active since 2026-10-30).** The palette is kept — cream ground,
-  ink, coral — and the signed-in hub draws it like a drawing set. Its tokens are `.hub-app` in
+- **Coral is active, ink is changed (the hub, 2026-10-29; active since 2026-10-30).** The palette is kept — a white ground
+  (near-white neutral surfaces and lines since 2026-10-30, the author's call: the warm creams read
+  brown), ink, coral — and the signed-in hub draws it like a drawing set. Its tokens are `.hub-app` in
   styles.css, put on `<body>` by `HubShell` so teleported menus and drawers inherit them, and by
   `/join/:code`, `/reset` and an error page inside the app; the landing, the public 404 and the
   share pages keep the `:root` tokens. In the hub: corners are 2, 3 and 4px

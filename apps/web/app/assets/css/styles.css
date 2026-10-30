@@ -168,18 +168,18 @@
      Coral itself (`--coral`) is 2.6:1 on the canvas, which is fine for a mark and illegible as
      text, so `--accent` is the same hue taken down to a readable 5:1 for the places a word has to
      be coral. The spec's muted grey (#858481, 3.7:1) is darkened for the same reason. */
-  --bg: light-dark(#fffcfa, #191816);
-  --surface: light-dark(#f2ebe3, #2c2a26);
-  --surface-raised: light-dark(#f7f2ed, #23211e);
-  --field: light-dark(#fffefe, #1e1d1a);
+  --bg: light-dark(#ffffff, #191816);
+  --surface: light-dark(#f1f1ef, #2c2a26);
+  --surface-raised: light-dark(#f7f7f6, #23211e);
+  --field: light-dark(#ffffff, #1e1d1a);
   --fg: light-dark(#252522, #f4efe9);
   --muted: light-dark(#6e6c68, #a39f98);
-  --line: light-dark(#efe6dc, #33302c);
-  --line-strong: light-dark(#e0d4c7, #45413c);
+  --line: light-dark(#ececea, #33302c);
+  --line-strong: light-dark(#dcdbd7, #45413c);
   --coral: #f2805d;
   --accent: light-dark(#b8481f, #f2805d);
   --accent-hover: light-dark(#9c3b17, #f7a077);
-  --accent-fg: light-dark(#fffcfa, #1a1410);
+  --accent-fg: light-dark(#ffffff, #1a1410);
   --accent-soft: light-dark(#fce9e0, #3a261e);
   /* What a global rule means, not which colour it is, for the rules the hub shares with the landing:
      the keyboard ring and a focused field's border and halo, a chosen checkbox or radio, a link's
@@ -207,7 +207,7 @@
   --ok-soft: light-dark(#e6f0dc, #1f2a1b);
   --warn: light-dark(#86750f, #d6c530);
   --warn-soft: light-dark(#f5efcc, #2d2a17);
-  --code: light-dark(#f2ebe3, #2c2a26);
+  --code: light-dark(#f1f1ef, #2c2a26);
   /* The hairline around an image. Pure black on light, pure white on dark, at a tenth: a tinted
      neutral picks up the surface behind it and reads as dirt on the picture's edge. */
   --image-edge: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
@@ -259,7 +259,7 @@
   --r-pill: 0.25rem;
   --font-serif: var(--font-sans);
   --edge-shadow: 0 0 0 1px var(--line-strong);
-  --edge-shadow-hover: 0 0 0 1px light-dark(#cbbcab, #57524b);
+  --edge-shadow-hover: 0 0 0 1px light-dark(#c8c6c1, #57524b);
 
   --rail: light-dark(#252522, #11100e);
   --on-rail: #f4efe9;
