@@ -69,7 +69,8 @@ async function call(method, path, body) {
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return { status: res.status, ...(await res.json()) };
+  // The HTTP status wins: a body may carry a field called status too (a work item's own).
+  return { ...(await res.json()), status: res.status };
 }
 
 /** What the signed-in account has been told, newest first, as text. */
@@ -165,7 +166,7 @@ test("nested folders keep their space, color and subtree when moved", { skip }, 
     `${script.id}/${scenes.id}`,
   );
 
-  await assert.rejects(api.updateFolder(script.id, { parent: scenes.id }), /subfolders/);
+  await assert.rejects(api.updateFolder(script.id, { parent: scenes.id }), /inside itself/);
   const deleted = await fetch(`${API}/v1/folders/${encodeURIComponent(script.id)}`, {
     method: "DELETE",
     headers: {
