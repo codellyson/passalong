@@ -42,7 +42,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
       <Transition
         enter-active-class="transition-opacity duration-200 ease-out motion-reduce:transition-none"
         enter-from-class="opacity-0"
-        leave-active-class="transition-opacity duration-150 ease-in motion-reduce:transition-none"
+        leave-active-class="transition-opacity duration-150 ease-out motion-reduce:transition-none"
         leave-to-class="opacity-0"
       >
         <div v-if="target" class="absolute inset-0 bg-black/40" aria-hidden="true" @click="close" />
@@ -50,7 +50,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
       <Transition
         enter-active-class="transition-transform duration-200 ease-out motion-reduce:transition-none"
         enter-from-class="translate-x-full"
-        leave-active-class="transition-transform duration-150 ease-in motion-reduce:transition-none"
+        leave-active-class="transition-transform duration-150 ease-out motion-reduce:transition-none"
         leave-to-class="translate-x-full"
       >
         <aside

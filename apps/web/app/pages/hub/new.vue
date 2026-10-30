@@ -554,15 +554,15 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                   <!-- One row with File it at every width: on a phone the three are marks alone, their
                        words kept for screen readers, so File it is never pushed onto a line of its own. -->
                   <span class="flex items-center gap-1">
-                    <label class="btn sm cursor-pointer border-transparent" :class="filed || busy ? 'pointer-events-none opacity-50' : ''">
+                    <label class="btn sm cursor-pointer border-transparent max-sm:w-8 max-sm:px-0" :class="filed || busy ? 'pointer-events-none opacity-50' : ''">
                       <input type="file" accept="image/*" multiple class="sr-only" :disabled="Boolean(filed) || busy" @change="attach" />
                       <AppIcon name="image" />
                       <span class="max-sm:sr-only">{{ uploading ? "Adding picture…" : "Picture" }}</span>
                     </label>
-                    <button type="button" class="btn sm border-transparent" :disabled="Boolean(filed) || busy" @mousedown.prevent @click="writer?.insert('@')">
+                    <button type="button" class="btn sm border-transparent max-sm:w-8 max-sm:px-0" :disabled="Boolean(filed) || busy" @mousedown.prevent @click="writer?.insert('@')">
                       <span aria-hidden="true">@</span><span class="max-sm:sr-only">Person</span>
                     </button>
-                    <button type="button" class="btn sm border-transparent" :disabled="Boolean(filed) || busy" @mousedown.prevent @click="writer?.insert('#')">
+                    <button type="button" class="btn sm border-transparent max-sm:w-8 max-sm:px-0" :disabled="Boolean(filed) || busy" @mousedown.prevent @click="writer?.insert('#')">
                       <span aria-hidden="true">#</span><span class="max-sm:sr-only">Group</span>
                     </button>
                   </span>

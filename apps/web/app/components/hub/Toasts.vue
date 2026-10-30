@@ -25,8 +25,8 @@ const DOT: Record<string, string> = {
     <TransitionGroup
       enter-from-class="translate-y-2 opacity-0"
       leave-to-class="opacity-0"
-      enter-active-class="transition duration-200 ease-out"
-      leave-active-class="transition duration-150 ease-in"
+      enter-active-class="transition-[opacity,translate] duration-200 ease-out"
+      leave-active-class="transition-[opacity,translate] duration-150 ease-out"
     >
       <div
         v-for="t in toasts"

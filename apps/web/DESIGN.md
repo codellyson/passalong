@@ -439,7 +439,7 @@ buttons. No celebration, no progress bar, no coral.
 
 ### Back link
 A page reached from a list leads with a muted link back to it ("Support", "Work", "All
-documents") behind the drawn back arrow (`AppIcon` `back`, 14px at the icon set's 1.75 stroke),
+documents") behind the drawn back arrow (`AppIcon` `back`, 14px at the icon set's 1.5 stroke),
 never a "←" glyph.
 
 ### Tabs

@@ -191,15 +191,16 @@ const nearLimit = computed(() => {
   <div :class="framed ? 'md:grid md:min-h-dvh md:grid-cols-[15rem_minmax(0,1fr)]' : ''">
     <!-- The rail. Sticky beside the page from md up; below that a drawer over it. -->
     <template v-if="framed">
+      <!-- Always there, faded in and out with the drawer, so closing is the opening run backwards. -->
       <div
-        v-if="drawer"
-        class="fixed inset-0 z-40 bg-[oklch(0_0_0/0.4)] md:hidden"
+        class="fixed inset-0 z-40 bg-[oklch(0_0_0/0.4)] transition-opacity duration-200 ease-out motion-reduce:transition-none md:hidden"
+        :class="drawer ? 'opacity-100' : 'pointer-events-none opacity-0'"
         aria-hidden="true"
         @click="drawer = false"
       />
       <aside
         id="hub-rail"
-        class="z-50 w-60 transition-transform duration-200 ease-out max-md:fixed max-md:inset-y-0 max-md:right-0 md:sticky md:top-0 md:h-dvh"
+        class="z-50 w-60 transition-[translate,visibility] duration-200 ease-out motion-reduce:transition-none max-md:fixed max-md:inset-y-0 max-md:right-0 md:sticky md:top-0 md:h-dvh"
         :class="drawer ? '' : 'max-md:invisible max-md:translate-x-full'"
         @keydown.esc="drawer = false"
       >
