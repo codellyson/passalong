@@ -254,25 +254,25 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
             </div>
           </section>
 
-          <!-- The column labels, once, over the groups. -->
-          <div
-            v-if="groups.length"
-            aria-hidden="true"
-            class="mt-8 hidden gap-x-3 pb-2 pl-4 @2xl:grid"
-            :class="[cols, label]"
-          >
-            <span>Work</span><span>Project</span><span>With</span><span class="text-right">Waiting</span><span />
-          </div>
           <section
             v-for="(g, gi) in groups"
             :key="g.reason"
             :aria-labelledby="`grp-${g.reason}`"
-            :class="gi ? 'mt-6' : 'mt-8 @2xl:mt-0'"
+            :class="gi ? 'mt-6' : 'mt-8'"
           >
             <h2 :id="`grp-${g.reason}`" class="m-0 flex items-baseline gap-2 border-b border-fg pb-2 font-ui text-sm font-semibold tracking-normal">
               {{ GROUP[g.reason] }}
               <span class="font-normal text-muted tabular-nums">{{ g.list.length }}</span>
             </h2>
+            <!-- The column labels, once, under the first group's heading. -->
+            <div
+              v-if="!gi"
+              aria-hidden="true"
+              class="hidden gap-x-3 border-b border-line pt-2 pb-2 pl-4 @2xl:grid"
+              :class="[cols, label]"
+            >
+              <span>Work</span><span>Project</span><span>With</span><span class="text-right">Waiting</span><span />
+            </div>
             <ol class="m-0 list-none p-0">
               <li
                 v-for="r in opened.has(g.reason) ? g.list : g.list.slice(0, SHOWN)"
@@ -300,11 +300,11 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                   </template>
                   <span v-else class="text-muted">Not in a project</span>
                 </span>
-                <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">
-                  <span class="@2xl:hidden" aria-hidden="true">· </span>{{ withWho(r) }}
+                <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @max-2xl:-ml-2 @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">
+                  <span class="mr-1 @2xl:hidden" aria-hidden="true">·</span>{{ withWho(r) }}
                 </span>
-                <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
-                  <span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(r.since, now) }}
+                <span class="order-2 font-ui text-xs text-muted tabular-nums @max-2xl:-ml-2 @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
+                  <span class="mr-1 @2xl:hidden" aria-hidden="true">·</span>{{ age(r.since, now) }}
                 </span>
               </li>
             </ol>

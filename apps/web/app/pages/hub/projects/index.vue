@@ -187,8 +187,8 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_minmax(0,15rem)]";
             <span class="order-2 pl-[11px] font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-2 @2xl:row-start-1 @2xl:pl-0 @2xl:text-right @2xl:text-sm @2xl:text-fg">
               {{ p.open }}<span class="@2xl:hidden"> open</span>
             </span>
-            <span class="order-2 font-ui text-xs text-muted tabular-nums @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
-              <span class="@2xl:hidden" aria-hidden="true">· </span>{{ p.documents }}<span class="@2xl:hidden">&nbsp;{{ p.documents === 1 ? "document" : "documents" }}</span>
+            <span class="order-2 font-ui text-xs text-muted tabular-nums @max-2xl:-ml-2 @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-right @2xl:text-sm @2xl:text-fg">
+              <span class="mr-1 @2xl:hidden" aria-hidden="true">·</span>{{ p.documents }}<span class="@2xl:hidden">&nbsp;{{ p.documents === 1 ? "document" : "documents" }}</span>
             </span>
             <!-- On a phone the last change is a line of its own, under the counts, on the title's edge. -->
             <span class="order-2 min-w-0 basis-full pl-[11px] font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-4 @2xl:row-start-1 @2xl:basis-auto @2xl:pl-0 @2xl:text-right @2xl:text-sm @2xl:text-fg">

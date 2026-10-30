@@ -46,7 +46,7 @@ const isProject = (id: string) => currentProject.value === id;
 </script>
 
 <template>
-  <div class="rail flex h-full flex-col gap-4 bg-rail px-3 pt-4 pb-3 text-on-rail">
+  <div class="rail flex h-full flex-col gap-4 border-r border-rail-line bg-rail px-3 pt-4 pb-3 text-on-rail">
     <a class="flex items-center gap-2 px-3 py-1 font-ui text-sm font-semibold text-on-rail no-underline" href="/hub">
       <img src="/favicon.svg" alt="" class="size-6" />
       <span>Passalong</span>

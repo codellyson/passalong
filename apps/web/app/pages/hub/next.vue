@@ -13,7 +13,7 @@
 -->
 <script setup lang="ts">
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { NeedRow, SupportList, ThreadItem } from "~/types/hub";
+import type { GuideContext, NeedRow, SupportList, ThreadItem } from "~/types/hub";
 import { age, toneOf } from "~/utils/projects";
 
 usePage({
@@ -68,6 +68,12 @@ const threadQ = useQuery({
   queryKey: computed(() => hubKeys.supportThread(id.value)),
   queryFn: async () =>
     (await api<{ thread: ThreadItem[] }>(`/v1/guides/${id.value}/thread`))?.thread ?? [],
+  enabled: computed(() => signedIn.value && customer.value),
+});
+/** Who Send goes to and under what subject: the request's context, as its own page reads it. */
+const contextQ = useQuery({
+  queryKey: computed(() => hubKeys.context(id.value)),
+  queryFn: async () => (await api<GuideContext>(`/v1/guides/${id.value}/context`)) ?? null,
   enabled: computed(() => signedIn.value && customer.value),
 });
 const { data: support } = useQuery({
@@ -231,7 +237,9 @@ const SAID: Partial<Record<NeedRow["reason"], string>> = {
           :key="`c-${item.id}`"
           :guide-id="item.id"
           :thread="threadQ.data.value ?? null"
-          :name="item.with || 'the customer'"
+          :name="contextQ.data.value?.customer?.name || item.with || 'the customer'"
+          :address="contextQ.data.value?.customer?.email"
+          :subject="contextQ.data.value?.customer?.subject"
           :state="state"
           @sent="onSent"
         />

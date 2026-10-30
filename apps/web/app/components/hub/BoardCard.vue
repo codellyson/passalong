@@ -92,8 +92,7 @@ function fromContext(e: MouseEvent) {
     <div class="flex items-start gap-2">
       <NuxtLink
         :to="`/hub/g/${g.id}`"
-        class="line-clamp-3 min-w-0 grow font-ui text-sm font-medium text-pretty no-underline outline-none after:absolute after:inset-0 after:rounded-2 hover:underline focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-[var(--focus)] focus-visible:after:outline-solid"
-        :class="done ? 'text-muted' : 'text-fg'"
+        class="line-clamp-3 min-w-0 grow font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 hover:underline focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-[var(--focus)] focus-visible:after:outline-solid"
       >{{ g.title || "Untitled" }}</NuxtLink>
       <!-- No room taken while hidden, so a narrow column's title keeps its width. -->
       <input
