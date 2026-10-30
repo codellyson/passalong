@@ -613,6 +613,27 @@ const FEED_SQL = `SELECT n.id, n.kind, n.guide_id, n.actor_id, n.team_id, n.at, 
   LEFT JOIN team t ON t.id = n.team_id
   WHERE n.account_id = ?`;
 
+/**
+ * A guide deleted takes its unread feed rows with it, so nobody opens a line about work that is
+ * gone. What already left cannot be taken back: answers how many people may have heard by mail or
+ * on a device, for the page that undid it to say so. Read rows stay, as history of what was seen.
+ */
+export async function forgetGuide(db: D1Database, guideId: string): Promise<{ told: number }> {
+  const pushed = [...PUSHED].map((k) => `'${k}'`).join(", ");
+  const told = await db
+    .prepare(
+      `SELECT COUNT(DISTINCT account_id) AS n FROM notification
+        WHERE guide_id = ? AND (emailed_at != '' OR kind IN (${pushed}))`,
+    )
+    .bind(guideId)
+    .first<{ n: number }>();
+  await db
+    .prepare("DELETE FROM notification WHERE guide_id = ? AND read_at = ''")
+    .bind(guideId)
+    .run();
+  return { told: Number(told?.n ?? 0) };
+}
+
 export type FeedScope = { kind: "all" } | { kind: "mine" } | { kind: "team"; id: string };
 
 const feedScope = (scope: FeedScope, account: string) =>

@@ -8,7 +8,9 @@
   Undo in place, and the last few filings below.
 -->
 <script setup lang="ts">
-import { age, toneOf } from "~/utils/projects";
+import type { Guide } from "~/types/hub";
+import { age, byLine, toneOf } from "~/utils/projects";
+import { shorten } from "~/utils/shorten";
 
 usePage({
   title: "What do you need? · Passalong",
@@ -54,8 +56,8 @@ const writer = ref<{
 const busy = ref(false);
 const uploading = ref(false);
 const problem = ref("");
-/** Said once after an undo: the words are still in the editor. */
-const undone = ref(false);
+/** Said once after an undo: "" when nothing was undone, else what holds now. */
+const undone = ref("");
 /** The server has no reader: the box cannot file anything, and says so before anyone writes. */
 const offline = ref(false);
 
@@ -79,6 +81,8 @@ interface Filed {
   projects: Project[];
 }
 const filed = ref<Filed | null>(null);
+/** The filing just made, so its row settles into the register rather than popping in. */
+const justFiled = ref("");
 /** Who it is for now, as an address: `#group`, `@handle`, or "" for the whole team. */
 const filedTo = ref("");
 const moving = ref(false);
@@ -132,7 +136,32 @@ interface Preview {
 }
 const preview = ref<Preview | null>(null);
 const reading = ref(false);
-const related = ref<{ id: string; title: string }[]>([]);
+/** Work already on the board that looks like it, each with the facts that tell same titles apart. */
+interface Related {
+  id: string;
+  title: string;
+  project: Project | null;
+  /** Who holds it, or where it stands. */
+  where: string;
+  at: string;
+}
+const related = ref<Related[]>([]);
+const STAGE: Record<string, string> = {
+  draft: "Draft",
+  todo: "To do",
+  working: "In progress",
+  done: "Done",
+};
+const relatedOf = (g: Guide): Related => {
+  const h = g.held_by?.[0];
+  return {
+    id: g.id,
+    title: g.title || "",
+    project: g.project ?? null,
+    where: h ? `With ${byLine(h.name, h.agent ? "agent" : "")}` : STAGE[g.stage || ""] || "",
+    at: g.updated || g.created,
+  };
+};
 let timer: ReturnType<typeof setTimeout> | undefined;
 let asked = 0;
 /** Pictures alone are enough to read; words need a sentence first, as the server says. */
@@ -143,7 +172,7 @@ const readable = computed(
 );
 watch([text, team], () => {
   clearTimeout(timer);
-  undone.value = false;
+  undone.value = "";
   if (filed.value || offline.value) return;
   if (!readable.value) {
     asked++;
@@ -164,12 +193,15 @@ watch([text, team], () => {
       preview.value = got?.preview ?? null;
       const q = preview.value?.title || "";
       const found = q
-        ? await api<{ guides: { id: string; title: string; status: string }[] }>(
+        ? await api<{ guides: Guide[] }>(
             `/v1/guides?q=${encodeURIComponent(q.split(" ").slice(0, 4).join(" "))}&scope=${encodeURIComponent(team.value || "all")}`,
           ).catch(() => null)
         : null;
       if (mine === asked)
-        related.value = (found?.guides ?? []).filter((g) => g.status !== "consumed").slice(0, 3);
+        related.value = (found?.guides ?? [])
+          .filter((g) => g.status !== "consumed")
+          .slice(0, 3)
+          .map(relatedOf);
     } catch (err) {
       if (mine !== asked) return;
       preview.value = null;
@@ -220,6 +252,7 @@ interface Recent {
   project_id: string;
   project: string;
   project_color: string;
+  team_name: string;
 }
 const recent = ref<Recent[]>([]);
 const loadRecent = () =>
@@ -272,7 +305,7 @@ async function file() {
   if (!text.value.trim() || busy.value || offline.value || filed.value) return;
   busy.value = true;
   problem.value = "";
-  undone.value = false;
+  undone.value = "";
   try {
     const got = await api<Filed>(
       "/v1/compose",
@@ -280,6 +313,7 @@ async function file() {
     );
     if (got) {
       filed.value = got;
+      justFiled.value = got.id;
       filedTo.value = got.route ? `#${got.route.slug}` : "";
       now.value = Date.now();
       loadRecent();
@@ -329,10 +363,18 @@ async function undo() {
   if (!filed.value) return;
   problem.value = "";
   try {
-    await api(`/v1/guides/${filed.value.id}`, { method: "DELETE" });
+    const got = await api<{ told?: number }>(`/v1/guides/${filed.value.id}`, {
+      method: "DELETE",
+    });
+    const told = got?.told ?? 0;
     filed.value = null;
     moving.value = false;
-    undone.value = true;
+    // Its unread feed lines go with it; mail and phone alerts already sent cannot be recalled.
+    undone.value = `Undone: it's deleted. Your words are still here.${
+      told
+        ? ` ${told === 1 ? "1 person" : `${told} people`} may already have been told by email or on their phone.`
+        : ""
+    }`;
     loadRecent();
   } catch (err) {
     problem.value = (err as Error).message;
@@ -342,7 +384,7 @@ async function undo() {
 function again() {
   filed.value = null;
   moving.value = false;
-  undone.value = false;
+  undone.value = "";
   preview.value = null;
   related.value = [];
   writer.value?.clear();
@@ -357,14 +399,14 @@ const whoFor = computed(() => {
     return g?.name || to;
   }
   if (to.startsWith("@")) return people.value.find((p) => `@${p.handle}` === to)?.name || to;
-  return teamName.value ? `Everyone in ${teamName.value}` : "Only you";
+  return everyone(teamName.value);
 });
+/** One phrase for "the whole team", on every line of this page and as Give to says it. */
+const everyone = (team: string) => (team ? `Everyone in ${team}` : "Only you");
 const previewFor = computed(() =>
   preview.value?.route
     ? preview.value.route.name || `#${preview.value.route.slug}`
-    : teamName.value
-      ? `Everyone in ${teamName.value}`
-      : "Only you",
+    : everyone(teamName.value),
 );
 /** The project the preview shows: the page's own when opened from one, else the reader's. */
 const previewProject = computed(() => preset.value ?? preview.value?.project ?? null);
@@ -378,7 +420,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
   <HubShell>
     <div class="flex flex-col gap-10">
       <!-- Filed: the page says what happened, where it went, and the three ways to change that. -->
-      <section v-if="filed" class="flex flex-col gap-5" aria-labelledby="filed-h" aria-live="polite">
+      <section v-if="filed" class="settle flex flex-col gap-5" aria-labelledby="filed-h" aria-live="polite">
         <div class="flex flex-col gap-2 border-b border-fg pb-4">
           <h1 id="filed-h" class="m-0 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-h2 font-medium tracking-tight">
             <span class="min-w-0 break-words"><span class="text-muted">Filed:</span> {{ filed.title }}</span>
@@ -415,12 +457,12 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
 
         <div class="flex flex-wrap items-center gap-2">
           <NuxtLink :to="`/hub/g/${filed.id}`" class="btn primary no-underline">Open it</NuxtLink>
+          <button type="button" class="btn" @click="again">Write another</button>
           <button type="button" class="btn" :aria-expanded="moving" @click="moving = !moving">
             Move…<AppIcon name="reveal" class="shrink-0 transition-transform" :class="moving ? 'rotate-180' : ''" />
           </button>
-          <button type="button" class="btn" @click="undo">Undo</button>
-          <span class="mx-2 hidden h-5 w-px bg-line sm:block" aria-hidden="true" />
-          <button type="button" class="btn" @click="again">Write another</button>
+          <span class="mx-2 h-5 w-px bg-line" aria-hidden="true" />
+          <button type="button" class="btn sm border-transparent text-muted hover:text-fg" @click="undo">Undo</button>
         </div>
 
         <!-- Move, in place: which project, and who it is for. -->
@@ -485,6 +527,23 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                 @problem="problem = $event"
               >
                 <template #footer>
+                  <!-- On a phone the panel is below the fold: its reading in one line, before File it. -->
+                  <p
+                    v-if="!offline && (preview || reading || preset)"
+                    class="m-0 flex w-full min-w-0 items-baseline gap-x-1 border-t border-line pt-3 font-ui text-xs text-muted lg:hidden"
+                    aria-hidden="true"
+                  >
+                    <span class="shrink-0">{{ state }}</span>
+                    <template v-if="preview">
+                      <span aria-hidden="true">·</span>
+                      <span class="min-w-0 font-medium text-fg">{{ shorten(preview.title, 28).text }}</span>
+                    </template>
+                    <span aria-hidden="true">·</span>
+                    <span v-if="previewProject" class="flex shrink-0 items-baseline gap-1">
+                      <span class="project-mark h-3 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(previewProject)" />{{ previewProject.title }}
+                    </span>
+                    <span v-else class="shrink-0">Not in a project</span>
+                  </p>
                   <span class="flex flex-wrap items-center gap-1">
                     <label class="btn sm cursor-pointer border-transparent" :class="filed || busy ? 'pointer-events-none opacity-50' : ''">
                       <input type="file" accept="image/*" multiple class="sr-only" :disabled="Boolean(filed) || busy" @change="attach" />
@@ -517,9 +576,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
                 >{{ s.label }}</button><span v-if="i < STARTERS.length - 1" aria-hidden="true">·</span>
               </template>
             </p>
-            <p v-if="undone" class="m-0 font-ui text-sm text-muted" role="status">
-              Undone. Nothing was filed; your words are still here to change or file again.
-            </p>
+            <p v-if="undone" class="m-0 font-ui text-sm text-muted" role="status">{{ undone }}</p>
             <div v-if="problem" role="alert" class="flex flex-wrap items-baseline gap-x-4 gap-y-2 rounded-2 border border-danger bg-danger-soft px-4 py-3">
               <p class="m-0 min-w-0 grow basis-64 font-ui text-sm text-danger">{{ problem }}</p>
               <button v-if="!offline && text.trim()" class="btn outline danger sm" type="button" @click="file">Try again</button>
@@ -583,9 +640,18 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
               </div>
               <div v-if="related.length" :class="fact">
                 <p :class="label">Looks like</p>
-                <ul class="m-0 flex list-none flex-col gap-1 p-0">
-                  <li v-for="r in related" :key="r.id" class="font-ui text-sm break-words">
-                    <NuxtLink :to="`/hub/g/${r.id}`" class="text-fg">{{ r.title }}</NuxtLink>
+                <ul class="m-0 flex list-none flex-col gap-2 p-0">
+                  <li v-for="r in related" :key="r.id" class="flex flex-col gap-0.5 font-ui">
+                    <NuxtLink :to="`/hub/g/${r.id}`" class="text-sm break-words text-fg">{{ r.title }}</NuxtLink>
+                    <span class="flex flex-wrap items-baseline gap-x-1 text-xs text-muted">
+                      <template v-if="r.project">
+                        <span class="project-mark h-3 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
+                        <span class="ml-1 text-fg">{{ r.project.title }}</span>
+                      </template>
+                      <span v-else>Not in a project</span>
+                      <template v-if="r.where"><span aria-hidden="true">·</span><span>{{ r.where }}</span></template>
+                      <span aria-hidden="true">·</span><span class="tabular-nums">{{ age(r.at, now) }}</span>
+                    </span>
                   </li>
                 </ul>
                 <p class="m-0 font-ui text-xs text-muted">Already on the board. Open one instead if it is the same thing.</p>
@@ -606,7 +672,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
             v-for="r in recent"
             :key="r.id"
             class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-3 @2xl:grid"
-            :class="cols"
+            :class="[cols, r.id === justFiled ? 'settle' : '']"
           >
             <NuxtLink :to="`/hub/g/${r.id}`" class="min-w-0 grow basis-full font-ui text-sm font-medium break-words text-fg no-underline hover:underline @2xl:basis-auto">{{ r.title }}</NuxtLink>
             <span class="flex min-w-0 items-baseline gap-2 font-ui text-xs @2xl:text-sm">
@@ -617,7 +683,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_9rem_9rem_3.5rem]";
               <span v-else class="text-muted">Not in a project</span>
             </span>
             <span class="min-w-0 font-ui text-xs break-words text-muted @2xl:text-sm @2xl:text-fg">
-              <span class="@2xl:hidden" aria-hidden="true">· </span>{{ r.routed || "Everyone" }}
+              <span class="@2xl:hidden" aria-hidden="true">· </span>{{ r.routed || everyone(r.team_name) }}
             </span>
             <span class="font-ui text-xs text-muted tabular-nums @2xl:text-right @2xl:text-sm">
               <span class="@2xl:hidden" aria-hidden="true">· </span>{{ age(r.created, now) }}

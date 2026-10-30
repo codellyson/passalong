@@ -96,7 +96,9 @@ the box — because a screenshot of an error is often the whole report. Its answ
 customer's words are quoted by code, its reason is a note on the thread, and when unsure it files for
 the whole team and sends `reader_unsure` (pushed, mailed) with its question. The same reader backs the
 hub's box, `/hub/new` (`POST /v1/compose`), for writing work in your own words;
-there, when unsure, it files its best reading anyway and puts its question on the thread. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When
+there, when unsure, it files its best reading anyway and puts its question on the thread. Deleting
+any guide removes its unread notification rows (`forgetGuide()`); mail and push already sent stay
+sent, and the delete answers `told` so the box's Undo can say so. Support has no webhook. Sending to customers needs the Workers Paid plan (see mail-send.ts). When
 work made from a request (a bug sent on to development) reaches Done, the request wakes: a
 `child_done` notification, and — when the team turned the reminder on (`team.tell_customer`, migration
 0059, set by an owner on the Support page; off by default) — it says "tell the customer" and the

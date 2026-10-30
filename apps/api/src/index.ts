@@ -177,6 +177,7 @@ import {
   displayName,
   feed,
   feedSince,
+  forgetGuide,
   line,
   markRead,
   summary as notifSummary,
@@ -5488,8 +5489,9 @@ app.get("/v1/compose/recent", async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT g.id, g.title, g.created, COALESCE(tg.name, tg.slug, ta.name, '@' || ta.handle, '') AS routed,
             COALESCE(f.id, '') AS project_id, COALESCE(f.title, '') AS project,
-            COALESCE(f.color, '') AS project_color
-       FROM guide g LEFT JOIN team_group tg ON tg.id = g.to_group_id
+            COALESCE(f.color, '') AS project_color, COALESCE(t.name, '') AS team_name
+       FROM guide g LEFT JOIN team t ON t.id = g.team_id
+       LEFT JOIN team_group tg ON tg.id = g.to_group_id
        LEFT JOIN account ta ON ta.id = g.to_account_id
        LEFT JOIN folder f ON f.id = (SELECT fg.folder_id FROM folder_guide fg WHERE fg.guide_id = g.id
                                       ORDER BY fg.added LIMIT 1)
@@ -5507,6 +5509,7 @@ app.get("/v1/compose/recent", async (c) => {
       project_id: string;
       project: string;
       project_color: string;
+      team_name: string;
     }>();
   return c.json({ filed: results });
 });
@@ -6701,7 +6704,8 @@ app.delete("/v1/guides/:id", async (c) => {
   await dropShots(c, found.row.id);
   await dropFiles(c, found.row.id);
   await c.env.DB.prepare("DELETE FROM guide WHERE id = ?").bind(found.row.id).run();
-  return c.json({ id: found.row.id, deleted: true });
+  const { told } = await forgetGuide(c.env.DB, found.row.id);
+  return c.json({ id: found.row.id, deleted: true, told });
 });
 
 // ---- share links ------------------------------------------------------------------------

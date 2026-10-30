@@ -131,9 +131,12 @@ before the editor turns it into a line break). Starter lines sit under it as qui
 empty; a team picker shows only for someone in several teams. Beside it (under it on a phone) is
 the agent's reading, refreshed as you write from `POST /v1/compose/preview`: Work (title and tag),
 Project (mark or "Not in a project"), For (group or everyone, with the reason), Worth checking when
-unsure, what is kept as it came, and Looks like (work already on the board). Filing turns the page
-into "Filed: <title>" with Project, For and Why, and Open it, Move… (project and who it is for, in
-place) and Undo (deletes it and puts the words back in the editor), then Write another. The last
+unsure, what is kept as it came, and Looks like (work already on the board, each with its project,
+holder or state and age); on a phone the editor's foot repeats the reading in one line. Filing turns
+the page into "Filed: <title>" with Project, For and Why, and Open it, Write another, Move… (project
+and who it is for, in place) and, set apart, Undo: it deletes the work, which takes its unread feed
+lines with it (`forgetGuide()` in notify.ts, from `DELETE /v1/guides/:id`, which answers `told`), and
+says how many people may already have been told by mail or push, which cannot be recalled. The last
 five filings are a register below. An empty preview answering 501 means there is no reader, and the
 page says "Writing it down here isn't set up" before anyone writes. `?shared=1` (a phone's Share)
 lands with the shared words and pictures already in the editor.

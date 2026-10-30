@@ -173,3 +173,45 @@ test("a decline carries its reason, because that is the whole point of saying no
   );
   assert.equal(summary(r).note, "no context on the payments side");
 });
+
+test("a deleted guide takes its unread feed rows, keeps what was read, and says who may have heard", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { forgetGuide } = await import("../src/notify.ts");
+  const dir = new URL("../migrations/", import.meta.url).pathname;
+  const sql = new DatabaseSync(":memory:");
+  for (const f of readdirSync(dir).sort()) sql.exec(readFileSync(join(dir, f), "utf8"));
+  const db = {
+    prepare(q) {
+      const stmt = sql.prepare(q);
+      const bound = (args) => ({
+        first: async () => stmt.get(...args) ?? null,
+        all: async () => ({ results: stmt.all(...args) }),
+        run: async () => ({ meta: { changes: Number(stmt.run(...args).changes) } }),
+      });
+      return { ...bound([]), bind: (...args) => bound(args) };
+    },
+  };
+  const T = "2026-10-30T00:00:00.000Z";
+  for (const a of ["ada", "bola", "kemi", "sam"])
+    sql
+      .prepare("INSERT INTO account (id, token_hash, created) VALUES (?, ?, ?)")
+      .run(a, `retired:${a}`, T);
+  const add = sql.prepare(
+    "INSERT INTO notification (account_id, kind, guide_id, actor_id, at, read_at, emailed_at) VALUES (?, ?, ?, 'ada', ?, ?, ?)",
+  );
+  add.run("bola", "handoff", "g1", T, "", T); // mailed and pushed
+  add.run("kemi", "handoff", "g1", T, T, ""); // read already: kept
+  add.run("sam", "pulled", "g1", T, "", ""); // neither mailed nor a pushed kind
+  add.run("bola", "handoff", "g2", T, "", ""); // another guide: untouched
+  const { told } = await forgetGuide(db, "g1");
+  assert.equal(told, 2, "bola and kemi may have heard; sam's kind is never pushed or mailed");
+  const left = sql
+    .prepare("SELECT account_id, guide_id FROM notification ORDER BY guide_id, account_id")
+    .all();
+  assert.deepEqual(
+    left.map((r) => `${r.guide_id}:${r.account_id}`),
+    ["g1:kemi", "g2:bola"],
+  );
+});
