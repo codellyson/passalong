@@ -9,7 +9,6 @@
 <script setup lang="ts">
 import { useQueries, useQueryClient } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
-import { age } from "~/utils/projects";
 
 const { data, api, json, scope, createTeam, signedIn } = useHub();
 const router = useRouter();
@@ -54,7 +53,18 @@ async function takeOut(t: TeamDetail, m: Member) {
 }
 const nameOf = (m: Member) => m.display || personName(m.name, m.handle);
 const roleOf = (m: Member) =>
-  m.role === "owner" ? (m.creator ? "Admin, made it" : "Admin") : "Member";
+  m.role === "owner" ? (m.creator ? "Admin · started the team" : "Admin") : "Member";
+/** When they joined, as a date: "29 Oct", with the year when it is not this one. */
+function joinedOn(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const year = d.getFullYear() !== new Date().getFullYear();
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    ...(year ? { year: "numeric" } : {}),
+  });
+}
 
 // Same reason as the token name: a `prompt()` throws where dialogs are blocked.
 const naming = ref(false);
@@ -145,18 +155,18 @@ function guides(t: TeamDetail) {
           </button>
         </template>
         <div class="@container">
-          <div aria-hidden="true" class="register-label hidden grid-cols-[minmax(0,1fr)_9rem_8rem_3.5rem_11rem] gap-x-4 border-b border-line pt-3 pb-2 @2xl:grid">
+          <div aria-hidden="true" class="register-label hidden grid-cols-[minmax(0,1fr)_9rem_11rem_6rem_11rem] gap-x-4 border-b border-line pt-3 pb-2 @2xl:grid">
             <span>Name</span><span>@name</span><span>Role</span><span class="text-right">Joined</span><span />
           </div>
           <ul class="m-0 list-none p-0">
             <li v-for="m in t.members" :key="m.id || m.handle || m.joined" class="border-b border-line py-3 last:border-b-0">
-              <div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-ui text-sm @2xl:grid @2xl:gap-x-4 @2xl:grid-cols-[minmax(0,1fr)_9rem_8rem_3.5rem_11rem]">
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-ui text-sm @2xl:grid @2xl:gap-x-4 @2xl:grid-cols-[minmax(0,1fr)_9rem_11rem_6rem_11rem]">
                 <span class="min-w-0 grow basis-full font-medium break-words text-fg @2xl:basis-auto">
                   {{ nameOf(m) }}<span v-if="m.id === meId" class="font-normal text-muted"> (you)</span>
                 </span>
                 <span class="min-w-0 truncate text-muted @2xl:text-fg">{{ m.handle ? `@${m.handle}` : "no @name yet" }}</span>
                 <span class="text-muted @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· </span>{{ roleOf(m) }}</span>
-                <span class="text-muted tabular-nums @2xl:text-right @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· joined </span>{{ age(m.joined) }}</span>
+                <span class="text-muted tabular-nums @2xl:text-right @2xl:text-fg"><span class="@2xl:hidden" aria-hidden="true">· joined </span>{{ joinedOn(m.joined) }}</span>
                 <span v-if="!m.creator && (t.role === 'owner' || m.id === meId)" class="flex basis-full flex-wrap justify-start gap-2 pt-1 @2xl:basis-auto @2xl:justify-end @2xl:pt-0">
                   <template v-if="!m.creator && t.role === 'owner' && m.id !== meId">
                     <button v-if="m.role !== 'owner'" class="btn sm" type="button" @click="setRole(t, m, 'admin')">Make admin</button>

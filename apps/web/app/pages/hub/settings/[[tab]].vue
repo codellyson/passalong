@@ -61,13 +61,6 @@ function go(item: (typeof items.value)[number]) {
   );
 }
 
-const planNote = computed(() => {
-  const m = me.value;
-  if (!m) return "";
-  if (m.sync === "free") return `${m.guides} of ${m.limit}`;
-  return m.plan === "solo" ? "Solo" : m.plan === "lapsed" ? "lapsed" : "no limit";
-});
-
 const TABS = [
   { id: "account", label: "Account", path: "/hub/settings" },
   { id: "plan", label: "Plan", path: "/hub/settings/plan" },
@@ -88,9 +81,12 @@ function tabOf(anchor: string): Tab {
 
 const route = useRoute();
 const tab = computed<Tab>(() => TABS.find((t) => t.id === route.params.tab)?.id ?? "account");
-// Sign-in is itself the first block of Account when it is missing, so it is not said twice.
+// Said once, where it is fixed: Sign-in is itself the first block of Account when it is missing,
+// and an empty group says so on its own row beside Choose people. The tab's dot still counts both.
 const pageItems = computed(() =>
-  items.value.filter((i) => tabOf(i.anchor) === tab.value && i.anchor !== "signin"),
+  items.value.filter(
+    (i) => tabOf(i.anchor) === tab.value && i.anchor !== "signin" && i.team?.tab !== "groups",
+  ),
 );
 
 onMounted(() => {
@@ -108,12 +104,8 @@ onMounted(() => {
 const nav = computed(() =>
   TABS.map((t) => {
     const n = items.value.filter((i) => tabOf(i.anchor) === t.id).length;
-    const fact =
-      t.id === "plan"
-        ? planNote.value
-        : t.id === "teams"
-          ? String(me.value?.teams?.length || "")
-          : "";
+    // Usage is said in the Plan page's summary and its Work row, not a third time on the tab.
+    const fact = t.id === "teams" ? String(me.value?.teams?.length || "") : "";
     const bad = items.value.some((i) => i.tone === "bad" && tabOf(i.anchor) === t.id);
     return { ...t, needs: n, tone: bad ? "bad" : n ? "warn" : "", note: n ? "" : fact };
   }),
@@ -135,9 +127,8 @@ const summary = computed(() => {
       if (m.sync === "free") return `Free plan · ${m.guides} of ${m.limit} pieces of work used`;
       return "No plan yet, so new work can't be sent.";
     case "teams":
-      return teams.length
-        ? `In ${listOf(teams.map((t) => t.name || t.slug))}. Who is in each, its groups, its channel and its plan.`
-        : "Not in a team yet. A team is the people you send work to.";
+      // With teams, the template writes the line itself so each name links to its block.
+      return teams.length ? "" : "Not in a team yet. A team is the people you send work to.";
     case "connections":
       return `${plural(connectors.value.length, "connected app")} · ${plural(data.value.tokens.length, "API token")}. What acts as you.`;
     case "integrations":
@@ -149,12 +140,10 @@ const summary = computed(() => {
   }
 });
 
-/** "Acme", "Acme and Beta", "Acme, Beta and Core". */
-function listOf(names: string[]) {
-  return names.length < 2
-    ? (names[0] ?? "")
-    : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
-}
+const myTeams = computed(() => me.value?.teams ?? []);
+/** What follows the i-th name in "Acme, Beta and Core". */
+const sep = (i: number) =>
+  i < myTeams.value.length - 2 ? ", " : i === myTeams.value.length - 2 ? " and " : "";
 </script>
 
 <template>
@@ -162,7 +151,10 @@ function listOf(names: string[]) {
     <div class="flex min-w-0 flex-col gap-6">
       <div class="flex flex-col gap-1">
         <h1 class="m-0 text-h2 font-medium tracking-tight">Settings</h1>
-        <p class="m-0 min-h-5 font-ui text-sm text-muted">{{ summary }}</p>
+        <p v-if="tab === 'teams' && myTeams.length" class="m-0 min-h-5 font-ui text-sm text-muted">
+          In <template v-for="(t, i) in myTeams" :key="t.slug"><a :href="`#team-${t.slug}`" class="text-fg">{{ t.name || t.slug }}</a>{{ sep(i) }}</template>. Who is in each, its groups, its channels and its plan.
+        </p>
+        <p v-else class="m-0 min-h-5 font-ui text-sm text-muted">{{ summary }}</p>
       </div>
 
       <!-- The hairline is the nav's own inset edge, so the row can scroll sideways on a phone

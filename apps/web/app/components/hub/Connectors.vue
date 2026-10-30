@@ -75,11 +75,14 @@ const confidential = ref(false);
 const busy = ref(false);
 /** Shown once. The server keeps a SHA-256 of the secret, so there is no second chance. */
 const fresh = ref<{ id: string; secret: string } | null>(null);
+/** The client-ID form, open by default only for ChatGPT, which always needs one. */
+const manualOpen = ref(false);
 watch(
   app,
   (a) => {
     callback.value = a.manual?.callback ?? "";
     confidential.value = false;
+    manualOpen.value = a.id === "chatgpt";
   },
   { immediate: true },
 );
@@ -160,9 +163,65 @@ const tone = {
 
 <template>
   <div class="flex flex-col">
+    <p v-if="trouble" class="m-0 mt-2 font-ui text-sm text-danger" role="alert">{{ trouble }}</p>
+
+    <HubSkeleton v-if="loadingClients" variant="lines" :rows="2" label="Loading connected apps" />
+    <div v-else-if="clients.length" class="@container">
+      <div aria-hidden="true" class="register-label hidden grid-cols-[minmax(0,1fr)_minmax(0,14rem)_5rem_auto] gap-x-4 border-b border-line pt-3 pb-2 @2xl:grid">
+        <span>App</span><span>State</span><span class="text-right">Last used</span><span class="w-28" />
+      </div>
+      <ul class="m-0 list-none p-0">
+        <li v-for="client in clients" :key="client.id" class="border-b border-line py-3 last:border-b-0">
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-ui text-sm @2xl:grid @2xl:gap-x-4 @2xl:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_5rem_auto]">
+            <span class="flex min-w-0 basis-full items-center gap-3 @2xl:basis-auto">
+              <span class="grid size-7 shrink-0 place-items-center rounded-2 border border-line bg-field text-fg">
+                <AppMark :name="markForHost(client.host)" :size="15" />
+              </span>
+              <span class="min-w-0">
+                <span class="block font-medium break-words text-fg">{{ client.name || client.host || "Unnamed app" }}</span>
+                <span class="block text-xs text-muted">
+                  {{ client.host }} · {{ client.registered === "dynamic" ? "signed itself in" : "client ID made by hand" }}
+                </span>
+              </span>
+            </span>
+            <span class="min-w-0 grow">
+              <span :class="tone[connectorState(client).tone]">{{ connectorState(client).label }}</span>
+              <span v-if="connectorState(client).detail" class="block text-xs text-muted">{{ connectorState(client).detail }}</span>
+            </span>
+            <span class="text-muted tabular-nums @2xl:text-right @2xl:text-fg">
+              <span class="@2xl:hidden" aria-hidden="true">Used </span>{{ client.used ? age(client.used) : "never" }}
+            </span>
+            <span class="flex basis-full flex-wrap gap-2 pt-1 @2xl:basis-auto @2xl:w-28 @2xl:justify-end @2xl:pt-0">
+              <button
+                v-if="connectorState(client).tone === 'bad'"
+                class="btn sm"
+                type="button"
+                @click="stepsFor(appForHost(client.host))"
+              >Reconnect</button>
+              <button v-if="removing !== client.id" class="btn sm" type="button" @click="removing = client.id">Disconnect…</button>
+            </span>
+          </div>
+          <div v-if="removing === client.id" class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
+            <p class="m-0 min-w-0 grow basis-64 font-ui text-sm">Disconnect {{ client.name || client.host || "this app" }}? It stops working as you at once; connect it again to bring it back.</p>
+            <button class="btn sm outline danger" type="button" @click="remove(client.id)">Disconnect</button>
+            <button class="btn sm" type="button" @click="removing = null">Keep it</button>
+          </div>
+        </li>
+      </ul>
+    </div>
+    <div v-else class="mt-3">
+      <div aria-hidden="true" class="register-label hidden grid-cols-[minmax(0,1fr)_minmax(0,14rem)_5rem_7rem] gap-x-4 border-b border-line pb-2 md:grid">
+        <span>App</span><span>State</span><span class="text-right">Last used</span><span />
+      </div>
+      <p class="m-0 border-b border-line py-3 font-ui text-sm text-muted">
+        Nothing connected yet. {{ connect.open ? "Pick your assistant below" : "Connect an app to start" }}, or point it at <code class="font-code text-xs">{{ MCP_URL }}</code> directly.
+      </p>
+    </div>
+
+    <!-- How to connect another, under what is already connected. -->
     <div
       v-if="connect.open"
-      class="mt-3 grid overflow-hidden rounded-3 border border-line bg-raised md:grid-cols-[13rem_1fr]"
+      class="mt-4 grid overflow-hidden rounded-3 border border-line bg-raised md:grid-cols-[13rem_1fr]"
     >
       <div
         ref="picker"
@@ -257,8 +316,14 @@ const tone = {
           </p>
         </div>
 
-        <details v-if="app.manual" :open="app.id === 'chatgpt'">
-          <summary class="linkish w-fit cursor-pointer font-ui text-sm">
+        <div v-if="app.manual" class="flex flex-col gap-3 border-t border-line pt-4">
+          <button
+            type="button"
+            class="flex w-fit cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-ui text-sm font-medium text-fg"
+            :aria-expanded="manualOpen"
+            :aria-controls="`manual-${app.id}`"
+            @click="manualOpen = !manualOpen"
+          >
             {{
               app.id === "chatgpt"
                 ? "Make a client ID for ChatGPT"
@@ -266,8 +331,9 @@ const tone = {
                   ? "The app asked for a client ID"
                   : `${app.name} asked for a client ID instead`
             }}
-          </summary>
-          <form class="mt-3 flex flex-col gap-3 rounded-1 border border-line p-3" @submit.prevent="createClient">
+            <AppIcon name="reveal" class="shrink-0 text-muted transition-transform" :class="manualOpen ? 'rotate-180' : ''" />
+          </button>
+          <form v-if="manualOpen" :id="`manual-${app.id}`" class="flex flex-col gap-3" @submit.prevent="createClient">
             <p v-if="app.manual.callback" class="m-0 font-ui text-sm text-muted">
               Filled in for {{ app.name }}. Nothing to choose.
             </p>
@@ -291,7 +357,7 @@ const tone = {
               {{ busy ? "Creating…" : "Create client ID" }}
             </button>
           </form>
-        </details>
+        </div>
 
         <!-- Shown once, like a new token: the page holds something the server cannot give back. -->
         <div v-if="fresh" class="rounded-3 border border-fg bg-bg p-4">
@@ -335,55 +401,5 @@ const tone = {
         </div>
       </div>
     </div>
-
-    <p v-if="trouble" class="m-0 mt-2 font-ui text-sm text-danger" role="alert">{{ trouble }}</p>
-
-    <HubSkeleton v-if="loadingClients" variant="lines" :rows="2" label="Loading connected apps" />
-    <div v-else-if="clients.length" class="@container">
-      <div aria-hidden="true" class="register-label hidden grid-cols-[minmax(0,1fr)_minmax(0,14rem)_5rem_auto] gap-x-4 border-b border-line pt-3 pb-2 @2xl:grid">
-        <span>App</span><span>State</span><span class="text-right">Last used</span><span class="w-28" />
-      </div>
-      <ul class="m-0 list-none p-0">
-        <li v-for="client in clients" :key="client.id" class="border-b border-line py-3 last:border-b-0">
-          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 font-ui text-sm @2xl:grid @2xl:gap-x-4 @2xl:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_5rem_auto]">
-            <span class="flex min-w-0 basis-full items-center gap-3 @2xl:basis-auto">
-              <span class="grid size-7 shrink-0 place-items-center rounded-2 border border-line bg-field text-fg">
-                <AppMark :name="markForHost(client.host)" :size="15" />
-              </span>
-              <span class="min-w-0">
-                <span class="block font-medium break-words text-fg">{{ client.name || client.host || "Unnamed app" }}</span>
-                <span class="block text-xs text-muted">
-                  {{ client.host }} · {{ client.registered === "dynamic" ? "signed itself in" : "client ID made by hand" }}
-                </span>
-              </span>
-            </span>
-            <span class="min-w-0 grow">
-              <span :class="tone[connectorState(client).tone]">{{ connectorState(client).label }}</span>
-              <span v-if="connectorState(client).detail" class="block text-xs text-muted">{{ connectorState(client).detail }}</span>
-            </span>
-            <span class="text-muted tabular-nums @2xl:text-right @2xl:text-fg">
-              <span class="@2xl:hidden" aria-hidden="true">Used </span>{{ client.used ? age(client.used) : "never" }}
-            </span>
-            <span class="flex basis-full flex-wrap gap-2 pt-1 @2xl:basis-auto @2xl:w-28 @2xl:justify-end @2xl:pt-0">
-              <button
-                v-if="connectorState(client).tone === 'bad'"
-                class="btn sm"
-                type="button"
-                @click="stepsFor(appForHost(client.host))"
-              >Reconnect</button>
-              <button v-if="removing !== client.id" class="btn sm" type="button" @click="removing = client.id">Disconnect…</button>
-            </span>
-          </div>
-          <div v-if="removing === client.id" class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2" role="alert">
-            <p class="m-0 min-w-0 grow basis-64 font-ui text-sm">Disconnect {{ client.name || client.host || "this app" }}? It stops working as you at once; connect it again to bring it back.</p>
-            <button class="btn sm outline danger" type="button" @click="remove(client.id)">Disconnect</button>
-            <button class="btn sm" type="button" @click="removing = null">Keep it</button>
-          </div>
-        </li>
-      </ul>
-    </div>
-    <p v-else class="m-0 border-b border-line py-3 font-ui text-sm text-muted">
-      Nothing connected yet. Pick your assistant above, or point it at <code class="font-code text-xs">{{ MCP_URL }}</code> directly.
-    </p>
   </div>
 </template>

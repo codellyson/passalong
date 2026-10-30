@@ -404,7 +404,7 @@ mode · no real money is charged" label, 1px warn edge, 2px corners, when the ke
 Seats or Work used, Ends on, and Billing with the one primary action; for anyone who cannot change
 it, a line naming who can. Every destructive act — revoke, disconnect, remove, leave, turn off —
 is a quiet `sm` control ending in "…" that opens a line under its row naming what breaks and what
-stays, with the act in outline danger and Keep it. A new secret is the Shown-once callout. Choices
+stays, with the act in outline danger and Keep it. A register leads its block and how to add another sits under it (the connect sheet under connected apps, its client-ID form a hairline-divided region opened by a drawn `reveal` chevron, never a box in a box). Dates in a register are dates ("29 Oct", the year when not this one); a fact is said once on a page. A new secret is the Shown-once callout. Choices
 among a few (where work comes from) are chosen chips. Loading is the skeleton, a failed load is the
 danger callout with Try again, and an empty register says what will appear and how.
 

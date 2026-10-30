@@ -85,7 +85,7 @@ async function go(path: string) {
       <p v-else-if="sync === 'none'" class="m-0 max-w-[44rem] text-muted">
         New work can't be sent until you're on a plan. Work you already have stays where it is.
       </p>
-      <p v-else class="m-0 text-muted">You're on the free plan. Solo removes the limit.</p>
+      <p v-else class="m-0 text-muted">Solo removes the limit on work.</p>
     </HubSettingRow>
 
     <HubSettingRow v-if="plan !== 'solo' && !onATeamSeat && sync === 'free'" label="Work" hint="Archived work takes up no room.">

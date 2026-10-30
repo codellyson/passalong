@@ -96,7 +96,7 @@ async function submit() {
       </HubSettingRow>
 
       <!-- Nothing at rest: "Saved." before anyone has saved anything reads as a claim. -->
-      <div v-if="dirty || saved" class="flex flex-wrap items-center gap-2 border-b border-line py-4 md:pl-[15rem]">
+      <div v-if="dirty || saved" class="flex flex-wrap items-center gap-2 border-t border-line py-4 md:pl-[15rem]">
         <template v-if="dirty">
           <button class="btn primary sm" type="submit" :disabled="saving">{{ saving ? "Saving…" : "Save changes" }}</button>
           <button class="btn sm" type="button" @click="cancel">Cancel</button>

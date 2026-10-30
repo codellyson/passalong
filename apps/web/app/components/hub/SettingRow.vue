@@ -7,7 +7,9 @@ defineProps<{ label: string; hint?: string; for?: string }>();
 </script>
 
 <template>
-  <div class="grid gap-x-8 gap-y-2 border-b border-line py-4 last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)]">
+  <!-- A hairline above every row but a block's first, which sits under the block's ink rule: so
+       rows in different containers (a form, then the rows after it) are still all divided. -->
+  <div class="grid gap-x-8 gap-y-2 border-t border-line py-4 first:border-t-0 md:grid-cols-[13rem_minmax(0,1fr)]">
     <div class="min-w-0">
       <label v-if="$props.for" :for="$props.for" class="font-ui text-sm font-medium text-fg">{{ label }}</label>
       <p v-else class="m-0 font-ui text-sm font-medium text-fg">{{ label }}</p>

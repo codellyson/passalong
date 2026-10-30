@@ -246,7 +246,7 @@ const choices = [
           </div>
           <div v-else class="flex flex-wrap gap-2">
             <button class="btn sm" type="button" @click="confirming = 'new'">New addresses…</button>
-            <button class="btn sm outline danger" type="button" @click="confirming = 'off'">Turn off…</button>
+            <button class="btn sm" type="button" @click="confirming = 'off'">Turn off…</button>
           </div>
         </HubSettingRow>
       </template>
