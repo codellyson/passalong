@@ -500,7 +500,7 @@ const label = "font-ui text-sm font-medium text-fg";
               </p>
               <div class="flex flex-col gap-2">
                 <label :class="label" for="setup-name">Your name</label>
-                <input id="setup-name" v-model="name" class="w-full" placeholder="Ada Okafor" autocomplete="name">
+                <input id="setup-name" v-model="name" class="w-full" placeholder="Leo Okafor" autocomplete="name">
               </div>
               <p v-if="!editingHandle" class="m-0 font-ui text-sm text-muted">
                 Teammates send you work as <b class="font-medium text-fg">@{{ handle || "your-name" }}</b>.

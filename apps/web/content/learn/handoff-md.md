@@ -121,7 +121,7 @@ A handoff file says what the state is. It does not say whether anyone is working
 whether it is finished, or whether it was abandoned. Two agents, or an agent and a teammate, can
 both pick up the same work because nothing marks it as taken.
 
-You can add a line for that ("Status: in progress, Ada's laptop"), but nothing enforces it, and
+You can add a line for that ("Status: in progress, Leo's laptop"), but nothing enforces it, and
 nothing tells you when it goes stale.
 
 ### It lives in one repo

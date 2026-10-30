@@ -185,7 +185,7 @@ async function submit() {
       <form class="join" @submit.prevent="submit">
         <label>
           Your name
-          <input v-model="name" name="name" placeholder="Ada Okafor" autocomplete="name" required />
+          <input v-model="name" name="name" placeholder="Leo Okafor" autocomplete="name" required />
         </label>
 
         <p class="muted m-0">

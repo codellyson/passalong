@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1200, height=750" />
+    <script src="assets/gsap.min.js"></script>
+    <style>
+@font-face { font-family: "Onest"; src: url("assets/fonts/onest-var.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Newsreader"; src: url("assets/fonts/newsreader-var.woff2") format("woff2"); font-weight: 200 800; }
+:root { --white:#ffffff; --paper:#f1f1ef; --ink:#252522; --coral:#f2805d; --coral-text:#b8481f; --coral-soft:#fce9e0;
+  --green:#3a7a2a; --amber:#e3b23c; --muted:#6e6c68; --line:#e4e3df; }
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:1200px; height:750px; overflow:hidden; background:var(--white); }
+#root { position:relative; width:100%; height:100%; overflow:hidden; font-family:"Onest",sans-serif; color:var(--ink); }
+.layer { position:absolute; inset:0; }
+.abs { position:absolute; }
+.card { width:560px; padding:22px 28px 26px; border:5px solid var(--ink); border-radius:20px; background:var(--white);
+  color:var(--ink); box-shadow:0 20px 44px rgba(37,37,34,.14); }
+.card .k { display:inline-block; padding:5px 16px 7px; border-radius:10px; background:var(--kc); color:var(--kt,var(--white));
+  font-size:30px; font-weight:700; }
+.card .t { margin-top:12px; font-size:50px; font-weight:700; letter-spacing:-.03em; line-height:1.05; white-space:nowrap; }
+.card .s { margin-top:12px; font-size:32px; font-weight:500; line-height:1.25; color:var(--muted); }
+.card.hot { border-color:var(--coral-text); box-shadow:0 24px 54px rgba(184,72,31,.28); }
+.email { --kc:var(--coral-text); } .bug { --kc:var(--ink); } .alert { --kc:var(--amber); --kt:var(--ink); }
+.ask { --kc:var(--green); } .hub { --kc:#5a5753; }
+.row { display:flex; align-items:center; gap:18px; width:640px; padding:18px 24px; border:5px solid var(--ink);
+  border-radius:18px; background:var(--white); box-shadow:0 14px 30px rgba(37,37,34,.12); }
+.row .k { flex-shrink:0; padding:5px 14px 7px; border-radius:10px; background:var(--kc); color:var(--kt,var(--white)); font-size:28px; font-weight:700; }
+.row .t { font-size:40px; font-weight:700; letter-spacing:-.025em; white-space:nowrap; }
+.pill { display:flex; align-items:center; gap:14px; padding:16px 26px; border-radius:999px; background:var(--white);
+  border:4px solid var(--ink); font-size:34px; font-weight:700; white-space:nowrap; box-shadow:0 14px 30px rgba(37,37,34,.15); }
+.pill i { width:22px; height:22px; border-radius:50%; background:var(--kc); }
+.av { display:grid; place-items:center; border-radius:50%; background:var(--ink); color:var(--white); font-weight:700; }
+.stamp { border:8px solid var(--ink); border-radius:16px; padding:8px 26px 12px; font-size:48px; font-weight:700;
+  letter-spacing:-.03em; white-space:nowrap; }
+.tick { display:grid; place-items:center; border-radius:50%; background:var(--green); }
+.tick svg { fill:none; stroke:var(--white); stroke-width:2.8; stroke-linecap:round; stroke-linejoin:round; }
+.tick path { stroke-dasharray:16; stroke-dashoffset:16; }
+.caret { display:inline-block; width:.08em; height:.9em; margin-left:.05em; vertical-align:-.08em; background:var(--coral); }
+
+      #root { background: var(--paper); }
+      .head { left: 280px; top: 50px; width: 640px; padding-bottom: 14px; border-bottom: 7px solid var(--ink);
+        font-size: 52px; font-weight: 700; letter-spacing: -.04em; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="things-come-in" data-start="0" data-duration="9" data-width="1200" data-height="750">
+      <div id="scene" class="layer clip" data-start="0" data-duration="9" data-track-index="0">
+        <p class="abs head" id="head">Work</p>
+        <div class="abs pill hub src" id="p0" style="left: 280px; top: 158px"><i></i>Hub box</div>
+        <div class="abs row hub" id="r0" style="left: 280px; top: 150px"><span class="k">Hub</span><span class="t">Pricing page typo</span></div>
+        <div class="abs pill email src" id="p1" style="left: 280px; top: 270px"><i></i>Forwarded email</div>
+        <div class="abs row email" id="r1" style="left: 280px; top: 262px"><span class="k">Email</span><span class="t">Invoice missing</span></div>
+        <div class="abs pill bug src" id="p2" style="left: 280px; top: 382px"><i></i>Phone screenshot</div>
+        <div class="abs row bug" id="r2" style="left: 280px; top: 374px"><span class="k">Phone</span><span class="t">Export error</span></div>
+        <div class="abs pill alert src" id="p3" style="left: 280px; top: 494px"><i></i>Webhook</div>
+        <div class="abs row alert" id="r3" style="left: 280px; top: 486px"><span class="k">Alert</span><span class="t">Payments are slow</span></div>
+        <div class="abs pill email src" id="p4" style="left: 280px; top: 606px"><i></i>support@</div>
+        <div class="abs row email hot" id="r4" style="left: 280px; top: 598px"><span class="k">Customer</span><span class="t">I can’t log in</span></div>
+      </div>
+    </div>
+    <script>
+
+const tl = gsap.timeline({ paused: true });
+const IN = "expo.out", OUT = "power3.in";
+// A thing lands: it falls into place and squashes once.
+const land = (el, at, from = { y: -700, rotation: 12 }, rot = 0) => {
+  tl.fromTo(el, { ...from, opacity: 0 }, { x: 0, y: 0, rotation: rot, opacity: 1, duration: 0.6, ease: "power3.out" }, at);
+};
+const pop = (el, at) => tl.fromTo(el, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45, ease: "back.out(2.6)" }, at);
+const stamp = (el, at, rot) => {
+  tl.fromTo(el, { opacity: 0, scale: 1.6, rotation: rot * 3 }, { opacity: 1, scale: 1, rotation: rot, duration: 0.3, ease: "power4.in" }, at);
+  tl.to(el, { keyframes: [{ scaleX: 1.05, scaleY: 0.93, duration: 0.06 }, { scaleX: 1, scaleY: 1, duration: 0.22, ease: "back.out(3)" }] }, at + 0.3);
+};
+const type = (el, text, at, dur) => {
+  const p = { n: 0 };
+  tl.fromTo(p, { n: 0 }, { n: text.length, duration: dur, ease: "none", onUpdate: () => {
+    const n = Math.round(p.n);
+    el.innerHTML = text.slice(0, n) + (n > 0 && n < text.length ? '<span class="caret"></span>' : "");
+  } }, at);
+};
+// Every loop ends by clearing back to its empty ground, so the start of the next pass meets it.
+const clear = (sel, at) => tl.to(sel, { opacity: 0, y: -24, duration: 0.5, ease: OUT, stagger: 0.03 }, at);
+
+tl.fromTo("#head", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: IN }, 0.1);
+tl.fromTo("#p0", { x: "-700px", y: "120px", opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 0.4);
+tl.to("#p0", { opacity: 0, scale: 1.1, duration: 0.2 }, 1.0);
+tl.fromTo("#r0", { opacity: 0, scaleX: 0.6 }, { opacity: 1, scaleX: 1, duration: 0.45, ease: "back.out(2)", transformOrigin: "0% 50%" }, 1.0);
+tl.fromTo("#p1", { x: "1300px", y: "-200px", opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 1.15);
+tl.to("#p1", { opacity: 0, scale: 1.1, duration: 0.2 }, 1.75);
+tl.fromTo("#r1", { opacity: 0, scaleX: 0.6 }, { opacity: 1, scaleX: 1, duration: 0.45, ease: "back.out(2)", transformOrigin: "0% 50%" }, 1.75);
+tl.fromTo("#p2", { x: "-700px", y: "800px", opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 1.9);
+tl.to("#p2", { opacity: 0, scale: 1.1, duration: 0.2 }, 2.5);
+tl.fromTo("#r2", { opacity: 0, scaleX: 0.6 }, { opacity: 1, scaleX: 1, duration: 0.45, ease: "back.out(2)", transformOrigin: "0% 50%" }, 2.5);
+tl.fromTo("#p3", { x: "1300px", y: "500px", opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 2.65);
+tl.to("#p3", { opacity: 0, scale: 1.1, duration: 0.2 }, 3.25);
+tl.fromTo("#r3", { opacity: 0, scaleX: 0.6 }, { opacity: 1, scaleX: 1, duration: 0.45, ease: "back.out(2)", transformOrigin: "0% 50%" }, 3.25);
+tl.fromTo("#p4", { x: "560px", y: "900px", opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 3.4);
+tl.to("#p4", { opacity: 0, scale: 1.1, duration: 0.2 }, 4.0);
+tl.fromTo("#r4", { opacity: 0, scaleX: 0.6 }, { opacity: 1, scaleX: 1, duration: 0.45, ease: "back.out(2)", transformOrigin: "0% 50%" }, 4.0);
+tl.to("#r4", { keyframes: [{ x: 10, duration: 0.06 }, { x: -8, duration: 0.06 }, { x: 0, duration: 0.08 }] }, 4.8);
+clear(["#r0", "#r1", "#r2", "#r3", "#r4", "#head"], 8.2);
+      window.__timelines = window.__timelines || {};
+      window.__timelines["things-come-in"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

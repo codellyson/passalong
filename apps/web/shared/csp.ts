@@ -48,5 +48,7 @@ export const hubHeaders = (nonce: string, dev = false) => ({
     // script and carries VIEW_HEADERS. That is the only frame, and it is this origin: the hub never
     // turns a stranger's markdown into its own HTML, because the hub runs script.
     "frame-src 'self'; " +
+    // The landing plays the launch film from this origin's own files; nothing streams from elsewhere.
+    "media-src 'self'; " +
     "manifest-src 'self'; base-uri 'none'; form-action 'none'",
 });

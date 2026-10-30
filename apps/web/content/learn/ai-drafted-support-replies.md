@@ -69,7 +69,7 @@ an address, a phone number or a different reference.
 
 Here is the shape of a good one:
 
-> Hi Ada, thanks for the screenshot. The export is skipping archived projects, and that is a bug on
+> Hi Kemi, thanks for the screenshot. The export is skipping archived projects, and that is a bug on
 > our side. A fix is in progress; I will write again when it is out.
 
 The person reading it changes one word, or none, and presses Send.

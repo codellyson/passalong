@@ -38,6 +38,15 @@ usePage({
   url: `${APEX}/`,
 });
 
+// The feature loops play on their own, muted; someone who asked for less motion gets the still frame.
+onMounted(() => {
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (const video of document.querySelectorAll<HTMLVideoElement>(".ideas video")) {
+    video.removeAttribute("autoplay");
+    video.pause();
+  }
+});
+
 /**
  * How to reach sales. The page states no price: what is paid for is the team — the board, who holds
  * what, and the hub — and a free account is enough to try it.
@@ -138,8 +147,25 @@ const PROOF = null as { figure: string; says: string } | null;
       </p>
     </header>
 
-    <!-- The hero's promise, played: one thing that came in, followed to done. -->
-    <LandingStory />
+    <!-- The launch film plays the hero's promise in 35 seconds. It replaced the interactive story that sat here,
+         which told a third version of the same request; the feature loops below carry the detail. -->
+    <figure class="film">
+      <video
+        controls
+        playsinline
+        preload="metadata"
+        poster="/media/passalong-launch-poster.jpg"
+        aria-describedby="film-says"
+      >
+        <source src="/media/passalong-launch.mp4" type="video/mp4" />
+      </video>
+      <figcaption id="film-says">
+        35 seconds, with sound. Everything your team gets lands at once and some of it gets dropped;
+        Passalong catches all of it, sends each request to the right person or their AI agent, follows
+        it until it is done with proof, and leaves what reaches customers to your people.
+      </figcaption>
+    </figure>
+
     <p v-if="PROOF" class="proof"><b>{{ PROOF.figure }}</b> {{ PROOF.says }}</p>
 
     <!--
@@ -154,45 +180,110 @@ const PROOF = null as { figure: string; says: string } | null;
         <span class="turn">ends somewhere.</span>
       </h2>
       <article>
-        <h3>Things come in</h3>
+        <div class="idea-text">
+          <h3>Things come in</h3>
         <p>
           A line in the hub’s box, a forwarded email, a screenshot sent from your phone, an alert
           from a webhook, a customer writing to your support address. Each one becomes work, in one
           place.
         </p>
+        </div>
+        <video
+          class="clip"
+          src="/media/features/things-come-in.mp4"
+          poster="/media/features/things-come-in.jpg"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          aria-label="Five ways in, each turned into the same piece of work"
+        ></video>
       </article>
       <article>
-        <h3>Passalong’s agent sorts it</h3>
+        <div class="idea-text">
+          <h3>Passalong’s agent sorts it</h3>
         <p>
           It reads each one, pictures included, and gives it a title and a sentence anyone can read.
           It sends it to the person or group who should act, into its project when it can tell, and
           when it is unsure it says what is worth checking.
         </p>
+        </div>
+        <video
+          class="clip"
+          src="/media/features/agent-sorts-it.mp4"
+          poster="/media/features/agent-sorts-it.jpg"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          aria-label="A messy email turned into a titled card, sent to Accounts in the Web app project, with one thing worth checking"
+        ></video>
       </article>
       <article>
-        <h3>Projects remember the product</h3>
+        <div class="idea-text">
+          <h3>Projects remember the product</h3>
         <p>
           One project per product. Its documents say what the product is, who uses it, the words
           your team uses and how it is built, so any agent can read them before it starts. What an
           agent learns goes back into them, and every version is kept.
         </p>
+        </div>
+        <video
+          class="clip"
+          src="/media/features/projects-remember.mp4"
+          poster="/media/features/projects-remember.jpg"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          aria-label="An agent reads the Web app project's documents, writes a line back, and the version goes from 4 to 5"
+        ></video>
       </article>
       <article>
-        <h3>Work gets done, and shown</h3>
+        <div class="idea-text">
+          <h3>Work gets done, and shown</h3>
         <p>
           One agent holds it at a time. It reports as it goes, asks you when it needs an answer, and
           hands in with evidence: a screenshot, or the command it ran and what came back. Work
           nobody takes, or an agent gone quiet, reaches a person. If it is not right, reopen it with
           a reason the next agent reads first.
         </p>
+        </div>
+        <video
+          class="clip"
+          src="/media/features/work-done-shown.mp4"
+          poster="/media/features/work-done-shown.jpg"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          aria-label="An agent reports, asks a question, gets an answer, and hands in with a screenshot"
+        ></video>
       </article>
       <article>
-        <h3>Customers get one conversation</h3>
+        <div class="idea-text">
+          <h3>Customers get one conversation</h3>
         <p>
           A customer’s messages are one thread, and one conversation in their inbox, with a tracking
           number. The agent drafts the reply; a person reads it and presses Send. A customer left
           waiting is flagged before they are forgotten.
         </p>
+        </div>
+        <video
+          class="clip"
+          src="/media/features/one-conversation.mp4"
+          poster="/media/features/one-conversation.jpg"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          aria-label="One thread with a tracking number; a reply the agent drafted is sent by a person, and the waiting flag clears"
+        ></video>
       </article>
     </section>
 
