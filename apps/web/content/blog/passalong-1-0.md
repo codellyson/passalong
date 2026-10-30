@@ -16,7 +16,7 @@ Passalong is the place those things go, and the thing that keeps them moving unt
 
 ## Work is one thing
 
-Passalong used to have three kinds of guide, each with its own template and required sections. In
+Passalong used to sort work into three kinds, each with its own template and required sections. In
 real use, most of what people wrote was a task or a bug filed under the wrong kind, and two-line
 notes were padded into six sections. So the kinds are gone.
 
@@ -85,7 +85,7 @@ ChatGPT or Claude. Passalong keeps the work, the knowledge and the record of wha
 cannot speak to the new server, and once 0.22.0 is out they are refused with the command to install
 it.
 
-**Guides are now work.** Everything you already have is still there. Its kind was removed and
+**Everything you had is now work.** None of it was lost. Its kind was removed and
 nothing else changed. The hub, the CLI and the agent tools say work, project, document and file.
 
 **Handovers become project documents.** Old handovers stay readable as plain work. From now on, what
