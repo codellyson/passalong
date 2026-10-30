@@ -61,7 +61,7 @@ Settings and the account menu at the foot. On a phone the places are docked alon
 in a phone app (`HubDock`, 2026-10-30, the author's call): Needs you with its count, Projects, New,
 Work and Support on a 56px ink bar that clears the home indicator (`viewport-fit=cover` on hub pages
 only); the current one is coral with a 2px coral bar along its top. The rest of the rail — Go to id,
-each project, Settings, you — is a drawer behind the top bar's menu, beside the mark. Anything fixed
+each project, Settings, you — is a drawer that slides in from the right, behind the menu at the top bar's right; the mark is at its left. Anything fixed
 or sticky at the foot (toasts, the bulk bar, a conversation's composer) stands `--dock` clear of it,
 which is 0 from 768px up.
 

@@ -199,8 +199,8 @@ const nearLimit = computed(() => {
       />
       <aside
         id="hub-rail"
-        class="z-50 w-60 transition-transform duration-200 ease-out max-md:fixed max-md:inset-y-0 max-md:left-0 md:sticky md:top-0 md:h-dvh"
-        :class="drawer ? '' : 'max-md:invisible max-md:-translate-x-full'"
+        class="z-50 w-60 transition-transform duration-200 ease-out max-md:fixed max-md:inset-y-0 max-md:right-0 md:sticky md:top-0 md:h-dvh"
+        :class="drawer ? '' : 'max-md:invisible max-md:translate-x-full'"
         @keydown.esc="drawer = false"
       >
         <HubSidebar />
@@ -208,14 +208,15 @@ const nearLimit = computed(() => {
     </template>
 
     <div class="min-w-0">
-      <!-- A phone's top bar: the drawer, the mark, and the way to the box. -->
+      <!-- A phone's top bar: the mark, and the menu at the right, where the thumb is. -->
       <div
         v-if="framed"
         class="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-bg px-4 md:hidden"
       >
+        <AppBrand to="/hub" />
         <button
           type="button"
-          class="btn icon -ml-2"
+          class="btn icon -mr-2 ml-auto"
           aria-controls="hub-rail"
           :aria-expanded="drawer"
           aria-label="Open the menu"
@@ -223,7 +224,6 @@ const nearLimit = computed(() => {
         >
           <AppIcon name="menu" />
         </button>
-        <AppBrand to="/hub" />
       </div>
 
   <main class="max-md:pt-6 max-md:pb-[calc(var(--dock)+var(--s-7))] md:pt-10" :class="measure">
