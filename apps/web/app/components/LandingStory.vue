@@ -2,9 +2,14 @@
   The hero's promise, played: one thing that came in, followed to done — it arrives, Passalong's
   agent sorts it, an agent takes it, it is handed in with proof, and a person sends the reply.
 
-  It plays itself, holds still while a pointer or keyboard is on it, and any step can be chosen. A
-  visitor can also write their own message and watch it go the same way. That part is a demo run in
-  the browser: nothing is sent anywhere, and the page says so.
+  Each moment has its own motion, so the card reads like the thing happening rather than rows
+  fading in: the email flies in and lands, the sorting stamps its project and group, the agent
+  arrives and works, the checks tick one by one, and the reply rises and goes. Moments that have
+  not happened yet keep their place, so the card never jumps.
+
+  It plays itself, holds still while a pointer or keyboard is on it, and any moment can be chosen. A
+  visitor can write their own message and watch it go the same way; that part is a demo run in the
+  browser, nothing is sent anywhere, and the page says so.
 
   The server renders the finished story, so it reads whole without script and to anyone who asked
   for less motion; the browser rewinds it and plays.
@@ -17,8 +22,11 @@ interface Story {
   project: string;
   group: string;
   reason: string;
-  fix: string;
-  proof: string;
+  agent: string;
+  working: string;
+  checks: [string, string];
+  reply: string;
+  sender: string;
 }
 
 const MAYA: Story = {
@@ -28,8 +36,12 @@ const MAYA: Story = {
   project: "Billing app",
   group: "#billing",
   reason: "a duplicate charge, so billing",
-  fix: "Found the second charge in the retry job.",
-  proof: "42 passed, and the refund issued.",
+  agent: "Bola’s agent",
+  working: "Reading the Billing app’s documents, then the retry job…",
+  checks: ["pnpm test billing: 42 passed", "Refund issued, receipt attached"],
+  reply:
+    "Hi Maya, sorry about that. We’ve refunded the second charge; it’s on its way back to you.",
+  sender: "Ada",
 };
 
 /**
@@ -78,8 +90,11 @@ function sortTyped(text: string): Story {
     project: rule?.project ?? "Support desk",
     group: rule?.group ?? "#support",
     reason: rule?.why ?? "a customer asking for help, so support",
-    fix: "Read the project’s documents first, then did the work.",
-    proof: "The checks it ran, with what came back.",
+    agent: "An agent",
+    working: `Reading the ${rule?.project ?? "Support desk"} documents first…`,
+    checks: ["The checks it ran, and what came back", "A screenshot of it working"],
+    reply: "Hi, thanks for writing in. It’s fixed, and here’s what we changed.",
+    sender: "Someone on your team",
   };
 }
 
@@ -98,6 +113,8 @@ const step = ref(5);
 const playing = ref(false);
 const held = ref(false);
 const typed = ref("");
+/** Bumped on every replay, so each moment's motion starts again from the top. */
+const run = ref(0);
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 function tick() {
@@ -106,13 +123,17 @@ function tick() {
   timer = setTimeout(
     () => {
       // Hold on the finished story a little longer, then go round again.
-      step.value = step.value >= STEPS.length ? 1 : step.value + 1;
+      if (step.value >= STEPS.length) {
+        run.value++;
+        step.value = 1;
+      } else step.value++;
       tick();
     },
     step.value >= STEPS.length ? STEP_MS * 2 : STEP_MS,
   );
 }
 function play(from = 1) {
+  run.value++;
   step.value = from;
   playing.value = true;
   tick();
@@ -139,7 +160,8 @@ onMounted(() => {
 });
 onBeforeUnmount(() => clearTimeout(timer));
 
-const shown = (n: number) => step.value >= n;
+/** A moment that has happened plays its entrance; one that has not keeps its place, unseen. */
+const at = (n: number) => (step.value >= n ? "in" : "later");
 </script>
 
 <template>
@@ -152,49 +174,70 @@ const shown = (n: number) => step.value >= n;
       @focusout="hold(false)"
     >
       <header class="story-head">
-        <h3>{{ story.title }}</h3>
-        <span class="story-status" :class="{ done: step === STEPS.length }" aria-live="polite">{{ STEPS[step - 1]?.status }}</span>
+        <h3 :key="story.title" class="story-title">{{ story.title }}</h3>
+        <span :key="`${run}-${step}`" class="story-status" :class="{ done: step === STEPS.length }" aria-live="polite">{{ STEPS[step - 1]?.status }}</span>
       </header>
 
-      <ol class="story-rows">
-        <li class="story-row" :class="{ later: !shown(1) }">
-          <AppIcon name="inbox" />
+      <ol :key="run" class="story-rows">
+        <!-- 1 · The email flies in and lands. -->
+        <li class="story-row arrive" :class="at(1)">
+          <span class="story-mark"><AppIcon name="inbox" /></span>
           <div>
             <p class="story-what">Email from {{ story.from }} <span class="story-at">09:12</span></p>
             <p class="story-said">“{{ story.said }}”</p>
           </div>
         </li>
-        <li class="story-row" :class="{ later: !shown(2) }">
-          <AppIcon name="project" />
+
+        <!-- 2 · The sorting stamps its project and group, then gives its reason. -->
+        <li class="story-row sort" :class="at(2)">
+          <span class="story-mark"><AppIcon name="project" /></span>
           <div>
-            <p class="story-what">Sorted to <b>{{ story.project }}</b>, for <b>{{ story.group }}</b> <span class="story-at">09:12</span></p>
-            <p class="story-note">The agent’s reason: {{ story.reason }}. A tracking number went back by email.</p>
+            <p class="story-what">
+              Sorted to
+              <span class="story-stamp">{{ story.project }}</span>
+              <span class="story-stamp second">{{ story.group }}</span>
+              <span class="story-at">09:12</span>
+            </p>
+            <p class="story-note reveal">The agent’s reason: {{ story.reason }}. A tracking number went back by email.</p>
           </div>
         </li>
-        <li class="story-row" :class="{ later: !shown(3) }">
-          <AppIcon name="board" />
+
+        <!-- 3 · An agent arrives and works. -->
+        <li class="story-row take" :class="[at(3), { working: step === 3 }]">
+          <span class="story-mark agent" aria-hidden="true">A</span>
           <div>
-            <p class="story-what">An agent took it <span class="story-at">09:20</span></p>
-            <p class="story-note">{{ story.fix }}</p>
+            <p class="story-what">{{ story.agent }} took it <span class="story-at">09:20</span></p>
+            <p class="story-note">{{ story.working }}</p>
+            <span class="story-work" aria-hidden="true" />
           </div>
         </li>
-        <li class="story-row" :class="{ later: !shown(4) }">
-          <AppIcon name="check" />
+
+        <!-- 4 · The checks tick, one after the other. -->
+        <li class="story-row proof" :class="at(4)">
+          <span class="story-mark"><AppIcon name="check" /></span>
           <div>
             <p class="story-what">Handed in with proof <span class="story-at">11:31</span></p>
-            <p class="story-note">{{ story.proof }}</p>
+            <ul class="story-checks">
+              <li v-for="c in story.checks" :key="c">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" /></svg>
+                <span>{{ c }}</span>
+              </li>
+            </ul>
           </div>
         </li>
-        <li class="story-row" :class="{ later: !shown(5) }">
-          <AppIcon name="support" />
+
+        <!-- 5 · The reply rises and goes. -->
+        <li class="story-row send" :class="at(5)">
+          <span class="story-mark"><AppIcon name="support" /></span>
           <div>
-            <p class="story-what">Reply sent by a person <span class="story-at">11:40</span></p>
-            <p class="story-note">Drafted by the agent, read and sent by someone on the team, in the same thread.</p>
+            <p class="story-what">Reply sent by {{ story.sender }} <span class="story-at">11:40</span></p>
+            <p class="story-reply">{{ story.reply }}</p>
+            <p class="story-note">Drafted by the agent, read and sent by a person.</p>
           </div>
         </li>
       </ol>
 
-      <!-- Where the story is: one segment per step, the current one filling while it plays. -->
+      <!-- Where the story is: one segment per moment, the current one filling while it plays. -->
       <div class="story-track" role="group" aria-label="Choose a moment">
         <button
           v-for="(s, i) in STEPS"
