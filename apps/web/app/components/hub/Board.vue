@@ -131,6 +131,18 @@ const settling = ref<Set<string>>(new Set());
 // ---- picking, for the bulk bar -------------------------------------------------------------
 
 const picks = ref<Set<string>>(new Set());
+
+// ---- To do's groups, three cards each until opened -------------------------------------------
+
+const GROUP_SHOWN = 3;
+const opened = ref<Set<string>>(new Set());
+/** You are shown in full: being named outranks being in the room. */
+const full = (t: Group) => t.key === props.me?.id || opened.value.has(t.key);
+function toggleGroup(key: string) {
+  const next = new Set(opened.value);
+  if (!next.delete(key)) next.add(key);
+  opened.value = next;
+}
 const pickable = (g: Guide) => g.stage !== "done";
 function pick(g: Guide) {
   const next = new Set(picks.value);
@@ -323,6 +335,8 @@ const shown = computed(
 
 const labelClass = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
 const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
+/** Inside one of To do's groups, cards sit closer: they belong together. */
+const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
 </script>
 
 <template>
@@ -381,7 +395,7 @@ const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:gri
       >
         <!-- On a phone the tab above already names the column. -->
         <!-- Held at the top while the page scrolls, so the four names stay in view. -->
-        <div class="sticky top-0 z-20 flex items-baseline gap-2 border-b border-fg bg-bg pt-2 pb-2 max-md:hidden">
+        <div class="sticky top-0 z-20 -mx-px flex items-baseline gap-2 border-b border-fg bg-bg px-px pt-2 pb-2 max-md:hidden">
           <h2 :id="`col-${c.id}-h`" class="m-0 font-ui text-sm font-[550] tracking-normal">{{ c.label }}</h2>
           <span class="font-ui text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
         </div>
@@ -410,9 +424,9 @@ const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:gri
               >
                 {{ t.label }} <span class="tabular-nums">{{ t.cards.length || "" }}</span>
               </p>
-              <ul v-if="t.cards.length" :class="cardList">
+              <ul v-if="t.cards.length" :class="groupList">
                 <HubBoardCard
-                  v-for="g in t.cards"
+                  v-for="g in full(t) ? t.cards : t.cards.slice(0, GROUP_SHOWN)"
                   :key="g.id"
                   :guide="g"
                   :now="now"
@@ -428,7 +442,16 @@ const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:gri
                   @menu="(x, y) => (menu = { guide: g, x, y })"
                 />
               </ul>
-              <p v-else class="m-0 py-2 font-ui text-xs text-muted">Drop here to give it to {{ t.key ? t.label : "anyone" }}.</p>
+              <button
+                v-if="t.key !== me?.id && t.cards.length > GROUP_SHOWN"
+                type="button"
+                class="linkish self-start font-ui text-xs text-muted"
+                :aria-expanded="opened.has(t.key)"
+                @click="toggleGroup(t.key)"
+              >
+                {{ opened.has(t.key) ? "Show fewer" : `${t.cards.length - GROUP_SHOWN} more in ${t.key ? t.label : "Anyone"}` }}
+              </button>
+              <p v-if="!t.cards.length" class="m-0 py-2 font-ui text-xs text-muted">Drop here to give it to {{ t.key ? t.label : "anyone" }}.</p>
             </div>
           </template>
 

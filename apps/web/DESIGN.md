@@ -277,11 +277,15 @@ column is a heading at 550 with a muted tabular count over an ink rule, like a r
 and the head is sticky on the cream ground so the four names stay in view while To do scrolls;
 there are no column boxes. Inside To do, work is grouped under who it is for — You, each person,
 each group, Anyone — each group named by an uppercase label over a hairline; You leads, its label
-in ink at 550 over an ink rule, because being named outranks being in the room. Cards stack 8px
-apart; in the stacked layout they run two to a row from a 28rem board.
+in ink at 550 over an ink rule, because being named outranks being in the room. Each group shows three
+cards and a quiet "N more in <group>" link that opens the rest in place ("Show fewer" closes them);
+You is always shown in full, and the label keeps the whole count. Cards stack 4px apart inside a
+group and 8px apart elsewhere, with groups 12px apart; in the stacked layout they run two to a row
+from a 28rem board. In progress never cuts a holder's name: the line wraps, and in a column
+narrower than the 60rem board's the progress note is the part left out.
 
-A card is deeper cream at 3px corners with the Edge ring and 8px of vertical padding, the
-register's density: the title at 500 (the whole card opens it), then "Changed · <what>" in coral
+A card is deeper cream at 3px corners with the Edge ring and 8px of vertical padding, as short as
+a title and one fact line allow (a 24px menu button sets the first line): the title at 500 (the whole card opens it), then "Changed · <what>" in coral
 text with the 3px coral bar at its left edge, then the project's 3×14 mark and name — or "Not in a
 project" in muted, the one phrase the hub uses for work in no project — with the age
 right-aligned in tabular figures. In progress adds one

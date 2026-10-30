@@ -92,14 +92,14 @@ function fromContext(e: MouseEvent) {
     <div class="flex items-start gap-2">
       <NuxtLink
         :to="`/hub/g/${g.id}`"
-        class="line-clamp-3 min-w-0 grow pt-1 font-ui text-sm font-medium text-pretty no-underline outline-none after:absolute after:inset-0 after:rounded-2 hover:underline focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-[var(--focus)] focus-visible:after:outline-solid"
+        class="line-clamp-3 min-w-0 grow font-ui text-sm font-medium text-pretty no-underline outline-none after:absolute after:inset-0 after:rounded-2 hover:underline focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-[var(--focus)] focus-visible:after:outline-solid"
         :class="done ? 'text-muted' : 'text-fg'"
       >{{ g.title || "Untitled" }}</NuxtLink>
       <!-- No room taken while hidden, so a narrow column's title keeps its width. -->
       <input
         v-if="pickable"
         type="checkbox"
-        class="relative z-10 mt-2 -ml-2 h-4 w-0 shrink-0 cursor-pointer opacity-0 transition-[width,margin,opacity] duration-150 group-hover:ml-0 group-hover:w-4 group-hover:opacity-100 focus-visible:ml-0 focus-visible:w-4 focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:ml-0 [@media(hover:none)]:w-4 [@media(hover:none)]:opacity-100"
+        class="relative z-10 mt-1 -ml-2 h-4 w-0 shrink-0 cursor-pointer opacity-0 transition-[width,margin,opacity] duration-150 group-hover:ml-0 group-hover:w-4 group-hover:opacity-100 focus-visible:ml-0 focus-visible:w-4 focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:ml-0 [@media(hover:none)]:w-4 [@media(hover:none)]:opacity-100"
         :class="picking || picked ? '!ml-0 !w-4 !opacity-100' : ''"
         :checked="picked"
         :aria-label="`Select ${g.title || 'this work'}`"
@@ -107,7 +107,7 @@ function fromContext(e: MouseEvent) {
       >
       <button
         type="button"
-        class="relative z-10 grid size-7 shrink-0 cursor-pointer place-items-center rounded-1 border-0 bg-transparent p-0 text-muted hover:bg-surface hover:text-fg"
+        class="relative z-10 grid size-6 shrink-0 cursor-pointer place-items-center rounded-1 border-0 bg-transparent p-0 text-muted hover:bg-surface hover:text-fg"
         aria-haspopup="menu"
         :aria-label="`Actions for ${g.title || 'this work'}`"
         @click.stop="fromButton"
@@ -116,12 +116,13 @@ function fromContext(e: MouseEvent) {
       </button>
     </div>
     <p v-if="g.changed" class="m-0 font-ui text-xs font-medium text-accent">Changed · {{ g.changed }}</p>
-    <p v-if="g.stage === 'working' && lead" class="m-0 line-clamp-1 pr-2 font-ui text-xs text-muted">
+    <!-- Wraps rather than cutting a person off; in a narrow column the note goes first. -->
+    <p v-if="g.stage === 'working' && lead" class="m-0 pr-2 font-ui text-xs text-muted">
       <template v-if="lead.health === 'quiet' || lead.health === 'asking'">
         <span class="font-medium text-fg">{{ STATE[lead.health] }}</span> ·
       </template>
-      <span class="text-fg">{{ holder }}</span>
-      <template v-if="lead.note"> · “{{ lead.note }}”</template>
+      <span class="whitespace-nowrap text-fg">{{ holder }}</span>
+      <span v-if="lead.note" class="hidden @[60rem]:inline"> · “{{ lead.note }}”</span>
     </p>
     <p class="m-0 flex items-center gap-2 pr-2 font-ui text-xs text-muted">
       <template v-if="g.project">
