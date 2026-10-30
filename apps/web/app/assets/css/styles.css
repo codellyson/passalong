@@ -2540,3 +2540,20 @@ table.rows thead th {
 .doc-writer li > p {
   margin: 0;
 }
+
+/* A board card that has just moved settles into the place the server gave it: a short rise from
+   where the drop left it, once. Nothing for those who asked for less motion. */
+@keyframes settle {
+  from {
+    opacity: 0.6;
+    transform: translateY(4px);
+  }
+}
+.settle {
+  animation: settle 200ms var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .settle {
+    animation: none;
+  }
+}

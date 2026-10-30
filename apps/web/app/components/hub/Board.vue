@@ -19,8 +19,13 @@
   columns are the server's to decide, never patched here — and a polite live region says what
   happened.
 
-  From a 60rem board the columns sit side by side, Draft and Done narrower; below that they stack
-  as sections, and on a phone one shows at a time under a row of tabs.
+  From a 44rem board (a 1024px window) the four columns sit side by side, from 60rem with Draft and
+  Done narrower, each head held at the top while To do scrolls; below that they stack as sections,
+  and on a phone one shows at a time under a row of tabs.
+
+  Ticking cards (not Done ones) brings up the bulk bar (HubBulkBar): Give to…, Move to…, Archive…
+  and Clear, each asked in place. Escape or Clear lets go of the selection; it never outlives the
+  cards it was made on.
 -->
 <script setup lang="ts">
 import type { STAGES } from "~/composables/useWorkLists";
@@ -39,6 +44,8 @@ const props = defineProps<{
   me: { id: string; to: string } | null;
   /** Show every finished card rather than the latest twenty. */
   allDone: boolean;
+  /** The team's name, for "Everyone in Acme". */
+  team: string;
 }>();
 
 const DONE_SHOWN = 20;
@@ -119,12 +126,40 @@ const said = ref("");
 /** Cards moved and waiting for the board to reload; they stay faded until it has. */
 const moving = ref<Set<string>>(new Set());
 const landed = new Set<string>();
+const settling = ref<Set<string>>(new Set());
+
+// ---- picking, for the bulk bar -------------------------------------------------------------
+
+const picks = ref<Set<string>>(new Set());
+const pickable = (g: Guide) => g.stage !== "done";
+function pick(g: Guide) {
+  const next = new Set(picks.value);
+  if (!next.delete(g.id)) next.add(g.id);
+  picks.value = next;
+}
+const pickedCards = computed(() =>
+  props.columns
+    .flatMap((c) => c.cards)
+    .filter((g, i, all) => picks.value.has(g.id) && all.findIndex((x) => x.id === g.id) === i),
+);
+// A selection never outlives the cards it was made on.
+watch(
+  () => props.columns,
+  (cols) => {
+    const here = new Set(cols.flatMap((c) => c.cards.filter(pickable).map((g) => g.id)));
+    if ([...picks.value].some((id) => !here.has(id)))
+      picks.value = new Set([...picks.value].filter((id) => here.has(id)));
+  },
+);
 watch(
   () => props.columns,
   () => {
     if (!landed.size) return;
     const next = new Set(moving.value);
     for (const id of landed) next.delete(id);
+    // Now where the server put them: they settle there, once.
+    settling.value = new Set(landed);
+    setTimeout(() => (settling.value = new Set()), 400);
     landed.clear();
     moving.value = next;
   },
@@ -287,11 +322,12 @@ const shown = computed(
 );
 
 const labelClass = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
-const cardList = "m-0 grid list-none gap-2 p-0 @[40rem]:grid-cols-2 @[60rem]:grid-cols-1";
+const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
 </script>
 
 <template>
-  <div class="@container flex flex-col gap-4">
+  <!-- Room at the foot while the bulk bar floats over it. -->
+  <div class="@container flex flex-col gap-4" :class="picks.size ? 'pb-24' : ''">
     <p class="sr-only" aria-live="polite">{{ said }}</p>
 
     <!-- A question the board asks before an act, in place: never a browser dialog. -->
@@ -329,7 +365,7 @@ const cardList = "m-0 grid list-none gap-2 p-0 @[40rem]:grid-cols-2 @[60rem]:gri
       </button>
     </div>
 
-    <div class="grid gap-x-6 gap-y-10 @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)]">
+    <div class="grid gap-x-4 gap-y-10 @[44rem]:grid-cols-4 @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6">
       <section
         v-for="c in columns"
         :id="`col-${c.id}`"
@@ -344,8 +380,9 @@ const cardList = "m-0 grid list-none gap-2 p-0 @[40rem]:grid-cols-2 @[60rem]:gri
         @drop.prevent="drop(c.id)"
       >
         <!-- On a phone the tab above already names the column. -->
-        <div class="flex items-baseline gap-2 border-b border-fg pb-2 max-md:hidden">
-          <h2 :id="`col-${c.id}-h`" class="m-0 font-ui text-sm font-semibold tracking-normal">{{ c.label }}</h2>
+        <!-- Held at the top while the page scrolls, so the four names stay in view. -->
+        <div class="sticky top-0 z-20 flex items-baseline gap-2 border-b border-fg bg-bg pt-2 pb-2 max-md:hidden">
+          <h2 :id="`col-${c.id}-h`" class="m-0 font-ui text-sm font-[550] tracking-normal">{{ c.label }}</h2>
           <span class="font-ui text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
         </div>
         <div
@@ -366,7 +403,11 @@ const cardList = "m-0 grid list-none gap-2 p-0 @[40rem]:grid-cols-2 @[60rem]:gri
               @dragover="groupOver(t.key, $event)"
               @drop.prevent="groupDrop(t.key, $event)"
             >
-              <p class="m-0 flex items-baseline gap-2 border-b border-line pb-1" :class="labelClass">
+              <!-- Being named outranks being in the room: You leads, in ink over an ink rule. -->
+              <p
+                class="m-0 flex items-baseline gap-2 border-b pb-1"
+                :class="[labelClass, t.key && t.key === me?.id ? '!text-fg font-[550] border-fg' : 'border-line']"
+              >
                 {{ t.label }} <span class="tabular-nums">{{ t.cards.length || "" }}</span>
               </p>
               <ul v-if="t.cards.length" :class="cardList">
@@ -377,6 +418,11 @@ const cardList = "m-0 grid list-none gap-2 p-0 @[40rem]:grid-cols-2 @[60rem]:gri
                   :now="now"
                   :draggable="!moving.has(g.id)"
                   :moving="moving.has(g.id) || dragging?.id === g.id"
+                  :settling="settling.has(g.id)"
+                  pickable
+                  :picked="picks.has(g.id)"
+                  :picking="picks.size > 0"
+                  @pick="pick(g)"
                   @drag="dragStart(g, $event)"
                   @dragend="dragEnd"
                   @menu="(x, y) => (menu = { guide: g, x, y })"
@@ -394,6 +440,11 @@ const cardList = "m-0 grid list-none gap-2 p-0 @[40rem]:grid-cols-2 @[60rem]:gri
               :now="now"
               :draggable="!moving.has(g.id)"
               :moving="moving.has(g.id) || dragging?.id === g.id"
+              :settling="settling.has(g.id)"
+              :pickable="pickable(g)"
+              :picked="picks.has(g.id)"
+              :picking="picks.size > 0"
+              @pick="pick(g)"
               @drag="dragStart(g, $event)"
               @dragend="dragEnd"
               @menu="(x, y) => (menu = { guide: g, x, y })"
@@ -413,6 +464,15 @@ const cardList = "m-0 grid list-none gap-2 p-0 @[40rem]:grid-cols-2 @[60rem]:gri
       </section>
     </div>
 
+    <HubBulkBar
+      :picked="pickedCards"
+      :people="people"
+      :groups="groups"
+      :me="me"
+      :team="team"
+      @clear="picks = new Set()"
+      @said="(t) => (said = t)"
+    />
     <HubCardMenu
       v-if="menu"
       :key="menu.guide.id + menu.x + menu.y"

@@ -203,7 +203,7 @@ const cols = "@2xl:grid-cols-[minmax(0,1fr)_8.5rem_8rem_3.5rem_4.75rem]";
                   <span class="project-mark h-3.5 w-[3px] shrink-0 self-center rounded-[1px]" :data-tone="toneOf(r.project)" aria-hidden="true" />
                   <span class="min-w-0 break-words">{{ r.project.title }}</span>
                 </template>
-                <span v-else class="text-muted">Not sorted yet</span>
+                <span v-else class="text-muted">Not in a project</span>
               </span>
               <span class="order-2 min-w-0 font-ui text-xs break-words text-muted @2xl:order-none @2xl:col-start-3 @2xl:row-start-1 @2xl:text-sm @2xl:text-fg">
                 <span class="@2xl:hidden" aria-hidden="true">· </span>{{ r.with || "Nobody" }}

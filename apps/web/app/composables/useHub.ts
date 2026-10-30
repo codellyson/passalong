@@ -480,6 +480,35 @@ function build(queryClient: QueryClient) {
     ]);
 
   /**
+   * The bulk bar's acts, on several pieces of work: give to someone ("@handle", "#group", "" for
+   * everyone), move to Draft or Ready, or archive. Each is the same route the single act uses, sent
+   * four at a time; then the lists reload once. No optimistic patching: the board's columns are
+   * the server's to decide. A refusal does not stop the rest; it is counted and said, with the
+   * first reason. Answers how many went through.
+   */
+  async function onBulk(
+    ids: string[],
+    act: { give: string } | { status: "draft" | "published" | "consumed" },
+  ): Promise<number> {
+    error.value = null;
+    const call = (id: string) =>
+      "give" in act
+        ? api(`/v1/guides/${id}/assign`, json("POST", { to: act.give }))
+        : api(`/v1/guides/${id}/status`, json("PATCH", { status: act.status }));
+    const failed: string[] = [];
+    for (let i = 0; i < ids.length; i += 4) {
+      const batch = await Promise.allSettled(ids.slice(i, i + 4).map(call));
+      for (const r of batch)
+        if (r.status === "rejected" && !(r.reason instanceof SignedOut))
+          failed.push((r.reason as Error).message);
+    }
+    await refresh(hubKeys.allGuides, hubKeys.board, hubKeys.me, hubKeys.tasks, hubKeys.working);
+    if (failed.length)
+      error.value = `${failed.length} of ${ids.length} did not go through: ${failed[0]}`;
+    return ids.length - failed.length;
+  }
+
+  /**
    * Write to whoever holds a piece of work: an answer to a question, or something thought of since. Not
    * optimistic — the server decides who may write and whether anyone is holding it, and a message
    * that appears and then vanishes is worse than one that takes a moment. Refetches what shows the
@@ -573,6 +602,7 @@ function build(queryClient: QueryClient) {
     onPersonTaskProgress,
     onPersonTaskHandIn,
     onAssign,
+    onBulk,
     onRecall,
     onReply,
     onTakeBack,

@@ -266,28 +266,43 @@ A secret the server cannot give back (a new token, a client secret, an admin's c
 The rail: the Passalong mark and name, Go to (⌘K), Needs you with its count, the Projects group (each with its line mark, an unseen-change dot when something changed, and its open count), Work, Support, New, then Settings and the account below a white-10% rule. Items are 32px rows at 14px; the current one is on-rail text at 500 over white 11%, the rest on-rail-muted until hovered (white 6%).
 
 ### Register row
-The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in coral text, a second muted line (a state such as "Went quiet" in ink, then the customer's own words in quotes), the project with its mark (or "Not sorted yet" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
+The signature list. Column labels once over the top, an ink rule under them, hairlines between rows. Each row: the title as a link, an optional "Changed · what" in coral text, a second muted line (a state such as "Went quiet" in ink, then the customer's own words in quotes), the project with its mark (or "Not in a project" in muted), who it is with, how long it has waited, and one verb (Reply, Answer, Open).
 
 ### Work board
 Four columns, people inside, and never a sideways scroll. Draft, To do, In progress and Done sit
-side by side once the board's own container passes 60rem (4fr · 5fr · 5fr · 4fr, 24px apart);
-below that they stack as sections 40px apart, and under 768px they are one column at a time under
-a row of tabs. Each column is a heading at 550 with a muted tabular count over an ink rule, like a
-register's head; there are no column boxes. Inside To do, work is grouped under who it is for —
-You, each person, each group, Anyone — each group named by an uppercase label over a hairline.
-Cards stack 8px apart; in the stacked layout they run two to a row from a 40rem board.
+side by side once the board's own container passes 44rem — a 1024px window — in equal columns
+16px apart, and from 60rem at 4fr · 5fr · 5fr · 4fr, 24px apart; below 44rem they stack as
+sections 40px apart, and under 768px they are one column at a time under a row of tabs. Each
+column is a heading at 550 with a muted tabular count over an ink rule, like a register's head,
+and the head is sticky on the cream ground so the four names stay in view while To do scrolls;
+there are no column boxes. Inside To do, work is grouped under who it is for — You, each person,
+each group, Anyone — each group named by an uppercase label over a hairline; You leads, its label
+in ink at 550 over an ink rule, because being named outranks being in the room. Cards stack 8px
+apart; in the stacked layout they run two to a row from a 28rem board.
 
-A card is deeper cream at 3px corners with the Edge ring: the title at 500 (the whole card opens
-it), then "Changed · <what>" in coral text with the 3px coral bar at its left edge, then the
-project's 3×14 mark and name with the age right-aligned in tabular figures. In progress adds one
+A card is deeper cream at 3px corners with the Edge ring and 8px of vertical padding, the
+register's density: the title at 500 (the whole card opens it), then "Changed · <what>" in coral
+text with the 3px coral bar at its left edge, then the project's 3×14 mark and name — or "Not in a
+project" in muted, the one phrase the hub uses for work in no project — with the age
+right-aligned in tabular figures. In progress adds one
 muted line — a state word in ink at 500 when the hold needs somebody ("Went quiet", "Waiting on
 you"), who holds it ("Bola, an agent"), and their last note in quotes. Done cards are quiet: the
-title muted, "Finished" or "Archived" beside the project. The card's one control is a 28px ghost
-menu button (the "more" glyph) at its top right; the menu is the keyboard's way to every drag.
+title muted, "Finished" or "Archived" beside the project unless the change label already says it.
+The card's controls are a 28px ghost menu button (the "more" glyph) at its top right — the menu is
+the keyboard's way to every drag — and, before it, a quiet tick that takes no room until hover,
+focus or any card being ticked (always shown on touch). A ticked card has the 2px ink ring.
+
+The bulk bar floats over the foot of the page once a card is ticked, taking no room before: ink,
+flat, 4px corners, a 1px ink edge and no shadow. It says "3 pieces of work selected" and offers
+Give to…, Move to… and Archive N… as ghost buttons in on-ink with a white-25% edge, and Clear as a
+link. A choice opens a second row under a white-15% rule (the people and groups, or To do and
+Draft with how many each applies to); every act then asks in that row ("Archive 3 pieces of work?
+They go to Done; nothing is deleted.") with the act as a cream button and Keep them. Escape steps
+back, then clears. What happened is said in the live region, and the board reloads.
 
 Dragging: the column or group a card can go to takes a 2px ink outline, the ones it cannot fade to
-50%, and the dragged card fades to 40% where it was; a moved card stays faded until the board has
-reloaded. A question before an act (stop an agent, why to reopen) is a hairline-ruled strip above
+50%, and the dragged card fades to 60% where it was; a moved card stays faded until the board has
+reloaded, then settles into its new place with a 200ms rise (none under reduced motion). A question before an act (stop an agent, why to reopen) is a hairline-ruled strip above
 the board. Above it all: the heading with its summary line ("13 to do · 1 in progress · 2 changed
 since you last looked"), then the project picker, Only mine and the search on one line. Empty
 board: "Nothing on the board" at the title size over an ink rule, a line saying what will show,

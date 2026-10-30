@@ -140,7 +140,7 @@ function clearFilters() {
           Work<template v-if="hasTeams"> in <HubScopes /></template>
           <span v-if="updating || scopeChanging" role="status" class="font-ui text-sm font-normal text-muted">Updating…</span>
         </h1>
-        <p v-if="!waiting && !unavailable && summary" class="m-0 font-ui text-sm text-muted">{{ summary }}</p>
+        <p v-if="!waiting && !unavailable && summary" class="m-0 font-ui text-sm text-pretty text-muted">{{ summary }}</p>
       </div>
 
       <!-- Named: the filter is only useful if you can see which work it is. -->
@@ -197,6 +197,7 @@ function clearFilters() {
             :groups="groups"
             :me="me"
             :all-done="route.query.done === 'all'"
+            :team="data.team?.name || data.team?.slug || ''"
           />
         </section>
       </template>
