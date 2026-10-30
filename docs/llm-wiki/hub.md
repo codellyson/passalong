@@ -134,6 +134,32 @@ documents too. Nothing is kept in the browser. Deleting a project or a file asks
 of Edit or on the file's row, naming what goes. There is no `/hub/folders`:
 nothing outside the hub linked to it. See [folders.md](folders.md).
 
+## Support — `/hub/support`
+
+**A register of every customer request, whoever is waiting on us first** (2026-10-30). One read,
+`GET /v1/support` (`supportRequests()` in apps/api/src/needs.ts, tested against SQLite), gives every
+column: the customer (name, tracking number quietly under it), the request (title, and the
+customer's own latest words on one line), its project (3×14 mark, or "Not in a project"), its state
+— New, Needs reply, With development, Waiting on customer, Solved, derived by `supportState()` and
+never stored — and how long they have waited while the next word is ours, in tabular figures and in
+danger once past the four hours `customer_waiting` uses (`late`). Coral is the change mark, from
+unread notifications ("Changed · Customer wrote"). Views are tabs at their own addresses: Waiting on
+us (default), Waiting on them (waiting on the customer, or with development), Solved, All, each with
+its count; a search filters across them. Nobody written yet: the team's support address with Copy.
+The owner's **Tell the customer when a fix is done** is a quiet setting row at the foot.
+
+`/hub/support/:id` is the conversation (`HubConversation`): the customer's messages and ours in
+order, each headed by who said it (the customer's name, or the teammate's) and an exact time, their
+pictures drawn and files offered; the reply box (`HubWriter`) is pinned to the window's foot. When
+the next word is ours the agent's draft (`askDraft()`) is already in it, labelled as the agent's
+until someone changes it; **Send** is the one primary act and a person's. Beside it, a side panel of
+facts: the customer (address shown only to the team, tracking number), project with **Move…**, who
+is on it with **Give to…**, the work made from it as live rows (stage, who holds it, the change
+mark), what finished since the customer was last answered (when the team asked to be told), the
+reader's routing note once, and **Mark solved** (author or admin; it archives) or **Reopen** (an
+archived request goes back through Draft straight to Ready; finished work reopens with a reason).
+Each act happens in place; a refusal is said where it was asked.
+
 ## Live
 
 The hub keeps itself current while open (`useLive`, `GET /v1/events`): an event refreshes what it

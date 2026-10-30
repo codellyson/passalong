@@ -254,10 +254,17 @@ export interface SupportRow {
   state: "new" | "needs_reply" | "with_development" | "waiting" | "solved";
   /** Since when the customer has waited on us; "" when the next word is theirs or it is solved. */
   waiting_since: string;
+  /** Waited on us longer than the four hours after which the team is reminded. */
+  late: boolean;
+  /** The customer's own latest words, on one line. */
+  said: string;
   last: { by: "customer" | "team" | ""; line: string; at: string };
   updated: string;
   /** Whether the request's team asked to be reminded to tell the customer a fix is done. */
   tell: boolean;
+  project: NeedProject | null;
+  /** What changed since you last looked; '' when nothing did. */
+  changed: string;
 }
 
 /** `GET /v1/support`: the requests, and the teams whose reminder the viewer (an owner) can set. */

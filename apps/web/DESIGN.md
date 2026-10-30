@@ -221,7 +221,7 @@ Warm cream and ink carry the whole interface; coral and the six project lines ar
 
 ## Layout
 
-A two-column shell: the 240px ink rail is sticky and full height from 768px up; below that it is a drawer over the page behind a 56px top bar holding the menu, the mark and New. The page's measure depends on what it holds: Needs you reads at 78rem, project, guide, support and settings pages at 70rem, the board takes the full width, everything else 54rem.
+A two-column shell: the 240px ink rail is sticky and full height from 768px up; below that it is a drawer over the page behind a 56px top bar holding the menu, the mark and New. The page's measure depends on what it holds: Needs you reads at 78rem, project, guide, support (the register and a request) and settings pages at 70rem, the board takes the full width, everything else 54rem.
 
 Needs you is a register beside a side column (18rem from 1280px up). The register becomes a five-column grid when its own container passes 42rem: work, project (8.5rem), with (8rem), waiting (3.5rem, right-aligned), action (4.75rem). Below that each row wraps into a title, its second line, and a single muted fact line separated by middots.
 
@@ -312,6 +312,33 @@ since you last looked"), then the project picker, Only mine and the search on on
 board: "Nothing on the board" at the title size over an ink rule, a line saying what will show,
 and New work; a filter that leaves nothing names itself ("Nothing in Billing app") with Clear
 filter; an empty column says so in one muted line.
+
+### Support register
+The Needs you register with a customer's columns: Customer (name, the tracking number muted under
+it) 10rem, Request (the title at 500 as the row's link, the customer's latest words in quotes under
+it), Project 8rem, State 8.5rem, Waiting 3.5rem right-aligned. The state is a word, ink at 500 when
+the next word is ours (New, Needs reply) and muted otherwise; the only colour is the waiting age in
+danger once it passes four hours, said again in the summary line ("10 waiting on us, all for more
+than 4 hours"). Tabs over it (Waiting on us, Waiting on them, Solved, All) carry their counts; the
+search sits beside the heading. On a phone each row is the name with the age at its right, the
+title, the quote and one muted fact line.
+
+### Conversation
+A customer request reads like Front: the thread is the page, the reply box is pinned to the
+window's foot (sticky, cream ground, a hairline above), and the facts are a side panel (17rem from
+1024px, 19rem from 1280px, sticky; under the thread on a phone). Each message is a block up to
+40rem: a header line — who said it at 500 (the customer's name, or "You", or the teammate's name),
+"customer" or "to Kemi Ade" muted, and an exact time ("Oct 28, 08:34 PM") right-aligned in tabular
+figures — over a 1px-ruled, 4px-cornered body: field white with the stronger rule for the customer,
+deeper cream for ours, which sits to the right. Pictures are drawn inside the body; files are `sm`
+buttons under it ("INV-1042.pdf Download"). The reply box is the TipTap writer at 0.9375rem, 6rem
+tall and scrolling inside itself past 40vh, with Picture and Draft again as ghost `sm` buttons and
+**Send** as the one primary. The agent's draft arrives in it when the next word is ours, and the
+line under it says "**Drafted by the agent** from the conversation…" until someone changes a word.
+The panel's facts are uppercase labels over values, divided by hairlines: Customer, Project (with
+Move…), On it / For (with Give to…; "Went quiet ·" in ink when the hold lapsed), Work made from it
+(live rows with the change mark), The work, then Mark solved or Reopen at the foot. Each act opens
+in place under its fact as a menu surface set static in the panel; a refusal is said there.
 
 ### Tabs
 A page with several views of one thing (a project's Documents, Work and History) is a row of links,

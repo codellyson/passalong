@@ -28,6 +28,8 @@ export interface ProjectFolder {
   title: string;
   color: string;
   parent_id: string | null;
+  /** The team it belongs to; '' for one of your own. */
+  team_slug?: string;
   description?: string;
   updated?: string;
   documents?: number;

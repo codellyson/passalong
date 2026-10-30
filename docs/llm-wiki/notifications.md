@@ -82,7 +82,7 @@ from "<team> support", Reply-To the same address, as `Re: <their subject> [R-…
 Message-IDs in In-Reply-To/References (migration 0060), so every mail is one conversation in their
 inbox. A reply from the same address carrying the number, or naming one of their kept Message-IDs,
 joins that request (`customer` thread event, `customer_wrote` notification) and reopens it if it was
-finished. A person answers on the request's page under the **Support** tab (`/hub/support/:id`, `POST /v1/guides/:id/customer`; the tab is a table of every request, state derived by `supportState()`),
+finished. A person answers on the request's page under **Support** (`/hub/support/:id`, `POST /v1/guides/:id/customer`; Support is a register of every request, waiting-on-us first, state derived by `supportState()` in needs.ts — see [hub.md](hub.md)),
 recorded as `answered`; there is no CLI command or MCP tool for it on purpose, because nothing reaches
 a customer before a person presses Send. A holding agent receives both kinds through `deliver()`.
 **The reader** (`reader.ts`) sorts each request when `READER_PROVIDER`, `READER_KEY` and `READER_MODEL` are

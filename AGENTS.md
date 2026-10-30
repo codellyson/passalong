@@ -383,6 +383,12 @@ change. Its README says how.
   (`customersWaiting()`, hourly sweep). Being reminded to tell the customer a fix is done is opt-in
   per team (`team.tell_customer`, migration 0059), set by an owner on the Support page and never in
   Settings; off, a finished fix wakes the request without those words, line or automatic draft.
+  The Support page (`/hub/support`) is a register read in one call, `GET /v1/support`
+  (`supportRequests()` in needs.ts, beside `supportState()`): state, the customer's latest words,
+  `late` (past `CUSTOMER_WAIT_MS`), project and the change mark come from the server, never derived
+  in the browser. A request's page is the conversation with the reply box pinned and the agent's
+  draft in it, beside a facts panel; Mark solved archives, so its Reopen goes back through Draft
+  straight to Ready for the same reason `reopenForCustomer()` does.
 - **The reader is provider-agnostic, and only fills fields (reader.ts, docs/LOOP.md §1a).** It names
   what comes in — a title, a summary, an optional tag, the team group it is for, and its reason —
   and writes no sections. It calls the model through the AI SDK (`ai`) and each provider's own

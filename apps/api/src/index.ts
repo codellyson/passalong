@@ -162,7 +162,6 @@ import {
   SUPPORT_PER_ACCOUNT,
   SUPPORT_PER_SENDER,
   supportBody,
-  supportState,
   threadHeaders,
   titleOf,
   withMid,
@@ -171,7 +170,7 @@ import {
 import { logFeed, summary as logSummary, SINCE_RE } from "./log.js";
 import { ackCopy, answerCopy } from "./mail-copy.js";
 import { handleMcp } from "./mcp-http.js";
-import { marksOf, needs } from "./needs.js";
+import { marksOf, needs, supportRequests } from "./needs.js";
 import { newsFor } from "./news.js";
 import {
   announce,
@@ -5566,88 +5565,12 @@ app.post("/v1/compose", async (c) => {
 });
 
 /**
- * Every customer request this account can see, for the Support table (docs/LOOP.md §1a): who, what,
- * where it stands and since when the customer has waited. State is derived on read by
- * `supportState`, from the conversation and the work made from the request.
+ * Every customer request this account can see, for the Support list (docs/LOOP.md §1a). The read
+ * and the derived state live in `supportRequests` (needs.ts), so the test runs the SQL.
  */
-app.get("/v1/support", async (c) => {
-  const me = c.get("account");
-  const { results } = await c.env.DB.prepare(
-    `SELECT g.id, g.title, g.ref, g.customer, g.customer_name, g.status, g.created, g.updated,
-            (SELECT MAX(at) FROM task_event WHERE guide_id = g.id AND kind = 'answered') AS answered_at,
-            (SELECT kind FROM task_event WHERE guide_id = g.id AND kind IN ('customer', 'answered')
-              ORDER BY id DESC LIMIT 1) AS last_kind,
-            (SELECT body FROM task_event WHERE guide_id = g.id AND kind IN ('customer', 'answered')
-              ORDER BY id DESC LIMIT 1) AS last_body,
-            (SELECT at FROM task_event WHERE guide_id = g.id AND kind IN ('customer', 'answered')
-              ORDER BY id DESC LIMIT 1) AS last_at,
-            (SELECT COUNT(*) FROM guide k WHERE k.parent_id = g.id
-              AND k.status NOT IN ('consumed', 'draft')) AS open_work,
-            COALESCE(t.tell_customer, 0) AS tell
-       FROM guide g LEFT JOIN team t ON t.id = g.team_id
-      WHERE g.customer <> ''
-        AND (g.account_id = ?1 OR g.team_id IN (SELECT team_id FROM membership WHERE account_id = ?1))
-      ORDER BY g.updated DESC
-      LIMIT 500`,
-  )
-    .bind(me)
-    .all<{
-      id: string;
-      title: string;
-      ref: string;
-      customer: string;
-      customer_name: string;
-      status: string;
-      created: string;
-      updated: string;
-      answered_at: string | null;
-      last_kind: string | null;
-      last_body: string | null;
-      last_at: string | null;
-      open_work: number;
-      tell: number;
-    }>();
-  // The teams whose owner may turn the reminder on or off, beside the requests it applies to.
-  const { results: teams } = await c.env.DB.prepare(
-    `SELECT t.slug, t.name, t.tell_customer AS tell FROM team t
-       JOIN membership m ON m.team_id = t.id AND m.account_id = ? AND m.role = 'owner'
-      ORDER BY t.name`,
-  )
-    .bind(me)
-    .all<{ slug: string; name: string; tell: number }>();
-  return c.json({
-    teams: teams.map((t) => ({ slug: t.slug, name: t.name, tell: Boolean(t.tell) })),
-    requests: results.map((r) => {
-      const lastBy =
-        r.last_kind === "customer" ? "customer" : r.last_kind === "answered" ? "team" : "";
-      const state = supportState({
-        done: r.status === "consumed",
-        lastBy,
-        answered: Boolean(r.answered_at),
-        openWork: Number(r.open_work),
-      });
-      return {
-        id: r.id,
-        title: r.title,
-        ref: r.ref,
-        customer: { name: r.customer_name, email: r.customer },
-        state,
-        // How long the customer has waited on us: only while the next word is ours.
-        waiting_since: state === "new" || state === "needs_reply" ? r.last_at || r.created : "",
-        last: {
-          by: lastBy,
-          line: String(r.last_body || "")
-            .replace(/\s+/g, " ")
-            .slice(0, 160),
-          at: r.last_at || r.created,
-        },
-        updated: r.updated,
-        // Whether this request's team asked to be reminded to tell the customer a fix is done.
-        tell: Boolean(r.tell),
-      };
-    }),
-  });
-});
+app.get("/v1/support", async (c) =>
+  c.json(await supportRequests(c.env.DB, c.get("account"), now(), claims.CUSTOMER_WAIT_MS)),
+);
 
 /**
  * Turn a team's "tell the customer" reminder on or off (docs/LOOP.md §1a: opt-in per team). Set

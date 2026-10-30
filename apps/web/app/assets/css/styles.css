@@ -2541,6 +2541,15 @@ table.rows thead th {
   margin: 0;
 }
 
+/* The reply box under a customer conversation: pinned to the window's foot, so it starts short and
+   scrolls inside itself before it can push the thread off the screen. */
+.writer-shell.reply .writer {
+  font-size: 0.9375rem;
+  min-height: 6rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
 /* A board card that has just moved settles into the place the server gave it: a short rise from
    where the drop left it, once. Nothing for those who asked for less motion. */
 @keyframes settle {

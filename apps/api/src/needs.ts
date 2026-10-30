@@ -408,3 +408,139 @@ export async function marksOf(
     ]),
   );
 }
+
+// ---- the Support list ---------------------------------------------------------------------------
+
+export type SupportState = "new" | "needs_reply" | "with_development" | "waiting" | "solved";
+
+/**
+ * Where a customer's request stands, from what already happened (docs/LOOP.md §1a): never stored,
+ * so it cannot disagree with the request. Solved is Done. A customer who wrote after our last
+ * answer needs a reply whatever else is going on. Otherwise open work made from it means it is
+ * with development; nothing said to them yet is new; our word last means we wait on them.
+ */
+export function supportState(r: {
+  done: boolean;
+  lastBy: "customer" | "team" | "";
+  answered: boolean;
+  openWork: number;
+}): SupportState {
+  if (r.done) return "solved";
+  if (r.answered && r.lastBy === "customer") return "needs_reply";
+  if (r.openWork > 0) return "with_development";
+  if (!r.answered) return "new";
+  return r.lastBy === "team" ? "waiting" : "needs_reply";
+}
+
+export interface SupportRequest {
+  id: string;
+  title: string;
+  ref: string;
+  customer: { name: string; email: string };
+  state: SupportState;
+  /** Since when the customer has waited on us; '' when the next word is theirs or it is solved. */
+  waiting_since: string;
+  /** Waited on us longer than the reminder allows (`customer_waiting`). */
+  late: boolean;
+  /** The customer's own latest words, on one line. */
+  said: string;
+  last: { by: "customer" | "team" | ""; line: string; at: string };
+  updated: string;
+  /** Whether the request's team asked to be reminded to tell the customer a fix is done. */
+  tell: boolean;
+  project: Project | null;
+  /** What changed since you last looked, in a few words; '' when nothing unread is on it. */
+  changed: string;
+}
+
+/**
+ * Every customer request this account can see, for the Support list: who, what, where it stands,
+ * since when the customer has waited, its project and what changed — one read, so the page needs
+ * no call per row. Also the teams whose owner (this account) may set the tell-the-customer reminder.
+ */
+export async function supportRequests(
+  db: D1Database,
+  account: string,
+  at: string,
+  waitMs: number,
+): Promise<{ requests: SupportRequest[]; teams: { slug: string; name: string; tell: boolean }[] }> {
+  const LAST = (col: string, kinds = "'customer', 'answered'") =>
+    `(SELECT ${col} FROM task_event WHERE guide_id = g.id AND kind IN (${kinds}) ORDER BY id DESC LIMIT 1)`;
+  const { results } = await db
+    .prepare(
+      `SELECT g.id, g.title, g.ref, g.customer, g.customer_name, g.status, g.created, g.updated,
+              (SELECT MAX(at) FROM task_event WHERE guide_id = g.id AND kind = 'answered') AS answered_at,
+              ${LAST("kind")} AS last_kind, ${LAST("body")} AS last_body, ${LAST("at")} AS last_at,
+              ${LAST("body", "'customer'")} AS said,
+              (SELECT COUNT(*) FROM guide k WHERE k.parent_id = g.id
+                AND k.status NOT IN ('consumed', 'draft')) AS open_work,
+              COALESCE(t.tell_customer, 0) AS tell
+         FROM guide g LEFT JOIN team t ON t.id = g.team_id
+        WHERE g.customer <> '' AND ${VISIBLE}
+        ORDER BY g.updated DESC
+        LIMIT 500`,
+    )
+    .bind(account)
+    .all<{
+      id: string;
+      title: string;
+      ref: string;
+      customer: string;
+      customer_name: string;
+      status: string;
+      created: string;
+      updated: string;
+      answered_at: string | null;
+      last_kind: string | null;
+      last_body: string | null;
+      last_at: string | null;
+      said: string | null;
+      open_work: number;
+      tell: number;
+    }>();
+  const { results: teams } = await db
+    .prepare(
+      `SELECT t.slug, t.name, t.tell_customer AS tell FROM team t
+         JOIN membership m ON m.team_id = t.id AND m.account_id = ? AND m.role = 'owner'
+        ORDER BY t.name`,
+    )
+    .bind(account)
+    .all<{ slug: string; name: string; tell: number }>();
+  const marks = await marksOf(
+    db,
+    account,
+    results.map((r) => r.id),
+  );
+  const nowMs = Date.parse(at);
+  return {
+    teams: teams.map((t) => ({ slug: t.slug, name: t.name, tell: Boolean(t.tell) })),
+    requests: results.map((r) => {
+      const lastBy =
+        r.last_kind === "customer" ? "customer" : r.last_kind === "answered" ? "team" : "";
+      const state = supportState({
+        done: r.status === "consumed",
+        lastBy,
+        answered: Boolean(r.answered_at),
+        openWork: Number(r.open_work),
+      });
+      // Only while the next word is ours.
+      const since = state === "new" || state === "needs_reply" ? r.last_at || r.created : "";
+      const mark = marks.get(r.id);
+      return {
+        id: r.id,
+        title: r.title,
+        ref: r.ref,
+        customer: { name: r.customer_name, email: r.customer },
+        state,
+        waiting_since: since,
+        late: Boolean(since) && nowMs - Date.parse(since) > waitMs,
+        said: words(r.said || ""),
+        last: { by: lastBy, line: words(r.last_body || ""), at: r.last_at || r.created },
+        updated: r.updated,
+        tell: Boolean(r.tell),
+        project: mark?.project ?? null,
+        changed: mark?.changed ?? "",
+      };
+    }),
+  };
+}

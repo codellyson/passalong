@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { changeWords, marksOf, needs } from "../src/needs.ts";
+import { changeWords, marksOf, needs, supportRequests, supportState } from "../src/needs.ts";
 import { KINDS } from "../src/notify.ts";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
@@ -209,4 +209,70 @@ test("every kind names what changed, and an unknown one still marks the row", ()
   assert.equal(changeWords("something_new"), "Changed");
   for (const k of KINDS) assert.notEqual(changeWords(k), "Changed", `${k} has words`);
   assert.equal(changeWords(""), "");
+});
+
+test("a request's place in the Support table comes from what happened to it", () => {
+  const st = (o) =>
+    supportState({ done: false, lastBy: "customer", answered: false, openWork: 0, ...o });
+  assert.equal(st({}), "new", "the customer wrote and nobody has answered");
+  assert.equal(st({ openWork: 1 }), "with_development", "work made from it is open");
+  assert.equal(st({ answered: true, lastBy: "team" }), "waiting", "our word was last");
+  assert.equal(
+    st({ answered: true, lastBy: "customer", openWork: 1 }),
+    "needs_reply",
+    "the customer wrote again: they need a reply even while the fix is open",
+  );
+  assert.equal(st({ answered: true, lastBy: "team", openWork: 1 }), "with_development");
+  assert.equal(st({ done: true, lastBy: "customer", answered: true }), "solved");
+});
+
+test("the Support list: state, their latest words, how long and whether too long, project and change", async () => {
+  const { db, x, guide, ev } = world();
+  const WAIT = 4 * 3600e3;
+  guide("r1", { customer: "a@x.com", customer_name: "Ann", created: ago(30) });
+  ev("r1", "customer", ago(30), "bo", "It   broke");
+  ev("r1", "answered", ago(29), "ada", "Looking");
+  ev("r1", "customer", ago(6), "bo", "Still\nbroken");
+  guide("r2", { customer: "b@x.com", created: ago(2) });
+  ev("r2", "customer", ago(2), "bo", "Hello");
+  guide("r3", { customer: "c@x.com", created: ago(20) });
+  ev("r3", "customer", ago(20), "bo", "Where is it");
+  ev("r3", "answered", ago(19), "ada", "On its way");
+  guide("r4", { customer: "d@x.com", status: "consumed", outcome: "archived" });
+  guide("w1");
+  x(`UPDATE guide SET team_id = '' , account_id = 'cy' WHERE id = 'r4';
+     INSERT INTO notification (account_id, kind, guide_id, at, read_at) VALUES
+       ('ada', 'customer_wrote', 'r1', '${ago(6)}', '');
+     INSERT INTO folder (id, created_by, team_id, title, created, updated, color, parent_id) VALUES
+       ('p', 'bo', 't', 'Billing app', '${ago(9)}', '${ago(9)}', 'teal', '');
+     INSERT INTO folder_guide (folder_id, guide_id, added_by, added) VALUES ('p', 'r2', 'bo', '${ago(9)}');
+     UPDATE membership SET role = 'owner' WHERE account_id = 'ada';
+     UPDATE team SET tell_customer = 1;`);
+  const { requests, teams } = await supportRequests(db, "ada", NOW, WAIT);
+  const by = Object.fromEntries(requests.map((r) => [r.id, r]));
+  assert.deepEqual(
+    Object.keys(by).sort(),
+    ["r1", "r2", "r3"],
+    "customers only, and only visible ones",
+  );
+  assert.equal(by.r1.state, "needs_reply");
+  assert.equal(by.r1.said, "Still broken", "their own latest words, on one line");
+  assert.equal(by.r1.waiting_since, ago(6));
+  assert.equal(by.r1.late, true, "past the reminder");
+  assert.equal(by.r1.changed, "Customer wrote");
+  assert.equal(by.r1.customer.name, "Ann");
+  assert.equal(by.r2.state, "new");
+  assert.equal(by.r2.late, false);
+  assert.deepEqual(by.r2.project, { id: "p", title: "Billing app", color: "teal" });
+  assert.equal(by.r3.state, "waiting");
+  assert.equal(by.r3.waiting_since, "", "the next word is theirs");
+  assert.equal(by.r3.said, "Where is it");
+  assert.equal(by.r3.last.by, "team");
+  assert.equal(by.r3.project, null);
+  assert.equal(by.r3.tell, true);
+  assert.deepEqual(
+    teams,
+    [{ slug: "acme", name: "Acme", tell: true }],
+    "the teams this owner can set",
+  );
 });
