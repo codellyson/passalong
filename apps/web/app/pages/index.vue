@@ -38,10 +38,11 @@ usePage({
   url: `${APEX}/`,
 });
 
-// The feature loops play on their own, muted; someone who asked for less motion gets the still frame.
+// The film and the feature loops play on their own, muted and without controls; someone who asked
+// for less motion gets the still frame.
 onMounted(() => {
   if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  for (const video of document.querySelectorAll<HTMLVideoElement>(".ideas video")) {
+  for (const video of document.querySelectorAll<HTMLVideoElement>(".film video, .ideas video")) {
     video.removeAttribute("autoplay");
     video.pause();
   }
@@ -151,7 +152,9 @@ const PROOF = null as { figure: string; says: string } | null;
          which told a third version of the same request; the feature loops below carry the detail. -->
     <figure class="film">
       <video
-        controls
+        autoplay
+        muted
+        loop
         playsinline
         preload="metadata"
         poster="/media/passalong-launch-poster.jpg"
@@ -160,7 +163,7 @@ const PROOF = null as { figure: string; says: string } | null;
         <source src="/media/passalong-launch.mp4" type="video/mp4" />
       </video>
       <figcaption id="film-says">
-        35 seconds, with sound. Everything your team gets lands at once and some of it gets dropped;
+        Everything your team gets lands at once and some of it gets dropped;
         Passalong catches all of it, sends each request to the right person or their AI agent, follows
         it until it is done with proof, and leaves what reaches customers to your people.
       </figcaption>
