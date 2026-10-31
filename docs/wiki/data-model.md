@@ -17,61 +17,63 @@ what the hub's "Add a way to sign in" card is for.
 `handle` is how teammates address you — `--to team/@handle` has nothing to aim at without one, so
 an account without a handle is prompted for one.
 
-## guide
+## work
 
-`id`, `account_id`, `share_key`, `title`, `status`, `source_context`, `tags`, `stack`, `markdown`,
-`created`, `updated`, `pulls`, `team_id`, `to_account_id`, `kind`, `report_id`, `area`, `severity`
+`id`, `account_id`, `share_key`, `title`, `summary`, `status`, `outcome`, `source_context`,
+`target`, `tags`, `stack`, `markdown`, `created`, `updated`, `pulls`, `team_id`, `to_account_id`,
+`to_group_id`, `parent_id`, `client`, `alone`, and a support request's `customer`, `customer_name`,
+`ref`, `customer_subject`, `customer_mids`
 
-The markdown is the guide; the columns beside it are a denormalised index of its frontmatter, kept
-for querying. When they disagree, the markdown is the truth.
+A row is one piece of **work**. The markdown is the work; the columns beside it are a denormalised index of its
+frontmatter, kept for querying. When they disagree, the markdown is the truth. The exceptions are
+the columns that are deliberately never frontmatter: `client` (what wrote it), `alone` (a person
+marked it safe for the runner), `outcome` and the customer columns.
 
 `share_key` is the secret. The `id` is an address — 8 characters from a no-lookalike alphabet,
-short enough to read aloud — and is not secret on its own. A share link is `/g/<id>/<key>`, so
+short enough to read aloud — and is not secret on its own. A share link is `/w/<id>/<key>`, so
 knowing an id gets you nothing.
 
-`kind` is `bug`, `task` or empty, and empty means `transfer` — every guide written before migration 0007
-is one, and defaulting the other way would have turned the whole table into bug reports. The last
-three are a bug's own: which report it was filed under, which product surface it is on, and how
-badly it is broken (`s1` blocker to `s4` cosmetic). All four are denormalised from frontmatter like
-everything else here.
+Work has no kinds (docs/WORK.md): a title, a summary and free markdown. `tags` may describe work
+and nothing turns on them.
 
-`status` is `draft | published`. `consumed` and `promoted` are legacy — still accepted, because
-the value lives in markdown people already published, but nothing sets them. `to_account_id` set means it was handed to
-one person; `team_id` means it went to a team.
+`status` is `draft | ready | done`, and nothing else parses. Migration 0068 rewrote the column and
+the `status:` line in every stored document to these three.
+`outcome` says how Done was reached: `finished` or `archived`. `to_account_id` set means it was handed to one person, `to_group_id` to a group; `team_id`
+means it went to a team.
 
-## report
+## claim, claim_fence, task_event
 
-`id`, `account_id`, `title`, `environment`, `team_id`, `to_account_id`, `created`, `updated`
+- `claim`: who holds a piece of work now — `work_id` (primary key: one holder), `account_id`,
+  `agent_id`, `host`, `repo`, `worktree`, `state`, `lease_until`, `note`, and what a hand-in carried
+  (`evidence`, `checks`, `writeup`, `risk`, `pr`), `fence`, `replied_through`. Deleted on release,
+  pass and finishing.
+- `claim_fence`: `work_id`, `held` — the generation `take` hands out, so a write from a hold since
+  released and re-taken is refused (migration 0029; one per piece of work since 0061).
+- `task_event`: `id`, `work_id`, `kind`, `account_id`, `agent_id`, `host`, `body`, `at` — the
+  thread, append-only. Kinds: `taken`, `progress`, `handed_in`, `passed`, `released`, `reopened`,
+  `asked`, `replied`, `noted`, `customer`, `answered`. This table alone is the thread.
 
-A set of bugs filed together, and deliberately little else — everything a reader acts on lives on
-the issues, because an issue is a guide and the product already knows what to do with one. It
-exists for two reasons a tag could not cover: a set handed over together should arrive together,
-and "6 issues across 3 areas" should survive one of them being fixed.
+## project, document, project_file, project_work
 
-Product area is **not** here. It is a column on `guide`, so the grouping inside a report is derived
-from its issues every time and an area with nothing left in it stops existing.
-
-## folder, folder_document, folder_asset, folder_guide
-
-Migrations 0046 and 0047 add project folders and nesting. `folder` has a creator, optional team id,
+A `project` has a creator, optional team id,
 title, description, optional parent id and optional color. A child stays in its parent's private or
-team space; the API prevents cycles. Private folders are visible only to their creator; team folders are visible to current
-members. `folder_document` holds the current Markdown and version; `folder_document_revision`
+team space; the API prevents cycles. Private projects are visible only to their creator; team
+projects are visible to current members. `document` holds the current Markdown and version; `document_revision`
 holds each saved body. A write must name the version it read, so concurrent edits do not overwrite.
-`folder_asset` points to private bytes in R2 under `folders/<folder>/<asset>`, independent of a
-guide's screenshots and attachments. `folder_guide` only links an existing guide to project
-context; removing a link or the guide leaves the folder's documents and files intact.
+`project_file` points to private bytes in R2 under `projects/<project>/<asset>`, independent of
+work's screenshots and attachments. `project_work` only links existing work to project context;
+removing a link or the work leaves the project's documents and files intact.
 
 ## shot
 
-`id`, `account_id`, `guide_id`, `name`, `type`, `bytes`, `created`
+`id`, `account_id`, `work_id`, `name`, `type`, `bytes`, `created`
 
 A screenshot attached as evidence. The bytes are in R2 under `<id>.<ext>`; this row is the only
 record of which extension that was, which is why a failed bucket delete must not delete the row —
 nothing would ever look for the file again.
 
-`guide_id` is written on every guide write, from the shot URLs in that guide's markdown, and is
-empty until some document names it. Deleting a guide deletes its shots and their objects. An
+`work_id` is written on every write of work, from the shot URLs in its markdown, and is
+empty until some document names it. Deleting work deletes its shots and their objects. An
 upload nobody ever referenced is swept hourly once it is a day old — claiming happens minutes
 after upload at worst, so a shorter window would race a tester who is still typing.
 
@@ -98,31 +100,33 @@ whether the link is also mailed.
 
 ## pull
 
-`id`, `guide_id`, `account_id`, `via`, `at`
+`id`, `work_id`, `account_id`, `via`, `at`
 
 One row per fetch. `account_id` is `''` for an anonymous share-link reader — that is a real case,
 not a bug, and reporting has to survive it. `via` records how it was reached (link, CLI, MCP).
 
-`guide.pulls` is the running count, kept alongside so a list query does not have to aggregate.
-The pull count is reported on the row. It used to drive a separate "worth keeping" queue and a
-`promoted` status; both are gone — a counter is not a state.
+`work.pulls` is the running count, kept alongside so a list query does not have to aggregate.
+The pull count is reported on the row; it drives no state — a counter is not a state.
 
-## verdict
+## proof
 
-`guide_id`, `account_id`, `ok` (1 or 0), `note`, `at`
+- `proof`: `work_id`, `account_id`, `ok`, `note`, `detail`, `checks`, `writeup`, `at` — what a
+  hand-in showed, kept by `complete()` after its claim is gone: the work page leads with it as
+  "Finished with". One row per (work, account). Nothing else writes it.
 
-The answer to "did it actually work". `note` carries the reason when `ok` is 0, and that reason is
-the highest-value thing in the system — it is what tells the author their guide was wrong, and it
-reaches them the same day.
+A "not for me" is a `passed` line in `task_event` with its reason; no table of its own.
 
 ## notification
 
-`id`, `account_id`, `kind`, `guide_id`, `actor_id`, `team_id`, `at`, `times`, `read_at`,
+`id`, `account_id`, `kind`, `work_id`, `actor_id`, `team_id`, `at`, `times`, `read_at`,
 `emailed_at`, `note`
 
-`kind` is one of `KINDS` in `apps/api/src/notify.ts`: the handoff events (`handoff`, `shared`,
-`taken`, `declined`, `pulled`, `consumed`, `reopened`, `verified`, `failed`, `joined`) and the
-task queue's (`task_claimed`, `task_finished`, `task_approved`, `task_rejected`, `task_released`). Repeated events coalesce into one row
+`kind` is one of `KINDS` in `apps/api/src/notify.ts`: work sent and moved (`sent_to_you`, `shared`,
+`passed`, `pulled`, `archived`, `reopened`, `reassigned`, `joined`), the queue's
+(`task_claimed`, `task_finished`, `task_released`, `stalled`, `requeued`,
+`stuck`, `untaken`, `still_draft`, `child_done`), the conversation's (`asked`, `replied`), a
+customer's (`customer_wrote`, `customer_waiting`, `reader_unsure`) and the admins'. Repeated events
+coalesce into one row
 with `times` incremented and `at` moved forward, rather than piling up — the feed is meant to be
 readable after a week away.
 
@@ -140,6 +144,6 @@ revoked token keeps its row so the hub can show what was revoked and when.
 
 ## Deleting an account
 
-`ON DELETE CASCADE` runs through guide, membership, pull, verdict, notification, token, session and
+`ON DELETE CASCADE` runs through work, claim, task_event, membership, pull, proof, notification, token, session and
 reset. Combined with `passalong export`, that is what "deleting your account leaves you with all of
 your content" means: the user keeps the markdown, the service keeps nothing.

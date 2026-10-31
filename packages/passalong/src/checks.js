@@ -2,15 +2,15 @@
  * Running an Acceptance check, rather than reading the agent's account of running it.
  *
  * A hand-in used to be the agent's word about its own work: `ran` was a string, and the only rule
- * was that it was longer than a verdict. "ran the tests, all green" passed. This module is the
+ * was that it was longer than a yes. "ran the tests, all green" passed. This module is the
  * other half — when a check names the command that proves it, the command is run here and the exit
  * code is recorded from the process, so the agent reports what it did and the machine reports how
  * it went.
  *
- * **The command comes from the agent's own hand_in call, never from a guide.** A guide is written
+ * **The command comes from the agent's own hand_in call, never from work.** Work is written
  * somewhere else and pulled from a stranger's account; lifting a command out of its Acceptance
- * section and running it would turn every pulled guide into remote code execution. Nothing here
- * parses guide markdown, and nothing should.
+ * section and running it would turn every pulled work into remote code execution. Nothing here
+ * parses work markdown, and nothing should.
  *
  * This runs only where there is a shell. `src/mcp.js` is a local stdio server on the agent's own
  * machine, so it can; `apps/api/src/mcp-http.ts` is a Worker, so it cannot, and a hand-in over HTTP
@@ -19,7 +19,7 @@
  * What this deliberately does NOT do is parse test output. SWE-bench needs 57 per-framework log
  * parsers to tell a skipped test from a passing one, and a half-parser that guesses is worse than
  * none: it would refuse honest runs in shapes nobody thought of, and pass the ones it misread. The
- * exit code is the whole verdict here, which is also how a CI step decides.
+ * exit code is the whole answer here, which is also how a CI step decides.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";

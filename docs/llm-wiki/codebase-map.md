@@ -4,11 +4,11 @@ Three pieces, **one Worker**, one origin, one deploy.
 
 | Piece | What it is | Deployed as |
 | --- | --- | --- |
-| `packages/passalong` | The CLI and the stdio MCP server. Defines the guide format. | npm package `passalong` |
+| `packages/passalong` | The CLI and the stdio MCP server. Defines the work format. | npm package `passalong` |
 | `apps/api` | Hono + D1: `/v1/*`, `/health`, the share link's `.md` and `og.png`. | **Not on its own** — mounted inside apps/web |
 | `apps/web` | Nuxt 4 on a Cloudflare Worker: every page, the static assets, and the mounted API. | The Worker CI deploys from `master` |
 
-`apps/web/server/middleware/1.api.ts` hands `/v1/*`, `/health` and the two `/g/**` machine routes to
+`apps/web/server/middleware/1.api.ts` hands `/v1/*`, `/health` and the two `/w/**` machine routes to
 the Hono app and lets everything else fall through to Nuxt. `apps/api/wrangler.jsonc` survives only
 because `wrangler d1 migrations` reads it; CI applies migrations before each deploy.
 
@@ -16,8 +16,12 @@ because `wrangler d1 migrations` reads it; CI applies migrations before each dep
 
 | Concept | Code |
 | --- | --- |
-| Guide format | `packages/passalong/src/guide.js`, mirrored in `apps/api/src/guide.ts` |
-| Claims, the task queue | `apps/api/src/claims.ts` |
+| Work format (still `work.js`/`work.ts`; the table is `work`) | `packages/passalong/src/work.js`, mirrored in `apps/api/src/work.ts` |
+| Claims, the queue, the thread | `apps/api/src/claims.ts` |
+| Agent tools (17, four nouns) | `packages/passalong/src/mcp.js` (stdio), `apps/api/src/mcp-http.ts` (HTTP, 16) |
+| Email in, webhooks | `apps/api/src/inbound.ts`, `receiveEmail()`/`intake()` in `index.ts` |
+| The reader | `apps/api/src/reader.ts` |
+| Projects (projects) | `apps/api/src/projects.ts`, `project-tree.ts` |
 | Notifications, wording | `apps/api/src/notify.ts` |
 | Live stream | `apps/api/src/events.ts`, `apps/web/app/composables/useLive.ts` |
 | Push | `apps/api/src/webpush.ts`, `apps/web/public/sw.js` |

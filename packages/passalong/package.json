@@ -1,14 +1,14 @@
 {
   "name": "passalong",
-  "version": "0.21.0",
-  "description": "Hand tasks, bugs and finished work to AI coding agents, and get back a write-up with evidence.",
+  "version": "0.22.0",
+  "description": "Work, projects, documents and files for a team and its agents: take work, hand it in with evidence, and keep what the team knows in its projects.",
   "mcpName": "io.github.codellyson/passalong",
   "keywords": [
     "mcp",
     "claude-code",
     "agent",
-    "handoff",
-    "knowledge-transfer",
+    "projects",
+    "team-knowledge",
     "cli",
     "markdown",
     "mcp-server",

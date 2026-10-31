@@ -1,14 +1,14 @@
-// Reading a guide in parts, and how big one may be. Mirrors the same names in
-// packages/passalong/src/guide.js — `test/sections.test.mjs` holds the two to the same answers.
+// Reading a piece of work in parts, and how big one may be. Mirrors the same names in
+// packages/passalong/src/work.js — `test/sections.test.mjs` holds the two to the same answers.
 //
-// Most of what is stored is a few very large guides: six of 123 held 72% of the text. An agent
-// that only wants the Acceptance of a long task, or what a long handoff decided, should not have to
+// Most of what is stored is a few very large work: six of 123 held 72% of the text. An agent
+// that only wants the Acceptance of a long task, or what a long piece of work decided, should not have to
 // read the rest first.
 
-/** Over this a guide is large: its readers are offered the outline first, and its author a warning. */
-export const GUIDE_WARN = 20_000;
-/** Over this a new guide is refused. A guide stored before it existed may keep the size it has. */
-export const GUIDE_MAX = 60_000;
+/** Over this a piece of work is large: its readers are offered the outline first, and its author a warning. */
+export const WORK_WARN = 20_000;
+/** Over this a new work is refused. A piece of work stored before it existed may keep the size it has. */
+export const WORK_MAX = 60_000;
 
 export interface Heading {
   heading: string;
@@ -82,21 +82,21 @@ export function section(markdown: string, name: string): { heading: string; text
   };
 }
 
-/** What a guide's author is told when it is on the large side. */
+/** What the author of a piece of work is told when it is on the large side. */
 export function sizeWarning(chars: number): string | null {
-  return chars > GUIDE_WARN
-    ? `this guide is ${chars.toLocaleString("en")} characters, and over ${GUIDE_WARN.toLocaleString("en")} ` +
-        "it is read by outline first. Put logs, dumps and long output in a file (attach_file) and " +
-        "link it; keep the guide to what the next agent has to act on."
+  return chars > WORK_WARN
+    ? `this is ${chars.toLocaleString("en")} characters, and over ${WORK_WARN.toLocaleString("en")} ` +
+        "it is read by outline first. Put logs, dumps and long output in a file (add_file) and " +
+        "link it; keep the text to what the next agent has to act on."
     : null;
 }
 
-/** Why a new guide of this size is refused, or null. `was` is the size already stored for the id. */
+/** Why new work of this size is refused, or null. `was` is the size already stored for the id. */
 export function sizeProblem(chars: number, was = 0): string | null {
-  if (chars <= Math.max(GUIDE_MAX, was)) return null;
+  if (chars <= Math.max(WORK_MAX, was)) return null;
   return (
-    `This guide is ${chars.toLocaleString("en")} characters; the limit is ` +
-    `${GUIDE_MAX.toLocaleString("en")}. Put logs, dumps and long output in a file (agents: ` +
-    "attach_file), link it in the guide, and keep the guide to what the next agent has to act on."
+    `This is ${chars.toLocaleString("en")} characters; the limit is ` +
+    `${WORK_MAX.toLocaleString("en")}. Put logs, dumps and long output in a file (agents: ` +
+    "add_file), link it in the text, and keep the text to what the next agent has to act on."
   );
 }

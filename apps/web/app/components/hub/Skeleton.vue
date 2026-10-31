@@ -1,7 +1,7 @@
 <!--
   The shape of what is loading, drawn before it arrives.
 
-  "Loading your guides…" was a sentence where a list was about to be, so the page jumped when the
+  "Loading your work…" was a sentence where a list was about to be, so the page jumped when the
   list replaced it. This draws rows at the size real rows will be, so the arrival changes what is
   in the space rather than the space itself.
 
@@ -14,7 +14,7 @@ withDefaults(
     rows?: number;
     /** Said to screen readers, which get nothing from grey bars. */
     label?: string;
-    /** Rows in a bordered list like the guides page, or bare lines inside a settings section. */
+    /** Rows in a bordered list like the work page, or bare lines inside a settings section. */
     variant?: "list" | "lines";
   }>(),
   { rows: 3, label: "Loading", variant: "list" },

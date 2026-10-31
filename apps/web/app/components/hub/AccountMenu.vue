@@ -1,6 +1,7 @@
 <!--
-  You, and the few things that are about you rather than about a guide: your settings, where to
-  learn how the product works, and signing out.
+  You, at the foot of the hub's rail, and the few things about you rather than about a piece of
+  work: where to learn how the product works, the appearance, and signing out. Settings is its own
+  place on the rail, just above.
 
   It replaces a footer that printed your handle — or, with no handle, "account <id>" — beside a
   lowercase "sign out", and a "What is Passalong?" link in the page heading that sent someone
@@ -25,40 +26,28 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
 
 <template>
   <div ref="root" class="relative" @keydown.esc="open = false">
-    <!-- On a phone the whole name did not fit and was cut to "@7kef2w…": an avatar there instead,
-         with the name read out and shown at the top of the menu. -->
     <button
       type="button"
-      class="btn sm max-w-[12rem] max-sm:size-8 max-sm:rounded-pill max-sm:p-0"
+      class="flex h-9 w-full cursor-pointer items-center gap-3 rounded-1 border-0 bg-transparent px-3 text-left font-ui text-sm text-on-rail-muted transition-colors hover:bg-rail-hover hover:text-on-rail"
       :aria-expanded="open"
       aria-haspopup="menu"
-      :aria-label="label"
       @click="open = !open"
     >
-      <span class="truncate max-sm:hidden">{{ label }}</span>
-      <span class="font-ui text-xs font-semibold sm:hidden" aria-hidden="true">{{ initials }}</span>
-      <AppIcon name="reveal" class="shrink-0 text-muted max-sm:hidden" />
+      <span class="grid size-5 shrink-0 place-items-center rounded-1 bg-rail-current text-xs font-semibold text-on-rail" aria-hidden="true">{{ initials }}</span>
+      <span class="min-w-0 grow break-words">{{ label }}</span>
+      <AppIcon name="reveal" class="shrink-0" />
     </button>
-    <div v-if="open" class="menu" role="menu">
-      <p class="menu-note mt-0 mb-1 truncate font-medium text-fg sm:hidden">{{ label }}</p>
-      <p v-if="data.me?.email" class="menu-note mt-0 mb-1 truncate">{{ data.me.email }}</p>
-      <NuxtLink class="menu-item" to="/hub/settings" @click="open = false">
-        Profile, teams and plans
-      </NuxtLink>
-      <!-- Running the product is not a setting of yours, so it is its own page, and it is only
-           here for whoever runs it. -->
+    <!-- Opens upward: it sits at the foot of the rail. -->
+    <div v-if="open" class="menu top-auto right-auto bottom-full left-0 mb-1 w-full min-w-[15rem]" role="menu">
+      <p v-if="data.me?.email" class="menu-note mt-0 mb-1 break-words">{{ data.me.email }}</p>
       <NuxtLink v-if="data.me?.role === 'super'" class="menu-item" to="/admin" @click="open = false">
         Admin
       </NuxtLink>
       <a class="menu-item" href="/connect">Connect Claude or another assistant</a>
       <a class="menu-item" href="/">How Passalong works</a>
       <div class="menu-rule" />
-      <!-- The navbar's theme button is hidden on a phone to fit one row; it lives here there. -->
-      <!-- Out of the bar below lg, where the bar needs the room. -->
-      <div class="lg:hidden">
-        <AppThemeToggle row />
-        <div class="menu-rule" />
-      </div>
+      <AppThemeToggle row />
+      <div class="menu-rule" />
       <button class="menu-item" type="button" @click="signOut">Sign out</button>
     </div>
   </div>

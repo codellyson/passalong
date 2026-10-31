@@ -3,7 +3,7 @@
   colour of the button or label it sits in.
 
   Inline and hand-written for two reasons. An icon font or a sprite from a CDN is refused outright
-  by the CSP (`font-src 'self'`, and no third-party origin is allowed), and a guide page runs no
+  by the CSP (`font-src 'self'`, and no third-party origin is allowed), and a work page runs no
   script at all — so anything that resolves icons at runtime cannot exist there. These are markup,
   server-rendered like everything else.
 
@@ -35,6 +35,19 @@ const PATHS = {
   sun: "M8 5.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M8 1.75v1.25M8 13v1.25M1.75 8H3M13 8h1.25M3.6 3.6l.9.9M11.5 11.5l.9.9M3.6 12.4l.9-.9M11.5 4.5l.9-.9",
   /** Appearance: dark. */
   moon: "M13 9.75A5.25 5.25 0 1 1 6.25 3a4.25 4.25 0 0 0 6.75 6.75z",
+  /** The hub's places, in its sidebar. */
+  inbox: "M2.75 9.25h3l1 1.5h2.5l1-1.5h3M2.75 9.25l1.5-5.5h7.5l1.5 5.5v3h-10.5z",
+  /** An attachment: a paper clip. */
+  attach:
+    "M10.5 5.25 6.4 9.35a1.25 1.25 0 0 0 1.77 1.77l4.6-4.6a2.5 2.5 0 0 0-3.54-3.54l-4.6 4.6a3.75 3.75 0 0 0 5.3 5.3l3.32-3.32",
+  /** A project: a project, the one shape everybody reads as a place things are kept. */
+  project: "M2.75 4.25h4l1.25 1.5h5.25v7h-10.5z",
+  board: "M2.75 2.75h3v10.5h-3zM6.5 2.75h3v7h-3zM10.25 2.75h3v4.5h-3z",
+  support: "M2.75 3.25h10.5v7.5h-6l-3 2.5v-2.5h-1.5z",
+  gear: "M8 5.75a2.25 2.25 0 1 0 0 4.5a2.25 2.25 0 1 0 0-4.5M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5M3.6 3.6l1.05 1.05M11.35 11.35l1.05 1.05M3.6 12.4l1.05-1.05M11.35 4.65l1.05-1.05",
+  menu: "M2.75 4.25h10.5M2.75 8h10.5M2.75 11.75h10.5",
+  /** Back to the list this page came from. */
+  back: "M12.75 8h-9.5M7 4.25L3.25 8 7 11.75",
 } as const;
 
 /** Dots are drawn as zero-length strokes with a round cap, so their weight *is* the stroke width —
@@ -49,7 +62,7 @@ const WIDTHS: Partial<Record<keyof typeof PATHS, number>> = { more: 2.25 };
     viewBox="0 0 16 16"
     fill="none"
     stroke="currentColor"
-    :stroke-width="WIDTHS[name] ?? 1.75"
+    :stroke-width="WIDTHS[name] ?? 1.5"
     stroke-linecap="round"
     stroke-linejoin="round"
     aria-hidden="true"

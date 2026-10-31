@@ -10,33 +10,29 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import * as js from "../../../packages/passalong/src/guide.js";
-import * as ts from "../src/guide.ts";
+import * as js from "../../../packages/passalong/src/work.js";
+import * as ts from "../src/work.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DIR = join(HERE, "..", "..", "..", "packages", "passalong", "fixtures", "guides");
+const DIR = join(HERE, "..", "..", "..", "packages", "passalong", "fixtures", "work");
 
 const doc = (front) => `---\n${front}\n---\n\nbody\n`;
 
 const CASES = [
-  [
-    "a nested map",
-    'title: t\nkind: transfer\ncolors:\n  primary: "#3ECF8E"\n  accent: x',
-    ["colors"],
-  ],
+  ["a nested map", 'title: t\nkind: task\ncolors:\n  primary: "#3ECF8E"\n  accent: x', ["colors"]],
   [
     "a map nested two deep",
-    "title: t\nkind: transfer\ntypography:\n  display:\n    fontSize: 72px",
+    "title: t\nkind: task\ntypography:\n  display:\n    fontSize: 72px",
     ["typography"],
   ],
   [
     "a block scalar",
-    "title: t\nkind: transfer\ndescription: |\n  line one\n  line two",
+    "title: t\nkind: task\ndescription: |\n  line one\n  line two",
     ["description"],
   ],
   [
     "a sequence under a field that is not a list",
-    "title: t\nkind: transfer\nowners:\n  - ada",
+    "title: t\nkind: task\nowners:\n  - ada",
     ["owners"],
   ],
   [
@@ -53,8 +49,8 @@ const CASES = [
 
 for (const [name, front, want] of CASES) {
   test(`unheldFields: ${name}`, () => {
-    assert.deepEqual(js.unheldFields(doc(front)), want, "guide.js");
-    assert.deepEqual(ts.unheldFields(doc(front)), want, "guide.ts");
+    assert.deepEqual(js.unheldFields(doc(front)), want, "work.js");
+    assert.deepEqual(ts.unheldFields(doc(front)), want, "work.ts");
   });
 }
 
@@ -66,7 +62,7 @@ test("unheldFields: a document with no frontmatter holds nothing it could lose",
 test("unheldFields: nothing in the corpus is refused", () => {
   for (const f of readdirSync(DIR).filter((f) => f.endsWith(".md") && f !== "README.md")) {
     const md = readFileSync(join(DIR, f), "utf8");
-    assert.deepEqual(js.unheldFields(md), [], `${f} (guide.js)`);
-    assert.deepEqual(ts.unheldFields(md), [], `${f} (guide.ts)`);
+    assert.deepEqual(js.unheldFields(md), [], `${f} (work.js)`);
+    assert.deepEqual(ts.unheldFields(md), [], `${f} (work.ts)`);
   }
 });

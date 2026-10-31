@@ -1,323 +1,261 @@
 <!--
-  The team board: five columns, the same for everyone who opens it, like any shared task board. A
-  card says what kind of work it is, who it is for and who has it; opening it goes to the guide's
-  own page, where anyone in the team can move it on. Which column a card is in is the server's
-  (`stage`), so nobody's board is arranged differently from anybody else's.
+  The Work board: four columns, people inside. Draft, To do, In progress and Done, always the width
+  of the page and never scrolled sideways. Which column a card is in is the server's (`stage`), so
+  nobody's board is arranged differently from anybody else's.
 
-  From md the columns sit side by side, at least 15rem each and sharing what is left, and the board
-  — not the page — scrolls sideways when they do not fit: wrapped into a grid they read as five boxes, not a board. On a phone
-  one column shows at a time, picked from a row of tabs, as Trello and Linear do.
+  Inside To do, work is grouped under who it is for (the server's `lanes`): you first, then each
+  teammate, each group, then Anyone — work for nobody in particular. A card sent to several named
+  people shows under each of them, as one card. Dragging a card between To do's groups gives it
+  there (`POST /v1/work/:id/assign`); while a To do card is dragged, every teammate and group
+  shows as somewhere to drop it, even with nothing waiting for them.
 
-  Who a card is for is its footer's right-hand line, and that line is the "Give to…" control: the
-  answer and the way to change it are one thing, and a separate button made every card a row taller.
-  Who has it is the same line's left side: a dot for how the hold is doing (`health`, from the
-  server), their name, ⚡ when an agent holds it, and a word only when somebody should look. The age at the top is since anything last happened to it. Done is faded.
+  Dragging between columns does what the work's own page offers, under the same rules: Draft to To
+  do is Ready (keeping the repo it names), To do to Draft is Move to Draft (not while held), In
+  progress to To do is Stop this agent (asked first, above the board), into Done is Archive
+  (`manage`), finished work back to To do is Reopen (with a reason, asked above the board), and
+  anything out of Done to Draft is Unarchive. Nothing is dropped into In progress: taking work is
+  "I'll do this" on its page, or an agent's `take`. The card menu has every one of these, which is
+  the way from a keyboard. A moved card fades until the board reloads from the server — the
+  columns are the server's to decide, never patched here — and a polite live region says what
+  happened.
 
-  The round dot at a card's top-left selects it for the bar that archives or deletes several at
-  once (HubBulkBar, on the page). It shows on hover and focus, and stays once anything is
-  selected; on a touch screen, which has no hover, it always shows. Only cards the viewer may
-  archive or delete (`manage`) have one. Right-clicking a card opens its quick actions
-  (HubCardMenu).
+  From a 44rem board (a 1024px window) the four columns sit side by side, from 60rem with Draft and
+  Done narrower, each head held at the top while To do scrolls; below that they stack as sections,
+  and on a phone one shows at a time under a row of tabs.
 
-  A card can be dragged to another column when that column means an act the card's own page
-  offers: back to Draft, Stop this agent (To do, from In progress; asked first), Archive (Done) and
-  Unarchive (out of Done, to Draft), and Ready (Draft to To do), for every kind: a handoff or bug
-  has a task's states. Ready for a task asks which repo it is for (HubReadyPrompt), where it was
-  dropped. While a card is dragged it fades where it
-  was, the columns it cannot go to fade, and a gap opens at the top of the one under it. A drop
-  lands at once and is put back, with the hub's error, if the server refuses it. The same acts are
-  in the right-click menu, which is the way there from a keyboard or a phone.
-
-  From md the columns are lanes the height of the window, each scrolling its own cards under a
-  header that stays put, so the whole lane is somewhere to drop and nothing ends half-way down.
-
-  In a team (`people`), it is a Trello board with a list per person: Draft, To do, a column for each
-  teammate and each group with work waiting, In progress, Done. Work waiting to be started sits in
-  the column of whoever it was sent to (`lanes`, from the server), or To do when nobody in
-  particular; several named people each see it in their column, as one guide. Dragging it to
-  someone's column gives it to them; dragging to In progress, Done or Draft does what those columns
-  always did.
+  Ticking cards (not Done ones) brings up the bulk bar (HubBulkBar): Give to…, Move to…, Archive…
+  and Clear, each asked in place. Escape or Clear lets go of the selection; it never outlives the
+  cards it was made on.
 -->
 <script setup lang="ts">
 import type { STAGES } from "~/composables/useWorkLists";
-import type { Guide, Task, Working } from "~/types/hub";
+import type { Task, Work, Working } from "~/types/hub";
+
+type Column = (typeof STAGES)[number] & { cards: Work[] };
+type Person = { id: string; label: string; to: string };
+type Group = { key: string; label: string; to: string; cards: Work[] };
 
 const props = defineProps<{
-  columns: ((typeof STAGES)[number] & { cards: Guide[] })[];
-  /** Teammates, for the columns by person; absent for the board by stage. `to` is how Give to… names them. */
-  people?: { id: string; label: string; to: string }[] | null;
+  columns: Column[];
+  /** The team's people (`to` is how assign names them) and groups; null across all teams. */
+  people: Person[] | null;
+  groups: { slug: string; name: string }[];
+  /** The viewer, as a group key (account id) and an assign address. */
+  me: { id: string; to: string } | null;
+  /** Show every finished card rather than the latest twenty. */
+  allDone: boolean;
+  /** The team's name, for "Everyone in Acme". */
+  team: string;
 }>();
 
-/** Done is most of what exists; the column shows the newest and says how many more. */
 const DONE_SHOWN = 20;
 
-/** Who it was sent to, in the words the rest of the hub uses. */
-function address(g: Guide) {
-  if (g.to) return g.to_name || `@${g.to}`;
-  // Several named people are a group nobody named (`~…`): say who they are, not its id.
-  if (g.to_group)
-    return g.to_group.startsWith("~") ? g.to_group_name || "several people" : `#${g.to_group}`;
-  if (g.team) return g.team_name || g.team;
-  return "Private";
-}
-/** The picker's name for where it is now: `@handle`, `#group`, or "" for the whole team. */
-const addressed = (g: Guide) =>
-  g.to
-    ? `@${g.to}`
-    : g.to_group?.startsWith("~")
-      ? (g.to_group_name ?? "").replace(/\s+/g, "")
-      : g.to_group
-        ? `#${g.to_group}`
-        : "";
-/** Anyone in the team can give work to someone else, as they can move it. Done work stays put. */
-const canGive = (g: Guide) => Boolean(g.team) && g.stage !== "done";
-
-/**
- * The one card whose "Give to…" picker is open, and where it floats: under the control that opened
- * it, fixed to the window and kept inside it. Floating rather than in the card's flow, which made
- * the card grow; drawn on the page body, because the lanes scroll both ways and clip anything
- * hanging out of them. A click outside it, Escape, or scrolling the board closes it.
- */
-const giving = ref("");
-const givingGuide = computed(() =>
-  giving.value ? props.columns.flatMap((c) => c.cards).find((g) => g.id === giving.value) : null,
-);
-const givePos = ref({ left: 0, top: 0 });
-const popover = ref<HTMLElement | null>(null);
-async function openGive(id: string, x: number, y: number) {
-  if (giving.value === id) return (giving.value = "");
-  giving.value = id;
-  givePos.value = { left: x, top: y };
-  await nextTick();
-  const box = popover.value?.getBoundingClientRect();
-  if (box)
-    givePos.value = {
-      left: Math.max(8, Math.min(x, window.innerWidth - box.width - 8)),
-      top: y + box.height > window.innerHeight - 8 ? Math.max(8, y - box.height - 28) : y,
-    };
-}
-function giveFrom(id: string, e: MouseEvent) {
-  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  openGive(id, r.right - 288, r.bottom + 4);
-}
-// The controls that open it stop their own click, so any click that arrives here is elsewhere.
-function onDocument(e: Event) {
-  if (giving.value && !popover.value?.contains(e.target as Node)) giving.value = "";
-}
+const now = ref(Date.now());
+let tick: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
-  document.addEventListener("click", onDocument);
-  window.addEventListener("scroll", onDocument, true);
+  tick = setInterval(() => (now.value = Date.now()), 60_000);
 });
-onBeforeUnmount(() => {
-  document.removeEventListener("click", onDocument);
-  window.removeEventListener("scroll", onDocument, true);
+onBeforeUnmount(() => clearInterval(tick));
+
+const col = (id: string) => props.columns.find((c) => c.id === id) as Column;
+/** Done, newest finish first, the latest twenty unless all were asked for. */
+const doneCards = computed(() => {
+  const sorted = [...col("done").cards].sort((a, b) =>
+    (b.updated || b.created).localeCompare(a.updated || a.created),
+  );
+  return props.allDone ? sorted : sorted.slice(0, DONE_SHOWN);
 });
 
-/** The hold a card leads with: one that needs somebody first, else the first. */
-const lead = (g: Guide) =>
-  (g.held_by ?? []).find((h) => h.health === "quiet" || h.health === "asking") ?? g.held_by?.[0];
+// ---- To do, by who it is for ---------------------------------------------------------------
 
-/**
- * How a hold is doing, as a coloured dot and, when somebody should look, a word. Working and a
- * person's own hold need nobody, so they say nothing beyond the dot.
- */
-const HEALTH = {
-  working: { dot: "bg-ok", word: "", label: "working" },
-  person: { dot: "bg-line-strong", word: "", label: "a person has it" },
-  review: { dot: "bg-accent", word: "", label: "handed in" },
-  asking: { dot: "bg-warn", word: "asked a question", label: "asked a question" },
-  quiet: { dot: "bg-danger", word: "went quiet", label: "went quiet" },
-} as const;
+const dragging = ref<Work | null>(null);
+/** Anyone in the team can give work to someone else; only within one team's board. */
+const canGive = (g: Work) => Boolean(g.team) && g.stage !== "done";
+const giving = computed(
+  () => Boolean(props.people) && dragging.value?.stage === "todo" && canGive(dragging.value),
+);
 
-/** How long since anything happened to it: its holder last heard from, or its last edit. */
-function age(g: Guide) {
-  const heard = (g.held_by ?? [])
-    .map((h) => h.since)
-    .sort()
-    .at(-1);
-  const edited = g.updated || g.created;
-  return rel(heard && heard > edited ? heard : edited).replace(/ ago$/, "");
-}
-
-const { list: selected, has, toggle } = useSelection();
-const pick = (g: Guide) =>
-  toggle({ id: g.id, title: g.title || "", archived: g.status === "consumed" });
-
-/** The card whose quick actions are open, and where the pointer was. */
-const menu = ref<{ guide: Guide; x: number; y: number } | null>(null);
-function openMenu(g: Guide, e: MouseEvent) {
-  // The context-menu key reports no pointer position, so the menu opens at the card instead.
-  const card = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  menu.value = {
-    guide: g,
-    x: e.clientX || card.left + 16,
-    y: e.clientY || card.top + 16,
+const todoGroups = computed<Group[]>(() => {
+  const me = props.me;
+  const byKey = new Map<string, Group>();
+  const group = (key: string, label: string, to: string) => {
+    if (!byKey.has(key)) byKey.set(key, { key, label, to, cards: [] });
+    return byKey.get(key) as Group;
   };
+  const person = (id: string, g?: Work) => {
+    if (me && id === me.id) return group(id, "You", me.to);
+    const p = props.people?.find((x) => x.id === id);
+    if (p) return group(id, p.label, p.to);
+    // Across all teams there is no member list: the card names who it was sent to.
+    const label = g?.to_name || g?.to_group_name || "Someone";
+    return group(id, label, g?.to ? `@${g.to}` : `@${id}`);
+  };
+  for (const g of col("todo").cards) {
+    const lanes = g.lanes ?? [];
+    if (!lanes.length) group("", "Anyone", "").cards.push(g);
+    for (const k of lanes)
+      (k.startsWith("#") ? group(k, g.to_group_name || k.slice(1), k) : person(k, g)).cards.push(g);
+  }
+  // Everywhere a dragged card could go, even where nothing waits yet.
+  if (giving.value) {
+    if (me) person(me.id);
+    for (const p of props.people ?? []) person(p.id);
+    for (const t of props.groups) group(`#${t.slug}`, t.name || t.slug, `#${t.slug}`);
+    group("", "Anyone", "");
+  }
+  const order = (x: Group) =>
+    x.key === me?.id ? 0 : x.key === "" ? 3 : x.key.startsWith("#") ? 2 : 1;
+  const seat = (x: Group) => {
+    const i = props.people?.findIndex((p) => p.id === x.key) ?? -1;
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  return [...byKey.values()].sort(
+    (a, b) => order(a) - order(b) || seat(a) - seat(b) || a.label.localeCompare(b.label),
+  );
+});
+
+// ---- moving --------------------------------------------------------------------------------
+
+const { onArchive, onAssign, onReopen, onTaskDraft, onTaskReady, onTakeBack } = useHub();
+const holding = (g: Work) => Boolean(g.held_by?.length);
+const finished = (g: Work) => g.status === "done" && g.outcome !== "archived";
+
+/** Said once a move lands or is refused, for anyone not watching the card. */
+const said = ref("");
+
+/** Cards moved and waiting for the board to reload; they stay faded until it has. */
+const moving = ref<Set<string>>(new Set());
+const landed = new Set<string>();
+const settling = ref<Set<string>>(new Set());
+
+// ---- picking, for the bulk bar -------------------------------------------------------------
+
+const picks = ref<Set<string>>(new Set());
+
+// ---- To do's groups, three cards each until opened -------------------------------------------
+
+const GROUP_SHOWN = 3;
+const opened = ref<Set<string>>(new Set());
+/** You are shown in full: being named outranks being in the room. */
+const full = (t: Group) => t.key === props.me?.id || opened.value.has(t.key);
+function toggleGroup(key: string) {
+  const next = new Set(opened.value);
+  if (!next.delete(key)) next.add(key);
+  opened.value = next;
+}
+const pickable = (g: Work) => g.stage !== "done";
+function pick(g: Work) {
+  const next = new Set(picks.value);
+  if (!next.delete(g.id)) next.add(g.id);
+  picks.value = next;
+}
+const pickedCards = computed(() =>
+  props.columns
+    .flatMap((c) => c.cards)
+    .filter((g, i, all) => picks.value.has(g.id) && all.findIndex((x) => x.id === g.id) === i),
+);
+// A selection never outlives the cards it was made on.
+watch(
+  () => props.columns,
+  (cols) => {
+    const here = new Set(cols.flatMap((c) => c.cards.filter(pickable).map((g) => g.id)));
+    if ([...picks.value].some((id) => !here.has(id)))
+      picks.value = new Set([...picks.value].filter((id) => here.has(id)));
+  },
+);
+watch(
+  () => props.columns,
+  () => {
+    if (!landed.size) return;
+    const next = new Set(moving.value);
+    for (const id of landed) next.delete(id);
+    // Now where the server put them: they settle there, once.
+    settling.value = new Set(landed);
+    setTimeout(() => (settling.value = new Set()), 400);
+    landed.clear();
+    moving.value = next;
+  },
+);
+async function act(g: Work, work: () => Promise<boolean>, done: string) {
+  moving.value = new Set(moving.value).add(g.id);
+  const ok = await work();
+  if (ok) {
+    landed.add(g.id);
+    said.value = done;
+  } else {
+    const next = new Set(moving.value);
+    next.delete(g.id);
+    moving.value = next;
+    said.value = `“${g.title || "That work"}” did not move.`;
+  }
 }
 
-const { onArchive, onAssign, onCloseGuide, onReopen, onTaskDraft, onTaskReady, onTakeBack } =
-  useHub();
-/** Finished, not shelved: what Reopen is for. Archived work comes back through Unarchive. */
-const finished = (g: Guide) => g.status === "consumed" && g.outcome !== "archived";
-
-/** The card being dragged, and the column under it. */
-const dragging = ref<Guide | null>(null);
-const over = ref("");
-const holding = (g: Guide) => (g.held_by ?? []).some((h) => h.health !== "review");
+/** A card waiting on a question asked above the board: stopping its agent, or why to reopen it. */
+const asking = ref<{ kind: "stop" | "reopen"; work: Work } | null>(null);
 
 /**
- * What dropping `g` in column `to` does, or null when it does nothing there. Each is the act the
- * guide's page offers, under the same rule: anyone in the team moves work, `manage` archives. An
- * act answers false when it did not happen, and the card goes back.
+ * What dropping `g` in column `to` does, or null when it does nothing there. Each is an act the
+ * work's page offers, under the same rule: anyone in the team moves work, `manage` archives.
  */
-function moveTo(g: Guide, to: string): (() => Promise<boolean> | boolean) | null {
+function moveTo(g: Work, to: string): (() => void) | null {
   const from = g.stage;
-  const task = g.kind === "task";
+  const name = `“${g.title || "That work"}”`;
   if (from === to) return null;
-  // Ready for a task asks which repo first (see drop()); anything else goes at once.
   if (from === "draft" && to === "todo")
-    return task ? () => false : () => onTaskReady({ id: g.id } as Task);
+    return () => act(g, () => onTaskReady({ id: g.id } as Task), `${name} is ready, in To do.`);
   if (from === "todo" && to === "draft" && !holding(g))
-    return () => onTaskDraft({ id: g.id } as Task);
-  if (from === "working" && to === "todo")
-    return () =>
-      confirm(`Stop the agent working on "${g.title}"? It goes back to To do.`) &&
-      onTakeBack({ id: g.id } as Working);
-  if (to === "done" && g.manage && from !== "review" && g.status !== "consumed")
-    return () => (task ? onArchive(g, true) : onCloseGuide(g));
-  // Finished work dragged back to To do is reopened, with why; anything out of Done to Draft is
-  // unarchived, so nobody redoes it without a person saying so.
+    return () => act(g, () => onTaskDraft({ id: g.id } as Task), `${name} moved to Draft.`);
+  if (from === "working" && to === "todo") return () => (asking.value = { kind: "stop", work: g });
+  if (to === "done" && g.manage && g.status !== "done")
+    return () => act(g, () => onArchive(g, true), `${name} archived, in Done.`);
   if (from === "done" && to === "todo" && finished(g))
-    return () => {
-      const why = prompt(`Why reopen "${g.title}"? Whoever finished it is told.`)?.trim();
-      return Boolean(why) && onReopen(g.id, why as string);
-    };
-  if (from === "done" && to === "draft" && g.manage && g.status === "consumed")
-    return () => onArchive(g, false);
+    return () => (asking.value = { kind: "reopen", work: g });
+  if (from === "done" && to === "draft" && g.manage && g.status === "done")
+    return () => act(g, () => onArchive(g, false), `${name} unarchived, in Draft.`);
   return null;
 }
+/** Waiting work given to a different group inside To do. */
+function giveTo(g: Work, key: string) {
+  if (!giving.value || g.stage !== "todo") return null;
+  const target = todoGroups.value.find((x) => x.key === key);
+  if (!target || target.cards.some((x) => x.id === g.id)) return null;
+  const name = `“${g.title || "That work"}”`;
+  return () =>
+    act(
+      g,
+      () => onAssign(g.id, target.to),
+      target.key === "" ? `${name} is for anyone now.` : `${name} given to ${target.label}.`,
+    );
+}
 
-/**
- * Where a moved card is shown until the board catches up: its id and the column it was put in. A
- * refused move deletes its entry and the card is back where the server has it.
- */
-const placed = ref<Record<string, string>>({});
-const view = computed(() => {
-  const moved = props.columns.flatMap((c) =>
-    c.cards.filter((g) => placed.value[g.id] && placed.value[g.id] !== c.id),
-  );
-  return props.columns.map((c) => ({
-    ...c,
-    cards: [
-      ...moved.filter((g) => placed.value[g.id] === c.id),
-      ...c.cards.filter((g) => !placed.value[g.id] || placed.value[g.id] === c.id),
-    ],
-  }));
+async function stopAgent() {
+  const g = asking.value?.work;
+  asking.value = null;
+  if (g)
+    await act(
+      g,
+      () => onTakeBack({ id: g.id } as Working),
+      `Stopped the agent on “${g.title}”. It is back in To do.`,
+    );
+}
+async function reopen(form: HTMLFormElement) {
+  const g = asking.value?.work;
+  const why = field(form, "why").trim();
+  if (!g || !why) return;
+  asking.value = null;
+  await act(g, () => onReopen(g.id, why), `“${g.title}” reopened, in To do.`);
+}
+const askField = ref<HTMLInputElement | null>(null);
+watch(asking, async (a) => {
+  await nextTick();
+  if (a?.kind === "reopen") askField.value?.focus();
 });
-// Once the server's board agrees, the entry has nothing left to say.
-watch(
-  () => props.columns,
-  (cols) => {
-    const now = { ...placed.value };
-    for (const c of cols) for (const g of c.cards) if (now[g.id] === c.id) delete now[g.id];
-    placed.value = now;
-  },
-);
-async function place(g: Guide, to: string, act: () => Promise<boolean> | boolean) {
-  placed.value = { ...placed.value, [g.id]: to };
-  if (!(await act())) {
-    const { [g.id]: _, ...rest } = placed.value;
-    placed.value = rest;
-  }
-}
 
-/**
- * The board with people (`people`): Draft, To do (nobody yet), a column per teammate and per group
- * with work waiting, In progress, Done — a Trello board with a list per person. Only work waiting to
- * be started moves between the people: Draft, In progress and Done are where they are for everyone.
- * A card waiting for several named people shows in each of their columns, as one guide. A card just
- * given somewhere shows there until the board catches up (`given`).
- */
-const given = ref<Record<string, string>>({});
-const isLane = (col: string) => !["draft", "todo", "working", "done"].includes(col);
-const laneColumns = computed(() => {
-  if (!props.people) return null;
-  const stage = (id: string) => view.value.find((c) => c.id === id)!;
-  const waiting = stage("todo").cards;
-  const groups = [
-    ...new Set(waiting.flatMap((g) => (g.lanes ?? []).filter((k) => k.startsWith("#")))),
-  ].sort();
-  const lanes = [...props.people, ...groups.map((k) => ({ id: k, label: k, to: k }))];
-  const known = new Set(lanes.map((c) => c.id));
-  const whose = (g: Guide) => {
-    if (given.value[g.id] !== undefined) return [given.value[g.id] as string];
-    const in_ = (g.lanes ?? []).filter((k) => known.has(k));
-    return in_.length ? in_ : ["todo"];
-  };
-  return [
-    stage("draft"),
-    {
-      ...stage("todo"),
-      label: "To do",
-      hint: "Ready, for nobody yet",
-      cards: waiting.filter((g) => whose(g).includes("todo")),
-    },
-    ...lanes.map((c) => ({
-      ...c,
-      hint: "",
-      cards: waiting.filter((g) => whose(g).includes(c.id)),
-    })),
-    stage("working"),
-    stage("done"),
-  ];
-});
-const shownColumns = computed(() => laneColumns.value ?? view.value);
-watch(
-  () => props.columns,
-  (cols) => {
-    const now = { ...given.value };
-    for (const g of cols.flatMap((c) => c.cards)) {
-      const to = now[g.id];
-      if (to !== undefined && (to === "todo" ? !g.lanes?.length : g.lanes?.includes(to)))
-        delete now[g.id];
-    }
-    given.value = now;
-  },
-);
-/** Dropping waiting work on a person or group gives it to them; on To do, to nobody in particular. */
-async function giveTo(g: Guide, col: string) {
-  const to =
-    col === "todo"
-      ? ""
-      : ((laneColumns.value?.find((c) => c.id === col) as { to?: string })?.to ?? "");
-  given.value = { ...given.value, [g.id]: col };
-  if (!(await onAssign(g.id, to))) {
-    const { [g.id]: _, ...rest } = given.value;
-    given.value = rest;
-  }
-}
-/** Waiting work moving between To do and the people, rather than between stages. */
-function regive(g: Guide, col: string) {
-  if (!laneColumns.value || g.stage !== "todo" || !canGive(g)) return false;
-  const here = laneColumns.value.find((c) => c.id === col)?.cards.some((x) => x.id === g.id);
-  return !here && (isLane(col) || (col === "todo" && Boolean(g.lanes?.length)));
-}
-const allowed = (g: Guide, col: string) =>
-  regive(g, col) || (!isLane(col) && Boolean(moveTo(g, col)));
+// ---- dragging ------------------------------------------------------------------------------
 
-/** The task waiting on its repo before it goes Ready, and where to ask. */
-const readying = ref<{ guide: Guide; x: number; y: number } | null>(null);
-function ready(repo: string) {
-  const g = readying.value?.guide;
-  readying.value = null;
-  if (g) place(g, "todo", () => onTaskReady({ id: g.id } as Task, repo));
-}
-
-/** How tall the dragged card is, for the gap that opens where it would land. */
-const gap = ref(0);
-function dragStart(g: Guide, e: DragEvent) {
+const over = ref("");
+function dragStart(g: Work, e: DragEvent) {
   dragging.value = g;
-  gap.value = (e.currentTarget as HTMLElement).offsetHeight;
   e.dataTransfer?.setData("text/plain", g.title || g.id);
   if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
 }
@@ -325,229 +263,264 @@ function dragEnd() {
   dragging.value = null;
   over.value = "";
 }
-function dragOver(col: string, e: DragEvent) {
-  if (!dragging.value || !allowed(dragging.value, col)) return;
+const canDrop = (to: string) => Boolean(dragging.value && moveTo(dragging.value, to));
+function dragOver(to: string, e: DragEvent) {
+  if (!canDrop(to)) return;
   e.preventDefault();
-  over.value = col;
+  over.value = to;
 }
-function drop(col: string, e: DragEvent) {
-  const g = dragging.value;
-  if (g && regive(g, col)) {
-    dragEnd();
-    giveTo(g, col);
-    return;
-  }
-  const act = g && !isLane(col) && moveTo(g, col);
+function drop(to: string) {
+  const run = dragging.value && moveTo(dragging.value, to);
   dragEnd();
-  if (!g || !act) return;
-  if (g.kind === "task" && g.stage === "draft" && col === "todo")
-    readying.value = { guide: g, x: e.clientX, y: e.clientY };
-  else place(g, col, act);
+  if (run) run();
+}
+/** A group inside To do takes the drop when it gives the card there; otherwise the column does. */
+function groupOver(key: string, e: DragEvent) {
+  if (!dragging.value || !giveTo(dragging.value, key)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  over.value = `group:${key}`;
+}
+function groupDrop(key: string, e: DragEvent) {
+  const run = dragging.value && giveTo(dragging.value, key);
+  if (!run) return;
+  e.stopPropagation();
+  dragEnd();
+  run();
 }
 
-/**
- * From md, the lanes reach the bottom of the window: the row is as tall as what is left below its
- * own top. Measured, because what sits above the board (a banner, a filter line) varies.
- */
-const lanes = ref<HTMLElement | null>(null);
-const laneHeight = ref("");
-function measure() {
-  const el = lanes.value;
-  if (!el || !window.matchMedia("(min-width: 768px)").matches) return (laneHeight.value = "");
-  const top = el.getBoundingClientRect().top + window.scrollY;
-  laneHeight.value = `max(24rem, calc(100dvh - ${top}px - 1.5rem))`;
-}
-onMounted(() => {
-  measure();
-  window.addEventListener("resize", measure);
-});
-onBeforeUnmount(() => window.removeEventListener("resize", measure));
+// ---- menus ---------------------------------------------------------------------------------
 
-/** The column a phone shows: the first with anything in it, until a tab is picked. */
+const menu = ref<{ work: Work; x: number; y: number } | null>(null);
+/** The card whose "Give to…" picker is open, and where it floats. */
+const givingTo = ref<{ work: Work; left: number; top: number } | null>(null);
+const popover = ref<HTMLElement | null>(null);
+async function openGive(g: Work, x: number, y: number) {
+  givingTo.value = { work: g, left: x, top: y };
+  await nextTick();
+  const box = popover.value?.getBoundingClientRect();
+  if (box && givingTo.value)
+    givingTo.value = {
+      work: g,
+      left: Math.max(8, Math.min(x, window.innerWidth - box.width - 8)),
+      top: Math.max(8, Math.min(y, window.innerHeight - box.height - 8)),
+    };
+  popover.value?.querySelector<HTMLElement>("button")?.focus();
+}
+function onDocument(e: Event) {
+  if (givingTo.value && !popover.value?.contains(e.target as Node)) givingTo.value = null;
+}
+onMounted(() => document.addEventListener("pointerdown", onDocument, true));
+onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocument, true));
+/** The address the picker starts on: `@handle`, `#group`, or "" for the whole team. */
+const addressed = (g: Work) =>
+  g.to
+    ? `@${g.to}`
+    : g.to_group?.startsWith("~")
+      ? (g.to_group_name ?? "").replace(/\s+/g, "")
+      : g.to_group
+        ? `#${g.to_group}`
+        : "";
+
+// ---- phone ---------------------------------------------------------------------------------
+
+/** The column a phone shows: To do, or the first with anything in it, until a tab is picked. */
 const picked = ref("");
 const shown = computed(
   () =>
-    (shownColumns.value.some((c) => c.id === picked.value) && picked.value) ||
-    shownColumns.value.find((c) => c.cards.length)?.id ||
-    shownColumns.value[0]?.id ||
+    picked.value ||
+    (col("todo").cards.length ? "todo" : props.columns.find((c) => c.cards.length)?.id) ||
     "todo",
 );
+
+const labelClass = "font-ui text-[0.6875rem] font-medium tracking-wider text-muted uppercase";
+const cardList = "m-0 grid list-none gap-2 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
+/** Inside one of To do's groups, cards sit closer: they belong together. */
+const groupList = "m-0 grid list-none gap-1 p-0 @[28rem]:grid-cols-2 @[44rem]:grid-cols-1";
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
-    <div role="tablist" aria-label="Board columns" class="flex gap-1 overflow-x-auto [scrollbar-width:none] md:hidden">
+  <!-- Room at the foot while the bulk bar floats over it. -->
+  <div class="@container flex flex-col gap-4" :class="picks.size ? 'pb-24' : ''">
+    <p class="sr-only" aria-live="polite">{{ said }}</p>
+
+    <!-- A question the board asks before an act, in place: never a browser dialog. -->
+    <div v-if="asking?.kind === 'stop'" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-3" role="alert">
+      <p class="m-0 min-w-0 grow font-ui text-sm">Stop the agent working on “{{ asking.work.title }}”? It goes back to To do.</p>
+      <button class="btn sm outline danger" type="button" @click="stopAgent">Stop this agent</button>
+      <button class="btn sm" type="button" @click="asking = null">Keep it</button>
+    </div>
+    <form
+      v-else-if="asking?.kind === 'reopen'"
+      class="flex flex-wrap items-center gap-x-3 gap-y-2 border-y border-line py-3"
+      @submit.prevent="reopen($event.target as HTMLFormElement)"
+    >
+      <label for="board-why" class="m-0 font-ui text-sm">Reopen “{{ asking.work.title }}”? Whoever finished it is told why.</label>
+      <input id="board-why" ref="askField" name="why" class="h-8 min-w-0 grow basis-48 text-sm" placeholder="What's still wrong" required @keydown.esc="asking = null" />
+      <button class="btn sm primary" type="submit">Reopen</button>
+      <button class="btn sm" type="button" @click="asking = null">Keep it</button>
+    </form>
+
+    <!-- A phone shows one column at a time. -->
+    <div role="tablist" aria-label="Board columns" class="flex gap-5 border-b border-line md:hidden">
       <button
-        v-for="col in shownColumns"
-        :key="col.id"
+        v-for="c in columns"
+        :id="`tab-${c.id}`"
+        :key="c.id"
         type="button"
         role="tab"
-        :aria-selected="shown === col.id"
-        class="btn sm static shrink-0"
-        :class="shown === col.id ? 'primary' : ''"
-        @click="picked = col.id"
+        :aria-selected="shown === c.id"
+        :aria-controls="`col-${c.id}`"
+        class="tab -mb-px flex cursor-pointer items-baseline gap-1 border-0 border-b-2 bg-transparent px-0 py-2 font-ui text-sm"
+        :class="shown === c.id ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
+        @click="picked = c.id"
       >
-        {{ col.label }} <span class="tabular-nums opacity-70">{{ col.cards.length }}</span>
+        {{ c.label }} <span class="text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
       </button>
     </div>
 
-    <div
-      ref="lanes"
-      class="flex items-start gap-3 md:items-stretch md:gap-2 md:overflow-x-auto md:pb-2"
-      :style="laneHeight ? { height: laneHeight } : undefined"
-    >
+    <div class="grid gap-x-4 gap-y-10 @[44rem]:grid-cols-4 @[60rem]:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)_minmax(0,4fr)] @[60rem]:gap-x-6">
       <section
-        v-for="col in shownColumns"
-        :key="col.id"
-        class="flex w-full min-w-0 flex-col gap-3 rounded-3 bg-surface p-3 transition-opacity md:min-h-0 md:flex-[1_0_15rem]"
+        v-for="c in columns"
+        :id="`col-${c.id}`"
+        :key="c.id"
+        class="flex min-w-0 flex-col transition-opacity motion-reduce:transition-none"
         :class="[
-          shown === col.id ? '' : 'max-md:hidden',
-          dragging && !col.cards.some((x) => x.id === dragging!.id) && !allowed(dragging, col.id) ? 'opacity-50' : '',
-          over === col.id ? 'ring-2 ring-[var(--accent)]' : '',
+          shown === c.id ? '' : 'max-md:hidden',
+          dragging && dragging.stage !== c.id && !canDrop(c.id) && !(c.id === 'todo' && giving) ? 'opacity-50' : '',
         ]"
-        @dragover="dragOver(col.id, $event)"
-        @drop.prevent="drop(col.id, $event)"
-        :aria-labelledby="`col-${col.id}`"
+        :aria-labelledby="`col-${c.id}-h`"
+        @dragover="dragOver(c.id, $event)"
+        @drop.prevent="drop(c.id)"
       >
-        <div class="flex items-baseline gap-2 px-1">
-          <h2 :id="`col-${col.id}`" class="m-0 font-ui text-sm font-semibold">{{ col.label }}</h2>
-          <span class="font-ui text-xs tabular-nums text-muted">{{ col.cards.length }}</span>
+        <!-- On a phone the tab above already names the column. -->
+        <!-- Held at the top while the page scrolls, so the four names stay in view. -->
+        <div class="sticky top-0 z-20 -mx-px flex items-baseline gap-2 border-b border-fg bg-bg px-px pt-2 pb-2 max-md:hidden">
+          <h2 :id="`col-${c.id}-h`" class="m-0 font-ui text-sm font-[550] tracking-normal">{{ c.label }}</h2>
+          <span class="font-ui text-xs text-muted tabular-nums">{{ c.cards.length }}</span>
         </div>
-        <p v-if="col.hint && !col.cards.length && over !== col.id" class="m-0 px-1 font-ui text-xs text-muted">{{ col.hint }}</p>
-        <!-- The lane's cards scroll inside it, under the header. -->
-        <ul class="m-0 -mx-1 flex list-none flex-col gap-2 px-1 pb-1 md:min-h-0 md:flex-1 md:overflow-y-auto">
-          <li
-            v-if="over === col.id"
-            aria-hidden="true"
-            class="shrink-0 rounded-2 border-2 border-dashed border-line-strong"
-            :style="{ height: `${gap}px` }"
-          />
-          <li
-            v-for="g in col.id === 'done' ? col.cards.slice(0, DONE_SHOWN) : col.cards"
-            :key="g.id"
-            class="group relative flex shrink-0 flex-col rounded-2 bg-raised shadow-edge transition-transform has-[a:active]:scale-[0.96]"
-            :class="[
-              dragging?.id === g.id ? 'opacity-40' : col.id === 'done' ? 'opacity-70' : '',
-              has(g.id) ? 'ring-2 ring-[var(--accent)]' : '',
-            ]"
-            :draggable="giving !== g.id"
-            @dragstart="dragStart(g, $event)"
-            @dragend="dragEnd"
-            @contextmenu.prevent="openMenu(g, $event)"
-          >
-            <!-- The top row: the select dot, the badges and the age, in one line so the dot sits on
-                 the badges' centre. Outside the link, because a control inside an <a> would open
-                 the page; the link below stretches over the whole card instead. -->
-            <div class="flex items-center gap-2 px-3 pt-2">
-              <!-- No room taken while hidden, so a card at rest starts at its badge. -->
-              <input
-                v-if="g.manage"
-                type="checkbox"
-                class="relative z-10 my-0 ml-0 -mr-2 h-4 w-0 shrink-0 cursor-pointer appearance-none rounded-pill border-0 border-line-strong bg-field opacity-0 transition-[width,margin,opacity] duration-150 checked:border-[var(--accent)] checked:bg-[var(--accent)] checked:shadow-[inset_0_0_0_3px_var(--field)] focus-visible:mr-0 focus-visible:w-4 focus-visible:border focus-visible:opacity-100 group-hover:mr-0 group-hover:w-4 group-hover:border group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:mr-0 [@media(hover:none)]:w-4 [@media(hover:none)]:border [@media(hover:none)]:opacity-100"
-                :class="selected.length ? '!mr-0 !w-4 !border !opacity-100' : ''"
-                :checked="has(g.id)"
-                :aria-label="`Select ${g.title || 'this guide'}`"
-                @change="pick(g)"
+        <div
+          class="flex grow flex-col gap-3 rounded-b-2 pt-3 pb-2"
+          :class="over === c.id ? 'outline-2 -outline-offset-2 outline-ink outline-solid' : ''"
+        >
+          <p v-if="!c.cards.length && !(c.id === 'todo' && giving)" class="m-0 font-ui text-sm text-muted">{{ c.hint }}</p>
+
+          <!-- To do: under who it is for. -->
+          <template v-if="c.id === 'todo'">
+            <div
+              v-for="t in todoGroups"
+              :key="t.key || 'anyone'"
+              class="flex flex-col gap-2 rounded-2"
+              :class="over === `group:${t.key}` ? 'outline-2 outline-offset-2 outline-ink outline-solid' : ''"
+              :aria-label="`For ${t.label}`"
+              role="group"
+              @dragover="groupOver(t.key, $event)"
+              @drop.prevent="groupDrop(t.key, $event)"
+            >
+              <!-- Being named outranks being in the room: You leads, in ink over an ink rule. -->
+              <p
+                class="m-0 flex items-baseline gap-2 border-b pb-1"
+                :class="[labelClass, t.key && t.key === me?.id ? '!text-fg font-[550] border-fg' : 'border-line']"
               >
-              <span
-                v-if="kindBadge(g.kind)"
-                class="rounded-1 border px-1 py-0.5 font-ui text-xs leading-none font-medium tracking-wide uppercase"
-                :class="kindBadge(g.kind)!.class"
-              >{{ kindBadge(g.kind)!.label }}</span>
-              <span
-                v-if="g.can_review"
-                class="rounded-pill bg-accent-soft px-2 py-0.5 font-ui text-xs font-semibold text-accent"
-              >Your review</span>
-              <!-- Done is approved work and archived work; the card says which, in words. -->
-              <span v-if="g.stage === 'done' && g.outcome" class="font-ui text-xs text-muted">{{
-                { finished: "Finished", approved: "Approved", archived: "Archived" }[g.outcome]
-              }}</span>
-              <span class="ml-auto font-ui text-xs tabular-nums text-muted">{{ age(g) }}</span>
-            </div>
-            <!-- The title is the link, and its ::after covers the card, so anywhere on the card
-                 opens it; the dot and the footer's control sit above that layer. -->
-            <NuxtLink
-              :to="`/hub/g/${g.id}`"
-              class="line-clamp-2 px-3 pt-2 pb-1 font-ui text-sm font-medium text-pretty text-fg no-underline outline-none after:absolute after:inset-0 after:rounded-2 focus-visible:after:outline-2 focus-visible:after:outline-[var(--accent)] focus-visible:after:outline-solid"
-            >{{ g.title || "Untitled guide" }}</NuxtLink>
-            <!-- The footer sits beside the link, not inside it: a button inside an <a> is invalid
-                 and would open the page. -->
-            <div class="flex items-center gap-2 px-3 pb-2 font-ui text-xs text-muted">
-              <!-- Who has it: a dot for how it is going, their name, ⚡ when an agent holds it, and a
-                   word only when somebody should look. The agent's own name is on the card's page;
-                   several holders read as the first and a count. -->
-              <span v-if="lead(g)" class="flex min-w-0 items-center gap-1">
-                <span
-                  class="size-1.5 shrink-0 rounded-pill"
-                  :class="HEALTH[lead(g)!.health].dot"
-                  role="img"
-                  :aria-label="HEALTH[lead(g)!.health].label"
+                {{ t.label }} <span class="tabular-nums">{{ t.cards.length || "" }}</span>
+              </p>
+              <ul v-if="t.cards.length" :class="groupList">
+                <HubBoardCard
+                  v-for="g in full(t) ? t.cards : t.cards.slice(0, GROUP_SHOWN)"
+                  :key="g.id"
+                  :work="g"
+                  :now="now"
+                  :draggable="!moving.has(g.id)"
+                  :moving="moving.has(g.id) || dragging?.id === g.id"
+                  :settling="settling.has(g.id)"
+                  pickable
+                  :picked="picks.has(g.id)"
+                  :picking="picks.size > 0"
+                  @pick="pick(g)"
+                  @drag="dragStart(g, $event)"
+                  @dragend="dragEnd"
+                  @menu="(x, y) => (menu = { work: g, x, y })"
                 />
-                <b class="min-w-0 truncate font-medium text-fg">{{ lead(g)!.you ? "You" : lead(g)!.name }}</b>
-                <span v-if="lead(g)!.agent" class="shrink-0" role="img" aria-label="an agent">⚡</span>
-                <span v-if="(g.held_by?.length ?? 0) > 1" class="shrink-0">+{{ g.held_by!.length - 1 }}</span>
-                <span
-                  v-if="HEALTH[lead(g)!.health].word"
-                  class="shrink-0"
-                  :class="lead(g)!.health === 'quiet' ? 'text-danger' : 'text-warn'"
-                >{{ HEALTH[lead(g)!.health].word }}</span>
-              </span>
+              </ul>
               <button
-                v-if="canGive(g)"
+                v-if="t.key !== me?.id && t.cards.length > GROUP_SHOWN"
                 type="button"
-                class="relative z-10 ml-auto flex min-w-0 cursor-pointer items-center gap-0.5 rounded-1 border-0 bg-transparent p-0 font-ui text-xs text-muted hover:text-fg"
-                :aria-expanded="giving === g.id"
-                :aria-label="`For ${address(g)}. Give it to someone else`"
-                @click.stop="giveFrom(g.id, $event)"
-                @keydown.esc="giving = ''"
+                class="linkish self-start font-ui text-xs text-muted"
+                :aria-expanded="opened.has(t.key)"
+                @click="toggleGroup(t.key)"
               >
-                <span class="min-w-0 truncate">{{ address(g) }}</span>
-                <AppIcon name="reveal" class="shrink-0" />
+                {{ opened.has(t.key) ? "Show fewer" : `${t.cards.length - GROUP_SHOWN} more in ${t.key ? t.label : "Anyone"}` }}
               </button>
-              <span v-else class="ml-auto min-w-0 truncate">{{ address(g) }}</span>
+              <p v-if="!t.cards.length" class="m-0 py-2 font-ui text-xs text-muted">Drop here to give it to {{ t.key ? t.label : "anyone" }}.</p>
             </div>
-          </li>
-        </ul>
-        <p v-if="col.id === 'done' && col.cards.length > DONE_SHOWN" class="m-0 px-1 font-ui text-xs text-muted">
-          and {{ col.cards.length - DONE_SHOWN }} more — search to find one
-        </p>
+          </template>
+
+          <ul v-else-if="c.cards.length" :class="cardList">
+            <HubBoardCard
+              v-for="g in c.id === 'done' ? doneCards : c.cards"
+              :key="g.id"
+              :work="g"
+              :now="now"
+              :draggable="!moving.has(g.id)"
+              :moving="moving.has(g.id) || dragging?.id === g.id"
+              :settling="settling.has(g.id)"
+              :pickable="pickable(g)"
+              :picked="picks.has(g.id)"
+              :picking="picks.size > 0"
+              @pick="pick(g)"
+              @drag="dragStart(g, $event)"
+              @dragend="dragEnd"
+              @menu="(x, y) => (menu = { work: g, x, y })"
+            />
+          </ul>
+          <p v-if="c.id === 'done' && c.cards.length > DONE_SHOWN" class="m-0 font-ui text-xs text-muted">
+            <template v-if="!allDone">
+              The latest {{ DONE_SHOWN }} of {{ c.cards.length }} ·
+              <NuxtLink :to="{ query: { ...$route.query, done: 'all' } }">See all</NuxtLink>
+            </template>
+            <template v-else>
+              All {{ c.cards.length }} ·
+              <NuxtLink :to="{ query: { ...$route.query, done: undefined } }">Show the latest {{ DONE_SHOWN }}</NuxtLink>
+            </template>
+          </p>
+        </div>
       </section>
     </div>
+
+    <HubBulkBar
+      :picked="pickedCards"
+      :people="people"
+      :groups="groups"
+      :me="me"
+      :team="team"
+      @clear="picks = new Set()"
+      @said="(t) => (said = t)"
+    />
     <HubCardMenu
       v-if="menu"
-      :key="menu.guide.id + menu.x + menu.y"
-      :guide="menu.guide"
+      :key="menu.work.id + menu.x + menu.y"
+      :work="menu.work"
       :x="menu.x"
       :y="menu.y"
-      :can-give="canGive(menu.guide)"
+      :can-give="canGive(menu.work)"
       @close="menu = null"
-      @give="openGive(menu!.guide.id, menu!.x, menu!.y)"
-      @ready="readying = { ...menu! }"
+      @give="openGive(menu!.work, menu!.x, menu!.y)"
     />
     <Teleport to="body">
       <div
-        v-if="givingGuide"
+        v-if="givingTo"
         ref="popover"
         class="menu !fixed !m-0 w-72"
-        :style="{ left: `${givePos.left}px`, top: `${givePos.top}px`, right: 'auto' }"
-        @keydown.esc="giving = ''"
+        :style="{ left: `${givingTo.left}px`, top: `${givingTo.top}px`, right: 'auto' }"
+        @keydown.esc="givingTo = null"
       >
         <HubAssignPicker
-          :id="givingGuide.id"
-          :team="givingGuide.team || ''"
-          :to="addressed(givingGuide)"
-          @done="giving = ''"
+          :id="givingTo.work.id"
+          :team="givingTo.work.team || ''"
+          :to="addressed(givingTo.work)"
+          @done="givingTo = null"
         />
       </div>
     </Teleport>
-    <HubReadyPrompt
-      v-if="readying"
-      :key="readying.guide.id"
-      :guide="readying.guide"
-      :x="readying.x"
-      :y="readying.y"
-      @close="readying = null"
-      @ready="ready"
-    />
   </div>
 </template>

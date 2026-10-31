@@ -42,7 +42,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
       <Transition
         enter-active-class="transition-opacity duration-200 ease-out motion-reduce:transition-none"
         enter-from-class="opacity-0"
-        leave-active-class="transition-opacity duration-150 ease-in motion-reduce:transition-none"
+        leave-active-class="transition-opacity duration-150 ease-out motion-reduce:transition-none"
         leave-to-class="opacity-0"
       >
         <div v-if="target" class="absolute inset-0 bg-black/40" aria-hidden="true" @click="close" />
@@ -50,7 +50,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
       <Transition
         enter-active-class="transition-transform duration-200 ease-out motion-reduce:transition-none"
         enter-from-class="translate-x-full"
-        leave-active-class="transition-transform duration-150 ease-in motion-reduce:transition-none"
+        leave-active-class="transition-transform duration-150 ease-out motion-reduce:transition-none"
         leave-to-class="translate-x-full"
       >
         <aside
@@ -68,7 +68,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
               <h2 class="m-0 mt-1 text-base leading-snug break-words">{{ last.title || last.id }}</h2>
               <p class="m-0 mt-1 flex items-center gap-3 text-xs text-muted">
                 <code class="font-code">{{ last.id }}</code>
-                <NuxtLink :to="`/hub/g/${last.id}`" @click="close">The guide</NuxtLink>
+                <NuxtLink :to="`/hub/w/${last.id}`" @click="close">The work</NuxtLink>
               </p>
             </div>
             <button class="btn sm shrink-0" type="button" aria-label="Close the conversation" @click="close">

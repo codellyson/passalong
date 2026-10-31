@@ -1,33 +1,30 @@
 #!/usr/bin/env node
 // Passalong CLI. Few flags on purpose: the defaults are the product.
 //
-//   passalong share [file] [--to TARGET] [--follows ID]  publish a guide → id + link; --follows adds it as context to guide ID
-//     --follows ID publishes it as a follow-up: more context for guide ID, listed under it and
-//     handed to whoever pulls or starts that guide
+//   passalong new "<what needs doing>" [--to TARGET] [--parent ID] [--draft]  write work down
+//   passalong new <file.md> [--to TARGET] [--parent ID] [--draft]  the same, from a file
 //     TARGET is a team, team/@handle for one person, or "team/#group" for the people who do a
 //     thing — quote that one, since a shell may read the # as a comment
-//   passalong task "<what needs doing>"  write a task for an agent; Ready at once
-//   passalong ready <id...|--all> guides you have read are ready — whoever they are for may take them now
-//   passalong tasks               every task and where it is: draft, ready, claimed, stalled, review
-//   passalong work [--once] [--agent CMD]  run an agent on each ready task here, one after another
-//   passalong work --watch [--every SECS]  the runner: keep taking work marked safe to run alone
-//   passalong reopen <id> <why>   finished work isn't right: back to To do, and whoever takes it next reads why
-//   passalong release <id>        take work back from whoever holds it, of any kind
-//   passalong attach <file>       upload a picture or a file and print the markdown that points at it
-//   passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
-//   passalong pull <id|link> [--save]  print a guide; --save also writes ./.passalong/<id>.md
-//   passalong start <id|link> [--save]  the same as take, by link as well as id
-//   passalong inbox               guides handed to you that you have not pulled yet
-//   passalong board               waiting on you, in flight, landed, worth keeping
-//   passalong activity [--all]    what happened while you were away; clears unless --all
-//   passalong log [repo]          what you did, newest first, by month
-//   passalong list [query]        your guides and your teams'
-//   passalong open <id> [--print] view a guide in the browser (or the terminal)
-//   passalong hub                 open your synced guides in the browser
-//   passalong take <id> [--save]  you are doing it: nobody else can take it while you hold it
+//   passalong board               what needs you, who is on what, and what is ready
+//   passalong list [query]        work you and your teams can see, newest first
+//   passalong open <id> [--print] view work in the browser (or the terminal)
+//   passalong take [id] [--save]  you are doing it: nobody else can take it while you hold it
+//   passalong progress <id> <note>  still on it, with a one-line note the hub shows
+//   passalong hand-in <id> <note> --evidence TEXT [--writeup TEXT] [--pr LINK]  it is done
 //   passalong pass <id> <why>     it is not yours, or you are stuck — hands it back with your reason
-//   passalong assign <id> <to>    give it to @handle (or several: @ada @bola), a #group, or "team" — yours, or assigned to you
-//   passalong recall <id>         take back something you sent: private again, gone from their inboxes
+//   passalong ask <id> <question> ask the person, keep it, and wait for their answer
+//   passalong reply <id> <text>   write to whoever holds it (--file PATH to attach); or leave a note
+//   passalong assign <id> <to>    give it to @handle (or several: @ada @bola), a #group, or "team"
+//   passalong release <id>        take work back from whoever holds it
+//   passalong reopen <id> <why>   finished work isn't right: back to To do, and whoever takes it next reads why
+//   passalong ready <id...|--all> work you have read is Ready — whoever it is for may take it now
+//   passalong archive <id>        off the board and out of the free tier's count
+//   passalong rm <id>             delete it
+//   passalong attach <file>       upload a picture or a file and print the markdown that points at it
+//   passalong work [--once] [--agent CMD]  run an agent on each piece of ready work here, one after another
+//   passalong work --watch [--every SECS]  the runner: keep taking work marked safe to run alone
+//   passalong hub                 open the hub in the browser
+//   passalong export [dir]        dump every piece of work as plain markdown (default ./passalong-export)
 //   passalong admin create <email>   make an account that runs Passalong (owner only)
 //   passalong admin list          who runs it
 //   passalong admin grant|revoke <@handle>   make an existing account an admin, or stop it being one
@@ -35,9 +32,6 @@
 //                                 give Solo to @handle, or Team to team/slug, until a date (operator only)
 //   passalong gifts               what has been given away, and what is still running
 //   passalong ungift <gift id>    take one back now
-//   passalong archive <id>        off your board and out of the free tier's count (was `done`)
-//   passalong rm <id>             delete a guide locally and from sync
-//   passalong export [dir]        dump every guide as plain markdown (default ./passalong-export)
 //   passalong login               sign in from the browser
 //   passalong login --with-token  read a token from stdin instead (CI, scripts)
 //   passalong login --new         add another account to this machine
@@ -63,8 +57,8 @@ import { homedir, hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as api from "../src/api.js";
-import { scaffold, taskScaffold } from "../src/capture.js";
-import { parse, serialize } from "../src/guide.js";
+import { workScaffold } from "../src/capture.js";
+import { parse, serialize } from "../src/work.js";
 import * as passalong from "../src/passalong.js";
 import * as store from "../src/store.js";
 
@@ -203,40 +197,11 @@ function relDate(iso) {
   return iso.slice(0, 10);
 }
 
-function guideLine(r) {
-  const who = r.team ? `  ${r.team}${r.to ? `/@${r.to}` : ""}${r.mine ? "" : ` from @${r.from || "?"}`}` : "";
+function workLine(r) {
+  const who = r.team ? `  ${r.team}${r.to ? `/${r.to}` : ""}${r.mine ? "" : ` from @${r.from || "?"}`}` : "";
   const tags = r.tags?.length ? `  #${r.tags.join(" #")}` : "";
-  let pulled = "";
-  if (r.mine && r.pulled_by?.length) {
-    const p = r.pulled_by[0];
-    pulled = `  ← ${p.handle ? `@${p.handle}` : "link"} ${relDate(p.at)}${r.pulled_by.length > 1 ? ` +${r.pulled_by.length - 1}` : ""}`;
-  }
-  return `${r.id}  ${r.status.padEnd(9)} ${relDate(r.created).padEnd(10)} ${r.title}${who}${tags}${pulled}`;
+  return `${r.id}  ${r.status.padEnd(9)} ${relDate(r.created).padEnd(10)} ${r.title}${who}${tags}`;
 }
-
-function activityLine(n) {
-  const dot = n.read ? " " : "•";
-  return `${dot} ${(n.guide || "").padEnd(8)}  ${relDate(n.at).padEnd(10)} ${n.text}`;
-}
-
-/**
- * After a pulled guide, the follow-ups written for it: more context, each its own guide. Listed on
- * stderr rather than printed in full, so stdout stays exactly the document; nothing at all when
- * there are none or sync is off.
- */
-async function listFollowUps(meta) {
-  const guides = await passalong.followUpGuides(meta);
-  if (!guides.length) return;
-  console.error(
-    `\n${guides.length} follow-up${guides.length === 1 ? "" : "s"} — more context for this guide:`,
-  );
-  for (const g of guides) console.error(`  ${g.id}  ${g.title || "untitled"}`);
-  console.error("Read one with: passalong pull <id>");
-}
-
-const MONTHS = "January February March April May June July August September October November December".split(" ");
-/** "September 2026" from an ISO timestamp, without pulling in a date library for one heading. */
-const monthOf = (iso) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
 
 // ---- the status line cache --------------------------------------------------------------------------
 
@@ -286,75 +251,191 @@ async function statusLine() {
 }
 
 const commands = {
-  async share(f) {
-    let path = f._[0];
-    if (!path) {
-      const [latest] = store.drafts();
-      if (latest) {
-        path = latest;
-        console.error(`using draft ${path}`);
-      } else {
-        path = store.draftPath(new Date().toISOString().replace(/[:.]/g, "-"));
-        writeFileSync(path, scaffold());
-        if (!tty)
-          die(`no draft to share; scaffolded ${path} — fill it in and run \`passalong share ${path}\``);
-      }
+  /**
+   * Write work down: a sentence becomes its title, summary and text, or a file is sent as it is. At
+   * a terminal it opens in $EDITOR first, so whoever wrote it can add to it before it goes.
+   */
+  async new(f) {
+    const arg =
+      f._.join(" ").trim() ||
+      die('usage: passalong new "<what needs doing>" | <file.md> [--to TARGET] [--parent ID] [--draft]');
+    let path = arg;
+    if (!(arg.endsWith(".md") && existsSync(arg))) {
+      path = store.draftPath(`work-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+      writeFileSync(path, workScaffold(arg));
     }
-    if (!existsSync(path)) die(`no such file: ${path}`);
     if (tty && !f["no-edit"]) edit(path);
-    const to = typeof f.to === "string" ? f.to : undefined;
-    const follows = typeof f.follows === "string" ? f.follows : undefined;
-    const { guide, url, notified } = await passalong
-      .share(readFileSync(path, "utf8"), { to, follows })
-      .catch((e) => die(e.message));
-    // Any draft that went out is spent, however it was named — a task that failed validation is
-    // re-shared by its path, and leaving it would have the next bare `share` publish it again.
-    // removeDraft() touches nothing outside the drafts directory.
+    const g = parse(readFileSync(path, "utf8"));
+    if (f.draft) g.meta.status = "draft";
+    const { work, url } = await passalong
+      .publish(serialize(g), {
+        to: typeof f.to === "string" ? f.to : undefined,
+        parent: typeof f.parent === "string" ? f.parent : undefined,
+      })
+      .catch((e) => die(`${e.message}\nkept at ${path} — fix it and run \`passalong new ${path}\``));
+    // A draft that went out is spent. removeDraft() touches nothing outside the drafts directory.
     store.removeDraft(resolve(path));
-    console.log(guide.meta.id);
-    console.error(`shared "${guide.meta.title}"`);
-    if (guide.meta.parent) console.error(`follows ${guide.meta.parent}`);
-    if (guide.meta.team)
-      console.error(
-        `handed to ${guide.meta.team}${guide.meta.to ? `/@${guide.meta.to}${notified ? " (emailed)" : " (in their inbox)"}` : " (team inbox)"}`,
-      );
+    console.log(work.meta.id);
+    const where = work.meta.team ? ` for ${work.meta.team}${work.meta.to ? `/${work.meta.to}` : ""}` : "";
+    console.error(`"${work.meta.title}" is ${work.meta.status === "draft" ? "in Draft" : "Ready"}${where}`);
     console.error(`link: ${url}`);
   },
 
-  /**
-   * Write a task. It lands in Draft and stays there until `passalong ready`: the gap between the
-   * two is the one moment a person reads what an agent is about to be asked to do.
-   */
-  async task(f) {
-    const sentence = f._.join(" ").trim() || die('usage: passalong task "<what needs doing>"');
-    const path = store.draftPath(`task-${new Date().toISOString().replace(/[:.]/g, "-")}`);
-    writeFileSync(path, taskScaffold(sentence));
-    if (tty && !f["no-edit"]) edit(path);
-    const { guide } = await passalong
-      .share(readFileSync(path, "utf8"))
-      .catch((e) => die(`${e.message}\ndraft kept at ${path} — fix it and run \`passalong share ${path}\``));
-    store.removeDraft(path);
-    const id = guide.meta.id;
-    console.log(id);
-    const target = guide.meta.target_context;
-    console.error(`task "${guide.meta.title}" is Ready${target ? ` for ${target}` : " (no repo)"}`);
-    if (guide.meta.team) console.error(`handed to ${guide.meta.team} (team inbox)`);
+  async board() {
+    const b = await passalong.board().catch((e) => die(e.message));
+    const section = (title, rows, line) => {
+      if (!rows.length) return;
+      console.log(`\n${title} · ${rows.length}`);
+      for (const r of rows) console.log(`  ${r.id}  ${line(r)}`);
+    };
+    section("Needs you", b.needs, (n) => `${n.title}  — ${n.why}`);
+    section("Being worked on", b.working, (w) =>
+      `${w.title}  ${w.who}${w.stalled ? " (went quiet)" : ""}${w.note ? `  "${w.note}"` : ""}`);
+    section("Ready", b.ready, (t) => `${t.title}${t.target ? `  [${t.target}]` : ""}${t.to ? `  for ${t.to}` : ""}`);
+    if (!b.needs.length && !b.working.length && !b.ready.length) console.error("nothing open");
+    console.error(`\n${b.counts.done} done. The board: ${b.hub}/work`);
   },
 
-  async tasks() {
-    const rows = await passalong.tasks().catch((e) => die(e.message));
-    if (!rows.length) return console.error('no tasks yet — write one with: passalong task "<what needs doing>"');
-    for (const t of rows) {
-      const c = t.claim;
-      const who = c ? `  ${c.host || "?"}:${c.worktree.split("/").pop() || "?"}` : "";
-      const said = c?.note ? `  "${c.note}"` : "";
-      console.log(`${t.id}  ${t.state.padEnd(8)} ${t.title}${t.target ? `  [${t.target}]` : ""}${who}${said}`);
-      // What came back, under the task it answers: the thing a reviewer reads before deciding.
-      if (t.state === "review" && c?.report)
-        console.log(`          → ${c.report}  ${c.report_title || "(untitled)"}${c.pr ? `  ${c.pr}` : ""}`);
+  async list(f) {
+    const scope = typeof f.team === "string" ? f.team : f.mine ? "mine" : "";
+    const rows = await passalong.list(f._.join(" "), { scope }).catch((e) => die(e.message));
+    if (!rows.length) return console.error('no work yet — write some with: passalong new "<what needs doing>"');
+    for (const r of rows) console.log(workLine(r));
+  },
+
+  async open(f) {
+    const id = f._[0] || die("usage: passalong open <id>");
+    const { work } = await passalong.resolve(id).catch((e) => die(e.message));
+    if (work.meta.url && tty && !f.print) {
+      openInBrowser(work.meta.url);
+      console.error(work.meta.url);
+    } else {
+      process.stdout.write(serialize(work));
+      if (work.meta.url) console.error(`\nlink: ${work.meta.url}`);
     }
-    if (rows.some((t) => t.state === "review"))
-      console.error("\nread a write-up with: passalong open <id> — then approve or reject the task");
+  },
+
+  /**
+   * Take it: you are doing it, and nobody else can take it while you hold it. It is printed, and
+   * `--save` also writes it to ./.passalong/. With no id, the next piece of work waiting here.
+   */
+  async take(f) {
+    const r = await passalong.take(f._[0], { save: Boolean(f.save) }).catch((e) => die(e.message));
+    if (!r.work?.markdown) return console.error(r.say || "nothing to take");
+    process.stdout.write(r.work.markdown);
+    if (r.path) console.error(`\nsaved to ${r.path}`);
+    console.error(`\nyou hold ${r.work.id} — hand it in when it is done, or pass it with the reason`);
+  },
+
+  async progress(f) {
+    const id = f._[0] || die("usage: passalong progress <id> <note>");
+    await passalong.progress(id, f._.slice(1).join(" ")).catch((e) => die(e.message));
+    console.error(`${id} — still yours`);
+  },
+
+  async ["hand-in"](f) {
+    const id = f._[0] || die("usage: passalong hand-in <id> <note> --evidence TEXT");
+    const note = f._.slice(1).join(" ") || die("say in one sentence what you did: passalong hand-in <id> <note>");
+    const r = await passalong
+      .handIn(id, {
+        note,
+        evidence: typeof f.evidence === "string" ? f.evidence : "",
+        writeup: typeof f.writeup === "string" ? f.writeup : "",
+        pr: typeof f.pr === "string" ? f.pr : "",
+      })
+      .catch((e) => die(e.message));
+    console.error(`${id} is ${r.state === "done" ? "Done" : "handed in here; others still hold it"}`);
+  },
+
+  async pass(f) {
+    const id = f._[0] || die("usage: passalong pass <id> <why it is not yours>");
+    const why = f._.slice(1).join(" ");
+    // Required, and the reason is the whole point: "not me" without "why" leaves the sender where
+    // the silence did, still guessing whether to re-address it, wait, or go and ask.
+    if (!why) die("say why you are passing: passalong pass <id> <why it is not yours>");
+    await passalong.pass(id, why).catch((e) => die(e.message));
+    console.error(`${id} handed back with your reason: "${why}"`);
+  },
+
+  async ask(f) {
+    const id = f._[0] || die("usage: passalong ask <id> <question>");
+    await passalong.ask(id, f._.slice(1).join(" ")).catch((e) => die(e.message));
+    console.error(`${id} — asked. It is still yours; take it again once they have replied`);
+  },
+
+  /**
+   * Write to whoever holds a piece of work, or leave a note on one nobody holds yet. The person's
+   * side of `ask`: an agent that stopped to wait hears this when it takes the work again.
+   */
+  async reply(f) {
+    const id = f._[0] || die("usage: passalong reply <id> <message> [--file PATH ...]");
+    const files = [f.file].flat().filter((x) => typeof x === "string");
+    const said = f._.slice(1).join(" ");
+    if (!said && !files.length) die("say something, or attach a file: passalong reply <id> <message>");
+    const r = await passalong.reply(id, said, { files }).catch((e) => die(e.message));
+    console.error(
+      r?.noted
+        ? `${id} — nobody holds it yet, so this is a note: whoever takes it is handed it first`
+        : `${id} — sent. Whoever holds it reads it the next time it checks in`,
+    );
+  },
+
+  async assign(f) {
+    const id = f._[0] || die('usage: passalong assign <id> <@handle | #group | team>');
+    const to = f._.slice(1).join(",") || die('say who: @handle (or several), #group, or "team" for everyone');
+    const r = await passalong.assign(id, to).catch((e) => die(e.message));
+    const back = r.taken_back ? ` — taken back from ${r.taken_back} who had it, and they were told` : "";
+    console.error(`${r.id} is now for ${r.to || "everyone in the team"}${back}`);
+  },
+
+  async release(f) {
+    const id = f._[0] || die("usage: passalong release <id>");
+    await passalong.release(id).catch((e) => die(e.message));
+    console.error(`${id} is back in Ready — whoever had it has been told`);
+  },
+
+  /** Finished work back to To do, with why at its top; whoever finished it is told. */
+  async reopen(f) {
+    const id = f._[0] || die("usage: passalong reopen <id> <why>");
+    const why = f._.slice(1).join(" ");
+    if (!why) die("say why: passalong reopen <id> <what is wrong>");
+    await passalong.reopen(id, why).catch((e) => die(e.message));
+    console.error(`${id} is back in To do — whoever takes it next reads why`);
+  },
+
+  async ready(f) {
+    if (f.all) {
+      const ids = await passalong.readyDrafts().catch((e) => die(e.message));
+      if (!ids.length) return console.error("no drafts of yours to make ready");
+      for (const id of ids) console.log(id);
+      return console.error(`${ids.length} Ready — whoever they are for may take them`);
+    }
+    if (!f._.length) die("usage: passalong ready <id...> | --all");
+    for (const ref of f._) {
+      const id = await passalong.ready(ref).catch((e) => die(e.message));
+      console.error(`${id} is Ready — whoever it is for may take it`);
+    }
+  },
+
+  /** Archive: off the board, and out of what the free tier counts. It comes back to Draft. */
+  async archive(f) {
+    const id = f._[0] || die("usage: passalong archive <id>");
+    await passalong.setStatus(id, "done").catch((e) => die(e.message));
+    console.error(`${id} archived — off the board, and it no longer counts against your plan`);
+  },
+
+  async rm(f) {
+    const id = f._[0] || die("usage: passalong rm <id>");
+    await passalong.remove(id).catch((e) => die(e.message));
+    console.error(`${id} removed`);
+  },
+
+  /** Upload a picture or a file and print the markdown that points at it. */
+  async attach(f) {
+    const file = f._[0] || die("usage: passalong attach <file> [--name LABEL]");
+    const got = await passalong.attachAny(file, { name: f.name || "" }).catch((e) => die(e.message));
+    process.stdout.write(`${got.markdown}\n`);
+    console.error(`uploaded ${got.bytes} bytes → ${got.url}`);
   },
 
   /**
@@ -391,216 +472,17 @@ const commands = {
       .catch((e) => die(e.message));
     for (const id of run.finished) console.log(id);
     const n = run.finished.length;
-    const done = `${n} task${n === 1 ? "" : "s"} finished and waiting for review`;
+    const done = `${n} finished`;
     if (run.stopped === "unfinished")
       die(
         `${done}. Stopped: the agent exited with ${run.task} still ${run.state || "open"} — ` +
           `run again to resume it, or \`passalong release ${run.task}\``,
       );
     console.error(`${done}${run.stopped === "empty" ? " — nothing left for this repo" : ""}`);
-    if (n) console.error("review them with: passalong tasks");
-  },
-
-  // Nothing waits for approval now (docs/REVIEW.md): finishing is final. Kept so a script that
-  // calls it is told, not refused.
-  async approve() {
-    console.error(
-      "nothing to approve: finished work is already Done. If it isn't right: passalong reopen <id> <why>",
-    );
-  },
-
-  /** Finished work back to To do, with why at its top; whoever finished it is told. */
-  async reopen(f) {
-    const id = f._[0] || die("usage: passalong reopen <id> <why>");
-    const why = f._.slice(1).join(" ");
-    if (!why) die("say why: passalong reopen <id> <what is wrong>");
-    await passalong.reopen(id, why).catch((e) => die(e.message));
-    console.error(`${id} is back in To do — whoever takes it next reads why`);
-  },
-
-  async reject(f) {
-    return commands.reopen(f);
-  },
-
-  async release(f) {
-    const id = f._[0] || die("usage: passalong release <id>");
-    const r = await passalong.release(id).catch((e) => die(e.message));
-    const from = Number(r?.from) || 1;
-    console.error(
-      `${id} is back in Ready${from > 1 ? `, taken back from ${from} places` : ""}` +
-        " — whoever had it has been told",
-    );
-  },
-
-  async ready(f) {
-    if (f.all) {
-      const ids = await passalong.readyDrafts().catch((e) => die(e.message));
-      if (!ids.length) return console.error("no drafts of yours to make ready");
-      for (const id of ids) console.log(id);
-      return console.error(`${ids.length} task${ids.length === 1 ? "" : "s"} Ready — agents may take them`);
-    }
-    if (!f._.length) die("usage: passalong ready <id...> | --all");
-    for (const id of f._) {
-      const g = await passalong.ready(id).catch((e) => die(e.message));
-      console.error(`${g.meta.id} is Ready — an agent may take it`);
-    }
-  },
-
-  async pull(f) {
-    const ref = f._[0] || die("usage: passalong pull <id|link>");
-    const { guide, markdown, path } = await passalong
-      .pull(ref, { save: Boolean(f.save) })
-      .catch((e) => die(e.message));
-    process.stdout.write(markdown);
-    if (path) console.error(`\nsaved to ${path}`);
-    await listFollowUps(guide.meta);
-  },
-
-  /**
-   * Take it: you are doing it, and nobody else can take it while you hold it. The guide is printed,
-   * and `--save` also writes it to ./.passalong/. Every kind is taken the same way, and `start` is
-   * the same command by its older name, which also takes a share link.
-   */
-  async start(f) {
-    const ref = f._[0] || die("usage: passalong take <id|link>");
-    const r = await passalong.start(ref, { save: Boolean(f.save) }).catch((e) => die(e.message));
-    if (!r.guide?.markdown) return console.error(r.say || "nothing to take");
-    process.stdout.write(r.markdown);
-    if (r.path) console.error(`\nsaved to ${r.path}`);
-    console.error(`\nyou hold ${r.guide.id} — hand it in when it is done, or pass it with the reason`);
-    await listFollowUps(parse(r.markdown).meta);
-  },
-
-
-  /**
-   * Upload an image and print the markdown that points at it. Evidence goes *in* the document:
-   * a guide travels as markdown to whoever holds its link, so a file beside it does not travel.
-   */
-  async attach(f) {
-    const file = f._[0] || die("usage: passalong attach <file> [--name LABEL]");
-    // A picture is evidence a page draws; anything else is a file somebody downloads.
-    const isImage = Object.keys(passalong.SHOT_TYPES).some((x) => file.toLowerCase().endsWith(x));
-    const shot = await (isImage ? passalong.attach : passalong.attachFile)(file, {
-      name: f.name || "",
-    }).catch((e) => die(e.message));
-    process.stdout.write(`${shot.markdown}\n`);
-    console.error(`uploaded ${shot.bytes} bytes → ${shot.url}`);
-  },
-
-  /**
-   * Write to whoever holds a guide, or leave a note on one nobody holds yet. The person's side of
-   * `ask`: an agent that stopped to wait hears this when it takes the guide again.
-   */
-  async reply(f) {
-    const id = f._[0] || die("usage: passalong reply <id> <message> [--file PATH ...]");
-    const files = [f.file].flat().filter((x) => typeof x === "string");
-    const said = f._.slice(1).join(" ");
-    if (!said && !files.length) die("say something, or attach a file: passalong reply <id> <message>");
-    const r = await passalong.reply(id, said, { files }).catch((e) => die(e.message));
-    console.error(
-      r?.noted
-        ? `${id} — nobody holds it yet, so this is a note: whoever takes it is handed it first`
-        : `${id} — sent. Whoever holds it reads it the next time it checks in`,
-    );
-  },
-
-  async inbox() {
-    const rows = await passalong.inbox().catch((e) => die(e.message));
-    if (!rows.length) return console.error("inbox empty — nothing handed to you that you haven't pulled");
-    for (const r of rows) console.log(guideLine(r));
-    console.error(`\n${rows.length} waiting. Take one with: passalong start <id>`);
-  },
-
-  async board() {
-    const b = await passalong.board().catch((e) => die(e.message));
-    const queue = (title, note, rows, line) => {
-      if (!rows.length) return;
-      console.log(`\n${title} · ${rows.length}   ${note}`);
-      for (const g of rows) console.log(`  ${g.id}  ${relDate(g.created).padEnd(10)} ${line(g)}`);
-    };
-    queue("Waiting on you", "handed to you, not pulled yet", b.waiting, (g) => `${g.title}  from @${g.from || "?"}`);
-    queue("Not working", "someone tried it and it does not hold up", b.failing, (g) =>
-      `${g.title}  ${g.verdict?.by ? `@${g.verdict.by}` : "someone"}: ${g.verdict?.note || "no reason given"}`);
-    queue("In flight", "handed over, nobody has taken it", b.in_flight, (g) =>
-      `${g.title}  to ${g.team}${g.to ? `/@${g.to}` : ""}${g.stale ? "  ← not picked up" : ""}`);
-    queue("Landed", "someone else has it", b.landed, (g) => `${g.title}  ${g.pulls} pull${g.pulls === 1 ? "" : "s"}`);
-    const total = b.waiting.length + b.failing.length + b.in_flight.length + b.landed.length;
-    if (!total) console.error("nothing in flight — every transfer is closed");
-    else if (b.unread) console.error(`\n${b.unread} new: passalong activity`);
-  },
-
-  /**
-   * What you did, newest first, under a heading per month.
-   *
-   * The month headings are the whole point: every other list in this CLI is ordered by what needs
-   * you — the board's queues, `list`'s state rank — and none of them can answer "what did I get
-   * done in September". Time is the axis nothing else offers.
-   *
-   * A repo narrows it, positionally and without a flag, for the same reason `list` takes its query
-   * that way: it is the one thing you are likely to say, and a flag would make you name it twice.
-   */
-  async log(f) {
-    const repo = f._.join(" ");
-    const rows = await passalong.log({ repo }).catch((e) => die(e.message));
-    if (!rows.length)
-      return console.error(
-        repo
-          ? `nothing passed along from anything matching "${repo}"`
-          : "nothing yet — your log fills up as you share, pull and answer guides",
-      );
-    let month = "";
-    for (const r of rows) {
-      const m = monthOf(r.at);
-      if (m !== month) {
-        console.log(`\n${m}`);
-        month = m;
-      }
-      console.log(`  ${r.guide}  ${r.at.slice(0, 10)}  ${r.text}${r.repo && !repo ? `  ${r.repo}` : ""}`);
-    }
-    // Said every time, because the list looks like a work log and is not one. A month you shipped
-    // without sharing looks identical here to a month you did nothing.
-    console.error(`\n${rows.length} thing${rows.length === 1 ? "" : "s"}. Work that never became a guide is not here.`);
-  },
-
-  async activity(f) {
-    const { notifications, unread } = await passalong.activity({ all: f.all }).catch((e) => die(e.message));
-    if (!notifications.length)
-      return console.error(
-        f.all ? "nothing has happened yet" : "nothing new — your guides and handoffs are quiet",
-      );
-    for (const n of notifications) console.log(activityLine(n));
-    const waiting = notifications.filter((n) => n.kind === "handoff" && !n.read);
-    if (waiting.length) console.error(`\nPull one with: passalong pull ${waiting[0].guide}`);
-    // Reading the feed is what marks it read: an unread count you have to clear by hand is a
-    // chore, and `--all` is there for when you want to look without clearing.
-    if (!f.all && unread) await passalong.seen().catch(() => {});
-  },
-
-  async list(f) {
-    const scope = typeof f.team === "string" ? f.team : f.mine ? "mine" : "";
-    const rows = await passalong.list(f._.join(" "), { scope });
-    if (!rows.length)
-      return console.error(
-        "no guides yet — run `passalong share` after your next finished piece of work",
-      );
-    for (const r of rows) console.log(guideLine(r));
-  },
-
-  async open(f) {
-    const id = f._[0] || die("usage: passalong open <id>");
-    const { guide } = await passalong.resolve(id).catch((e) => die(e.message));
-    if (guide.meta.url && tty && !f.print) {
-      openInBrowser(guide.meta.url);
-      console.error(guide.meta.url);
-    } else {
-      process.stdout.write(serialize(guide));
-      if (guide.meta.url) console.error(`\nlink: ${guide.meta.url}`);
-    }
   },
 
   async hub() {
-    if (!api.loggedIn())
-      die("not logged in — run `passalong login` first (the hub shows synced guides)");
+    if (!api.loggedIn()) die("not logged in — run `passalong login` first");
     // The token rides in the URL fragment: the browser never sends it to the server, and the
     // page moves it into localStorage and scrubs the address bar on load.
     const url = `${api.baseUrl()}/hub#token=${encodeURIComponent(api.token())}`;
@@ -610,35 +492,10 @@ const commands = {
     } else console.log(url);
   },
 
-  async take(f) {
-    return commands.start(f);
-  },
-
-  async pass(f) {
-    const id = f._[0] || die("usage: passalong pass <id> <why it is not yours>");
-    const why = f._.slice(1).join(" ");
-    // Required, and the reason is the whole point: "not me" without "why" leaves the sender where
-    // the silence did, still guessing whether to re-address it, wait, or go and ask.
-    if (!why) die("say why you are passing: passalong pass <id> <why it is not yours>");
-    await passalong.pass(id, why).catch((e) => die(e.message));
-    console.error(`${id} handed back with your reason: "${why}"`);
-  },
-
-
-  async assign(f) {
-    const id = f._[0] || die('usage: passalong assign <id> <@handle | #group | team>');
-    const to = f._.slice(1).join(",") || die('say who: @handle (or several), #group, or "team" for everyone');
-    const r = await passalong.assign(id, to).catch((e) => die(e.message));
-    const back = r.taken_back ? ` — taken back from ${r.taken_back} who had it, and they were told` : "";
-    console.error(`${r.id} is now for ${r.to || "everyone in the team"}${back}`);
-  },
-
-  async recall(f) {
-    const id = f._[0] || die("usage: passalong recall <id>");
-    const r = await passalong.recall(id).catch((e) => die(e.message));
-    console.error(`${r.id} is private again, and gone from their inboxes`);
-    if (r.already_opened_by)
-      console.error(`${r.already_opened_by} ${r.already_opened_by === 1 ? "person" : "people"} had already opened it, and keep what they pulled`);
+  async export(f) {
+    const dir = resolve(f._[0] || "passalong-export");
+    const paths = await passalong.exportAll(dir).catch((e) => die(e.message));
+    console.error(`exported ${paths.length} → ${dir}`);
   },
 
   // ---- who runs the product ---------------------------------------------------------------
@@ -711,44 +568,6 @@ const commands = {
     const id = f._[0] || die("usage: passalong ungift <gift id>  (passalong gifts lists them)");
     await api.takeGiftBack(id).catch((e) => die(e.message));
     console.error(`${id} taken back — that plan is lapsed as of now`);
-  },
-
-  /**
-   * Archive a guide: off your board, and out of what the free tier counts.
-   *
-   * The command was `done`, and the status it sets is still `consumed`, because both once meant "I
-   * implemented it". That meaning went to the verdict, where it belongs — it is the reader's
-   * judgement, not the author's — and what was left is shelf space, which has a job nothing else
-   * does: the only way under the sync limit that does not delete the work, and the 402 says so by
-   * name. So the command says what it does now.
-   *
-   * `consumed` stays on disk. It is a status inside markdown files in other people's
-   * repositories, and `validate()` refuses a status it does not know, so renaming the value would
-   * make a guide shared a month ago fail to re-share today. The word people read and the token the
-   * format stores are allowed to differ; what is not allowed is two words for people.
-   */
-  async archive(f) {
-    const id = f._[0] || die("usage: passalong archive <id>");
-    const g = await passalong.setStatus(id, "consumed").catch((e) => die(e.message));
-    console.error(`${g.meta.id} archived — off your board, and it no longer counts against sync`);
-  },
-
-  /** What `archive` was called. Kept so a script written against it still runs, and says so. */
-  async done(f) {
-    console.error("`passalong done` is now `passalong archive` — it archives, it does not mark work done.");
-    return commands.archive(f);
-  },
-
-  async rm(f) {
-    const id = f._[0] || die("usage: passalong rm <id>");
-    await passalong.remove(id).catch((e) => die(e.message));
-    console.error(`${id} removed`);
-  },
-
-  async export(f) {
-    const dir = resolve(f._[0] || "passalong-export");
-    const paths = await passalong.exportAll(dir).catch((e) => die(e.message));
-    console.error(`exported ${paths.length} guide${paths.length === 1 ? "" : "s"} → ${dir}`);
   },
 
   async login(f) {
@@ -831,7 +650,7 @@ const commands = {
         : who.sync === "none"
           ? " (no plan — nothing is syncing)"
           : " (no limit on your plan)";
-    console.log(`guides   ${who.guides} synced${ceiling}`);
+    console.log(`work     ${who.work} active${ceiling}`);
     const current = api.currentTeam();
     console.log(
       `teams    ${who.teams.length ? who.teams.map((t) => `${t.slug}${t.slug === current ? "*" : ""} (${t.role})`).join(", ") : "(none — passalong team create <name>)"}`,
@@ -848,7 +667,7 @@ const commands = {
         return console.error(`you are in ${teams.map((t) => t.slug).join(", ")}; pick one: passalong team use <slug>`);
       }
       const t = await api.team(cfg.team).catch((e) => die(e.message));
-      console.log(`${t.name} (${t.slug}) — ${t.members.length} member${t.members.length === 1 ? "" : "s"}, ${t.guides} guide${t.guides === 1 ? "" : "s"}`);
+      console.log(`${t.name} (${t.slug}) — ${t.members.length} member${t.members.length === 1 ? "" : "s"}, ${t.work} piece${t.work === 1 ? "" : "s"} of work`);
       for (const m of t.members)
         console.log(`  ${m.handle ? `@${m.handle}` : "(no handle)"}${m.name ? `  ${m.name}` : ""}  ${m.role === "owner" ? "admin" : m.role}  joined ${relDate(m.joined)}`);
       return;
@@ -948,9 +767,10 @@ const commands = {
     } catch (err) {
       console.error(`could not install Claude Code hooks (${err.message}); ${settingsPath} left as it was`);
     }
-    if (!api.loggedIn())
-      console.error("sync is off; run `passalong login` when you want guides to follow you across machines");
-    console.error('done. In Claude Code, say "pass this along" at the end of a task, or run /passalong-capture.');
+    if (!api.loggedIn()) console.error("not signed in yet: run `passalong login`");
+    console.error(
+      'done. In Claude Code, say "pass this along" to write what a session learned into the project\'s documents, or run /passalong-capture.',
+    );
   },
 
   /**
@@ -959,7 +779,7 @@ const commands = {
    * nothing at all when anything goes wrong — a hook must never get in the way of a session.
    */
   async now(f) {
-    const { nowText, statusText, stopVerdict } = await import("../src/hooks.js");
+    const { nowText, statusText, stopDecision } = await import("../src/hooks.js");
     // The status line: printed from a cache, refreshed behind it. Claude Code cancels a status
     // line still running when the next update comes, so this never waits on the network.
     if (f.statusline) return statusLine(f);
@@ -967,7 +787,7 @@ const commands = {
       const cwd = typeof f["statusline-refresh"] === "string" ? f["statusline-refresh"] : process.cwd();
       try {
         const r = await passalong.now({ cwd });
-        writeStatus(cwd, statusText({ held: r.held, needs: r.needs, ready: r.waiting.ready }));
+        writeStatus(cwd, statusText(r));
       } catch {}
       return;
     }
@@ -1016,7 +836,7 @@ const commands = {
             }),
           );
       } else if (f.hook === "stop") {
-        const v = stopVerdict({ held: r.held, input });
+        const v = stopDecision({ held: r.held, input });
         if (v) console.log(JSON.stringify(v));
       }
     } catch {}
@@ -1039,7 +859,7 @@ const commands = {
   async help() {
     const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
     const lines = src.split("\n").filter((l) => l.startsWith("//   passalong "));
-    console.log("passalong — hand finished work to another context\n");
+    console.log("passalong — work for people and agents, and what they know\n");
     console.log(lines.map((l) => l.slice(3)).join("\n"));
   },
 };

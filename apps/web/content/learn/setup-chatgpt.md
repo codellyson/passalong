@@ -1,14 +1,13 @@
 ---
 title: Set up Passalong in ChatGPT
 date: 2026-10-03
-description: Add Passalong to ChatGPT as a connector, so a plan you work out in a chat becomes a task your coding agent can take, and you can see and file work without leaving ChatGPT.
+description: Add Passalong to ChatGPT as a connector, so a plan you work out in a chat becomes work your agent can take, without leaving ChatGPT.
 draft: false
 ---
 
 ChatGPT cannot see your repo or run your code, so it is not where the work gets done. It is often
 where the work gets decided: you think a feature through, settle the approach, and spot the bugs
-in a screenshot. With Passalong connected, what you decide in ChatGPT becomes a task or a bug
-report that Claude Code or Codex can take in your repo, without copying anything across.
+in a screenshot. With Passalong connected, what you decide in ChatGPT becomes work that Claude Code or Codex can take in your repo, without copying anything across.
 
 ChatGPT connects to the hosted Passalong server, so you need a Passalong account. It gets every
 tool that does not need a working directory.
@@ -42,27 +41,28 @@ In a chat, ask:
 > What is on my Passalong board?
 
 ChatGPT can draw your work as a board in the conversation: what is waiting on you, who is on what,
-and what is open. It is read-only; approving and sending work back happen in your hub.
+and what is open. It is read-only; moving work around happens in your hub.
 
 ## What to use it for
 
-- **Turn a plan into a task.** After working something out: "Write this up as a Passalong task
-  with a Goal, Context, Constraints and Acceptance we can check. Mark anything you are guessing
-  about the codebase." A coding agent in your repo can then take it.
-- **Split bigger work.** "Plan this as Passalong tasks, each waiting on the ones it depends on."
-- **File bugs from what you see.** Attach screenshots and: "File these as Passalong bugs, one per
-  issue, with how to reproduce each."
-- **Catch up.** "What happened to my Passalong work today?"
+- **Turn a plan into work.** After working something out: "Write this down as Passalong work:
+  what we want, what we agreed must not change, and what done looks like. Mark anything you are
+  guessing about the codebase." A coding agent in your repo can then take it.
+- **Split bigger work.** "Write this down as several pieces of Passalong work, each waiting on the
+  ones it depends on, as a draft I can read first."
+- **Write down bugs from what you see.** Attach screenshots and: "Write these down as Passalong
+  work, one per bug, with how to see each and the screenshot on it."
+- **Catch up.** "What needs me on Passalong, and who is on what?"
+- **Keep what you know.** "Add what we just decided to the project's Passalong documents."
 
-With Passalong connected to your tools, agents can run the whole loop: ChatGPT files the bugs and
-writes the tasks, a coding agent takes the work, reports progress, hands it in with evidence and
-passes the next piece on. What stays with you is the decision: you approve the work or send it
-back.
+With Passalong connected to your tools, agents can run the whole loop: ChatGPT writes down the bugs
+and the work, a coding agent takes it, reports progress, hands it in with evidence and writes what
+it learned into the project's documents. Finishing is final; if something is not right, anyone on
+the team can reopen it.
 
 ## Screenshots
 
-Attach images in ChatGPT on the web. ChatGPT passes the file to Passalong itself, and it lands on
-the bug it belongs to. The ChatGPT mobile apps send a file Passalong cannot download, so use the
+Attach images in ChatGPT on the web. ChatGPT passes the file to Passalong itself, and it lands on the work it belongs to. The ChatGPT mobile apps send a file Passalong cannot download, so use the
 web for anything with a screenshot.
 
 ## If something is off

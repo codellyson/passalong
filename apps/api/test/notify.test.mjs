@@ -30,7 +30,7 @@ test("a notification carries the actor and the team as a person reads them", () 
 const row = (over = {}) => ({
   id: 1,
   kind: "pulled",
-  guide_id: "k3mq2xa7",
+  work_id: "k3mq2xa7",
   actor_id: "acc_bob",
   team_id: "t1",
   at: "2026-09-04T10:00:00.000Z",
@@ -51,23 +51,16 @@ test("every kind renders a sentence naming who did what", () => {
   assert.deepEqual(seen, [
     '@bob sent you "Add Paystack webhook verification" in khaime',
     '@bob shared "Add Paystack webhook verification" with khaime',
-    '@bob is taking "Add Paystack webhook verification"',
     '@bob passed on "Add Paystack webhook verification"',
     '@bob opened "Add Paystack webhook verification"',
-    '@bob is done with "Add Paystack webhook verification"',
-    '@bob put "Add Paystack webhook verification" back on your list',
-    '@bob said "Add Paystack webhook verification" worked',
-    '@bob said "Add Paystack webhook verification" didn\'t work',
+    '@bob archived "Add Paystack webhook verification"',
+    '@bob reopened "Add Paystack webhook verification"',
     "@bob joined khaime",
     "@bob made you an admin of khaime",
     "@bob removed you from khaime",
-    '@bob\'s agent took the task "Add Paystack webhook verification"',
-    '@bob\'s agent finished "Add Paystack webhook verification", and it is waiting for your review',
-    '@bob approved "Add Paystack webhook verification"',
-    '@bob sent "Add Paystack webhook verification" back',
+    '@bob\'s agent took "Add Paystack webhook verification"',
+    '@bob\'s agent finished "Add Paystack webhook verification"',
     '@bob took "Add Paystack webhook verification" back from your agent',
-    '@bob accepted your work on "Add Paystack webhook verification", and closed it',
-    '@bob sent "Add Paystack webhook verification" back',
     '@bob gave "Add Paystack webhook verification" to someone else',
     '"Add Paystack webhook verification" has gone quiet — nobody has heard from whoever holds it',
     '"Add Paystack webhook verification" went back to Draft — nobody took it',
@@ -86,7 +79,7 @@ test("every kind renders a sentence naming who did what", () => {
     "Two subscriptions are paying for one plan. Refund one in Bachs",
     // Both actorless: a machine sent them, so neither names a person.
     'An email became "Add Paystack webhook verification"',
-    "A new sender wants to email you guides. Allow or block it in Settings",
+    "A new sender wants to email you work. Allow or block it in Settings",
     '"Add Paystack webhook verification" came in from a webhook',
   ]);
 });
@@ -94,20 +87,17 @@ test("every kind renders a sentence naming who did what", () => {
 test("a person's name and a team's name win over their handle and slug", () => {
   const named = (over) => line(row({ actor_real: "Hybee1", team_name: "Khaime", ...over }));
   assert.equal(
-    named({ kind: "handoff" }),
+    named({ kind: "sent_to_you" }),
     'Hybee1 sent you "Add Paystack webhook verification" in Khaime',
   );
   assert.equal(named({ kind: "joined" }), "Hybee1 joined Khaime");
-  assert.equal(named({ kind: "taken" }), 'Hybee1 is taking "Add Paystack webhook verification"');
-  assert.equal(
-    named({ kind: "consumed" }),
-    'Hybee1 is done with "Add Paystack webhook verification"',
-  );
+  assert.equal(named({ kind: "passed" }), 'Hybee1 passed on "Add Paystack webhook verification"');
+  assert.equal(named({ kind: "archived" }), 'Hybee1 archived "Add Paystack webhook verification"');
 });
 
-test("a room is never told 'you': a handoff there says who it went to", () => {
+test("a room is never told 'you': work sent there says who it went to", () => {
   const text = line({
-    kind: "handoff",
+    kind: "sent_to_you",
     actor_name: "Hybee1",
     title: "Add Paystack webhook verification",
     team_name: "Khaime",
@@ -122,15 +112,15 @@ test("a room is never told 'you': a handoff there says who it went to", () => {
   );
 });
 
-test("a failing verdict carries its reason into the line", () => {
-  const r = row({ kind: "failed", note: "401 on a valid signature too" });
+test("a reopen carries its reason into the line", () => {
+  const r = row({ kind: "reopened", note: "toggle does nothing on Safari" });
   assert.equal(
     line(r),
-    '@bob said "Add Paystack webhook verification" didn\'t work: 401 on a valid signature too',
+    '@bob reopened "Add Paystack webhook verification": toggle does nothing on Safari',
   );
-  assert.equal(summary(r).note, "401 on a valid signature too");
-  // A reason is the point of the verdict; without one the line still reads.
-  assert.doesNotMatch(line(row({ kind: "failed" })), /:\s*$/);
+  assert.equal(summary(r).note, "toggle does nothing on Safari");
+  // A reason is the point of reopening; without one the line still reads.
+  assert.doesNotMatch(line(row({ kind: "reopened" })), /:\s*$/);
 });
 
 test("an anonymous share-link reader is the only 'Someone'", () => {
@@ -145,12 +135,12 @@ test("an anonymous share-link reader is the only 'Someone'", () => {
 test("repeat opens read as one line that says how many times", () => {
   assert.equal(line(row({ times: 4 })), '@bob opened "Add Paystack webhook verification" 4 times');
   assert.doesNotMatch(line(row({ times: 1 })), /times|×/, "a single event carries no count");
-  // Only opens repeat in practice; a handoff says nothing about how many times it was addressed.
-  assert.doesNotMatch(line(row({ kind: "handoff", times: 3 })), /times|×/);
+  // Only opens repeat in practice; sending says nothing about how many times it was addressed.
+  assert.doesNotMatch(line(row({ kind: "sent_to_you", times: 3 })), /times|×/);
 });
 
-test("a guide that has since been deleted still reads", () => {
-  assert.equal(line(row({ title: "" })), "@bob opened a guide");
+test("a piece of work that has since been deleted still reads", () => {
+  assert.equal(line(row({ title: "" })), "@bob opened untitled work");
 });
 
 test("no sentence uses the words the product retired", () => {
@@ -165,26 +155,59 @@ test("no sentence uses the words the product retired", () => {
 
 test("summary carries the rendered line and the read flag", () => {
   const s = summary(row({ read_at: "2026-09-04T11:00:00.000Z" }));
-  assert.equal(s.guide, "k3mq2xa7");
+  assert.equal(s.work, "k3mq2xa7");
   assert.equal(s.read, true);
   assert.equal(s.text, line(row()));
   assert.equal(summary(row()).read, false);
 });
 
 test("a decline carries its reason, because that is the whole point of saying no", () => {
-  const r = row({ kind: "declined", note: "no context on the payments side" });
+  const r = row({ kind: "passed", note: "no context on the payments side" });
   assert.equal(
     line(r),
     '@bob passed on "Add Paystack webhook verification": no context on the payments side',
   );
   assert.equal(summary(r).note, "no context on the payments side");
-  // Taking it needs no reason, and the line must still read without one.
-  assert.equal(line(row({ kind: "taken" })), '@bob is taking "Add Paystack webhook verification"');
 });
 
-test("a rejection says why", () => {
-  assert.equal(
-    line(row({ kind: "task_rejected", note: "toggle does nothing on Safari" })),
-    '@bob sent "Add Paystack webhook verification" back: toggle does nothing on Safari',
+test("a deleted work takes its unread feed rows, keeps what was read, and says who may have heard", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { forgetWork } = await import("../src/notify.ts");
+  const dir = new URL("../migrations/", import.meta.url).pathname;
+  const sql = new DatabaseSync(":memory:");
+  for (const f of readdirSync(dir).sort()) sql.exec(readFileSync(join(dir, f), "utf8"));
+  const db = {
+    prepare(q) {
+      const stmt = sql.prepare(q);
+      const bound = (args) => ({
+        first: async () => stmt.get(...args) ?? null,
+        all: async () => ({ results: stmt.all(...args) }),
+        run: async () => ({ meta: { changes: Number(stmt.run(...args).changes) } }),
+      });
+      return { ...bound([]), bind: (...args) => bound(args) };
+    },
+  };
+  const T = "2026-10-30T00:00:00.000Z";
+  for (const a of ["ada", "bola", "kemi", "sam"])
+    sql
+      .prepare("INSERT INTO account (id, token_hash, created) VALUES (?, ?, ?)")
+      .run(a, `retired:${a}`, T);
+  const add = sql.prepare(
+    "INSERT INTO notification (account_id, kind, work_id, actor_id, at, read_at, emailed_at) VALUES (?, ?, ?, 'ada', ?, ?, ?)",
+  );
+  add.run("bola", "sent_to_you", "g1", T, "", T); // mailed and pushed
+  add.run("kemi", "sent_to_you", "g1", T, T, ""); // read already: kept
+  add.run("sam", "pulled", "g1", T, "", ""); // neither mailed nor a pushed kind
+  add.run("bola", "sent_to_you", "g2", T, "", ""); // another work: untouched
+  const { told } = await forgetWork(db, "g1");
+  assert.equal(told, 2, "bola and kemi may have heard; sam's kind is never pushed or mailed");
+  const left = sql
+    .prepare("SELECT account_id, work_id FROM notification ORDER BY work_id, account_id")
+    .all();
+  assert.deepEqual(
+    left.map((r) => `${r.work_id}:${r.account_id}`),
+    ["g1:kemi", "g2:bola"],
   );
 });

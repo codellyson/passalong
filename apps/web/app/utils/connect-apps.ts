@@ -208,7 +208,7 @@ export const APPS: ConnectApp[] = [
       { text: "Make a token under {path}, named after where it will live.", path: "API tokens" },
       {
         text: "Call the API with it.",
-        copy: 'curl -H "authorization: Bearer $TOKEN" \\\n  https://passalong.dev/v1/inbox',
+        copy: 'curl -H "authorization: Bearer $TOKEN" \\\n  https://passalong.dev/v1/tasks',
       },
     ],
     notes: [],
@@ -315,25 +315,25 @@ export interface AttentionItem {
 export function attention(input: {
   hasPassword: boolean;
   /** Your own sync ceiling, as /v1/me sends it. At the limit, nothing new can be sent. */
-  plan?: { sync: string; guides: number; limit: number };
+  plan?: { sync: string; work: number; limit: number };
   connectors: ConnectorRow[];
   teams: { slug: string; name: string; channels: ChannelRow[]; groups: GroupRow[] }[];
 }): AttentionItem[] {
   const items: AttentionItem[] = [];
-  // First, because it stops the one thing Passalong is for: sending a guide.
+  // First, because it stops the one thing Passalong is for: sending a piece of work.
   const plan = input.plan;
   if (plan?.sync === "none") {
     items.push({
       tone: "bad",
-      text: "New guides can't be sent until you're on a plan.",
+      text: "New work can't be sent until you're on a plan.",
       where: "Your plan",
       action: "See your plan",
       anchor: "plan",
     });
-  } else if (plan?.sync === "free" && plan.limit > 0 && plan.guides >= plan.limit) {
+  } else if (plan?.sync === "free" && plan.limit > 0 && plan.work >= plan.limit) {
     items.push({
       tone: "bad",
-      text: `You've used all ${plan.limit} guides on the free plan, so new guides can't be sent. Archiving a finished guide frees a space.`,
+      text: `You've used all ${plan.limit} pieces of work on the free plan, so new work can't be sent. Archiving finished work frees a space.`,
       where: "Your plan",
       action: "See your plan",
       anchor: "plan",
@@ -367,7 +367,7 @@ export function attention(input: {
       if (g.members.length) continue;
       items.push({
         tone: "warn",
-        text: `Group ${g.name || g.slug} has nobody in it, so guides sent there reach no one.`,
+        text: `Group ${g.name || g.slug} has nobody in it, so work sent there reaches no one.`,
         where: `${t.name} · Groups`,
         action: "Choose people",
         anchor: `team-${t.slug}`,

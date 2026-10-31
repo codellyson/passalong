@@ -33,8 +33,8 @@ test("a missing or unreadable env default still leaves a working ceiling", () =>
 });
 
 test("only the statuses that occupy room are counted", () => {
-  assert.deepEqual([...COUNTED], ["published", "promoted"]);
-  assert.ok(!COUNTED.includes("consumed"), "archiving is what makes room, so it cannot count");
+  assert.deepEqual([...COUNTED], ["ready"]);
+  assert.ok(!COUNTED.includes("done"), "archiving is what makes room, so it cannot count");
   assert.ok(!COUNTED.includes("draft"));
 });
 
@@ -71,7 +71,7 @@ test("full is decided by the plan, never by the number alone", () => {
   // The trap this shape exists to avoid: "no ceiling" and "may sync nothing" both carry a falsy
   // limit, so anything testing truthiness tells the second account it is the first.
   assert.equal(isFull(10_000, { plan: "unlimited", limit: 0 }), false);
-  assert.equal(isFull(0, { plan: "none", limit: 0 }), true, "no plan is full at zero guides");
+  assert.equal(isFull(0, { plan: "none", limit: 0 }), true, "no plan is full at zero work");
   assert.equal(isFull(24, { plan: "free", limit: 25 }), false);
   assert.equal(isFull(25, { plan: "free", limit: 25 }), true);
 });

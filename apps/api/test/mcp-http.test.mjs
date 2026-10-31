@@ -3,17 +3,33 @@
 // No network and no credential: `handleMcp` takes a Request and a function that stands in for the
 // rest of the API, so the protocol wiring can be checked without a database behind it. What this
 // proves is the part that would be tedious to debug through a client — that the endpoint speaks
-// JSON-RPC, lists the tools it claims to, and hands a route's answer back unchanged.
+// JSON-RPC, lists the tools it claims to, and hands each call to the route it maps onto.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handleMcp } from "../src/mcp-http.ts";
 
 const PROTOCOL = "2025-06-18";
-const VOCAB = {
-  areas: "web, mobile",
-  severities: "s1 blocker, s3 minor",
-  shotTypes: "Accepts image/png, image/jpeg",
-};
+const VOCAB = { shotTypes: "Accepts image/png, image/jpeg" };
+
+/** docs/WORK.md's seventeen, less `accounts`: over HTTP the bearer token is the account. */
+const TOOLS = [
+  "add_file",
+  "ask",
+  "create_work",
+  "delete_document",
+  "delete_file",
+  "find_projects",
+  "find_work",
+  "hand_in",
+  "pass",
+  "progress",
+  "read_document",
+  "read_file",
+  "save_document",
+  "save_project",
+  "take",
+  "update_work",
+];
 
 /** Stands in for the app: records what a tool asked for, answers what the test wants. */
 function recorder(answers = {}) {
@@ -21,7 +37,7 @@ function recorder(answers = {}) {
   const call = async (method, path, body, raw) => {
     seen.push({ method, path, body, raw });
     const answer = answers[`${method} ${path.split("?")[0]}`] ?? { status: 200, text: "{}" };
-    return typeof answer === "function" ? answer(body) : answer;
+    return typeof answer === "function" ? answer(body, path) : answer;
   };
   return { call, seen };
 }
@@ -35,1255 +51,417 @@ const rpc = (body) =>
 
 const read = async (res) => {
   const text = await res.text();
-  // `enableJsonResponse` means one JSON body, not an SSE stream — assert that, since a stream here
-  // would mean the transport was configured differently than intended.
+  // `enableJsonResponse` means one JSON body, not an SSE stream.
   assert.match(res.headers.get("content-type") || "", /application\/json/);
   return JSON.parse(text);
 };
 
-test("it introduces itself with a protocol version and its tools", async () => {
-  const { call } = recorder();
-  const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: PROTOCOL,
-        capabilities: {},
-        clientInfo: { name: "test", version: "0" },
-      },
-    }),
-    call,
-    VOCAB,
-  );
-  assert.equal(res.status, 200);
-  const body = await read(res);
-  assert.equal(body.result.serverInfo.name, "passalong");
-  assert.ok(body.result.capabilities.tools, "it must advertise tools");
-  assert.match(body.result.instructions, /kind: bug is a defect to FIX/);
-});
-
-test("every tool it lists is one an agent could act on", async () => {
-  const { call } = recorder();
-  const res = await handleMcp(
-    rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
-    call,
-    VOCAB,
-  );
-  const body = await read(res);
-  const names = body.result.tools.map((t) => t.name).sort();
-  assert.deepEqual(names, [
-    "add_folder_asset",
-    "ask",
-    "assign",
-    "attach_screenshot",
-    "board",
-    "create_folder",
-    "create_folder_document",
-    "create_folder_upload",
-    "create_upload",
-    "delete_folder_asset",
-    "delete_folder_document",
-    "file_bugs",
-    "get_folder",
-    "get_folder_asset",
-    "get_folder_document",
-    "get_folder_document_history",
-    "get_guide",
-    "get_report",
-    "hand_in",
-    "inbox",
-    "link_folder_guide",
-    "list_folders",
-    "log",
-    "move_folder_document",
-    "pass",
-    "progress",
-    "publish_guide",
-    "rename_folder_document",
-    "reply",
-    "save_folder_document",
-    "search_guides",
-    "share_folder",
-    "take",
-    "unlink_folder_guide",
-    "update_folder",
-    "work",
-  ]);
-  for (const tool of body.result.tools) {
-    assert.ok(tool.description && tool.description.length > 20, `${tool.name} needs a description`);
-    assert.equal(tool.inputSchema.type, "object", `${tool.name} needs an input schema`);
-  }
-});
-
-// create_upload is how an agent holding the image as a file hands it over: Claude's sandbox has the
-// file and no file input to put it in, so it gets somewhere to send the bytes instead.
-test("create_upload mints a link and hands back the command that uses it", async () => {
-  const link = `https://passalong.dev/v1/uploads/pa_up_${"a".repeat(32)}`;
-  const { call, seen } = recorder({
-    "POST /v1/uploads": {
-      status: 201,
-      text: JSON.stringify({ upload_url: link, expires: "2026-09-15T12:10:00.000Z" }),
-    },
-  });
+/** Call one tool and hand back its result. */
+async function tool(call, name, args = {}) {
   const body = await read(
     await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 12,
-        method: "tools/call",
-        params: { name: "create_upload", arguments: { name: "shot.png" } },
-      }),
+      rpc({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }),
       call,
       VOCAB,
     ),
   );
-  assert.equal(body.result.isError, undefined);
-  assert.deepEqual(
-    seen.map((s) => `${s.method} ${s.path}`),
-    ["POST /v1/uploads"],
-  );
-  assert.deepEqual(
-    seen[0].body,
-    { name: "shot.png", kind: "image" },
-    "a picture unless it says otherwise",
-  );
-  const { upload_url, command } = body.result.structuredContent;
-  assert.equal(upload_url, link);
-  // PUT and the file's bytes, to that link. No content-type in it: the route reads the bytes.
-  assert.equal(command, `curl -sS --fail-with-body -X PUT --data-binary @IMAGE_PATH '${link}'`);
-  assert.match(body.result.content[0].text, /IMAGE_PATH/);
-});
+  return body.result;
+}
 
-test("create_upload passes the route's refusal on", async () => {
-  const { call } = recorder({
-    "POST /v1/uploads": { status: 429, text: '{"message":"Too many upload links are open."}' },
-  });
-  const body = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 13,
-        method: "tools/call",
-        params: { name: "create_upload", arguments: {} },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.equal(body.result.isError, true);
-  assert.match(body.result.content[0].text, /Too many upload links/);
-});
+const textOf = (r) => r.content.map((c) => c.text).join("\n");
 
-test("create_folder_upload scopes a one-time file link to the chosen folder", async () => {
-  const link = `https://passalong.dev/v1/uploads/pa_up_${"c".repeat(32)}`;
-  const { call, seen } = recorder({
-    "POST /v1/uploads": {
-      status: 201,
-      text: JSON.stringify({ upload_url: link, expires: "2026-10-09T12:10:00.000Z" }),
-    },
-  });
-  const body = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 15,
-        method: "tools/call",
-        params: {
-          name: "create_folder_upload",
-          arguments: { folder: "folder123", name: "screen.png" },
-        },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.deepEqual(seen[0].body, { folder: "folder123", name: "screen.png" });
-  assert.match(body.result.structuredContent.command, /--data-binary @FILE_PATH/);
-  assert.equal(body.result.structuredContent.upload_url, link);
-});
-
-test("agents can create a nested colored folder and move it through the same routes as the hub", async () => {
-  const { call, seen } = recorder({
-    "POST /v1/folders": { status: 201, text: JSON.stringify({ folder: { id: "child" } }) },
-    "PATCH /v1/folders/child": { status: 200, text: JSON.stringify({ folder: { id: "child" } }) },
-  });
-  for (const [name, args] of [
-    ["create_folder", { title: "Script", parent: "project", color: "blue" }],
-    ["update_folder", { folder: "child", parent: "", color: "coral" }],
-  ]) {
-    const body = await read(
-      await handleMcp(
-        rpc({ jsonrpc: "2.0", id: 16, method: "tools/call", params: { name, arguments: args } }),
-        call,
-        VOCAB,
-      ),
-    );
-    assert.equal(body.result.structuredContent.folder.id, "child");
-  }
-  assert.equal(seen[0].path, "/v1/folders");
-  assert.equal(seen[0].body.parent, "project");
-  assert.equal(seen[0].body.color, "blue");
-  assert.equal(seen[1].method, "PATCH");
-  assert.deepEqual(seen[1].body, { parent: "", color: "coral" });
-});
-
-test("a local path passed as a download URL is pointed at create_upload", async () => {
-  const { call, seen } = recorder();
-  const body = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 14,
-        method: "tools/call",
-        params: {
-          name: "attach_screenshot",
-          arguments: {
-            file: { download_url: "/mnt/user-data/uploads/shot.png", file_id: "shot.png" },
-          },
-        },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  // What Claude did: it had the file in its sandbox and passed the path. The refusal says what works.
-  assert.equal(body.result.isError, true);
-  assert.match(body.result.content[0].text, /create_upload/);
-  assert.deepEqual(seen, []);
-});
-
-test("a tool call reaches the route it maps onto, and relays what it said", async () => {
-  const { call, seen } = recorder({
-    "GET /v1/guides": { status: 200, text: '{"guides":[]}' },
-  });
-  const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 3,
-      method: "tools/call",
-      params: { name: "search_guides", arguments: { q: "webhook", scope: "mine" } },
-    }),
-    call,
-    VOCAB,
-  );
-  const body = await read(res);
-  assert.equal(body.result.content[0].text, '{"guides":[]}');
-  assert.equal(seen.length, 1);
-  assert.equal(seen[0].method, "GET");
-  assert.match(seen[0].path, /^\/v1\/guides\?/);
-  assert.match(seen[0].path, /q=webhook/);
-  assert.match(seen[0].path, /scope=mine/);
-});
-
-test("a bug is announced as one before its markdown is handed over", async () => {
-  const markdown = "---\ntitle: x\nkind: bug\n---\n\n## Problem\np\n\n## Reproduce\n1. x\n";
-  const { call } = recorder({ "GET /v1/guides/abc12345": { status: 200, text: markdown } });
-  const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 4,
-      method: "tools/call",
-      params: { name: "get_guide", arguments: { id: "abc12345" } },
-    }),
-    call,
-    VOCAB,
-  );
-  const body = await read(res);
-  const out = body.result.content[0].text;
-  // The warning has to arrive before the document: an agent keys on headings, and a repro under a
-  // heading it is told to follow is how it reproduces the bug and reports the guide as broken.
-  assert.ok(out.startsWith("THIS IS A BUG REPORT"));
-  assert.ok(out.indexOf("THIS IS A BUG REPORT") < out.indexOf("## Reproduce"));
-  assert.ok(out.endsWith(markdown));
-});
-
-test("a transfer guide is handed over untouched", async () => {
-  const markdown = "---\ntitle: x\n---\n\n## Problem\np\n\n## Steps\n1. x\n";
-  const { call } = recorder({ "GET /v1/guides/abc12345": { status: 200, text: markdown } });
-  const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 5,
-      method: "tools/call",
-      params: { name: "get_guide", arguments: { id: "abc12345" } },
-    }),
-    call,
-    VOCAB,
-  );
-  const body = await read(res);
-  assert.equal(body.result.content[0].text, markdown);
-});
-
-test("a route's refusal is the tool's error, not a new one", async () => {
-  const { call } = recorder({
-    "PUT /v1/guides/abc12345": { status: 400, text: '{"message":"frontmatter needs a title"}' },
-  });
-  const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 6,
-      method: "tools/call",
-      params: { name: "publish_guide", arguments: { id: "abc12345", markdown: "---\n---\n" } },
-    }),
-    call,
-    VOCAB,
-  );
-  const body = await read(res);
-  assert.equal(body.result.isError, true);
-  assert.match(body.result.content[0].text, /frontmatter needs a title/);
-});
-
-test("file_bugs opens the report first, then files each issue under it", async () => {
-  const { call, seen } = recorder({
-    "POST /v1/reports": { status: 201, text: '{"report":{"id":"rep12345"}}' },
-  });
-  const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 7,
-      method: "tools/call",
-      params: {
-        name: "file_bugs",
-        arguments: {
-          title: "sweep",
-          environment: "staging",
-          issues: [
-            { title: "one", problem: "p1", reproduce: "1. a", area: "web", severity: "s1" },
-            { title: "two", problem: "p2", reproduce: "1. b" },
-          ],
-        },
-      },
-    }),
-    call,
-    VOCAB,
-  );
-  const body = await read(res);
-  assert.equal(body.result.isError, undefined);
-
-  assert.equal(seen[0].path, "/v1/reports");
-  assert.equal(seen.length, 3, "the report, then one write per issue");
-
-  const first = seen[1].body.markdown;
-  assert.match(first, /^kind: bug$/m);
-  assert.match(first, /^report: rep12345$/m);
-  assert.match(first, /^severity: s1$/m);
-  assert.match(first, /^## Reproduce$/m);
-  assert.ok(!/^## Steps$/m.test(first), "a bug must never carry a Steps section");
-  assert.match(first, /^> \*\*Bug report\.\*\*/m);
-  // Unstated severity has a default rather than being left off the document.
-  assert.match(seen[2].body.markdown, /^severity: s3$/m);
-});
-
-test("a failure part-way through says which issues already landed", async () => {
-  let writes = 0;
-  const { call } = recorder({
-    "POST /v1/reports": { status: 201, text: '{"report":{"id":"rep12345"}}' },
-  });
-  const counting = async (method, path, body) => {
-    if (method === "PUT" && ++writes === 2) return { status: 402, text: '{"message":"limit"}' };
-    return call(method, path, body);
-  };
-  const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 8,
-      method: "tools/call",
-      params: {
-        name: "file_bugs",
-        arguments: {
-          issues: [
-            { title: "one", problem: "p", reproduce: "1. a" },
-            { title: "two", problem: "p", reproduce: "1. b" },
-          ],
-        },
-      },
-    }),
-    counting,
-    VOCAB,
-  );
-  const body = await read(res);
-  assert.equal(body.result.isError, true);
-  assert.match(body.result.content[0].text, /filed 1 of 2 issues/);
-});
-
-test("passing carries its reason to the route", async () => {
-  const { call, seen } = recorder({
-    "POST /v1/guides/k3mq2xa7/pass": { status: 200, text: '{"id":"k3mq2xa7","passed":true}' },
-  });
-  const res = await handleMcp(
-    callTool("pass", { id: "k3mq2xa7", agent: "chat-7f3k2m9q", why: "no context on payments" }),
-    call,
-    VOCAB,
-  );
-  assert.equal(res.status, 200);
-  assert.equal(seen[0].method, "POST");
-  assert.equal(seen[0].path, "/v1/guides/k3mq2xa7/pass");
-  assert.deepEqual(seen[0].body, { agent: "chat-7f3k2m9q", why: "no context on payments" });
-});
-
-test("every tool says what it does to the world, so a client does not assume the worst", async () => {
+async function list() {
   const { call } = recorder();
   const body = await read(
     await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
   );
-  // Left unsaid, readOnlyHint defaults to false and destructiveHint and openWorldHint to true, and
-  // ChatGPT badged `inbox` as a destructive public write.
-  for (const t of body.result.tools) {
-    for (const hint of ["readOnlyHint", "destructiveHint", "openWorldHint"]) {
-      assert.equal(typeof t.annotations?.[hint], "boolean", `${t.name} must set ${hint}`);
-    }
+  return body.result.tools;
+}
+
+/** Stub the outside world a client-passed file is fetched from. */
+async function withDownload(bytes, type, fn) {
+  const real = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(bytes, { status: 200, headers: { "content-type": type } });
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = real;
   }
-  const by = (pred) =>
-    body.result.tools
-      .filter(pred)
-      .map((t) => t.name)
-      .sort();
-  assert.deepEqual(
-    by((t) => t.annotations.readOnlyHint),
-    [
-      "board",
-      "get_folder",
-      "get_folder_asset",
-      "get_folder_document",
-      "get_folder_document_history",
-      "get_report",
-      "inbox",
-      "list_folders",
-      "log",
-      "search_guides",
-      "work",
-    ],
-  );
-  assert.deepEqual(
-    by((t) => t.annotations.destructiveHint),
-    ["delete_folder_asset", "delete_folder_document", "publish_guide"],
-  );
-  assert.deepEqual(
-    by((t) => t.annotations.openWorldHint),
-    ["add_folder_asset", "attach_screenshot", "file_bugs", "publish_guide"],
-  );
-});
+}
 
-test("every tool declares an output schema that leaves room for fields it does not name", async () => {
-  const { call } = recorder();
-  const body = await read(
-    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
-  );
-  for (const t of body.result.tools) {
-    assert.equal(t.outputSchema?.type, "object", `${t.name} needs an output schema`);
-    // A closed object would make every field a route adds a validation error in the client.
-    assert.notEqual(t.outputSchema.additionalProperties, false, `${t.name} must stay open`);
-  }
-});
-
-test("a relayed answer comes back as data as well as text", async () => {
-  const guides = { guides: [{ id: "k3mq2xa7", title: "x", kind: "bug", extra: 1 }] };
-  const { call } = recorder({ "GET /v1/inbox": { status: 200, text: JSON.stringify(guides) } });
-  const body = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 3,
-        method: "tools/call",
-        params: { name: "inbox", arguments: {} },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.equal(body.result.isError, undefined);
-  assert.deepEqual(
-    body.result.structuredContent,
-    guides,
-    "fields the schema does not name survive",
-  );
-  assert.equal(body.result.content[0].text, JSON.stringify(guides));
-});
-
-test("a folder image reaches the agent as an image without putting its bytes in structured metadata", async () => {
-  const { call, seen } = recorder({
-    "GET /v1/folders/folder123/assets/image123/agent": {
-      status: 200,
-      text: JSON.stringify({ id: "image123", name: "screen.png", type: "image/png", data: "cG5n" }),
-    },
-  });
-  const body = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 77,
-        method: "tools/call",
-        params: { name: "get_folder_asset", arguments: { folder: "folder123", asset: "image123" } },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.equal(seen[0].path, "/v1/folders/folder123/assets/image123/agent");
-  assert.deepEqual(body.result.structuredContent, {
-    id: "image123",
-    name: "screen.png",
-    type: "image/png",
-  });
-  assert.equal(body.result.content[1].type, "image");
-  assert.equal(body.result.content[1].data, "cG5n");
-});
-
-test("a route that answers with something other than an object is a tool error", async () => {
-  const { call } = recorder({ "GET /v1/board": { status: 200, text: "<html>" } });
-  const body = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 3,
-        method: "tools/call",
-        params: { name: "board", arguments: {} },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.equal(body.result.isError, true);
-  assert.match(body.result.content[0].text, /unexpected response from \/v1\/board/);
-});
-
-test("get_guide hands back the document and its follow-ups as data, without the notes", async () => {
-  const markdown = "---\ntitle: x\nkind: bug\n---\n\n## Problem\np\n";
-  const { call } = recorder({
-    "GET /v1/guides/abc12345": { status: 200, text: markdown },
-    "GET /v1/guides/abc12345/children": {
-      status: 200,
-      text: JSON.stringify({ guides: [{ id: "f1", title: "More", markdown: "# more\n" }] }),
-    },
-  });
-  const body = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 4,
-        method: "tools/call",
-        params: { name: "get_guide", arguments: { id: "abc12345" } },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.deepEqual(body.result.structuredContent, {
-    id: "abc12345",
-    kind: "bug",
-    markdown,
-    // It follows nothing, so there is nothing in front of it.
-    parent: "",
-    follow_ups: [{ id: "f1", title: "More", markdown: "# more" }],
-  });
-});
-
-// attach_screenshot is the one tool that reaches outside: it fetches a URL a caller handed it.
-// `download_url` is filled in by ChatGPT in practice, but anyone holding a token can call the tool
-// directly, so what it refuses matters as much as what it uploads.
 const FILE = {
-  download_url: "https://files.example.com/abc.png",
-  file_id: "file-abc",
-  mime_type: "image/png",
+  download_url: "https://files.example.com/a",
+  file_id: "f1",
   file_name: "shot.png",
 };
 
-const attach = (file) =>
-  rpc({
-    jsonrpc: "2.0",
-    id: 9,
-    method: "tools/call",
-    params: { name: "attach_screenshot", arguments: { file } },
-  });
+test("it introduces itself around four nouns, and never says guide", async () => {
+  const { call } = recorder();
+  const body = await read(
+    await handleMcp(
+      rpc({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: PROTOCOL,
+          capabilities: {},
+          clientInfo: { name: "test", version: "0" },
+        },
+      }),
+      call,
+      VOCAB,
+    ),
+  );
+  assert.equal(body.result.serverInfo.name, "passalong");
+  assert.ok(body.result.capabilities.tools, "it must advertise tools");
+  const said = body.result.instructions;
+  assert.match(said, /A PROJECT IS A PLACE; ITS DOCUMENTS ARE WHAT TO KNOW; WORK IS WHAT TO DO/);
+  assert.match(said, /WHAT YOU LEARN GOES INTO THE PROJECT'S DOCUMENTS/);
+  assert.match(said, /BEFORE WRITING ANYTHING DOWN, CHECK WHAT IS ALREADY OPEN/);
+  assert.match(said, /Ask which, in one line/, "a vague ask is answered with a question");
+  assert.doesNotMatch(said, /guide/i);
+});
 
-test("add_folder_asset sends attached file bytes to the folder route", async () => {
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(new Uint8Array([137, 80, 78, 71]), {
-      status: 200,
-      headers: { "content-type": "image/png" },
-    });
-  try {
-    const { call, seen } = recorder({
-      "POST /v1/folders/folder123/assets": {
-        status: 201,
-        text: JSON.stringify({ asset: { id: "asset123", name: "screen.png" } }),
-      },
-    });
-    const body = await read(
-      await handleMcp(
-        rpc({
-          jsonrpc: "2.0",
-          id: 16,
-          method: "tools/call",
-          params: { name: "add_folder_asset", arguments: { folder: "folder123", file: FILE } },
-        }),
-        call,
-        VOCAB,
-      ),
-    );
-    assert.equal(seen[0].path, "/v1/folders/folder123/assets");
-    assert.equal(seen[0].raw.headers["x-file-name"], "shot.png");
-    assert.equal(seen[0].body.byteLength, 4);
-    assert.equal(body.result.structuredContent.asset.id, "asset123");
-  } finally {
-    globalThis.fetch = realFetch;
+test("it lists the work tools and nothing else, each one an agent could act on", async () => {
+  const tools = await list();
+  assert.deepEqual(tools.map((t) => t.name).sort(), TOOLS);
+  for (const t of tools) {
+    assert.ok(t.description && t.description.length > 20, `${t.name} needs a description`);
+    assert.equal(t.inputSchema.type, "object", `${t.name} needs an input schema`);
+  }
+  assert.doesNotMatch(JSON.stringify(tools), /guide/i, "no name, description or field says guide");
+});
+
+test("every tool says what it does to the world, so a client does not assume the worst", async () => {
+  const tools = new Map((await list()).map((t) => [t.name, t]));
+  const where = (hint) =>
+    [...tools]
+      .filter(([, t]) => t.annotations[hint] === true)
+      .map(([n]) => n)
+      .sort();
+  assert.deepEqual(where("readOnlyHint"), [
+    "find_projects",
+    "find_work",
+    "read_document",
+    "read_file",
+  ]);
+  assert.deepEqual(where("destructiveHint"), ["delete_document", "delete_file", "update_work"]);
+  assert.deepEqual(where("openWorldHint"), ["add_file", "create_work"], "only these fetch a URL");
+  for (const [name, t] of tools) {
+    assert.equal(typeof t.annotations.readOnlyHint, "boolean", `${name} declares nothing`);
+    assert.ok(t.outputSchema, `${name} declares an output schema`);
+    assert.notEqual(t.outputSchema.additionalProperties, false, `${name} leaves room for more`);
   }
 });
 
-test("attach_screenshot declares its file input the way a client looks for it", async () => {
-  const { call } = recorder();
-  const body = await read(
-    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
-  );
-  const tool = body.result.tools.find((t) => t.name === "attach_screenshot");
-  assert.deepEqual(tool._meta["openai/fileParams"], ["file"]);
-  const props = tool.inputSchema.properties.file.properties;
-  assert.deepEqual(Object.keys(props).sort(), [
+test("files are declared as file inputs, at the top level, where a client looks for them", async () => {
+  const tools = new Map((await list()).map((t) => [t.name, t]));
+  assert.deepEqual(tools.get("add_file")._meta["openai/fileParams"], ["file"]);
+  assert.deepEqual(tools.get("create_work")._meta["openai/fileParams"], ["files"]);
+  const file = tools.get("add_file").inputSchema.properties.file;
+  assert.deepEqual(Object.keys(file.properties).sort(), [
     "download_url",
     "file_id",
     "file_name",
     "mime_type",
   ]);
-  assert.deepEqual(tool.inputSchema.properties.file.required.sort(), ["download_url", "file_id"]);
+  assert.match(tools.get("add_file").description, /`ran` on hand_in/);
+  assert.match(tools.get("add_file").description, /DO NOT WRITE NEW WORK TO CARRY SCREENSHOTS/);
 });
 
-test("attach_screenshot refuses a URL only the worker could reach", async () => {
-  const { call, seen } = recorder();
-  for (const url of [
-    "http://files.example.com/a.png",
-    "https://localhost/a.png",
-    "https://127.0.0.1/a.png",
-    "https://10.0.0.5/a.png",
-    "https://169.254.169.254/latest/meta-data",
-    "https://192.168.1.1/a.png",
-    "not a url",
-  ]) {
-    const body = await read(await handleMcp(attach({ ...FILE, download_url: url }), call, VOCAB));
-    assert.equal(body.result.isError, true, `${url} should be refused`);
-    assert.match(body.result.content[0].text, /public https URL/);
-  }
-  // Nothing reached the API: a refused URL is refused before any of it is fetched or stored.
-  assert.deepEqual(seen, []);
-});
+// ---- work ----------------------------------------------------------------------------------------
 
-test("attach_screenshot uploads the bytes it fetched, labelled by what was served", async () => {
-  const png = new Uint8Array([137, 80, 78, 71]);
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(png, { status: 200, headers: { "content-type": "image/png" } });
-  try {
-    const { call, seen } = recorder({
-      "POST /v1/shots": {
-        status: 201,
-        text: JSON.stringify({ shot: { id: "s1", url: "https://passalong.dev/v1/shots/s1" } }),
-      },
-    });
-    const body = await read(await handleMcp(attach(FILE), call, VOCAB));
-    assert.equal(seen.length, 1);
-    assert.equal(seen[0].path, "/v1/shots");
-    assert.equal(seen[0].raw.contentType, "image/png");
-    assert.equal(seen[0].raw.headers["x-shot-name"], "shot.png");
-    assert.equal(seen[0].body.byteLength, 4, "the bytes go up, not a description of them");
-    // The markdown is the point: evidence lives in the document, so the tool hands back the line.
-    assert.match(
-      body.result.content[0].text,
-      /!\[shot\.png\]\(https:\/\/passalong\.dev\/v1\/shots\/s1\)/,
-    );
-  } finally {
-    globalThis.fetch = realFetch;
-  }
-});
-
-test("attach_screenshot lets the route refuse, rather than inventing its own rules", async () => {
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(new Uint8Array([1, 2]), {
-      status: 200,
-      headers: { "content-type": "image/tiff" },
-    });
-  try {
-    const { call } = recorder({
-      "POST /v1/shots": { status: 415, text: "screenshots must be image/png, image/jpeg" },
-    });
-    const body = await read(
-      await handleMcp(attach({ ...FILE, mime_type: "image/png" }), call, VOCAB),
-    );
-    assert.equal(body.result.isError, true);
-    // The served type wins over the client's claim, and `/v1/shots` is the one that says no.
-    assert.match(body.result.content[0].text, /screenshots must be/);
-  } finally {
-    globalThis.fetch = realFetch;
-  }
-});
-
-test("file_bugs carries evidence into the issue it belongs to", async () => {
+test("take hands over the work with the lead, its parent in front, and where learning goes", async () => {
+  const markdown = "---\nid: abc12345\ntitle: x\nsummary: s\nparent: par12345\n---\n\nFix it.\n";
   const { call, seen } = recorder({
-    "POST /v1/reports": { status: 201, text: JSON.stringify({ report: { id: "r1" } }) },
-    "PUT /v1/guides": { status: 201, text: JSON.stringify({ url: "https://passalong.dev/g/x/y" }) },
-  });
-  const res = await handleMcp(
-    rpc({
-      jsonrpc: "2.0",
-      id: 7,
-      method: "tools/call",
-      params: {
-        name: "file_bugs",
-        arguments: {
-          title: "Checkout pass",
-          issues: [
-            {
-              title: "Save does nothing",
-              problem: "Clicking Save does not save.",
-              reproduce: "1. Click Save.",
-              evidence: ["https://passalong.dev/v1/shots/abc123"],
-            },
-            { title: "No evidence here", problem: "P", reproduce: "R" },
-          ],
-        },
-      },
-    }),
-    call,
-    VOCAB,
-  );
-  await read(res);
-  const puts = seen.filter((s) => s.method === "PUT");
-  assert.equal(puts.length, 2);
-  // Under Problem, ahead of Reproduce — the same placement bugGuide() uses in the CLI, because a
-  // guide filed from either surface has to be the same document.
-  const first = puts[0].body.markdown;
-  assert.match(
-    first,
-    /## Problem\n[\s\S]*!\[evidence\]\(https:\/\/passalong\.dev\/v1\/shots\/abc123\)\n\n## Reproduce/,
-  );
-  // An issue with no evidence is untouched, so a report of eight bugs and one screenshot does not
-  // put the screenshot on all eight.
-  assert.doesNotMatch(puts[1].body.markdown, /!\[/);
-});
-
-test("the tools that write a guide say where a screenshot goes", async () => {
-  const { call } = recorder();
-  const body = await read(
-    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
-  );
-  // The failure this guards: an agent reads file_bugs' fields, finds no attachment among them, and
-  // concludes the product cannot carry evidence. The tool that can is named where it will be read.
-  for (const name of ["file_bugs", "publish_guide"]) {
-    const tool = body.result.tools.find((t) => t.name === name);
-    assert.match(
-      tool.description,
-      /attach_screenshot/,
-      `${name} should point at attach_screenshot`,
-    );
-  }
-  const issue = body.result.tools.find((t) => t.name === "file_bugs").inputSchema.properties.issues;
-  assert.ok(issue.items.properties.evidence, "each issue takes its own evidence");
-});
-
-// The one-call path: a client that can pass files hands them to the tool that writes the guide, so
-// an agent does not have to call attach_screenshot and then copy a line into the document.
-const SHOT_API = {
-  "POST /v1/shots": {
-    status: 201,
-    text: JSON.stringify({ shot: { id: "s1", url: "https://passalong.dev/v1/shots/s1" } }),
-  },
-  "POST /v1/reports": { status: 201, text: JSON.stringify({ report: { id: "r1" } }) },
-  "PUT /v1/guides": { status: 201, text: JSON.stringify({ url: "https://passalong.dev/g/x/y" }) },
-  // What the route really answers with: publish_guide's output schema requires the id.
-  "PUT /v1/guides/k3mq2xa7": {
-    status: 201,
-    text: JSON.stringify({ id: "k3mq2xa7", url: "https://passalong.dev/g/k3mq2xa7/y" }),
-  },
-};
-
-async function withImageHost(fn) {
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(new Uint8Array([137, 80, 78, 71]), {
-      status: 200,
-      headers: { "content-type": "image/png" },
-    });
-  try {
-    return await fn();
-  } finally {
-    globalThis.fetch = realFetch;
-  }
-}
-
-const tool = (name, args) =>
-  rpc({ jsonrpc: "2.0", id: 11, method: "tools/call", params: { name, arguments: args } });
-
-test("publish_guide and file_bugs declare attachments as file inputs, at the top level", async () => {
-  const { call } = recorder();
-  const body = await read(
-    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
-  );
-  for (const name of ["publish_guide", "file_bugs"]) {
-    const t = body.result.tools.find((x) => x.name === name);
-    // Only a top-level field can be a file param, so this is where a client will look.
-    assert.deepEqual(t._meta["openai/fileParams"], ["attachments"], name);
-    const items = t.inputSchema.properties.attachments.items;
-    assert.deepEqual(Object.keys(items.properties).sort(), [
-      "download_url",
-      "file_id",
-      "file_name",
-      "mime_type",
-    ]);
-    assert.deepEqual(items.required.sort(), ["download_url", "file_id"]);
-  }
-});
-
-test("publish_guide stores its attachments and puts them under Problem", async () => {
-  await withImageHost(async () => {
-    const { call, seen } = recorder(SHOT_API);
-    const markdown =
-      "---\ntitle: Save fails\nkind: bug\n---\n\n## Problem\nSave does nothing.\n\n## Reproduce\n1. Save\n";
-    const body = await read(
-      await handleMcp(
-        tool("publish_guide", { id: "k3mq2xa7", markdown, attachments: [FILE] }),
-        call,
-        VOCAB,
-      ),
-    );
-    assert.notEqual(body.result.isError, true);
-    assert.deepEqual(
-      seen.map((s) => `${s.method} ${s.path}`),
-      ["POST /v1/shots", "PUT /v1/guides/k3mq2xa7"],
-      "the file is stored before the guide that names it",
-    );
-    assert.match(
-      seen[1].body.markdown,
-      /## Problem\nSave does nothing\.\n\n!\[shot\.png\]\(https:\/\/passalong\.dev\/v1\/shots\/s1\)\n\n## Reproduce/,
-    );
-  });
-});
-
-test("publish_guide writes nothing when an attachment cannot be fetched", async () => {
-  const { call, seen } = recorder(SHOT_API);
-  const body = await read(
-    await handleMcp(
-      tool("publish_guide", {
-        markdown: "---\ntitle: x\n---\n\nbody\n",
-        attachments: [{ ...FILE, download_url: "https://127.0.0.1/a.png" }],
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.equal(body.result.isError, true);
-  assert.match(body.result.content[0].text, /attachment 0 \(shot\.png\): .*public https URL/);
-  assert.deepEqual(seen, []);
-});
-
-test("file_bugs puts each attachment on the issue that names it", async () => {
-  await withImageHost(async () => {
-    const { call, seen } = recorder(SHOT_API);
-    await read(
-      await handleMcp(
-        tool("file_bugs", {
-          attachments: [FILE],
-          issues: [
-            { title: "No shot", problem: "P1", reproduce: "R1" },
-            { title: "Has shot", problem: "P2", reproduce: "R2", attachments: [0] },
-          ],
-        }),
-        call,
-        VOCAB,
-      ),
-    );
-    const puts = seen.filter((s) => s.method === "PUT");
-    assert.doesNotMatch(puts[0].body.markdown, /!\[/);
-    assert.match(puts[1].body.markdown, /## Problem\nP2\n\n!\[shot\.png\]\(.*s1\)\n\n## Reproduce/);
-  });
-});
-
-test("file_bugs with one issue gives it every attachment", async () => {
-  await withImageHost(async () => {
-    const { call, seen } = recorder(SHOT_API);
-    await read(
-      await handleMcp(
-        tool("file_bugs", {
-          attachments: [FILE],
-          issues: [{ title: "Only", problem: "P", reproduce: "R" }],
-        }),
-        call,
-        VOCAB,
-      ),
-    );
-    const put = seen.find((s) => s.method === "PUT");
-    assert.match(put.body.markdown, /!\[shot\.png\]/);
-  });
-});
-
-test("file_bugs refuses to guess whose attachment it is, before writing anything", async () => {
-  const { call, seen } = recorder(SHOT_API);
-  const two = [
-    { title: "A", problem: "P", reproduce: "R" },
-    { title: "B", problem: "P", reproduce: "R" },
-  ];
-  let body = await read(
-    await handleMcp(tool("file_bugs", { attachments: [FILE], issues: two }), call, VOCAB),
-  );
-  assert.equal(body.result.isError, true);
-  assert.match(body.result.content[0].text, /attachment 0 belongs to no issue/);
-
-  body = await read(
-    await handleMcp(
-      tool("file_bugs", {
-        attachments: [FILE],
-        issues: [{ ...two[0], attachments: [0, 3] }, two[1]],
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.equal(body.result.isError, true);
-  assert.match(body.result.content[0].text, /names attachment 3, but only 1 were passed/);
-  assert.deepEqual(seen, [], "no shot stored and no report opened");
-});
-
-test("publish_guide carries a parent beside the document, and only when one was given", async () => {
-  const { call, seen } = recorder({
-    "PUT /v1/guides/k3mq2xa7": { status: 201, text: JSON.stringify({ url: "https://x/g/a/b" }) },
-  });
-  const publish = (args) =>
-    handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 5,
-        method: "tools/call",
-        params: {
-          name: "publish_guide",
-          arguments: { id: "k3mq2xa7", markdown: "---\n---\n", ...args },
-        },
-      }),
-      call,
-      VOCAB,
-    );
-  await read(await publish({ parent: "zx9y8w42" }));
-  await read(await publish({}));
-  // The route writes `parent` into the frontmatter, so a model records lineage without editing YAML.
-  assert.deepEqual(seen[0].body, { markdown: "---\n---\n", parent: "zx9y8w42" });
-  // No parent means the body a publish has always sent — nothing new rides along by accident.
-  assert.deepEqual(seen[1].body, { markdown: "---\n---\n" });
-});
-
-test("publish_guide mints an id when none is given, and uses the one it was handed", async () => {
-  const { call, seen } = recorder();
-  const publish = (args) =>
-    handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 6,
-        method: "tools/call",
-        params: { name: "publish_guide", arguments: { markdown: "---\n---\n", ...args } },
-      }),
-      call,
-      VOCAB,
-    );
-  await read(await publish({}));
-  await read(await publish({ id: "k3mq2xa7" }));
-  // Minted in the CLI's own alphabet, so nothing downstream can tell where an id came from. The
-  // model no longer names guides, which is how one bug became khaimeteam4, 5 and 6.
-  assert.match(seen[0].path, /^\/v1\/guides\/[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
-  // An update names the guide it updates; minting there would publish a copy instead.
-  assert.equal(seen[1].path, "/v1/guides/k3mq2xa7");
-});
-
-// An agent that departs from a guide and writes nothing back is the loop this product exists to
-// close. Being able to set `parent` is not enough; it has to be told when, where it will read it.
-test("agents are told when a follow-up is a guide, at connect and with the guide itself", async () => {
-  const { call } = recorder({
-    "GET /v1/guides/k3mq2xa7": {
-      status: 200,
-      text: "---\nid: k3mq2xa7\ntitle: T\n---\n\n## Steps\n1. x\n",
-    },
-    "GET /v1/guides/bugbug12": {
-      status: 200,
-      text: "---\nid: bugbug12\nkind: bug\n---\n\n## Problem\nx\n",
-    },
-  });
-  const init = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "initialize",
-        params: {
-          protocolVersion: PROTOCOL,
-          capabilities: {},
-          clientInfo: { name: "t", version: "0" },
-        },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.match(init.result.instructions, /FOLLOW-UP IS MORE CONTEXT FOR A GUIDE/);
-  assert.match(init.result.instructions, /publish_guide `parent`/);
-  assert.match(init.result.instructions, /take and get_guide return a guide's follow-ups after it/);
-  // And the other direction: a follow-up arrives with the guide it came out of.
-  assert.match(init.result.instructions, /the guide it follows, in front of it/);
-  // Not the old rule: context is worth adding whether or not the guide worked as written.
-  assert.doesNotMatch(init.result.instructions, /worked exactly as written|departed from/);
-
-  const get = async (id) =>
-    (
-      await read(
-        await handleMcp(
-          rpc({
-            jsonrpc: "2.0",
-            id: 3,
-            method: "tools/call",
-            params: { name: "get_guide", arguments: { id } },
-          }),
-          call,
-          VOCAB,
-        ),
-      )
-    ).result.content;
-  const transfer = await get("k3mq2xa7");
-  // The document is its own block, byte for byte; the note is a second one. An agent that writes
-  // the guide back out cannot carry the note into it, and nothing lands in front of `---`.
-  assert.equal(transfer[0].text, "---\nid: k3mq2xa7\ntitle: T\n---\n\n## Steps\n1. x\n");
-  assert.match(transfer[1].text, /publish_guide parent=k3mq2xa7/);
-  assert.match(transfer[1].text, /more context for this guide/);
-  assert.match((await get("bugbug12"))[1].text, /once this is fixed[\s\S]*parent=bugbug12/);
-});
-
-const getGuide = async (call, id) =>
-  (
-    await read(
-      await handleMcp(
-        rpc({
-          jsonrpc: "2.0",
-          id: 4,
-          method: "tools/call",
-          params: { name: "get_guide", arguments: { id } },
-        }),
-        call,
-        VOCAB,
-      ),
-    )
-  ).result.content;
-
-const DOC = "---\nid: k3mq2xa7\ntitle: T\n---\n\n## Steps\n1. x\n";
-
-test("get_guide hands over a guide's follow-ups after it, oldest first, with their bodies", async () => {
-  const { call, seen } = recorder({
-    "GET /v1/guides/k3mq2xa7": { status: 200, text: DOC },
-    "GET /v1/guides/k3mq2xa7/children": {
+    "POST /v1/take": {
       status: 200,
       text: JSON.stringify({
-        guides: [
-          { id: "aaaa2222", title: "Postgres 16 needs a flag", markdown: "first body\n" },
-          { id: "bbbb3333", title: "What changed since", markdown: "second body" },
+        work: { id: "abc12345", markdown },
+        next: [{ tool: "progress", when: "at each milestone", why: "or it stalls" }],
+      }),
+    },
+    "GET /v1/work/abc12345/parent": {
+      status: 200,
+      text: JSON.stringify({
+        work: { id: "par12345", title: "Bigger", state: "open", markdown: "the big one" },
+      }),
+    },
+  });
+  const r = await tool(call, "take", { agent: "chat-7f3k2m9q", id: "abc12345" });
+  assert.deepEqual(seen[0].body, { agent: "chat-7f3k2m9q", id: "abc12345", repo: "", any: false });
+  const out = textOf(r);
+  assert.ok(out.indexOf("THIS CAME OUT OF par12345") < out.indexOf("Fix it."), "parent first");
+  assert.match(out, /SEARCH THE WHOLE TREE BEFORE YOU CONCLUDE/);
+  assert.match(out, /progress abc12345 — when at each milestone/);
+  assert.match(out, /project's documents \(find_projects, read_document, save_document\)/);
+  assert.doesNotMatch(out, /THIS IS A (BUG|TASK)/, "no kind decides what is said");
+});
+
+test("nothing waiting says to stop, and someone else holding it is the route's own refusal", async () => {
+  const none = recorder({
+    "POST /v1/take": {
+      status: 200,
+      text: JSON.stringify({ work: null, next: [], say: "Nothing is waiting. Stop." }),
+    },
+  });
+  assert.match(textOf(await tool(none.call, "take", { agent: "chat-7f3k2m9q" })), /Stop\./);
+  const held = recorder({
+    "POST /v1/take": {
+      status: 409,
+      text: JSON.stringify({ message: "someone else has it", say: "Tell the user." }),
+    },
+  });
+  const r = await tool(held.call, "take", { agent: "chat-7f3k2m9q", id: "abc12345" });
+  assert.equal(r.isError, true);
+  assert.match(textOf(r), /someone else has it[\s\S]*Tell the user/);
+});
+
+test("progress, pass, ask and hand_in each reach their route with what they carry", async () => {
+  const { call, seen } = recorder();
+  const agent = "chat-7f3k2m9q";
+  await tool(call, "progress", { id: "abc12345", agent, note: "Reading the page." });
+  await tool(call, "pass", { id: "abc12345", agent, why: "not mine" });
+  await tool(call, "ask", { id: "abc12345", agent, question: "Settings or header?" });
+  await tool(call, "hand_in", {
+    id: "abc12345",
+    agent,
+    note: "Added the toggle.",
+    evidence: "$ npm test\n41 pass, 0 fail",
+    writeup: "Used the existing hook.",
+    pr: "https://github.com/o/r/pull/1",
+  });
+  assert.deepEqual(
+    seen.map((s) => `${s.method} ${s.path}`),
+    [
+      "PUT /v1/work/abc12345/progress",
+      "POST /v1/work/abc12345/pass",
+      "POST /v1/work/abc12345/ask",
+      "POST /v1/work/abc12345/hand_in",
+    ],
+  );
+  assert.deepEqual(seen[1].body, { agent, why: "not mine" });
+  assert.deepEqual(seen[3].body, {
+    agent,
+    note: "Added the toggle.",
+    evidence: "$ npm test\n41 pass, 0 fail",
+    writeup: "Used the existing hook.",
+    pr: "https://github.com/o/r/pull/1",
+  });
+});
+
+test("create_work writes one document per item, in order, with what each waits on", async () => {
+  const { call, seen } = recorder({
+    "GET /v1/me": { status: 200, text: JSON.stringify({ teams: [{ slug: "khaime" }] }) },
+  });
+  const r = await tool(call, "create_work", {
+    items: [
+      { title: "Schema: add table", summary: "Add the table.", repo: "o/r" },
+      { title: "API", summary: "Serve it.", after: [0], to: "khaime/#backend", parent: "par12345" },
+    ],
+    draft: true,
+  });
+  assert.equal(r.isError, undefined);
+  const puts = seen.filter((s) => s.method === "PUT");
+  assert.equal(puts.length, 2);
+  const [first, second] = puts.map((p) => p.body.markdown);
+  const firstId = puts[0].path.split("/").pop();
+  assert.match(first, /^title: "Schema: add table"$/m);
+  assert.match(first, /^summary: Add the table\.$/m);
+  assert.match(first, /^target_context: o\/r$/m);
+  assert.match(first, /^status: draft$/m);
+  assert.match(first, /^team: khaime$/m, "the one team you are in, when none is named");
+  assert.doesNotMatch(first, /^kind:/m, "work has no kind");
+  assert.match(second, new RegExp(`^blocked_by: \\[${firstId}\\]$`, "m"));
+  assert.match(second, /^to: "#backend"$/m);
+  assert.equal(puts[1].body.parent, "par12345", "the parent rides beside the document");
+  assert.equal(puts[0].body.parent, undefined);
+  assert.equal(r.structuredContent.work.length, 2);
+  assert.match(r.structuredContent.next, /hub\/work/);
+});
+
+test("create_work puts each file on the item that names it, and guesses nothing", async () => {
+  const png = new Uint8Array([137, 80, 78, 71]);
+  const answers = {
+    "POST /v1/shots": () => ({
+      status: 201,
+      text: JSON.stringify({ shot: { id: "s1", url: "https://passalong.dev/v1/shots/s1" } }),
+    }),
+  };
+  await withDownload(png, "image/png", async () => {
+    const { call, seen } = recorder(answers);
+    const r = await tool(call, "create_work", {
+      files: [FILE, FILE],
+      items: [
+        { title: "a", summary: "a", files: [1] },
+        { title: "b", summary: "b", files: [0] },
+      ],
+      to: "khaime",
+    });
+    assert.equal(r.isError, undefined);
+    const docs = seen.filter((s) => s.method === "PUT").map((s) => s.body.markdown);
+    assert.match(docs[0], /!\[shot\.png\]\(https:\/\/passalong\.dev\/v1\/shots\/s1\)/);
+    assert.match(docs[1], /!\[shot\.png\]/);
+
+    const one = recorder(answers);
+    await tool(one.call, "create_work", { files: [FILE], items: [{ title: "a", summary: "a" }] });
+    assert.match(one.seen.find((s) => s.method === "PUT").body.markdown, /!\[shot\.png\]/);
+  });
+  const { call, seen } = recorder();
+  const r = await tool(call, "create_work", {
+    files: [FILE, FILE],
+    items: [
+      { title: "a", summary: "a", files: [0] },
+      { title: "b", summary: "b" },
+    ],
+  });
+  assert.equal(r.isError, true);
+  assert.match(textOf(r), /file 1 belongs to no item/);
+  assert.deepEqual(seen, [], "refused before anything is fetched or written");
+  const later = await tool(call, "create_work", {
+    items: [{ title: "a", summary: "a", after: [0] }],
+  });
+  assert.match(textOf(later), /can only wait on an earlier one/);
+});
+
+test("a failure part-way through says which work already landed", async () => {
+  let n = 0;
+  const { call } = recorder();
+  const failing = async (method, path, body) => {
+    if (method === "PUT" && ++n === 2) return { status: 400, text: '{"message":"no summary"}' };
+    return call(method, path, body);
+  };
+  const r = await tool(failing, "create_work", {
+    items: [
+      { title: "a", summary: "a" },
+      { title: "b", summary: "b" },
+    ],
+    to: "khaime",
+  });
+  assert.equal(r.isError, true);
+  assert.match(textOf(r), /wrote 1 of 2 before failing/);
+});
+
+test("find_work reads by id without taking it, with what it came out of in front", async () => {
+  const markdown =
+    "---\nid: abc12345\ntitle: x\nsummary: s\n---\n\nThe upload button does nothing.\n";
+  const { call, seen } = recorder({
+    "GET /v1/work/abc12345": { status: 200, text: markdown },
+    "GET /v1/work/abc12345/parent": { status: 200, text: '{"work":null}' },
+  });
+  const r = await tool(call, "find_work", { id: "abc12345" });
+  assert.equal(seen[0].path, "/v1/work/abc12345?peek=1", "reading records nothing");
+  assert.equal(r.content[0].text, markdown, "the document as it came");
+  assert.match(textOf(r), /to work on it, call take abc12345/);
+  assert.equal(r.structuredContent.markdown, markdown);
+});
+
+test("find_work reads large work by its outline, or one section", async () => {
+  const filler = "x".repeat(25_000);
+  const markdown = `---\nid: big12345\ntitle: x\nsummary: s\n---\n\n## Background\n${filler}\n\n## What to change\nthe one thing\n`;
+  const { call } = recorder({ "GET /v1/work/big12345": { status: 200, text: markdown } });
+  const outline = textOf(await tool(call, "find_work", { id: "big12345" }));
+  assert.match(outline, /- Background \(/);
+  assert.match(outline, /find_work id=big12345 section=/);
+  assert.ok(outline.length < 1500);
+  const part = textOf(await tool(call, "find_work", { id: "big12345", section: "what to" }));
+  assert.match(part, /the one thing/);
+  assert.ok(!part.includes(filler));
+});
+
+test("find_work with words searches, and answers with work", async () => {
+  const { call, seen } = recorder({
+    "GET /v1/work": { status: 200, text: '{"work":[{"id":"abc12345","title":"t"}]}' },
+  });
+  const r = await tool(call, "find_work", { query: "webhook", scope: "mine" });
+  assert.match(seen[0].path, /q=webhook/);
+  assert.match(seen[0].path, /scope=mine/);
+  assert.deepEqual(r.structuredContent, { work: [{ id: "abc12345", title: "t" }] });
+});
+
+test("find_work with nothing is the board, drawn as an app where the host can", async () => {
+  const task = (id, state, extra = {}) => ({
+    id,
+    title: `work ${id}`,
+    state,
+    mine: true,
+    url: `https://passalong.dev/w/${id}/k`,
+    claim: null,
+    ...extra,
+  });
+  const { call } = recorder({
+    "GET /v1/tasks": {
+      status: 200,
+      text: JSON.stringify({
+        tasks: [
+          task("d1", "draft"),
+          task("s1", "stalled"),
+          task("a1", "claimed", { claim: { asking: "Which colour?" } }),
+          task("b1", "claimed", { claim: { note: "BLOCKED: need the key" } }),
+          task("r1", "ready", { team: "khaime", to: "@ada" }),
+          task("r2", "ready", { mine: false }),
+          task("x1", "done"),
         ],
       }),
     },
-  });
-  const content = await getGuide(call, "k3mq2xa7");
-  // The document block is still exactly the document.
-  assert.equal(content[0].text, DOC);
-  assert.equal(
-    content[1].text,
-    "FOLLOW-UPS — more context added to this guide, oldest first. Read them before acting; " +
-      "where one contradicts the original, the follow-up is newer.\n\n" +
-      "--- follow-up aaaa2222: Postgres 16 needs a flag ---\nfirst body\n\n" +
-      "--- follow-up bbbb3333: What changed since ---\nsecond body",
-  );
-  assert.match(content[2].text, /^<!-- passalong:/);
-  // Asked for with content, which is the form that records no pull on the children.
-  assert.ok(seen.some((s) => s.path === "/v1/guides/k3mq2xa7/children?markdown=1"));
-});
-
-const CHILD =
-  "---\nid: jn3juujr\ntitle: Confirmation email\nparent: hveahejv\n---\n\n## Steps\n1. x\n";
-const PARENT_ANSWER = JSON.stringify({
-  guide: {
-    id: "hveahejv",
-    title: "Store Hours UI",
-    state: "held",
-    by: { name: "Ada Lovelace", handle: "ada" },
-    markdown: "---\nid: hveahejv\n---\n\n## Goal\nOpen/close per day.\n",
-  },
-});
-
-test("a follow-up is handed over with the guide it came out of, in front of it", async () => {
-  const { call, seen } = recorder({
-    "GET /v1/guides/jn3juujr": { status: 200, text: CHILD },
-    "GET /v1/guides/jn3juujr/children": { status: 200, text: JSON.stringify({ guides: [] }) },
-    "GET /v1/guides/jn3juujr/parent": { status: 200, text: PARENT_ANSWER },
-  });
-  const content = await getGuide(call, "jn3juujr");
-  assert.match(
-    content[0].text,
-    /^THIS IS A FOLLOW-UP TO hveahejv: Store Hours UI — held by Ada Lovelace\./,
-  );
-  assert.match(content[0].text, /Open\/close per day\./, "the parent's own document comes with it");
-  assert.match(content[0].text, /depends on hveahejv being done and it is not, say so/);
-  // The document itself is still handed over whole, after the context.
-  assert.equal(content[1].text, CHILD);
-  // Asked for with content, and reading it records no pull on the parent.
-  assert.ok(seen.some((s) => s.path === "/v1/guides/jn3juujr/parent?markdown=1"));
-});
-
-test("taking a follow-up carries the same context, so no agent starts on half of it", async () => {
-  const answer = {
-    guide: { id: "jn3juujr", kind: "transfer", markdown: CHILD },
-    next: [{ tool: "hand_in", when: "done", why: "its author hears" }],
-  };
-  const { call } = recorder({
-    "POST /v1/take": { status: 200, text: JSON.stringify(answer) },
-    "GET /v1/guides/jn3juujr/children": { status: 200, text: JSON.stringify({ guides: [] }) },
-    "GET /v1/guides/jn3juujr/parent": { status: 200, text: PARENT_ANSWER },
-  });
-  const body = await read(
-    await handleMcp(callTool("take", { agent: "chat-7f3k2m9q", id: "jn3juujr" }), call, VOCAB),
-  );
-  const content = body.result.content;
-  assert.match(content[0].text, /^THIS IS A FOLLOW-UP TO hveahejv/);
-  assert.match(content[1].text, /jn3juujr is yours/);
-});
-
-test("a guide that follows nothing is handed over exactly as it always was", async () => {
-  for (const parent of [
-    { status: 200, text: JSON.stringify({ guide: null }) },
-    { status: 500, text: "boom" },
-    { status: 200, text: "not json" },
-  ]) {
-    const { call } = recorder({
-      "GET /v1/guides/k3mq2xa7": { status: 200, text: DOC },
-      "GET /v1/guides/k3mq2xa7/children": { status: 200, text: JSON.stringify({ guides: [] }) },
-      "GET /v1/guides/k3mq2xa7/parent": parent,
-    });
-    const content = await getGuide(call, "k3mq2xa7");
-    assert.equal(content.length, 2);
-    assert.equal(content[0].text, DOC);
-  }
-});
-
-test("no follow-ups, or a failure fetching them, returns the guide as it always was", async () => {
-  for (const children of [
-    { status: 200, text: JSON.stringify({ guides: [] }) },
-    { status: 500, text: "boom" },
-    { status: 200, text: "not json" },
-  ]) {
-    const { call } = recorder({
-      "GET /v1/guides/k3mq2xa7": { status: 200, text: DOC },
-      "GET /v1/guides/k3mq2xa7/children": children,
-    });
-    const content = await getGuide(call, "k3mq2xa7");
-    assert.equal(content.length, 2);
-    assert.equal(content[0].text, DOC);
-    assert.match(content[1].text, /^<!-- passalong:/);
-  }
-});
-
-const callTool = (name, args) =>
-  rpc({ jsonrpc: "2.0", id: 11, method: "tools/call", params: { name, arguments: args } });
-
-test("take works any guide by id, and ends with what to call next", async () => {
-  const answer = {
-    guide: { id: "k3mq2xa7", kind: "transfer", markdown: "---\ntitle: t\n---\n\n## Steps\n1. x\n" },
-    next: [{ tool: "hand_in", when: "you ran its Verification here", why: "its author hears" }],
-  };
-  const { call, seen } = recorder({
-    "POST /v1/take": { status: 200, text: JSON.stringify(answer) },
-  });
-  const body = await read(
-    await handleMcp(callTool("take", { agent: "chat-7f3k2m9q", id: "k3mq2xa7" }), call, VOCAB),
-  );
-  assert.deepEqual(seen[0].body, { agent: "chat-7f3k2m9q", id: "k3mq2xa7", repo: "", any: false });
-  const said = body.result.content[0].text;
-  assert.match(said, /## Steps/);
-  assert.match(said, /next:\n\s+hand_in k3mq2xa7 — when you ran its Verification here/);
-});
-
-test("the old tool names are gone, and the instructions say what replaced them", async () => {
-  // Ten tools for four jobs, each pair described almost the same way, is a list a model misreads.
-  const { call } = recorder();
-  const list = await read(
-    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
-  );
-  const names = list.result.tools.map((t) => t.name);
-  for (const gone of [
-    "next_task",
-    "task_progress",
-    "finish_task",
-    "ack_guide",
-    "verify_guide",
-    "start_guide",
-  ])
-    assert.ok(!names.includes(gone), `${gone} should be gone`);
-  const hello = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "initialize",
-        params: {
-          protocolVersion: PROTOCOL,
-          capabilities: {},
-          clientInfo: { name: "t", version: "1" },
-        },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.match(hello.result.instructions, /those are gone: take, progress, hand_in and pass/);
-});
-
-test("a refusal to stop says to stop", async () => {
-  const { call } = recorder({
-    "PUT /v1/guides/t1/progress": {
-      status: 409,
+    "GET /v1/working": {
+      status: 200,
       text: JSON.stringify({
-        message: "this agent does not hold that",
-        next: [],
-        say: "You no longer hold this. Stop.",
+        working: [
+          {
+            id: "a1",
+            title: "work a1",
+            state: "claimed",
+            note: "on it",
+            url: "u",
+            by: { name: "Ada", handle: "ada", you: false },
+          },
+        ],
       }),
     },
+    "GET /v1/teams/khaime": {
+      status: 200,
+      text: JSON.stringify({ name: "Khaime", members: [{ id: "m1", handle: "ada", name: "Ada" }] }),
+    },
+    "GET /v1/teams/khaime/groups": {
+      status: 200,
+      text: JSON.stringify({ groups: [{ slug: "backend", name: "Backend" }] }),
+    },
   });
-  const body = await read(
-    await handleMcp(callTool("progress", { id: "t1", agent: "chat-7f3k2m9q" }), call, VOCAB),
+  const b = (await tool(call, "find_work")).structuredContent;
+  assert.deepEqual(
+    b.needs.map((n) => [n.id, n.why]),
+    [
+      ["d1", "in Draft: read it and mark it Ready"],
+      ["s1", "its agent went quiet"],
+      ["a1", "asking you: Which colour?"],
+      ["b1", "stuck on you: need the key"],
+    ],
   );
-  assert.equal(body.result.isError, true);
-  assert.match(body.result.content[0].text, /Stop\./);
+  assert.equal(b.needs[0].url, "https://passalong.dev/hub/w/d1");
+  assert.deepEqual(b.working, [
+    { id: "a1", title: "work a1", who: "Ada", note: "on it", stalled: false, url: "u" },
+  ]);
+  assert.deepEqual(
+    b.ready.map((t) => [t.id, t.team ?? null, t.to]),
+    [
+      ["r1", "khaime", "@ada"],
+      ["r2", null, ""],
+    ],
+  );
+  assert.deepEqual(
+    b.teams.khaime.map((c) => c.to),
+    ["", "@ada", "#backend"],
+  );
+  assert.deepEqual(b.counts, { needs: 4, working: 1, open: 3, done: 1 });
+
+  const finder = (await list()).find((t) => t.name === "find_work");
+  assert.equal(finder._meta.ui.resourceUri, "ui://passalong/work");
 });
 
-test("assign maps onto the route, with who it is for", async () => {
-  const { call, seen } = recorder({
-    "POST /v1/guides/t1/assign": { status: 200, text: '{"id":"t1","to":"@ada","taken_back":0}' },
-  });
-  const body = await read(
-    await handleMcp(callTool("assign", { id: "t1", to: "@ada" }), call, VOCAB),
-  );
-  assert.deepEqual(seen[0].body, { to: "@ada" });
-  assert.equal(body.result.structuredContent.to, "@ada");
-});
-
-// ---- the work board as an MCP App (docs/V2.md §11) --------------------------------------------------
-
-test("work is drawn as an app where the host can, and names the page it is drawn with", async () => {
-  const { call } = recorder();
-  const body = await read(
-    await handleMcp(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), call, VOCAB),
-  );
-  const work = body.result.tools.find((t) => t.name === "work");
-  assert.equal(work._meta.ui.resourceUri, "ui://passalong/work");
-  // Nothing the app can press is hidden from the model: the review gate is not in the app.
-  for (const t of body.result.tools) {
-    const v = t._meta?.ui?.visibility;
-    assert.ok(!v || v.includes("model"), `${t.name} is callable by the model`);
-    assert.doesNotMatch(t.name, /approve|reject|send_back|close/, "no gate tool over MCP");
-  }
-});
-
-test("the app page is served as an MCP App, speaks the host protocol, and loads nothing from outside", async () => {
+test("the board page is served as an MCP App, and calls only find_work and update_work", async () => {
   const { call } = recorder();
   const body = await read(
     await handleMcp(
@@ -1300,320 +478,208 @@ test("the app page is served as an MCP App, speaks the host protocol, and loads 
   const [page] = body.result.contents;
   assert.equal(page.mimeType, "text/html;profile=mcp-app");
   assert.match(page.text, /ui\/initialize/);
-  assert.match(page.text, /ui\/notifications\/tool-result/);
   assert.match(page.text, /ui\/open-link/);
   assert.doesNotMatch(page.text, /<script[^>]+src=|<link[^>]+href="http/, "self-contained");
+  const called = [...page.text.matchAll(/name: "([a-z_]+)"/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(called)].sort(), ["find_work", "update_work"]);
 });
 
-test("work gathers what needs you, who is on what and what is open into one board", async () => {
-  const task = (id, state, mine = true, extra = {}) => ({
-    id,
-    title: `task ${id}`,
-    state,
-    mine,
-    url: `https://passalong.dev/g/${id}/k`,
-    claim: null,
-    ...extra,
-  });
-  const { call } = recorder({
-    "GET /v1/tasks": {
-      status: 200,
-      text: JSON.stringify({
-        tasks: [
-          task("t1", "review"),
-          task("t2", "ready"),
-          task("t3", "ready"),
-          task("t4", "draft"),
-          task("t5", "done"),
-        ],
-      }),
-    },
-    "GET /v1/working": {
-      status: 200,
-      text: JSON.stringify({
-        working: [
-          {
-            id: "h1",
-            title: "Stream the PDF",
-            kind: "transfer",
-            state: "claimed",
-            by: { name: "Ada", handle: "ada", you: false },
-            note: "halfway",
-            url: "u",
-          },
-        ],
-      }),
-    },
-    "GET /v1/handed_in": {
-      status: 200,
-      text: JSON.stringify({
-        handed_in: [
-          {
-            id: "h2",
-            title: "CSV export",
-            place: "o/r",
-            by: { name: "Bami", handle: "bami" },
-            note: "works",
-            url: "u2",
-          },
-        ],
-      }),
-    },
-    "GET /v1/inbox": {
-      status: 200,
-      text: JSON.stringify({ guides: [{ id: "g1", title: "Fix the header", url: "u3" }] }),
-    },
-  });
-  const body = await read(await handleMcp(callTool("work", {}), call, VOCAB));
-  const board = body.result.structuredContent;
-  assert.deepEqual(board.counts, { needs: 3, working: 1, open: 3, done: 1 });
-  assert.deepEqual(
-    board.needs.map((n) => n.id),
-    ["t1", "h2", "g1"],
-  );
-  assert.equal(board.hub, "https://passalong.dev/hub");
-  assert.match(
-    body.result.content[0].text,
-    /3 need you/,
-    "a text answer for hosts that draw no apps",
-  );
-});
-
-test("the board says what you may give to someone else, and to whom, so the app can offer it", async () => {
-  const { call } = recorder({
-    "GET /v1/tasks": {
-      status: 200,
-      text: JSON.stringify({
-        tasks: [
-          {
-            id: "t1",
-            title: "mine",
-            state: "ready",
-            mine: true,
-            team: "acme",
-            to: "",
-            url: "u",
-            claim: null,
-          },
-          {
-            id: "t2",
-            title: "for me",
-            state: "ready",
-            mine: false,
-            for_me: true,
-            team: "acme",
-            to: "@me",
-            url: "u",
-            claim: null,
-          },
-          {
-            id: "t3",
-            title: "someone else's",
-            state: "ready",
-            mine: false,
-            team: "acme",
-            url: "u",
-            claim: null,
-          },
-          {
-            id: "t4",
-            title: "no team",
-            state: "ready",
-            mine: true,
-            team: "",
-            url: "u",
-            claim: null,
-          },
-        ],
-      }),
-    },
-    "GET /v1/teams/acme": {
-      status: 200,
-      text: JSON.stringify({
-        name: "Acme",
-        members: [
-          { id: "a1", handle: "ada", name: "Ada" },
-          { id: "b2", handle: "", name: "" },
-        ],
-      }),
-    },
-    "GET /v1/teams/acme/groups": {
-      status: 200,
-      text: JSON.stringify({ groups: [{ slug: "web", name: "Web" }] }),
-    },
-  });
-  const board = (await read(await handleMcp(callTool("work", {}), call, VOCAB))).result
-    .structuredContent;
-  const byId = Object.fromEntries(board.ready.map((t) => [t.id, t]));
-  assert.equal(byId.t1.team, "acme");
-  assert.equal(byId.t2.team, "acme", "assigned to you: yours to pass on");
-  assert.equal(byId.t3.team, undefined, "not yours, not offered");
-  assert.equal(byId.t4.team, undefined, "no team, nobody to give it to");
-  assert.deepEqual(
-    board.teams.acme.map((c) => c.to),
-    ["", "@ada", "@b2", "#web"],
-    "everyone, each teammate (by id without an @name), each group",
-  );
-});
-
-test("a vague ask to 'update passalong' is answered by checking what you hold, not by publishing", async () => {
-  const { call } = recorder();
-  const body = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "initialize",
-        params: {
-          protocolVersion: PROTOCOL,
-          capabilities: {},
-          clientInfo: { name: "t", version: "1" },
-        },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  const said = body.result.instructions;
-  // Work already committed on a branch the team can see has not crossed a boundary, and a guide
-  // for it is one more thing to review. Hand in what you hold, or ask; do not publish by default.
-  assert.match(said, /hand_in/);
-  assert.match(said, /ask which/i);
-  assert.match(said, /has not crossed|crossed no boundary|never left/i);
-  const publish = body.result.instructions;
-  assert.match(publish, /before publishing/i);
-});
-
-test("create_upload can mint a link for a file, and says so in the command it hands back", async () => {
-  const link = `https://passalong.dev/v1/uploads/pa_up_${"b".repeat(32)}`;
+test("update_work moves, gives and rewrites, each through its own route", async () => {
   const { call, seen } = recorder({
+    "PUT /v1/work/abc12345": {
+      status: 200,
+      text: '{"url":"https://passalong.dev/w/abc12345/k"}',
+    },
+    "POST /v1/work/abc12345/assign": { status: 200, text: '{"id":"abc12345","to":"#backend"}' },
+    "PATCH /v1/work/abc12345/status": { status: 200, text: '{"ok":true}' },
+  });
+  const r = await tool(call, "update_work", {
+    id: "abc12345",
+    markdown: "---\ntitle: t\nsummary: s\n---\n\nnew\n",
+    to: "#backend",
+    status: "archived",
+  });
+  assert.deepEqual(
+    seen.map((s) => `${s.method} ${s.path}`),
+    ["PUT /v1/work/abc12345", "POST /v1/work/abc12345/assign", "PATCH /v1/work/abc12345/status"],
+  );
+  assert.deepEqual(seen[2].body, { status: "done" });
+  assert.deepEqual(r.structuredContent, {
+    id: "abc12345",
+    url: "https://passalong.dev/w/abc12345/k",
+    to: "#backend",
+    status: "archived",
+  });
+  const team = recorder();
+  await tool(team.call, "update_work", { id: "abc12345", to: "" });
+  assert.deepEqual(team.seen[0].body, { to: "" }, "an empty `to` is the whole team");
+  const nothing = await tool(team.call, "update_work", { id: "abc12345" });
+  assert.equal(nothing.isError, true);
+});
+
+test("a route's refusal is the tool's error, and a non-object answer is one too", async () => {
+  const refusing = recorder({
+    "PATCH /v1/work/abc12345/status": { status: 403, text: '{"message":"only its author"}' },
+  });
+  const r = await tool(refusing.call, "update_work", { id: "abc12345", status: "ready" });
+  assert.equal(r.isError, true);
+  assert.match(textOf(r), /only its author/);
+  const odd = recorder({ "GET /v1/projects": { status: 200, text: "[]" } });
+  assert.equal((await tool(odd.call, "find_projects")).isError, true);
+});
+
+// ---- projects, documents and files --------------------------------------------------------------
+
+test("projects are found, made and changed through the project routes", async () => {
+  const { call, seen } = recorder({
+    "POST /v1/projects": { status: 201, text: '{"project":{"id":"f1"},"space":"private"}' },
+    "PATCH /v1/projects/f1": { status: 200, text: '{"project":{"id":"f1"}}' },
+  });
+  await tool(call, "find_projects", { query: "billing" });
+  await tool(call, "find_projects", { id: "f1" });
+  await tool(call, "save_project", { title: "Billing", description: "Payments", color: "blue" });
+  await tool(call, "save_project", { id: "f1", parent: "" });
+  assert.deepEqual(
+    seen.map((s) => `${s.method} ${s.path}`),
+    [
+      "GET /v1/projects?q=billing",
+      "GET /v1/projects/f1",
+      "POST /v1/projects",
+      "PATCH /v1/projects/f1",
+    ],
+  );
+  assert.deepEqual(seen[3].body, { parent: "" }, "only what was said changes");
+  const moved = await tool(call, "save_project", { id: "f1", team: "khaime" });
+  assert.equal(moved.isError, true, "a project's space does not change");
+  assert.equal((await tool(call, "save_project", {})).isError, true, "a new one needs a title");
+});
+
+test("documents are read with their history, and saved, renamed and moved with their version", async () => {
+  const { call, seen } = recorder();
+  const project = "f1";
+  await tool(call, "read_document", { project, document: "d1" });
+  await tool(call, "read_document", { project, document: "d1", history: true });
+  await tool(call, "read_document", { project, document: "d1", version: 3 });
+  await tool(call, "save_document", { project, name: "Log", body: "- today" });
+  await tool(call, "save_document", { project, document: "d1", body: "new", version: 4 });
+  await tool(call, "save_document", { project, document: "d1", name: "Billing", move_to: "f2" });
+  await tool(call, "delete_document", { project, document: "d1" });
+  const doc = "/v1/projects/f1/documents/d1";
+  assert.deepEqual(
+    seen.map((s) => `${s.method} ${s.path}`),
+    [
+      `GET ${doc}`,
+      `GET ${doc}/revisions`,
+      `GET ${doc}/revisions/3`,
+      "POST /v1/projects/f1/documents",
+      `PUT ${doc}`,
+      `PATCH ${doc}`,
+      `DELETE ${doc}`,
+    ],
+  );
+  assert.deepEqual(seen[4].body, { version: 4, body: "new" });
+  assert.deepEqual(seen[5].body, { name: "Billing", project: "f2" });
+  const blind = await tool(call, "save_document", { project, document: "d1", body: "x" });
+  assert.equal(blind.isError, true, "an edit without the version read is refused here");
+  assert.match(textOf(blind), /version/);
+});
+
+test("a project's picture reaches the agent as an image, and files are removed by one route", async () => {
+  const { call, seen } = recorder({
+    "GET /v1/projects/f1/files/a1/agent": {
+      status: 200,
+      text: JSON.stringify({ id: "a1", name: "screen.png", type: "image/png", data: "iVBORw==" }),
+    },
+  });
+  const r = await tool(call, "read_file", { project: "f1", file: "a1" });
+  assert.deepEqual(r.content[1], { type: "image", data: "iVBORw==", mimeType: "image/png" });
+  assert.equal(r.structuredContent.data, undefined, "the bytes are not also in the metadata");
+  await tool(call, "delete_file", { project: "f1", file: "a1" });
+  assert.equal(seen[1].method, "DELETE");
+  assert.equal(seen[1].path, "/v1/projects/f1/files/a1");
+});
+
+test("add_file with no file mints a one-time link, for work or for a project", async () => {
+  const minted = {
     "POST /v1/uploads": {
       status: 201,
-      text: JSON.stringify({ upload_url: link, expires: "2026-09-15T12:10:00.000Z", kind: "file" }),
-    },
-  });
-  const body = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 13,
-        method: "tools/call",
-        params: { name: "create_upload", arguments: { name: "run.log", kind: "file" } },
+      text: JSON.stringify({
+        upload_url: "https://passalong.dev/v1/uploads/up_x",
+        expires: "2026-10-29T10:10:00Z",
       }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.deepEqual(seen[0].body, { name: "run.log", kind: "file" });
-  assert.equal(
-    body.result.structuredContent.command,
-    `curl -sS --fail-with-body -X PUT --data-binary @FILE_PATH '${link}'`,
-  );
-  assert.match(body.result.content[0].text, /FILE_PATH/);
-});
-
-test("the folder removals each reach their one route, and a refusal comes back as an error", async () => {
-  const cases = [
-    [
-      "delete_folder_document",
-      { folder: "f1", document: "d1" },
-      "DELETE /v1/folders/f1/documents/d1",
-    ],
-    ["delete_folder_asset", { folder: "f1", asset: "a1" }, "DELETE /v1/folders/f1/assets/a1"],
-    ["unlink_folder_guide", { folder: "f1", guide: "g1" }, "DELETE /v1/folders/f1/guides/g1"],
-  ];
-  for (const [name, args, route] of cases) {
-    const { call, seen } = recorder({ [route]: { status: 200, text: '{"removed":true}' } });
-    const body = await read(
-      await handleMcp(
-        rpc({ jsonrpc: "2.0", id: 30, method: "tools/call", params: { name, arguments: args } }),
-        call,
-        VOCAB,
-      ),
-    );
-    assert.deepEqual(
-      seen.map((s) => `${s.method} ${s.path}`),
-      [route],
-      name,
-    );
-    assert.equal(body.result.structuredContent.removed, true, name);
-  }
-  // There is deliberately no tool for DELETE /v1/folders/:id: a whole tree is a person's call.
-  const { call } = recorder({
-    "DELETE /v1/folders/f1/documents/nope": {
-      status: 404,
-      text: '{"message":"That document isn\'t in this folder."}',
     },
+  };
+  const { call, seen } = recorder(minted);
+  const r = await tool(call, "add_file", { name: "error.log", kind: "file" });
+  assert.deepEqual(seen[0].body, { name: "error.log", kind: "file" });
+  assert.match(
+    r.structuredContent.command,
+    /curl .*-X PUT --data-binary @FILE_PATH 'https:\/\/passalong\.dev\/v1\/uploads\/up_x'/,
+  );
+  await tool(call, "add_file", { project: "f1", name: "brief.pdf" });
+  assert.deepEqual(seen[1].body, { project: "f1", name: "brief.pdf" });
+  const refusing = recorder({ "POST /v1/uploads": { status: 429, text: "Too many upload links" } });
+  const no = await tool(refusing.call, "add_file", {});
+  assert.equal(no.isError, true);
+  assert.match(textOf(no), /Too many upload links/);
+});
+
+test("add_file stores a picture as one, anything else as a download, and a project's in it", async () => {
+  await withDownload(new Uint8Array([137, 80, 78, 71]), "image/png", async () => {
+    const { call, seen } = recorder({
+      "POST /v1/shots": {
+        status: 201,
+        text: JSON.stringify({ shot: { id: "s1", url: "https://passalong.dev/v1/shots/s1" } }),
+      },
+    });
+    const r = await tool(call, "add_file", { file: FILE });
+    assert.equal(seen[0].raw.contentType, "image/png");
+    assert.equal(seen[0].raw.headers["x-shot-name"], "shot.png");
+    assert.equal(seen[0].body.byteLength, 4, "the bytes go up, not a description of them");
+    assert.equal(r.structuredContent.markdown, "![shot.png](https://passalong.dev/v1/shots/s1)");
+    await tool(call, "add_file", { file: FILE, project: "f1" });
+    assert.equal(seen[1].path, "/v1/projects/f1/files");
+    assert.equal(seen[1].raw.headers["x-file-name"], "shot.png");
   });
-  const refused = await read(
-    await handleMcp(
-      rpc({
-        jsonrpc: "2.0",
-        id: 31,
-        method: "tools/call",
-        params: { name: "delete_folder_document", arguments: { folder: "f1", document: "nope" } },
-      }),
-      call,
-      VOCAB,
-    ),
-  );
-  assert.equal(refused.result.isError, true);
-  assert.match(refused.result.content[0].text, /isn't in this folder/);
+  await withDownload(new Uint8Array([37, 80, 68, 70]), "application/pdf", async () => {
+    const { call, seen } = recorder({
+      "POST /v1/attachments": {
+        status: 201,
+        text: JSON.stringify({
+          attachment: { id: "t1", url: "https://passalong.dev/v1/attachments/t1" },
+        }),
+      },
+    });
+    const r = await tool(call, "add_file", { file: { ...FILE, file_name: "spec.pdf" } });
+    assert.equal(seen[0].path, "/v1/attachments");
+    assert.equal(
+      r.structuredContent.markdown,
+      "[spec.pdf](https://passalong.dev/v1/attachments/t1)",
+    );
+  });
 });
 
-test("no agent tool deletes a whole folder", async () => {
-  const { call } = recorder();
-  const body = await read(
-    await handleMcp(rpc({ jsonrpc: "2.0", id: 32, method: "tools/list", params: {} }), call, VOCAB),
-  );
-  assert.ok(!body.result.tools.some((t) => t.name === "delete_folder"));
-});
-
-test("an agent can find folders by words or by guide, rename a document and read its history", async () => {
-  const cases = [
-    ["list_folders", { query: "web dashboard" }, "GET /v1/folders?q=web+dashboard"],
-    ["list_folders", { guide: "g1", scope: "mine" }, "GET /v1/folders?scope=mine&guide=g1"],
-    ["list_folders", {}, "GET /v1/folders"],
-    [
-      "rename_folder_document",
-      { folder: "f1", document: "d1", name: "Script v2" },
-      "PATCH /v1/folders/f1/documents/d1",
-    ],
-    [
-      "move_folder_document",
-      { folder: "f1", document: "d1", to: "f2" },
-      "PATCH /v1/folders/f1/documents/d1",
-    ],
-    [
-      "get_folder_document_history",
-      { folder: "f1", document: "d1" },
-      "GET /v1/folders/f1/documents/d1/revisions",
-    ],
-    [
-      "get_folder_document_history",
-      { folder: "f1", document: "d1", version: 2 },
-      "GET /v1/folders/f1/documents/d1/revisions/2",
-    ],
-  ];
-  for (const [name, args, route] of cases) {
-    const answer = name.endsWith("_folder_document")
-      ? '{"document":{"id":"d1"}}'
-      : '{"folders":[]}';
-    const { call, seen } = recorder({ [route.split("?")[0]]: { status: 200, text: answer } });
-    const body = await read(
-      await handleMcp(
-        rpc({ jsonrpc: "2.0", id: 40, method: "tools/call", params: { name, arguments: args } }),
-        call,
-        VOCAB,
-      ),
-    );
-    assert.deepEqual(
-      seen.map((s) => `${s.method} ${s.path}`),
-      [route],
-      name,
-    );
-    assert.notEqual(body.result.isError, true, name);
-    if (name === "rename_folder_document") assert.deepEqual(seen[0].body, { name: "Script v2" });
-    if (name === "move_folder_document") assert.deepEqual(seen[0].body, { folder: "f2" });
+test("add_file refuses a URL only the worker could reach, before anything is sent", async () => {
+  const { call, seen } = recorder();
+  for (const url of [
+    "http://files.example.com/a",
+    "https://localhost/a",
+    "https://127.0.0.1/a",
+    "https://10.0.0.4/a",
+    "https://[::1]/a",
+  ]) {
+    const r = await tool(call, "add_file", { file: { ...FILE, download_url: url } });
+    assert.equal(r.isError, true, `${url} should be refused`);
+    assert.match(textOf(r), /public https URL[\s\S]*add_file with no `file`/);
   }
+  assert.deepEqual(seen, []);
+});
+
+test("the route refuses a file, not this server", async () => {
+  await withDownload(new Uint8Array([1, 2]), "image/png", async () => {
+    const { call } = recorder({ "POST /v1/shots": { status: 415, text: "not an image" } });
+    const r = await tool(call, "add_file", { file: FILE });
+    assert.equal(r.isError, true);
+    assert.match(textOf(r), /not an image/);
+  });
 });

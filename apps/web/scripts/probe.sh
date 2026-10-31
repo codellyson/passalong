@@ -6,23 +6,24 @@
 #   3. a <link rel=stylesheet>         — the one stylesheet, extracted to its own hashed file
 #   4. the markup still server-rendered — noScripts drops the JS, not the HTML
 #
-# Together those are what let a page keep `default-src 'none'` with no `script-src` at all. Guide
+# Together those are what let a page keep `default-src 'none'` with no `script-src` at all. Work
 # pages render markdown a stranger wrote and that CSP is the only thing making it safe, so if this
-# stops passing, `/g/**` cannot move.
+# stops passing, `/w/**` cannot move.
 #
 #   sh scripts/probe.sh https://passalong-web.<subdomain>.workers.dev [path]
 #
-# It runs against the landing page by default — a real page under the real route rule, rather than
-# a fixture that could drift from one. Pass a path to check another, e.g. a guide page:
+# It runs against /docs by default — a real page under the real route rule, rather than a fixture
+# that could drift from one. (The landing runs script now, under the hub's nonce policy.) Pass a
+# path to check another, e.g. a work page:
 #
-#   sh scripts/probe.sh https://passalong.dev /g/<id>/<key>
+#   sh scripts/probe.sh https://passalong.dev /w/<id>/<key>
 #
 # `nuxt dev` cannot answer any of this: a development build ships scripts and inlines styles
 # whatever the config says.
 set -eu
 
 origin=${1:?usage: probe.sh <origin> [path]}
-path=${2:-/}
+path=${2:-/docs}
 html=$(curl -fsS "$origin$path")
 fail=0
 
@@ -56,7 +57,7 @@ esac
 # brand link is the marker because every page under this rule carries one, so the check does not
 # have to know which page it was pointed at.
 case $html in
-  *'class="brand"'*) check ok "markup is server-rendered" ;;
+  *'class="brand'*) check ok "markup is server-rendered" ;;
   *) check no "markup is server-rendered" ;;
 esac
 

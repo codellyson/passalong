@@ -4,7 +4,7 @@
 
   The choices are the team as a whole, each teammate, and each group. A teammate with no @name is
   picked by their account id, which the server accepts as an address. Choosing
-  calls POST /v1/guides/:id/assign; whoever held it and is left out has it taken back and is told,
+  calls POST /v1/work/:id/assign; whoever held it and is left out has it taken back and is told,
   which the note under the list says before anyone presses anything.
 -->
 <script setup lang="ts">
@@ -12,7 +12,8 @@ import { useQuery } from "@tanstack/vue-query";
 import type { TeamDetail } from "~/types/hub";
 
 const props = defineProps<{ id: string; team: string; to?: string }>();
-const emit = defineEmits<{ done: [] }>();
+/** `done` carries the address chosen once it is given, and nothing when it was not. */
+const emit = defineEmits<{ done: [to?: string] }>();
 const { api, onAssign, signedIn } = useHub();
 
 const detail = useQuery({
@@ -56,9 +57,9 @@ const busy = ref(false);
 async function pick(to: string) {
   if (to === (props.to ?? "") || busy.value) return emit("done");
   busy.value = true;
-  await onAssign(props.id, to);
+  const ok = await onAssign(props.id, to);
   busy.value = false;
-  emit("done");
+  emit("done", ok ? to : undefined);
 }
 </script>
 

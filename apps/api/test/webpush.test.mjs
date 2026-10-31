@@ -73,7 +73,7 @@ async function decrypt(b, body) {
 
 test("the browser can decrypt what is sent, and nothing about it is in the clear", async () => {
   const b = await browser();
-  const message = JSON.stringify({ title: "Bo Adeyemi handed it in", url: "/hub/g/ordpaid1" });
+  const message = JSON.stringify({ title: "Bo Adeyemi handed it in", url: "/hub/w/ordpaid1" });
   const body = await encrypt(b.sub, enc.encode(message));
   assert.ok(!new TextDecoder().decode(body).includes("handed"), "the sentence is not readable");
   const out = await decrypt(b, body);

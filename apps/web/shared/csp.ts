@@ -9,8 +9,8 @@ const BASE = {
 };
 
 /**
- * Guide pages and the landing: no script at all. This is `VIEW_HEADERS` from apps/api, unchanged,
- * and it is the product's one real security property — a guide page renders markdown a stranger
+ * Work pages and the prose pages (docs, /learn, the blog): no script at all. This is `VIEW_HEADERS` from apps/api, unchanged,
+ * and it is the product's one real security property — a work page renders markdown a stranger
  * wrote, and there is no sanitiser behind this, only the CSP. Pair it with the `noScripts` route
  * rule; without that Nuxt emits a bootstrap script the policy will (correctly) refuse.
  */
@@ -41,12 +41,14 @@ export const hubHeaders = (nonce: string, dev = false) => ({
     // header doing its job. The build is what ships, and it is checked by scripts/probe.sh.
     `style-src 'self'${dev ? " 'unsafe-inline'" : ""}; ` +
     // `ws:` is the dev server's HMR socket; nothing else on the page opens one.
-    // Private folder images are fetched with the account's token, then shown from an in-memory
+    // Private project images are fetched with the account's token, then shown from an in-memory
     // blob URL. The URL never exposes the credential or gives the image a public address.
     `font-src 'self'; connect-src 'self'${dev ? " ws:" : ""}; img-src 'self' blob:; ` +
-    // A guide's page in the hub shows the guide by framing its own share page, which runs no
+    // A piece of work's page in the hub shows the work by framing its own share page, which runs no
     // script and carries VIEW_HEADERS. That is the only frame, and it is this origin: the hub never
     // turns a stranger's markdown into its own HTML, because the hub runs script.
     "frame-src 'self'; " +
+    // The landing plays the launch film from this origin's own files; nothing streams from elsewhere.
+    "media-src 'self'; " +
     "manifest-src 'self'; base-uri 'none'; form-action 'none'",
 });

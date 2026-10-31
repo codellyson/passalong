@@ -1,7 +1,7 @@
 ---
 title: How to write a task an AI coding agent can finish
 date: 2026-10-03
-description: Most agent tasks fail before the agent starts. How to size a task, what context to give, and how to write acceptance an agent can check itself against, with a template and a before-and-after.
+description: Most agent tasks fail before the agent starts. How to size a task, what context to give and how to say what done means, with a before-and-after.
 draft: false
 ---
 
@@ -61,6 +61,10 @@ That is a separate task.
 It took five minutes longer to write. It will save the agent an hour of guessing and save you a
 review of a change you did not want.
 
+The headings are a habit, not a form. A two-line task with a screenshot can be complete, and a
+heading with nothing useful under it is noise. What matters is that each of the things below is
+said when it applies.
+
 ## Say what, not how
 
 The **Goal** is what is true when the work is done. It is not a list of steps.
@@ -112,7 +116,7 @@ be something a person or a script can check, with an answer nobody can argue wit
 you will review against, so it is worth getting right.
 
 Good acceptance names the observable result and, where it can, the command that shows it. What that
-looks like depends on the kind of work:
+looks like depends on the sort of work:
 
 **A bug fix**: a test that fails before and passes after. (For reporting the bug itself, see
 [A bug report template for AI coding agents](/learn/bug-report-template-for-ai-agents).)
@@ -204,24 +208,29 @@ Read the task once as if you had never seen the project:
 
 ## Writing tasks with Passalong
 
-[Passalong](/) uses exactly this shape. A task is a guide with Goal, Context, Constraints,
-Acceptance and Out of scope ([the format](/docs/guide-format)), and Acceptance is required: a task
-without it is refused. When an agent hands the work in, it attaches evidence against each
-Acceptance line, and you review line by line, sending back only the lines that are not met.
+In [Passalong](/), a task is a piece of work: a title, a summary of a sentence or two that a person
+can read in a list, and a body in whatever shape fits ([the format](/docs/work-format)). Nothing
+requires the headings above, and there are no kinds: an agent reads what you wrote and works out
+what done means. Writing "done when" lines is still the best thing you can do for it. When an agent
+hands the work in, it attaches evidence for each thing the work asked for. Finishing is final, and
+anyone on the team can **Reopen** it with the reason if something is not met.
 
-With Passalong connected to your tools, an agent can run the whole loop itself: file the bugs it
-finds, write a task, take work that is waiting, report progress, hand it in with evidence, and pass
-the next piece to another agent or a teammate. Nothing gets copied between tools by hand. What stays
-with you is the decision: you approve the work or send it back.
+Context that every task on a product would repeat belongs in the project's documents rather than in
+each task: how the product is built, the words the team uses, what was decided. Agents read them,
+and write back what they learn.
 
-Bigger work can be split into a plan of tasks, each waiting on the ones it depends on, so an agent
-only picks up a step when the steps before it are approved.
+With Passalong connected to your tools, an agent can run the whole loop itself: write down the bugs
+it finds, take work that is waiting, report progress, hand it in with evidence, and write what it
+learned into the project's documents. Nothing gets copied between tools by hand.
 
-Write a task from the command line:
+Bigger work can be written down as several pieces at once, each waiting on the ones it depends on,
+so an agent only picks up a step when the steps before it are Done.
+
+Write work down from the command line:
 
 ```sh
-passalong task "Users stay signed in for 7 days"
+passalong new "Users stay signed in for 7 days"
 ```
 
-Or ask your agent, in Claude Code, Codex, ChatGPT or Claude, to write it up as a Passalong task.
+Or ask your agent, in Claude Code, Codex, ChatGPT or Claude, to write it down as Passalong work.
 [Connect your tools](/connect) to get started.

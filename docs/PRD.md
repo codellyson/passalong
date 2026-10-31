@@ -1,168 +1,137 @@
-# PRD: Passalong (formerly Relay)
+# PRD: Passalong
 
-**Version:** 0.1 draft  **Author:** Lukman Isiaka  **Date:** September 2026  **Status:** Draft for review
+**Author:** Lukman Isiaka  **Version:** 1.0  **Date:** October 2026
+
+What the product is for and who pays for it. `docs/LOOP.md` is the direction and `docs/WORK.md`
+the shape of work; this page keeps the intent, the principles and the numbers they are measured by.
+Section numbers are cited from code and other docs, so they stay put.
 
 ## 1. One-liner
 
-Passalong lets a developer capture an implementation they just finished in one context and hand it to another context (a different repo, machine, agent session, or teammate) in a form an AI agent can act on directly.
+Passalong keeps a team's work and what it knows, for people and their agents: work someone must
+still do, and projects holding the documents and files that work needs.
 
 ## 2. Problem
 
-Developers increasingly work across many contexts in parallel: multiple repos, multiple products, multiple agent sessions, sometimes multiple machines. Solutions figured out in one context regularly need to be implemented somewhere else. Today that transfer happens through Slack messages, memory, copy-pasted snippets, or re-explaining the problem to a fresh agent session from scratch.
-
-This is lossy and slow. The original session contained the full reasoning: what was tried, what failed, which decisions were made and why, and how success was verified. Almost none of that survives the transfer. The receiving context (whether it is the same person five minutes later or a teammate on a different codebase) starts close to zero.
-
-Repo docs do not solve this. A `docs/` folder is scoped to one repo and written for permanence. The artifact needed here is scoped to a transfer moment and written for execution: portable, structured, and consumable by an agent on the receiving side.
+Work crosses contexts all day: from a customer to the team, from one person to another, from a
+person to an agent and back, from one repo or machine to the next. Today it crosses through chat
+messages, memory and re-explaining the problem to a fresh agent session. Almost nothing survives:
+what was asked, what was tried, what was decided and how it was checked. And what was learned along
+the way lives in one session's transcript, where nobody finds it again.
 
 ## 3. Insight
 
-In the age of AI agents, an implementation guide is no longer documentation. It is executable context. A well structured transfer guide can be pulled into a receiving agent's context via MCP and acted on immediately. The product is not a knowledge base. It is a baton pass between contexts.
+With agents, work written down is executable. A piece of work an agent can read through MCP is
+acted on at once, and what it learns can be written back where the next reader looks. The product
+is not a knowledge base and not a ticket tracker: it is the place work passes through, and the
+project documents it leaves behind.
 
 ## 4. Who it is for
 
-**v1 persona:** the multi-context solo developer. Someone running several products, services, or client projects at once. The sender and receiver are frequently the same person in different sessions. No team required to get value on day one.
+The small team (2 to 15 people) whose agents (Claude Code, Codex, ChatGPT, Claude, Cursor) are part
+of the daily work, and the people around them who do not run agents: testers, designers, support.
+A person working alone gets value on day one, but the team is what Passalong is sold to (§11).
 
-**v2 persona:** the small dev team (2 to 15 engineers). Teams where knowledge transfer currently happens over chat, and where agents (Claude Code, Cursor, etc.) are part of the daily workflow.
+## 5. Core loop
 
-## 5. Core loop (v1)
+1. **Something comes in.** A teammate's words in the hub's box, an email, a phone's share sheet, a
+   webhook, a customer's message, or an agent's `create_work`. The reader (Passalong's own model
+   call) gives it a title, a summary and the project and group it is for.
+2. **Someone takes it.** A person ("I'll do this") or an agent (`take`). One holder at a time; the
+   author sees who has it.
+3. **It moves.** Progress notes as it goes; `ask` when the holder needs the person, who replies.
+4. **It finishes.** A hand-in with proof a person can look at puts it in Done. Reopen brings it back
+   with the reason.
+5. **What was learned is kept.** The agent writes it into the project's documents, where everyone
+   finds it.
 
-1. **Finish work in an agent session.** Developer solves something non-trivial in Claude Code (or any agent tool).
-2. **Capture.** Run `passalong share`. The CLI (or an agent skill/hook) distills the session into a draft transfer guide: problem, solution shape, decisions and rationale, concrete steps with context-specific parts flagged, and verification steps.
-3. **Trim and publish.** Developer reviews the draft, cuts noise, publishes. The guide gets a short ID and is synced.
-4. **Pull on the other side.** In the receiving context, run `passalong pull <id>` or let the receiving agent fetch it via the Passalong MCP server. The guide lands in the agent's context and the agent implements, adapting the flagged context-specific parts.
-5. **Close.** Say whether it worked. That verdict is the close — an author lifecycle on top of it (`consumed`, `promoted`) was cut, because it said the same thing twice and the pull count already reports how well-travelled a guide is.
+Passalong runs no agent of its own on a team's work: teams bring their own.
 
-The demo moment: solve a bug in service A, run one command, open a session in service B, and the agent there already knows the whole story.
+## 6. The artifact
 
-## 6. The artifact: what a transfer guide contains
+Work is plain markdown with frontmatter: a `title`, a `summary` a person can read (400 characters at
+most) and whatever body the next reader needs. No kinds, sections or templates. `status` is
+`draft`, `ready` or `done`; `tags`, `parent:` and `blocked_by:` are optional. Pictures and files
+travel with it. Project documents are markdown too, versioned so a person's and an agent's edits
+cannot silently replace each other.
 
-Plain markdown with frontmatter. No proprietary format, fully exportable, git-friendly.
+## 7. Product surface
 
-**Frontmatter:**
-- id, title, created, author
-- source_context: repo/product where it originated
-- status: draft, published (`consumed` and `promoted` are legacy: accepted, never set)
-- stack_assumptions: e.g. Postgres, Next.js 15, Paystack v2 API
-- tags
+- **The hub** (`/hub`): Needs you, the team board (Draft, To do, In progress, Done), projects with
+  their documents, files, work and history, Support, and the box for writing work.
+- **MCP**, stdio (`passalong mcp`) and hosted (`/v1/mcp`): seventeen tools over work, projects,
+  documents and files.
+- **The CLI** (`passalong`): the same acts from a terminal, and `passalong work` to run an agent on
+  ready work.
+- **Share links** (`/w/:id/:key`, `/p/:id/:key`): a read-only page for anyone holding the link,
+  running no script.
 
-**Body sections:**
-- **Problem.** What was broken or needed, in two or three sentences.
-- **Solution shape.** The approach at a high level, before any code.
-- **Decisions and rationale.** What was chosen, what was rejected, and why. This is what lets the receiving context adapt instead of blindly copying.
-- **Steps.** Concrete implementation steps. Context-specific parts are explicitly marked (e.g. "ASSUMES: Postgres. If MySQL, adjust X").
-- **Verification.** How to confirm it worked: commands, expected outputs, test cases.
-- **Gotchas.** Things that failed along the way and why. Often the highest-value section.
+## 8. Teams
 
-## 7. Product surface (v1)
-
-**CLI (`passalong`):**
-- `passalong share` - capture from the current session/directory, open draft for review
-- `passalong pull <id>` - fetch a guide into the current directory/context
-- `passalong list` - list your guides
-- `passalong open <id>` - view in terminal or browser
-
-**MCP server:** Exposes `search_guides`, `get_guide`, and `publish_guide` tools so any MCP-capable agent can pull and create guides without leaving the session. This is the strategic rail: it makes Passalong tool-agnostic across Claude Code, Cursor, Windsurf, and whatever comes next.
-
-**Capture skill/hook for Claude Code:** A skill that, when invoked at session end, distills the transcript into the guide structure above. This is the cold start killer: guides are created as a byproduct of work, not as a writing chore.
-
-**Thin web view:** Read-only rendering of guides with a shareable link. No editor at launch. Editing happens in your own tools on the markdown.
-
-## 8. v2: team coordination
-
-- Team workspaces with invite by email
-- Guides addressed to a person or team ("handoff to X"), with notification
-- Pull activity visible to the sender (did the transfer land?)
-- Team-wide MCP endpoint so every member's agents can search the team's guides
-- Browser task workflow for people who do not have an agent: take, progress, and hand in
-- A hub overview with counts for work needing attention, in progress, open, and done
-
-Team-wide assignment and channel announcements are already available: an author can assign work
-to everyone in a team, and configured team channels receive one announcement per event. Individual
-in-app notifications remain addressed to each member so each person can read and dismiss their own.
-
-Explicitly out of scope for v2: analytics dashboards, rich text editor, comments/threads, permissions beyond workspace membership.
-
-Removed 2026-09-11: a **promotion flow** was listed here — guides that keep getting pulled graduating into a small set of maintained references. It was cut during M2 for the reason §5 already records: the pull count on a guide says how travelled it is, and an author lifecycle on top of that says the same thing twice. Nothing reads `promoted`, the board has no bucket for it, and `passalong promote` prints its own deprecation notice. The line stayed on this list after the thing it described was removed, which made a deliberate decision read as an outstanding gap.
-
-Added 2026-09-04, after asking where a tester's output goes: a **verdict** (`works` / `broken` with a one-line reason) is a first-class event, separate from the guide's status. `consumed` means implemented; a verdict means it actually runs. It is capped at one line per person per guide precisely so it stays a verdict and does not become the comment thread excluded above. This also widens the persona: testers and QA receive guides, and the Verification and Gotchas sections were already written for them.
+A team sees one board and anyone on it moves the work. Work is addressed to a person (`@handle`),
+a group (`#group`) or the whole team, and whoever it is for is told: in the hub, by push, by mail.
+Out of scope: analytics dashboards, comment threads (a thread on work is only between whoever holds
+it and the people it is for), and permissions beyond team membership and ownership.
 
 ## 9. Positioning
 
-**Added 2026-10-09: project folders.** Some work takes more than one transfer moment. A tutorial
-video, for example, needs a script, screen captures and source material that a person may edit and
-an agent may use across several assignments. Nestable folders group those Markdown documents and
-assets, with guides linked to the work they ask for. A color can mark a group, and people can
-select folders for bulk organization. The folder is durable project context; each
-guide still carries one specific handoff, task or bug and keeps its plain-markdown format. Folder
-documents have revisions so a person's and an agent's edits cannot silently overwrite each other.
+**What Passalong is not:** a wiki, a docs site, a replacement for `docs/` in a repo, a note-taking
+app, a Trello for agents, or a host for agents.
 
-**What Passalong is not:** a wiki, a docs site, a replacement for `docs/` in a repo, a note-taking app.
+**What it competes with in practice:** chat messages to teammates and to yourself, pasted snippets,
+and re-prompting agents from scratch.
 
-**What it competes with in practice:** Slack messages to teammates, messages to self, copy-pasted snippets, and re-prompting agents from scratch.
+**Why not just git or an issue tracker?** Git is one repo and has no way into an agent's context
+across tools. A tracker holds tickets for people to read; Passalong holds work an agent takes and
+finishes with proof, and the documents it learned from.
 
-**Why not just git?** Git is scoped to one repo and has no delivery mechanism into agent context across repos and tools. Passalong's job is the crossing: repo to repo, machine to machine, person to person, agent to agent.
+## 10. Principles
 
-**Why now:** agents made implementation knowledge executable. MCP made cross-tool delivery possible. Neither was true 18 months ago.
-
-## 10. Principles (Just X DNA)
-
-- **No lock-in.** Guides are plain markdown. `passalong export` dumps everything. Deleting your account leaves you with all your content.
-- **Server-first, nothing left behind.** Revised 2026-10-14 (was "Local-first spirit"). Guides live on the server, and the CLI keeps no copy of one on the machine unless somebody asks — `pull --save` for one file, `passalong export` for all of them. Local copies were written by every share, pull and take; they went stale (a pull served one over the author's later edit) and piled up, 314 on one machine. An agent does not work without the network anyway, so offline use bought nothing.
-- **Zero-friction start.** Install, `passalong login`, `passalong share`, done. Sharing needs an account (revised 2026-10-14: it used to work with none, against the local store); `passalong login` approves in the browser in one step. Updated 2026-09-05: email + password sign-in exists for people who arrive through a browser, but the CLI still mints an anonymous account with no email, no password and no forms. Both kinds of account are the same account; one has simply been claimed.
-- **Agent-native.** Every feature must answer: can an agent do this without a human clicking through a UI?
+- **No lock-in.** Work and documents are plain markdown. `passalong export` dumps everything.
+  Deleting your account leaves you with all your content.
+- **Server-first, nothing left behind.** Work lives on the server; nothing is kept on the machine
+  unless somebody asks (`take --save`, `export`).
+- **Zero-friction start.** Install, `passalong login` (approved in the browser), write work.
+  Invites are accepted in the browser, so a teammate needs no terminal.
+- **Agent-native.** Every feature must answer: can an agent do this without a human clicking
+  through a UI? The one deliberate exception is mail to a customer, which only a person sends.
 
 ## 11. Monetization
 
-- **Free:** solo, limited synced guides (e.g. 25 active), personal MCP endpoint. (Unlimited local guides went with the local store, 2026-10-14.)
-- **Team (paid, per seat):** shared workspace, team MCP endpoint, handoff/notification flow, unlimited synced guides.
-- **Target buyer:** the eng lead or senior dev tired of re-explaining. Land via one enthusiastic dev on the free tier, expand to team.
+- **Free:** a ceiling of `FREE_SYNC_LIMIT` (25) active pieces of work, open to new accounts while
+  `FREE_SIGNUP` is `"1"`. Accounts from before the free tier changed keep what they had.
+- **Solo:** $5 a month, no ceiling for one person.
+- **Team:** $20 a month for up to ten people. A seat lifts whoever sits in it, paid for or not.
+- **Target buyer:** the lead tired of re-explaining. Land with one person, expand to the team.
 
-Built 2026-09-11: **Solo is a real plan.** Every subscription route was team-scoped and owner-only, so an individual who wanted to pay had to invent a team of one — which is also why the free tier could not be closed, since a new account had nowhere to go. `POST /v1/subscribe` buys it and `account.plan` holds it.
-
-Decided 2026-09-11: **the free tier closes to new accounts, and every account that already existed keeps it.** Migration 0016 marks them; `FREE_SIGNUP` is the switch and it is **closed** in production as of 2026-09-11, now that Solo gives an individual somewhere to buy. It still defaults to open in code, so a deployment that does not set it keeps the old behaviour rather than locking people out by omission. What stays free for everybody is the local store — the CLI writes and reads guides with no account and no ceiling, which is §10 and is not a concession. *(Superseded 2026-10-14: there is no local store of guides any more, so nothing is free without an account. What survives of the promise is export: every guide you can read, as plain markdown, whatever your plan.)*
-
-**Reversed 2026-10-08: the free tier is open again.** `FREE_SIGNUP` is `"1"` in production, so a new account syncs up to `FREE_SYNC_LIMIT` (25) guides with no plan. Closing it made a new account's first task fail with "Syncing guides needs a plan" while Settings said paid plans were not available, and nobody reached the point of watching work move. Solo and Team are unchanged; the switch closes again by setting it to `"0"`.
-
-Built 2026-09-23: **a plan can be given, and every gift ends.** Comping a design partner or putting a support problem right was an UPDATE typed against production, which recorded nothing — not who gave it, not why, and above all not until when, so a comp meant to last a quarter lasted until somebody happened to look. `plan_until` sits beside `plan` and is read on every request (`planNow()` in quota.ts), so a gift stops on its date with nothing having to run on a clock; `plan_grant` keeps the record of the act, which no request reads and every later question needs. Two rules hold it together: **a gift never touches a subscription** — not when given, not when revoked, because a date an operator typed must never end a plan somebody is being charged for — and **an expired gift is `lapsed`**, the word that already means "had one, has not now" and already falls back to whatever the account would have had anyway. Who may give one is a super; who may make a super is only an account the deployment itself names in `ADMIN_ACCOUNTS`. Being a super is permission to run Passalong, not to decide who else may — so an admin session somebody walks up to cannot leave a permanent second owner behind, and changing who may is changing the deployment, which is the one act no session can perform. A super who tries is told exactly that; anybody else gets the 404 that says nothing. Where the list is unset, every operator route answers 404 to everybody. `passalong gift @ada --until 2027-09-23 --why "design partner"`, `passalong gifts`, `passalong ungift <id>`.
-
-Built 2026-09-23: **who runs the product is a role, and admin is its own account.** `ADMIN_ACCOUNTS` gated the operator routes, which meant adding or removing an operator was editing a secret and redeploying, the list said nothing about whose ids those were, and nothing recorded when the power was given or taken. `account.role` is `''` for everybody and `'super'` for the few, with `role_since` and `role_by` beside it (migration 0027); the secret narrows to what a column cannot do — making the first super on a fresh deployment, and getting back in when nobody is left — and is checked beside the role, never instead of it, so a revoke is not undone by a stale entry. `passalong admin create <email>` makes an account that exists to run the product, separate from the operator's own working account, so admin acts are never taken by the identity that also publishes guides. In the browser it is `/admin`, its own page reached from the account menu and only by a super — not a band inside Settings, which is what a customer keeps about themselves: comping another account is the business being run, and sitting beside a team's own owner and member roles it read as one more of those. Anyone else who types the address is sent back to their work. It signs in like any other account, which is the point of the role being a column: no admin password, no admin token, nothing new to leak — a CLI token and a 24-hour link to set a hub password, each shown once. The last super cannot be removed, because a product with no operator is recoverable only by editing a secret and redeploying.
-
-Pricing note: this is deliberately a team-monetized product. The solo tier is the distribution engine, not the revenue.
-
-Decided 2026-09-11, building it. **A seat lifts whoever sits in it.** A free member of a paid team publishes without a ceiling, and has never paid for anything — the team is what is bought, so the team is what is lifted. Seats are enforced where somebody joins rather than at checkout, because a count taken when a seat is bought drifts the first time a member leaves.
-
-**A lapsed team goes read-only, not dark.** Everything already in it stays readable, pullable and answerable; what stops is new work being addressed to it and anyone new joining. §10 promises no lock-in, and a team's guides are its members' own work — withholding them to collect a debt is exactly what that principle forbids. Verdicts and acks keep working on a lapsed team's guides for the same reason in miniature: they belong to the reader, and the reader is not the person who missed the payment.
+A lapsed plan is read-only, not dark: new work stops flowing in, but work in flight still closes
+and everything stays readable and exportable, because withholding a team's own work to collect a
+debt is what §10 forbids. Payments go through Bachs, a merchant of record; plans can be given for a
+time by whoever runs Passalong, and every gift ends. AGENTS.md holds the rules.
 
 ## 12. Risks and open questions
 
-- **Capture quality.** If `passalong share` produces mediocre distillations, the loop dies. Mitigation: this is the first thing to prototype and pressure-test before building anything else.
-- **Platform absorption.** Anthropic (skills), Cursor, and GitHub are circling adjacent territory. Defensible ground: cross-tool, cross-repo, transfer-shaped rather than library-shaped. The window argues for shipping the narrow loop fast.
-- **"Why not just paste it into the next session?"** For small transfers, pasting wins. Passalong has to win on: structure (verification and gotchas survive), addressability (short IDs, MCP search), and cross-machine/cross-person reach. Positioning must be honest that trivial transfers do not need it.
-- **Session access.** Capture depends on being able to read the agent session (transcript, hooks). Claude Code hooks make this feasible today; other tools vary. Fallback: `passalong share` can also distill from a working directory diff plus a short prompt.
-- **Naming.** Decided 2026-09-04: **Passalong** (was "Relay"). Relay fit the metaphor but was unownable (npm, search, a dozen products). Passalong is plain English, covers self-transfer as well as handoff to a person, and is free on npm and .dev. Rejected: LetThemKnow (implies another person; sounds like notifications), Baton/Handoff/Portage (taken or colliding).
+- **Platform absorption.** Agent vendors are building adjacent queues and memories. Defensible
+  ground: cross-tool, cross-person, and work that closes with proof.
+- **"Why not just paste it?"** For small crossings, pasting wins. Passalong has to win on
+  addressability, proof, and what is kept for the next person.
+- **The loop's open steps** are in docs/LOOP.md §7.
 
 ## 13. Milestones
 
-- **M0 - Capture spike (1 to 2 weeks):** prototype the session-to-guide distillation as a Claude Code skill. Success = you personally use it for real transfers between your own projects and the drafts need only light trimming.
-- **M1 - Solo loop (3 to 4 weeks):** CLI (share, pull, list), local store, hosted sync, personal MCP server, thin web view. Success = you stop pasting context between your own sessions.
-- **M2 - Team layer** (built 2026-09-04; success criterion still open): workspaces, invites, addressed handoffs, team MCP endpoint. Success = one external team (Khaime is the obvious candidate) uses it for a real cross-person transfer weekly.
-- **M3 - Public launch:** landing page, docs, Show HN / dev community launch, free and team tiers live.
+- **Built:** the CLI, MCP over stdio and HTTP, the hub, teams, the task queue, projects, intake by
+  box, mail, share sheet and webhook, customer support, paid plans.
+- **1.0:** one model and one set of words (docs/WORK.md, docs/DEPLOY.md's cutover).
+- **Next:** docs/LOOP.md's build order.
 
 ## 14. Success metrics
 
-- **Activation:** first `passalong share` to first `passalong pull` in a different context within 7 days.
-- **Core health:** weekly transfers per active user (share + pull pairs).
-- **Quality proxy:** percent of pulled guides that came back with a passing verdict, and how many of those needed no follow-up edit to the guide.
-- **v2:** percent of transfers that cross a person boundary (self-transfer vs team-transfer ratio).
+- **Activation:** an account's first piece of work taken in a different context within 7 days.
+- **Core health:** crossings per active person per week (work written and taken by somebody).
+- **Quality proxy:** the share of work taken by somebody else that finished with proof and was not
+  reopened.
+- **Crossing people:** the share of crossings from one person to another, rather than to yourself.
 
-All four are computed by `pnpm metrics --dev` (or `--remote`), which reads `guide`, `pull` and `verdict` in D1 directly.
-
-Two figures beside them are not §14 and are printed anyway. **Verdict silence** is the pulled guides that came back with neither `works` nor `broken` — the loop's last step skipped, which the quality proxy hid inside its denominator. **The task queue** is where tasks are now and what their hand-ins brought, from `claim`: the four bullets above all read the share-and-pull loop, so until this was added the whole of V2 was invisible to the only instrument the product has.
-
-Added 2026-09-11, on making these measurable for the first time. Two notes that belong with the numbers rather than behind them.
-
-The **quality proxy** used to read "percent of pulled guides marked consumed without follow-up edits". `consumed` meant implemented when that was written and means archived now — the author's shelf — so counting it would have answered a different question than the one being asked. The verdict is what replaced it and is the better instrument anyway: the reader's judgement rather than the author's. "Without follow-up edits" survives unchanged, as `guide.updated` moving after a verdict.
-
-**Activation undercounts, and will keep undercounting.** `passalong pull` serves a guide out of the local store without calling the API unless it carries a team, so a developer pulling their own teamless guide into another repo — the v1 loop, exactly — leaves no row to count. Closing that would mean recording a pull for a fetch that never happens, which is worse than a known-low number. Read it as a floor. *(From 2026-10-14 every pull calls the API, so this holds only for data from older CLIs.)*
-
-None of this can come from Aptabase: both per-account bullets need sequences joined on who did what, and `analytics.ts` sends categorical props and never an id, on purpose. That is why the figures come from a script against the database and not from the dashboard.
+All four are computed by `pnpm metrics --dev` (or `--remote`), which reads D1 directly and prints
+beside each number what it cannot say. None can come from Aptabase: the per-account figures need
+sequences joined on who did what, and `analytics.ts` never sends an id, on purpose.

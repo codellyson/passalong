@@ -8,7 +8,7 @@ const esc = (s: string) =>
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, "content-type", "application/rss+xml; charset=utf-8");
   setResponseHeader(event, "cache-control", "public, max-age=3600");
-  const posts = await publishedPosts();
+  const posts = await livePosts();
   const items = posts
     .map(
       (p) => `    <item>

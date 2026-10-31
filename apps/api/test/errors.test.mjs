@@ -2,7 +2,7 @@
 // so these are sentences for people: what happened, and what to do next.
 //
 // Most refusals live in index.ts, which is not importable from a test (see the note in hosts.ts),
-// so those are pinned against its source, the way guide.test.mjs pins its rules.
+// so those are pinned against its source, the way work.test.mjs pins its rules.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
@@ -24,7 +24,7 @@ test("the old machine phrasings are gone from everything a person can reach", as
   const src = await source();
   for (const old of [
     "no such team, or you are not a member",
-    "no such guide (or it is not in one of your teams)",
+    "no such work (or it is not in one of your teams)",
     "invite not found",
     "email or password is wrong",
     "handle: 2–31 chars",
@@ -44,14 +44,13 @@ test("refusals name what happened and what to do next", async () => {
   const src = await source();
   for (const now of [
     "You're not in that team any more, or it was deleted.",
-    "This guide isn't available any more. It may have been deleted or moved to a team you're not in.",
+    "This work isn't available any more. It may have been deleted or moved to a team you're not in.",
     "This invite doesn't work any more. Ask whoever sent it for a new link.",
     "That reset link has expired or was already used. Ask for a new one from the sign-in page.",
     "Choose 2 to 31 letters, numbers or dashes, starting with a letter or number.",
     "Screenshots can't be uploaded here right now.",
     "That file isn't an image. Use a PNG, JPEG, WebP or GIF.",
-    "This report doesn't exist or was deleted.",
-    "Syncing guides needs a plan. Choose one in Settings.",
+    "Sending work needs a plan. Choose one in Settings.",
   ]) {
     assert.ok(src.includes(now), `missing: ${now}`);
   }

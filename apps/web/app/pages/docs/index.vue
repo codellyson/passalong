@@ -15,9 +15,9 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/docs");
 
 usePage({
-  title: "Passalong docs — hand work to AI coding agents",
+  title: "Passalong docs — set up your team, projects and agents",
   description:
-    "Install it, connect your assistant, and write guides an agent in another repo or session can act on: the format, the four calls, and the API.",
+    "Set up a team, add projects and their documents, connect email and alerts, and bring your own agents: the format, the calls and the API.",
   url: `${APEX}${self.path}`,
   image: `${APEX}/og.png`,
   noindex: self.draft,
@@ -31,65 +31,64 @@ const TOPICS = [
   {
     h: "Handing work to agents",
     p:
-      "What a task, a bug or a transfer needs before an agent takes it, how to write acceptance " +
-      "it can check, and how to review what comes back. Written for any agent, with or without " +
+      "What a piece of work needs before an agent takes it, how to say what done means so it can " +
+      "check, and how to look at what comes back. Written for any agent, with or without " +
       "Passalong.",
     href: "/learn/ai-agent-handoff",
-    link: "Read the guide",
+    link: "Read it",
   },
   {
     h: "Running several agents",
     p:
-      "A workspace for each agent, one claimed job per agent, work split so it does not overlap, " +
-      "and a review queue you can keep up with. Written for any mix of agents.",
+      "A workspace for each agent, one held piece of work per agent, work split so it does not " +
+      "overlap, and a board you can keep up with. Written for any mix of agents.",
     href: "/learn/run-multiple-ai-coding-agents",
-    link: "Read the guide",
+    link: "Read it",
   },
   {
     h: "Install and connect",
     p:
       "`npm i -g passalong` installs it, `passalong setup` registers the MCP server, the capture " +
-      "skill and the Claude Code hooks, and `passalong login` syncs across machines. Reading a " +
-      "guide somebody sent you needs none of this: a share link opens in a browser, and an agent " +
-      "appends .md to it.",
+      "skill and the Claude Code hooks, and `passalong login` signs you in. Reading work somebody " +
+      "sent you needs none of this: a share link opens in a browser, and an agent appends .md to it.",
     href: "/connect",
     link: "Connect your tools",
   },
   {
-    h: "The guide format",
+    h: "The work format",
     p:
-      "Markdown with frontmatter, and headings that do not move: Problem, Steps, Verification, " +
-      "Gotchas. They are stable because the receiving agent keys on them — a bug uses Reproduce " +
-      "where a transfer uses Steps, and that difference is load-bearing.",
-    href: "/docs/guide-format",
+      "Markdown with frontmatter: a title, a summary for a person, and a body in whatever shape " +
+      "fits. No kinds, required sections or templates — the agent that takes it works out what " +
+      "done means. A tag such as bug describes it; nothing turns on one.",
+    href: "/docs/work-format",
     link: "Read the format",
   },
   {
-    h: "Share a guide",
+    h: "Write work down",
     p:
-      'In Claude Code, say "pass this along" and the capture skill writes the guide from the ' +
-      "session. From a terminal, `passalong share <file>`. Either way `--to team/@handle` asks " +
-      "one person, `--to team/#group` asks the people who do a thing, and `--to team` asks " +
-      "nobody in particular.",
+      'Type it into the box in the hub, ask your agent, or run `passalong new "what needs doing"`. ' +
+      "`--to @handle` asks one person, `--to #group` asks the people who do a thing, and leaving " +
+      "it off asks the whole team. `--draft` holds it for a person to read first.",
     href: "/connect",
     link: "Connect an assistant",
   },
   {
-    h: "Pick one up and answer",
+    h: "Do it, and say so",
     p:
-      "Four calls, whatever the guide is: take it — which is what tells the sender somebody is on " +
-      "it, and stops a second agent doing the same work — report progress, hand it in with the " +
-      "evidence, or pass it back with the reason. The sender hears each one.",
+      "The same calls for all work: take it — which tells the sender somebody is on it, and stops " +
+      "a second agent doing the same work — report progress, ask when it needs a person's answer, " +
+      "hand it in with the evidence, or pass it back with the reason. The sender hears each one, " +
+      "and finished work that is not right is reopened with why.",
     href: null,
     link: "",
   },
   {
-    h: "Follow-ups and bug reports",
+    h: "Projects and documents",
     p:
-      "A follow-up is more context for a guide, written as its own guide: `passalong share " +
-      "--follows <id>`. Whoever opens the original gets it too. Defects you found but are not " +
-      "fixing go in one call as a report, each becoming a guide somebody can take on its own — " +
-      "with the screenshot attached, not described.",
+      "A project is a place for one product; its documents are what to know about it — a README, a " +
+      'page per area, a Log of what changed. Say "pass this along" in Claude Code and the capture ' +
+      "skill writes what the session learned into those documents. Anything someone must still do " +
+      "is work, not a document, with the screenshot attached, not described.",
     href: "/connect#screenshots",
     link: "Attaching screenshots",
   },
@@ -97,8 +96,9 @@ const TOPICS = [
     h: "Errors, alerts and email in",
     p:
       "Point Sentry, PostHog, an email address or your own code at Passalong and each one becomes " +
-      "a task, a bug or a transfer, with what was sent quoted in it. Repeats of one issue stay one " +
-      "guide, and a task waits as a Draft until you mark it Ready and say which repo it is for.",
+      "work, with what was sent quoted in it and the reader's title, summary and label on it. " +
+      "Customers get an address of their own and a tracking number. Repeats of one issue stay one " +
+      "piece of work.",
     href: "/docs/integrations",
     link: "Set up integrations",
   },
@@ -124,10 +124,10 @@ const TOPICS = [
         <span class="turn">and have the next agent act on it.</span>
       </h1>
       <p class="lede">
-        Passalong hands work between AI coding agents: a task nobody has done, a bug to fix, or
-        finished work worth repeating, written so an agent in another repo or a later session can
-        act on it. Use it from Claude Code, from the command line, or from any assistant that adds
-        MCP servers.
+        Passalong keeps a team's work and what it knows: work someone must still do, written so an
+        agent in another repo or a later session can act on it, and the documents that say what
+        each project is. Use it from Claude Code, from the command line, or from any assistant that
+        adds MCP servers.
       </p>
     </header>
 

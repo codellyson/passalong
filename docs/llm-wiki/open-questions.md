@@ -13,28 +13,29 @@ page it belongs to, and into [decisions.md](decisions.md).
 - **Publish (the feature)** — five decisions in [docs/PUBLISH.md](../PUBLISH.md) §14: the page's
   address, pricing, solo pages, whether the task's author gets a say, and the name.
 
-- **Finishing with proof** — [docs/REVIEW.md](../REVIEW.md) (direction agreed 2026-10-15): no review
+- **Finishing with proof** (direction agreed 2026-10-15): no review
   stage. Finishing needs proof a person can look at and goes straight to Done; Reopen undoes it, and
   asking someone to check is a follow-up addressed to them. Open in §9: recordings, what backend proof
   looks like, and who hears about a reopen.
 
-- **The loop** — [docs/LOOP.md](../LOOP.md) (direction recorded 2026-10-28): every customer request
-  closes, from inbox to fix to reply, with Passalong as the rule-keeper rather than a manager agent.
-  Nothing built. First step proposed: stop stalled and untaken work being left behind, and count
-  what drops. Then the customer as a party on a guide, and a parent waking when its child is Done.
+- **The loop** — [docs/LOOP.md](../LOOP.md) §0 build order. Step 1, one thing: work, is built
+  (2026-10-29). Next: the agent tidies the board (closes finished work, archives abandoned work,
+  judges hand-ins, and the proof gate goes), then onboarding, then projects as the home of all work.
+- **Cutover for one thing, work** — migrate production (0061, 0062) behind a Time Travel bookmark,
+  deploy, publish passalong 0.22.0, then raise `MIN_CLIENT` to 0.22.0 ([docs/DEPLOY.md](../DEPLOY.md)).
+  Until then installed CLIs call routes and tools that are gone.
 
 ## Known gaps
 
-- **Hold history.** A claim is deleted on approve, release and pass, so Progress cannot show a hold that
-  ended. Keeping it needs its own table.
-- **Quick actions on rows.** Task rows can still Approve without opening the line-by-line review.
-- **Agent hand-ins and screenshots.** A person's "it works" needs a screenshot; an agent's hand-in does
-  not, deliberately. Revisit if agents start saying things work that do not.
+- **Hold history on Progress.** The thread keeps every hold (`task_event`), but the work page's
+  Progress is built from live claims and still loses a hold once it ended.
+- **Agents cannot put work in a project.** Linking work to a project is the hub's alone since
+  `link_project_work` went; it waits for work to live in its project (LOOP.md step 4).
+- **Old words outside the product.** The `/learn` articles still teach kinds and sections.
 - **Live stream at scale.** It polls D1 every 3 s per open tab. Durable Objects are the step if that
   starts to cost.
 - **The unfurl card with the new mark** has not been looked at on the deployed Worker.
 
 ## Sources
 - [docs/PUBLISH.md](../PUBLISH.md), the PR descriptions for #60–#64
-- [docs/REVIEW.md](../REVIEW.md)
-- [docs/LOOP.md](../LOOP.md)
+- [docs/LOOP.md](../LOOP.md), [docs/WORK.md](../WORK.md)

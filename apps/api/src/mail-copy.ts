@@ -6,7 +6,7 @@
 //
 // The rules every mail here follows:
 //   - the subject and the preview say who did what, by name, and never carry an id;
-//   - the one thing to do is open the guide, and anything the reader answers is answered there;
+//   - the one thing to do is open the work, and anything the reader answers is answered there;
 //   - a CLI command is a footnote for whoever uses a terminal or an agent, never the instruction.
 
 export interface Copy {
@@ -23,11 +23,7 @@ export interface Copy {
 export const hubUrl = (origin?: string) =>
   `${(origin || "https://passalong.dev").replace(/\/$/, "")}/hub`;
 
-/** What the author of a guide that did not work is told to do next. */
-export const FIX_AND_RESEND =
-  "Update the guide and share it again; the link you sent keeps working.";
-
-export function handoffCopy(o: {
+export function sentToYouCopy(o: {
   fromName: string;
   title: string;
   id: string;
@@ -37,12 +33,12 @@ export function handoffCopy(o: {
   const where = o.team ? ` in ${o.team}` : "";
   return {
     subject: `${o.fromName} sent you "${o.title}"`,
-    preview: `${o.fromName} sent you a guide${where}. Open it to take it.`,
-    eyebrow: `${o.fromName} sent you a guide${where}`,
+    preview: `${o.fromName} sent you work${where}. Open it to take it.`,
+    eyebrow: `${o.fromName} sent you work${where}`,
     text: [
       `${o.fromName} sent you "${o.title}"${where}.`,
       "",
-      `Open the guide: ${o.url}`,
+      `Open it: ${o.url}`,
       "",
       "Take it there when you start: nobody else can take it while you hold it, and",
       `${o.fromName} sees you have it. Hand it in when it is done, with what you ran to show it.`,
@@ -55,30 +51,28 @@ export function handoffCopy(o: {
 export function openedCopy(o: { byName: string; title: string; url: string; hub: string }): Copy {
   return {
     subject: `${o.byName} opened "${o.title}"`,
-    preview: `${o.byName} opened your guide. What's still open is whether it worked for them.`,
+    preview: `${o.byName} opened your work.`,
     eyebrow: `${o.byName} opened it`,
     text: [
-      `${o.byName} opened your guide "${o.title}".`,
+      `${o.byName} opened "${o.title}".`,
       "",
-      "What's still open is whether it worked for them.",
-      "",
-      `Open the guide: ${o.url}`,
+      `Open it: ${o.url}`,
       "",
       `See everything in one place: ${o.hub}`,
     ],
   };
 }
 
-/** Somebody who is not the author is done with a guide. The author archiving it sends nothing. */
+/** Somebody who is not the author is done with a piece of work. The author archiving it sends nothing. */
 export function doneCopy(o: { byName: string; title: string; url: string; hub: string }): Copy {
   return {
     subject: `${o.byName} is done with "${o.title}"`,
-    preview: `${o.byName} is done with your guide. Nothing is waiting on either of you.`,
+    preview: `${o.byName} is done with your work. Nothing is waiting on either of you.`,
     eyebrow: `${o.byName} is done with it`,
     text: [
-      `${o.byName} is done with your guide "${o.title}". Nothing is waiting on either of you.`,
+      `${o.byName} is done with "${o.title}". Nothing is waiting on either of you.`,
       "",
-      `Open the guide: ${o.url}`,
+      `Open it: ${o.url}`,
       "",
       `See everything in one place: ${o.hub}`,
     ],
@@ -107,7 +101,7 @@ export function askedCopy(o: {
       "",
       `Answer it in the hub: ${o.hub}`,
       "",
-      `Open the guide: ${o.url}`,
+      `Open it: ${o.url}`,
     ],
   };
 }
@@ -131,34 +125,7 @@ export function repliedCopy(o: {
       "",
       "Your agent reads it the next time it checks in.",
       "",
-      `Open the guide: ${o.url}`,
-      "",
-      `See everything in one place: ${o.hub}`,
-    ],
-  };
-}
-
-export function verdictCopy(o: {
-  byName: string;
-  title: string;
-  url: string;
-  ok: boolean;
-  note: string;
-  hub: string;
-}): Copy {
-  const said = o.ok ? "worked" : "didn't work";
-  return {
-    subject: `${o.byName} said "${o.title}" ${said}`,
-    // The reason goes in the preview, because on a failure it is the only thing the reader needs
-    // and the inbox is where they are standing.
-    preview: `${o.byName} said it ${said}${o.note ? `: ${o.note}` : "."}`,
-    eyebrow: `${o.byName} said it ${said}`,
-    text: [
-      `${o.byName} tried "${o.title}" and said it ${said}.`,
-      ...(o.note ? ["", `  "${o.note}"`] : []),
-      "",
-      `Open the guide: ${o.url}`,
-      ...(o.ok ? [] : ["", FIX_AND_RESEND]),
+      `Open it: ${o.url}`,
       "",
       `See everything in one place: ${o.hub}`,
     ],

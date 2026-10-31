@@ -20,7 +20,7 @@ const code = computed(() => String(route.params.code));
 
 const { data: invite } = await useFetch(`/api/invite/${encodeURIComponent(code.value)}`);
 // `statusMessage: "invite"` is what error.vue reads to say "ask for a fresh invite" rather than
-// talking about guide links.
+// talking about work links.
 if (!invite.value) throw createError({ statusCode: 404, statusMessage: "invite" });
 
 const team = computed(() => invite.value?.team ?? "");
@@ -30,6 +30,8 @@ usePage({
   description: `Invitation to the ${team.value} team on Passalong.`,
   noindex: true,
 });
+// The signed-in world's tokens (square corners, coral primary, ink focus), as the hub draws them.
+useHead({ bodyAttrs: { class: "hub-app" } });
 
 const KEY = "passalong.token";
 const token = {
@@ -173,7 +175,7 @@ async function submit() {
     <article>
       <p>
         When someone on the team finishes a piece of work you need to pick up, they send it to you
-        as a guide: what the problem was, how they solved it, and how to check it worked.
+        as work: what the problem was, how they solved it, and how to check it worked.
       </p>
       <p>
         It works the other way too: from your own Claude Code you can record an issue or a task for
@@ -183,7 +185,7 @@ async function submit() {
       <form class="join" @submit.prevent="submit">
         <label>
           Your name
-          <input v-model="name" name="name" placeholder="Ada Okafor" autocomplete="name" required />
+          <input v-model="name" name="name" placeholder="Leo Okafor" autocomplete="name" required />
         </label>
 
         <p class="muted m-0">

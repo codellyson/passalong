@@ -12,18 +12,18 @@ claim could not be verified, it says so.
 
 The product is a baton pass. Its machinery is deterministic; its payload is not.
 
-**Deterministic.** Parsing and validating a guide is a pure function of the text — `validate()` in
-`packages/passalong/src/guide.js`. The queue holds one rule, that no two agents hold the same work
+**Deterministic.** Parsing and validating a piece of work is a pure function of the text — `validate()` in
+`packages/passalong/src/work.js`. The queue holds one rule, that no two agents hold the same work
 in the same place, and holds it with a primary key rather than a check. The hand-in gate is one
 rule about evidence. Task state is derived on every read, never stored.
 
-**Not deterministic.** The guide itself is written by a model, and the agent on the receiving side
+**Not deterministic.** The work itself is written by a model, and the agent on the receiving side
 re-implements from it, adapting anything marked `ASSUMES:`. The same session captured twice gives
-two different guides; the same guide pulled into two repos gives two different diffs. That is the
+two different work; the same work pulled into two repos gives two different diffs. That is the
 point. A byte-identical replay is a patch file, and a patch file does not cross repositories.
 
 So determinism sits at the seams and not in the middle. The useful question is not "is the output
-reproducible" — it is "can two agents double-do work, can an invalid guide publish, can a hand-in
+reproducible" — it is "can two agents double-do work, can an invalid work publish, can a hand-in
 pass with no proof". Those are the invariants worth holding.
 
 ## The generator cannot be pinned
@@ -70,22 +70,22 @@ Two consequences specific to this repo:
   and `apps/web` contain no reference to `temperature`, `top_p` or `top_k`. Passalong is
   infrastructure around the agent, never a model client. Every source of variance above sits
   upstream, outside its process, unreachable by any knob it could add. It cannot pin the generator.
-  It can only pin the artifact and gate the verdict.
+  It can only pin the artifact and gate the proof.
 
 ## The format is not a fixed point
 
-Measured against the real store, 214 guides in `~/.passalong/guides`:
+Measured against the real store, 214 work in `~/.passalong/work`:
 
 ```
 files=214  byte-identical=183  drift=31  parse-error=0
 ```
 
-`serialize(parse(x)) !== x` for **14.5%** of real guides. Nothing fails to parse, and every drifted
+`serialize(parse(x)) !== x` for **14.5%** of real work. Nothing fails to parse, and every drifted
 file is a fixed point on the second pass — so `serialize` output is a normal form, but reading an
-existing guide and writing it back rewrites it. Three causes, isolated:
+existing work and writing it back rewrites it. Three causes, isolated:
 
-- **Field reordering.** `META_ORDER` in `guide.js` imposes a canonical key order on write, so a
-  guide authored in another order is rewritten. This accounts for most of the 31.
+- **Field reordering.** `META_ORDER` in `work.js` imposes a canonical key order on write, so a
+  work authored in another order is rewritten. This accounts for most of the 31.
 - **Tag rewriting.** `tag()` folds `_` to `-`, so `passalong_mcp` re-shares as `passalong-mcp`. A
   silent value mutation on a field used for search.
 - **`created` normalization.** Quoted ISO timestamps lose their quoting.
@@ -103,13 +103,13 @@ Perl hashes, Python dictionaries and sets ... will list their keys in a differen
 
 One hazard from the same source is already avoided: both parsers use `toLowerCase()` rather than
 `toLocaleLowerCase()`, and neither contains `localeCompare` or any `.sort()`, so locale collation
-cannot move a guide's bytes. The absence of any sort is also why unknown keys keep insertion order.
+cannot move a piece of work's bytes. The absence of any sort is also why unknown keys keep insertion order.
 
 ### Two parsers, no assertion that they agree
 
-`apps/api/src/guide.ts` mirrors the format defined in `packages/passalong/src/guide.js`, and
+`apps/api/src/work.ts` mirrors the format defined in `packages/passalong/src/work.js`, and
 `AGENTS.md` says to change both. That instruction is enforced by attention alone.
-`packages/passalong/test/guide.test.js` and `apps/api/test/guide.test.mjs` are separate suites over
+`packages/passalong/test/work.test.js` and `apps/api/test/work.test.mjs` are separate suites over
 separate cases; `packages/passalong/fixtures/` holds one file, `fake-agent.mjs`, read only by the
 e2e test. Nothing asserts the two implementations agree on a single byte.
 
@@ -119,7 +119,7 @@ drift in one parser is what an unenforced mirror looks like from the inside.
 
 ## Content-addressed ids: rejected
 
-Replacing the random `newId()` with a hash of the guide's bytes was considered and dropped. Three
+Replacing the random `newId()` with a hash of the work's bytes was considered and dropped. Three
 independent reasons, in order of decisiveness.
 
 **There is no canonical form to hash.** YAML 1.2.2 uses the phrase "canonical form" only for scalar
@@ -142,11 +142,11 @@ original tar headers with `tar-split` rather than by canonicalizing.
 **The benefit does not exist here.** Measured on the corpus:
 
 ```
-identical bodies under different ids: 1 group, 2 guides
-identical titles under different ids: 2 groups, 4 guides
+identical bodies under different ids: 1 group, 2 work
+identical titles under different ids: 2 groups, 4 work
 ```
 
-Content addressing would dedupe 2 guides out of 214. Nix's stated reason for content-addressed
+Content addressing would dedupe 2 work out of 214. Nix's stated reason for content-addressed
 derivations is early cutoff — "to prevent rebuilds when changes to the derivation do not result in
 changes to the derivation's output" — which is a build-graph argument with no analogue in a store of
 prose documents. Worth noting that `ca-derivations` is still experimental in Nix 2.35, and the
@@ -166,7 +166,7 @@ Passalong has no such counter, but it is not unfenced. Every claim mutation in
 guard:
 
 ```sql
-WHERE guide_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'
+WHERE work_id = ? AND agent_id = ? AND account_id = ? AND state = 'claimed'
 ```
 
 `release` deletes the claim row. A stalled agent that wakes up and hands in therefore matches zero
@@ -184,8 +184,9 @@ in the reviewed literature applies that this design does not already have.
 
 ## A lease that expires without releasing has no precedent
 
-`docs/V2.md` §5: when the lease expires the card moves to Stalled "and stays locked. It never goes
-back to Ready on its own. Only you release it."
+When a lease expires the work shows as stalled and stays locked: the hourly sweep puts it back in
+the queue only `REQUEUE_AFTER_MS` (two hours) later (`requeueStalled()` in claims.ts), and a person
+can release it before then.
 
 No primary source describes that shape. Chubby, Redis/Redlock, SQS, KCL, Kubernetes node leases,
 Subversion and Git LFS were all checked. The documented alternatives are three, and two argue
@@ -222,7 +223,7 @@ Verified writeup, "the tests are not shown to the agent". Terminal-Bench goes fu
 `tests/` into the container only *after* the agent has stopped.
 
 The reason to read SWE-bench's grading code is that most of it is scar tissue, and every scar is a
-way an agent fooled a verdict. Its live source comments record four attacks:
+way an agent fooled a proof. Its live source comments record four attacks:
 
 - **The log can lie.** "A patch can print its own `PASSED` lines (e.g. from a `conftest.py` hook),
   so cross-check the log against the test command's exit status". Exiting non-zero while reporting
@@ -238,7 +239,7 @@ way an agent fooled a verdict. Its live source comments record four attacks:
   scores as fully resolved.
 
 The closest analogue to Passalong's problem is their submission verifier, which re-derives the
-verdict from the logs a submission claims to be scored from: "No Docker and no re-execution: the
+proof from the logs a submission claims to be scored from: "No Docker and no re-execution: the
 recorded test output is the evidence, and grading it is deterministic." It classifies a claim with
 no log attached as an `unbacked_claim` and fails it, because "shipping no log for an instance you
 claim to have resolved is the cheapest way to inflate a score, so it cannot pass."
@@ -249,12 +250,12 @@ Zheng et al. (arXiv 2306.05685) is usually cited for "80% agreement with humans"
 *preference* agreement on open-ended chat with ties discarded. The correctness-shaped measurement is
 Table 4, where a failure means the judge called an incorrect answer correct:
 
-| Prompt | Default | Chain-of-thought | Reference-guided |
+| Prompt | Default | Chain-of-thought | With a reference answer |
 | --- | --- | --- | --- |
 | Incorrect answers passed as correct | 70% | 30% | **15%** |
 
 Even handed the reference answer, 15% of wrong work was waved through. The same paper measures
-position bias — the best judge flips its verdict on answer order 35% of the time — and verbosity
+position bias — the best judge flips its proof on answer order 35% of the time — and verbosity
 bias, where padding an answer with a restatement that adds no information fools two of three judges
 **91.3%** of the time. Anthropic's own eval guidance ranks code-based grading as "fastest and most
 reliable" and says of model grading, "test to ensure reliability first then scale". OpenAI's grader
@@ -298,7 +299,7 @@ Worth noting an asymmetry in this repo: `apps/api/src/mcp-http.ts` declares anno
 `ADDS`) and `outputSchema` throughout; `packages/passalong/src/mcp.js` declares neither. Same four
 jobs, two different contracts, and the stdio server is the surface most agents actually reach.
 
-Finally, the protocol's error split matches the verdict split: tool execution errors belong in the
+Finally, the protocol's error split matches the proof split: tool execution errors belong in the
 result with `isError: true`, not as a JSON-RPC error, "otherwise, the LLM would not be able to see
 that an error occurred and self-correct".
 
@@ -318,7 +319,7 @@ found nothing wrong".
 
 Not done, and deliberately: parsing test output. SWE-bench needs 57 per-framework log parsers to
 tell a skipped test from a passing one, and a half-parser that guesses would refuse honest runs and
-pass misread ones. The exit code is the whole verdict here, which is how a CI step decides too.
+pass misread ones. The exit code is the whole proof here, which is how a CI step decides too.
 
 This has to run where a shell exists. `packages/passalong/src/mcp.js` runs on the agent's machine
 over stdio and can execute the command; `apps/api/src/mcp-http.ts` is a Worker and cannot. So the
@@ -326,12 +327,12 @@ strong path is local and the HTTP surface keeps the prose gate. That asymmetry s
 the tool description rather than discovered.
 
 Keep `cmd` optional, and expect it to stay rare for a while. Measured on the corpus: 137 of 214
-guides carry a `Verification` or `Acceptance` section at all, only 19 of those contain a fenced
+work carry a `Verification` or `Acceptance` section at all, only 19 of those contain a fenced
 block, 36 are prose with no code anywhere, and across 804 verification lines **11.8%** begin with a
 recognisable command. Many of the rest are legitimately manual — "open the hub, the badge reads 3"
 has no exit code and never will. Mandating a command would teach agents to invent one, which is
 worse than the prose it replaced. The win is converting the 11.8% from claim to fact today, with a
-format that absorbs the rest as guides gain commands.
+format that absorbs the rest as work gain commands.
 
 One tension to note rather than resolve: both benchmarks hide the checks from the worker, and
 Passalong cannot. A task's `Acceptance` *is* its specification — the agent has to read it to do the
@@ -339,29 +340,29 @@ work. That removes an anti-gaming guarantee the benchmarks rely on, which is a f
 executing the check rather than accepting a report of it.
 
 **2. Give the two parsers a shared corpus.** *Implemented, in
-`packages/passalong/fixtures/guides/`.* One file per shape the format has to keep working, each in
+`packages/passalong/fixtures/work/`.* One file per shape the format has to keep working, each in
 canonical form, so `serialize(parse(x))` returns it byte for byte and a change to `META_ORDER`,
 `quote()` or `tag()` lands as a diff in a file somebody has to read rather than as a silent rewrite
-of guides already in other people's repositories. `test/corpus.test.js` holds guide.js to the
+of work already in other people's repositories. `test/corpus.test.js` holds work.js to the
 corpus and pins the normalisations that are meant to happen as input/output pairs;
-`apps/api/test/corpus.test.mjs` reads the same files and holds `guide.ts` to `guide.js` on
+`apps/api/test/corpus.test.mjs` reads the same files and holds `work.ts` to `work.js` on
 frontmatter, body, sections, tags and unreachable images.
 
 Both assertions were checked by mutation rather than assumed: dropping `_` from `tag()` in the
 mirror fails three cross-parser tests, and swapping two entries in `META_ORDER` fails eight in the
 corpus suite.
 
-It found one divergence immediately. `sections()` reset a section on every heading, so a guide with
+It found one divergence immediately. `sections()` reset a section on every heading, so a piece of work with
 two `## Verification` blocks was validated against the second alone, while `splitSections()` in
-`guide.ts` — which the web view reads — kept both. guide.js now appends, and the two agree.
+`work.ts` — which the web view reads — kept both. work.js now appends, and the two agree.
 
 It also pinned one thing as-is rather than fixing it: the frontmatter is read line by line on
 `\r?\n` so it comes back as LF, but the body is taken whole and only trimmed, so a `\r` inside it
-survives. Normalising the body would rewrite the bytes of every guide written on Windows, which is
+survives. Normalising the body would rewrite the bytes of every work written on Windows, which is
 the silent rewrite the corpus exists to make visible rather than commit.
 
 **3. Add a monotonic counter to the claim row.** *Implemented, in
-`apps/api/migrations/0029_claim_fence.sql`.* Every fresh claim gets the next number for that guide
+`apps/api/migrations/0029_claim_fence.sql`.* Every fresh claim gets the next number for that work
 and place, `take` tells the agent what it is, and `progress`, `hand_in` and `pass` send it back; a
 write carrying a number that is not the current one is refused with "it was released and taken
 again since". That is Chubby's lock generation number and KCL's `leaseCounter`.
@@ -382,20 +383,20 @@ follow-up, once published clients carry it — and that is the precondition for 
 lease release on its own.
 
 **4. Annotate the stdio MCP tools.** *Implemented.* All seventeen now say what they do to the
-world, matching the `READS`/`ADDS` block in `mcp-http.ts`. Six only read; `publish_guide` is the
-one that admits it may replace a document; `attach_screenshot` is the one that reaches outside
+world, matching the `READS`/`ADDS` block in `mcp-http.ts`. Six only read; `create_work` is the
+one that admits it may replace a document; `add_file` is the one that reaches outside
 Passalong. `activity` is marked as a write although it mostly reads, because it clears the unread
 feed when asked to and an annotation cannot say "sometimes".
 
 `outputSchema` is declared on `progress`, `hand_in` and `pass` only — the calls that answer with a
 record this server shapes. The spec puts the MUST on the server ("Servers MUST provide structured
 results that conform to this schema") and only a SHOULD on the client, so declaring a shape is a
-promise; `take` answers with the guide's markdown to read, not a record, so it stays quiet.
+promise; `take` answers with the work's markdown to read, not a record, so it stays quiet.
 
 `serve()` was split into `buildServer()` and `serve()`, the shape `mcp-http.ts` already had, so
 `test/mcp-surface.test.js` can list the tools over an in-memory transport pair and read what each
 one tells a client. Four mutations were checked against it: removing an annotation fails four
-tests, and downgrading `publish_guide`, `attach_screenshot` or a declared schema fails one each.
+tests, and downgrading `create_work`, `add_file` or a declared schema fails one each.
 
 That test caught a real mistake before it shipped. Handing `registerTool` a zod `.shape` rather
 than the object rebuilds it closed, so all three schemas were advertised as
@@ -403,12 +404,12 @@ than the object rebuilds it closed, so all three schemas were advertised as
 next field added to a route would have broken. The suite now pins openness.
 
 Not doing: content-addressed ids, for the three reasons above. Not doing: anything that tries to
-make guide text reproducible.
+make work text reproducible.
 
 ## Sources
 
 Primary sources, all fetched 2026-09-23 unless noted. Corpus measurements are against
-`~/.passalong/guides` (214 guides) and the code as of this branch.
+`~/.passalong/work` (214 work) and the code as of this branch.
 
 - Anthropic Messages API reference; model ids and versions; prompt caching — platform.claude.com
 - OpenAI OpenAPI specification — github.com/openai/openai-openapi
@@ -433,7 +434,7 @@ Primary sources, all fetched 2026-09-23 unless noted. Corpus measurements are ag
   OpenTelemetry semantic conventions
 - Model Context Protocol specification, revision 2026-07-28 (`schema.ts`, `server/tools.mdx`)
 
-Unverified and flagged as such by the researchers: Terminal-Bench 2.0's verdict code and its
+Unverified and flagged as such by the researchers: Terminal-Bench 2.0's proof code and its
 validation methodology (the Harbor source was unreachable and its preprint is unpublished); SARIF
-2.2 prose (draft only); and any first-party evidence of model-judged and test-executed verdicts
+2.2 prose (draft only); and any first-party evidence of model-judged and test-executed proofs
 drifting apart, which nobody appears to have published.

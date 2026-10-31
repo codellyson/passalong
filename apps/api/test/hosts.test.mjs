@@ -5,8 +5,8 @@ import { canonicalRedirect } from "../src/hosts.ts";
 
 test("www is sent to the apex, path and query intact", () => {
   assert.equal(
-    canonicalRedirect("https://www.passalong.dev/g/abcdefgh/key123?view=verify"),
-    "https://passalong.dev/g/abcdefgh/key123?view=verify",
+    canonicalRedirect("https://www.passalong.dev/w/abcdefgh/key123?view=verify"),
+    "https://passalong.dev/w/abcdefgh/key123?view=verify",
   );
   assert.equal(canonicalRedirect("https://www.passalong.dev/"), "https://passalong.dev/");
 });
@@ -22,7 +22,7 @@ test("the Host header is enough on its own, port and all", () => {
 test("hosts that serve are left alone", () => {
   for (const url of [
     "https://passalong.dev/health",
-    "https://passalong.kreativekorna.com/g/abcdefgh/key123",
+    "https://passalong.kreativekorna.com/w/abcdefgh/key123",
     "http://localhost:8787/hub",
   ]) {
     assert.equal(canonicalRedirect(url), null, url);
@@ -36,11 +36,11 @@ test("plain http on a serving host is upgraded, and stays on its host", () => {
   );
   assert.equal(
     canonicalRedirect(
-      "http://internal.example/g/abcdefgh/key123",
+      "http://internal.example/w/abcdefgh/key123",
       "passalong.kreativekorna.com",
       "http",
     ),
-    "https://passalong.kreativekorna.com/g/abcdefgh/key123",
+    "https://passalong.kreativekorna.com/w/abcdefgh/key123",
   );
   // www goes straight to the https apex rather than taking two hops.
   assert.equal(

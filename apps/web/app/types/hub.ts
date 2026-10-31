@@ -1,6 +1,8 @@
 // The shapes `/v1/*` returns. Only the fields the hub actually reads — the API sends more, and
 // pinning the rest here would just be a second place to keep in step with apps/api.
 
+import type { SetupState } from "~/utils/setup";
+
 export interface Team {
   slug: string;
   name: string;
@@ -18,11 +20,7 @@ export interface Me {
   has_password: boolean;
   /** Whether the email was proven to reach its owner (migrations/0050). Absent from an older server. */
   email_verified?: boolean;
-  /** Guides are kept for good rather than tidied away on a clock. */
-  keep_forever?: boolean;
-  /** Whether this account may choose that. Everybody today; a plan will decide. */
-  may_keep?: boolean;
-  guides: number;
+  work: number;
   /** Only meaningful when `sync` is "free". See apps/api/src/quota.ts. */
   limit: number;
   /** "unlimited" | "free" | "none" — a falsy `limit` cannot tell the first from the last. */
@@ -41,41 +39,34 @@ export interface Me {
   teams: Team[];
   /** Name, else @handle, else @account id — worked out by the API. */
   display?: string;
-}
-
-export interface Verdict {
-  ok: boolean;
-  by: string | null;
-  by_name?: string;
-  note: string | null;
-  at?: string;
+  /** Where first-run setup got to (apps/api/src/setup.ts). Absent from an older server. */
+  setup?: SetupState;
 }
 
 export interface Pull {
   handle: string | null;
-  /** How it arrived: "cli", "link", or a receipt a verdict ("verdict") or archive ("web") wrote. */
+  /** How it arrived: "cli", "link", or the receipt an archive ("web") wrote. */
   via?: string;
   at: string;
 }
 
-export interface Guide {
+/** A piece of work, as a list row. */
+export interface Work {
   id: string;
   title: string | null;
-  /** What it says to a person, a sentence or two. Empty on a guide from before summaries. */
+  /** What it says to a person, a sentence or two. Empty on work from before summaries. */
   summary?: string;
-  /** First available image in the guide, served by Passalong on this origin. */
-  preview_image?: { url: string; alt: string } | null;
-  /** When its proof screenshots are deleted, or "". Only on a closed guide that has some. */
+  /** When its proof screenshots are deleted, or "". Only on finished work that has some. */
   proof_expires?: string;
   status: string;
-  /** How it reached Done: approved after review, or archived. '' while it is not done. */
-  outcome?: "finished" | "approved" | "archived" | "";
+  /** How it reached Done: finished or archived. '' while it is not done. */
+  outcome?: "finished" | "archived" | "";
   url: string;
   created: string;
   /** Its last edit or status change. */
   updated?: string;
   pulls: number;
-  /** Yours to promote or delete; someone else's to verify. */
+  /** You wrote it. */
   mine: boolean;
   /** Its author, or the owner of its team: may archive, reassign or delete it. */
   manage?: boolean;
@@ -87,120 +78,59 @@ export interface Guide {
   to_name?: string;
   team_name?: string;
   to_group_name?: string;
-  taken_by_names?: string[];
   source_context: string | null;
   tags: string[];
   stack_assumptions: string[];
   pulled_by?: Pull[];
-  verdict?: Verdict | null;
   /**
    * Addressed to you, by handle or to a group you are in, rather than dropped in the team. Someone
    * addressing you chose you; a team drop chose nobody, and the inbox sorts on the difference.
    */
   for_me?: boolean;
-  /**
-   * Someone else took it, holds it or said how it went, so it is not waiting on you. Worked out by
-   * the server with the same rule as the inbox; never true when you were named or said "on it".
-   */
-  answered_elsewhere?: boolean;
   /** Its column on the team board, worked out by the server the same for everyone. */
-  stage?: "draft" | "todo" | "working" | "review" | "done";
-  /** Whose rows it sits in when the board is by person: holders, else who it was sent to. Empty is Anyone. */
+  stage?: "draft" | "todo" | "working" | "done";
+  /** Who it is for, as To do groups it: holders, else who it was sent to (account ids, `#group`). Empty is Anyone. */
   lanes?: string[];
-  /** Who holds it or handed it in. `agent` is empty for a person working it in the browser. */
+  /** The project it is linked into, or null. */
+  project?: NeedProject | null;
+  /** What changed on it since you last looked; '' when nothing did. */
+  changed?: string;
+  /** Who holds it. `agent` is empty for a person working it in the browser. */
   held_by?: {
     name: string;
     agent: string;
     you: boolean;
-    /** Handed in, waiting on a person's answer, gone quiet, a person's own hold, or working. */
-    health: "review" | "asking" | "person" | "quiet" | "working";
+    /** Waiting on a person's answer, gone quiet, a person's own hold, or working. */
+    health: "asking" | "person" | "quiet" | "working";
     /** When it was last heard from. */
     since: string;
+    /** The holder's last progress note, or "". */
+    note?: string;
   }[];
-  /** Handed in, and you may review it: anyone in the team but whoever did the work. */
-  can_review?: boolean;
   /** The group inside the team it was handed to, by name. Empty when it went to a person or all. */
   to_group?: string;
-  /** Who said they are on it, and who passed it back with a reason. See migrations/0013_acks.sql. */
-  taken_by?: string[];
-  declined?: Declined[];
-  /** Your own standing answer, so a row offers the other one rather than asking again. */
-  my_ack?: { taken: boolean; note: string; at: string } | null;
-  /** The report this issue belongs to, when it is one — see migrations/0006_reports.sql. */
-  report?: string;
-  report_title?: string;
   /**
-   * The guide this one came out of — see migrations/0015_lineage.sql. The title is only filled when
-   * you can read the parent, so an id with no title is a parent in a team you are not in.
+   * The work this came out of — see migrations/0015_lineage.sql. The title is only filled when you
+   * can read the parent, so an id with no title is a parent in a team you are not in.
    */
   parent?: string;
   parent_title?: string;
   /** Its address, so "follows X" opens X rather than searching the list already on screen. */
   parent_url?: string;
-  /** Follow-ups you can read: published guides that name this one as their parent. */
+  /** Work you can read that names this as its parent. */
   children?: number;
-  /** "bug", "task" or "transfer"; absent means transfer. */
-  kind?: string;
   /**
-   * What last wrote it: `cli@<version>`, `mcp`, `hub` or `api` — see migrations/0035. Empty on a
-   * guide last written before that, which is unknown rather than any of the four.
+   * What last wrote it: `cli@<version>`, `mcp`, `hub`, `api` or `email` — see migrations/0035.
+   * Empty on work last written before that, which is unknown rather than any of them.
    */
   client?: string;
-  area?: string;
-  severity?: string;
-  /** Set by the board's SQL, not worked out here — see the note on `load()`. */
-  failing?: boolean;
-  stale?: boolean;
-}
-
-/** Someone handing a guide back, and why. The reason is the whole reason to say no out loud. */
-export interface Declined {
-  by: string;
-  by_name?: string;
-  note: string;
-  at: string;
 }
 
 /** The board's buckets are defined in SQL. The hub renders them; it never derives them. */
 export interface Board {
-  failing: Guide[];
-  waiting: Guide[];
-  in_flight: Guide[];
-  landed: Guide[];
-  /** Always empty. A compatibility shim for the published CLI — see the note in /v1/board. */
-  promote?: Guide[];
-}
-
-export interface Note {
-  id: string;
-  at: string;
-  text: string;
-  guide: string | null;
-  read: boolean;
-  /** What happened, as the server names it: "shared", "pulled", "verified"… */
-  kind?: string;
-  /** Who did it, as a person reads them. Empty for a clock or an anonymous reader. */
-  actor_name?: string;
-  team_name?: string;
-  /** The guide's title. */
-  title?: string;
-}
-
-/**
- * One thing you did. The server renders `text`, the same way it renders a notification's — see
- * apps/api/src/log.ts for why this is your own acts and `Note` is everyone else's.
- */
-export interface LogEntry {
-  act: "published" | "pulled" | "works" | "broken" | "took" | "passed";
-  at: string;
-  guide: string;
-  title: string;
-  /** The guide's `source_context`. The author's repo, which is not always the reader's. */
-  repo: string;
-  url: string;
-  mine: boolean;
-  note: string;
-  text: string;
+  waiting: Work[];
+  in_flight: Work[];
+  landed: Work[];
 }
 
 export interface ApiToken {
@@ -211,7 +141,7 @@ export interface ApiToken {
 }
 
 export interface TeamDetail extends Team {
-  guides: number;
+  work: number;
   /** How many members the plan is paid for. Zero on a free plan, where seats are not the limit. */
   seats?: number;
   /** Paid for through Bachs, so there is a billing page to open. A given plan has none. */
@@ -235,19 +165,19 @@ export interface TeamDetail extends Team {
 }
 
 /** Where a task is. Derived by the server on every read — see apps/api/src/claims.ts. */
-export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "review" | "done";
+export type TaskState = "draft" | "ready" | "blocked" | "claimed" | "stalled" | "done";
 
-/** One task on the board, as `GET /v1/tasks` sends it. */
+/** One piece of work in the queue, as `GET /v1/tasks` sends it. */
 export interface Task {
   id: string;
   title: string;
-  /** What it says to a person. Empty on a task from before summaries. */
+  /** What it says to a person. Empty on work from before summaries. */
   summary?: string;
-  /** The repo an agent has to be in to take it; empty for a task for no repo. */
+  /** The repo an agent has to be in to take it with no id; empty for no repo. */
   target: string;
   state: TaskState;
   created: string;
-  /** You wrote it, so ready, approve, reject and release are yours. */
+  /** You wrote it. */
   mine: boolean;
   /** You wrote it or administer its team, so you may manage it. */
   manage?: boolean;
@@ -268,30 +198,24 @@ export interface Task {
     asking?: string;
     /** What it ran and what came back, sent with the hand-in. Empty until it hands in. */
     evidence?: string;
-    /** A person's browser hand-in can provide a prose write-up without a separate report guide. */
+    /** What finishing took, in their words, sent with the hand-in. */
     writeup?: string;
-    /** The same evidence against the Acceptance line each piece answers, when the agent sorted it. */
+    /** The same evidence against what each piece answers, when the agent sorted it. */
     checks?: { check: string; ran: string; says?: string; ok?: boolean }[];
-    /** What they think it could break. One line, often empty. See 0032_claim_risk.sql. */
-    risk?: string;
-    report: string;
-    report_title?: string;
-    report_url?: string;
     pr: string;
     claimed_at: string;
     lease_until: string;
-    /** Whose agent has it. A teammate's agent can take your task. */
+    /** Whose agent has it. A teammate's agent can take your work. */
     by?: { handle: string; name: string; you: boolean };
   } | null;
 }
 
-/** One guide someone is working on right now, of any kind. See GET /v1/working. */
+/** One piece of work someone is on right now. See GET /v1/working. */
 export interface Working {
   id: string;
   title: string;
-  /** What it says to a person. Empty on a guide from before summaries. */
+  /** What it says to a person. Empty on work from before summaries. */
   summary?: string;
-  kind: string;
   target: string;
   url: string;
   state: "claimed" | "stalled";
@@ -311,48 +235,16 @@ export interface Working {
   lease_until: string;
 }
 
-/** A handoff or bug you wrote that somebody handed in, waiting on you. See GET /v1/handed_in. */
-export interface HandedIn {
-  /** The evidence sorted against the `## Verification` line each part answers, as JSON. */
-  checks?: string;
-  id: string;
-  title: string;
-  kind: string;
-  url: string;
-  /** The repo it was handed in from; '' for a person in the browser. What send-back names. */
-  place: string;
-  by: { handle: string; name: string };
-  agent: string;
-  host: string;
-  worktree: string;
-  note: string;
-  /** What it ran and what came back, sent with the hand-in. See migrations/0025_claim_evidence.sql. */
-  evidence: string;
-  /** What they had to adapt to make it work there. Prose, often empty. See 0031_writeup.sql. */
-  writeup?: string;
-  /** What they think it could break. One line, often empty. See 0032_claim_risk.sql. */
-  risk?: string;
-  /** Their verdict was that it worked. */
-  worked?: boolean;
-  at: string;
-}
-
 export interface HubData {
   me: Me | null;
-  guides: Guide[];
+  work: Work[];
   board: Board | null;
-  activity: Note[];
-  /** Your own acts, newest first. The window the server sends, not everything you have ever done. */
-  log: LogEntry[];
-  unread: number;
   tokens: ApiToken[];
   team: TeamDetail | null;
   tasks: Task[];
   working: Working[];
-  handedIn: HandedIn[];
 }
 
-/** One line of a guide's thread. See GET /v1/guides/:id/thread and claims.thread(). */
 /** One row of the Support table: a customer's request and where it stands (GET /v1/support). */
 export interface SupportRow {
   id: string;
@@ -362,10 +254,17 @@ export interface SupportRow {
   state: "new" | "needs_reply" | "with_development" | "waiting" | "solved";
   /** Since when the customer has waited on us; "" when the next word is theirs or it is solved. */
   waiting_since: string;
+  /** Waited on us longer than the four hours after which the team is reminded. */
+  late: boolean;
+  /** The customer's own latest words, on one line. */
+  said: string;
   last: { by: "customer" | "team" | ""; line: string; at: string };
   updated: string;
   /** Whether the request's team asked to be reminded to tell the customer a fix is done. */
   tell: boolean;
+  project: NeedProject | null;
+  /** What changed since you last looked; '' when nothing did. */
+  changed: string;
 }
 
 /** `GET /v1/support`: the requests, and the teams whose reminder the viewer (an owner) can set. */
@@ -374,6 +273,7 @@ export interface SupportList {
   teams: { slug: string; name: string; tell: boolean }[];
 }
 
+/** One line of a piece of work's thread. See GET /v1/work/:id/thread and claims.thread(). */
 export interface ThreadItem {
   id: string;
   kind:
@@ -382,79 +282,108 @@ export interface ThreadItem {
     | "handed_in"
     | "passed"
     | "released"
-    | "approved"
-    | "sent_back"
-    | "closed"
+    | "reopened"
     | "asked"
     | "replied"
     | "noted"
     | "customer"
-    | "answered"
-    | "verdict"
-    | "ack";
+    | "answered";
   at: string;
   body: string;
-  /** A verdict or an ack only: it worked, or they took it. */
-  ok?: boolean;
   by: { name: string; handle: string; agent: boolean; host: string; you: boolean };
 }
 
-/** One place a guide is held, with what came back if it was handed in. See GET /v1/guides/:id/context. */
+/** Whoever holds a piece of work. See GET /v1/work/:id/context. */
 export interface ContextClaim {
-  /** '' for a task; the taker's repo for a handoff or a bug, which is taken once per repo. */
-  place: string;
-  state: "claimed" | "stalled" | "review";
+  state: "claimed" | "stalled";
   by: { handle: string; name: string };
-  /** Held or handed in by the account looking at the page. */
+  /** Held by the account looking at the page. */
   mine?: boolean;
   agent: string;
   host: string;
   repo: string;
   note: string;
-  writeup: string;
   evidence: string;
-  checks: { check: string; ran: string; says?: string; ok?: boolean }[];
-  /** The reviewer's, so only the author is sent it. */
-  risk: string;
-  pr: string;
-  /** The write-up guide it handed in, when this reader can open it. */
-  report: { id: string; title: string; url: string } | null;
   claimed_at: string;
   lease_until: string;
   updated: string;
 }
 
-/** Everything around one guide, for its page in the hub. No markdown: that stays on the share page. */
-export interface GuideContext {
-  guide: Guide;
-  /** A task's repo, as the queue matches it; '' for no repo. Absent from an older server. */
-  target?: string;
-  /** Repos this account's tasks and agents already use, to pick from when marking a task Ready. */
-  repos?: string[];
-  /** A person marked this task safe for the runner to take with nobody watching. */
-  alone?: boolean;
-  /** A support request's customer and tracking number; null for any other guide. */
-  customer?: { name: string; email: string; ref: string } | null;
+/** Everything around one piece of work, for its page in the hub. No markdown: that stays on the share page. */
+export interface WorkContext {
+  work: Work;
+  /** Its repo, as the queue matches it; '' for no repo. */
+  target: string;
+  /** Repos this account's work and agents already use, to pick from when marking it Ready. */
+  repos: string[];
+  /** A person marked it safe for the runner to take with nobody watching. */
+  alone: boolean;
+  /** A support request's customer and tracking number; null for any other work. */
+  customer?: { name: string; email: string; ref: string; subject?: string } | null;
   owner: boolean;
   /** The owner of its team, and not its author: may act on it as if they were. */
   admin?: boolean;
   claims: ContextClaim[];
-  /** Every standing verdict, newest first, with what it showed: a "works" carries screenshots. */
-  verdicts: {
+  /** What it was finished with, newest first: each hand-in is kept as one (`complete()` in claims.ts). */
+  proofs: {
     ok: boolean;
     by: { handle: string; name: string };
     note: string;
     detail: string;
-    /** What finishing took, in the finisher's words. Absent from an older server. */
-    writeup?: string;
+    /** What finishing took, in the finisher's words. */
+    writeup: string;
     at: string;
   }[];
-  /** Each person's standing answer to "are you taking this?", with when they gave it. */
-  acks: { taken: boolean; by: { handle: string; name: string }; note: string; at: string }[];
-  parent: Guide | null;
-  children: Guide[];
-  blocked_by: Guide[];
-  blocks: Guide[];
-  /** The folders holding this guide that the reader can open. Absent from an older server. */
-  folders?: { id: string; title: string; color: string }[];
+  parent: Work | null;
+  children: Work[];
+  blocked_by: Work[];
+  blocks: Work[];
+  /** The projects holding it that the reader can open. */
+  projects: { id: string; title: string; color: string }[];
+}
+
+/** A project as `/v1/needs` names it: the top project a piece of work is linked into. */
+export interface NeedProject {
+  id: string;
+  title: string;
+  color: string;
+}
+
+/** One row of Needs you. See apps/api/src/needs.ts for the rank. */
+export interface NeedRow {
+  id: string;
+  /** Other open requests from the same customer under the same title, folded into this row. */
+  also: string[];
+  title: string;
+  summary: string;
+  reason: "customer" | "asking" | "stuck" | "untaken" | "came_back";
+  with: string;
+  since: string;
+  said: string;
+  project: NeedProject | null;
+  /** What changed since you last looked; '' when nothing did. */
+  changed: string;
+}
+
+export interface Needs {
+  rows: NeedRow[];
+  customers: {
+    id: string;
+    title: string;
+    customer: string;
+    ours: boolean;
+    since: string;
+    project: NeedProject | null;
+    changed: string;
+  }[];
+  closed: {
+    id: string;
+    title: string;
+    summary: string;
+    by: string;
+    at: string;
+    project: NeedProject | null;
+    changed: string;
+  }[];
+  unread: number;
 }

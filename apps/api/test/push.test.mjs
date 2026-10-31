@@ -19,20 +19,16 @@ test("only what needs you is pushed; the rest stays in the feed and the toasts",
     "customer_wrote",
     "email_sender",
     "emailed",
-    "failed",
-    "handoff",
     "hooked",
     "reader_unsure",
-    "sent_back",
+    "reopened",
+    "sent_to_you",
     "stalled",
     "stuck",
-    "taken",
     "task_finished",
-    "task_rejected",
     "untaken",
-    "verified",
   ]);
-  for (const quiet of ["pulled", "joined", "shared", "consumed", "task_claimed"])
+  for (const quiet of ["pulled", "joined", "shared", "archived", "task_claimed"])
     assert.ok(!PUSHED.has(quiet), `${quiet} is not pushed`);
   for (const k of PUSHED) assert.ok(KINDS.includes(k), `${k} is a real kind`);
 });
@@ -72,11 +68,11 @@ test("your own agent finishing your task reaches you, without an actor", () => {
 
 test("an agent stuck on you is told once, when the block starts", () => {
   const route = index.slice(
-    index.indexOf('app.put("/v1/guides/:id/progress"'),
+    index.indexOf('app.put("/v1/work/:id/progress"'),
     index.indexOf("const fenceIn"),
   );
   assert.match(route, /blocked\.test\(claim\.note\) && !blocked\.test\(before\?\.note \|\| ""\)/);
-  assert.match(route, /kind: "blocked",\s+guide_id: claim\.guide_id,\s+actor_id: "",/);
+  assert.match(route, /kind: "blocked",\s+work_id: claim\.work_id,\s+actor_id: "",/);
 });
 
 test("a subscription must be an https endpoint with browser-shaped keys", () => {

@@ -29,7 +29,7 @@
     }
   ],
 
-  // Outbound mail (handoffs, pulls, invites) through Cloudflare Email Service. No API key: the
+  // Outbound mail (work sent, pulls, invites) through Cloudflare Email Service. No API key: the
   // binding is the credential. EMAIL_FROM's domain must be onboarded to Email Service, and
   // sending to addresses outside the account needs the Workers Paid plan.
   "send_email": [{ "name": "EMAIL" }],
@@ -56,15 +56,15 @@
     //
     // `origin()` used to fall back to the request's own origin, so `passalong.kreativekorna.com`
     // minted share links, invite links, reset links and screenshot URLs under itself — which is
-    // the same problem the www route exists to avoid, one guide with two links and a share key in
+    // the same problem the www route exists to avoid, one piece of work with two links and a share key in
     // each. The old host keeps serving what was handed out before the move; it no longer creates
     // anything new.
     "PUBLIC_ORIGIN": "https://passalong.dev",
     "ENVIRONMENT": "production",
-    // Free tier: how many published/promoted guides one account may keep synced.
-    // Local guides are unlimited; this only gates the hosted copy.
+    // Free tier: how much ready work one account may keep synced.
+    // This gates the hosted copy.
     "FREE_SYNC_LIMIT": "25",
-    // Sender for handoff/invite mail. Must be on a domain onboarded to Email Service.
+    // Sender for work and invite mail. Must be on a domain onboarded to Email Service.
     "EMAIL_FROM": "no-reply@passalong.dev",
     // How the sender reads in an inbox list. Without it Gmail shows the local part, so every mail
     // arrived from "no-reply" — the one thing the sender cannot do, rather than who it is.

@@ -1,4 +1,4 @@
-// The Claude Code hooks `passalong setup` installs. See docs/V2.md §11.
+// The Claude Code hooks `passalong setup` installs.
 //
 // Two moments an agent forgets what it holds: when a session starts (a restart, a /clear, a
 // compaction), and when it decides it is done. SessionStart runs `passalong now --hook session`
@@ -26,14 +26,10 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
  * agent to the queue. So a session is told what the worktree holds, and to carry on only with what
  * was its own before a restart — never to resume another session's work.
  */
-export function nowText({ held = [], waiting = {} }) {
+export function nowText({ held = [], ready = 0 }) {
   if (held.length === 1) {
     const [h] = held;
-    const lines = [
-      // `kind` is required on what /v1/working sends. The `|| "task"` that used to be here was
-      // both dead and wrong — absent has meant transfer since kinds existed, never task.
-      `Passalong: This worktree holds ${h.id} (${h.kind}): ${h.title || h.id}.`,
-    ];
+    const lines = [`Passalong: This worktree holds ${h.id}: ${h.title || h.id}.`];
     if (h.note) lines.push(`Last note: "${h.note}".`);
     // The one thing here that is new information rather than a reminder: the person has written, and
     // nothing else in the session will say so until the agent next checks in.
@@ -56,7 +52,7 @@ export function nowText({ held = [], waiting = {} }) {
     const lines = [`Passalong: This worktree holds ${held.length} things:`];
     for (const h of held)
       lines.push(
-        `- ${h.id} (${h.kind}): ${h.title || h.id}${h.state === "stalled" ? " — stalled" : ""}` +
+        `- ${h.id}: ${h.title || h.id}${h.state === "stalled" ? " — stalled" : ""}` +
           `${h.replies ? ` — ${plural(h.replies, "message", "messages")} waiting` : ""}`,
       );
     lines.push(
@@ -65,13 +61,8 @@ export function nowText({ held = [], waiting = {} }) {
     );
     return lines.join("\n");
   }
-  const parts = [];
-  if (waiting.ready)
-    parts.push(plural(waiting.ready, "ready task for this repo", "ready tasks for this repo"));
-  if (waiting.inbox)
-    parts.push(plural(waiting.inbox, "guide handed to you", "guides handed to you"));
-  if (!parts.length) return "";
-  return `Passalong: ${parts.join(" and ")}. Call take with no id to start the next one, when the user wants that.`;
+  if (!ready) return "";
+  return `Passalong: ${plural(ready, "piece of work is", "pieces of work are")} ready for this repo. Call take with no id to start the next one, when the user wants that.`;
 }
 
 /**
@@ -81,7 +72,7 @@ export function nowText({ held = [], waiting = {} }) {
  * would leave it no way to end. The hook cannot tell which session took what, so it names
  * everything still open here and lets the session settle its own.
  */
-export function stopVerdict({ held = [], input = {} }) {
+export function stopDecision({ held = [], input = {} }) {
   // An agent that asked a question was told to stop and wait, so it must be let: blocking it would
   // make the instruction and the hook contradict each other, and the agent would pick one.
   const open = held.filter((h) => !h.asking);
@@ -131,8 +122,8 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /**
  * One line: what this worktree's agent holds, then what needs you and what is ready here.
- * `needs` counts everything waiting on the person: work handed in for review, agents stuck on
- * them, and guides handed to them.
+ * `needs` counts everything waiting on the person: drafts to read, agents asking or stuck on them,
+ * and agents gone quiet.
  */
 export function statusText({ held = [], needs = 0, ready = 0 }) {
   const parts = [];

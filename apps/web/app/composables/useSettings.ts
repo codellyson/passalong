@@ -57,9 +57,8 @@ export function useTeamExtras() {
   );
 }
 
-/** Which tab each team card has open, and which app the connect sheet shows. Settable from anywhere. */
+/** Which app the connect sheet shows, and whether it is open. Settable from anywhere. */
 export function useSettingsUi() {
-  const teamTab = useState<Record<string, string>>("settings:team-tab", () => ({}));
   const connect = useState("settings:connect", () => ({ open: false, app: "chatgpt" }));
-  return { teamTab, connect };
+  return { connect };
 }

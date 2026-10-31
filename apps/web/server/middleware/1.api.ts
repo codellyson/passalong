@@ -4,19 +4,19 @@
 //
 // Three surfaces stay with Hono rather than becoming Nuxt routes:
 //
-//   /v1/*                   the machine API, and the contract published CLIs point at
-//   /g/:id/:key.md          a guide's raw markdown, which records a pull
-//   /g/:id/:key/og.png      the unfurl card; `workers-og` is ~1.7MB of wasm behind a dynamic
+//   /v1/*                   the machine API, and the contract released CLIs point at
+//   /w/:id/:key.md          a piece of work's raw markdown, which records a pull
+//   /w/:id/:key/og.png      the unfurl card; `workers-og` is ~1.7MB of wasm behind a dynamic
 //                           import, so every other route would pay for it on a cold start
 //   /og.png                 the site's own card, same renderer and same reason
 //   /health                 what CI waits on after a deploy, on both serving hosts
 //
-// Everything else — including the guide *page* at /g/:id/:key — falls through to Nuxt. The match
+// Everything else — including the work *page* at /w/:id/:key — falls through to Nuxt. The match
 // is written out rather than delegated to Hono's own router because a miss must fall through
 // here, and handing the request over would instead produce Hono's 404.
 import api from "#api/index";
 
-const MACHINE_ROUTE = /^\/g\/[^/]+\/[^/]+(?:\.md|\/og\.png)$/;
+const MACHINE_ROUTE = /^\/w\/[^/]+\/[^/]+(?:\.md|\/og\.png)$/;
 
 /** The site's own unfurl card, rendered by the same workers-og import and for the same reason. */
 const SITE_CARD = "/og.png";

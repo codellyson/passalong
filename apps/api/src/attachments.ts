@@ -90,28 +90,28 @@ export function attachmentIds(text: string): string[] {
   return [...new Set([...found].map((m) => m[1] as string))];
 }
 
-/** What claiming needs: who, for what guide, what they wrote, and what the guide carries overall. */
+/** What claiming needs: who, for what work, what they wrote, and what the work carries overall. */
 interface Hold {
   account: string;
-  guide: string;
+  work: string;
   /** Ids in what this caller just wrote. Only these are claimed, and only for `account`. */
   mine: string[];
-  /** Ids the guide points at from anywhere. Anything outside this is released. */
+  /** Ids the work points at from anywhere. Anything outside this is released. */
   carried: string[];
 }
 
 /**
- * Point a guide at the files it carries, and let go of any it no longer does. The same two lists and
+ * Point a piece of work at the files it carries, and let go of any it no longer does. The same two lists and
  * the same reasoning as `holdShots`: `mine` decides what this caller may claim, and `account_id` is in
  * that WHERE so naming somebody else's id takes nothing; `carried` decides what is released, because a
- * guide's files come from its markdown and from every reply on it, written by different people.
+ * work's files come from its markdown and from every reply on it, written by different people.
  *
  * A released file becomes an orphan and is swept, not deleted here: a write is the wrong moment to
  * decide nobody wants a file.
  */
 export async function holdAttachments(
   db: D1Database,
-  { account, guide, mine, carried }: Hold,
+  { account, work, mine, carried }: Hold,
 ): Promise<void> {
   const keep = [...new Set([...mine, ...carried])];
   const statements = [];
@@ -119,28 +119,28 @@ export async function holdAttachments(
     statements.push(
       db
         .prepare(
-          `UPDATE attachment SET guide_id = ? WHERE account_id = ? AND id IN (${mine
+          `UPDATE attachment SET work_id = ? WHERE account_id = ? AND id IN (${mine
             .map(() => "?")
             .join(",")})`,
         )
-        .bind(guide, account, ...mine),
+        .bind(work, account, ...mine),
     );
   statements.push(
     keep.length
       ? db
           .prepare(
-            `UPDATE attachment SET guide_id = '' WHERE guide_id = ? AND id NOT IN (${keep
+            `UPDATE attachment SET work_id = '' WHERE work_id = ? AND id NOT IN (${keep
               .map(() => "?")
               .join(",")})`,
           )
-          .bind(guide, ...keep)
-      : db.prepare("UPDATE attachment SET guide_id = '' WHERE guide_id = ?").bind(guide),
+          .bind(work, ...keep)
+      : db.prepare("UPDATE attachment SET work_id = '' WHERE work_id = ?").bind(work),
   );
   await db.batch(statements);
 }
 
 /**
- * Delete files no guide ever claimed, or let go of. Same bargain as the screenshots': the age is the
+ * Delete files no work ever claimed, or let go of. Same bargain as the screenshots': the age is the
  * whole safety of it, the bucket goes first because an object with no row is invisible waste while a
  * row with no object is a dead download, and if the bucket refuses we stop and try the same batch
  * tomorrow rather than strand objects nothing would ever look for again.
@@ -148,7 +148,7 @@ export async function holdAttachments(
 export async function sweepAttachments(env: AttachEnv, { hours = 24, limit = 500 } = {}) {
   const cutoff = new Date(Date.now() - hours * 3600_000).toISOString();
   const { results } = await env.DB.prepare(
-    "SELECT id, type FROM attachment WHERE guide_id = '' AND created < ? ORDER BY created LIMIT ?",
+    "SELECT id, type FROM attachment WHERE work_id = '' AND created < ? ORDER BY created LIMIT ?",
   )
     .bind(cutoff, limit)
     .all<{ id: string; type: string }>();

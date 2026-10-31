@@ -1,33 +1,22 @@
-// The Passalong MCP server (stdio). This is the rail that makes Passalong tool-agnostic: any
-// MCP-capable agent can search, pull, and publish guides without leaving its session. With a
-// team, the same tools see the team's guides and the user's inbox.
+// The Passalong MCP server (stdio). Any MCP-capable agent can take work, hand it in, write work
+// down, and read and write a project's documents without leaving its session.
 //
 //   claude mcp add passalong -- passalong mcp
+//
+// Seventeen tools, four nouns: work, project, document, file (docs/WORK.md). The same tools are
+// served over HTTP by apps/api/src/mcp-http.ts; the two say the same things in the same words.
 import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as api from "./api.js";
 import { refusal, runChecks } from "./checks.js";
-import {
-  AREAS,
-  BUG_SECTIONS,
-  GUIDE_WARN,
-  outlineText,
-  parse,
-  SECTIONS,
-  section as sectionOf,
-  sizeWarning,
-  TASK_SECTIONS,
-  template,
-} from "./guide.js";
 import * as passalong from "./passalong.js";
+import { outlineText, parse, section as sectionOf, serialize, WORK_WARN } from "./work.js";
 
 /**
  * What the server calls itself in the MCP handshake — read from package.json rather than written
- * here, because a literal drifts. This one said 0.2.0 for two releases while the package was
- * 0.2.2, and the one thing a version string in a handshake is for is telling a client which build
- * it is talking to. `pnpm release` bumps package.json, so there is only one number to bump.
+ * here, because a literal drifts. `pnpm release` bumps package.json, so there is one number.
  */
 const VERSION = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -36,42 +25,36 @@ const VERSION = JSON.parse(
 const text = (s) => ({ content: [{ type: "text", text: s }] });
 
 /**
- * Said in front of every guide an agent opens, whatever its kind: the hand-in needs evidence, and
- * evidence is collected while the work happens, not reconstructed from memory once it is done.
- * Mirrors KEEP_EVIDENCE in apps/api/src/mcp-http.ts.
+ * Where the line `add_file` returns goes, which is not always new work. Proof of a hand-in belongs
+ * on the hand-in: six screenshots of a delivered change were once published as a document with six
+ * sections wrapped round them, because the upload tool named only one destination.
+ * Mirrors WHERE_THE_LINE_GOES in apps/api/src/mcp-http.ts.
  */
 const WHERE_THE_LINE_GOES =
-  "WHERE THE LINE GOES DEPENDS ON WHAT THE IMAGE IS EVIDENCE OF. Proof that work you are handing i" +
-  "n holds — a screen that renders right, a total that matches — goes in that check's `ran` on han" +
-  "d_in, and nothing is published: a check answered with a picture is shown, which is what the han" +
-  "d-in asks for. Only an image that is part of a DOCUMENT goes in a guide body — the screenshot i" +
-  "n a bug report, a diagram a guide is explaining — and then it must be in the markdown, because " +
-  "a guide travels as markdown to whoever holds its link and evidence beside the document does not" +
-  " travel at all; publishing claims whatever the markdown names, so attach first and publish afte" +
-  "r. DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS. Six images and a caption each is a hand-in, not" +
-  " a document, and wrapping them in Problem / Solution shape / Decisions / Steps / Verification t" +
-  "o make them publishable is how a set of pictures becomes fifteen hundred words nobody asked for" +
-  ". png, jpg, webp or gif.";
+  "WHERE THE LINE GOES DEPENDS ON WHAT THE FILE IS EVIDENCE OF. Proof that work you are handing in " +
+  "holds — a screen that renders right, a total that matches — goes in that check's `ran` on " +
+  "hand_in, and nothing new is written: a check answered with a picture is shown, which is what " +
+  "the hand-in asks for. A picture that is part of the work itself — the screenshot of a bug, a " +
+  "diagram it explains — goes in its text (create_work, or update_work), because work travels as " +
+  "its text and a file beside it does not travel at all. DO NOT WRITE NEW WORK TO CARRY " +
+  "SCREENSHOTS: six images and a caption each is a hand-in. With `project`, the file is kept in " +
+  "that project instead. Pictures (png, jpg, webp, gif) are drawn where they are named; anything " +
+  "else is a file to download.";
 
 /**
- * What a screenshot has to be a screenshot OF.
- *
- * "A check is run or shown" made a picture mandatory, and an agent short of one built a page to
- * photograph: it added `src/app/notes-preview`, shot that, then `rm -rf`'d it and published the
- * shots as evidence that the real screen rendered. The rule was satisfied and almost nothing was
- * proved — the measure had become the target, and the page the picture showed no longer existed.
- *
+ * What a screenshot has to be a screenshot OF. An agent short of a picture once built a page to
+ * photograph, shot it, deleted it, and offered the shots as evidence the real screen rendered.
  * Mirrors SHOOT_THE_REAL_THING in apps/api/src/mcp-http.ts.
  */
 const SHOOT_THE_REAL_THING =
   "SHOOT THE RUNNING THING, NOT SOMETHING YOU BUILT TO SHOOT. A screenshot is worth what the sc" +
   "reen behind it is worth: the real route in the real app, reached the way a reader would reac" +
   "h it. A scratch page, a story, a harness or a component rendered on its own is a picture of " +
-  "your scaffolding, and it can look right while the thing the guide is about does not. If the " +
+  "your scaffolding, and it can look right while the thing the work is about does not. If the " +
   "only way you could get a picture was to build something, that is not evidence the real scree" +
   "n works — say what you built and why in `writeup`, and leave the check to the commands that " +
   "do hold. NEVER DELETE WHAT YOUR EVIDENCE POINTS AT: a shot of a page you removed afterwards " +
-  "is one nobody can take again, including you.";
+  "is one nobody can take again, including you.\n\n";
 
 const KEEP_EVIDENCE =
   "KEEP YOUR EVIDENCE AS YOU GO. hand_in needs it: the commands you ran and what came back, the " +
@@ -79,15 +62,9 @@ const KEEP_EVIDENCE =
   "writing from memory, which is the thing evidence is here to replace.\n\n";
 
 /**
- * Said in front of every guide an agent has to locate things in for itself — a bug and a task.
- *
- * The failure it is here to stop: an agent lists one directory, or opens the one file it expected,
- * and concludes from that. It then reports that a thing is absent, or that it found the only
- * occurrence, having never looked past the place it happened to start. The conclusion is confident
- * and wrong, and nothing downstream can tell, because the evidence it brings is real — it is just
- * evidence of a search that was too small.
- *
- * Mirrors SEARCH_WIDE in apps/api/src/mcp-http.ts.
+ * The failure this stops: an agent lists one directory, or opens the one file it expected, and
+ * reports that a thing is absent, or that it found the only occurrence. Confident and wrong, and
+ * nothing downstream can tell. Mirrors SEARCH_WIDE in apps/api/src/mcp-http.ts.
  */
 const SEARCH_WIDE =
   "SEARCH THE WHOLE TREE BEFORE YOU CONCLUDE. Listing a directory, or reading the one file you " +
@@ -96,77 +73,12 @@ const SEARCH_WIDE =
   'already handled, search across the repository and let the output be your reason. "I looked" ' +
   "is a claim; the search and what it printed is evidence.\n\n";
 
-/**
- * What to say in front of a guide whose kind changes what the reader should do with it.
- *
- * The heading text is what an agent keys on, and a bug's or a task's headings are close enough to
- * a transfer guide's to be treated as one by an agent that never opened the frontmatter. So the
- * kind is stated before the document, in the imperative. A transfer guide needs nothing: following
- * it is what an agent does with an unmarked document anyway.
- */
-function leadFor(meta) {
-  if (meta.kind === "bug")
-    return (
-      "THIS IS A BUG REPORT, NOT WORK TO REPEAT. Do not follow Reproduce as instructions " +
-      "— those steps produce the defect. Fix what Problem describes, then check " +
-      "Verification and answer with hand_in.\n\n" +
-      SEARCH_WIDE +
-      SHOOT_THE_REAL_THING +
-      KEEP_EVIDENCE
-    );
-  if (meta.kind === "task")
-    return (
-      "THIS IS A TASK: WORK NOBODY HAS DONE YET. There are no Steps to follow — work out how to " +
-      "reach Goal within Constraints, and leave Out of scope alone. It is done when every check " +
-      "under Acceptance holds. Opening it here does not make it yours: to work on it, call take " +
-      "with its id in the repo it is for, so no other agent can. Then progress, and hand_in " +
-      "with a write-up.\n\n" +
-      SEARCH_WIDE +
-      SHOOT_THE_REAL_THING +
-      KEEP_EVIDENCE
-    );
-  // A transfer guide is handed over untouched: it is a document to follow, and anything in front
-  // of it is one more thing that is not the document. The reminder still reaches the agent on the
-  // answer's `next` line, which is where every other instruction from the server rides.
-  return "";
-}
+/** Said in front of every piece of work an agent takes. Mirrors LEAD in apps/api/src/mcp-http.ts. */
+const LEAD = SEARCH_WIDE + SHOOT_THE_REAL_THING + KEEP_EVIDENCE;
 
 /**
- * The rest of the report this issue came from.
- *
- * A QA pass files six bugs at once, and they arrive in an inbox as six unrelated guides — which
- * is how the same root cause gets fixed three times, or how someone fixes one of a pair and calls
- * the sweep done. Naming the siblings costs one request and only happens for a guide that has a
- * parent. A failure here is not worth failing the pull over: the issue itself is what was asked
- * for, and it is already in hand.
- */
-async function related(meta) {
-  if (!meta.report) return "";
-  try {
-    const { report } = await api.report(meta.report);
-    const others = (report.areas || [])
-      .flatMap((a) => a.issues.map((i) => ({ ...i, area: a.area })))
-      .filter((i) => i.id !== meta.id);
-    if (!others.length) return "";
-    const lines = others.map(
-      (i) => `  ${i.id}  [${i.severity || "--"}] ${i.area || "no area"} — ${i.title}`,
-    );
-    return (
-      `\n\n<!-- passalong: filed with ${others.length} other issue${others.length === 1 ? "" : "s"}` +
-      `${report.title ? ` in "${report.title}"` : ""}. Fix only this one unless asked; the others are\n` +
-      `${lines.join("\n")}\n-->`
-    );
-  } catch {
-    return "";
-  }
-}
-/**
- * An answer a client can read as data as well as prose.
- *
- * `structuredContent` is the same JSON the text block holds; the spec asks for both, because a
- * tool "that returns structured content SHOULD also return the serialized JSON in a TextContent
- * block" for clients that only read text. Only an object goes in the structured field — the spec
- * allows any JSON value there, but a bare array or string tells a client nothing it could key on.
+ * An answer a client can read as data as well as prose. The spec asks for both: structured content
+ * "SHOULD also return the serialized JSON in a TextContent block" for clients that only read text.
  */
 const json = (data) => ({
   ...text(JSON.stringify(data, null, 2)),
@@ -174,52 +86,25 @@ const json = (data) => ({
 });
 
 /**
- * What each tool does to the world, said out loud. Mirrors the same block in
- * apps/api/src/mcp-http.ts, which had these and this server did not — the same four jobs described
- * to a client two different ways, on the surface most agents actually reach.
- *
- * MCP's defaults for a tool that says nothing are the worst case — it writes, it may destroy, it
- * reaches outside — and a client acts on them: over HTTP, ChatGPT badged every tool here, `inbox`
- * included, as a destructive public write. The spec is equally clear that these are hints and
- * nothing more: "clients MUST consider tool annotations to be untrusted unless they come from
- * trusted servers". They are a description, not a permission.
- *
- * `openWorldHint` is false for everything that stays inside Passalong. Only attach_screenshot
- * reaches outside it, for a file on this machine that Passalong did not put there.
+ * What the four calls that answer with a record return. Declared only for those: `outputSchema`
+ * puts a MUST on the server, so it is a promise, and promising a shape this server does not
+ * control would be worse than staying quiet. Every field is optional and the objects are open —
+ * the object itself goes to registerTool, never its `.shape`, which is rebuilt closed and
+ * advertised as `additionalProperties: false`.
  */
-/**
- * What the three verbs that answer with JSON return. Declared only for those: `outputSchema` puts
- * the obligation on the server — "Servers MUST provide structured results that conform to this
- * schema", while a client only SHOULD check — so it is a promise, and promising a shape this
- * server does not control would be worse than staying quiet. `take` is the reason for the rule
- * rather than an exception to it: it answers with the guide's markdown and a lead-in to read, not
- * with a record.
- *
- * Every field is optional and the objects are open. The four calls serve three kinds of guide and
- * the routes add fields freely, so a required key here would be a promise broken by a kind that
- * does not carry it.
- */
-// The object itself is handed to registerTool, not its `.shape`: a shape is rebuilt into a closed
-// object and advertised as `additionalProperties: false`, which would be this server promising that
-// an answer carries nothing else — and then breaking that promise the first time a route adds a
-// field. Passing the object through keeps it open.
 const openObject = (shape) => z.object(shape).partial().passthrough();
-const progressOut = openObject({
-  id: z.string(),
-  lease_until: z.string(),
-  note: z.string(),
-});
-const handInOut = openObject({
-  id: z.string(),
-  state: z.string(),
-  report: z.string(),
-  ok: z.boolean(),
-});
+const progressOut = openObject({ id: z.string(), lease_until: z.string(), note: z.string() });
+const handInOut = openObject({ id: z.string(), state: z.string() });
 const passOut = openObject({ id: z.string(), passed: z.boolean() });
+const askOut = openObject({ id: z.string(), lease_until: z.string() });
 
+/**
+ * What each tool does to the world, said out loud. MCP's defaults for a tool that says nothing are
+ * the worst case, and clients act on them. These are hints, not permissions.
+ */
 const READS = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const ADDS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
-// Removes something that cannot be brought back. Only a person's request should lead here.
+// Removes or replaces something that cannot be brought back. Only a person's request should lead here.
 const REMOVES = { readOnlyHint: false, destructiveHint: true, openWorldHint: false };
 const fail = (err) => ({ content: [{ type: "text", text: err.message }], isError: true });
 
@@ -231,8 +116,7 @@ export function nextNote({ next = [], say = "" } = {}, id = "") {
   const lines = next.map(
     (s) =>
       `  ${s.tool}${id && s.tool !== "take" ? ` ${id}` : ""} — when ${s.when} (${s.why})` +
-      // What the call has to carry, under the call it belongs to: an agent that reads this at the
-      // end of a long session should not have to remember hand_in takes evidence.
+      // What the call has to carry, under the call it belongs to.
       (s.with ? `\n      with ${s.with}` : ""),
   );
   if (say) lines.unshift(`  ${say}`);
@@ -241,8 +125,7 @@ export function nextNote({ next = [], say = "" } = {}, id = "") {
 
 /**
  * What the person said to this agent since it last heard, in front of everything else: a reply is
- * the thing the agent stopped for, and burying it under the guide it already knows is how it gets
- * missed. See claims.deliver() in apps/api/src/claims.ts.
+ * the thing the agent stopped for. See claims.deliver() in apps/api/src/claims.ts.
  */
 export function repliesNote(replies = []) {
   if (!Array.isArray(replies) || !replies.length) return "";
@@ -263,6 +146,22 @@ const failWith = (err) => {
   };
 };
 
+/** One call, its answer as JSON, its refusal as an error. */
+const run = (fn) => async (args) => {
+  try {
+    return json(await fn(args));
+  } catch (err) {
+    return fail(err);
+  }
+};
+
+const CWD = z
+  .string()
+  .optional()
+  .describe("the worktree you are working in; default is the server's cwd");
+
+const STATUS = { ready: "ready", draft: "draft", archived: "done" };
+
 /**
  * The server, built but not connected. Split out so the tool surface can be read without a
  * transport — `test/mcp-surface.test.js` lists the tools over an in-memory pair and checks what
@@ -273,143 +172,75 @@ export function buildServer() {
     { name: "passalong", version: VERSION },
     {
       instructions:
-        "Passalong hands work between contexts as guides: markdown with frontmatter, in three " +
-        "kinds, and `kind:` in the frontmatter says which. READ IT BEFORE ACTING — each asks " +
-        "for different behaviour. Every kind is worked with the same four calls:\n" +
-        "take (with an id, or none for the next thing waiting for you) says you are doing it and " +
-        "returns it; nobody else can take it here while you hold it, and its sender sees you are " +
-        "on it. progress, with a one-line note at each milestone — 30 minutes of silence marks it " +
-        "stalled. hand_in when done here. pass, with the reason, when it is not yours or you are " +
-        "stuck. ask, with a question, when you need an answer from the person: you keep what you " +
-        "hold, stop and wait, and take it again once they have replied. Every answer ends with " +
-        "`next`: what to call now. Follow it, and when it says to " +
-        "stop, stop. OPEN A GUIDE YOU MEAN TO ACT ON WITH take, NOT get_guide: get_guide only " +
-        "reads, and the sender learns nothing. If take says somebody else has it, tell the user " +
-        "instead of doing the work twice.\n" +
+        "Passalong keeps a team's work and what it knows, as four things. WORK is something " +
+        "someone must still do: one thing, with no kinds, sections or templates — a title, a " +
+        "summary for a person, and whatever text, pictures and files the next reader needs, in " +
+        "whatever shape fits. Read it and work out what done means; nothing tells you in advance. " +
+        "A PROJECT is a place for one product or body of work; its DOCUMENTS are what to know " +
+        "about it — a README saying what it is, who uses it and how it is built, a page per area, " +
+        "a Log of what changed. FILES are pictures and other files, on work or in a project.\n" +
+        "DOING WORK. take (with an id, or none for the next thing waiting here) says you are doing " +
+        "it and returns it; nobody else can take it while you hold it, and whoever sent it sees " +
+        "you are on it. progress, with a one-line note at each milestone — 30 minutes of silence " +
+        "marks it stalled. hand_in when it is done. pass, with the reason, when it is not yours or " +
+        "you are stuck. ask, with a question, when you need the person's answer: you keep it, stop " +
+        "and wait, and take it again once they have replied. Every answer ends with `next`: what " +
+        "to call now. Follow it, and when it says to stop, stop. OPEN WORK YOU MEAN TO DO WITH " +
+        "take, NOT find_work: find_work only reads, and nobody learns you are on it. If take says " +
+        "somebody else has it, tell the user instead of doing the work twice.\n" +
         "EVERY HAND-IN CARRIES EVIDENCE: what you ran and what came back — the command and the " +
         "lines that decided it, a test summary, a link to the change, or a screenshot url. " +
         "Collect it as you work rather than writing it from memory at the end. hand_in without " +
-        "it is refused, because the write-up and the verdict are both your word for your own " +
-        "work and evidence is the part the person reviewing it can check.\n" +
-        "EVERY GUIDE SAYS WHAT IT IS TO A PERSON. The document is for agents: exact, dense, full of " +
-        "ids and paths. Put `summary:` in its frontmatter — one or two plain sentences, 400 " +
-        "characters at most, no ids, paths or jargon, saying what this is and whether anybody has " +
-        "to act. It is what the person sees first in their hub; the document is behind it. A guide " +
-        "with no summary is refused.\n" +
-        "SAY WHICH KIND IT IS. There is no default: a guide with no `kind:` line is refused, and so " +
-        "is a spelling that is not one of the three. A NEW GUIDE IS READY: it reaches whoever it is " +
-        "for at once. Say `status: draft` only when the person should read it first — something you " +
-        "are unsure of — and tell them; plan_tasks drafts for you. Every kind moves the same way — " +
-        "Ready, taken, handed in, approved. " +
-        `kind: task is work nobody has done yet. Sections: ${TASK_SECTIONS.join(", ")}. ` +
-        "It has no Steps: work out how to reach Goal within Constraints, leave Out of scope " +
-        "alone, and treat Acceptance as the definition of done. A proposal awaiting a team decision " +
-        "stays Draft until a person makes it Ready. hand_in when every Acceptance line holds: it is " +
-        "final — the task goes to Done with what you showed, and nobody reviews it after you — so " +
-        "show it, and say anything you had to adapt in `writeup` (500 characters).\n" +
-        `kind: transfer (or no kind: line) is a finished implementation to repeat here. Sections: ${SECTIONS.join(", ")}. ` +
-        "Follow its Steps, adapting anything marked ASSUMES to this codebase; run its " +
-        "Verification, then hand_in with ok and, when it failed, a note saying what went wrong.\n" +
-        `kind: bug is a defect to FIX here. Sections: ${BUG_SECTIONS.join(", ")}. ` +
-        "It has no Steps and nothing in it is a procedure to apply: Reproduce is how to see the " +
-        "bug and running it produces the bug, Verification is the behaviour that should have " +
-        "happened. Fix the defect, then check Verification and hand_in — ok true once the " +
-        "behaviour it describes actually holds. A bug report is not broken because you " +
-        "reproduced it. " +
-        "When you find defects you are not fixing — a test run, a QA pass, a review — call " +
-        "file_bugs with all of them at once; each becomes a guide someone can take on its own. " +
-        "AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT. Before filing or publishing, " +
-        "attach it with attach_screenshot and pass what it returns as `evidence` — a screenshot " +
-        "you described instead of attaching is the most useful thing in the report, thrown away. " +
-        "A guide already filed without one is not stuck: get_guide it, add the markdown line to " +
-        "the body, and publish_guide the same id — publishing claims whatever the markdown names. " +
-        "\n" +
-        "When the user asks you to write a task, or to queue work for an agent, call plan_tasks — " +
-        "one step for one task — with every section filled from the conversation and the code, " +
-        "Acceptance as checks a person can run; it fills in the repo you are in. When the user " +
-        "asks you to plan or break down a larger goal, call plan_tasks with the steps in order, " +
-        "`after` naming the earlier steps each needs. Tasks land in Draft, not the queue: tell the " +
-        "user to read them and run `passalong ready <id>` or `passalong ready --all`.\n" +
-        "When the user asks to pass along, hand off, or share what was just done, distill the " +
-        "session into a guide (guide_template kind transfer shows the shape) and call " +
-        "publish_guide, with `to` as team, team/@handle for one teammate, or team/#group for the " +
-        "people who do a thing. " +
-        "BEFORE PUBLISHING ANYTHING, CHECK WHAT IS ALREADY OPEN: call board (it lists what this " +
-        "worktree holds) or read the inbox. If this session's work answers something you hold, hand_in " +
-        "that — never publish a second guide about it. A transfer guide is for work that has to " +
-        "cross a boundary: another repo, another machine, a teammate without your branch. Work you " +
-        "committed and pushed where the team can already see it has crossed no boundary, and a " +
-        "guide about it is one more thing for somebody to read and review; what is worth " +
-        "publishing from a session like that is what is still open, as a bug or a task. " +
-        '"Update the passalong", "add this to passalong" and the like are ambiguous — hand in ' +
-        "what you hold, add a follow-up, or publish something new? Ask which, in one line, rather " +
-        "than publishing and leaving the user to undo it. " +
-        "At the start of work, inbox shows guides teammates have handed to this user — take one " +
-        "to start it — and activity shows whether the guides they handed off have landed. When " +
-        "the user asks what they have been working on, or wants a standup or a summary of a " +
-        "period, call log — but say that it holds what they passed along and not everything they " +
-        "did. Gotchas are the highest-value section: record what failed and why.\n" +
-        "A FOLDER IS A PLACE; ITS DOCUMENTS ARE WHAT TO KNOW; GUIDES ARE WHAT TO DO. Sort every " +
-        "item before writing it into a folder. If someone still has to act on it — a defect that " +
-        "is still open, work not yet done, a check nobody has run — it is a guide: kind bug for " +
-        "something broken, kind task for work to do. Publish it and link_folder_guide it into the " +
-        "folder; a guide has an owner, a state and an answer. A document has none of those and " +
-        "tells nobody, so open work recorded only as a document is lost. If it is what someone " +
-        "needs to know — an overview, a decision, a finding, something already fixed with its " +
-        "commit — it is a document. An incident is both: one overview document, a document per " +
-        "resolved finding, and a bug or task guide per open item, all in the incident's folder. " +
-        "WHERE A FOLDER LIVES is in the `space` field of create_folder and get_folder: private, " +
-        "or a named team. Tell the person that, never what you meant to do; a folder made without " +
-        "`team` is private, and a subfolder takes its parent's space.\n" +
-        "FOLDERS ARE REUSABLE PROJECT CONTEXT, NOT GUIDES. When the user asks for a folder for a " +
-        "script, brief, assets or work spanning several guides, call list_folders first to avoid " +
-        "making a duplicate. If none fits, call create_folder with a title and short description. " +
-        "Use its parent id to nest a subfolder at any depth; keep a related project together. " +
-        "A folder's color can mark an area, and update_folder can recolor or move it later. " +
-        "A short request is enough: name it from the person's purpose and draft the first Markdown " +
-        "document with create_folder_document. Do not leave an empty folder or make them fill a form. " +
-        "Pass `team` only when the user wants it shared with that team; use the slug they named " +
-        "or one returned by list_folders, and omit it for a private folder. Use the returned " +
-        "folder id with create_folder_document to add Markdown, get_folder to see its contents, " +
-        "get_folder_document to read text and its version, and save_folder_document with that " +
-        "version when editing. On a stale-version refusal, reread before retrying so another " +
-        "person's work is not lost. Use add_folder_asset for a screenshot or file available on " +
-        "this machine, and get_folder_asset to read one already there. " +
-        "To put a guide in a folder — a task, bug or handoff, new or already published — publish it " +
-        "as usual (for a team folder, to that folder's team, or its members cannot see it), then call " +
-        "link_folder_guide with the folder id and the guide id. Linking leaves the guide unchanged; " +
-        "unlink_folder_guide takes it out again. Delete a document or file with " +
-        "delete_folder_document or delete_folder_asset only when the person asked for it to go: " +
-        "neither can be undone. No tool deletes a whole folder; a person does that in the hub. " +
-        "share_folder returns a link anyone can read the folder by, like a guide's; use it only " +
-        "when the person asked to share the folder. " +
-        "list_folders with query finds folders and documents by their words, and with guide the " +
-        "folders a guide is in. rename_folder_document renames a document and move_folder_document " +
-        "moves it to another folder in the same space, keeping its history; " +
-        "get_folder_document_history reads earlier versions, so a bad edit can be put back.\n" +
-        "A FOLLOW-UP IS MORE CONTEXT FOR A GUIDE, WRITTEN AS ITS OWN GUIDE. When a guide needs " +
-        "more context — a missing detail, a step that needed explaining, what changed since, what " +
-        "you found doing it — publish that context with publish_guide `parent` set to the guide's " +
-        "id. It is listed under the original, and anyone who opens the original, person or agent, " +
-        "gets it too. get_guide and take return a guide's follow-ups after it; read them " +
-        "before acting. They also return the guide it follows, in front of it: a follow-up is a " +
-        "note on a bigger piece of work, not the work. If it needs that guide done and it is " +
-        "not, say so rather than starting.",
+        "it is refused, because your note is your word for your own work and evidence is the " +
+        "part a person can check.\n" +
+        "WRITING WORK DOWN. create_work takes one piece of work or several. Each says what it is " +
+        "to a person in `summary` — one or two plain sentences, 400 characters at most, no ids, " +
+        "paths or jargon, saying what this is and whether anybody has to act. It is what the " +
+        "person sees first; the text behind it is for agents: exact, dense, full of ids and " +
+        "paths. New work is Ready: it reaches whoever it is for at once. Pass `draft: true` when " +
+        "a person should read it first — a plan of several pieces, or something you are unsure " +
+        "of — and tell them. A tag such as bug, feature or question may describe it; nothing " +
+        "turns on one. BEFORE WRITING ANYTHING DOWN, CHECK WHAT IS ALREADY OPEN: find_work with " +
+        "nothing shows the board and what this worktree holds. If this session's work answers " +
+        "something you hold, hand_in that — never write a second piece of work about it. Defects " +
+        "you found and are not fixing go in one create_work call, each its own item, so each can " +
+        "be taken on its own. AN IMAGE THE USER SHOWED YOU IS EVIDENCE, NOT CONTEXT: add_file it " +
+        "and put the line it returns in the text — a screenshot described instead of attached is " +
+        "the most useful thing in the report, thrown away. update_work changes work that exists: " +
+        "Ready, Draft or archived, who it is for, or its text.\n" +
+        "WHAT YOU LEARN GOES INTO THE PROJECT'S DOCUMENTS. When the user asks you to pass this " +
+        "along, hand it off, capture it, or share what was just done, write what the next person " +
+        "needs to know into the project's documents: find_projects, read_document its README and " +
+        "the page for that area, and save_document to update the page that already covers it " +
+        "rather than adding a new one each time, with a line on its Log. Never hand knowledge to " +
+        'one person as a piece of work. "Update the passalong", "add this to passalong" and the ' +
+        "like are ambiguous — hand in what you hold, update the documents, or write new work? Ask " +
+        "which, in one line, rather than writing and leaving the user to undo it.\n" +
+        "A PROJECT IS A PLACE; ITS DOCUMENTS ARE WHAT TO KNOW; WORK IS WHAT TO DO. Sort " +
+        "everything before writing it. If someone still has to act on it — a defect still open, " +
+        "work not yet done, a check nobody has run — it is work: it has an owner, a state and an " +
+        "answer. A document has none of those and tells nobody, so open work recorded only as a " +
+        "document is lost. If it is what someone needs to know — an overview, a decision, a " +
+        "finding, something already fixed with its commit — it is a document. WHERE A PROJECT " +
+        "LIVES is in the `space` field find_projects and save_project return: private, or a named " +
+        "team. Tell the person that, never what you meant to do; a project made without `team` " +
+        "is private, and one made inside another takes its space. Call find_projects before " +
+        "save_project, so you do not make a duplicate; a short request is enough to name one and " +
+        "write its first document. read_document gives a document's text and version; " +
+        "save_document with that version, and on a stale-version refusal read it again before " +
+        "retrying, so nobody's writing is lost. Every version is kept, and read_document with " +
+        "`history` lists them, so a bad edit can be put back. delete_document and delete_file " +
+        "only when the person asked for that one to go: neither can be undone, and no tool " +
+        "deletes a whole project.\n" +
+        "SEVERAL ACCOUNTS. When this machine has more than one signed in and none is chosen, " +
+        "every call is refused until accounts with `use` says which. Ask the person; never choose.",
     },
   );
 
-  // ---- the four verbs (docs/V2.md §11) --------------------------------------------------------
-  // One implementation each. The older tool names above call these too, so an agent following an
-  // old prompt gets exactly what one following a new prompt gets.
-
-  /** An answer as JSON, with the server's next move after it. */
+  /** An answer as JSON, with the server's next move after it, and a reply in front of it. */
   const answer = (r, id) => {
     const { next, say, ...rest } = r || {};
     const note = nextNote({ next, say }, id);
-    // The note is what the agent acts on and it is prose, so it stays in the text half only. The
-    // structured half is the answer itself, which is what `outputSchema` below describes.
-    // A reply goes first, in prose: it is what the agent stopped for, and inside the JSON it reads
-    // as one more field.
     const said = repliesNote(rest.replies);
     return {
       ...text(
@@ -418,685 +249,15 @@ export function buildServer() {
       structuredContent: rest,
     };
   };
-
-  async function doTake({ id, cwd, any }) {
-    const dir = cwd || process.cwd();
+  const verb = (fn) => async (args) => {
     try {
-      const r = await passalong.take(id, { cwd: dir, any: Boolean(any) });
-      if (!r.guide) return text(nextNote(r) || "Nothing is waiting for this agent here.");
-      const meta = parse(r.guide.markdown).meta;
-      const siblings = await related(meta);
-      const context = await passalong.followUps(meta);
-      const from = await passalong.parentGuide(meta);
-      const held =
-        `<!-- passalong: ${r.guide.id} is yours` +
-        `${r.guide.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->`;
-      const said = repliesNote(r.replies);
-      return text(
-        `${said ? `${said}\n\n` : ""}${from}${leadFor(meta)}${r.guide.markdown}${siblings}${context ? `\n\n${context}` : ""}` +
-          `\n\n${held}\n${nextNote(r, r.guide.id)}\n${passalong.followUpNote(meta)}`,
-      );
-    } catch (err) {
-      const h = err.body?.holder;
-      if (h)
-        return fail({
-          message:
-            `${err.message}. Somebody else is on it here${h.agent ? ` (agent ${h.agent}${h.host ? ` on ${h.host}` : ""})` : ""}${h.note ? ` (last said: "${h.note}")` : ""}. ` +
-            "Tell the user before doing this work too; get_guide reads it without taking it.",
-        });
-      return failWith(err);
-    }
-  }
-
-  async function doProgress({ id, note, cwd }) {
-    try {
-      return answer(await passalong.progress(id, note || "", { cwd: cwd || process.cwd() }), id);
+      return answer(await fn(args), args.id);
     } catch (err) {
       return failWith(err);
     }
-  }
+  };
 
-  async function doHandIn({
-    id,
-    ok,
-    note,
-    evidence,
-    checks,
-    writeup,
-    risk,
-    markdown,
-    report,
-    pr,
-    cwd,
-  }) {
-    try {
-      // A check that names a command is run here, before anything is recorded, and its exit code
-      // decides it rather than the agent's account of it. A failure is refused with the command's
-      // own output: the claim is still held, nothing is written, and the agent has what it needs
-      // to fix. Checks with no `cmd` pass straight through to the prose rule.
-      const at = cwd || process.cwd();
-      const done = runChecks(checks || [], { cwd: at });
-      if (done.failed)
-        return {
-          content: [
-            { type: "text", text: refusal(done.failed, { ran: done.ran, total: checks.length }) },
-          ],
-          isError: true,
-        };
-      const r = await passalong.handIn(id, {
-        ok,
-        note: note || "",
-        evidence: evidence || "",
-        checks: done.checks,
-        writeup: writeup || "",
-        risk: risk || "",
-        markdown,
-        report,
-        pr: pr || "",
-        cwd: at,
-      });
-      return answer(r, id);
-    } catch (err) {
-      return failWith(err);
-    }
-  }
-
-  async function doAsk({ id, question, cwd }) {
-    try {
-      return answer(await passalong.ask(id, question, { cwd: cwd || process.cwd() }), id);
-    } catch (err) {
-      return failWith(err);
-    }
-  }
-
-  async function doPass({ id, why, cwd }) {
-    try {
-      return answer(await passalong.pass(id, why, { cwd: cwd || process.cwd() }), id);
-    } catch (err) {
-      return failWith(err);
-    }
-  }
-
-  server.registerTool(
-    "assign",
-    {
-      title: "Give it to someone else",
-      annotations: ADDS,
-      description:
-        "Reassign a guide or task the user wrote, or one assigned to them, to someone else in its team, when the user asks: " +
-        '`to` is @handle for one person, "@ada,@bola" for several named people, #group for the people who do a thing, or "team" for ' +
-        "everyone. Whoever held it and is left out has it taken back and is told; a task then only " +
-        "goes to the new assignee's agents. Its author, or whoever it is assigned to, can do this.",
-      inputSchema: {
-        id: z.string().describe("passalong id"),
-        to: z.string().describe('"@handle", "#group", or "team"'),
-      },
-    },
-    async ({ id, to }) => {
-      try {
-        return json(await passalong.assign(id, to));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "list_folders",
-    {
-      title: "List project folders",
-      annotations: READS,
-      description: `Find project folders of documents, assets and guides. Pass query to find the folders whose name, description, or any document's name or text mention those words; each then names its matching documents. Pass guide to find the folders a guide is in. Requires sync sign-in.`,
-      inputSchema: {
-        scope: z.string().optional().describe('"all", "mine", or a team slug'),
-        query: z.string().optional().describe("Words to look for in folders and their documents"),
-        guide: z.string().optional().describe("A guide id: only the folders it is linked in"),
-      },
-    },
-    async ({ scope, query, guide }) => {
-      try {
-        return json(await api.folders(scope || "all", { query, guide }));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "create_folder",
-    {
-      title: "Create project folder",
-      annotations: ADDS,
-      description:
-        "Create a folder or nested subfolder after checking list_folders. Pass parent to nest it; omit team for a private root, and pass a team slug only when sharing was requested. A subfolder inherits its parent's space. The answer's `space` says where it landed: report that to the person.",
-      inputSchema: {
-        title: z.string().describe("Name of the project or body of work"),
-        description: z.string().optional().describe("Short purpose of the folder"),
-        team: z.string().optional().describe("Team slug; omit for a private folder"),
-        parent: z
-          .string()
-          .optional()
-          .describe("Parent folder id for a nested subfolder; omit for a top-level folder"),
-        color: z
-          .enum(["coral", "amber", "green", "blue", "violet"])
-          .optional()
-          .describe("Optional grouping color"),
-      },
-    },
-    async ({ title, description, team, parent, color }) => {
-      try {
-        return json(
-          await api.createFolder(title, description || "", team || "", parent || "", color || ""),
-        );
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "update_folder",
-    {
-      title: "Organize project folder",
-      annotations: ADDS,
-      description:
-        "Rename, describe, recolor or move a folder. Pass parent as an empty string to move it to the top level. A folder cannot move inside itself or a descendant, or into another team/private space.",
-      inputSchema: {
-        folder: z.string(),
-        title: z.string().optional(),
-        description: z.string().optional(),
-        parent: z
-          .string()
-          .optional()
-          .describe("New parent folder id; empty string means top level"),
-        color: z.enum(["", "coral", "amber", "green", "blue", "violet"]).optional(),
-      },
-    },
-    async ({ folder, title, description, parent, color }) => {
-      try {
-        const changes = Object.fromEntries(
-          Object.entries({ title, description, parent, color }).filter(
-            ([, value]) => value !== undefined,
-          ),
-        );
-        return json(await api.updateFolder(folder, changes));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "get_folder",
-    {
-      title: "Open project folder",
-      annotations: READS,
-      description: "List a folder's documents, assets and linked guides.",
-      inputSchema: { folder: z.string() },
-    },
-    async ({ folder }) => {
-      try {
-        return json(await api.folder(folder));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "get_folder_document",
-    {
-      title: "Read folder document",
-      annotations: READS,
-      description: "Read the full Markdown and version before editing it.",
-      inputSchema: { folder: z.string(), document: z.string() },
-    },
-    async ({ folder, document }) => {
-      try {
-        return json(await api.folderDocument(folder, document));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "get_folder_asset",
-    {
-      title: "Read folder asset",
-      annotations: READS,
-      description:
-        "Read an image or small text file from a folder into this agent's context. Other file types stay private downloads.",
-      inputSchema: { folder: z.string(), asset: z.string() },
-    },
-    async ({ folder, asset }) => {
-      try {
-        const file = await api.folderAsset(folder, asset);
-        const { data, text: body, ...meta } = file;
-        return {
-          content: data
-            ? [
-                { type: "text", text: file.name },
-                { type: "image", data, mimeType: file.type },
-              ]
-            : [{ type: "text", text: `${file.name}\n\n${body || ""}` }],
-          structuredContent: meta,
-        };
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "add_folder_asset",
-    {
-      title: "Add file to project folder",
-      annotations: { ...ADDS, openWorldHint: true },
-      description:
-        "Add a screenshot, reference file or other asset from this machine to a folder. Use a real file path you can read; the bytes are uploaded directly, not copied into a guide. Images, PDF, ZIP and text are accepted up to 10 MB.",
-      inputSchema: {
-        folder: z.string().describe("folder id returned by create_folder or list_folders"),
-        file: z.string().describe("path to the file on this machine"),
-        name: z.string().optional().describe("label in the folder; defaults to the filename"),
-      },
-    },
-    async ({ folder, file, name }) => {
-      try {
-        return json(await api.addFolderAsset(folder, file, name || ""));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "create_folder_document",
-    {
-      title: "Write new folder document",
-      annotations: ADDS,
-      description:
-        "Add a Markdown document to a folder: reference to read, such as a brief, script, overview or a finding already resolved. It has no owner and no state and notifies nobody, so anything someone must still act on (an open bug, work to do) belongs in a bug or task guide linked to the folder instead.",
-      inputSchema: { folder: z.string(), name: z.string(), body: z.string() },
-    },
-    async ({ folder, name, body }) => {
-      try {
-        return json(await api.createFolderDocument(folder, name, body));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "save_folder_document",
-    {
-      title: "Save folder document",
-      annotations: ADDS,
-      description:
-        "Save a new revision. Send the version returned when you read it; a newer edit is refused.",
-      inputSchema: {
-        folder: z.string(),
-        document: z.string(),
-        version: z.number().int().positive(),
-        body: z.string(),
-      },
-    },
-    async ({ folder, document, version, body }) => {
-      try {
-        return json(await api.saveFolderDocument(folder, document, version, body));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "rename_folder_document",
-    {
-      title: "Rename folder document",
-      annotations: ADDS,
-      description:
-        "Rename a folder document. Its id, text and history stay; no version is needed, because a rename cannot overwrite anyone's text.",
-      inputSchema: { folder: z.string(), document: z.string(), name: z.string() },
-    },
-    async ({ folder, document, name }) => {
-      try {
-        return json(await api.renameFolderDocument(folder, document, name));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "share_folder",
-    {
-      title: "Share folder link",
-      annotations: ADDS,
-      description:
-        "Get the folder's share link, making one if it has none: like a guide's link, anyone holding it can read the folder and the folders inside it and download its files, with no account. Linked guides are not included. Call it only when the person asked to share the folder or for its link; stopping sharing is done in the hub.",
-      inputSchema: { folder: z.string() },
-    },
-    async ({ folder }) => {
-      try {
-        return json(await api.shareFolder(folder));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "move_folder_document",
-    {
-      title: "Move folder document",
-      annotations: ADDS,
-      description:
-        "Move a folder document into another folder in the same space, private or the same team. It keeps its id, text and history; pass name too to rename it on the way. Refused if the other folder already has a document by that name.",
-      inputSchema: {
-        folder: z.string().describe("The folder the document is in now"),
-        document: z.string(),
-        to: z.string().describe("The folder to move it into"),
-        name: z.string().optional().describe("A new name, if it should change too"),
-      },
-    },
-    async ({ folder, document, to, name }) => {
-      try {
-        return json(await api.moveFolderDocument(folder, document, to, name || ""));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "get_folder_document_history",
-    {
-      title: "Read folder document history",
-      annotations: READS,
-      description:
-        "Read a folder document's earlier versions. Without version, lists them newest first; with version, returns that version's text. To bring one back, save it with save_folder_document over the current version.",
-      inputSchema: {
-        folder: z.string(),
-        document: z.string(),
-        version: z.number().int().positive().optional(),
-      },
-    },
-    async ({ folder, document, version }) => {
-      try {
-        return json(await api.folderDocumentHistory(folder, document, version || 0));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-  server.registerTool(
-    "link_folder_guide",
-    {
-      title: "Link guide to folder",
-      annotations: ADDS,
-      description:
-        "Put a task, bug or handoff guide in the folder, beside the documents and assets it uses: one just published or one that already existed.",
-      inputSchema: { folder: z.string(), guide: z.string() },
-    },
-    async ({ folder, guide }) => {
-      try {
-        return json(await api.linkFolderGuide(folder, guide));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "unlink_folder_guide",
-    {
-      title: "Unlink guide from folder",
-      annotations: ADDS,
-      description:
-        "Take a guide out of a folder. Only the link goes: the guide itself is unchanged, and link_folder_guide puts it back.",
-      inputSchema: { folder: z.string(), guide: z.string() },
-    },
-    async ({ folder, guide }) => {
-      try {
-        return json(await api.unlinkFolderGuide(folder, guide));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "delete_folder_document",
-    {
-      title: "Delete folder document",
-      annotations: REMOVES,
-      description:
-        "Delete one document from a folder, with its earlier versions. It cannot be brought back, so do it only when the person asked for that document to go; to change what it says, use save_folder_document instead.",
-      inputSchema: { folder: z.string(), document: z.string() },
-    },
-    async ({ folder, document }) => {
-      try {
-        return json(await api.deleteFolderDocument(folder, document));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "delete_folder_asset",
-    {
-      title: "Delete folder file",
-      annotations: REMOVES,
-      description:
-        "Delete one file from a folder. It cannot be brought back, so do it only when the person asked for that file to go.",
-      inputSchema: { folder: z.string(), asset: z.string() },
-    },
-    async ({ folder, asset }) => {
-      try {
-        return json(await api.deleteFolderAsset(folder, asset));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "search_guides",
-    {
-      title: "Search guides",
-      annotations: READS,
-      description:
-        "Search transfer guides by words in the title, tags, stack, or body: the user's own " +
-        "plus every team they belong to. Empty query lists everything, newest first.",
-      inputSchema: {
-        query: z.string().default(""),
-        scope: z.string().optional().describe('"mine", "all" (default), or a team slug'),
-      },
-    },
-    async ({ query, scope }) => {
-      try {
-        const rows = await passalong.list(query, { scope: scope || "" });
-        return json({ guides: rows });
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "inbox",
-    {
-      title: "Inbox",
-      annotations: READS,
-      description:
-        "Guides handed to this user (or to their teams) that they have not pulled yet. Call it " +
-        "when starting work so handoffs are not missed. Needs sync (passalong login).",
-      inputSchema: {},
-    },
-    async () => {
-      try {
-        return json({ guides: await passalong.inbox() });
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "board",
-    {
-      title: "Board",
-      annotations: READS,
-      description:
-        "The state of this user's transfers as queues: waiting on you (handed to you, not " +
-        "pulled), not working (someone gave it a failing verdict — the most urgent), in flight " +
-        "(handed over, nobody has taken it — `stale` means it has sat over a week), and landed " +
-        "(someone else has it), and `held`: what this worktree's agents hold now. Use it to answer " +
-        "'what is outstanding?' and to see what you hold, without taking anything.",
-      inputSchema: {},
-    },
-    async () => {
-      try {
-        const [board, now] = await Promise.all([
-          passalong.board(),
-          passalong.now().catch(() => ({ held: [] })),
-        ]);
-        return json({ ...board, held: now.held });
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "log",
-    {
-      title: "What this user did",
-      annotations: READS,
-      description:
-        "This user's own acts on guides, newest first: what they published, what they took " +
-        "delivery of, and every verdict and ack they gave. Each item has a rendered `text` line " +
-        "and the guide's repo. Use it to answer 'what have I been working on', to write a " +
-        "standup or a weekly summary, or to find work from a repo by when it happened rather " +
-        "than by what it was called. The hub calls this page Activities, so 'my activities' means " +
-        "this tool. It is the opposite of `activity`, which is what other people did. IMPORTANT: it records what was passed along, not what was worked on — work " +
-        "that never became a guide has no entry, so never present it as a complete record of " +
-        "this user's work, and never infer that a quiet period was an idle one.",
-      inputSchema: {
-        repo: z.string().default("").describe("narrow to guides whose source repo matches this"),
-        since: z
-          .string()
-          .default("")
-          .describe("only what happened on or after this date: 2026, 2026-09, or 2026-09-11"),
-      },
-    },
-    async ({ repo, since }) => {
-      try {
-        return json({ log: await passalong.log({ repo: repo || "", since: since || "" }) });
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "activity",
-    {
-      title: "Activity",
-      annotations: READS,
-      description:
-        "What has happened to this user's guides and handoffs: who pulled one, who archived one, " +
-        "who was handed what, who joined a team. Each item has a ready-made `text` line. This is " +
-        "the hub's notifications, not its Activities page — for the user's own acts ('my " +
-        "activities'), use log. This only reads; clear_activity is what marks the feed seen.",
-      inputSchema: {
-        all: z.boolean().default(false).describe("include what the user has already seen"),
-      },
-    },
-    async ({ all }) => {
-      try {
-        return json(await passalong.activity({ all }));
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  /**
-   * Split out of `activity`, which took `mark_read` and so read on one call and wrote on the next.
-   *
-   * An annotation cannot say "sometimes": `readOnlyHint` was false for a tool that almost always
-   * only reads, which is a client being told the cautious lie on every call rather than the truth
-   * on the one that matters. Two tools, each true about itself.
-   */
-  server.registerTool(
-    "clear_activity",
-    {
-      title: "Mark activity seen",
-      annotations: ADDS,
-      description:
-        "Clear the user's unread feed, after they have been shown what is in it. Read it with " +
-        "activity first — clearing what nobody was told about loses it.",
-      inputSchema: {},
-    },
-    async () => {
-      try {
-        const res = await passalong.activity({ all: false });
-        if (!res.unread) return json({ cleared: 0, unread: 0 });
-        await passalong.seen();
-        return json({ cleared: res.unread, unread: 0 });
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "plan_tasks",
-    {
-      title: "Plan a goal as tasks",
-      annotations: ADDS,
-      description:
-        "Write tasks for agents: one step for a single task, or a larger goal broken into steps " +
-        "an agent can each finish and a person can each check, written as drafts in order. The " +
-        "tool for any task, rather than publish_guide. Give each step a Goal and an Acceptance " +
-        "a person can run. " +
-        "`after` names the earlier steps (by position, from 0) a step needs; it waits for them " +
-        "to be approved, and steps that need nothing of each other can run side by side. Keep a " +
-        "step to one sitting of work in one repo. Nothing runs until the user makes them ready.",
-      inputSchema: {
-        steps: z
-          .array(
-            z.object({
-              title: z.string(),
-              summary: z
-                .string()
-                .describe(
-                  "one or two plain sentences for a PERSON, no ids or paths: what this task is and " +
-                    "why it matters. The goal below is for the agent; this is what a person reads",
-                ),
-              goal: z.string().describe("what is true when this step is done"),
-              acceptance: z.string().describe("checks a person can run, one per line"),
-              context: z.string().optional(),
-              constraints: z.string().optional(),
-              out_of_scope: z.string().optional(),
-              target_context: z
-                .string()
-                .optional()
-                .describe("owner/repo it is for; default is the repo you are in, '' for none"),
-              after: z.array(z.number().int()).optional().describe("earlier steps this one needs"),
-            }),
-          )
-          .min(1)
-          .max(20),
-        cwd: z.string().optional().describe("the repo you are planning from"),
-      },
-    },
-    async ({ steps, cwd }) => {
-      try {
-        const ids = await passalong.planTasks(steps, { cwd: cwd || process.cwd() });
-        return json({
-          drafts: ids.map((id, i) => ({ id, title: steps[i].title, after: steps[i].after || [] })),
-          next: `all in Draft: ask the user to read them and mark them Ready on the board at ${api.baseUrl()}/hub/work, or run \`passalong ready --all\``,
-        });
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
+  // ---- work: take, progress, hand_in, pass, ask ---------------------------------------------
 
   server.registerTool(
     "take",
@@ -1104,28 +265,47 @@ export function buildServer() {
       title: "Take work",
       annotations: ADDS,
       description:
-        "Say you are doing it, and get it. With `id`, that guide — any kind: a task, a bug, a " +
-        "handoff. With no id, the next thing waiting — always something new, never what you hold. " +
-        "While you hold it no other agent can take it here, and its sender sees you are on it. You " +
-        "may hold several at once; the person watches them on the board. If somebody else has it, the " +
-        "answer says who — tell the user rather than doing the work twice. Every answer ends with " +
-        "what to call next.",
+        "Say you are doing it, and get it. With `id`, that piece of work. With no id, the next " +
+        "thing waiting here — always something new, never what you hold. While you hold it no " +
+        "other agent can take it, and whoever sent it sees you are on it. You may hold several; " +
+        "the person watches them on the board. If somebody else has it, the answer says who — " +
+        "tell the user rather than doing the work twice. Every answer ends with what to call next.",
       inputSchema: {
         id: z
           .string()
           .optional()
           .describe("passalong id or share link; leave out for the next one"),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
+        cwd: CWD,
         any: z
           .boolean()
           .optional()
-          .describe("a task for another repo, or none — only when the user asks"),
+          .describe("work for another repo, or none — only when the user asks"),
       },
     },
-    async (args) => doTake(args),
+    async ({ id, cwd, any }) => {
+      try {
+        const r = await passalong.take(id, { cwd: cwd || process.cwd(), any: Boolean(any) });
+        if (!r.work) return text(nextNote(r) || "Nothing is waiting for this agent here.");
+        const from = await passalong.parentWork(parse(r.work.markdown).meta);
+        const held =
+          `<!-- passalong: ${r.work.id} is yours` +
+          `${r.work.resumed ? " (you already held it — carry on from where it was left)" : ""}. -->`;
+        const said = repliesNote(r.replies);
+        return text(
+          `${said ? `${said}\n\n` : ""}${from}${LEAD}${r.work.markdown}` +
+            `\n\n${held}\n${nextNote(r, r.work.id)}\n${passalong.AFTER}`,
+        );
+      } catch (err) {
+        const h = err.body?.holder;
+        if (h)
+          return fail({
+            message:
+              `${err.message}. Somebody else is on it${h.agent ? ` (agent ${h.agent}${h.host ? ` on ${h.host}` : ""})` : ""}${h.note ? ` (last said: "${h.note}")` : ""}. ` +
+              "Tell the user before doing this work too; find_work reads it without taking it.",
+          });
+        return failWith(err);
+      }
+    },
   );
 
   server.registerTool(
@@ -1147,13 +327,10 @@ export function buildServer() {
               'the settings page to find where the toggle goes." Start it with BLOCKED: when ' +
               "you are stopped and need an answer",
           ),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
+        cwd: CWD,
       },
     },
-    async (args) => doProgress(args),
+    verb(({ id, note, cwd }) => passalong.progress(id, note || "", { cwd: cwd || process.cwd() })),
   );
 
   server.registerTool(
@@ -1163,21 +340,19 @@ export function buildServer() {
       outputSchema: handInOut,
       annotations: ADDS,
       description:
-        "Finished here, with proof. IT IS FINAL: the work goes to Done with what you showed, and nobody reviews it after you (anyone can reopen it with a reason). So SHOW IT: a screenshot for anything with a screen — before and after, for a bug — or, for backend work, the one command and the line of its output that shows it works. Send `checks`: one entry per " +
-        "line the guide asks for — `## Acceptance` on a task, `## Verification` on a handoff or a " +
-        "bug — each with that line and the evidence for it. That is what its author reads, line " +
-        "against line, instead of hunting through a wall of output for the part that answers each " +
-        "one, AND IT IS HOW YOU KNOW YOU ARE DONE: every line has one. Give a check `cmd` when a " +
-        "command proves it: the command is run here before the hand-in lands, a non-zero exit " +
-        "refuses it, and what it printed is recorded instead of your account of it. Use `ran` for " +
-        "a check no command can settle. `evidence` as one block is the older shape and still " +
-        "works. A task needs no write-up guide any more. A handoff or a bug takes `ok`, whether its " +
-        "Verification held here, and `note` saying what went wrong when it did not. DO NOT " +
-        "publish a guide to carry your evidence: it belongs on this call, and a second document " +
-        'titled "Hand-in evidence" is the thing `checks` exists to replace. If it worked but you ' +
-        "had to adapt something, that goes in `writeup` and the next reader of the guide is shown " +
-        "it — that is its home. A follow-up guide is for work somebody else should now do, not " +
-        "for answering.",
+        "Finished here, with proof. IT IS FINAL: the work goes to Done with what you showed, and " +
+        "nobody reviews it after you (anyone can reopen it with a reason). So SHOW IT: a " +
+        "screenshot for anything with a screen — before and after, for a defect — or, for " +
+        "backend work, the one command and the line of its output that shows it works. Send " +
+        "`checks`: one entry per thing the work asked for, each with that line and the evidence " +
+        "for it. That is what a person reads, line against line, AND IT IS HOW YOU KNOW YOU ARE " +
+        "DONE: every line has one. Give a check `cmd` when a command proves it: the command is " +
+        "run here before the hand-in lands, a non-zero exit refuses it, and what it printed is " +
+        "recorded instead of your account of it. Use `ran` for a check no command can settle — " +
+        "add_file the screenshot and put the line it returns there. `evidence` as one block works " +
+        "too. DO NOT write new work to carry your evidence: it belongs on this call. What you had " +
+        "to adapt goes in `writeup`; what you learned about the project goes into its documents " +
+        "(save_document).",
       inputSchema: {
         id: z.string().describe("passalong id"),
         evidence: z
@@ -1197,18 +372,14 @@ export function buildServer() {
               z.object({
                 check: z
                   .string()
-                  .describe(
-                    "the line this answers, in the guide's own words: an Acceptance line on a task, " +
-                      "a Verification line on a handoff or a bug",
-                  ),
+                  .describe("what the work asked for that this answers, in its own words"),
                 says: z
                   .string()
                   .optional()
                   .describe(
                     'what happened, in one plain sentence for a PERSON: "Swagger lists all six ' +
-                      'endpoints, each with request and response schemas." It is the row they read ' +
-                      "in the review table; the evidence stays folded behind it. Strongly " +
-                      "recommended: a check without one shows only the line it answers",
+                      'endpoints, each with request and response schemas." It is the row they read; ' +
+                      "the evidence stays folded behind it",
                   ),
                 ran: z
                   .string()
@@ -1223,91 +394,69 @@ export function buildServer() {
                     "the shell command that proves this line, run here before the hand-in lands — " +
                       "its exit code decides the check and its output is recorded as the evidence. " +
                       "Non-zero refuses the hand-in. Leave it out for a check nobody can run, like " +
-                      '"the badge reads 3" — then SHOW it with attach_screenshot and put the line it returns in `ran`; a check is run or shown, and describing what you saw is refused',
+                      '"the badge reads 3" — then SHOW it with add_file and put the line it returns in `ran`; a check is run or shown, and describing what you saw is refused',
                   ),
               }),
             ),
           )
           .optional()
           .describe(
-            "one entry per line the guide asks for — Acceptance on a task, Verification on a " +
-              "handoff or a bug — in the order you worked them. Each is RUN (`cmd`) or SHOWN (an " +
-              "attach_screenshot line in `ran`). Pasting a command you typed into `ran` is not " +
-              "running it and is refused",
+            "one entry per thing the work asked for, in the order you worked them. Each is RUN " +
+              "(`cmd`) or SHOWN (an add_file line in `ran`). Pasting a command you typed into " +
+              "`ran` is not running it and is refused",
           ),
-        ok: z.boolean().optional().describe("handoff or bug: did its Verification hold"),
         note: z
           .string()
           .describe(
             "one plain sentence, in the first person, saying what you did and how it went: " +
               '"Added the toggle to Settings; it survives a reload." It is the first thing the ' +
-              "person reads, and the evidence is behind it. Say what went wrong when ok is false",
+              "person reads, and the evidence is behind it",
           ),
         writeup: z
           .string()
           .optional()
           .describe(
-            "what you had to adapt to make it work here — a version, a name, a step that needed " +
-              "something the guide does not mention. 500 characters at most; anything longer " +
-              "belongs in the change. Optional: leave it out when it worked as written. The next " +
-              "person to open the guide is shown it",
+            "what you had to adapt to make it work here — a version, a name, a step the work did " +
+              "not mention. 500 characters at most; anything longer belongs in the change. " +
+              "Optional: leave it out when it went as written",
           ),
         risk: z
           .string()
           .optional()
           .describe(
-            "what this could break, in one line — the part of a PR template's Risk that is " +
-              "worth reading: a shared helper changed, a migration that cannot be undone, a " +
-              "route other clients call. Optional; leave it out when there is nothing specific, " +
-              'rather than writing "low risk". Its author reads it before accepting the work',
+            "what this could break, in one line: a shared helper changed, a migration that " +
+              "cannot be undone, a route other clients call. Optional; leave it out when there is " +
+              'nothing specific, rather than writing "low risk"',
           ),
-        markdown: z
-          .string()
-          .optional()
-          .describe("older shape, not needed: say what you adapted in `writeup` instead"),
-        report: z
-          .string()
-          .optional()
-          .describe("older shape, not needed: say what you adapted in `writeup` instead"),
-        pr: z.string().optional().describe("task: PR or branch link, when there is one"),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
+        pr: z.string().optional().describe("PR, branch or commit link, when there is one"),
+        cwd: CWD,
       },
     },
-    async (args) => doHandIn(args),
-  );
-
-  server.registerTool(
-    "ask",
-    {
-      title: "Ask the person",
-      outputSchema: openObject({ id: z.string(), lease_until: z.string() }),
-      annotations: ADDS,
-      description:
-        "You need the person's answer before you can go on. Ask one clear question, with the " +
-        "context it needs to be answered without opening your terminal. You keep what you hold " +
-        "and nobody else can take it. Then STOP and tell the user you are waiting: do not carry " +
-        "on guessing. When they have replied, call take with this id and their reply comes back " +
-        "with it. Use `pass` instead when the work is not yours; a progress note starting " +
-        "BLOCKED: is the older way of saying this, and is not heard as a question.",
-      inputSchema: {
-        id: z.string().describe("passalong id"),
-        question: z
-          .string()
-          .describe(
-            "one clear question in the first person, a few sentences at most, plain text: " +
-              '"Should the dark-mode toggle live in Settings or the header? The header is ' +
-              'crowded on mobile." What you were about to do, if they just say yes, helps',
-          ),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
-      },
+    async ({ id, note, evidence, checks, writeup, risk, pr, cwd }) => {
+      try {
+        // A check that names a command is run here, before anything is recorded, and its exit
+        // code decides it rather than the agent's account of it. A failure is refused with the
+        // command's own output: the claim is still held, nothing is written.
+        const at = cwd || process.cwd();
+        const done = runChecks(checks || [], { cwd: at });
+        if (done.failed)
+          return fail({
+            message: refusal(done.failed, { ran: done.ran, total: checks.length }),
+          });
+        const r = await passalong.handIn(id, {
+          note,
+          evidence: evidence || "",
+          checks: done.checks,
+          writeup: writeup || "",
+          risk: risk || "",
+          pr: pr || "",
+          cwd: at,
+        });
+        return answer(r, id);
+      } catch (err) {
+        return failWith(err);
+      }
     },
-    async (args) => doAsk(args),
   );
 
   server.registerTool(
@@ -1323,269 +472,126 @@ export function buildServer() {
       inputSchema: {
         id: z.string().describe("passalong id"),
         why: z.string().describe("one line: why it is not yours, or where you got stuck"),
-        cwd: z
-          .string()
-          .optional()
-          .describe("the worktree you are working in; default is the server's cwd"),
+        cwd: CWD,
       },
     },
-    async (args) => doPass(args),
+    verb(({ id, why, cwd }) => passalong.pass(id, why, { cwd: cwd || process.cwd() })),
   );
 
   server.registerTool(
-    "get_guide",
+    "ask",
     {
-      title: "Get guide",
-      annotations: READS,
-      description:
-        "READ a transfer guide by passalong id or share link and return its markdown. A guide over " +
-        "20,000 characters comes back as an outline (its headings and their sizes) unless you ask " +
-        "for `section`, for one part, or `full`, for all of it. Nothing is written to disk. " +
-        "Pulling a teammate's guide tells them the transfer landed. Use this to look at a guide " +
-        "you have not committed to. If you are about to DO the work, call take instead: " +
-        "it does this and takes it in one call, which is the only way the sender learns " +
-        "somebody picked it up.",
-      inputSchema: {
-        ref: z.string().describe("passalong id (e.g. k3mq2xa7) or share URL"),
-        section: z
-          .string()
-          .optional()
-          .describe("read only the part under this heading, e.g. Acceptance; see the outline"),
-        outline: z
-          .boolean()
-          .optional()
-          .describe("just the headings and their sizes, whatever the guide's length"),
-        full: z
-          .boolean()
-          .optional()
-          .describe("the whole document, even one over 20,000 characters"),
-      },
-    },
-    async ({ ref, section, outline, full }) => {
-      try {
-        const { markdown, from } = await passalong.pull(ref);
-        const meta = parse(markdown).meta;
-        if (section) {
-          const part = sectionOf(markdown, section);
-          if (!part)
-            return text(
-              `No heading matching "${section}".\n\n${outlineText(markdown, { id: meta.id || ref })}`,
-            );
-          return text(
-            `${part.text}\n\n<!-- passalong: ${meta.id || ref}, "${part.heading}" only; ask with full: true for the whole guide -->`,
-          );
-        }
-        if (outline || (!full && markdown.length > GUIDE_WARN))
-          return text(
-            `${outlineText(markdown, { id: meta.id || ref })}\n\n<!-- passalong: ${from} -->`,
-          );
-        const lead = leadFor(meta);
-        const siblings = await related(meta);
-        // Follow-ups are more context for this guide, so they come with it — after the document,
-        // never inside it, so the guide an agent writes back out is still only the guide.
-        const context = await passalong.followUps(meta);
-        // The guide this one came out of, in front of the document: a follow-up read on its own
-        // looks like a small piece of work and is a note on a bigger one.
-        const follows = await passalong.parentGuide(meta);
-        // After the document, with the other trailing comments, not in front of it. An
-        // instruction that arrives with the payload is what gets read — but anything before the
-        // opening `---` stops the frontmatter being frontmatter, and this fires on every guide
-        // anyone was handed rather than only on bugs. The bug lead stays where it is: it is a
-        // warning against executing the document, so being read first is its whole job.
-        return text(
-          `${follows}${lead}${markdown}${siblings}${context ? `\n\n${context}` : ""}` +
-            `\n\n<!-- passalong: ${from} -->` +
-            `\n${passalong.handoffNudge(meta)}` +
-            `\n${passalong.followUpNote(meta)}`,
-        );
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "attach_screenshot",
-    {
-      title: "Attach a screenshot",
-      annotations: { ...ADDS, openWorldHint: true },
-      description:
-        "Upload an image as evidence — a path in `file`, or the bytes in `data` when you have " +
-        "the image and no file — and get back the markdown line that points at it. " +
-        WHERE_THE_LINE_GOES,
-      inputSchema: {
-        file: z
-          .string()
-          .default("")
-          .describe("path to the image on this machine; leave out when sending `data`"),
-        data: z
-          .string()
-          .default("")
-          .describe(
-            "the image itself, base64 (a data: URL is fine), for when you have the bytes and no " +
-              "file — a browser tool that hands back an image inline and never writes to disk. " +
-              "5MB; larger belongs in create_upload",
-          ),
-        type: z
-          .string()
-          .default("image/png")
-          .describe("media type of `data`: image/png, image/jpeg, image/webp or image/gif"),
-        name: z.string().default("").describe("label for the image; defaults to its filename"),
-      },
-    },
-    async ({ file, data, type, name }) => {
-      try {
-        if (!file && !data) {
-          return fail(
-            new Error(
-              "send `file` (a path on this machine) or `data` (the image, base64). If your " +
-                "screenshot is a tool result you cannot write out, capture it to a file instead " +
-                "— a headless browser's page.screenshot({ path }) or your platform's capture " +
-                "command — and pass that path.",
-            ),
-          );
-        }
-        const shot = data
-          ? await passalong.attachBytes(data, { name: name || "", type: type || "image/png" })
-          : await passalong.attach(file, { name: name || "" });
-        return text(
-          `${JSON.stringify({ id: shot.id, url: shot.url, bytes: shot.bytes }, null, 2)}\n\n` +
-            `Put this in the guide body:\n${shot.markdown}`,
-        );
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "attach_file",
-    {
-      title: "Attach a file",
-      annotations: { ...ADDS, openWorldHint: true },
-      description:
-        "Upload a file that is not a picture — a log, a PDF, a CSV, a zip, up to 10MB — and get " +
-        "back the markdown line that points at it. For a guide body or a bug report: put the " +
-        "line there and publishing claims the file. It is private, so only people who can read " +
-        "that guide can download it; for something a reviewer must SEE, use attach_screenshot. " +
-        "Pictures belong to attach_screenshot, not here.",
-      inputSchema: {
-        file: z.string().describe("path to the file on this machine"),
-        name: z.string().default("").describe("label for the file; defaults to its filename"),
-      },
-    },
-    async ({ file, name }) => {
-      try {
-        const got = await passalong.attachFile(file, { name: name || "" });
-        return text(
-          `${JSON.stringify({ id: got.id, url: got.url, bytes: got.bytes }, null, 2)}\n\n` +
-            `Put this in the guide body:\n${got.markdown}`,
-        );
-      } catch (err) {
-        return fail(err);
-      }
-    },
-  );
-
-  server.registerTool(
-    "reply",
-    {
-      title: "Write to the agent",
+      title: "Ask the person",
+      outputSchema: askOut,
       annotations: ADDS,
       description:
-        "A person's tool, for someone driving their work from an assistant: write to whoever " +
-        "holds a guide — an answer to a question it asked, or something you thought of since — " +
-        "or, when nobody holds it yet and it is yours, leave a note for whoever takes it. Plain " +
-        "text, 1000 characters. `files` are paths on this machine: a picture is drawn in the " +
-        "thread and anything else is a file to download. Only its author, whoever it is " +
-        "assigned to, or whoever holds it can write; the agent reads it the next time it " +
-        "checks in. Agents answering their own questions do not use this: they use ask and take.",
+        "You need the person's answer before you can go on. Ask one clear question, with the " +
+        "context it needs to be answered without opening your terminal. You keep what you hold " +
+        "and nobody else can take it. Then STOP and tell the user you are waiting: do not carry " +
+        "on guessing. When they have replied, call take with this id and their reply comes back " +
+        "with it. Use `pass` instead when the work is not yours.",
       inputSchema: {
         id: z.string().describe("passalong id"),
-        text: z.string().default("").describe("what to say; may be empty when attaching a file"),
-        files: z
-          .array(z.string())
-          .max(3)
-          .default([])
-          .describe("paths to up to three files or pictures to attach"),
+        question: z
+          .string()
+          .describe(
+            "one clear question in the first person, a few sentences at most, plain text: " +
+              '"Should the dark-mode toggle live in Settings or the header? The header is ' +
+              'crowded on mobile." What you were about to do, if they just say yes, helps',
+          ),
+        cwd: CWD,
       },
     },
-    async ({ id, text: said, files }) => {
-      try {
-        const r = await passalong.reply(id, said, { files });
-        return text(
-          r?.noted
-            ? `Nobody holds ${id} yet, so this is a note: whoever takes it is handed it first.`
-            : `Sent to whoever holds ${id}. It reads this the next time it checks in.`,
-        );
-      } catch (err) {
-        return failWith(err);
-      }
-    },
+    verb(({ id, question, cwd }) => passalong.ask(id, question, { cwd: cwd || process.cwd() })),
   );
 
+  // ---- work: create_work, find_work, update_work ---------------------------------------------
+
   server.registerTool(
-    "publish_guide",
+    "create_work",
     {
-      title: "Publish guide",
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      title: "Write work down",
+      annotations: ADDS,
       description:
-        "Publish a guide from markdown (frontmatter + sections). Check what you hold first " +
-        "(board): if this session answers something you hold, hand_in that instead, and if the " +
-        "work never left a branch the team can see, publish what is still open as a bug or a task " +
-        "rather than a write-up of the fix. A transfer guide by default, or " +
-        "a single bug with `kind: bug`; use file_bugs for more than one; or a task for work nobody " +
-        "has done yet with `kind: task`. Missing id, created, " +
-        "author, and source_context are filled in. A screenshot belongs in the markdown: attach it " +
-        "with attach_screenshot and put the line it returns in the body, because publishing claims " +
-        "whatever the markdown names. " +
-        '`to` addresses it to a team ("khaime") or a ' +
-        'teammate ("khaime/lukman"), who is notified. Returns the id and share link.',
+        "Write down work someone must still do: one piece, or several at once — a plan broken " +
+        "into steps, or every defect a test run turned up, each its own item so each can be " +
+        "taken on its own. Check what is open first (find_work): if this session answers " +
+        "something you hold, hand_in that instead. Each item is Ready at once and reaches whoever " +
+        "it is for; `draft: true` holds them all for a person to read first. A picture belongs " +
+        "in the text: add_file it and put the line it returns in `body`. Knowledge is not work: " +
+        "what someone needs to know goes into a project's documents (save_document).",
       inputSchema: {
-        markdown: z.string().describe("full guide markdown; start from guide_template"),
+        items: z
+          .array(
+            z.object({
+              title: z.string().describe("what it is, in a few words"),
+              summary: z
+                .string()
+                .describe(
+                  "one or two plain sentences for a PERSON, no ids or paths: what this is and " +
+                    "whether anybody has to act. 400 characters at most",
+                ),
+              body: z
+                .string()
+                .optional()
+                .describe(
+                  "markdown for whoever does it: what is wrong or wanted, what you found, what " +
+                    "done looks like if you know — in whatever shape fits",
+                ),
+              to: z
+                .string()
+                .optional()
+                .describe("who it is for, when not the same as the top-level `to`"),
+              parent: z
+                .string()
+                .optional()
+                .describe("id of the work this comes out of — a bigger piece, a customer request"),
+              after: z
+                .array(z.number().int())
+                .optional()
+                .describe("positions (from 0) of earlier items this one needs done first"),
+              repo: z
+                .string()
+                .optional()
+                .describe("owner/repo it is for; default is the repo you are in, '' for none"),
+              tags: z
+                .array(z.string())
+                .optional()
+                .describe(
+                  "words that describe it, e.g. bug, feature, question; nothing turns on one",
+                ),
+            }),
+          )
+          .min(1)
+          .max(20),
         to: z
           .string()
           .optional()
           .describe(
-            "team slug, team/@handle for one teammate, team/@ada,@bola for several named teammates, or team/#group for a set of them",
+            "team slug, team/@handle for one teammate, team/@ada,@bola for several, or " +
+              "team/#group for the people who do a thing; default is your current team",
           ),
-        cwd: z
-          .string()
+        draft: z
+          .boolean()
           .optional()
-          .describe("directory the work happened in, used to infer source_context"),
-        parent: z
-          .string()
-          .optional()
-          .describe(
-            "id or share link of the guide this one adds context to — set it and this is " +
-              "published as that guide's follow-up: listed under it, and read by whoever opens it",
-          ),
+          .describe("hold it all in Draft for a person to read and make Ready"),
+        cwd: z.string().optional().describe("the repo you are writing from"),
       },
     },
-    async ({ markdown, to, cwd, parent }) => {
+    async ({ items, to, draft, cwd }) => {
       try {
-        const { guide, url, synced, notified } = await passalong.share(markdown, {
-          cwd: cwd || process.cwd(),
+        const made = await passalong.createWork(items, {
+          draft: Boolean(draft),
           to,
-          follows: parent,
+          cwd: cwd || process.cwd(),
         });
         return json({
-          id: guide.meta.id,
-          title: guide.meta.title,
-          url,
-          synced,
-          team: guide.meta.team || "",
-          to: guide.meta.to || "",
-          parent: guide.meta.parent || "",
-          notified,
-          ...(sizeWarning(markdown.length) ? { warning: sizeWarning(markdown.length) } : {}),
-          // Nothing goes live on publish, and an agent that reports "sent it" or "queued it" has
-          // told the user something untrue. Said in the result so it is said to them.
-          ...(guide.meta.status === "draft"
+          work: made,
+          // Nothing in Draft reaches anybody, and an agent that reports "sent it" has told the
+          // user something untrue. Said in the result so it is said to them.
+          ...(draft
             ? {
-                status: "draft",
-                // The hub page, never the share link: the share page has no Ready button.
-                next: `in Draft: ask the user to read it and mark it Ready at ${api.baseUrl()}/hub/g/${guide.meta.id}, or run \`passalong ready ${guide.meta.id}\``,
+                next: `in Draft: ask the user to read it and mark it Ready at ${api.baseUrl()}/hub/work, or run \`passalong ready --all\``,
               }
             : {}),
         });
@@ -1596,94 +602,57 @@ export function buildServer() {
   );
 
   server.registerTool(
-    "file_bugs",
+    "find_work",
     {
-      title: "File bugs",
-      annotations: ADDS,
+      title: "Find work",
+      annotations: READS,
       description:
-        "File one or more bugs you found but are not fixing, as a set. Opens a report and " +
-        "publishes each issue as its own guide — its own id, share link, and verdict — so a " +
-        "reviewer can hand any one of them to whoever fixes it. Use this after a test run, a QA " +
-        "pass, or a review that turned up defects; use publish_guide instead for work you " +
-        "finished and want repeated elsewhere. If there is a screenshot of any of this, it is " +
-        "evidence: call attach_screenshot first and pass what it returns as that issue's " +
-        "`evidence`. Describing a screenshot instead of attaching it throws away the most useful " +
-        "thing in the report. Needs sync (`passalong login`).",
+        "READ work without taking it. With `id`, that piece of work — its markdown, read only; " +
+        "work over 20,000 characters comes back as an outline unless you ask for `section` or " +
+        "`full`. With `query`, the work whose words match. With neither, the board: what needs " +
+        "the person, who is on what, what is ready, and what this worktree holds. To DO the work, " +
+        "call take instead: it is the only way anyone learns somebody picked it up.",
       inputSchema: {
-        title: z
+        id: z.string().optional().describe("passalong id (e.g. k3mq2xa7) or share link"),
+        query: z.string().optional().describe("words to look for in titles, tags and text"),
+        scope: z
           .string()
           .optional()
-          .describe('what the sweep was, e.g. "Checkout regression pass, 8 Sep build"'),
-        environment: z
+          .describe('with query: "mine", "all" (default), or a team slug'),
+        section: z
           .string()
           .optional()
-          .describe("production, staging or development — where you saw these"),
-        to: z
-          .string()
-          .optional()
-          .describe(
-            "team slug, team/@handle for one teammate, team/@ada,@bola for several named teammates, or team/#group for a set of them",
-          ),
-        issues: z
-          .array(
-            z.object({
-              evidence: z
-                .array(z.string())
-                .default([])
-                .describe(
-                  "screenshot URLs from attach_screenshot, or the markdown lines it returned; " +
-                    "they go under Problem, where a reader looks first",
-                ),
-              title: z.string().describe("what is broken, in one line"),
-              summary: z
-                .string()
-                .optional()
-                .describe(
-                  "one or two plain sentences for a PERSON, no ids or paths: what is broken and " +
-                    "whether anyone needs to act. Defaults to the title",
-                ),
-              problem: z
-                .string()
-                .describe(
-                  "what is broken and what it stops someone doing; the error if there is one",
-                ),
-              reproduce: z
-                .string()
-                .describe(
-                  "numbered steps that show the bug — these produce it, they are not a fix",
-                ),
-              verification: z
-                .string()
-                .optional()
-                .describe(
-                  "the behaviour that should have happened, as something a fixer can check",
-                ),
-              gotchas: z
-                .string()
-                .optional()
-                .describe("anything already ruled out, or that made it hard to pin down"),
-              area: z
-                .string()
-                .optional()
-                .describe(`which surface it is on — known: ${AREAS.map((a) => a.slug).join(", ")}`),
-              severity: z
-                .string()
-                .optional()
-                .describe("s1 blocker, s2 major, s3 minor, s4 cosmetic (default s3)"),
-            }),
-          )
-          .min(1)
-          .describe("one entry per defect; file them together rather than one call each"),
-        cwd: z.string().optional().describe("directory the bugs were found in"),
+          .describe("with id: only the part under this heading; see the outline"),
+        full: z.boolean().optional().describe("with id: the whole text, however long"),
       },
     },
-    async ({ title, environment, to, issues, cwd }) => {
+    async ({ id, query, scope, section, full }) => {
       try {
-        const filed = await passalong.fileBugs(
-          { title: title || "", environment: environment || "", issues },
-          { cwd: cwd || process.cwd(), to },
-        );
-        return json(filed);
+        if (id) {
+          const { work } = await passalong.resolve(id, { peek: true });
+          const markdown = serialize(work);
+          const ref = work.meta.id || id;
+          if (section) {
+            const part = sectionOf(markdown, section);
+            return text(
+              part
+                ? `${part.text}\n\n<!-- passalong: ${ref}, "${part.heading}" only; ask with full: true for all of it -->`
+                : `No heading matching "${section}".\n\n${outlineText(markdown, { id: ref })}`,
+            );
+          }
+          if (!full && markdown.length > WORK_WARN) return text(outlineText(markdown, { id: ref }));
+          return text(
+            `${await passalong.parentWork(work.meta)}${markdown}\n\n` +
+              `<!-- passalong: reading it does not make it yours: to work on it, call take ${ref}. -->`,
+          );
+        }
+        if (query !== undefined && query !== "")
+          return json({ work: await passalong.list(query, { scope: scope || "" }) });
+        const [board, now] = await Promise.all([
+          passalong.board(),
+          passalong.now().catch(() => ({ held: [] })),
+        ]);
+        return json({ ...board, held: now.held });
       } catch (err) {
         return fail(err);
       }
@@ -1691,100 +660,338 @@ export function buildServer() {
   );
 
   server.registerTool(
-    "guide_template",
+    "update_work",
     {
-      title: "Guide template",
-      annotations: READS,
+      title: "Change work",
+      // Destructive because `markdown` replaces the text that was there.
+      annotations: REMOVES,
       description:
-        "The empty guide skeleton with guidance comments for each section. By default a task " +
-        "brief: Goal, Context, Constraints, Acceptance, Out of scope. `kind: transfer` gives the " +
-        "skeleton for finished work to repeat; `kind: bug` a bug report, with Reproduce and no Steps.",
+        "Change work that exists, when the person asks or when you wrote it. `status`: ready " +
+        "(whoever it is for may take it), draft (held for a person to read), or archived (off the " +
+        "board; it comes back to Draft). `to`: who it is for — @handle, several as @ada,@bola, " +
+        '#group, or "" for the whole team; whoever held it and is left out has it taken back and ' +
+        "is told. `markdown`: its whole text, frontmatter first, as find_work gave it — say " +
+        "what changed, keep what did not.",
       inputSchema: {
-        kind: z
-          .enum(["transfer", "bug", "task"])
+        id: z.string().describe("passalong id"),
+        status: z.enum(["ready", "draft", "archived"]).optional(),
+        to: z.string().optional().describe('"@handle", "@ada,@bola", "#group", or "" for the team'),
+        markdown: z
+          .string()
           .optional()
-          .describe(
-            "task (default) for work nobody has done yet; transfer for finished work to repeat; " +
-              "bug for a defect to fix",
-          ),
+          .describe("the whole document, frontmatter first, to replace its text"),
+        cwd: z.string().optional().describe("the repo you are working in"),
       },
     },
-    async ({ kind }) => text(template(kind ? { kind } : {})),
+    async ({ id, status, to, markdown, cwd }) => {
+      try {
+        if (!markdown && !status && to === undefined)
+          throw new Error("say what to change: status, to, or markdown");
+        const done = { id };
+        if (markdown)
+          done.url = (await passalong.updateText(id, markdown, { cwd: cwd || process.cwd() })).url;
+        if (to !== undefined) done.to = (await passalong.assign(id, to)).to ?? to;
+        if (status) {
+          await passalong.setStatus(id, STATUS[status]);
+          done.status = status;
+        }
+        return json(done);
+      } catch (err) {
+        return fail(err);
+      }
+    },
   );
+
+  // ---- projects and documents -----------------------------------------------------------------
+
+  server.registerTool(
+    "find_projects",
+    {
+      title: "Find projects",
+      annotations: READS,
+      description:
+        "With `id`, one project: its documents, files and the projects inside it. With `query`, " +
+        "the projects whose name, description or any document mentions those words, each naming " +
+        "its matching documents. With neither, every project you can see. Each answer's `space` " +
+        'says where it lives: private, or a named team; `repo` is the repo it is built from, "" ' +
+        "when it has none. Read that repo when you write or check its documents.",
+      inputSchema: {
+        id: z.string().optional().describe("project id"),
+        query: z.string().optional().describe("words to look for in projects and their documents"),
+        scope: z.string().optional().describe('"all" (default), "mine", or a team slug'),
+      },
+    },
+    run(({ id, query, scope }) =>
+      id ? api.project(id) : api.projects(scope || "all", query || ""),
+    ),
+  );
+
+  server.registerTool(
+    "save_project",
+    {
+      title: "Save a project",
+      annotations: ADDS,
+      description:
+        "With no `id`, make a project, after find_projects shows none fits: a `title` and a short " +
+        "`description`, and its `repo` when it has one. Leave out `team` for a private one, and " +
+        "pass a team slug only when the person wants it shared; `parent` puts it inside another, " +
+        'in that one\'s space. With `id`, change its title, description, repo ("" for none), ' +
+        'colour or place (`parent` "" for the top level); ' +
+        "its space never changes. The answer's `space` says where it is: tell the person.",
+      inputSchema: {
+        id: z.string().optional().describe("the project to change; leave out to make one"),
+        title: z.string().optional().describe("name of the product or body of work"),
+        description: z.string().optional().describe("what it is for, in a line"),
+        team: z.string().optional().describe("new project only: team slug; omit for private"),
+        parent: z.string().optional().describe('project to put it inside; "" for the top level'),
+        color: z.enum(["", "coral", "amber", "green", "blue", "violet"]).optional(),
+        repo: z
+          .string()
+          .optional()
+          .describe('the repo it is built from, e.g. github.com/acme/billing; "" for none'),
+      },
+    },
+    run(({ id, title, description, team, parent, color, repo }) => {
+      if (!id) {
+        if (!title) throw new Error("a new project needs a `title`");
+        return api.createProject(
+          title,
+          description || "",
+          team || "",
+          parent || "",
+          color || "",
+          repo || "",
+        );
+      }
+      if (team) throw new Error("a project's space does not change; leave out `team`");
+      const changes = Object.fromEntries(
+        Object.entries({ title, description, parent, color, repo }).filter(
+          ([, v]) => v !== undefined,
+        ),
+      );
+      return api.updateProject(id, changes);
+    }),
+  );
+
+  server.registerTool(
+    "read_document",
+    {
+      title: "Read a document",
+      annotations: READS,
+      description:
+        "One document's Markdown and its `version`, which save_document needs. `history: true` " +
+        "lists its earlier versions, newest first; `version` returns that version's text. To " +
+        "bring one back, save it over the current version.",
+      inputSchema: {
+        project: z.string().describe("project id"),
+        document: z.string().describe("document id"),
+        history: z.boolean().optional().describe("list its earlier versions"),
+        version: z.number().int().positive().optional().describe("read this earlier version"),
+      },
+    },
+    run(({ project, document, history, version }) =>
+      history || version
+        ? api.projectDocumentHistory(project, document, version || 0)
+        : api.projectDocument(project, document),
+    ),
+  );
+
+  server.registerTool(
+    "save_document",
+    {
+      title: "Save a document",
+      annotations: ADDS,
+      description:
+        "Write what someone needs to know into a project. With no `document`, a new one: `name` " +
+        "and `body`. With `document`, change it: `body` with the `version` read_document gave you " +
+        "— a newer edit is refused, so nobody's writing is lost — and/or `name` to rename it, " +
+        "and/or `move_to` another project in the same space. Its id and history stay. Update the " +
+        "page that already covers something rather than adding another. A document has no owner " +
+        "and no state and tells nobody: anything someone must still act on is work (create_work).",
+      inputSchema: {
+        project: z.string().describe("project id"),
+        document: z.string().optional().describe("the document to change; leave out for a new one"),
+        name: z
+          .string()
+          .optional()
+          .describe("its name: required for a new one, a rename otherwise"),
+        body: z.string().optional().describe("the whole Markdown text"),
+        version: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("with `body` on an existing document: the version you read"),
+        move_to: z.string().optional().describe("a project id in the same space to move it into"),
+      },
+    },
+    run(async ({ project, document, name, body, version, move_to }) => {
+      if (!document) {
+        if (!name || body === undefined) throw new Error("a new document needs `name` and `body`");
+        return api.createProjectDocument(project, name, body);
+      }
+      let saved;
+      if (body !== undefined) {
+        if (!version) throw new Error("send the `version` read_document gave you with `body`");
+        saved = await api.saveProjectDocument(project, document, version, body);
+      }
+      if (name || move_to)
+        saved = await api.patchProjectDocument(project, document, {
+          ...(name ? { name } : {}),
+          ...(move_to ? { project: move_to } : {}),
+        });
+      if (!saved)
+        throw new Error("say what to change: `body` with `version`, `name`, or `move_to`");
+      return saved;
+    }),
+  );
+
+  server.registerTool(
+    "delete_document",
+    {
+      title: "Delete a document",
+      annotations: REMOVES,
+      description:
+        "Delete one document, with its earlier versions. It cannot be brought back, so do it only " +
+        "when the person asked for that document to go; to change what it says, use save_document.",
+      inputSchema: { project: z.string(), document: z.string() },
+    },
+    run(({ project, document }) => api.deleteProjectDocument(project, document)),
+  );
+
+  // ---- files ----------------------------------------------------------------------------------
+
+  server.registerTool(
+    "add_file",
+    {
+      title: "Add a file",
+      annotations: { ...ADDS, openWorldHint: true },
+      description:
+        "Upload a picture or any other file — a path in `file`, or a picture's bytes in `data` " +
+        "when you have the image and no file — and get back the markdown line that points at it. " +
+        "Files up to 10MB, pictures up to 5MB. " +
+        WHERE_THE_LINE_GOES,
+      inputSchema: {
+        file: z.string().optional().describe("path to the file on this machine"),
+        data: z
+          .string()
+          .optional()
+          .describe(
+            "a picture itself, base64 (a data: URL is fine), for when a tool handed you the image " +
+              "and never wrote it to disk",
+          ),
+        type: z
+          .string()
+          .optional()
+          .describe("media type of `data`: image/png, image/jpeg, image/webp or image/gif"),
+        name: z.string().optional().describe("label for it; defaults to its filename"),
+        project: z.string().optional().describe("keep it in this project instead"),
+      },
+    },
+    async ({ file, data, type, name, project }) => {
+      try {
+        if (project) {
+          if (!file) throw new Error("a file for a project needs `file`, a path on this machine");
+          return json(await api.addProjectFile(project, file, name || ""));
+        }
+        if (!file && !data)
+          throw new Error(
+            "send `file` (a path on this machine) or `data` (a picture, base64). If your " +
+              "screenshot is a tool result you cannot write out, capture it to a file instead — a " +
+              "headless browser's page.screenshot({ path }) or your platform's capture command.",
+          );
+        const got = data
+          ? await passalong.attachBytes(data, { name: name || "", type: type || "image/png" })
+          : await passalong.attachAny(file, { name: name || "" });
+        return text(
+          `${JSON.stringify({ id: got.id, url: got.url, bytes: got.bytes }, null, 2)}\n\n` +
+            `The line that points at it:\n${got.markdown}`,
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "read_file",
+    {
+      title: "Read a file",
+      annotations: READS,
+      description:
+        "Read a picture or a small text file kept in a project into this conversation. Other " +
+        "files stay downloads in the hub.",
+      inputSchema: { project: z.string(), file: z.string().describe("file id") },
+    },
+    async ({ project, file }) => {
+      try {
+        const got = await api.projectFile(project, file);
+        const { data, text: body, ...meta } = got;
+        return {
+          content: data
+            ? [
+                { type: "text", text: got.name },
+                { type: "image", data, mimeType: got.type },
+              ]
+            : [{ type: "text", text: `${got.name}\n\n${body || ""}` }],
+          structuredContent: meta,
+        };
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_file",
+    {
+      title: "Delete a file",
+      annotations: REMOVES,
+      description:
+        "Delete one file from a project. It cannot be brought back, so do it only when the person " +
+        "asked for that file to go.",
+      inputSchema: { project: z.string(), file: z.string().describe("file id") },
+    },
+    run(({ project, file }) => api.deleteProjectFile(project, file)),
+  );
+
+  // ---- account ----------------------------------------------------------------------------------
 
   server.registerTool(
     "accounts",
     {
       title: "Accounts on this machine",
-      annotations: READS,
+      // Read-only to the world: `use` is this process remembering a name until it exits, and
+      // nothing on disk or on the server changes, so the machine's default stays where it was.
+      annotations: { ...READS, idempotentHint: true },
       description:
         "The Passalong accounts signed in on this machine, which one this session is using, and " +
-        "whether it still has to be chosen. With two or more and nothing chosen, every call that " +
-        "needs an account is refused until use_account says which. Read-only.",
-      inputSchema: {},
-    },
-    async () => {
-      const list = api.accountList();
-      return json({
-        accounts: list,
-        in_use: api.accountInUse(),
-        must_choose: api.needsChoice(),
-        ...(api.needsChoice() ? { next: api.choiceMessage() } : {}),
-      });
-    },
-  );
-
-  server.registerTool(
-    "use_account",
-    {
-      title: "Use an account for this session",
-      annotations: { ...ADDS, idempotentHint: true },
-      description:
-        "Say which signed-in account this session acts as. Call it only with a name the PERSON " +
-        "gave you: when a machine has more than one account and none is chosen, ask them which, " +
-        "in plain words, then pass their answer. It lasts until this session ends and changes " +
-        "nothing on disk, so it never moves the machine's default.",
+        "whether it still has to be chosen. With two or more and nothing chosen, every other call " +
+        "is refused until `use` says which: ask the PERSON, in plain words, and pass their " +
+        "answer. It lasts until this session ends and never moves the machine's default.",
       inputSchema: {
-        name: z.string().describe("an account name from the accounts tool, as the person said it"),
+        use: z.string().optional().describe("an account name from the list, as the person said it"),
       },
     },
-    async ({ name }) => {
-      try {
-        api.chooseAccount(name);
+    run(async ({ use }) => {
+      if (use) {
+        api.chooseAccount(use);
         const who = await api.me();
-        return json({
-          using: name,
+        return {
+          using: use,
           account: who.account,
           handle: who.handle || "",
           email: who.email || "",
           teams: (who.teams || []).map((t) => t.slug),
-        });
-      } catch (err) {
-        return fail(err);
+        };
       }
-    },
-  );
-
-  server.registerTool(
-    "set_guide_status",
-    {
-      title: "Set guide status",
-      annotations: ADDS,
-      description:
-        "Archive a guide (`consumed`) or put it back on the board (`published`). Archiving is the " +
-        "author's shelf: off the board, out of the free tier's count, reversible — it is not a " +
-        "judgement that the work landed, which is what hand_in reports. `promoted` was " +
-        "retired and the server refuses it.",
-      inputSchema: { id: z.string(), status: z.enum(["published", "consumed"]) },
-    },
-    async ({ id, status }) => {
-      try {
-        const g = await passalong.setStatus(id, status);
-        return json(passalong.summary(g));
-      } catch (err) {
-        return fail(err);
-      }
-    },
+      return {
+        accounts: api.accountList(),
+        in_use: api.accountInUse(),
+        must_choose: api.needsChoice(),
+        ...(api.needsChoice() ? { next: api.choiceMessage() } : {}),
+      };
+    }),
   );
 
   return server;

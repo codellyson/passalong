@@ -1,10 +1,10 @@
 // Which hosts serve, and which only point at one.
 //
 // `passalong.dev` is canonical. `www.passalong.dev` is routed so the name resolves, but serving it
-// would mint a second share link for every guide — and a share key lives in the URL, so one link
+// would mint a second share link for every piece of work — and a share key lives in the URL, so one link
 // becoming two is a real problem rather than an untidy one. `passalong.kreativekorna.com` does
 // serve: links under it were handed out before the move and have to keep resolving. It no longer
-// *mints* anything, though — `PUBLIC_ORIGIN` names the apex, so a guide shared from either host
+// *mints* anything, though — `PUBLIC_ORIGIN` names the apex, so a piece of work shared from either host
 // gets one link and it is the canonical one. Serving an old link and creating a new one under the
 // same name are different jobs, and only the first is worth keeping.
 const WWW = "www.passalong.dev";
@@ -47,7 +47,7 @@ const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\]|::1|.+\.localhost|.+\.test)$/;
 /**
  * The origin every link this server mints is written against: share links, invites, screenshots.
  *
- * `PUBLIC_ORIGIN` names the apex so one guide has one link whichever production host shared it.
+ * `PUBLIC_ORIGIN` names the apex so one piece of work has one link whichever production host shared it.
  * But the variable ships in wrangler.jsonc and so reaches `nuxt dev` too, where it made a local
  * server hand out production addresses — a screenshot uploaded to localhost came back as
  * `https://passalong.dev/v1/shots/<id>`, which production has never heard of, and it rendered as a

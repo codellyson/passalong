@@ -8,7 +8,7 @@ export function timeLeft(iso: string, at = Date.now()): string {
 }
 
 /**
- * The line a guide shows when its proof screenshots are about to be deleted, or null. A sent guide
+ * The line a piece of work shows when its proof screenshots are about to be deleted, or null. A sent piece of work
  * nobody took is no longer tidied away — it stays Ready and a person is told — so this is the one
  * clock left. `soon` is the last two days, for a louder colour.
  */
@@ -19,7 +19,7 @@ export function expiryLine(
   if (!g.proof_expires) return null;
   return {
     text: `Screenshots deleted in ${timeLeft(g.proof_expires, at)}`,
-    why: "The screenshots that proved this work are deleted 5 days after it was closed, and can't be brought back. The guide itself stays. Turn off Clean-up in Settings to keep them.",
+    why: "The screenshots that proved this work are deleted 5 days after it was closed, and can't be brought back. The work itself stays.",
     soon: new Date(g.proof_expires).getTime() - at < 2 * 86_400_000,
   };
 }

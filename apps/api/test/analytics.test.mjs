@@ -15,17 +15,17 @@ const spy = (impl) => {
 
 test("no key, no call — an unconfigured deployment stays silent", async () => {
   const f = spy();
-  await track({}, "guide_shared", { team: true }, f);
-  await track({ APTABASE_KEY: "" }, "guide_shared", {}, f);
+  await track({}, "work_shared", { team: true }, f);
+  await track({ APTABASE_KEY: "" }, "work_shared", {}, f);
   assert.equal(f.calls.length, 0);
 });
 
 test("the key picks the region", async () => {
   const us = spy();
-  await track({ APTABASE_KEY: "A-US-0000000000" }, "guide_shared", {}, us);
+  await track({ APTABASE_KEY: "A-US-0000000000" }, "work_shared", {}, us);
   assert.match(us.calls[0].url, /^https:\/\/us\.aptabase\.com\/api\/v0\/event$/);
   const eu = spy();
-  await track({ APTABASE_KEY: "A-EU-0000000000" }, "guide_shared", {}, eu);
+  await track({ APTABASE_KEY: "A-EU-0000000000" }, "work_shared", {}, eu);
   assert.match(eu.calls[0].url, /^https:\/\/eu\.aptabase\.com\//);
 });
 
@@ -33,7 +33,7 @@ test("the payload carries the event and nothing it was not given", async () => {
   const f = spy();
   await track(
     { APTABASE_KEY: "A-US-1", ENVIRONMENT: "production" },
-    "guide_pulled",
+    "work_pulled",
     { via: "cli" },
     f,
   );
@@ -42,7 +42,7 @@ test("the payload carries the event and nothing it was not given", async () => {
   // One object, not an array: the /api/v0/events batch form silently drops everything, and the
   // ingest answers 200 either way, so only a test keeps this honest.
   assert.ok(!Array.isArray(body), "the singular endpoint takes one object");
-  assert.equal(body.eventName, "guide_pulled");
+  assert.equal(body.eventName, "work_pulled");
   assert.deepEqual(body.props, { via: "cli" });
   assert.equal(body.systemProps.isDebug, false);
   assert.deepEqual(Object.keys(body.systemProps).sort(), [

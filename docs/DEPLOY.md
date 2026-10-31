@@ -19,7 +19,7 @@ bearer tokens for the CLI and MCP servers. Only SHA-256 hashes are stored — of
 and reset codes alike. `POST /v1/accounts` mints an account with no email, and only for a valid
 team invite link: it answers 400 to anything else.
 
-**Mail.** Handoff, pull, consumed and invite emails go through Cloudflare Email Service via the
+**Mail.** Sent-to-you, pull, archived and invite emails go through Cloudflare Email Service via the
 `send_email` binding (`EMAIL` in `wrangler.jsonc`). There is no API key — the binding is the
 credential — but two things must be true, or every send fails silently:
 
@@ -40,10 +40,10 @@ credential — but two things must be true, or every send fails silently:
    account. On any plan you may mail addresses verified as Email Routing destinations, free.
 
 Nothing else depends on this: every mail is a delivery of a `notification` row that exists either
-way, so with mail off the hub, `passalong activity` and the MCP `activity` tool still work.
+way, so with mail off the hub's feed still works.
 
 **Migration 0005 rewrote how identity works** and runs against live data. It was tested locally
-against a seeded pre-auth database: accounts, guides, teams, memberships and notifications all
+against a seeded pre-auth database: accounts, work, teams, memberships and notifications all
 survive, and every existing `account.token_hash` becomes a row in `token` named "CLI (existing)",
 so tokens people already hold keep working. If you ever need to re-test that, seed a database from
 migrations 0001–0004 first — running 0005 against an empty one proves nothing.
@@ -58,10 +58,9 @@ straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no b
 deliberately. See the rule about what may go in a prop in AGENTS.md before adding an event.
 
 **The free tier is open.** `FREE_SIGNUP` is `"1"` in `apps/web/wrangler.jsonc` (reopened 2026-10-08), so a new
-account may keep `FREE_SYNC_LIMIT` guides synced without a plan; archived guides do not count. It had
+account may keep `FREE_SYNC_LIMIT` pieces of work without a plan; archived work does not count. It had
 been `"0"`, which refused a new account's first task. Set it to `"0"` to close it again: accounts
-carrying `grandfathered` (migration 0016) keep their ceiling either way, and the local store is
-untouched — `passalong share` writes to the machine with no account and no ceiling.
+carrying `grandfathered` (migration 0016) keep their ceiling either way.
 
 **Billing.** Payments go through [Bachs](https://docs.bachs.io), a merchant of record. Four Worker
 secrets, all optional: without them the paid tier is simply unavailable and every webhook is
@@ -108,6 +107,64 @@ pnpm -C apps/web build          # the dry run needs the build output to exist
 pnpm -C apps/web deploy:check   # wrangler dry run: bindings, assets, routes
 ```
 
+## Cutover: 1.0 (migrations 0061–0068, passalong 0.22.0)
+
+1.0 is one model and one set of words: work, projects, documents, files and proof; the statuses
+`draft`, `ready` and `done`; `/v1/work` and `/v1/projects`; share links `/w/:id/:key` and
+`/p/:id/:key`. It removes kinds and about forty-five agent tools (docs/WORK.md), and **migration
+0068 renames the tables, columns, indexes, statuses and notification kinds** to those words. Two
+things stop working, by decision: **every share link minted before 0068** (the old link paths are
+not served) and **every CLI below 0.22.0** (the routes it calls are gone). Do it in this order, by
+hand, not through an unattended CI push:
+
+1. **Bookmark the database.** D1 Time Travel restores to any minute in the last 30 days, but a
+   bookmark taken now is the exact point to go back to:
+
+   ```sh
+   cd apps/web && npx wrangler d1 time-travel info passalong   # note the bookmark it prints
+   ```
+
+2. **Migrate.** `pnpm -C apps/api db:migrate:remote` applies everything pending. 0061 strips
+   `kind:` from every document, makes each issue set parent work and rebuilds `claim` and
+   `claim_fence` on one holder; 0062 moves every earlier answer into the thread; 0068 renames the
+   tables to `work`, `project`, `document`, `document_revision`, `document_seen`, `project_file`,
+   `project_work`, `inbound_work` and `proof`, every `*_id` column to `work_id`/`project_id`, rewrites
+   statuses to `ready`/`done` in the column and in each document's `status:` line, renames the
+   notification kinds (`sent_to_you`, `passed`, `archived`, `made_admin`, `reopened`) and drops
+   the table of old answers. Check it:
+
+   ```sh
+   npx wrangler d1 execute passalong --remote --command \
+     "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1"   # 0068_work
+   npx wrangler d1 execute passalong --remote --command \
+     "SELECT status, COUNT(*) AS n FROM work GROUP BY status"     # draft, ready, done only
+   ```
+
+3. **Deploy the Worker** (`pnpm -C apps/web build && pnpm -C apps/web run deploy`) and run the
+   checks under "Verify" below. From here installed CLIs below 0.22.0 fail on every call; that
+   window should be minutes.
+4. **Move the project files.** R2 keeps each project file at `projects/<project>/<file>` now; until
+   this runs, a project's files answer 404. Look first, then act (it copies, reads the copy back,
+   and only then deletes the old key; run again, it skips what is already moved):
+
+   ```sh
+   node scripts/move-project-files.mjs           # dry run: what would move
+   node scripts/move-project-files.mjs --apply   # ends "failed 0"
+   ```
+
+5. **Release the CLI.** `passalong` 0.22.0 to npm (section 2), approve the staged version, and
+   check `npx -y passalong@latest version` prints 0.22.0.
+6. **Raise the floor.** Set `MIN_CLIENT` in `apps/api/src/clients.ts` to `"0.22.0"`, commit, and
+   deploy again. Every older CLI now gets the 426 with the install command instead of a bare
+   failure. Never before step 5: a floor above what npm hands out refuses every agent with nothing
+   it can install.
+
+To undo before step 6: `npx wrangler rollback` in `apps/web` and
+`npx wrangler d1 time-travel restore passalong --bookmark=<bookmark>`. A restore discards every
+write since the bookmark, so after real use, write a forward migration instead. The old Worker reads
+project files under `folders/`, so after step 4 a rollback leaves them unreachable until they are
+copied back.
+
 ## 1. Worker
 
 **One-time, before the first deploy that carries them:** the R2 bucket must exist, or wrangler
@@ -142,22 +199,21 @@ curl -sI https://www.passalong.dev/ | head -1        # 308 to the apex
 ```
 
 Both halves now live in one Worker, so `/health` passing no longer implies the pages render. Check
-a page, and check that guide pages still carry the CSP that makes them safe:
+a page, and check that share pages still carry the CSP that makes them safe:
 
 ```sh
 sh apps/web/scripts/probe.sh https://passalong.dev
-sh apps/web/scripts/probe.sh https://passalong.dev /g/<id>/<key>
+sh apps/web/scripts/probe.sh https://passalong.dev /w/<id>/<key>
 ```
 
-If either probe fails, **stop and roll back** — a guide page that ships script has lost the one
+If either probe fails, **stop and roll back** — a share page that ships script has lost the one
 property that makes rendering someone else's markdown safe. Rolling back is
 `npx wrangler rollback` in `apps/web`.
 
 Then switch your own machine from the local Worker to production:
 
 ```sh
-passalong login            # mints a production account; prints the token for other machines
-passalong share ~/.passalong/guides/<id>.md --no-edit   # re-share anything you want synced
+passalong login            # approve this machine in the signed-in hub
 ```
 
 Rollback: `wrangler rollback` in `apps/api`, or `wrangler deployments list` to pick a version.
@@ -251,8 +307,7 @@ and runs `claude mcp add passalong -- passalong mcp`, so those two paths are par
 
 ## 3. After deploy
 
-- Update `docs/PRD.md` status and the README install line if the package name changes (the
-  naming question in the PRD is still open: Passalong, Handoff, Baton, JustPassalong).
+- Update the README install line if the package name changes.
 - The free-tier cap is `FREE_SYNC_LIMIT` in `wrangler.jsonc`; account creation is throttled to
   5 per IP per minute via the `ACCOUNT_LIMIT` rate-limit binding.
 
@@ -267,8 +322,8 @@ pnpm -C apps/api exec wrangler d1 execute passalong --remote \
   --command "UPDATE account SET sync_limit = 200 WHERE handle = 'someone'"
 ```
 
-Put it back on the default with `sync_limit = 0`. Only guides that are `published` or `promoted`
-count against it, so archiving in the hub is what makes room — see `COUNTED` in
+Put it back on the default with `sync_limit = 0`. Only work that is `ready`
+counts against it, so archiving in the hub is what makes room — see `COUNTED` in
 `apps/api/src/quota.ts`, which is the one definition both the warning and the refusal read.
 
 There is no plan or subscription behind this. When there is, a plan resolves to a number and this
@@ -342,4 +397,4 @@ tagged or published, so the shipped history is `0.1.0` then `0.2.2`.
   constant, and `homepage` in the package together. `passalong.kreativekorna.com` is kept routed
   rather than redirected: share keys live in the URL, so links handed out under it must keep
   resolving. It no longer mints anything, though — `origin()` in `src/index.ts` returns
-  `PUBLIC_ORIGIN` when it is set, so both hosts name the apex and one guide keeps one link.
+  `PUBLIC_ORIGIN` when it is set, so both hosts name the apex and one piece of work keeps one link.

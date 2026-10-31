@@ -126,7 +126,7 @@ function deny() {
       <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ info.host }}</p>
 
       <p class="mt-5 mb-0 font-ui text-base text-fg">
-        It will be able to read guides in your teams, send guides, and answer guides sent to you,
+        It will be able to read work in your teams, send work, and answer work sent to you,
         as <b>{{ you }}</b>.
       </p>
       <p class="mt-2 mb-0 font-ui text-sm text-muted">
