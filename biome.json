@@ -10,7 +10,8 @@
       "!**/.output",
       "!**/.claude",
       "!**/.impeccable",
-      "!apps/api/public/vendor"
+      "!apps/api/public/vendor",
+      "!media/launch-video/assets/gsap.min.js"
     ]
   },
   "formatter": {

@@ -290,5 +290,5 @@ for name, ground, css, body, script in CLIPS:
         (d / "assets").symlink_to("../../assets")
     for f in ("hyperframes.json", "package.json"):
         (d / f).write_text((HERE.parent / f).read_text().replace("launch-video", name))
-    (d / "meta.json").write_text(json.dumps({"id": name, "name": name}, indent=2))
+    (d / "meta.json").write_text(json.dumps({"id": name, "name": name}, indent=2) + "\n")
     print("wrote", name)
