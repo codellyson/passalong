@@ -164,3 +164,4 @@ source it came from.
 
 - 2026-11-02 — surfaces, open-questions: the cutover targets CLI 1.0.0 through `pnpm release major`; keep the client floor at 0.20.0 until 1.0.0 is installable from npm. Source: docs/DEPLOY.md, AGENTS.md.
 - 2026-11-02 — codebase-map: CI can pause production through PAUSE_DEPLOY while the 1.0 CLI is staged for approval; build before migrations to shorten the incompatible-schema window. Source: .github/workflows/ci.yml, docs/DEPLOY.md.
+- 2026-11-03 — surfaces: the client floor is raised to 1.0.0, now `latest` on npm (published 2026-11-02); every CLI below it gets the 426 with the install command. Source: apps/api/src/clients.ts.

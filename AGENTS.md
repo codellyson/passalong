@@ -319,10 +319,10 @@ change. Its README says how.
   the other. `passalong mcp` prints no update notice and an agent never reads stderr, so the
   refusal on the call it just made is the one text it is sure to see. CLIs up to 0.11.0 send no
   header and are known by Node's own `user-agent: node`; browsers, curl, SDKs and `/v1/mcp` are
-  never gated. The floor is 0.20.0 until 1.0.0 — the CLI and tools that speak work — is on npm;
-  then it is raised to 1.0.0 at once (docs/DEPLOY.md, the cutover). **Raise `MIN_CLIENT` only
-  after that version is `latest` on npm** — a floor above what npm hands out refuses every agent
-  with nothing it can install.
+  never gated. The floor is 1.0.0 — the CLI and tools that speak work — raised at the cutover once
+  1.0.0 was `latest` on npm (docs/DEPLOY.md). **Raise `MIN_CLIENT` only after that version is
+  `latest` on npm** — a floor above what npm hands out refuses every agent with nothing it can
+  install.
 - **A team's board is one board, and anyone on it moves the work.** Everything in a team is seen by
   everyone in it, in the same place: `/hub/work` is four columns (Draft, To do, In progress, Done)
   and a card's column is the server's `stage` (`boardPlace()` in index.ts), never re-derived per

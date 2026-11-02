@@ -19,7 +19,7 @@ left, once per machine. Prints the id on stdout and everything else on stderr, s
 - `passalong setup` installs the Claude Code capture skill, the MCP server and hooks. The skill writes
   what a session learned into the project's documents, with a line on its Log — never a document for one person.
 - **Too old is refused, not warned.** Every call carries `x-passalong-version`; below `MIN_CLIENT`
-  (currently 0.20.0; 1.0.0 once it is `latest` on npm) the API answers 426 with the install
+  (currently 1.0.0, raised at the cutover once it was `latest` on npm) the API answers 426 with the install
   command. An agent never reads stderr, so the refusal is the one text it is sure to see. The
   package release is staged by CI and requires a maintainer's npm approval.
 
