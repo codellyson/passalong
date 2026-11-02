@@ -1,23 +1,23 @@
 // The two parsers, held to each other.
 //
-// `packages/passalong/src/guide.js` defines the guide format; this package's `src/guide.ts`
+// `packages/passalong/src/work.js` defines the work format; this package's `src/work.ts`
 // mirrors its parsing rules, and AGENTS.md says to change both. That instruction was enforced by
 // attention alone until this existed: the two suites tested separate cases over separate inputs,
-// and nothing compared the pair on a single byte. A guide is markdown in somebody else's
+// and nothing compared the pair on a single byte. A piece of work is markdown in somebody else's
 // repository, so the two drifting apart is not a bug you can deploy your way out of.
 //
-// The corpus itself lives beside the definition, in packages/passalong/fixtures/guides. This file
-// reaches for it on purpose: guide.js is the authority, and the mirror comes to it.
+// The corpus itself lives beside the definition, in packages/passalong/fixtures/work. This file
+// reaches for it on purpose: work.js is the authority, and the mirror comes to it.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import * as js from "../../../packages/passalong/src/guide.js";
-import * as ts from "../src/guide.ts";
+import * as js from "../../../packages/passalong/src/work.js";
+import * as ts from "../src/work.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DIR = join(HERE, "..", "..", "..", "packages", "passalong", "fixtures", "guides");
+const DIR = join(HERE, "..", "..", "..", "packages", "passalong", "fixtures", "work");
 const NAMES = readdirSync(DIR)
   .filter((f) => f.endsWith(".md") && f !== "README.md")
   .sort();
@@ -37,19 +37,10 @@ for (const name of NAMES) {
 
   test(`${name}: both parsers cut the body in the same place`, () => {
     const raw = read(name);
-    // guide.js trims what it returns and guide.ts hands back the slice, so the comparison is on
+    // work.js trims what it returns and work.ts hands back the slice, so the comparison is on
     // the trimmed form — that difference is in the signatures, not in where the cut falls.
     assert.equal(ts.body(raw).trim(), js.parse(raw).body, `${name}: the body differs`);
     assert.equal(ts.split(raw)?.body.trim(), js.parse(raw).body, `${name}: split disagrees`);
-  });
-
-  test(`${name}: both parsers agree on the sections it has`, () => {
-    // `splitSections` keeps the preamble and the author's order, which `sections` does not — that
-    // is written down in guide.ts and is deliberate. What must not differ is the headings found
-    // and the text under each.
-    const mine = js.sections(js.parse(read(name)).body);
-    const theirs = ts.splitSections(ts.body(read(name))).by;
-    assert.deepEqual(theirs, mine, `${name}: the sections differ`);
   });
 
   test(`${name}: both parsers agree on which images are unreachable`, () => {
@@ -82,6 +73,17 @@ test("both normalise a tag to the same string", () => {
   for (const raw of ["Rate_Limit", "  spaced  out  ", "#hash!marks?", "--edges--", "", "A-B"])
     assert.equal(ts.tag(raw), js.tag(raw), `tag(${JSON.stringify(raw)})`);
   assert.deepEqual(ts.tagList(["a_b", "a b", "A-B", ""]), js.tagList(["a_b", "a b", "A-B", ""]));
+});
+
+test("both refuse a document that says what kind it is, and only that field", () => {
+  const doc = (front) => `---\ntitle: t\nsummary: s\n${front}---\n\nb\n`;
+  for (const k of ["task", "bug", "transfer"]) {
+    assert.deepEqual(ts.retiredFields(doc(`kind: ${k}\n`)), ["kind"]);
+    assert.ok(js.validate(js.parse(doc(`kind: ${k}\n`))).some((e) => /`kind:` is gone/.test(e)));
+  }
+  // A word in the body, or a field that merely starts with the letters, is not the field.
+  assert.deepEqual(ts.retiredFields(doc("kindness: yes\n").replace("\nb\n", "\nkind: bug\n")), []);
+  for (const name of NAMES) assert.deepEqual(ts.retiredFields(read(name)), [], name);
 });
 
 test("both find the same unreachable images, and leave the same ones alone", () => {

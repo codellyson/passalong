@@ -5,9 +5,9 @@
 // Worker: it is a plugin and a `triggers.crons` line in wrangler.jsonc.
 //
 // Screenshots leave two ways here: the upload nobody ever referenced, which nothing else is in a
-// position to notice, and the proof on a guide closed long enough ago that nobody is reviewing it.
-// Everything else about a shot is handled where it happens — claimed when the guide naming it is
-// written, deleted with that guide.
+// position to notice, and the proof on a piece of work closed long enough ago that nobody is reviewing it.
+// Everything else about a shot is handled where it happens — claimed when the work naming it is
+// written, deleted with that work.
 
 import { alertPeople } from "#api/alerts";
 import { sweepAttachments } from "#api/attachments";
@@ -52,13 +52,13 @@ export default defineNitroPlugin((nitro) => {
     } catch (err) {
       console.error("file sweep failed", err);
     }
-    // Proof on guides closed more than PROOF_DAYS ago: the screenshots somebody attached to say it
+    // Proof on work closed more than PROOF_DAYS ago: the screenshots somebody attached to say it
     // works. They were for the review, and the review is over. See sweepProof in shots.ts.
     try {
       const { removed } = await sweepProof(env as Parameters<typeof sweepProof>[0]);
       if (removed)
         console.log(
-          `removed ${removed} proof screenshot(s) from guides closed ${PROOF_DAYS}+ days ago`,
+          `removed ${removed} proof screenshot(s) from work closed ${PROOF_DAYS}+ days ago`,
         );
     } catch (err) {
       console.error("proof sweep failed", err);
@@ -87,7 +87,7 @@ export default defineNitroPlugin((nitro) => {
      * notification channel gets muted.
      *
      * `actor_id` is deliberately empty. Nobody did this; a lease ran out. With an actor the
-     * sentence would name a person as having done something to the guide, and with the author's
+     * sentence would name a person as having done something to the work, and with the author's
      * own account it would be suppressed as self-inflicted — which is the commonest case of all,
      * somebody's own agent going quiet on their own task.
      */
@@ -103,7 +103,7 @@ export default defineNitroPlugin((nitro) => {
         await notify(env as Parameters<typeof notify>[0], {
           to: s.author,
           kind: "stalled",
-          guide_id: s.guide_id,
+          work_id: s.work_id,
           actor_id: "",
           // The last thing its agent said, when it said anything — which is the most useful thing
           // to put in front of somebody deciding whether to release it. Where it was running is
@@ -131,7 +131,7 @@ export default defineNitroPlugin((nitro) => {
       for (const r of back) {
         const e = {
           kind: "requeued" as const,
-          guide_id: r.guide_id,
+          work_id: r.work_id,
           actor_id: "",
           team_id: r.team_id,
         };
@@ -150,7 +150,7 @@ export default defineNitroPlugin((nitro) => {
       console.error("requeue failed", err);
     }
 
-    // Guides left in Draft for a day. Draft is where every guide starts, and one its author meant to
+    // Work left in Draft for a day. Draft is where every piece of work starts, and one its author meant to
     // send sits there with nothing saying so. Feed only, no mail, like a stall notice.
     try {
       const now = Date.now();
@@ -161,7 +161,7 @@ export default defineNitroPlugin((nitro) => {
         await notify(env as Parameters<typeof notify>[0], {
           to: g.account_id,
           kind: "still_draft",
-          guide_id: g.id,
+          work_id: g.id,
           actor_id: "",
           team_id: g.team_id,
         });
@@ -171,8 +171,7 @@ export default defineNitroPlugin((nitro) => {
     }
 
     /**
-     * Guides sent to somebody that nothing ever happened to. They stay Ready — they used to go back
-     * to Draft after a fortnight, where they reached nobody — and the people who can move them are
+     * Work sent to somebody that nothing ever happened to. They stay Ready, and the people who can move them are
      * told every day until someone acts: the author and the team's owners (mailed the first time).
      */
     try {
@@ -189,12 +188,12 @@ export default defineNitroPlugin((nitro) => {
         await alertPeople(
           env as Parameters<typeof alertPeople>[0],
           [g.account_id, ...owners.map((o) => o.account_id)],
-          { kind: "untaken", guide_id: g.id, actor_id: "", team_id: g.team_id },
+          { kind: "untaken", work_id: g.id, actor_id: "", team_id: g.team_id },
           "Nobody has taken this",
           g.title,
         );
       }
-      if (left.length) console.log(`told about ${left.length} guide(s) nobody took`);
+      if (left.length) console.log(`told about ${left.length} work(s) nobody took`);
     } catch (err) {
       console.error("untaken notice failed", err);
     }
@@ -218,7 +217,7 @@ export default defineNitroPlugin((nitro) => {
         await alertPeople(
           env as Parameters<typeof alertPeople>[0],
           [g.account_id, ...owners.map((o) => o.account_id)],
-          { kind: "customer_waiting", guide_id: g.id, actor_id: "", team_id: g.team_id },
+          { kind: "customer_waiting", work_id: g.id, actor_id: "", team_id: g.team_id },
           "A customer is waiting",
           g.title,
         );

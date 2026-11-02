@@ -1,5 +1,5 @@
 <!--
-  One blog post: the title and date, then the body in the reading face guides use.
+  One blog post: the title and date, then the body in the reading face work use.
 
   The body is rendered on the server from our own markdown (server/utils/blog.ts), under the same
   no-script policy as every public page. A draft renders at its address for review, noindex.

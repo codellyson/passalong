@@ -14,6 +14,8 @@ usePage({
   description: "Set a new Passalong password.",
   noindex: true,
 });
+// The signed-in world's tokens (square corners, coral primary, ink focus), as the hub draws them.
+useHead({ bodyAttrs: { class: "hub-app" } });
 
 const code = ref<string | null>(null);
 const mounted = ref(false);
@@ -55,7 +57,7 @@ async function submit(e: Event) {
     <header>
       <AppBrand />
       <h1>Choose a new password</h1>
-      <div class="meta"><span>the link works once, and for an hour</span></div>
+      <div class="meta"><span>The link works once, and for an hour.</span></div>
     </header>
 
     <!-- The same block the hub and the sign-in screen use for a refusal. A bare red line at the

@@ -64,7 +64,7 @@ export async function makeSuper(
 }
 
 /**
- * Take the role back. The account is untouched — its guides, its plan and its sign-in are its own,
+ * Take the role back. The account is untouched — its work, its plan and its sign-in are its own,
  * and losing the power to comp somebody is not losing what you wrote.
  *
  * The last super cannot be removed, by themselves or by anybody. A product with no operator and no

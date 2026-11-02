@@ -1,8 +1,8 @@
 # Share links are addressed by a secret key; they are for whoever holds the link, not for indexes.
 User-agent: *
 Allow: /$
-Disallow: /g/
-Disallow: /f/
+Disallow: /w/
+Disallow: /p/
 Disallow: /v1/
 Disallow: /hub
 Disallow: /join

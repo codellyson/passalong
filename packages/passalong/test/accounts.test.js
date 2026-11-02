@@ -66,7 +66,7 @@ test("with several accounts and nobody saying which, an agent is refused before 
   await assert.rejects(api.me(), (e) => {
     assert.match(e.message, /More than one Passalong account/);
     assert.match(e.message, /work \(work@example\.test\), personal \(personal@example\.test\)/);
-    assert.match(e.message, /use_account/);
+    assert.match(e.message, /call accounts with `use`/);
     assert.match(e.message, /Do not choose one yourself/);
     assert.notEqual(e.status, 0, "refused here, not a network failure");
     return true;
@@ -189,11 +189,11 @@ test("over MCP, an agent sees it must choose, is refused until it does, and cann
   );
   assert.match(seen.next, /Ask the person which one/);
 
-  const refused = await client.callTool({ name: "board", arguments: {} });
+  const refused = await client.callTool({ name: "find_work", arguments: {} });
   assert.equal(refused.isError, true);
   assert.match(text(refused), /More than one Passalong account/);
 
-  const nobody = await client.callTool({ name: "use_account", arguments: { name: "nobody" } });
+  const nobody = await client.callTool({ name: "accounts", arguments: { use: "nobody" } });
   assert.equal(nobody.isError, true);
   assert.match(text(nobody), /no account called "nobody"/);
   await client.close();

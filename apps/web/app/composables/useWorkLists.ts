@@ -1,36 +1,38 @@
 import type { Ref } from "vue";
-import type { Guide } from "~/types/hub";
+import type { Work } from "~/types/hub";
 
 /**
- * The team board: every guide in scope — tasks, handoffs and bugs — in one column each, the same
- * for everyone who opens it. The column is the server's (`stage` on every guide row); nothing here
+ * The team board: all work in scope, in one column each, the same for everyone who opens it. The
+ * column is the server's (`stage` on every row); nothing here
  * re-decides it per viewer, which is what made two teammates see the same work in different places.
- * Home shows the column counts and /hub/work the board; both read them from here.
  *
  * `q` and `follows` narrow it, as the Work page's search does. `mineOnly` keeps only the cards
- * that are about you — yours, sent to you or a group you are in, held by you, or yours to review —
- * without moving any card to a different column.
+ * that are about you — yours, sent to you or a group you are in, or held by you — and `project`
+ * only one project's ("none": work in no project), without moving any card to a different column.
  */
 export const STAGES = [
-  { id: "draft", label: "Draft", hint: "Not ready for anyone yet" },
-  { id: "todo", label: "To do", hint: "Ready, nobody has it" },
-  { id: "working", label: "In progress", hint: "Held by a person or an agent" },
-  { id: "done", label: "Done", hint: "Finished, with what was shown, or archived" },
+  { id: "draft", label: "Draft", hint: "Nothing waiting to be read first." },
+  { id: "todo", label: "To do", hint: "Nothing ready and waiting." },
+  { id: "working", label: "In progress", hint: "Nobody is working on anything." },
+  { id: "done", label: "Done", hint: "Nothing finished yet." },
 ] as const;
 export type Stage = (typeof STAGES)[number]["id"];
 
 /** A card that is about you. Used as a filter only: it never moves a card. */
-export const aboutMe = (g: Guide) =>
-  g.mine || Boolean(g.for_me) || Boolean(g.can_review) || Boolean(g.held_by?.some((h) => h.you));
+export const aboutMe = (g: Work) =>
+  g.mine || Boolean(g.for_me) || Boolean(g.held_by?.some((h) => h.you));
 
-export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Ref<boolean>) {
+export function useWorkLists(
+  q: Ref<string>,
+  follows: Ref<string>,
+  mineOnly?: Ref<boolean>,
+  project?: Ref<string>,
+) {
   const { data, scope, loading, failed } = useHub();
 
   /** A failed list cannot be reported as an empty board. The shell offers Try again. */
-  const unavailable = computed(() => failed.value.guides || failed.value.board);
-  const waiting = computed(
-    () => !unavailable.value && (loading.value.guides || loading.value.board),
-  );
+  const unavailable = computed(() => failed.value.work || failed.value.board);
+  const waiting = computed(() => !unavailable.value && (loading.value.work || loading.value.board));
 
   // An account with nothing in it is not looking at a board. It gets the steps that lead somewhere,
   // but only once the list has arrived empty, or every first load would flash onboarding.
@@ -39,7 +41,7 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Re
       Boolean(data.value.me) &&
       !waiting.value &&
       !unavailable.value &&
-      data.value.guides.length === 0 &&
+      data.value.work.length === 0 &&
       data.value.tasks.length === 0,
   );
   const hasTeams = computed(() => Boolean(data.value.me?.teams.length));
@@ -52,11 +54,11 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Re
   };
 
   /**
-   * The list is scoped and the inbox is not. Across all teams, a guide sent to you from outside your
+   * The list is scoped and the inbox is not. Across all teams, work sent to you from outside your
    * teams is in the inbox and not in the list — the one thing here that must not go missing.
    */
-  const guides = computed<Guide[]>(() => {
-    const list = data.value.guides;
+  const work = computed<Work[]>(() => {
+    const list = data.value.work;
     return scope.value !== "all"
       ? list
       : [
@@ -65,9 +67,10 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Re
         ];
   });
 
-  const matches = (g: Guide) => {
+  const matches = (g: Work) => {
     if (follows.value && g.parent !== follows.value) return false;
     if (mineOnly?.value && !aboutMe(g)) return false;
+    if (project?.value && (g.project?.id ?? "none") !== project.value) return false;
     return hit([
       g.title,
       g.summary,
@@ -79,7 +82,6 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Re
       g.to_group,
       g.team_name,
       g.id,
-      g.report_title,
       ...(g.held_by ?? []).flatMap((h) => [h.name, h.agent]),
       ...(g.tags || []),
       ...(g.stack_assumptions || []),
@@ -87,7 +89,7 @@ export function useWorkLists(q: Ref<string>, follows: Ref<string>, mineOnly?: Re
   };
 
   const columns = computed(() => {
-    const shown = guides.value.filter(matches);
+    const shown = work.value.filter(matches);
     return STAGES.map((s) => ({
       ...s,
       cards: shown.filter((g) => (g.stage ?? "todo") === s.id),

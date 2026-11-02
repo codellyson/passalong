@@ -19,7 +19,7 @@ test("only an admin changes roles, and the maker of the team stays one", () => {
 test("promoting tells the person; demoting and a no-op do not", () => {
   assert.match(
     patch,
-    /if \(role === "owner"\)\s+await notify\(c\.env, \{\s+to: who\.id,\s+kind: "promoted"/,
+    /if \(role === "owner"\)\s+await notify\(c\.env, \{\s+to: who\.id,\s+kind: "made_admin"/,
   );
 });
 
@@ -32,7 +32,7 @@ test("anyone may leave, only an admin removes, and the maker can do neither", ()
 test("removing someone releases their holds and takes them out of the team's groups", () => {
   assert.match(
     del,
-    /DELETE FROM claim WHERE account_id = \? AND guide_id IN \(SELECT id FROM guide WHERE team_id = \?\)/,
+    /DELETE FROM claim WHERE account_id = \? AND work_id IN \(SELECT id FROM work WHERE team_id = \?\)/,
   );
   assert.match(
     del,

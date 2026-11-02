@@ -6,7 +6,7 @@
 
   It understands what is pasted into it: a picture is uploaded and shown in place, an error or a log
   becomes a code block, a link stays a link. It knows the team: `@` suggests people and `#` the
-  team's groups. What it emits is markdown (utils/markdown.ts), the form every guide is in.
+  team's groups. What it emits is markdown (utils/markdown.ts), the form every piece of work is in.
 -->
 <script setup lang="ts">
 import Image from "@tiptap/extension-image";
@@ -196,6 +196,38 @@ async function addPicture(file: File) {
   const url = await upload(file);
   if (url) editor.value?.chain().focus().setImage({ src: url, alt: file.name }).run();
 }
+/**
+ * Add any file: a picture is drawn inline; anything else (a PDF, a zip, a text file) is kept as an
+ * attachment and named by a link, which the work claims when it is filed, as a reply's files are.
+ */
+async function addFile(file: File) {
+  if (file.type.startsWith("image/")) return addPicture(file);
+  try {
+    const got = await api<{ attachment: { url: string; name: string } }>("/v1/attachments", {
+      method: "POST",
+      headers: {
+        "content-type": file.type || "application/octet-stream",
+        "x-file-name": encodeURIComponent(file.name),
+      },
+      body: file,
+    });
+    if (!got?.attachment) return;
+    editor.value
+      ?.chain()
+      .focus()
+      .insertContent([
+        {
+          type: "text",
+          text: got.attachment.name,
+          marks: [{ type: "link", attrs: { href: got.attachment.url } }],
+        },
+        { type: "text", text: " " },
+      ])
+      .run();
+  } catch (e) {
+    emit("problem", (e as Error).message);
+  }
+}
 function clear() {
   editor.value?.commands.clearContent(true);
 }
@@ -216,7 +248,7 @@ function setText(text: string) {
     { emitUpdate: true },
   );
 }
-defineExpose({ addPicture, clear, insert, setText });
+defineExpose({ addPicture, addFile, clear, insert, setText });
 </script>
 
 <template>

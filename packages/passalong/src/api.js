@@ -1,5 +1,5 @@
-// Client for the hosted sync API (apps/api). Everything here is optional: with no token the
-// CLI is a purely local tool, and every function throws an ApiError the CLI turns into a hint.
+// Client for the hosted API (apps/api). Work lives there, so nearly every call needs a login, and
+// every function throws an ApiError the CLI turns into a hint.
 import { readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
@@ -27,7 +27,7 @@ export class ApiError extends Error {
 // ---- which account -----------------------------------------------------------------------------
 //
 // A machine may be signed in to several (store.js). Who a call is made as comes from, in order:
-// PASSALONG_TOKEN, an account named by PASSALONG_ACCOUNT, `--as` or `use_account` (this process
+// PASSALONG_TOKEN, an account named by PASSALONG_ACCOUNT, `--as` or `accounts` `use` (this process
 // only), then the machine's default. With two or more logins and nobody having said which, a
 // person at a terminal gets the default and an agent — a process with no terminal to ask on — is
 // refused with the names, so it asks the person rather than choosing. That refusal is the prompt:
@@ -102,7 +102,7 @@ export function choiceMessage() {
     .join(", ");
   return (
     `More than one Passalong account is signed in on this machine (${list}) and nothing says which ` +
-    "this session is for. Ask the person which one to use, then call use_account with its name " +
+    "this session is for. Ask the person which one to use, then call accounts with `use` set to its name " +
     "(or run the command with --as <name>). Do not choose one yourself."
   );
 }
@@ -216,58 +216,6 @@ const q = (params) => {
 };
 
 /**
- * Sign in, or make the account, and come back with a token for this machine.
- *
- * Three calls, because the API answers a browser and this is not one: signing in sets a session
- * cookie, and the CLI carries a bearer token instead — one that shows up in the hub's token list
- * with a name on it, and can be revoked there without changing the password. So the cookie is used
- * once, to mint the token, and then dropped.
- *
- * `make` is signup rather than sign-in. It is the caller's decision and not a fallback here: an
- * account created because an address was mistyped is worse than being told there is no such
- * account.
- */
-export async function signIn(email, password, { make = false, label = "" } = {}) {
-  const res = await fetch(`${baseUrl()}${make ? "/v1/auth/signup" : "/v1/auth/login"}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  }).catch((err) => {
-    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
-  });
-  if (!res.ok) {
-    const said = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, said.message || res.statusText);
-  }
-  const { account } = await res.json();
-  // `getSetCookie` keeps the cookies apart; a joined `set-cookie` header cannot be split safely,
-  // because an Expires date has a comma in it.
-  const cookie = (res.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
-  if (!cookie) throw new ApiError(500, "signed in, but no session came back");
-
-  const minted = await fetch(`${baseUrl()}/v1/tokens`, {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie },
-    body: JSON.stringify({ name: label || "cli" }),
-  });
-  if (!minted.ok) {
-    const said = await minted.json().catch(() => ({}));
-    throw new ApiError(minted.status, said.message || "could not make a token for this machine");
-  }
-  const { token: made } = await minted.json();
-  return { account, token: made };
-}
-
-/**
- * Mint an account with no email and no password.
- *
- * Nothing in this package calls it any more — `passalong login` asks for an email and a password,
- * because an account nobody can sign in to is one that dies with the file it is stored in, and the
- * CLI used to make one without ever saying so. It stays exported because the route it calls is
- * still live and still right for the invite page, which mints before it claims, and because
- * removing a published export is a breaking change for anyone who imported it.
- */
-/**
  * Sign this machine in from the browser. `challenge` is the sha256, in hex, of a secret kept here;
  * what comes back is a short code to show, the page to open, and how often to ask whether it was
  * approved. Nothing in the answer is a credential.
@@ -293,7 +241,6 @@ export async function devicePoll(id, verifier) {
   return said;
 }
 
-export const createAccount = () => call("/v1/accounts", { method: "POST", auth: false });
 export const me = () => call("/v1/me");
 export const updateMe = (patch) => call("/v1/me", { method: "PATCH", body: patch });
 
@@ -314,101 +261,83 @@ export const removeMember = (slug, who) =>
 export const join = (code) =>
   call(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
 
-export const board = () => call("/v1/board");
-export const folders = (scope = "all", { query = "", guide = "" } = {}) =>
-  call(`/v1/folders${q({ scope, q: query, guide })}`);
-export const createFolder = (title, description = "", team = "", parent = "", color = "") =>
-  call("/v1/folders", { method: "POST", body: { title, description, team, parent, color } });
-export const folder = (id) => call(`/v1/folders/${encodeURIComponent(id)}`);
-export const updateFolder = (id, changes) =>
-  call(`/v1/folders/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });
-export const folderDocument = (folderId, documentId) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`);
-export const folderAsset = (folderId, assetId) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/assets/${encodeURIComponent(assetId)}/agent`);
-export async function addFolderAsset(folderId, path, name = "") {
+export const projects = (scope = "all", query = "") =>
+  call(`/v1/projects${q({ scope, q: query })}`);
+export const createProject = (
+  title,
+  description = "",
+  team = "",
+  parent = "",
+  color = "",
+  repo = "",
+) =>
+  call("/v1/projects", { method: "POST", body: { title, description, team, parent, color, repo } });
+export const project = (id) => call(`/v1/projects/${encodeURIComponent(id)}`);
+export const updateProject = (id, changes) =>
+  call(`/v1/projects/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });
+export const projectDocument = (projectId, documentId) =>
+  call(`/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}`);
+export const projectFile = (projectId, fileId) =>
+  call(`/v1/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileId)}/agent`);
+export async function addProjectFile(projectId, path, name = "") {
   const file = await stat(path);
-  if (!file.isFile()) throw new ApiError(400, "Choose a file to add to the folder.");
+  if (!file.isFile()) throw new ApiError(400, "Choose a file to add to the project.");
   if (file.size > 10 * 1024 * 1024) throw new ApiError(413, "That file is over 10 MB.");
-  return call(`/v1/folders/${encodeURIComponent(folderId)}/assets`, {
+  return call(`/v1/projects/${encodeURIComponent(projectId)}/files`, {
     method: "POST",
     body: new Uint8Array(await readFile(path)),
     uploadName: name || basename(path),
   });
 }
-export const createFolderDocument = (folderId, name, body) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents`, {
+export const createProjectDocument = (projectId, name, body) =>
+  call(`/v1/projects/${encodeURIComponent(projectId)}/documents`, {
     method: "POST",
     body: { name, body },
   });
-export const saveFolderDocument = (folderId, documentId, version, body) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
-    method: "PUT",
-    body: { version, body },
-  });
-export const renameFolderDocument = (folderId, documentId, name) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
-    method: "PATCH",
-    body: { name },
-  });
-export const moveFolderDocument = (folderId, documentId, to, name = "") =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
-    method: "PATCH",
-    body: name ? { folder: to, name } : { folder: to },
-  });
-export const folderDocumentHistory = (folderId, documentId, version = 0) =>
+export const saveProjectDocument = (projectId, documentId, version, body) =>
   call(
-    `/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}/revisions${version ? `/${version}` : ""}`,
+    `/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "PUT",
+      body: { version, body },
+    },
   );
-export const shareFolder = (folderId) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/share`, { method: "POST" });
-export const linkFolderGuide = (folderId, guide) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/guides`, { method: "POST", body: { guide } });
-export const unlinkFolderGuide = (folderId, guide) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/guides/${encodeURIComponent(guide)}`, {
+/** Rename a document, move it to another project (`project`), or both. Its id and history stay. */
+export const patchProjectDocument = (projectId, documentId, changes) =>
+  call(
+    `/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "PATCH",
+      body: changes,
+    },
+  );
+export const projectDocumentHistory = (projectId, documentId, version = 0) =>
+  call(
+    `/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}/revisions${version ? `/${version}` : ""}`,
+  );
+export const deleteProjectDocument = (projectId, documentId) =>
+  call(
+    `/v1/projects/${encodeURIComponent(projectId)}/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "DELETE",
+    },
+  );
+export const deleteProjectFile = (projectId, fileId) =>
+  call(`/v1/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileId)}`, {
     method: "DELETE",
   });
-export const deleteFolderDocument = (folderId, documentId) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/documents/${encodeURIComponent(documentId)}`, {
-    method: "DELETE",
-  });
-export const deleteFolderAsset = (folderId, assetId) =>
-  call(`/v1/folders/${encodeURIComponent(folderId)}/assets/${encodeURIComponent(assetId)}`, {
-    method: "DELETE",
-  });
-/** What you did, newest first. `since` is a date prefix: 2026, 2026-09, 2026-09-11. */
-export const log = ({ repo = "", since = "", limit = 0 } = {}) =>
-  call(`/v1/log${q({ repo, since, limit: limit || "" })}`);
-export const notifications = ({ unread = true, limit = 0 } = {}) =>
-  call(`/v1/notifications${q({ unread: unread ? "1" : "", limit: limit || "" })}`);
-/** No ids means "everything unread". */
-export const markRead = (ids = []) =>
-  call("/v1/notifications/read", { method: "POST", body: { ids } });
-
-export const publish = (id, markdown) =>
-  call(`/v1/guides/${id}`, { method: "PUT", body: markdown });
-export const list = (query = "", scope = "") => call(`/v1/guides${q({ q: query, scope })}`);
-export const inbox = () => call("/v1/inbox");
-/** Open a report for a set of issues to be filed under. */
-export const createReport = (body) => call("/v1/reports", { method: "POST", body });
-/** One report and the issues filed under it, grouped by product area. */
-export const report = (id) => call(`/v1/reports/${encodeURIComponent(id)}`);
+export const publish = (id, markdown) => call(`/v1/work/${id}`, { method: "PUT", body: markdown });
+export const list = (query = "", scope = "") => call(`/v1/work${q({ q: query, scope })}`);
 export const get = (id, { peek = false, as = null } = {}) =>
-  call(`/v1/guides/${id}${q({ peek: peek ? "1" : "" })}`, { raw: true, as });
-/** One page of every guide this account can read, for `export`. Records no pull. */
+  call(`/v1/work/${id}${q({ peek: peek ? "1" : "" })}`, { raw: true, as });
+/** One page of every piece of work this account can read, for `export`. Records no pull. */
 export const exportPage = (after = "", as = null) => call(`/v1/export${q({ after })}`, { as });
 /**
- * A guide's follow-ups, one level down. `markdown` adds each one's content, oldest first and
- * capped server-side; neither form counts as opening them.
- */
-export const children = (id, { markdown = false } = {}) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/children${q({ markdown: markdown ? "1" : "" })}`);
-/**
- * The guide this one came out of, with where it has got to. `markdown` adds its content. Like the
- * follow-ups, reading it is not opening it: no pull is recorded on the parent.
+ * The work this one came out of, with where it has got to. `markdown` adds its content. Reading it
+ * is not opening it: no pull is recorded on the parent.
  */
 export const parent = (id, { markdown = false } = {}) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/parent${q({ markdown: markdown ? "1" : "" })}`);
+  call(`/v1/work/${encodeURIComponent(id)}/parent${q({ markdown: markdown ? "1" : "" })}`);
 /**
  * Giving a plan away, for whoever the deployment names in `ADMIN_ACCOUNTS`. Every other account
  * gets a 404 from these, so the CLI does not have to know who the operator is either.
@@ -424,63 +353,29 @@ export const listGifts = () => call("/v1/admin/gifts");
 export const takeGiftBack = (id) =>
   call(`/v1/admin/gifts/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const setStatus = (id, status) =>
-  call(`/v1/guides/${id}/status`, { method: "PATCH", body: { status } });
-export const remove = (id) => call(`/v1/guides/${id}`, { method: "DELETE" });
-/** Does it actually work? `note` is required when it does not. */
-export const verdict = (id, ok, note = "", detail = "") =>
-  call(`/v1/guides/${id}/verdict`, {
-    method: "PUT",
-    body: { ok, note, ...(detail ? { detail } : {}) },
-  });
-
+  call(`/v1/work/${id}/status`, { method: "PATCH", body: { status } });
+export const remove = (id) => call(`/v1/work/${id}`, { method: "DELETE" });
 export const tasks = () => call("/v1/tasks");
 export const nextTask = (body) => call("/v1/tasks/next", { method: "POST", body });
-export const taskProgress = (id, body) =>
-  call(`/v1/tasks/${encodeURIComponent(id)}/progress`, { method: "PUT", body });
-export const finishTask = (id, body) =>
-  call(`/v1/tasks/${encodeURIComponent(id)}/finish`, { method: "POST", body });
-export const approveTask = (id) =>
-  call(`/v1/tasks/${encodeURIComponent(id)}/approve`, { method: "POST", body: {} });
-export const rejectTask = (id, why) =>
-  call(`/v1/tasks/${encodeURIComponent(id)}/reject`, { method: "POST", body: { why } });
 export const reopen = (id, why) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/reopen`, { method: "POST", body: { why } });
-/** A handoff's or bug's approve and send-back. No `place` names the only hand-in there is. */
-export const closeGuide = (id) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/close`, { method: "POST", body: {} });
-export const sendBack = (id, why) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/send_back`, { method: "POST", body: { why } });
-/** Take work back from whoever holds it, of any kind. `/v1/tasks/…/release` is the old path. */
+  call(`/v1/work/${encodeURIComponent(id)}/reopen`, { method: "POST", body: { why } });
+/** Take work back from whoever holds it. */
 export const release = (id) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });
-/** The four verbs every guide answers to. See docs/V2.md §11. */
+  call(`/v1/work/${encodeURIComponent(id)}/release`, { method: "POST", body: {} });
 export const working = () => call("/v1/working");
-export const handedIn = () => call("/v1/handed_in");
-export const recall = (id) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/recall`, { method: "POST", body: {} });
 export const assign = (id, to) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/assign`, { method: "POST", body: { to } });
+  call(`/v1/work/${encodeURIComponent(id)}/assign`, { method: "POST", body: { to } });
 export const take = (body) => call("/v1/take", { method: "POST", body });
 export const progress = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/progress`, { method: "PUT", body });
+  call(`/v1/work/${encodeURIComponent(id)}/progress`, { method: "PUT", body });
 export const handIn = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/hand_in`, { method: "POST", body });
+  call(`/v1/work/${encodeURIComponent(id)}/hand_in`, { method: "POST", body });
 export const ask = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/ask`, { method: "POST", body });
+  call(`/v1/work/${encodeURIComponent(id)}/ask`, { method: "POST", body });
 export const reply = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/reply`, { method: "POST", body: { body } });
+  call(`/v1/work/${encodeURIComponent(id)}/reply`, { method: "POST", body: { body } });
 export const pass = (id, body) =>
-  call(`/v1/guides/${encodeURIComponent(id)}/pass`, { method: "POST", body });
-export const ack = (id, taken, note = "") =>
-  call(`/v1/guides/${id}/ack`, { method: "PUT", body: { taken, note } });
-
-/**
- * Upload an image as evidence, and get back the URL a guide points at.
- *
- * Not `call()`: that serialises a body as JSON or markdown, and this route reads bytes and takes
- * the content type as the declaration of what they are. `name` is the label, and it travels in a
- * header rather than the body for the same reason.
- */
+  call(`/v1/work/${encodeURIComponent(id)}/pass`, { method: "POST", body });
 /**
  * Upload a file that is not a picture, and get back what the server made of it. The server decides
  * what the bytes are and refuses what it does not keep; `type` and `name` are hints. The name travels
@@ -491,6 +386,7 @@ export async function uploadFile(bytes, type, name = "") {
   const t = token();
   if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
   const headers = {
+    ...CLIENT,
     authorization: `Bearer ${t}`,
     "content-type": type || "application/octet-stream",
   };
@@ -499,7 +395,7 @@ export async function uploadFile(bytes, type, name = "") {
   try {
     res = await fetch(`${baseUrl()}/v1/attachments`, { method: "POST", headers, body: bytes });
   } catch (err) {
-    throw new ApiError(0, `could not reach ${base} (${err.message})`);
+    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
   }
   if (!res.ok) {
     const body = await res.text();
@@ -512,6 +408,10 @@ export async function uploadFile(bytes, type, name = "") {
   return (await res.json()).attachment;
 }
 
+/**
+ * Upload a picture, and get back the URL work points at. Not `call()`: that serialises a body as
+ * JSON or markdown, and this route reads bytes and takes the content type as what they are.
+ */
 export async function uploadShot(bytes, type, name = "") {
   const t = token();
   if (!t) throw new ApiError(401, "not logged in — run `passalong login` to enable sync");
@@ -523,7 +423,7 @@ export async function uploadShot(bytes, type, name = "") {
   try {
     res = await fetch(`${baseUrl()}/v1/shots`, { method: "POST", headers, body: bytes });
   } catch (err) {
-    throw new ApiError(0, `could not reach ${base} (${err.message})`);
+    throw new ApiError(0, `could not reach ${baseUrl()} (${err.message})`);
   }
   if (!res.ok) {
     const body = await res.text();
@@ -536,7 +436,7 @@ export async function uploadShot(bytes, type, name = "") {
   return (await res.json()).shot;
 }
 
-/** Fetch a guide by its share link (no account needed). Accepts the web URL or the .md URL. */
+/** Fetch work by its share link (no account needed). Accepts the web URL or the .md URL. */
 export async function fetchShared(url) {
   const u = new URL(url);
   if (!u.pathname.endsWith(".md")) u.pathname = `${u.pathname.replace(/\/$/, "")}.md`;
@@ -544,8 +444,4 @@ export async function fetchShared(url) {
   if (!res.ok)
     throw new ApiError(res.status, `could not fetch ${url}: ${res.status} ${res.statusText}`);
   return res.text();
-}
-
-export function shareUrl(id, key) {
-  return `${baseUrl()}/g/${id}/${key}`;
 }

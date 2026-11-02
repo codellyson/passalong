@@ -1,14 +1,14 @@
 // Product analytics, sent from the Worker rather than the browser.
 //
-// The browser was the wrong place for this. A share link is `/g/:id/:key` where the key *is* the
+// The browser was the wrong place for this. A share link is `/w/:id/:key` where the key *is* the
 // secret, and every web analytics SDK reports the page URL — so the obvious integration would have
-// posted users' share keys to a third party. Guide pages also run no script at all, and that CSP
+// posted users' share keys to a third party. Work pages also run no script at all, and that CSP
 // is what makes rendering someone else's markdown safe, so loosening it to measure page views
 // would trade the product's one real security property for a chart.
 //
 // Sending from here means no third-party script, no CSP change, and total control over what
 // leaves. The rule: **event names and categorical props only**. Never an id, handle, email, team
-// name, guide title, or anything from a URL. If a prop could identify a person or a guide, it does
+// name, work title, or anything from a URL. If a prop could identify a person or a piece of work, it does
 // not go.
 //
 // Aptabase's ingest is a plain POST, so there is no SDK to vendor. Match what the official SDK

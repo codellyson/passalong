@@ -106,7 +106,7 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocument));
         :aria-checked="modelValue === option.value"
         @click="pick(option.value)"
       >
-        <span class="w-4 shrink-0 text-accent">{{ modelValue === option.value ? "✓" : "" }}</span>
+        <span class="w-4 shrink-0 text-fg">{{ modelValue === option.value ? "✓" : "" }}</span>
         {{ option.label }}
       </button>
     </div>

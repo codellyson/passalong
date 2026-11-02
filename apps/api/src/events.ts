@@ -4,11 +4,11 @@
  * Two kinds of event, both read from rows that already exist — nothing new is stored, so the stream
  * cannot disagree with the board:
  *
- *   note     a notification addressed to this account: taken, passed, handed in, approved, works,
+ *   note     a notification addressed to this account: taken, passed, handed in, reopened, works,
  *            closed, went quiet. The hub shows it as a toast. notify() already leaves out anything
  *            the account did itself.
- *   change   something happened to a guide this account can see — a hold, a progress note, a
- *            verdict, an ack. Quiet: the hub refreshes that guide and shows nothing.
+ *   change   something happened to a piece of work this account can see — a hold, a progress note, a
+ *            proof. Quiet: the hub refreshes that work and shows nothing.
  *
  * It is polled, not pushed. Each tick reads the two since a cursor, which is the time of the latest
  * row sent, and the cursor rides on each event's `id:` so a reconnect (EventSource and the hub's
@@ -29,14 +29,14 @@ export interface Note {
   [k: string]: unknown;
 }
 export interface Change {
-  guide_id: string;
+  work_id: string;
   at: string;
 }
 
 export interface Source {
   /** Notifications for the account with `at` after `since`, oldest first. */
   notes(since: string): Promise<Note[]>;
-  /** Guides the account can see that changed after `since`, oldest first. */
+  /** Work the account can see that changed after `since`, oldest first. */
   changes(since: string): Promise<Change[]>;
 }
 

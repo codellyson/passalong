@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1200, height=750" />
+    <script src="assets/gsap.min.js"></script>
+    <style>
+@font-face { font-family: "Onest"; src: url("assets/fonts/onest-var.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Newsreader"; src: url("assets/fonts/newsreader-var.woff2") format("woff2"); font-weight: 200 800; }
+:root { --white:#ffffff; --paper:#f1f1ef; --ink:#252522; --coral:#f2805d; --coral-text:#b8481f; --coral-soft:#fce9e0;
+  --green:#3a7a2a; --amber:#e3b23c; --muted:#6e6c68; --line:#e4e3df; }
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:1200px; height:750px; overflow:hidden; background:var(--white); }
+#root { position:relative; width:100%; height:100%; overflow:hidden; font-family:"Onest",sans-serif; color:var(--ink); }
+.layer { position:absolute; inset:0; }
+.abs { position:absolute; }
+.card { width:560px; padding:22px 28px 26px; border:5px solid var(--ink); border-radius:20px; background:var(--white);
+  color:var(--ink); box-shadow:0 20px 44px rgba(37,37,34,.14); }
+.card .k { display:inline-block; padding:5px 16px 7px; border-radius:10px; background:var(--kc); color:var(--kt,var(--white));
+  font-size:30px; font-weight:700; }
+.card .t { margin-top:12px; font-size:50px; font-weight:700; letter-spacing:-.03em; line-height:1.05; white-space:nowrap; }
+.card .s { margin-top:12px; font-size:32px; font-weight:500; line-height:1.25; color:var(--muted); }
+.card.hot { border-color:var(--coral-text); box-shadow:0 24px 54px rgba(184,72,31,.28); }
+.email { --kc:var(--coral-text); } .bug { --kc:var(--ink); } .alert { --kc:var(--amber); --kt:var(--ink); }
+.ask { --kc:var(--green); } .hub { --kc:#5a5753; }
+.row { display:flex; align-items:center; gap:18px; width:640px; padding:18px 24px; border:5px solid var(--ink);
+  border-radius:18px; background:var(--white); box-shadow:0 14px 30px rgba(37,37,34,.12); }
+.row .k { flex-shrink:0; padding:5px 14px 7px; border-radius:10px; background:var(--kc); color:var(--kt,var(--white)); font-size:28px; font-weight:700; }
+.row .t { font-size:40px; font-weight:700; letter-spacing:-.025em; white-space:nowrap; }
+.pill { display:flex; align-items:center; gap:14px; padding:16px 26px; border-radius:999px; background:var(--white);
+  border:4px solid var(--ink); font-size:34px; font-weight:700; white-space:nowrap; box-shadow:0 14px 30px rgba(37,37,34,.15); }
+.pill i { width:22px; height:22px; border-radius:50%; background:var(--kc); }
+.av { display:grid; place-items:center; border-radius:50%; background:var(--ink); color:var(--white); font-weight:700; }
+.stamp { border:8px solid var(--ink); border-radius:16px; padding:8px 26px 12px; font-size:48px; font-weight:700;
+  letter-spacing:-.03em; white-space:nowrap; }
+.tick { display:grid; place-items:center; border-radius:50%; background:var(--green); }
+.tick svg { fill:none; stroke:var(--white); stroke-width:2.8; stroke-linecap:round; stroke-linejoin:round; }
+.tick path { stroke-dasharray:16; stroke-dashoffset:16; }
+.caret { display:inline-block; width:.08em; height:.9em; margin-left:.05em; vertical-align:-.08em; background:var(--coral); }
+
+      #root { background: var(--coral-soft); }
+      .note { left: 70px; display: flex; align-items: center; gap: 16px; font-size: 38px; font-weight: 600; letter-spacing: -.02em; }
+      .note i { width: 18px; height: 18px; border-radius: 50%; background: var(--coral); }
+      #n1 { top: 270px; } #n2 { top: 600px; }
+      .bub { padding: 18px 26px 22px; border-radius: 24px; font-size: 38px; font-weight: 600; line-height: 1.15; max-width: 520px; }
+      .bub b { display: block; margin-bottom: 4px; font-size: 26px; font-weight: 700; opacity: .7; }
+      .ask { left: 70px; top: 350px; background: var(--ink); color: var(--white); border-bottom-left-radius: 6px; }
+      .ans { left: 420px; top: 470px; background: var(--white); border: 4px solid var(--ink); border-bottom-right-radius: 6px; }
+      .proof { left: 700px; top: 150px; width: 440px; padding: 26px 30px 30px; border: 5px solid var(--green); border-radius: 20px;
+        background: var(--white); box-shadow: 0 24px 50px rgba(58,122,42,.2); }
+      .proof-k { padding-left: 44px; font-size: 28px; font-weight: 700; color: var(--green); }
+      .proof-t { margin-top: 8px; font-size: 44px; font-weight: 700; letter-spacing: -.025em; line-height: 1.08; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="work-done-shown" data-start="0" data-duration="9" data-width="1200" data-height="750">
+      <div id="scene" class="layer clip" data-start="0" data-duration="9" data-track-index="0">
+        <div class="abs card email hot" id="w" style="left: 60px; top: 60px; width: 600px">
+          <p class="k">Email · Kemi</p><p class="t">Can’t log in</p>
+          <span class="abs av" id="holder" style="right: 22px; top: 22px; width: 72px; height: 72px; font-size: 30px">AI</span>
+        </div>
+        <p class="abs note" id="n1"><i></i>Found it: links expire after 60s.</p>
+        <div class="abs bub ask" id="q"><b>AI agent asks</b>Keep old links working?</div>
+        <div class="abs bub ans" id="a"><b>Leo</b>Yes, for an hour.</div>
+        <p class="abs note" id="n2"><i></i>Fixed and tested.</p>
+        <div class="abs proof" id="proof"><span class="abs tick" id="tick" style="left: -30px; top: -30px; width: 84px; height: 84px"><svg width="54" height="54" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg></span>
+          <p class="proof-k">Proof · screenshot</p><p class="proof-t">Signed in with a new link</p></div>
+      </div>
+    </div>
+    <script>
+
+const tl = gsap.timeline({ paused: true });
+const IN = "expo.out", OUT = "power3.in";
+// A thing lands: it falls into place and squashes once.
+const land = (el, at, from = { y: -700, rotation: 12 }, rot = 0) => {
+  tl.fromTo(el, { ...from, opacity: 0 }, { x: 0, y: 0, rotation: rot, opacity: 1, duration: 0.6, ease: "power3.out" }, at);
+};
+const pop = (el, at) => tl.fromTo(el, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45, ease: "back.out(2.6)" }, at);
+const stamp = (el, at, rot) => {
+  tl.fromTo(el, { opacity: 0, scale: 1.6, rotation: rot * 3 }, { opacity: 1, scale: 1, rotation: rot, duration: 0.3, ease: "power4.in" }, at);
+  tl.to(el, { keyframes: [{ scaleX: 1.05, scaleY: 0.93, duration: 0.06 }, { scaleX: 1, scaleY: 1, duration: 0.22, ease: "back.out(3)" }] }, at + 0.3);
+};
+const type = (el, text, at, dur) => {
+  const p = { n: 0 };
+  tl.fromTo(p, { n: 0 }, { n: text.length, duration: dur, ease: "none", onUpdate: () => {
+    const n = Math.round(p.n);
+    el.innerHTML = text.slice(0, n) + (n > 0 && n < text.length ? '<span class="caret"></span>' : "");
+  } }, at);
+};
+// Every loop ends by clearing back to its empty ground, so the start of the next pass meets it.
+const clear = (sel, at) => tl.to(sel, { opacity: 0, y: -24, duration: 0.5, ease: OUT, stagger: 0.03 }, at);
+
+land("#w", 0.3, { y: -500, rotation: -8 }, -1);
+pop("#holder", 0.9);
+tl.fromTo("#n1", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.5, ease: IN }, 1.4);
+tl.fromTo("#q", { opacity: 0, scale: 0.7, transformOrigin: "0% 100%" }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(2)" }, 2.3);
+tl.fromTo("#a", { opacity: 0, scale: 0.7, transformOrigin: "100% 100%" }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(2)" }, 3.3);
+tl.fromTo("#n2", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.5, ease: IN }, 4.3);
+land("#proof", 5.1, { x: 500, y: 0, rotation: 10 }, 2);
+pop("#tick", 5.6);
+tl.to("#tick path", { strokeDashoffset: 0, duration: 0.35, ease: "power2.out" }, 5.75);
+clear(["#w", "#n1", "#q", "#a", "#n2", "#proof"], 8.2);
+      window.__timelines = window.__timelines || {};
+      window.__timelines["work-done-shown"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

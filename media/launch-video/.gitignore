@@ -1,0 +1,6 @@
+# Render output and HyperFrames' own working state; the films that ship live in apps/web/public/media.
+renders/
+.hyperframes/
+.thumbnails/
+.waveform-cache/
+.impeccable/

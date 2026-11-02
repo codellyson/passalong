@@ -8,13 +8,13 @@
   is rendered per request and varies on the cookie (nuxt.config.ts), so nobody is shown another
   visitor's version.
 
-  Docs appears only once /docs is published (shared/pages.ts), so a draft is never linked.
+  Docs appears only once /docs is live (shared/pages.ts), so a draft is never linked.
 -->
 <script setup lang="ts">
-import { published } from "#shared/pages";
+import { isPublic } from "#shared/pages";
 import { hasSession } from "~/utils/session";
 
-const docs = published("/docs");
+const docs = isPublic("/docs");
 // Read on the server and carried to the client by useState: these pages never hydrate, so the
 // cookie header is the only place the answer can come from.
 const signedIn = useState("masthead:signed-in", () =>

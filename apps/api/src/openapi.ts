@@ -7,10 +7,10 @@
  * a bearer token and a share link is plain markdown. What was missing was a description, so
  * pointing one of them at Passalong meant hand-writing schemas.
  *
- * WHAT IS AND IS NOT IN HERE. This describes the surface the MCP server exposes — read guides,
- * file bugs, edit project-folder documents, answer with a verdict, and take, report on and finish tasks — and deliberately not
- * account administration, or the task review gate (approve, reject, release), which is a person's to
- * do and has no MCP tool for the same reason. Signup, login,
+ * WHAT IS AND IS NOT IN HERE. This describes the surface the MCP server exposes — read and write
+ * work, edit project-project documents, and take, report on and finish work — and deliberately not
+ * account administration, or a person's calls on work (release, reopen), which have no MCP tool
+ * for the same reason. Signup, login,
  * password reset and token management are real routes and stay undescribed: an action schema is a
  * list of things you are inviting a model to call, and "reset this account's password" does not
  * belong on it. Anyone automating those has the source.
@@ -27,24 +27,17 @@ const SCOPE_PARAMETER = {
   description: "`all` (default), `mine`, or a team slug.",
 };
 
-const GUIDE = {
+const WORK = {
   type: "object",
   description:
-    "One guide. A transfer guide is finished work to repeat; a bug is a defect to fix; a task is work nobody has done yet. `kind` says which.",
+    "One piece of work: what to do, in plain words, with whatever came with it. It has no kinds and no required sections; read it and work out what done means.",
   properties: {
     id: { type: "string", example: "k3mq2xa7" },
     title: { type: "string" },
-    kind: {
-      type: "string",
-      enum: ["transfer", "bug", "task"],
-      description:
-        "transfer: follow its Steps. bug: fix what Problem describes — Reproduce shows the defect and must not be run as a remedy. task: reach Goal within Constraints; done when Acceptance holds.",
-    },
+    summary: { type: "string", description: "What it is, in a sentence or two, for a person." },
     status: {
       type: "string",
-      enum: ["draft", "published", "consumed", "promoted"],
-      description:
-        "`promoted` is read-only: guides that carry it keep it, and no write can set it.",
+      enum: ["draft", "ready", "done"],
     },
     url: {
       type: "string",
@@ -75,123 +68,57 @@ const GUIDE = {
     },
     stage: {
       type: "string",
-      enum: ["draft", "todo", "working", "review", "done"],
+      enum: ["draft", "todo", "working", "done"],
       description: "Its column on the team board, the same for everyone who sees it.",
     },
     held_by: {
       type: "array",
-      description: "Who holds it or handed it in.",
+      description: "Who holds it.",
       items: {
         type: "object",
         properties: {
           name: { type: "string" },
           agent: { type: "string", description: "The agent's name; empty for a person." },
           you: { type: "boolean" },
-          health: { type: "string", enum: ["working", "quiet", "asking", "person", "review"] },
+          health: { type: "string", enum: ["working", "quiet", "asking", "person"] },
           since: { type: "string", format: "date-time", description: "Last heard from." },
         },
       },
     },
-    can_review: {
-      type: "boolean",
-      description: "It is handed in and you may review it: anyone in the team but whoever did it.",
-    },
     answered_elsewhere: {
       type: "boolean",
       description:
-        "Someone else took it, holds it or said how it went, so it is not waiting on you. Never " +
-        "true when it names you by handle or you said you are on it.",
+        "Someone else took it, holds it or finished it, so it is not waiting on you. Never true " +
+        "when it names you by handle or you said you are on it.",
     },
     source_context: { type: "string" },
     tags: { type: "array", items: { type: "string" } },
     stack_assumptions: { type: "array", items: { type: "string" } },
-    report: { type: "string", description: "The report this issue was filed under, if any." },
-    area: { type: "string", description: "Bugs only: which surface it is on." },
-    severity: { type: "string", enum: ["s1", "s2", "s3", "s4"] },
-    failing: { type: "boolean", description: "Someone tried it and said it does not work." },
-    verdict: {
-      type: ["object", "null"],
-      properties: {
-        ok: { type: "boolean" },
-        by: { type: "string" },
-        by_name: { type: "string" },
-        note: { type: "string" },
-        at: { type: "string", format: "date-time" },
-      },
-    },
-    taken_by: {
-      type: "array",
-      items: { type: "string" },
-      description: "Handles of the people who said they are on it.",
-    },
-    taken_by_names: {
-      type: "array",
-      items: { type: "string" },
-      description: "The same people as taken_by, in the same order, by name.",
-    },
-    declined: {
-      type: "array",
-      description: "Who handed it back, and why. Only its author can re-home it.",
-      items: {
-        type: "object",
-        properties: {
-          by: { type: "string" },
-          by_name: { type: "string" },
-          note: { type: "string" },
-          at: { type: "string", format: "date-time" },
-        },
-      },
-    },
+    parent: { type: "string", description: "The work this came out of, if any." },
   },
 } as const;
 
-const REPORT = {
-  type: "object",
-  description: "A set of bugs filed together. Each issue inside it is a guide in its own right.",
-  properties: {
-    id: { type: "string" },
-    title: { type: "string" },
-    environment: { type: "string", example: "staging" },
-    team: { type: "string" },
-    to: { type: "string" },
-    issues: { type: "integer" },
-    failing: { type: "integer" },
-    areas: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          area: { type: "string" },
-          issues: { type: "array", items: { $ref: "#/components/schemas/Guide" } },
-        },
-      },
-    },
-  },
-} as const;
-
-/** One task on the queue, as GET /v1/tasks and POST /v1/tasks/next answer it. */
+/** One piece of work on the queue, as GET /v1/tasks and POST /v1/tasks/next answer it. */
 const TASK = {
   type: "object",
-  description:
-    "A task: work nobody has done yet, queued for an agent. `state` is where it is; `claim` is who has it.",
+  description: "Work queued for an agent. `state` is where it is; `claim` is who has it.",
   properties: {
     id: { type: "string", example: "3cxbzebv" },
     title: { type: "string" },
-    target: { type: "string", description: "owner/repo the task is for; empty for no repo." },
+    target: { type: "string", description: "owner/repo it is for; empty for no repo." },
     state: {
       type: "string",
-      enum: ["draft", "ready", "blocked", "claimed", "stalled", "review", "done"],
+      enum: ["draft", "ready", "blocked", "claimed", "stalled", "done"],
       description:
         "stalled: claimed, and nothing heard for 30 minutes. Still locked to the agent that took it.",
     },
-    mine: { type: "boolean", description: "You wrote it, so its review is yours." },
+    mine: { type: "boolean", description: "You wrote it." },
     url: { type: "string", description: "Share link." },
     claim: {
       type: ["object", "null"],
       properties: {
         agent: { type: "string" },
         note: { type: "string", description: "The latest progress line." },
-        report: { type: "string", description: "Id of the transfer guide it was finished with." },
         pr: { type: "string", description: "A PR link or a commit hash." },
         lease_until: { type: "string", format: "date-time" },
       },
@@ -204,7 +131,7 @@ const AGENT = {
   type: "string",
   pattern: "^[a-z0-9-]{8,64}$",
   description:
-    "A name for you, the same on every task call. A local agent's is in its worktree's .passalong/agent.json.",
+    "A name for you, the same on every call. A local agent's is in its worktree's .passalong/agent.json.",
 };
 /** What every verb's answer ends with: the calls that make sense from here. See steps() in claims.ts. */
 const NEXT = {
@@ -253,17 +180,17 @@ const agentBody = (props: Record<string, unknown> = {}, required: string[] = [])
 
 const NOT_HELD = {
   description:
-    "You do not hold that task: a person took it back, or it was never yours. Stop working on it.",
+    "You do not hold that: a person took it back, or it was never yours. Stop working on it.",
 };
 
-const guideList = {
+const workList = {
   200: {
-    description: "Guides.",
+    description: "Work.",
     content: {
       "application/json": {
         schema: {
           type: "object",
-          properties: { guides: { type: "array", items: { $ref: "#/components/schemas/Guide" } } },
+          properties: { work: { type: "array", items: { $ref: "#/components/schemas/Work" } } },
         },
       },
     },
@@ -277,14 +204,11 @@ export function openapi(origin: string) {
       title: "Passalong",
       version: "1.0.0",
       description:
-        "Hand work between contexts as guides: markdown with frontmatter, in three kinds. A " +
-        "transfer guide is finished work to repeat — follow its Steps. A bug is a defect to fix — " +
-        "Reproduce shows you the problem and is not a procedure to apply, and Verification is the " +
-        "behaviour that should have happened. A task is work nobody has done yet. " +
-        "Every kind is worked with four calls: POST /v1/take, PUT /v1/guides/{id}/progress, " +
-        "POST /v1/guides/{id}/hand_in and POST /v1/guides/{id}/pass. Each answer ends with " +
-        "`next`, what to call now, and `say` when the move is to stop. Read `kind` before acting " +
-        "on any guide.",
+        "Work for a team and its agents: markdown with frontmatter, saying what to do in plain " +
+        "words. Work has no kinds and no required sections — read it and work out what done " +
+        "means. It is worked with four calls: POST /v1/take, PUT /v1/work/{id}/progress, " +
+        "POST /v1/work/{id}/hand_in and POST /v1/work/{id}/pass. Each answer ends with " +
+        "`next`, what to call now, and `say` when the move is to stop.",
     },
     servers: [{ url: origin }],
     security: [{ bearerAuth: [] }],
@@ -296,7 +220,7 @@ export function openapi(origin: string) {
           description: "An API token, minted in the hub under Settings.",
         },
       },
-      schemas: { Guide: GUIDE, Report: REPORT, Task: TASK, Next: NEXT },
+      schemas: { Work: WORK, Task: TASK, Next: NEXT },
     },
     paths: {
       "/v1/me": {
@@ -306,16 +230,16 @@ export function openapi(origin: string) {
           responses: { 200: { description: "The account." } },
         },
       },
-      "/v1/folders": {
+      "/v1/projects": {
         get: {
-          operationId: "listFolders",
-          summary: "List project folders this account can use.",
+          operationId: "listProjects",
+          summary: "List projects this account can use.",
           parameters: [SCOPE_PARAMETER],
-          responses: { 200: { description: "Visible folders." } },
+          responses: { 200: { description: "Visible projects." } },
         },
         post: {
-          operationId: "createFolder",
-          summary: "Create a private or team project folder.",
+          operationId: "createProject",
+          summary: "Create a private or team project.",
           requestBody: {
             required: true,
             content: {
@@ -326,31 +250,35 @@ export function openapi(origin: string) {
                   properties: {
                     title: { type: "string" },
                     description: { type: "string" },
-                    team: { type: "string", description: "Team slug; omit for a private folder." },
+                    team: { type: "string", description: "Team slug; omit for a private project." },
+                    repo: {
+                      type: "string",
+                      description: "The repo it is built from; omit for none.",
+                    },
                   },
                 },
               },
             },
           },
-          responses: { 201: { description: "The new folder." } },
+          responses: { 201: { description: "The new project." } },
         },
       },
-      "/v1/folders/{folder}": {
+      "/v1/projects/{project}": {
         get: {
-          operationId: "getFolder",
-          summary: "List a folder's documents, assets and linked guides.",
-          parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
+          operationId: "getProject",
+          summary: "List a project's documents, files and linked work.",
+          parameters: [{ name: "project", in: "path", required: true, schema: { type: "string" } }],
           responses: {
-            200: { description: "Folder contents." },
-            404: { description: "Unavailable folder." },
+            200: { description: "Project contents." },
+            404: { description: "Unavailable project." },
           },
         },
       },
-      "/v1/folders/{folder}/documents": {
+      "/v1/projects/{project}/documents": {
         post: {
-          operationId: "createFolderDocument",
-          summary: "Add a Markdown document to a folder.",
-          parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
+          operationId: "createProjectDocument",
+          summary: "Add a Markdown document to a project.",
+          parameters: [{ name: "project", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
             content: {
@@ -366,21 +294,21 @@ export function openapi(origin: string) {
           responses: { 201: { description: "The new document and its version." } },
         },
       },
-      "/v1/folders/{folder}/documents/{document}": {
+      "/v1/projects/{project}/documents/{document}": {
         get: {
-          operationId: "getFolderDocument",
-          summary: "Read a folder document and its current version.",
+          operationId: "getProjectDocument",
+          summary: "Read a project document and its current version.",
           parameters: [
-            { name: "folder", in: "path", required: true, schema: { type: "string" } },
+            { name: "project", in: "path", required: true, schema: { type: "string" } },
             { name: "document", in: "path", required: true, schema: { type: "string" } },
           ],
           responses: { 200: { description: "Document Markdown and version." } },
         },
         put: {
-          operationId: "saveFolderDocument",
+          operationId: "saveProjectDocument",
           summary: "Save a new version, refusing a stale editor with 409.",
           parameters: [
-            { name: "folder", in: "path", required: true, schema: { type: "string" } },
+            { name: "project", in: "path", required: true, schema: { type: "string" } },
             { name: "document", in: "path", required: true, schema: { type: "string" } },
           ],
           requestBody: {
@@ -401,74 +329,73 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/folders/{folder}/assets/{asset}/agent": {
+      "/v1/projects/{project}/files/{file}/agent": {
         get: {
-          operationId: "getFolderAsset",
-          summary: "Read a bounded image or text asset for agent context.",
+          operationId: "getProjectFile",
+          summary: "Read a bounded image or text file for agent context.",
           parameters: [
-            { name: "folder", in: "path", required: true, schema: { type: "string" } },
-            { name: "asset", in: "path", required: true, schema: { type: "string" } },
+            { name: "project", in: "path", required: true, schema: { type: "string" } },
+            { name: "file", in: "path", required: true, schema: { type: "string" } },
           ],
           responses: { 200: { description: "Image as base64, or text." } },
         },
       },
-      "/v1/folders/{folder}/guides": {
+      "/v1/projects/{project}/work": {
         post: {
-          operationId: "linkFolderGuide",
-          summary: "Link an existing guide to a folder without changing the guide.",
-          parameters: [{ name: "folder", in: "path", required: true, schema: { type: "string" } }],
+          operationId: "linkProjectWork",
+          summary: "Link existing work to a project without changing it.",
+          parameters: [{ name: "project", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
             content: {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["guide"],
-                  properties: { guide: { type: "string" } },
+                  required: ["work"],
+                  properties: { work: { type: "string" } },
                 },
               },
             },
           },
-          responses: { 201: { description: "The linked guide id." } },
+          responses: { 201: { description: "The linked work's id." } },
         },
       },
-      "/v1/guides": {
+      "/v1/work": {
         get: {
-          operationId: "searchGuides",
-          summary: "Search guides by words in the title, tags, stack, or body.",
+          operationId: "searchWork",
+          summary: "Search work by words in the title, tags, stack, or body.",
           parameters: [
             { name: "q", in: "query", schema: { type: "string" }, description: "Search words." },
             SCOPE_PARAMETER,
           ],
-          responses: guideList,
+          responses: workList,
         },
       },
-      "/v1/guides/{id}": {
+      "/v1/work/{id}": {
         get: {
-          operationId: "getGuide",
-          summary: "One guide's full markdown.",
+          operationId: "getWork",
+          summary: "One piece of work's full markdown.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
-            200: { description: "The guide.", content: { "text/markdown": {} } },
-            404: { description: "No such guide." },
+            200: { description: "The work.", content: { "text/markdown": {} } },
+            404: { description: "No such work." },
           },
         },
         put: {
-          operationId: "publishGuide",
-          summary: "Publish or update a guide. The body is the whole document.",
+          operationId: "publishWork",
+          summary: "Create or update work. The body is the whole document.",
           description:
-            "Frontmatter carries the addressing: `team:` and `to:` hand it over, `kind: bug` " +
-            "makes it a bug report, `report:` files it under a report. A bug's repro belongs " +
-            "under `## Reproduce`, never `## Steps`. `parent:` names the guide this one came out of " +
+            "Frontmatter carries `title:`, `summary:` and the addressing: `team:` and `to:` hand it " +
+            "over. `kind:` is refused: work has no kinds. `parent:` names the work this came out of " +
             "— or send `parent` beside `markdown` and it is written into the frontmatter for you. " +
-            "Choose a new id only for a new guide. To change one, PUT to the id it was published " +
+            "Choose a new id only for new work. To change one, PUT to the id it was published " +
             "under: a different id publishes a second copy, and each counts against the synced limit.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
             content: {
               // JSON first, because the tools that read this document can only send JSON. The
-              // markdown body is what the CLI uses and stays the honest shape: the guide is the
+              // markdown body is what the CLI uses and stays the honest shape: the work is the
               // body.
               "application/json": {
                 schema: {
@@ -482,7 +409,7 @@ export function openapi(origin: string) {
                     parent: {
                       type: "string",
                       description:
-                        "Optional id of the guide this one came out of. Written into the " +
+                        "Optional id of the work this came out of. Written into the " +
                         "frontmatter as `parent:`, so the stored document is the same either way.",
                     },
                   },
@@ -498,132 +425,36 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/children": {
-        get: {
-          operationId: "listFollowUps",
-          summary: "The guides that came out of this one, one level down.",
-          description:
-            "Guides whose `parent:` names this one — its follow-ups, more context for it — " +
-            "filtered to what you can read. One level: walk it for more. Newest first, up to 100, " +
-            "as summaries. With `markdown=1`, each summary also carries the follow-up's `markdown`, " +
-            "oldest first (context reads in the order it was added), at most 20, and any one over " +
-            "32 KB is cut with a marker saying so. Neither form counts as opening the follow-ups.",
-          parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
-            {
-              name: "markdown",
-              in: "query",
-              required: false,
-              description:
-                "1 to include each follow-up's markdown, oldest first, capped at 20 and 32 KB each",
-              schema: { type: "string", enum: ["1"] },
-            },
-          ],
-          responses: {
-            200: { description: "The follow-ups.", content: { "application/json": {} } },
-            404: { description: "No such guide." },
-          },
-        },
-      },
-      "/v1/guides/{id}/ack": {
-        put: {
-          operationId: "sayWhetherYouAreTakingIt",
-          summary: "Answer for a guide handed to you: are you doing it?",
-          description:
-            "The first word back, before any work. Passing must say why — `taken: false` with no " +
-            "note is refused, because an unanswered handoff is indistinguishable from an " +
-            "unnoticed one. The guide's own author is refused: there is nothing to tell yourself.",
-          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["taken"],
-                  properties: {
-                    taken: { type: "boolean" },
-                    note: { type: "string", maxLength: 280 },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            200: { description: "Recorded." },
-            400: {
-              description:
-                "Passing needs a reason. Or it is a task, which is not taken this way: use POST /v1/take.",
-            },
-            403: { description: "It is your own guide." },
-          },
-        },
-      },
-      "/v1/guides/{id}/verdict": {
-        put: {
-          operationId: "sayWhetherItWorked",
-          summary: "Answer for a guide you took: did it work?",
-          description:
-            "The single most valuable thing to report back. A failure must say why — `ok: false` " +
-            "with no note is refused.",
-          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["ok"],
-                  properties: {
-                    ok: { type: "boolean" },
-                    note: { type: "string", maxLength: 280 },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            200: { description: "Recorded." },
-            400: {
-              description:
-                "A failure needs a reason. Or it is a task, which is not answered this way: hand it in with POST /v1/guides/{id}/hand_in.",
-            },
-          },
-        },
-      },
-      // The task queue, the agent's half of it. Approve, reject and release are the review gate — a
-      // person's calls — and stay undescribed for the reason account routes do: a description is a
-      // list of things a model is invited to call, and approving work is not one of them.
-      // The four verbs every guide is worked with, and who is on what. See docs/V2.md §11.
+      // The four verbs all work is done with, and who is on what. See docs/WORK.md. Release and
+      // reopen are a person's calls and stay undescribed for the reason account routes do: a
+      // description is a list of things a model is invited to call.
       "/v1/take": {
         post: {
           operationId: "take",
-          summary: "Say you are doing it, and get it: a guide by id, or the next one waiting.",
+          summary: "Say you are doing it, and get it: work by id, or the next one waiting.",
           description:
-            "Any kind. While you hold it nobody else can take it there: a task has one taker, " +
-            "anything else one per repo. You may hold several — taking what you hold " +
-            "resumes it. When somebody else has it the 409 names them in `holder`: tell the user " +
-            "rather than doing the work twice. With no id, the next ready task for `repo`, or " +
-            "`guide: null` and `say` when nothing is waiting.",
+            "While you hold it nobody else can take it. You may hold several — taking what you " +
+            "hold resumes it. When somebody else has it the 409 names them in `holder`: tell the " +
+            "user rather than doing the work twice. With no id, the next ready work for `repo`, or " +
+            "`work: null` and `say` when nothing is waiting.",
           requestBody: agentBody({
-            id: { type: "string", description: "The guide to take. Leave out for the next one." },
+            id: { type: "string", description: "The work to take. Leave out for the next one." },
             repo: { type: "string", description: "owner/repo you are in; omit for no repo." },
             host: { type: "string" },
             worktree: { type: "string" },
-            any: { type: "boolean", description: "A task for another repo. Only when asked to." },
+            any: { type: "boolean", description: "Work for another repo. Only when asked to." },
           }),
           responses: {
             200: json200(
               "What you now hold, with its markdown — or null — and what to call next.",
               withNext({
-                guide: {
+                work: {
                   oneOf: [
                     {
                       type: "object",
                       properties: {
                         id: { type: "string" },
                         title: { type: "string" },
-                        kind: { type: "string" },
                         markdown: { type: "string" },
                         resumed: { type: "boolean" },
                         lease_until: { type: "string", format: "date-time" },
@@ -634,8 +465,8 @@ export function openapi(origin: string) {
                 },
               }),
             ),
-            400: { description: "No `agent`, or a task taken from outside the repo it is for." },
-            404: { description: "No such guide that you can see." },
+            400: { description: "No `agent`, or work taken from outside the repo it is for." },
+            404: { description: "No such work that you can see." },
             409: {
               description:
                 "Somebody has it here (`holder` says who), you already hold something else, or it is a draft, blocked or done.",
@@ -643,7 +474,7 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/progress": {
+      "/v1/work/{id}/progress": {
         put: {
           operationId: "progress",
           summary: "Still on it: renews your hold, and `note` is the line the hub shows.",
@@ -658,37 +489,35 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/hand_in": {
+      "/v1/work/{id}/hand_in": {
         post: {
           operationId: "handIn",
           summary: "Done here.",
           description:
-            "Done here, with proof. `evidence` is required whatever the kind: what you ran and what came back. A task also takes `report`, the id of a transfer guide you published about the work; its author reviews it against Acceptance. A handoff or a bug takes `ok`, whether its Verification held, and `note` when it did not.",
+            "Done, with proof: it goes to Done, and nobody reviews it after. `note` is one plain sentence saying what you did. `evidence` (or `checks`) is what you ran and what came back. `writeup` is anything you had to adapt, and why.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: agentBody(
             {
-              report: { type: "string", description: "Task: the write-up's id." },
-              pr: { type: "string", description: "Task: PR or branch link, or a commit hash." },
-              ok: { type: "boolean", description: "Handoff or bug: did its Verification hold." },
               note: { type: "string", maxLength: 280 },
+              writeup: { type: "string", maxLength: 500 },
+              pr: { type: "string", description: "PR or branch link, or a commit hash." },
               evidence: {
                 type: "string",
                 maxLength: 4000,
                 description:
-                  "What you ran and what came back: the command and the lines that decided it, a test summary, a link to the change, or a screenshot url. A verdict on your own work is not evidence.",
+                  "What you ran and what came back: the command and the lines that decided it, a test summary, a link to the change, or a screenshot url. Your own word for your work is not evidence.",
               },
             },
-            ["evidence"],
+            ["note", "evidence"],
           ),
           responses: {
-            200: json200("Handed in.", withNext({ id: { type: "string" } })),
-            400: { description: "A task without `report`, or a failure without a note." },
-            403: { description: "Your own guide: there is nobody to hand it in to." },
+            200: json200("Done.", withNext({ id: { type: "string" } })),
+            400: { description: "No note, no evidence, or a write-up over 500 characters." },
             409: NOT_HELD,
           },
         },
       },
-      "/v1/guides/{id}/pass": {
+      "/v1/work/{id}/pass": {
         post: {
           operationId: "pass",
           summary: "Not yours, or stuck: give it back with the reason.",
@@ -704,7 +533,7 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/ask": {
+      "/v1/work/{id}/ask": {
         post: {
           operationId: "ask",
           summary: "Ask the person a question and wait, keeping what you hold.",
@@ -722,10 +551,10 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/reply": {
+      "/v1/work/{id}/reply": {
         post: {
           operationId: "reply",
-          summary: "A person writes to whoever holds a guide.",
+          summary: "A person writes to whoever holds a piece of work.",
           description:
             "Only while it is held, and only from its author, whoever it is assigned to, or its holder. Plain text, 1000 characters. The agent is told on its next `progress` or `take`.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
@@ -748,12 +577,12 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/guides/{id}/assign": {
+      "/v1/work/{id}/assign": {
         post: {
           operationId: "assign",
-          summary: "Give a guide or task you wrote to someone else in its team.",
+          summary: "Give work to someone else in its team.",
           description:
-            "`to` is `@handle` for one person (or `@<account id>` for a teammate with no @name), `#group` for the people who do a thing, or empty for the whole team. Its author may, and so may whoever it is assigned to — the person, or anyone in the group; the author is told. Whoever held it and is left out has it taken back and is told; a task then only goes to the new assignee's agents.",
+            "`to` is `@handle` for one person (or `@<account id>` for a teammate with no @name), `#group` for the people who do a thing, or empty for the whole team. Anyone in its team may; the author is told. Whoever held it and is left out has it taken back and is told; the queue then only hands it to the new assignee's agents.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -784,10 +613,10 @@ export function openapi(origin: string) {
       "/v1/working": {
         get: {
           operationId: "working",
-          summary: "Who is working on what: every guide somebody holds right now that you can see.",
+          summary: "Who is working on what: everything somebody holds right now that you can see.",
           parameters: [SCOPE_PARAMETER],
           responses: {
-            200: json200("Most recently heard from first. One row per taker.", {
+            200: json200("Most recently heard from first.", {
               type: "object",
               properties: {
                 working: {
@@ -797,7 +626,6 @@ export function openapi(origin: string) {
                     properties: {
                       id: { type: "string" },
                       title: { type: "string" },
-                      kind: { type: "string" },
                       state: { type: "string", enum: ["claimed", "stalled"] },
                       by: {
                         type: "object",
@@ -822,7 +650,7 @@ export function openapi(origin: string) {
       "/v1/tasks": {
         get: {
           operationId: "listTasks",
-          summary: "Every task you can see, with where it is and who has it.",
+          summary: "All work you can see, with where it is and who has it.",
           parameters: [SCOPE_PARAMETER],
           responses: {
             200: {
@@ -845,11 +673,11 @@ export function openapi(origin: string) {
         post: {
           operationId: "takeNextTask",
           summary:
-            "Take the oldest ready task for a repo. No other agent can have it while you do.",
+            "Take the oldest ready work for a repo. No other agent can have it while you do.",
           description:
-            "If you already hold a task, that one comes back instead (`resumed: true`) — one at a " +
-            "time. A task waits until every task in its `blocked_by` is approved. Answers " +
-            "`{ task: null }` when nothing is ready.",
+            "Work waits until everything in its `blocked_by` is Done. `alone: true` takes only " +
+            "work a person marked safe to run with nobody watching. Answers `{ task: null }` when " +
+            "nothing is ready.",
           requestBody: {
             required: true,
             content: {
@@ -861,13 +689,17 @@ export function openapi(origin: string) {
                     agent: AGENT,
                     repo: {
                       type: "string",
-                      description: "owner/repo you are in; omit for tasks for no repo.",
+                      description: "owner/repo you are in; omit for work for no repo.",
                     },
                     host: { type: "string" },
                     worktree: { type: "string" },
                     any: {
                       type: "boolean",
-                      description: "Take a task for any repo. Only when asked to.",
+                      description: "Take work for any repo. Only when asked to.",
+                    },
+                    alone: {
+                      type: "boolean",
+                      description: "Only work a person marked safe to run alone.",
                     },
                   },
                 },
@@ -876,7 +708,7 @@ export function openapi(origin: string) {
           },
           responses: {
             200: {
-              description: "The task you now hold, with its markdown, or null.",
+              description: "The work you now hold, with its markdown, or null.",
               content: {
                 "application/json": {
                   schema: {
@@ -908,80 +740,6 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/tasks/{id}/progress": {
-        put: {
-          operationId: "reportTaskProgress",
-          summary:
-            "Say you are still on it, with a one-line status. 30 minutes without one stalls it.",
-          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["agent"],
-                  properties: {
-                    agent: AGENT,
-                    note: {
-                      type: "string",
-                      maxLength: 280,
-                      description: 'e.g. "migrating schema, 2 of 5"',
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            200: { description: "The lease runs 30 minutes from now." },
-            409: NOT_HELD,
-          },
-        },
-      },
-      "/v1/tasks/{id}/finish": {
-        post: {
-          operationId: "finishTask",
-          summary: "Hand a finished task in for review, with a transfer guide about the work.",
-          description:
-            "Only once every Acceptance line holds. Publish the transfer guide first (PUT " +
-            "/v1/guides/{id}) and pass its id as `report`: the reviewer reads it against " +
-            "Acceptance. `pr` is a PR link or the hash of the commit you made.",
-          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["agent", "report"],
-                  properties: {
-                    agent: AGENT,
-                    report: {
-                      type: "string",
-                      description: "Id of the transfer guide about this work.",
-                    },
-                    pr: { type: "string" },
-                    note: { type: "string", maxLength: 280 },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            200: { description: "In review. A person approves it or sends it back." },
-            400: { description: "`report` is missing, not yours, or is itself a task." },
-            409: NOT_HELD,
-          },
-        },
-      },
-      "/v1/inbox": {
-        get: {
-          operationId: "inbox",
-          summary: "Handed to you and not yet taken.",
-          responses: guideList,
-        },
-      },
       "/v1/board": {
         get: {
           operationId: "board",
@@ -994,16 +752,16 @@ export function openapi(origin: string) {
           operationId: "log",
           summary: "What you did, newest first.",
           description:
-            "Your own acts on guides — published, pulled, and the verdicts and acks you gave — " +
-            "each with a rendered `text` line and the guide's repo. The opposite of " +
+            "Your own acts on work — published, pulled, finished, and the ones you passed on — " +
+            "each with a rendered `text` line and its repo. The opposite of " +
             "notifications, which is what other people did. It records what was passed along, " +
-            "not what was worked on: work that never became a guide has no entry here.",
+            "not what was worked on: something never written down as work has no entry here.",
           parameters: [
             {
               name: "repo",
               in: "query",
               schema: { type: "string" },
-              description: "Narrow to guides whose source repo matches.",
+              description: "Narrow to work whose source repo matches.",
             },
             {
               name: "since",
@@ -1025,68 +783,10 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/v1/reports": {
-        get: {
-          operationId: "listReports",
-          summary: "Bug reports you filed, newest first.",
-          responses: { 200: { description: "Reports." } },
-        },
-        post: {
-          operationId: "openReport",
-          summary: "Open a report for a set of bugs.",
-          description:
-            "Returns an id. Put it in each issue's `report:` frontmatter, then publish the issues " +
-            "with publishGuide — one guide each, so any of them can be taken and answered for on " +
-            "its own.",
-          requestBody: {
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    title: { type: "string", example: "Checkout regression pass, 8 Sep build" },
-                    environment: { type: "string", example: "staging" },
-                    team: { type: "string" },
-                    to: { type: "string", description: "A handle on that team." },
-                  },
-                },
-              },
-            },
-          },
-          responses: { 201: { description: "Opened." } },
-        },
-      },
-      "/v1/reports/{id}": {
-        get: {
-          operationId: "getReport",
-          summary: "One report and its issues, grouped by product area.",
-          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-          responses: {
-            200: {
-              description: "The report.",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: { report: { $ref: "#/components/schemas/Report" } },
-                  },
-                },
-              },
-            },
-            404: { description: "No such report." },
-          },
-        },
-        patch: {
-          operationId: "updateReport",
-          summary: "Change a report's title, environment, or who it went to.",
-          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
-          responses: { 204: { description: "Updated." } },
-        },
-      },
       "/v1/shots": {
         post: {
           operationId: "uploadScreenshot",
-          summary: "Store a screenshot and get a URL to put in a guide's markdown.",
+          summary: "Store a screenshot and get a URL to put in work's markdown.",
           description:
             "Raw image bytes with a content-type; png, jpeg, webp or gif, up to 5MB. Reference " +
             "the returned url as a markdown image so the evidence outlives wherever it came from.",
@@ -1104,10 +804,10 @@ export function openapi(origin: string) {
       "/v1/uploads": {
         post: {
           operationId: "createUploadLink",
-          summary: "Get a one-time link that takes a screenshot, file or folder asset.",
+          summary: "Get a one-time link that takes a screenshot, file or project file.",
           description:
             "For an agent's code sandbox that holds a file but cannot send your token with it. " +
-            "Set folder to an accessible folder id to store an image or file there. " +
+            "Set project to an accessible project id to store an image or file there. " +
             "The link works once and expires in 10 minutes.",
           requestBody: {
             required: false,
@@ -1118,9 +818,9 @@ export function openapi(origin: string) {
                   properties: {
                     name: { type: "string" },
                     kind: { type: "string", enum: ["image", "file"] },
-                    folder: {
+                    project: {
                       type: "string",
-                      description: "Store the upload in this folder instead.",
+                      description: "Store the upload in this project instead.",
                     },
                   },
                 },
@@ -1138,8 +838,8 @@ export function openapi(origin: string) {
           operationId: "sendToUploadLink",
           summary: "Send raw bytes to an upload link. POST works too.",
           description:
-            "The minted link decides whether to store a screenshot (5 MB), a guide file (10 MB), " +
-            "or a folder asset (10 MB). Types are checked from the bytes. Returns the stored item.",
+            "The minted link decides whether to store a screenshot (5 MB), a file on work (10 MB), " +
+            "or a project file (10 MB). Types are checked from the bytes. Returns the stored item.",
           security: [],
           parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
           requestBody: { required: true, content: { "application/octet-stream": {} } },
@@ -1150,13 +850,13 @@ export function openapi(origin: string) {
           },
         },
       },
-      "/g/{id}/{key}.md": {
+      "/w/{id}/{key}.md": {
         get: {
-          operationId: "readSharedGuide",
-          summary: "A guide's markdown from its share link. No account needed.",
+          operationId: "readSharedWork",
+          summary: "Work's markdown from its share link. No account needed.",
           description:
             "The key in the share URL is the whole authorization. Reading one records a pull, " +
-            "which is how the sender learns the transfer landed.",
+            "which is how the sender learns it landed.",
           security: [],
           parameters: [
             { name: "id", in: "path", required: true, schema: { type: "string" } },
@@ -1164,7 +864,7 @@ export function openapi(origin: string) {
           ],
           responses: {
             200: { description: "The markdown.", content: { "text/markdown": {} } },
-            404: { description: "No such guide." },
+            404: { description: "No such work." },
           },
         },
       },

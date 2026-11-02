@@ -1,5 +1,5 @@
 // `www.passalong.dev` is routed so the name resolves, but it does not serve: two hosts minting
-// share links for the same guide would split one link into two, and a key in the URL makes that
+// share links for the same work would split one link into two, and a key in the URL makes that
 // worse than untidy. The old kreativekorna host is deliberately *not* redirected — links under it
 // are already in circulation, so it keeps serving. Plain http on either serving host is sent to
 // https on the same host.

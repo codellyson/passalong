@@ -5,28 +5,31 @@ in `AGENTS.md` and the PRs; this is the map.
 
 | Date | Decision | Why |
 | --- | --- | --- |
-| 2026-10-10 | **One Markdown renderer**: guides, the blog, learn pages and folder documents all use remark with GFM and GitHub's alerts; `marked` is gone. | Two parsers read the same Markdown two ways — footnotes worked in a folder and broke in a guide — and alerts needed writing once. Guides stay unsanitised behind their CSP; folder documents stay sanitised. |
+| 2026-10-29 | **One thing, work** — built ([docs/WORK.md](../WORK.md)): no kinds, sections, templates, write-up work, report sets, verify view, separate reader replies or review; one holder per piece of work; email in is `key+new@` and `key+support@`, the webhook `POST /v1/in/<key>`; the reader names work and tags it; 17 agent tools over work, project, document and file (16 over HTTP); people never read "work". Overhaul, never patch: removed whole, data migrated (0061, 0062), old CLIs cut off by `MIN_CLIENT`. Supersedes "`kind` is explicit" (2026-09-25). | Kinds were the system doing the agent's reading in advance: 162 of 200 pieces of work were filed under the wrong kind, templates padded short notes and documents written for one person went unread. |
+| 2026-10-29 | **The agent decides**: Passalong's own agent closes finished work, archives abandoned work and judges hand-ins; evidence is an input, not a gate (the hand-in proof refusal goes); every decision is written with its reason and undone by Reopen. Sending to a customer stays a person's. First: one thing called work, then the agent tidies the board. [LOOP.md §0](../LOOP.md) | People do not answer: 64% of hand-ins sat unanswered, finished work never reached Done, and unread write-ups sat on the board until archived by hand. |
+| 2026-10-29 | **Projects** lead: one project per product or repo, holding documents and work; what an agent learned goes into documents; onboarding is built first. Passalong never hosts the agent that does the work. [LOOP.md §0](../LOOP.md) | 162 of 200 pieces of work were really tasks and bugs and one-off write-ups went unread; the pain is dropped work and agents that do not know the product, which documents in a project answer and a one-off write-up does not. |
+| 2026-10-10 | **One Markdown renderer**: work, the blog, learn pages and project documents all use remark with GFM and GitHub's alerts; `marked` is gone. | Two parsers read the same Markdown two ways — footnotes worked in a project and broke in a piece of work — and alerts needed writing once. Work stay unsanitised behind their CSP; project documents stay sanitised. |
 | 2026-09-27 | **Publish** sketched: an approved write-up can become a public post. Not built. | The changelog is a chore every team skips, and the checked write-up already exists. [docs/PUBLISH.md](../PUBLISH.md) |
 | 2026-09-27 | A **blog** in the repo, as markdown bundled into the Worker. | Posts reviewed like code; no CMS, no script on the page. |
 | 2026-09-27 | The new **mark**: a squircle P. Manifest `standalone`. | iOS delivers push only to a standalone home-screen app. |
 | 2026-09-27 | **Push notifications**, only for what needs you. | Toasts reach you only with the hub open; a phone buzzing for every open gets muted. |
 | 2026-09-27 | Your own agent's hand-in and a `BLOCKED:` note **notify you**. | notify() dropped them as self-inflicted, and they are the ones you most need. |
 | 2026-09-27 | **Live hub** over polled SSE, cursor by time. | No new infrastructure; notifications coalesce, so row ids would miss repeats. |
-| 2026-09-27 | **One Needs-you list**, restyled in place; the review stays a pane. | Items below a tall review were never found. Moving the review onto the guide page buried the document and said everything twice — rejected. |
+| 2026-09-27 | **One Needs-you list**, restyled in place; the review stays a pane. | Items below a tall review were never found. Moving the review onto the work page buried the document and said everything twice — rejected. |
 | 2026-09-27 | A dev server **mints its own links**. | `PUBLIC_ORIGIN` reached dev and handed out production URLs for local uploads. |
-| 2026-09-26 | **Progress timeline** leads the guide page. | The page answered "where is this?" in pieces, with no sense of when. Chosen from a four-way prototype. |
+| 2026-09-26 | **Progress timeline** leads the work page. | The page answered "where is this?" in pieces, with no sense of when. Chosen from a four-way prototype. |
 | 2026-09-26 | **"It works" needs a screenshot**; proof deleted 5 days after closing. | People said things worked that did not; keeping every proof forever is storage nobody reads. |
 | 2026-09-26 | Unfurl cards **cached at the edge** by markup hash. | Every unfurl was a fresh render; a hash means no stale card and no purge. |
-| 2026-09-26 | A **signed-in guide page** that frames the share page. | The hub runs script; it must never render a stranger's markdown as its own HTML. |
+| 2026-09-26 | A **signed-in work page** that frames the share page. | The hub runs script; it must never render a stranger's markdown as its own HTML. |
 | 2026-09-26 | The **warm cream redesign**: Onest, Newsreader, ink pills. | A calmer, product-native look; coral as punctuation. |
 | 2026-09-25 | **Handed in is final**; old CLIs refused (426). | Follow-ups nobody asked for came from agents that had already handed in; rules ship on merge, text ships on reinstall. |
-| 2026-09-25 | **`kind` is explicit**, no default. | A silent default mislabelled 162 of 200 guides. |
+| 2026-09-25 | **`kind` is explicit**, no default. Superseded 2026-10-29: there is no kind. | A silent default mislabelled 162 of 200 work. |
 | 2026-09-24 | Evidence over prose; screenshots from the real thing. | The write-up is the agent's word; evidence is what a reviewer can check. |
 | 2026-09-23 | Roles and gifts: `super`, and plans that end on a date. | Comps were untracked UPDATEs that never ended. |
-| 2026-09-21 | **The task queue** (V2): tasks, claims, the human gate. | Guides as the unit, with a queue on top, not a Trello for agents. [docs/V2.md](../V2.md) |
+| 2026-09-21 | **The task queue** (V2): tasks, claims, the human gate. | Work as the unit, with a queue on top, not a Trello for agents. |
 | 2026-09-11 | **Solo** plan; the free tier closes to new accounts. | An individual who wanted to pay had nowhere to go. |
 | 2026-09-04 | Named **Passalong** (was Relay); teams (M2). | Relay was unownable; the team is what pays. |
 
 ## Sources
-- `git log --merges origin/master` (PRs #1–#65)
-- [AGENTS.md](../../AGENTS.md), [docs/PRD.md](../PRD.md), [docs/V2.md](../V2.md), [docs/PUBLISH.md](../PUBLISH.md)
+- `git log --merges origin/master` (PRs #1–#65); branch `claude/projects-direction` for one thing, work
+- [AGENTS.md](../../AGENTS.md), [docs/PRD.md](../PRD.md), [docs/PUBLISH.md](../PUBLISH.md)

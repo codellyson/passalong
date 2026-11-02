@@ -1,5 +1,5 @@
 // The blog: markdown files in content/blog, bundled as server assets (nuxt.config.ts), read here.
-// The /learn pages are the same thing from content/learn — long-lived guides rather than dated
+// The /learn pages are the same thing from content/learn — long-lived work rather than dated
 // posts — so every reader here takes the collection, and the blog is the default.
 //
 // Each file is one post. Frontmatter is a few `key: value` lines — title, date (YYYY-MM-DD),
@@ -9,7 +9,7 @@
 //
 // Posts are ours, not somebody else's markdown, but they go out under the same no-script policy as
 // every other public page, so nothing in one can run.
-import { renderMarkdown } from "./guide-html";
+import { renderMarkdown } from "./work-html";
 
 export interface Post {
   slug: string;
@@ -69,7 +69,7 @@ export async function allPosts(collection: Collection = "blog"): Promise<Post[]>
   return out.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export const publishedPosts = async (collection: Collection = "blog") =>
+export const livePosts = async (collection: Collection = "blog") =>
   (await allPosts(collection)).filter((p) => !p.draft);
 
 /** One post with its body rendered, or null when there is no such post. */

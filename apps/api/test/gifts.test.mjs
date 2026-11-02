@@ -290,7 +290,7 @@ test("a role says when it was given and by whom, and taking it back leaves the a
   assert.equal((await unSuper(db, { account: "ada", by: "boss", at: later })).error, undefined);
   assert.deepEqual(row(), { role: "", role_since: later, role_by: "boss" });
   assert.equal(await isAdmin(db, "", "ada"), false);
-  // The account itself is untouched: losing the role is not losing the guides.
+  // The account itself is untouched: losing the role is not losing the work.
   assert.equal(db.raw.prepare("SELECT id FROM account WHERE id = 'ada'").get().id, "ada");
   assert.match(
     (await unSuper(db, { account: "ada", by: "boss", at: later })).error,

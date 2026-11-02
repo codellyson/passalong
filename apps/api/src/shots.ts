@@ -1,7 +1,7 @@
 /**
  * Screenshot storage: what a stored file is called, and how the ones nobody wants go away.
  *
- * A shot is claimed by the guide whose markdown points at it, and deleting that guide takes it —
+ * A shot is claimed by the work whose markdown points at it, and deleting that work takes it —
  * see `claimShots` and `dropShots` in index.ts. What neither of those covers is the upload that
  * was never referenced by anything: a tester attaches a screenshot, then closes the tab. Nothing
  * points at it, nothing will, and it sits in the bucket forever.
@@ -28,25 +28,25 @@ export const SHOT_TYPES: Record<string, string> = {
 export const shotKey = (id: string, type: string) => `${id}.${SHOT_TYPES[type] || "png"}`;
 
 /**
- * Point a guide at the screenshots it carries, and let go of any it no longer does.
+ * Point a piece of work at the screenshots it carries, and let go of any it no longer does.
  *
  * `mine` is what the writer of this call put there — the ids in the document it just published, or
  * in the evidence it just handed in — and only the account that uploaded a shot can claim it.
  * Without `account_id` in that WHERE, naming someone else's id in your own markdown would take
- * their image, and deleting your guide would then delete it.
+ * their image, and deleting your work would then delete it.
  *
- * `carried` is everything the guide points at from anywhere, which is what decides the release.
- * The two differ because a guide carries shots from more than one source and more than one person:
+ * `carried` is everything the work points at from anywhere, which is what decides the release.
+ * The two differ because a piece of work carries shots from more than one source and more than one person:
  * its own markdown, written by its author, and the evidence of each hand-in on it, written by
  * whoever did the work. Releasing on `mine` alone would mean an author's next edit dropped the
  * screenshot a teammate handed in — and a day later the sweep would delete it.
  *
  * A released shot becomes an orphan rather than being deleted here: the same upload can be
- * referenced by a second guide, and a write is the wrong moment to decide nobody wants a file.
+ * referenced by a second work, and a write is the wrong moment to decide nobody wants a file.
  */
 export async function holdShots(
   db: D1Database,
-  { account, guide, mine, carried }: Hold,
+  { account, work, mine, carried }: Hold,
 ): Promise<void> {
   const keep = [...new Set([...mine, ...carried])];
   const holes = keep.map(() => "?").join(",");
@@ -55,64 +55,64 @@ export async function holdShots(
     statements.push(
       db
         .prepare(
-          `UPDATE shot SET guide_id = ? WHERE account_id = ? AND id IN (${mine
+          `UPDATE shot SET work_id = ? WHERE account_id = ? AND id IN (${mine
             .map(() => "?")
             .join(",")})`,
         )
-        .bind(guide, account, ...mine),
+        .bind(work, account, ...mine),
     );
   statements.push(
     keep.length
       ? db
-          .prepare(`UPDATE shot SET guide_id = '' WHERE guide_id = ? AND id NOT IN (${holes})`)
-          .bind(guide, ...keep)
-      : db.prepare("UPDATE shot SET guide_id = '' WHERE guide_id = ?").bind(guide),
+          .prepare(`UPDATE shot SET work_id = '' WHERE work_id = ? AND id NOT IN (${holes})`)
+          .bind(work, ...keep)
+      : db.prepare("UPDATE shot SET work_id = '' WHERE work_id = ?").bind(work),
   );
   await db.batch(statements);
 }
 
-/** What holdShots() needs: who is claiming, for what guide, what they wrote, what it all carries. */
+/** What holdShots() needs: who is claiming, for what work, what they wrote, what it all carries. */
 interface Hold {
   account: string;
-  guide: string;
+  work: string;
   /** Shot ids in what this caller just wrote. Only these are claimed, and only for `account`. */
   mine: string[];
-  /** Shot ids the guide points at from anywhere. Anything outside this is released. */
+  /** Shot ids the work points at from anywhere. Anything outside this is released. */
   carried: string[];
 }
 
 /**
- * The evidence of every hand-in on a guide, and the proof on every verdict, as it was written.
+ * The evidence of every hand-in on a piece of work, and the proof on every proof, as it was written.
  *
- * A "works" verdict carries screenshots of it working (see PROOF_DAYS), and they live on the
- * verdict row rather than on a claim. Leaving them out here would let the author's next edit
+ * A "works" proof carries screenshots of it working (see PROOF_DAYS), and they live on the
+ * proof row rather than on a claim. Leaving them out here would let the author's next edit
  * release them, and the orphan sweep would take them a day later.
  *
- * Parsing it for shot ids is the caller's job: the parser lives in guide.ts with the markdown it
+ * Parsing it for shot ids is the caller's job: the parser lives in work.ts with the markdown it
  * was written for, and this file deliberately imports no sibling so it can be tested against a
  * real SQLite the way claims.ts is.
  */
-export async function evidenceOn(db: D1Database, guide: string): Promise<string[]> {
+export async function evidenceOn(db: D1Database, work: string): Promise<string[]> {
   const { results } = await db
     .prepare(
-      `SELECT evidence AS text FROM claim WHERE guide_id = ?1 AND evidence <> ''
+      `SELECT evidence AS text FROM claim WHERE work_id = ?1 AND evidence <> ''
        UNION ALL
-       SELECT detail FROM verdict WHERE guide_id = ?1 AND detail <> ''`,
+       SELECT detail FROM proof WHERE work_id = ?1 AND detail <> ''`,
     )
-    .bind(guide)
+    .bind(work)
     .all<{ text: string }>();
   return results.map((r) => r.text);
 }
 
 /**
- * How long proof outlives the guide it proves, once that guide is closed.
+ * How long proof outlives the work it proves, once that work is closed.
  *
- * Proof is a screenshot of the thing working: somebody says a guide works, and shows it. It is
- * there for the review, and the review ends when the author closes the guide or approves the task.
+ * Proof is a screenshot of the thing working: somebody says a piece of work works, and shows it. It is
+ * there for the review, and the review ends when the author closes the work or approves the task.
  * Keeping every screenshot of every finished piece of work forever is storage nobody reads, so
  * five days after closing it goes — long enough to reopen something that was closed too early and
- * still see why somebody said it worked. What the guide's own document shows is never proof: it
- * is the document, and it stays for as long as the guide does.
+ * still see why somebody said it worked. What the work's own document shows is never proof: it
+ * is the document, and it stays for as long as the work does.
  */
 export const PROOF_DAYS = 5;
 
@@ -131,19 +131,18 @@ export function strike(text: string, ids: string[]): string {
 }
 
 /**
- * Delete the proof on guides closed more than PROOF_DAYS ago.
+ * Delete the proof on work closed more than PROOF_DAYS ago.
  *
- * Proof is any shot a closed guide holds that its own markdown does not name: the screenshots on
- * a "works" verdict, and those in a hand-in's evidence. `updated` is when the guide was closed —
- * closing writes the status into the markdown — and a guide edited or put back since starts the
+ * Proof is any shot a closed work holds that its own markdown does not name: the screenshots on
+ * a "works" proof, and those in a hand-in's evidence. `updated` is when the work was closed —
+ * closing writes the status into the markdown — and a piece of work edited or put back since starts the
  * clock again, which is the safe direction for it to be wrong in.
  *
- * The text that pointed at a removed shot says so rather than showing a broken image: a verdict
+ * The text that pointed at a removed shot says so rather than showing a broken image: a proof
  * that reads "works" beside an empty frame looks like proof that failed to load, not proof that
  * was tidied away on schedule. Bucket first and stop if it refuses, as sweepOrphans does.
  *
- * Not for an account that has asked to keep everything (`account.keep_forever`): its guides' proof
- * stays, whoever closed them.
+ * Every account alike: this is a fixed rule, not a setting (migration 0065 removed the switch).
  */
 export async function sweepProof(
   env: ShotEnv,
@@ -151,14 +150,13 @@ export async function sweepProof(
 ) {
   const cutoff = new Date(at - days * 86_400_000).toISOString();
   const { results } = await env.DB.prepare(
-    `SELECT s.id, s.type, s.guide_id FROM shot s JOIN guide g ON g.id = s.guide_id
-        JOIN account a ON a.id = g.account_id
-      WHERE g.status = 'consumed' AND g.updated < ? AND a.keep_forever = 0
+    `SELECT s.id, s.type, s.work_id FROM shot s JOIN work g ON g.id = s.work_id
+      WHERE g.status = 'done' AND g.updated < ?
         AND instr(g.markdown, '/v1/shots/' || s.id) = 0
       ORDER BY g.updated LIMIT ?`,
   )
     .bind(cutoff, limit)
-    .all<{ id: string; type: string; guide_id: string }>();
+    .all<{ id: string; type: string; work_id: string }>();
   if (!results.length) return { removed: 0, deferred: 0 };
 
   if (env.SHOTS) {
@@ -176,34 +174,34 @@ export async function sweepProof(
       .run();
   }
 
-  const byGuide = new Map<string, string[]>();
-  for (const r of results) byGuide.set(r.guide_id, [...(byGuide.get(r.guide_id) ?? []), r.id]);
-  for (const [guide, gone] of byGuide) {
+  const byWork = new Map<string, string[]>();
+  for (const r of results) byWork.set(r.work_id, [...(byWork.get(r.work_id) ?? []), r.id]);
+  for (const [work, gone] of byWork) {
     const { results: said } = await env.DB.prepare(
-      "SELECT account_id, note, detail FROM verdict WHERE guide_id = ?",
+      "SELECT account_id, note, detail FROM proof WHERE work_id = ?",
     )
-      .bind(guide)
+      .bind(work)
       .all<{ account_id: string; note: string; detail: string }>();
     for (const v of said) {
       const note = strike(v.note, gone);
       const detail = strike(v.detail, gone);
       if (note !== v.note || detail !== v.detail)
         await env.DB.prepare(
-          "UPDATE verdict SET note = ?, detail = ? WHERE guide_id = ? AND account_id = ?",
+          "UPDATE proof SET note = ?, detail = ? WHERE work_id = ? AND account_id = ?",
         )
-          .bind(note, detail, guide, v.account_id)
+          .bind(note, detail, work, v.account_id)
           .run();
     }
     const { results: held } = await env.DB.prepare(
-      "SELECT place, evidence FROM claim WHERE guide_id = ? AND evidence <> ''",
+      "SELECT evidence FROM claim WHERE work_id = ? AND evidence <> ''",
     )
-      .bind(guide)
-      .all<{ place: string; evidence: string }>();
+      .bind(work)
+      .all<{ evidence: string }>();
     for (const k of held) {
       const evidence = strike(k.evidence, gone);
       if (evidence !== k.evidence)
-        await env.DB.prepare("UPDATE claim SET evidence = ? WHERE guide_id = ? AND place = ?")
-          .bind(evidence, guide, k.place)
+        await env.DB.prepare("UPDATE claim SET evidence = ? WHERE work_id = ?")
+          .bind(evidence, work)
           .run();
     }
   }
@@ -211,25 +209,25 @@ export async function sweepProof(
 }
 
 /**
- * What was said in a guide's conversation that points at a screenshot: a person's reply with a
+ * What was said in a piece of work's conversation that points at a screenshot: a person's reply with a
  * picture or a file on it. Same reason as the evidence above — it is a document somebody wrote, it is not the
- * guide's markdown, and without it the author's next edit would release the picture and the sweep
+ * work's markdown, and without it the author's next edit would release the picture and the sweep
  * would delete it a day later.
  */
-export async function conversationOn(db: D1Database, guide: string): Promise<string[]> {
+export async function conversationOn(db: D1Database, work: string): Promise<string[]> {
   const { results } = await db
     .prepare(
-      "SELECT body FROM task_event WHERE guide_id = ? AND (body LIKE '%/v1/shots/%' OR body LIKE '%/v1/attachments/%')",
+      "SELECT body FROM task_event WHERE work_id = ? AND (body LIKE '%/v1/shots/%' OR body LIKE '%/v1/attachments/%')",
     )
-    .bind(guide)
+    .bind(work)
     .all<{ body: string }>();
   return results.map((r) => r.body);
 }
 
 /**
- * Delete uploads no guide ever claimed.
+ * Delete uploads no work ever claimed.
  *
- * The age is the whole safety of it. A shot is claimed when the guide naming it is written, which
+ * The age is the whole safety of it. A shot is claimed when the work naming it is written, which
  * is minutes after the upload at worst and never before it — so anything unclaimed and older than
  * a day belongs to a form somebody abandoned. A shorter window would race a tester who is still
  * typing.
@@ -240,13 +238,13 @@ export async function conversationOn(db: D1Database, guide: string): Promise<str
 export async function sweepOrphans(env: ShotEnv, { hours = 24, limit = 500 } = {}) {
   const cutoff = new Date(Date.now() - hours * 3600_000).toISOString();
   const { results } = await env.DB.prepare(
-    "SELECT id, type FROM shot WHERE guide_id = '' AND created < ? ORDER BY created LIMIT ?",
+    "SELECT id, type FROM shot WHERE work_id = '' AND created < ? ORDER BY created LIMIT ?",
   )
     .bind(cutoff, limit)
     .all<{ id: string; type: string }>();
   if (!results.length) return { swept: 0, deferred: 0 };
 
-  // The bucket first, for the same reason guide deletion does it that way: an object with no row
+  // The bucket first, for the same reason work deletion does it that way: an object with no row
   // is invisible waste, a row pointing at a file that is gone is a broken image on a page.
   //
   // And if the bucket refuses, stop. Deleting the rows anyway would strand those objects for good:
@@ -271,9 +269,8 @@ export async function sweepOrphans(env: ShotEnv, { hours = 24, limit = 500 } = {
 }
 
 /**
- * When each of these closed guides loses its proof screenshots, for the ones that will: closed,
- * holding a shot its own markdown does not name, and written by somebody who has not asked to keep
- * everything. The same three conditions sweepProof deletes on, so a date shown here is a date that
+ * When each of these closed work loses its proof screenshots, for the ones that will: closed,
+ * holding a shot its own markdown does not name. The same two conditions sweepProof deletes on, so a date shown here is a date that
  * happens. At most one slice of bound ids per call (D1 takes 100).
  */
 export async function proofExpiry(
@@ -285,11 +282,10 @@ export async function proofExpiry(
   if (!ids.length) return out;
   const { results } = await db
     .prepare(
-      `SELECT g.id, MIN(g.updated) AS updated FROM guide g
-         JOIN account a ON a.id = g.account_id
-         JOIN shot s ON s.guide_id = g.id
-        WHERE g.id IN (${ids.map(() => "?").join(",")}) AND g.status = 'consumed'
-          AND a.keep_forever = 0 AND instr(g.markdown, '/v1/shots/' || s.id) = 0
+      `SELECT g.id, MIN(g.updated) AS updated FROM work g
+         JOIN shot s ON s.work_id = g.id
+        WHERE g.id IN (${ids.map(() => "?").join(",")}) AND g.status = 'done'
+          AND instr(g.markdown, '/v1/shots/' || s.id) = 0
         GROUP BY g.id`,
     )
     .bind(...ids)

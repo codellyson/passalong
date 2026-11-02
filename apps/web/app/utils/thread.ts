@@ -3,7 +3,7 @@
  *
  * The server sends facts — "progress, by this agent, with this note" — and this puts them in the
  * voice a person would use, so the conversation reads as one. Nothing here rewrites what an agent
- * wrote: a progress note, a reason and a verdict's note come through as they were sent, and a line
+ * wrote: a progress note, a reason and a question come through as they were sent, and a line
  * with nothing of its own to say gets a plain sentence for what happened.
  *
  * Imports only types, so it runs under `node --test` without Nuxt — which is why the name rule
@@ -28,7 +28,7 @@ export interface Message {
   pictures: boolean;
   /** Files attached to it, to be downloaded. Their lines are taken out of `text`. */
   files: { name: string; url: string }[];
-  /** Negative: a decline, a failing verdict, a send-back, a pass. */
+  /** Negative: a reopen or a pass. */
   tone: "neutral" | "bad";
 }
 
@@ -42,7 +42,7 @@ const FILE_LINE =
 /** The most a message may say, as the server keeps it. A picture or a file is a line of it. */
 export const REPLY_MAX = 1000;
 
-/** The most one reply carries, pictures and files together: it is a reply, not a folder. */
+/** The most one reply carries, pictures and files together: it is a reply, not a project. */
 export const REPLY_ATTACHMENTS = 3;
 
 /** A thing attached to a reply and not yet sent: a picture drawn in the thread, or a file saved from it. */
@@ -83,7 +83,7 @@ export function messageOf(i: ThreadItem): Message {
   let tone: Message["tone"] = "neutral";
   switch (i.kind) {
     case "customer":
-      // Stored under the guide's author because the customer has no account; it is their words,
+      // Stored under the work's author because the customer has no account; it is their words,
       // and the files they sent are drawn and offered the way anyone's are.
       break;
     case "answered":
@@ -110,11 +110,9 @@ export function messageOf(i: ThreadItem): Message {
           : "Took this back.";
       quiet = true;
       break;
-    case "approved":
-      text = "Approved.";
-      break;
-    case "sent_back":
-      text = said("Sent back", i.body);
+    case "reopened":
+      // Reopened after it was finished, with why (reopen in claims.ts).
+      text = said("Reopened", i.body);
       tone = "bad";
       break;
     case "asked":
@@ -123,20 +121,7 @@ export function messageOf(i: ThreadItem): Message {
     case "replied":
       break;
     case "noted":
-      // Left on the task before anybody took it: the author speaking to whoever does.
-      break;
-    case "closed":
-      text = "Closed.";
-      quiet = true;
-      break;
-    case "verdict":
-      text = i.ok ? said("It works", i.body) : said("It does not work", i.body);
-      tone = i.ok ? "neutral" : "bad";
-      break;
-    case "ack":
-      text = i.ok ? "On it." : said("Not me", i.body);
-      tone = i.ok ? "neutral" : "bad";
-      quiet = Boolean(i.ok) && !i.body;
+      // Left on the work before anybody took it: the author speaking to whoever does.
       break;
   }
   // A file is a line of its own, `[name](…/v1/attachments/<id>)`, and is shown as something to

@@ -12,9 +12,9 @@ export default defineEventHandler(async (event) => {
   const urls = PUBLIC_PAGES.filter((p) => !p.draft)
     .map((p) => `  <url><loc>${APEX}${p.path}</loc><lastmod>${p.updated}</lastmod></url>`)
     .join("\n");
-  // Posts, once the blog itself is published: each one by its own date.
+  // Posts, once the blog itself is live: each one by its own date.
   const blog = PUBLIC_PAGES.some((p) => p.path === "/blog" && !p.draft)
-    ? (await publishedPosts())
+    ? (await livePosts())
         .map((p) => `  <url><loc>${APEX}/blog/${p.slug}</loc><lastmod>${p.date}</lastmod></url>`)
         .join("\n")
     : "";

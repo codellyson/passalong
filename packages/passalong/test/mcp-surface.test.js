@@ -22,56 +22,46 @@ async function tools() {
   return new Map(tools.map((t) => [t.name, t]));
 }
 
-const READ_ONLY = [
-  "list_folders",
-  "get_folder",
-  "get_folder_asset",
-  "get_folder_document",
-  "get_folder_document_history",
-  "search_guides",
-  "inbox",
-  "board",
-  "log",
-  "get_guide",
-  "guide_template",
-  "activity",
-  "accounts",
-];
-const WRITES = [
-  "add_folder_asset",
-  "create_folder",
-  "update_folder",
-  "create_folder_document",
-  "save_folder_document",
-  "link_folder_guide",
-  "rename_folder_document",
-  "move_folder_document",
-  "share_folder",
-  "unlink_folder_guide",
-  "delete_folder_document",
-  "delete_folder_asset",
-  "ask",
-  "attach_file",
-  "reply",
-  "assign",
-  "plan_tasks",
+/** docs/WORK.md, "Agent tools: 17, four nouns". */
+const TOOLS = [
   "take",
   "progress",
   "hand_in",
   "pass",
-  "file_bugs",
-  "set_guide_status",
-  "publish_guide",
-  "attach_screenshot",
-  "use_account",
-  // Was `activity` with a `mark_read` flag, which made one tool read on one call and write on the
-  // next — so its annotation had to claim it writes, on every call, to be honest about one of them.
-  "clear_activity",
+  "ask",
+  "create_work",
+  "find_work",
+  "update_work",
+  "find_projects",
+  "save_project",
+  "read_document",
+  "save_document",
+  "delete_document",
+  "add_file",
+  "read_file",
+  "delete_file",
+  "accounts",
 ];
+// `accounts` reads, and `use` is this process remembering a name: nothing on disk or on the server
+// changes, so the machine's default stays where it was.
+const READ_ONLY = ["find_work", "find_projects", "read_document", "read_file", "accounts"];
+
+test("the surface is the seventeen tools, and nothing else", async () => {
+  assert.deepEqual([...(await tools()).keys()].sort(), [...TOOLS].sort());
+});
+
+test("no tool name, description or instruction uses an old word: four nouns, work, project, document, file", async () => {
+  const [left, right] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test", version: "0" });
+  await Promise.all([buildServer().connect(right), client.connect(left)]);
+  const { tools: listed } = await client.listTools();
+  const said = JSON.stringify({ instructions: client.getInstructions(), listed });
+  await client.close();
+  assert.doesNotMatch(said, /guide|folder|handoff|transfer|verdict/i);
+});
 
 test("every tool says what it does to the world", async () => {
   const all = await tools();
-  assert.ok(all.size >= 17, `expected the whole surface, saw ${all.size}`);
   for (const [name, tool] of all)
     assert.ok(
       tool.annotations && typeof tool.annotations.readOnlyHint === "boolean",
@@ -85,11 +75,8 @@ test("a tool that only reads says so, and a tool that writes does not claim to",
     assert.ok(all.has(name), `${name} is missing`);
     assert.equal(all.get(name).annotations.readOnlyHint, true, `${name} only reads`);
   }
-  for (const name of WRITES) {
-    assert.ok(all.has(name), `${name} is missing`);
+  for (const name of TOOLS.filter((t) => !READ_ONLY.includes(t)))
     assert.equal(all.get(name).annotations.readOnlyHint, false, `${name} writes`);
-  }
-  assert.equal(READ_ONLY.length + WRITES.length, all.size, "a tool was added and not classified");
 });
 
 test("only the calls that replace or remove something say they are destructive", async () => {
@@ -97,13 +84,9 @@ test("only the calls that replace or remove something say they are destructive",
   const destructive = [...all]
     .filter(([, t]) => t.annotations.destructiveHint === true)
     .map(([name]) => name);
-  // Publishing with an id that already exists replaces that guide, and the two folder deletes
-  // remove what cannot be brought back. Unlinking is not here: link_folder_guide undoes it.
-  assert.deepEqual(destructive.sort(), [
-    "delete_folder_asset",
-    "delete_folder_document",
-    "publish_guide",
-  ]);
+  // update_work's `markdown` replaces the text that was there, and the two deletes remove what
+  // cannot be brought back. save_document is not here: every version of a document is kept.
+  assert.deepEqual(destructive.sort(), ["delete_document", "delete_file", "update_work"]);
 });
 
 test("only the tools that reach outside Passalong say so", async () => {
@@ -112,14 +95,14 @@ test("only the tools that reach outside Passalong say so", async () => {
     .filter(([, t]) => t.annotations.openWorldHint === true)
     .map(([name]) => name);
   // A file on this machine that Passalong did not put there.
-  assert.deepEqual(outside.sort(), ["add_folder_asset", "attach_file", "attach_screenshot"]);
+  assert.deepEqual(outside, ["add_file"]);
 });
 
 test("a tool promises a shape only where this server decides the shape", async () => {
   const all = await tools();
   const promised = [...all].filter(([, t]) => t.outputSchema).map(([name]) => name);
   // `outputSchema` puts the MUST on the server, so it is declared only for the calls that answer
-  // with a record this server writes. `take` answers with the guide's markdown to read, which is
+  // with a record this server writes. `take` answers with the work's markdown to read, which is
   // why it is not here.
   assert.deepEqual(promised.sort(), ["ask", "hand_in", "pass", "progress"]);
   for (const name of promised) {
@@ -128,7 +111,7 @@ test("a tool promises a shape only where this server decides the shape", async (
     assert.deepEqual(
       schema.required ?? [],
       [],
-      `${name} must not require a key a kind may not have`,
+      `${name} must not require a key a route may stop sending`,
     );
     // The one that bit. Handing registerTool a `.shape` instead of the object rebuilds it closed
     // and advertises `additionalProperties: false`, which is this server promising an answer
@@ -142,10 +125,8 @@ test("a tool promises a shape only where this server decides the shape", async (
 });
 
 test("a hand-in has somewhere to say what it took, and both servers offer it", async () => {
-  // The last channel an agent had to publish a guide for. A handoff that WORKED, and had to adapt
-  // something to get there, could answer with `ok` (a boolean), `note` (280 characters) and
-  // `evidence` (refused unless it is what you ran). The adaptation went out as a follow-up guide
-  // with an id, a share link and an inbox row asking somebody to take it.
+  // What had to be adapted to make it work once went out as a second document with an id, a share
+  // link and an inbox row asking somebody to take it. It belongs on the hand-in.
   const hand = (await tools()).get("hand_in");
   const writeup = hand.inputSchema.properties.writeup;
   assert.ok(writeup, "hand_in takes a write-up");
@@ -167,79 +148,59 @@ test("a hand-in has somewhere to say what it took, and both servers offer it", a
 });
 
 /**
- * The two servers say the same things in front of a guide.
- *
- * `KEEP_EVIDENCE` and `SEARCH_WIDE` are written out once per server and held together by a comment
- * that says "mirrors the other one". A comment does not fail. An agent reaching Passalong over
- * HTTP and an agent reaching it over stdio are the same agent doing the same work, and a rule that
- * reached one of them was a rule half the users never got.
+ * The two servers say the same things in front of the work an agent takes. Each block is written
+ * out once per server and held together by a comment saying "mirrors the other one"; a comment does
+ * not fail. An agent reaching Passalong over HTTP and one reaching it over stdio do the same work.
  */
-test("both servers say the same thing in front of a guide", async () => {
+test("both servers say the same thing in front of the work", async () => {
   const read = (p) => readFile(new URL(p, import.meta.url), "utf8");
   const [stdio, http] = await Promise.all([
     read("../src/mcp.js"),
     read("../../../apps/api/src/mcp-http.ts"),
   ]);
-  // Adjacent string literals are joined before matching. These blocks are written as a run of
-  // concatenated pieces and the formatter chooses the breaks, so a sentence that reads as one
-  // thing in the file crosses a `" + "` in the source — and matching the raw text would fail on a
-  // reflow that changed nothing anybody reads.
+  // Adjacent string literals are joined before matching: the formatter chooses the breaks.
   const said = (src) => src.replace(/["']\s*\+\s*\n?\s*["']/g, "");
   for (const line of [
     "KEEP YOUR EVIDENCE AS YOU GO",
     "SEARCH THE WHOLE TREE BEFORE YOU CONCLUDE",
     '"I looked" is a claim; the search and what it printed is evidence',
-    // This one is why the rule has a test. attach_screenshot said "put that line in the guide
-    // body" while hand_in said "do not publish a guide to carry your evidence", and only the first
-    // named a destination — so six screenshots of a delivered change were published as a guide
-    // with Problem, Solution shape, Decisions, Steps, Verification and Gotchas wrapped round them.
-    "WHERE THE LINE GOES DEPENDS ON WHAT THE IMAGE IS EVIDENCE OF",
-    "DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS",
-    // Added after an agent short of a picture built `src/app/notes-preview` to have something to
-    // photograph, shot it, `rm -rf`'d it, and offered the shots as evidence that the real screen
-    // rendered. The rule was satisfied; the page in the picture no longer existed.
+    // The upload tool once named one destination, the document, while hand_in said not to publish
+    // anything for evidence — so six screenshots of a delivered change became a second document.
+    "WHERE THE LINE GOES DEPENDS ON WHAT THE FILE IS EVIDENCE OF",
+    "DO NOT WRITE NEW WORK TO CARRY SCREENSHOTS",
+    // Added after an agent short of a picture built a page to photograph, shot it, deleted it, and
+    // offered the shots as evidence that the real screen rendered.
     "SHOOT THE RUNNING THING, NOT SOMETHING YOU BUILT TO SHOOT",
     "NEVER DELETE WHAT YOUR EVIDENCE POINTS AT",
+    "A PROJECT IS A PLACE; ITS DOCUMENTS ARE WHAT TO KNOW; WORK IS WHAT TO DO",
+    "WHAT YOU LEARN GOES INTO THE PROJECT'S DOCUMENTS",
   ]) {
     assert.ok(said(stdio).includes(line), `stdio is missing: ${line}`);
     assert.ok(said(http).includes(line), `the HTTP server is missing: ${line}`);
   }
-  // And both attach it to the two kinds an agent has to locate things in for itself. A transfer
-  // guide gets neither, on purpose: it is handed over untouched, and anything in front of it is
-  // one more thing that is not the document.
+  // And both put all three in front of every piece of work taken, with no kind to choose by.
   for (const src of [stdio, http]) {
-    assert.equal(src.split("SEARCH_WIDE +").length - 1, 2, "on the bug lead and the task lead");
-    assert.equal(src.split("SHOOT_THE_REAL_THING +").length - 1, 2, "and so is this one");
+    assert.match(src, /const LEAD = SEARCH_WIDE \+ SHOOT_THE_REAL_THING \+ KEEP_EVIDENCE;/);
+    assert.equal(src.split("${LEAD}").length - 1, 1, "and LEAD is said once, on take");
   }
 });
 
-test("a screenshot goes in whether you have a file or only the bytes", async () => {
-  // The rule that a check is run or shown is only as good as the door into "shown". attach_screenshot
-  // took a path on this machine, and an agent driving a browser usually has the opposite: the pane
-  // hands the image back as a tool result and never writes a file. The agent did what anyone would
-  // — swapped to grep and tsc checks, put what it saw in `writeup` — and said so: "a grep proves
-  // the code changed, not that the screen renders right."
-  const shot = (await tools()).get("attach_screenshot");
-  const props = shot.inputSchema.properties;
-  assert.ok(props.file, "a path still works");
+test("a file goes in whether you have a path or only the bytes", async () => {
+  // The rule that a check is run or shown is only as good as the door into "shown". An agent
+  // driving a browser usually has the image as a tool result and never a file on disk.
+  const add = (await tools()).get("add_file");
+  const props = add.inputSchema.properties;
+  assert.ok(props.file, "a path works");
   assert.ok(props.data, "and so do the bytes");
+  assert.ok(props.project, "and it can be kept in a project instead");
   assert.match(props.data.description, /base64/);
-  assert.deepEqual(shot.inputSchema.required ?? [], [], "neither is required on its own");
+  assert.deepEqual(add.inputSchema.required ?? [], [], "none is required on its own");
   assert.match(props.type.description, /image\/png/);
+  assert.match(add.description, /`ran` on hand_in/, "proof of a hand-in goes on the hand-in");
+  assert.match(add.description, /DO NOT WRITE NEW WORK TO CARRY SCREENSHOTS/);
 });
 
-test("attach_screenshot sends hand-in evidence to the hand-in, not to a guide", async () => {
-  // The contradiction that produced a 1500-word guide to deliver six pictures: this tool named one
-  // destination, the guide body, and hand_in said not to publish a guide for evidence. An agent
-  // holding a screenshot of work it was handing in could satisfy only one of them.
-  const shot = (await tools()).get("attach_screenshot");
-  assert.match(shot.description, /`ran` on hand_in/, "proof of a hand-in goes on the hand-in");
-  assert.match(shot.description, /nothing is published/);
-  assert.match(shot.description, /part of a DOCUMENT goes in a guide body/, "and the other case");
-  assert.match(shot.description, /DO NOT PUBLISH A GUIDE TO CARRY SCREENSHOTS/);
-});
-
-test("get_guide reads a large guide by outline, by section, or whole", async () => {
+test("find_work reads large work by outline, by section, or whole", async () => {
   const { mkdtempSync, writeFileSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
@@ -250,18 +211,17 @@ test("get_guide reads a large guide by outline, by section, or whole", async () 
     file,
     [
       "---",
-      "id: bigguide",
+      "id: bigw0rk1",
       "title: A big one",
-      "summary: A guide with a lot in it.",
-      "kind: transfer",
-      "status: published",
+      "summary: Work with a lot in it.",
+      "status: ready",
       "---",
       "",
-      "## Problem",
+      "## Background",
       filler,
       "",
-      "## Steps",
-      "1. do the one thing",
+      "## What to change",
+      "1. the one thing",
       "",
     ].join("\n"),
   );
@@ -269,25 +229,27 @@ test("get_guide reads a large guide by outline, by section, or whole", async () 
   const client = new Client({ name: "test", version: "0" });
   await Promise.all([buildServer().connect(right), client.connect(left)]);
   const read = async (args) =>
-    (await client.callTool({ name: "get_guide", arguments: { ref: file, cwd: dir, ...args } }))
-      .content[0].text;
+    (await client.callTool({ name: "find_work", arguments: { id: file, ...args } })).content[0]
+      .text;
 
   const first = await read({});
   assert.match(first, /Sections:/);
-  assert.match(first, /- Problem \(/);
-  assert.match(first, /A guide with a lot in it\./, "the summary comes first");
-  assert.ok(first.length < 1500, "a large guide comes back as an outline");
+  assert.match(first, /- Background \(/);
+  assert.match(first, /Work with a lot in it\./, "the summary comes first");
+  assert.match(first, /find_work id=bigw0rk1 section=/);
+  assert.ok(first.length < 1500, "large work comes back as an outline");
 
-  const part = await read({ section: "steps" });
-  assert.match(part, /do the one thing/);
+  const part = await read({ section: "what to" });
+  assert.match(part, /the one thing/);
   assert.ok(!part.includes(filler), "only the part asked for");
 
   const missing = await read({ section: "nothing like it" });
   assert.match(missing, /No heading matching/);
-  assert.match(missing, /- Steps \(/, "and it says what there is instead");
+  assert.match(missing, /- What to change \(/, "and it says what there is instead");
 
   const whole = await read({ full: true });
   assert.ok(whole.includes(filler), "full gives all of it");
+  assert.match(whole, /call take bigw0rk1/, "and reading it is not taking it");
   await client.close();
 });
 

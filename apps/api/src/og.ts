@@ -1,6 +1,6 @@
-// The unfurl card for a guide link.
+// The unfurl card for a piece of work link.
 //
-// A guide travels by being pasted — into Slack, into a DM, into an agent's context — so the
+// A piece of work travels by being pasted — into Slack, into a DM, into an agent's context — so the
 // preview card is the first thing most people ever see of one. It used to be blank: the pages
 // declared `twitter:card summary` and no image at all.
 //
@@ -11,7 +11,7 @@
 // Fonts come from `public/fonts` through the ASSETS binding rather than being bundled, for the
 // same reason. Satori cannot read woff2, so these are the static .woff pair; the stylesheet's
 // variable woff2 stays the thing browsers download.
-import type { Meta } from "./guide.js";
+import type { Meta } from "./work.js";
 
 type Env = { ASSETS: Fetcher };
 
@@ -100,7 +100,7 @@ function card(o: { title: string; from: string; meta: Meta }): string {
   <div style="display:flex;flex-direction:column;">
     <div style="display:flex;margin-bottom:28px;">${bits.map(chip).join("")}</div>
     <div style="display:flex;align-items:center;border-top:2px solid ${C.line};padding-top:26px;">
-      <div style="display:flex;color:${C.muted};font-size:26px;">${o.from ? `From ${esc(clip(o.from, 60))}` : "A Passalong guide"}</div>
+      <div style="display:flex;color:${C.muted};font-size:26px;">${o.from ? `From ${esc(clip(o.from, 60))}` : "Work on Passalong"}</div>
     </div>
   </div>
 </div>`;
@@ -110,9 +110,9 @@ function card(o: { title: string; from: string; meta: Meta }): string {
  * The card for the site itself.
  *
  * `/` had no `og:image` at all, so every link to the product unfurled as a bare text row — the same
- * blank card the guide pages were fixed for, on the one page most people meet first. Same renderer
- * and same palette; what differs is that a guide's card leads with its title while this one leads
- * with the claim, because a link to `/` is not about any particular guide.
+ * blank card the work pages were fixed for, on the one page most people meet first. Same renderer
+ * and same palette; what differs is that a piece of work's card leads with its title while this one leads
+ * with the claim, because a link to `/` is not about any particular work.
  */
 function siteCard(): string {
   return `
@@ -195,10 +195,10 @@ const DRAWN_WITH = "onest-400,onest-600.woff 1200x630 png";
  *
  * Every unfurl was a fresh render — a second or more of wasm on every crawler fetch — because a
  * response a Worker makes is never cached by Cloudflare's CDN, whatever its `cache-control` says;
- * only the Cache API stores it. The key is a hash of the markup, not the guide's address: the card
- * is exactly its markup, so a retitled guide, a status change or a renamed author is a new key and
+ * only the Cache API stores it. The key is a hash of the markup, not the work's address: the card
+ * is exactly its markup, so a retitled work, a status change or a renamed author is a new key and
  * never a stale picture, and nothing has to remember to purge. It also keeps the share key, which
- * is the guide's secret, out of the cache key entirely. The key's path is never routed, so nothing
+ * is the work's secret, out of the cache key entirely. The key's path is never routed, so nothing
  * outside this function can read an entry.
  */
 export async function cached(
@@ -224,9 +224,9 @@ export async function cached(
 }
 
 /**
- * PNG bytes for one guide's unfurl card, 1200×630.
+ * PNG bytes for one piece of work's unfurl card, 1200×630.
  *
- * `from` is the author as a person reads them. The footer used to print the guide's id, which is
+ * `from` is the author as a person reads them. The footer used to print the work's id, which is
  * the one thing on the card nobody looking at a preview can do anything with.
  */
 export async function renderOgImage(

@@ -2,14 +2,14 @@
  * How much of the free tier an account has used, and where its ceiling is.
  *
  * This exists because the two answers used to be computed in two places and disagreed: the hub's
- * banner counted every guide an account had, while the publish path counted only the ones that
+ * banner counted every piece of work an account had, while the publish path counted only the ones that
  * actually take up room. So the interface said "25 of 25, the next share will be refused" while
  * shares went on working, and the number people were asked to act on was not the number being
  * enforced.
  */
 
-/** What a synced guide is, for counting: the statuses that occupy room on the hosted copy. */
-export const COUNTED = ["published", "promoted"] as const;
+/** What a synced work is, for counting: the statuses that occupy room on the hosted copy. */
+export const COUNTED = ["ready"] as const;
 
 /**
  * An account's ceiling. The per-account override wins when it is set; zero means "not set", so a
@@ -27,7 +27,7 @@ export function limitFor(override: unknown, fallback: unknown, fallbackDefault =
  *
  * This was one integer with `0` meaning "no ceiling". That worked while there were two answers; it
  * cannot survive a third. Removing the free tier adds "may not sync at all", and the obvious
- * encoding for that is also zero — a limit of zero guides — which is the exact value already
+ * encoding for that is also zero — a limit of zero work — which is the exact value already
  * spoken for. Worse, every consumer tests `me.limit` for truthiness, so both zeroes read as
  * "unlimited" and the account that may sync nothing is told it may sync everything.
  *
@@ -35,7 +35,7 @@ export function limitFor(override: unknown, fallback: unknown, fallbackDefault =
  * `team.plan`: one field, three values, none of which can be confused for another.
  *
  *   unlimited  a seat on a paid team. `limit` is not consulted.
- *   free       the grandfathered ceiling. `limit` is the number of synced guides allowed.
+ *   free       the grandfathered ceiling. `limit` is the number of synced work allowed.
  *   none       no plan and no grandfathering: nothing may be synced until there is one.
  */
 export const SYNC_PLANS = ["unlimited", "free", "none"] as const;
@@ -84,7 +84,7 @@ export function ceilingFor(
   return { plan: "none", limit: 0 };
 }
 
-/** Whether one more guide would go over. Written once so the check and the warning agree. */
+/** Whether one more work would go over. Written once so the check and the warning agree. */
 export function isFull(used: number, ceiling: Ceiling): boolean {
   if (ceiling.plan === "unlimited") return false;
   if (ceiling.plan === "none") return true;
@@ -127,8 +127,8 @@ export function planNow(plan: string, until: unknown, at: string): string {
  * Whether new work may be addressed to a team.
  *
  * `lapsed` is read-only, and read-only is narrower than it sounds: what stops is work flowing *in*
- * — a new guide addressed to the team, a new member joining. What must not stop is work already in
- * flight closing, because a verdict and an ack belong to the reader and the reader is not the person
+ * — a new work addressed to the team, a new member joining. What must not stop is work already in
+ * flight closing, because taking, handing in and passing belong to whoever does the work and the reader is not the person
  * who missed the payment.
  */
 export const acceptsNewWork = (plan: string): boolean => plan !== "lapsed";
@@ -138,17 +138,4 @@ export function seatsFull(plan: string, seats: unknown, members: unknown): boole
   if (plan !== "team") return false;
   const paidFor = Math.trunc(Number(seats)) || 0;
   return paidFor > 0 && Number(members) >= paidFor;
-}
-
-/**
- * Whether an account may turn the automatic clean-up off: keep every guide, and the proof on it,
- * for as long as it likes (`account.keep_forever`).
- *
- * Everybody may today. This is the one place a plan gets checked on the day keeping things stops
- * being free, and `/v1/me` reports it as `may_keep` so the hub can say so beside the switch. An
- * account that already has the column set when this starts returning false keeps what it has: the
- * sweeps read the column, not this.
- */
-export function mayKeep(_ownPlan: unknown = "free", _paidTeams: unknown = 0): boolean {
-  return true;
 }

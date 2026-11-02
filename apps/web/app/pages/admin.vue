@@ -1,6 +1,6 @@
 <!--
   Running Passalong: the platform owner's page, and the only one in the product that is not about
-  somebody's guides.
+  somebody's work.
 
   It was a band inside Settings, which was the wrong room. Settings is what a customer keeps about
   themselves — their profile, their plan, their teams, their tokens — and comping another account

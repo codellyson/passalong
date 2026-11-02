@@ -9,7 +9,7 @@ It sits beside the other docs rather than replacing them:
 | --- | --- |
 | [`AGENTS.md`](../../AGENTS.md) | The rules and sharp edges. Normative. Read before changing code. |
 | [`docs/wiki/`](../wiki/README.md) | Reference: schema, routes, auth, web view, releasing. Descriptive, one area per page. |
-| [`docs/PRD.md`](../PRD.md), [`docs/V2.md`](../V2.md), [`docs/PUBLISH.md`](../PUBLISH.md) | Intent: what the product is for and what is planned. |
+| [`docs/PRD.md`](../PRD.md), [`docs/PUBLISH.md`](../PUBLISH.md) | Intent: what the product is for and what is planned. |
 | **`docs/llm-wiki/`** (here) | Understanding: one page per concept, how it connects to the others, the decisions behind it, and what is still open. The place to start when you need the whole picture fast. |
 
 Start at [index.md](index.md). What changed and when is in [log.md](log.md).

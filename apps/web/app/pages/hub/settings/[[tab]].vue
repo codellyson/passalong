@@ -3,17 +3,18 @@
 
   Five pages, one topic each: Account (the default), Plan, Teams, Agents and Integrations. It used to be
   one long scroll of ten sections, and it was overwhelming: the section you came for was buried
-  among the ones you did not. The sidebar is now the pages, each carrying its own state ("2 need
-  you", "1 failing"), and each page opens with the "Needs you" items that belong to it.
+  among the ones you did not. The pages are the world's tabs, each its own address; a tab with
+  something broken carries a status dot, and each page opens with the "Needs you" items that belong
+  to it, then calm blocks (HubSettingsSection) of labelled rows (HubSettingRow) and registers.
 
   Agents and Integrations are two pages because they face opposite ways: Agents is what acts as you
   (connected apps, API tokens), Integrations is what sends work to you (email, Sentry, PostHog).
   Agents keeps the `connections` address it had when both were one page.
 
-  Old links still land: `/hub/settings#plan` is forwarded to the page holding `#plan`.
+  A section anchor lands: `/hub/settings#plan` is forwarded to the page holding `#plan`.
 -->
 <script setup lang="ts">
-import { appForHost, attention, connectorState } from "~/utils/connect-apps";
+import { attention } from "~/utils/connect-apps";
 
 usePage({
   title: "Settings · Passalong",
@@ -22,7 +23,7 @@ usePage({
 });
 
 const { data } = useHub();
-const { teamTab, connect } = useSettingsUi();
+const { connect } = useSettingsUi();
 const { data: connectorsData } = useConnectors();
 const extras = useTeamExtras();
 
@@ -34,7 +35,7 @@ const items = computed(() =>
   attention({
     hasPassword: !needsPassword.value,
     plan: me.value
-      ? { sync: me.value.sync, guides: me.value.guides, limit: me.value.limit }
+      ? { sync: me.value.sync, work: me.value.work, limit: me.value.limit }
       : undefined,
     connectors: connectors.value,
     teams: extras.value,
@@ -52,23 +53,21 @@ watch(
 );
 
 function go(item: (typeof items.value)[number]) {
-  if (item.team) teamTab.value = { ...teamTab.value, [item.team.slug]: item.team.tab };
   if (item.app) connect.value = { open: true, app: item.app };
   nextTick(() =>
-    document.getElementById(item.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    document
+      .getElementById(item.team ? `team-${item.team.slug}-${item.team.tab}` : item.anchor)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" }),
   );
 }
 
+/** The Plan tab's one fact: work used on the free plan, else the plan's name. */
 const planNote = computed(() => {
   const m = me.value;
   if (!m) return "";
-  if (m.sync === "free") return `${m.guides} of ${m.limit}`;
+  if (m.sync === "free") return `${m.work} of ${m.limit}`;
   return m.plan === "solo" ? "Solo" : m.plan === "lapsed" ? "lapsed" : "no limit";
 });
-
-const failingApps = computed(
-  () => connectors.value.filter((c) => connectorState(c).tone === "bad").length,
-);
 
 const TABS = [
   { id: "account", label: "Account", path: "/hub/settings" },
@@ -90,11 +89,18 @@ function tabOf(anchor: string): Tab {
 
 const route = useRoute();
 const tab = computed<Tab>(() => TABS.find((t) => t.id === route.params.tab)?.id ?? "account");
-const pageItems = computed(() => items.value.filter((i) => tabOf(i.anchor) === tab.value));
+// Said once, where it is fixed: Sign-in is itself the first block of Account when it is missing,
+// and an empty group says so on its own row beside Choose people. The tab's dot still counts both.
+const pageItems = computed(() =>
+  items.value.filter(
+    (i) => tabOf(i.anchor) === tab.value && i.anchor !== "signin" && i.team?.tab !== "groups",
+  ),
+);
 
 onMounted(() => {
+  // `#token=…` is a sign-in link's fragment, not an old anchor: it must not send you to Account.
   const anchor = route.hash.slice(1);
-  const home = anchor ? tabOf(anchor) : tab.value;
+  const home = anchor && !anchor.includes("=") ? tabOf(anchor) : tab.value;
   if (home !== tab.value)
     navigateTo(
       { path: TABS.find((t) => t.id === home)?.path, hash: route.hash },
@@ -111,186 +117,153 @@ const nav = computed(() =>
         ? planNote.value
         : t.id === "teams"
           ? String(me.value?.teams?.length || "")
-          : t.id === "connections" && failingApps.value
-            ? `${failingApps.value} failing`
-            : "";
-    return {
-      ...t,
-      note: n ? `${n} need${n === 1 ? "s" : ""} you` : fact,
-      tone: n || (t.id === "connections" && failingApps.value) ? "bad" : "",
-    };
+          : "";
+    const bad = items.value.some((i) => i.tone === "bad" && tabOf(i.anchor) === t.id);
+    return { ...t, needs: n, tone: bad ? "bad" : n ? "warn" : "", note: n ? "" : fact };
   }),
 );
 
 const claiming = ref(false);
-const band = "flex flex-col";
-const bandLabel = "m-0 mb-2 font-ui text-xs font-semibold tracking-widest text-muted uppercase";
-const sec = "flex scroll-mt-20 flex-col gap-4 py-5";
-const secHead = "flex flex-wrap items-baseline gap-x-3 gap-y-1";
-const title = "m-0 font-ui text-lg font-semibold text-fg";
-// Its own line under the title. A max-width here let the flex row fit it beside the title instead,
-// since wrapping is decided by the width an item asks for.
-const blurb = "m-0 w-full basis-full font-ui text-sm text-muted";
-const noteTone: Record<string, string> = {
-  bad: "text-danger",
-  warn: "text-warn",
-  "": "text-muted",
-};
+
+/** The one line under the heading: what this page holds, said as facts where there are some. */
+const summary = computed(() => {
+  const m = me.value;
+  if (!m) return "";
+  const teams = m.teams ?? [];
+  switch (tab.value) {
+    case "plan":
+      if (m.sync === "unlimited" && m.plan !== "solo")
+        return "In a paid team, so there's no limit on work.";
+      if (m.plan === "solo") return "Solo, with no limit on work.";
+      if (m.plan === "lapsed") return "Your Solo plan has lapsed. Nothing has been taken away.";
+      if (m.sync === "free") return `Free plan · ${m.work} of ${m.limit} pieces of work used`;
+      return "No plan yet, so new work can't be sent.";
+    case "teams":
+      // With teams, the template writes the line itself so each name links to its block.
+      return teams.length ? "" : "Not in a team yet. A team is the people you send work to.";
+    case "connections":
+      return `${plural(connectors.value.length, "connected app")} · ${plural(data.value.tokens.length, "API token")}. What acts as you.`;
+    case "integrations":
+      return "Where work arrives from outside: email, Sentry, PostHog and your own code.";
+    default:
+      return [m.name || m.display, m.handle ? `@${m.handle}` : "", m.email]
+        .filter(Boolean)
+        .join(" · ");
+  }
+});
+
+const myTeams = computed(() => me.value?.teams ?? []);
+/** What follows the i-th name in "Acme, Beta and Core". */
+const sep = (i: number) =>
+  i < myTeams.value.length - 2 ? ", " : i === myTeams.value.length - 2 ? " and " : "";
 </script>
 
 <template>
   <HubShell>
-    <div class="grid gap-8 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-12">
-      <nav class="flex flex-col gap-4 md:sticky md:top-20 md:self-start" aria-label="Settings pages">
-        <h1 class="m-0">Settings</h1>
-        <div class="flex gap-2 overflow-x-auto pb-1 md:flex-col md:gap-0.5 md:overflow-visible md:pb-0">
-          <NuxtLink
-            v-for="t in nav"
-            :key="t.id"
-            :to="t.path"
-            class="flex shrink-0 items-baseline justify-between gap-2 rounded-1 border border-line px-2.5 py-1.5 font-ui text-sm whitespace-nowrap text-fg no-underline hover:bg-surface md:border-transparent"
-            :class="tab === t.id ? 'bg-surface font-medium md:shadow-[inset_2px_0_0_var(--accent)]' : ''"
-            :aria-current="tab === t.id ? 'page' : undefined"
-          >
-            {{ t.label }}
-            <small v-if="t.note" class="text-xs font-normal" :class="noteTone[t.tone]">{{ t.note }}</small>
-          </NuxtLink>
-        </div>
+    <div class="flex min-w-0 flex-col gap-6">
+      <div class="flex flex-col gap-1">
+        <h1 class="m-0 text-h2 font-medium tracking-tight">Settings</h1>
+        <p v-if="tab === 'teams' && myTeams.length" class="m-0 min-h-5 font-ui text-sm text-muted">
+          In <template v-for="(t, i) in myTeams" :key="t.slug"><a :href="`#team-${t.slug}`" class="text-fg">{{ t.name || t.slug }}</a>{{ sep(i) }}</template>. Who is in each, its groups, its channels and its plan.
+        </p>
+        <p v-else class="m-0 min-h-5 font-ui text-sm text-muted">{{ summary }}</p>
+      </div>
+
+      <!-- The hairline is the nav's own inset edge, so the row can scroll sideways on a phone
+           without clipping the current tab's bar; it fades at the right to say it continues. -->
+      <nav
+        class="flex gap-5 overflow-x-auto shadow-[inset_0_-1px_0_var(--line)] max-md:pr-12 max-md:[mask-image:linear-gradient(to_right,#000_calc(100%-3rem),transparent)] md:gap-6"
+        aria-label="Settings pages"
+      >
+        <NuxtLink
+          v-for="t in nav"
+          :key="t.id"
+          :to="t.path"
+          class="tab flex shrink-0 items-baseline gap-2 border-b-2 py-2 font-ui text-sm whitespace-nowrap no-underline"
+          :class="tab === t.id ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg'"
+          :aria-current="tab === t.id ? 'page' : undefined"
+        >
+          {{ t.label }}
+          <span v-if="t.needs" class="size-1.5 shrink-0 self-center rounded-pill" :class="t.tone === 'bad' ? 'bg-danger' : 'bg-changed'" aria-hidden="true" />
+          <span v-if="t.needs" class="sr-only">, {{ t.needs }} need{{ t.needs === 1 ? "s" : "" }} you</span>
+          <span v-else-if="t.note" class="text-xs text-muted tabular-nums">{{ t.note }}</span>
+        </NuxtLink>
       </nav>
 
-      <div class="flex min-w-0 flex-col">
-        <section v-if="pageItems.length" class="mb-8 rounded-2 bg-raised shadow-edge" aria-labelledby="needs-h">
-          <!-- A div, not <header>: the global header rule's padding and margin outrank utilities. -->
-          <div class="flex items-baseline gap-2 border-b border-line px-4 py-3">
-            <h2 id="needs-h" class="m-0 font-ui text-base font-semibold text-fg">Needs you</h2>
-            <span class="font-ui text-sm text-muted">{{ plural(pageItems.length, "thing") }}, most urgent first</span>
-          </div>
-          <ul class="m-0 list-none p-0">
-            <li
-              v-for="(item, i) in pageItems"
-              :key="i"
-              class="grid grid-cols-[0.5rem_1fr_auto] items-center gap-3 border-b border-line px-4 py-2.5 font-ui text-sm last:border-b-0"
-            >
-              <span class="size-2 rounded-pill" :class="item.tone === 'bad' ? 'bg-danger' : 'bg-warn'" aria-hidden="true" />
-              <span class="text-fg">{{ item.text }} <span class="text-muted">· {{ item.where }}</span></span>
-              <button class="linkish font-medium whitespace-nowrap" type="button" @click="go(item)">{{ item.action }}</button>
-            </li>
-          </ul>
-        </section>
+      <!-- What is broken on this page, as standing notices: a status dot on a hairline row. -->
+      <section v-if="pageItems.length" aria-labelledby="needs-h">
+        <h2 id="needs-h" class="sr-only">Needs you</h2>
+        <ul class="m-0 list-none p-0">
+          <li
+            v-for="(item, i) in pageItems"
+            :key="i"
+            class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-3 font-ui text-sm first:border-t"
+          >
+            <span class="size-1.5 shrink-0 rounded-pill" :class="item.tone === 'bad' ? 'bg-danger' : 'bg-changed'" aria-hidden="true" />
+            <span class="min-w-0 grow basis-64 text-fg">{{ item.text }} <span class="text-muted">· {{ item.where }}</span></span>
+            <button class="btn sm" type="button" @click="go(item)">{{ item.action }}</button>
+          </li>
+        </ul>
+      </section>
 
-        <div v-if="tab === 'account'" :class="band">
-          <h2 :class="bandLabel">Account</h2>
+      <div v-if="tab === 'account'" class="flex flex-col gap-10">
+        <HubSettingsSection v-if="needsPassword" id="signin" title="Sign-in" blurb="How you get back into Passalong from another browser.">
+          <HubSettingRow label="Password" hint="Made by an invite or the command line, this account has none yet.">
+            <template v-if="!claiming">
+              <p class="m-0 text-fg">You're only signed in on this browser. Add a password to sign in anywhere else.</p>
+              <button class="btn primary sm self-start" type="button" @click="claiming = true">Add a password</button>
+            </template>
+            <HubClaim v-else bare @cancel="claiming = false" />
+          </HubSettingRow>
+        </HubSettingsSection>
 
-          <section v-if="needsPassword" id="signin" :class="sec" aria-labelledby="signin-h">
-            <div :class="secHead">
-              <h3 id="signin-h" :class="title">Sign-in</h3>
-              <p :class="blurb">How you get back into Passalong from another browser.</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2 bg-warn-soft px-4 py-3">
-              <p class="m-0 grow basis-72 font-ui text-sm text-fg">
-                <b>This account has no password.</b> It was made before we asked for one, or by the
-                terminal tool. Add one to sign in from another browser.
-              </p>
-              <button v-if="!claiming" class="btn primary sm" type="button" @click="claiming = true">Add a password</button>
-            </div>
-            <HubClaim v-if="claiming" bare />
-          </section>
+        <HubSettingsSection id="profile" title="Profile" blurb="What teammates see, and the @name they send work to.">
+          <HubIdentity />
+        </HubSettingsSection>
 
-          <section id="profile" :class="sec" aria-labelledby="profile-h">
-            <div :class="secHead">
-              <h3 id="profile-h" :class="title">Profile</h3>
-              <p :class="blurb">What teammates see, and the @name they send work to.</p>
-            </div>
-            <HubIdentity bare />
-          </section>
-
-          <section id="notifications" :class="sec" aria-labelledby="notifications-h">
-            <div :class="secHead">
-              <h3 id="notifications-h" :class="title">Notifications</h3>
-              <p :class="blurb">
-                When the hub isn't open: something sent to you, handed in, didn't work, sent back, gone
-                quiet, or stuck on you. Per device.
-              </p>
-            </div>
-            <HubPushSettings />
-          </section>
-
-          <section id="cleanup" :class="sec" aria-labelledby="cleanup-h">
-            <div :class="secHead">
-              <h3 id="cleanup-h" :class="title">Clean-up</h3>
-              <p :class="blurb">What Passalong removes by itself, and when.</p>
-            </div>
-            <HubRetention />
-          </section>
-        </div>
-
-        <div v-else-if="tab === 'plan'" :class="band">
-          <h2 :class="bandLabel">Plan</h2>
-          <section id="plan" :class="sec" aria-labelledby="plan-h">
-            <div :class="secHead">
-              <h3 id="plan-h" :class="title">Your plan</h3>
-              <p :class="blurb">Your own plan, separate from any team you're in. A team's plan is on its card below.</p>
-            </div>
-            <HubSolo />
-          </section>
-        </div>
-
-        <div v-else-if="tab === 'teams'" :class="band">
-          <h2 :class="bandLabel">Teams</h2>
-          <section :class="sec" aria-label="Your teams">
-            <HubTeamList />
-          </section>
-        </div>
-
-        <div v-else-if="tab === 'connections'" :class="band">
-          <h2 :class="bandLabel">Agents</h2>
-
-          <section id="apps" :class="sec" aria-labelledby="apps-h">
-            <div :class="secHead">
-              <h3 id="apps-h" :class="title">Connected apps</h3>
-              <button
-                class="btn sm ml-auto"
-                :class="connect.open ? '' : 'primary'"
-                type="button"
-                :aria-expanded="connect.open"
-                @click="connect = { ...connect, open: !connect.open }"
-              >
-                {{ connect.open ? "Close" : "Connect an app" }}
-              </button>
-              <p :class="blurb">
-                Assistants that work with your guides as you. Each has its own access, reaching only
-                Passalong's tools, and you can cut it off here.
-              </p>
-            </div>
-            <HubConnectors />
-          </section>
-
-          <section id="tokens" :class="sec" aria-labelledby="tokens-h">
-            <div :class="secHead">
-              <h3 id="tokens-h" :class="title">API tokens</h3>
-              <p :class="blurb">
-                For the command line and your own scripts. A token reaches your whole account, so give
-                each place its own and revoke it there.
-              </p>
-            </div>
-            <HubTokens />
-          </section>
-        </div>
-
-        <div v-else :class="band">
-          <h2 :class="bandLabel">Integrations</h2>
-          <section id="integrations" :class="sec" aria-labelledby="integrations-h">
-            <div :class="secHead">
-              <h3 id="integrations-h" :class="title">Email, Sentry and PostHog</h3>
-              <p :class="blurb">
-                Errors from Sentry and PostHog, and emails sent to you, arrive here as tasks, bugs or
-                transfers. Tasks wait as Drafts until you mark them Ready.
-              </p>
-            </div>
-            <HubIntegrations />
-          </section>
-        </div>
+        <HubSettingsSection
+          id="notifications"
+          title="Notifications"
+          blurb="When the hub isn't open: something sent to you, finished, didn't work, reopened, gone quiet, or stuck on you. Set per device."
+        >
+          <HubPushSettings />
+        </HubSettingsSection>
       </div>
+
+      <div v-else-if="tab === 'plan'" class="flex flex-col gap-10">
+        <HubSettingsSection id="plan" title="Your plan" blurb="Your own plan, separate from any team you're in. A team's plan is under Teams.">
+          <HubSolo />
+        </HubSettingsSection>
+      </div>
+
+      <div v-else-if="tab === 'teams'" class="flex flex-col gap-10">
+        <HubTeamList />
+      </div>
+
+      <div v-else-if="tab === 'connections'" class="flex flex-col gap-10">
+        <HubSettingsSection
+          id="apps"
+          title="Connected apps"
+          blurb="Assistants that act for you in Passalong. Each has its own access, reaching only Passalong's tools, and you can cut it off here."
+        >
+          <template #action>
+            <button
+              class="btn sm"
+              :class="connect.open ? '' : 'primary'"
+              type="button"
+              :aria-expanded="connect.open"
+              @click="connect = { ...connect, open: !connect.open }"
+            >
+              {{ connect.open ? "Close" : "Connect an app" }}
+            </button>
+          </template>
+          <HubConnectors />
+        </HubSettingsSection>
+
+        <HubTokens />
+      </div>
+
+      <HubIntegrations v-else />
     </div>
   </HubShell>
 </template>

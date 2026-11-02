@@ -1,6 +1,6 @@
 // The theme switch, as a link.
 //
-// Every public page here runs no script at all — `/`, `/connect` and every guide page are
+// Every public page here runs no script at all — `/`, `/connect` and every work page are
 // `noScripts` with a policy naming no `script-src` — so the usual toggle, a click handler writing
 // to localStorage, cannot exist on the pages that most need one. This is the same switch built out
 // of the things that do work without script: a link, a cookie, and a redirect back to where you

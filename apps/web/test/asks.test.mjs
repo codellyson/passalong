@@ -1,25 +1,22 @@
-// A guide made from a folder only lands in it if the sentence tells the agent which folder. These pin
-// that every kind names the folder by id, and that a team folder's guide is addressed to its team.
+// Work made from a project only lands in it if the sentence tells the agent which project. These pin
+// that the project is named by id, and that a team project's work is addressed to its team.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { folderGuideAsk } from "../app/utils/asks.ts";
+import { newProjectAsk, projectAsk, readmeAsk } from "../app/utils/asks.ts";
 
-const folder = { id: "fld123", title: "Feature Guide" };
+const project = { id: "fld123", title: "Feature Work" };
 
-test("each kind asks for its own guide and then the link to this folder", () => {
-  assert.match(folderGuideAsk("task", folder), /^Add a Passalong task: /);
-  assert.match(folderGuideAsk("bug", folder), /^File this as a Passalong bug: /);
-  assert.match(folderGuideAsk("handoff", folder), /^Pass this along\./);
-  for (const kind of ["task", "bug", "handoff"])
-    assert.match(
-      folderGuideAsk(kind, folder),
-      /Then link it to the Passalong folder "Feature Guide" \(fld123\)\.$/,
-    );
+test("a project's ask names the project by title and id", () => {
+  assert.match(projectAsk(project), /^Add this to Passalong: /);
+  assert.match(projectAsk(project), /the Passalong project "Feature Work" \(fld123\)\.$/);
+  assert.match(readmeAsk(project), /project "Feature Work" \(fld123\)/);
 });
 
-test("a team folder's guide goes to that team, so the folder's members can see it", () => {
-  const team = { ...folder, team: "acme" };
-  assert.match(folderGuideAsk("task", team), /^Add a Passalong task for the team acme: /);
-  assert.match(folderGuideAsk("bug", team), /^File this as a Passalong bug for the team acme: /);
-  assert.match(folderGuideAsk("handoff", team), /^Pass this along for the team acme\./);
+test("a team project's work goes to that team, so the project's members can see it", () => {
+  assert.match(
+    projectAsk({ ...project, team: "acme" }),
+    /^Add this to Passalong for the team acme: /,
+  );
+  assert.match(newProjectAsk("acme"), /for the team acme/);
+  assert.doesNotMatch(newProjectAsk(), /team/);
 });

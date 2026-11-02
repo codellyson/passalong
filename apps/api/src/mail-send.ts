@@ -106,6 +106,6 @@ export async function sendMail(
  * Somebody handed you work. The one mail that is addressed rather than announced.
  *
  * It used to end with "mark it done when it lands: passalong done <id>", which is now the wrong
- * instruction twice over: `done` archives a guide, and what the sender is actually owed is whether
+ * instruction twice over: `done` archives a piece of work, and what the sender is actually owed is whether
  * it worked. So the mail ends where the loop does — `works` or `broken`.
  */

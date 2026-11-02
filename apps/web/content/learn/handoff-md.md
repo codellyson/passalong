@@ -121,7 +121,7 @@ A handoff file says what the state is. It does not say whether anyone is working
 whether it is finished, or whether it was abandoned. Two agents, or an agent and a teammate, can
 both pick up the same work because nothing marks it as taken.
 
-You can add a line for that ("Status: in progress, Ada's laptop"), but nothing enforces it, and
+You can add a line for that ("Status: in progress, Leo's laptop"), but nothing enforces it, and
 nothing tells you when it goes stale.
 
 ### It lives in one repo
@@ -137,28 +137,35 @@ that, and no tool beats a file you control.
 [Passalong or a HANDOFF.md file?](/learn/passalong-vs-handoff-md) sets the two side by side.
 
 If you recognise two or more of the failures above, the problem has changed. You are no longer
-handing work to your future self; you are handing it between agents, and sometimes people. That
-needs each handoff to be its own document, with a kind, an owner and a status, that stays around
-after the work is done.
+handing work to your future self; you are handing it between agents, and sometimes people. A
+HANDOFF.md mixes two things that want different homes:
 
-That is what [Passalong](/) does. Each handoff is a guide: markdown with frontmatter, the same
-sections as above, stored outside the repo so any agent can reach it. An agent takes a guide before
-working on it, so nobody else picks up the same work. It reports progress as it goes, and hands it
-in with evidence that you review. Guides stay in your history after they are done, and you can
-export them as plain markdown at any time.
+- **What someone must still do**: the goal, what is in progress, the next step. That wants an owner
+  and a state, so two agents do not pick it up at once and nothing is left half done without anyone
+  knowing.
+- **What was learned**: the decisions, the dead ends, how the thing is built. That wants to outlast
+  the session, and to be found by whoever works on the same code next month, not overwritten
+  tomorrow.
 
-With Passalong connected to your tools, an agent can run the whole loop itself: file the bugs it
-finds, write a task, take work that is waiting, report progress, hand it in with evidence, and pass
-the next piece to another agent or a teammate. Nothing gets copied between tools by hand. What stays
-with you is the decision: you approve the work or send it back.
+That is how [Passalong](/) splits it. What someone must still do is a piece of **work**: markdown
+with a title and a plain summary, stored outside the repo so any agent can reach it. An agent takes
+it before working on it, so nobody else picks up the same work, reports progress as it goes, and
+hands it in with evidence. What was learned goes into the **project's documents**: a README for the
+product, a page per area, and a Log of what changed. The capture skill for Claude Code writes them
+for you when you say "pass this along" at the end of a session, updating the page that already
+covers it rather than adding a new note each time. Every version of a document is kept, and you can
+export your work as plain markdown at any time.
 
-It works locally with no account, from Claude Code and Codex, and from ChatGPT and Claude as a
-connector.
+With Passalong connected to your tools, an agent can run the whole loop itself: write down the bugs
+it finds, take work that is waiting, report progress, hand it in with evidence, and write what it
+learned into the project's documents. Nothing gets copied between tools by hand.
+
+It works from Claude Code and Codex, and from ChatGPT and Claude as a connector.
 
 ```sh
 npm i -g passalong
 passalong setup
+passalong login
 ```
 
-[Connect your tools](/connect), or read the [guide format](/docs/guide-format) to see how the
-sections compare to a HANDOFF.md.
+[Connect your tools](/connect), or read the [work format](/docs/work-format).

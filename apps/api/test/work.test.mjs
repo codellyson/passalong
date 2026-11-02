@@ -1,0 +1,513 @@
+// Runs on Node 22.18+ with built-in type stripping (`node --test`).
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { test } from "node:test";
+import {
+  body,
+  dropField,
+  parseMeta,
+  publishProblem,
+  retiredFields,
+  STATUSES,
+  setField,
+  setList,
+  shotIds,
+  split,
+  tag,
+  tagList,
+  unarchiveProblem,
+  unreachableImages,
+} from "../src/work.ts";
+
+const DOC = `---
+id: k3mq2xa7
+title: "Add Paystack webhook: verify signature"
+status: ready
+stack_assumptions: [Next.js 15, Postgres]
+tags:
+  - paystack
+  - webhooks
+---
+
+## Problem
+Webhooks were accepted without checking the signature.
+`;
+
+test("parseMeta mirrors the CLI parser for strings and lists", () => {
+  const m = parseMeta(DOC);
+  assert.equal(m.id, "k3mq2xa7");
+  assert.equal(m.title, "Add Paystack webhook: verify signature");
+  assert.deepEqual(m.stack_assumptions, ["Next.js 15", "Postgres"]);
+  assert.deepEqual(m.tags, ["paystack", "webhooks"]);
+  // A document with no frontmatter returns early, and the two parsers have to leave it in the same
+  // state there. The shared corpus caught them disagreeing about exactly this.
+  assert.deepEqual(parseMeta("no frontmatter"), { tags: [], stack_assumptions: [] });
+});
+
+test("a new work is Ready or a draft, never archived, and an edit leaves status alone", () => {
+  assert.equal(publishProblem("ready"), "", "Ready is the default");
+  assert.match(publishProblem("done"), /can't start archived/);
+  assert.match(publishProblem("ready", "draft"), /its own action/);
+  assert.match(publishProblem("ready", "done"), /its own action/);
+  assert.equal(publishProblem("draft"), "");
+  assert.equal(publishProblem("ready", "ready"), "", "a re-share keeps what it has");
+});
+
+test("an archived work comes back to Draft, never straight to Ready", () => {
+  // Archived includes finished: back as Ready, finished work is somebody's to do again.
+  assert.match(unarchiveProblem("done", "ready"), /back to Draft/);
+  assert.equal(unarchiveProblem("done", "draft"), "");
+  assert.equal(unarchiveProblem("draft", "ready"), "", "Ready from Draft is the way in");
+});
+
+test("setField replaces an existing field in place", () => {
+  const out = setField(DOC, "status", "done");
+  assert.match(out, /^status: done$/m);
+  assert.equal(parseMeta(out).status, "done");
+  assert.equal(body(out), body(DOC), "body untouched");
+  assert.doesNotMatch(out, /status: ready/);
+});
+
+test("setField appends a missing field and quotes what YAML would misread", () => {
+  const out = setField(DOC, "url", "https://x.test/w/k3mq2xa7/abc");
+  assert.match(out, /^url: "https:\/\/x\.test\/w\/k3mq2xa7\/abc"$/m);
+  assert.equal(parseMeta(out).url, "https://x.test/w/k3mq2xa7/abc");
+  assert.ok(split(out), "still a valid frontmatter document");
+});
+
+test("setField on a document with no frontmatter creates one", () => {
+  const out = setField("## Problem\nx", "id", "abcd2345");
+  assert.equal(parseMeta(out).id, "abcd2345");
+  assert.equal(body(out).trim(), "## Problem\nx");
+});
+
+test("a screenshot is readable with its id alone", async () => {
+  // The route the auth middleware forgot. Evidence lives inside a piece of work, and a piece of work travels as
+  // markdown to anyone holding its share key: an image that 401s renders as a broken image for
+  // exactly the reader it was attached for. Production found this; a signed-in browser hid it.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const guard =
+    /const publicShot = \(method: string, path: string\) =>\s*method === "GET" && (\/[^;]+\/)\.test\(path\)/.exec(
+      src,
+    );
+  assert.ok(guard, "the public-shot exception is gone from the auth middleware");
+  const re = new RegExp(guard[1].slice(1, -1));
+  assert.ok(re.test("/v1/shots/jjeqrdsg9eam"));
+  assert.ok(!re.test("/v1/shots"));
+  assert.ok(!re.test("/v1/work/abc12345"));
+});
+
+test("a document says which screenshots belong to it", () => {
+  const md = [
+    "![one](https://passalong.dev/v1/shots/jjeqrdsg9eam)",
+    "![again, same shot](https://passalong.dev/v1/shots/jjeqrdsg9eam)",
+    "![two](http://localhost:3006/v1/shots/abc123def456)",
+    "not a shot: https://passalong.dev/v1/work/k3mq2xa7",
+    "not a shot either: /v1/shots/",
+  ].join("\n\n");
+  assert.deepEqual(shotIds(md), ["jjeqrdsg9eam", "abc123def456"]);
+  assert.deepEqual(shotIds("nothing here"), []);
+});
+
+test("the sweep only takes unclaimed uploads, and takes their objects too", async () => {
+  const { sweepOrphans, shotKey } = await import("../src/shots.ts");
+  assert.equal(shotKey("abc123", "image/jpeg"), "abc123.jpg");
+  // An unknown type still names something, because the row is the only record of the extension
+  // and a sweep that throws leaves the bucket growing.
+  assert.equal(shotKey("abc123", "application/pdf"), "abc123.png");
+
+  const asked = [];
+  const deletedKeys = [];
+  const rows = [
+    { id: "aaaaaa111111", type: "image/png" },
+    { id: "bbbbbb222222", type: "image/webp" },
+  ];
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind(...args) {
+            asked.push({ sql, args });
+            return {
+              all: async () => ({ results: rows }),
+              run: async () => ({}),
+            };
+          },
+        };
+      },
+    },
+    SHOTS: { delete: async (keys) => deletedKeys.push(...keys) },
+  };
+
+  const { swept } = await sweepOrphans(env, { hours: 24, limit: 500 });
+  assert.equal(swept, 2);
+  assert.deepEqual(deletedKeys, ["aaaaaa111111.png", "bbbbbb222222.webp"]);
+
+  const [select, remove] = asked;
+  assert.match(select.sql, /work_id = ''/, "only unclaimed uploads");
+  assert.match(select.sql, /created < \?/, "and only ones old enough to be abandoned");
+  const cutoff = Date.parse(select.args[0]);
+  const age = Date.now() - cutoff;
+  assert.ok(age > 23 * 3600_000 && age < 25 * 3600_000, `cutoff should be ~24h ago, was ${age}ms`);
+  assert.match(remove.sql, /^DELETE FROM shot/);
+  assert.deepEqual(remove.args, ["aaaaaa111111", "bbbbbb222222"]);
+});
+
+test("the sweep does nothing when there is nothing to take", async () => {
+  const { sweepOrphans } = await import("../src/shots.ts");
+  let deleted = false;
+  const env = {
+    DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }) }) }) },
+    SHOTS: {
+      delete: async () => {
+        deleted = true;
+      },
+    },
+  };
+  assert.deepEqual(await sweepOrphans(env), { swept: 0, deferred: 0 });
+  assert.equal(deleted, false, "an empty sweep must not touch the bucket");
+});
+
+test("a bucket that refuses leaves the rows for tomorrow", async () => {
+  const { sweepOrphans } = await import("../src/shots.ts");
+  let rowsDeleted = false;
+  const env = {
+    DB: {
+      prepare: (sql) => ({
+        bind: () => ({
+          all: async () => ({ results: [{ id: "aaaaaa111111", type: "image/png" }] }),
+          run: async () => {
+            if (/DELETE/.test(sql)) rowsDeleted = true;
+            return {};
+          },
+        }),
+      }),
+    },
+    SHOTS: {
+      delete: async () => {
+        throw new Error("R2 said no");
+      },
+    },
+  };
+  // The row is the only record that the object exists. Delete it after a failed bucket call and
+  // the file is stranded for good, because nothing will ever look for it again.
+  assert.deepEqual(await sweepOrphans(env), { swept: 0, deferred: 1 });
+  assert.equal(rowsDeleted, false, "rows must survive a bucket failure");
+});
+
+test("a piece of work can arrive as itself or wrapped in JSON", async () => {
+  // The route reads the body one of two ways depending on content-type. An agent platform that
+  // builds calls from the OpenAPI document can only send JSON, so without the wrapper the one
+  // route that publishes anything is the one route those agents cannot reach.
+  // Checked against the source because the Hono app is not importable from a test — see the note
+  // in hosts.ts. Matched in pieces rather than as one line: the formatter decides where the line
+  // breaks go, and a test that fails when biome wraps a line is testing the formatter.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  for (const piece of [
+    "const sentJson =",
+    "content-type",
+    '=== "application/json"',
+    'typeof wrapper?.markdown === "string"',
+  ]) {
+    assert.ok(src.includes(piece), `the JSON body branch should still contain: ${piece}`);
+  }
+
+  const { openapi } = await import("../src/openapi.ts");
+  const doc = openapi("https://passalong.dev");
+  const body = doc.paths["/v1/work/{id}"].put.requestBody.content;
+  assert.ok(body["application/json"], "the schema must offer a JSON body");
+  assert.ok(body["text/markdown"], "and keep the markdown one the CLI sends");
+  assert.deepEqual(body["application/json"].schema.required, ["markdown"]);
+});
+
+test("tags come back in one style, however they were typed", () => {
+  assert.deepEqual(
+    tagList(["Custom Fields", "additional_information", "#bug", "", "  ", "custom--fields"]),
+    ["custom-fields", "additional-information", "bug"],
+    "one style, blanks dropped, and two spellings of one idea collapse to one tag",
+  );
+  assert.equal(tag("a".repeat(40)), "a".repeat(32), "capped");
+  assert.equal(tag("-lead-and-trail-"), "lead-and-trail");
+  assert.equal(tag("!!!"), "", "a tag made only of punctuation is not a tag");
+  assert.deepEqual(tagList(undefined), []);
+  assert.deepEqual(tagList("one_tag"), ["one-tag"], "a scalar is a list of one");
+});
+
+test("parseMeta normalises the tags it reads, so old work read as new ones", () => {
+  const meta = parseMeta("---\nid: aa\ntags: [Custom Fields, additional_information]\n---\n\nx\n");
+  assert.deepEqual(meta.tags, ["custom-fields", "additional-information"]);
+});
+
+test("setList replaces a block sequence rather than orphaning its items", () => {
+  const md =
+    "---\nid: aa\ntags:\n  - additional_information\n  - Custom Fields\nstatus: ready\n---\n\n## Problem\nx\n";
+  const out = setList(md, "tags", parseMeta(md).tags);
+  assert.match(out, /^tags: \[additional-information, custom-fields\]$/m);
+  assert.ok(!out.includes("- Custom Fields"), "the old items must not be left behind");
+  assert.match(out, /^status: ready$/m, "and the key after them must survive");
+  assert.match(out, /## Problem/, "the body is untouched");
+});
+
+test("setList leaves a document that already says the right thing alone", () => {
+  const md = "---\nid: aa\ntags: [bug, hub]\n---\n\n## Problem\nx\n";
+  assert.equal(setList(md, "tags", ["bug", "hub"]), md, "publishing twice must not rewrite it");
+});
+
+test("setList appends the field when the document has none", () => {
+  const out = setList("---\nid: aa\n---\n\nx\n", "tags", ["bug"]);
+  assert.match(out, /^tags: \[bug\]$/m);
+  assert.deepEqual(parseMeta(out).tags, ["bug"]);
+});
+
+test("an empty list is written as one, not left as the old value", () => {
+  const out = setList("---\nid: aa\ntags: [bug]\n---\n\nx\n", "tags", []);
+  assert.match(out, /^tags: \[\]$/m);
+  assert.deepEqual(parseMeta(out).tags, []);
+});
+
+test("the share page is the document and nothing about who answered it", async () => {
+  // The key in the URL is the whole authorisation, so the page is public to whoever holds it: what
+  // a hand-in showed and who sent it are on the signed-in work page, never here.
+  const page = await readFile(
+    new URL("../../web/server/api/work/[id]/[key].get.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(page, /FROM (proof|claim)\b/);
+  // What finishing keeps is the standing proof, which the signed-in page leads with.
+  const claims = await readFile(new URL("../src/claims.ts", import.meta.url), "utf8");
+  assert.match(claims, /INSERT INTO proof[\s\S]*detail, checks, writeup/);
+});
+
+test("nothing a stranger does to your work happens in silence", async () => {
+  // Checked against the source because the Hono app is not importable from a test — see the note
+  // in hosts.ts. What is pinned is the rule, not the wording: every mutation a person who is not
+  // the author can reach has to tell the author. `reopened` is here because it did not, and a
+  // work moved off somebody's board on another person's say-so without a word.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const block = (needle, len = 4000) => {
+    const at = src.indexOf(needle);
+    assert.ok(at > 0, `${needle} should still exist`);
+    return src.slice(at, at + len);
+  };
+  // "Not for me" lives in one function, held to the rule, and the route that says it calls it.
+  const decline = block("async function recordDecline");
+  assert.match(decline, /await notify\(c\.env/, "a decline must tell the author");
+  assert.match(decline, /kind: "passed"/);
+  assert.match(block('"/v1/work/:id/pass"'), /recordDecline\(/);
+  // Finishing, taking and passing tell the author through taskEvent.
+  for (const route of ["/v1/work/:id/hand_in", "/v1/take", "/v1/work/:id/pass"])
+    assert.match(block(`"${route}"`, 6000), /taskEvent\(c,/, `${route} must tell the author`);
+  for (const kind of [/kind: "reopened"/, /kind: "archived"/]) {
+    const body = block('"/v1/work/:id/status"', 7000);
+    assert.match(body, /await notify\(c\.env/);
+    assert.match(body, kind);
+  }
+});
+
+test("the inbox ranks a handle over a group over a team drop", async () => {
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("async function inboxRows");
+  const body = src.slice(at, at + 3000);
+  assert.match(
+    body,
+    /ORDER BY CASE WHEN to_account_id = \? THEN 0 WHEN to_group_id <> '' THEN 1 ELSE 2 END/,
+    "a handle chose you, a group chose the people who do a thing, a team drop chose nobody",
+  );
+});
+
+test("a group address does not also land on everyone else in the team", async () => {
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("async function inboxRows");
+  const body = src.slice(at, at + 3000);
+  assert.match(
+    body,
+    /AND to_account_id = '' AND to_group_id = ''/,
+    "the team-wide clause must exclude both of the narrower addresses",
+  );
+  assert.match(
+    body,
+    /SELECT group_id FROM group_member WHERE account_id = \?/,
+    "a group work reaches the people in that group",
+  );
+});
+
+test("somebody else taking it clears a shared ask, never one with your name on it", async () => {
+  // The rule is ANSWERED_ELSEWHERE in claims.ts, run against real SQLite in claims.test.mjs. This
+  // pins that the inbox and every piece of work row read that one rule rather than a copy of it.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("async function inboxRows");
+  assert.match(src.slice(at, at + 3000), /AND NOT \$\{claims\.ANSWERED_ELSEWHERE\}/);
+  assert.match(src, /answered_elsewhere: elsewhere\.has\(r\.id\)/);
+});
+
+test("work is Draft, Ready or Done", () => {
+  assert.deepEqual([...STATUSES], ["draft", "ready", "done"]);
+});
+
+test("parseMeta reads a parent, which needs no rule of its own", () => {
+  // The parser is generic, so `parent:` is read the moment the field exists in the format. This
+  // pins that it stays a plain scalar — not a list, not normalised the way tags are.
+  const m = parseMeta(`---\nid: k3mq2xa7\ntitle: One\nparent: zx9y8w42\n---\n\n## Problem\nx\n`);
+  assert.equal(m.parent, "zx9y8w42");
+  assert.equal(parseMeta(DOC).parent, undefined, "and a piece of work without one says nothing");
+});
+
+test("an image a reader cannot load is caught, and an ordinary one is not", () => {
+  // The case that shipped: ChatGPT wrapped its own file id in a scheme it invented, and the work
+  // published with a dead picture and no upload behind it.
+  assert.deepEqual(
+    unreachableImages("![Teams page](attachment://file_00000000399c82119527546cfeeb8b9c)"),
+    ["attachment://file_00000000399c82119527546cfeeb8b9c"],
+  );
+  for (const target of [
+    "blob:https://chatgpt.com/abc",
+    "file:///tmp/a.png",
+    "data:image/png;base64,iVBOR",
+  ]) {
+    assert.deepEqual(unreachableImages(`![x](${target})`), [target], `${target} should be caught`);
+  }
+  // Left alone: an uploaded shot, an image hosted elsewhere, and a relative path that has always
+  // published. This is a check for handles only one client can read, not a link checker.
+  assert.deepEqual(unreachableImages("![a](https://passalong.dev/v1/shots/abc123)"), []);
+  assert.deepEqual(unreachableImages("![a](http://example.com/a.png)"), []);
+  assert.deepEqual(unreachableImages("![a](./diagram.png)"), []);
+  // A link that is not an image is not this check's business.
+  assert.deepEqual(unreachableImages("[see](attachment://file_1)"), []);
+});
+
+test("the API description covers what an agent does with work, and not a person's calls", async () => {
+  const { openapi } = await import("../src/openapi.ts");
+  const doc = openapi("https://passalong.dev");
+  for (const [path, method] of [
+    ["/v1/tasks", "get"],
+    ["/v1/tasks/next", "post"],
+    ["/v1/take", "post"],
+    ["/v1/work/{id}/progress", "put"],
+    ["/v1/work/{id}/hand_in", "post"],
+    ["/v1/work/{id}/pass", "post"],
+    ["/v1/work/{id}/ask", "post"],
+    ["/v1/work/{id}/reply", "post"],
+    ["/v1/working", "get"],
+    ["/v1/work/{id}/assign", "post"],
+  ])
+    assert.ok(doc.paths[path]?.[method], `${method.toUpperCase()} ${path} is described`);
+  // Every verb's answer says what to call next; a client generated from the spec should see it.
+  assert.ok(doc.components.schemas.Next, "the next-step shape is described");
+  // Release and reopen are a person's calls. Describing them would invite a model to make them, so
+  // they stay out, like the account routes do.
+  for (const call of ["release", "reopen"])
+    assert.equal(doc.paths[`/v1/work/{id}/${call}`], undefined, `${call} is not described`);
+  // The routes that went with kinds, review and report sets are gone from the description too.
+  for (const gone of [
+    "/v1/work/{id}/ack",
+    "/v1/work/{id}/proof",
+    "/v1/tasks/{id}/progress",
+    "/v1/tasks/{id}/finish",
+    "/v1/reports",
+    "/v1/reports/{id}",
+  ])
+    assert.equal(doc.paths[gone], undefined, `${gone} is not described`);
+  assert.doesNotMatch(JSON.stringify(doc), /"transfer"|transfer work|Acceptance|Reproduce/);
+});
+
+test("the API description says null the way OpenAPI 3.1 does", async () => {
+  const { openapi } = await import("../src/openapi.ts");
+  const doc = openapi("https://passalong.dev");
+  assert.equal(doc.openapi.startsWith("3.1"), true);
+  // `nullable` is OpenAPI 3.0. A 3.1 validator ignores it, so a field that can be null reads as one
+  // that never is, and a client generated from it chokes on the null.
+  assert.doesNotMatch(JSON.stringify(doc), /"nullable"/);
+});
+
+test("a field can be taken out of the frontmatter, and nothing else moves", () => {
+  const md = '---\nid: aa\nteam: khaime\nto: "@ada"\ntitle: t\n---\n\nbody\n';
+  assert.equal(dropField(md, "to"), "---\nid: aa\nteam: khaime\ntitle: t\n---\n\nbody\n");
+  assert.equal(dropField(md, "missing"), md, "absent is a no-op");
+  assert.equal(parseMeta(dropField(md, "to")).to, undefined);
+});
+
+test("work that finished with changes says so, on itself", async () => {
+  // A hand-in that held, and had to adapt something to get there, says so in its writeup — never in
+  // a second piece of work written to carry a paragraph.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const handIn = src.slice(src.indexOf('app.post("/v1/work/:id/hand_in"'));
+  const route = handIn.slice(0, handIn.indexOf("\napp."));
+  assert.match(route, /claims\.handIn\([\s\S]*writeup,/, "on the claim, and so the proof");
+
+  // A later hand-in with nothing to add must not erase what an earlier one wrote: a proof is one
+  // row per account, and silence is not a retraction.
+  const claims = await readFile(new URL("../src/claims.ts", import.meta.url), "utf8");
+  assert.match(claims, /writeup = CASE WHEN excluded\.writeup <> ''/);
+});
+
+test("a hand-in says what it did in a sentence, before anything behind it is read", async () => {
+  // The route is not importable from a test (see hosts.ts), so the rule is pinned in the source:
+  // `note` is refused when empty, before anything is handed in.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf('app.post("/v1/work/:id/hand_in"');
+  const route = src.slice(at, src.indexOf("\napp.", at));
+  const refusal = route.indexOf("if (!note) return err(c, 400");
+  assert.ok(refusal > 0, "an empty note is refused");
+  assert.ok(refusal < route.indexOf("claims.handIn("), "before anything is handed in");
+  assert.equal(src.indexOf('"/v1/tasks/:id/finish"'), -1, "and the old finish route is gone");
+});
+
+test("a question and a reply each tell the person waiting on them", async () => {
+  // Pinned in the source for the reason the test above is: the Hono app is not importable here. An
+  // agent that asks and a person who answers are each waiting on the other, and neither can see
+  // that the other has spoken unless something says so.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const block = (needle) => {
+    const at = src.indexOf(needle);
+    assert.ok(at > 0, `${needle} should still exist`);
+    return src.slice(at, src.indexOf("\napp.", at + 10));
+  };
+  assert.match(block('"/v1/work/:id/ask"'), /kind: "asked"[\s\S]*sendAsked\(/);
+  assert.match(block('"/v1/work/:id/reply"'), /kind: "replied"[\s\S]*sendReplied\(/);
+});
+
+test("a new work says what it is to a person, and an old one is let through as it came", async () => {
+  const { summaryProblem, SUMMARY_MAX, parseMeta } = await import("../src/work.ts");
+  assert.equal(summaryProblem("What this is, for a person."), null);
+  assert.match(summaryProblem(""), /say it to a person/, "refused by name");
+  assert.match(summaryProblem(undefined), /summary/);
+  assert.match(summaryProblem("x".repeat(SUMMARY_MAX + 1)), /400 at most/);
+  assert.equal(summaryProblem("x".repeat(SUMMARY_MAX)), null);
+  // A piece of work stored before summaries existed, written again by a client that has not heard of them,
+  // is not refused for a field it cannot know about. A piece of work that never had one is.
+  assert.equal(summaryProblem("", true), null);
+  assert.match(summaryProblem("", false), /summary/);
+  // And a summary is held to the limit even where an absent one is forgiven.
+  assert.match(summaryProblem("x".repeat(SUMMARY_MAX + 1), true), /400 at most/);
+  assert.equal(
+    parseMeta("---\ntitle: t\nsummary: Said plainly.\nkind: task\n---\n").summary,
+    "Said plainly.",
+  );
+
+  // The route refuses before it stores, and stores what it kept.
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf("summaryProblem(meta.summary");
+  assert.ok(at > 0, "the publish refuses a piece of work with no summary");
+  assert.ok(
+    at < src.indexOf("INSERT INTO work (id, account_id, share_key"),
+    "before anything is written",
+  );
+  assert.match(src, /summary=excluded\.summary/);
+});
+
+test("a document that says what kind it is is refused at the boundary every client goes through", async () => {
+  const src = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  const at = src.indexOf('app.put("/v1/work/:id"');
+  const route = src.slice(at, src.indexOf("\napp.", at));
+  const refusal = route.indexOf("if (retiredFields(markdown).length)");
+  assert.ok(refusal > 0, "PUT /v1/work/:id refuses kind:");
+  assert.ok(refusal < route.indexOf("parseMeta(markdown)"), "before anything reads the document");
+  assert.doesNotMatch(route, /setField\(markdown, "kind"/, "and never writes one back");
+  assert.deepEqual(retiredFields("---\ntitle: t\nkind: task\n---\n\nb"), ["kind"]);
+  assert.deepEqual(
+    retiredFields("---\ntitle: t\n---\n\nkind: task"),
+    [],
+    "a body line is not the field",
+  );
+  assert.deepEqual(retiredFields("no frontmatter"), []);
+});

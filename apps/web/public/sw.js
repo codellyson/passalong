@@ -1,9 +1,9 @@
 // Passalong's service worker. It does two things: shows a push when the hub is not in front of you
-// (and opens the guide it is about when clicked), and receives what a phone shares to Passalong.
+// (and opens the work it is about when clicked), and receives what a phone shares to Passalong.
 //
 // Its fetch handler answers exactly one request, the POST the phone's Share menu sends to
 // /hub/share (`share_target` in site.webmanifest). Every other request it leaves alone, without
-// answering, so the pages it controls — guide pages included, whose safety is their no-script
+// answering, so the pages it controls — work pages included, whose safety is their no-script
 // policy — load exactly as they would without it. See apps/api/src/webpush.ts for how a push is
 // sent and why nobody in between can read it.
 

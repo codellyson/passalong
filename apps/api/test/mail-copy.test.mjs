@@ -10,38 +10,28 @@ import {
   askedCopy,
   customerSubject,
   doneCopy,
-  FIX_AND_RESEND,
-  handoffCopy,
   hubUrl,
   openedCopy,
   plainForCustomer,
   repliedCopy,
-  verdictCopy,
+  sentToYouCopy,
 } from "../src/mail-copy.ts";
 
 const ID = "k3mq2xa7";
-const URL_ = `https://passalong.dev/g/${ID}/dpmmerhnfh2faf9sceu58j`;
+const URL_ = `https://passalong.dev/w/${ID}/dpmmerhnfh2faf9sceu58j`;
 const HUB = hubUrl("https://passalong.dev");
 const TITLE = "Add Paystack webhook verification";
 
 const every = () => [
-  handoffCopy({ fromName: "Hybee1", title: TITLE, id: ID, url: URL_, team: "Khaime" }),
+  sentToYouCopy({ fromName: "Hybee1", title: TITLE, id: ID, url: URL_, team: "Khaime" }),
   openedCopy({ byName: "Ada", title: TITLE, url: URL_, hub: HUB }),
   doneCopy({ byName: "Ada", title: TITLE, url: URL_, hub: HUB }),
-  verdictCopy({ byName: "Ada", title: TITLE, url: URL_, ok: true, note: "", hub: HUB }),
-  verdictCopy({ byName: "Ada", title: TITLE, url: URL_, ok: false, note: "401s", hub: HUB }),
 ];
 
 test("every subject says who did what, by name", () => {
   assert.deepEqual(
     every().map((m) => m.subject),
-    [
-      `Hybee1 sent you "${TITLE}"`,
-      `Ada opened "${TITLE}"`,
-      `Ada is done with "${TITLE}"`,
-      `Ada said "${TITLE}" worked`,
-      `Ada said "${TITLE}" didn't work`,
-    ],
+    [`Hybee1 sent you "${TITLE}"`, `Ada opened "${TITLE}"`, `Ada is done with "${TITLE}"`],
   );
 });
 
@@ -52,18 +42,16 @@ test("the preview starts with the person, and neither it nor the subject carries
     assert.ok(!m.preview.includes(ID), `an id in the preview: ${m.preview}`);
     assert.doesNotMatch(`${m.subject}\n${m.preview}\n${m.eyebrow}`, /someone/i);
   }
-  // On a failure the reason is what the reader needs, so it is in the preview.
-  assert.equal(every()[4].preview, "Ada said it didn't work: 401s");
 });
 
-test("the text half leads with opening the guide, and a command is only a footnote", () => {
-  const handoff = every()[0].text;
-  assert.equal(handoff[0], `Hybee1 sent you "${TITLE}" in Khaime.`);
-  assert.ok(handoff.includes(`Open the guide: ${URL_}`));
-  assert.match(handoff.join("\n"), /Take it there/);
-  const commands = handoff.filter((l) => l.includes("passalong "));
+test("the text half leads with opening the work, and a command is only a footnote", () => {
+  const sent = every()[0].text;
+  assert.equal(sent[0], `Hybee1 sent you "${TITLE}" in Khaime.`);
+  assert.ok(sent.includes(`Open it: ${URL_}`));
+  assert.match(sent.join("\n"), /Take it there/);
+  const commands = sent.filter((l) => l.includes("passalong "));
   assert.deepEqual(commands, [`Using a terminal or an agent? passalong take ${ID}`]);
-  assert.equal(handoff.at(-1), commands[0], "the command is the last thing, not the first");
+  assert.equal(sent.at(-1), commands[0], "the command is the last thing, not the first");
 });
 
 test("see everything points at the hub, never at a command", () => {
@@ -73,15 +61,6 @@ test("see everything points at the hub, never at a command", () => {
     assert.ok(m.text.includes(`See everything in one place: ${HUB}`));
     assert.doesNotMatch(m.text.join("\n"), /passalong activity/);
   }
-});
-
-test("a failed verdict says how to fix it, and a good one does not", () => {
-  assert.equal(
-    FIX_AND_RESEND,
-    "Update the guide and share it again; the link you sent keeps working.",
-  );
-  assert.ok(every()[4].text.includes(FIX_AND_RESEND));
-  assert.ok(!every()[3].text.includes(FIX_AND_RESEND));
 });
 
 test("no mail mentions a retired verb or calls a real person someone", async () => {
@@ -94,7 +73,7 @@ test("no mail mentions a retired verb or calls a real person someone", async () 
   }
 });
 
-test("a question mail quotes the question and sends the reader to answer it, not to read a guide", () => {
+test("a question mail quotes the question and sends the reader to answer it, not to read a piece of work", () => {
   const c = askedCopy({
     byName: "Ada",
     title: TITLE,

@@ -2,7 +2,7 @@
  * The rich text editor's HTML, back into markdown.
  *
  * The hub has a WYSIWYG field because a tester filing six bugs should not have to remember list
- * syntax — but a guide *is* markdown, and an issue filed here has to be the same document as one
+ * syntax — but a piece of work *is* markdown, and an issue filed here has to be the same document as one
  * filed by the CLI. So the editor's output is converted rather than stored: nothing downstream
  * ever learns that a browser was involved.
  *
@@ -92,8 +92,8 @@ function block(node: Node): string {
     case "H2":
     case "H3":
     case "H4":
-      // Never above ###: the guide's own sections are `##`, and a description that outranked
-      // them would break the outline the guide page builds from those headings.
+      // Never above ###: the work's own sections are `##`, and a description that outranked
+      // them would break the outline the work page builds from those headings.
       return `### ${inline(el).trim()}\n\n`;
     case "UL":
       return `${listBlock(el, false, 0)}\n`;

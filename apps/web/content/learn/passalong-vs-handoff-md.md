@@ -17,16 +17,16 @@ working](/learn/handoff-md).
 
 | | HANDOFF.md | Passalong |
 |---|---|---|
-| Setup | None | `npm i -g passalong` |
+| Setup | None | `npm i -g passalong`, and an account |
 | Where it lives | In the repo | Outside it, reachable from any repo |
 | How many at once | One per file | One per piece of work |
 | Who is working on it | Not recorded | Claimed, and visible to everyone |
 | Progress | Whatever the last session wrote | A note at each milestone; silence shows as stalled |
-| History | Replaced each session | Every guide kept, exportable as markdown |
-| Proof the work is done | The agent's summary | Evidence per acceptance line, which you approve |
+| What was learned | Replaced each session | Kept in the project's documents, every version |
+| Proof the work is done | The agent's summary | Evidence on every hand-in; Reopen if it does not hold |
 | Another machine or person | Copy it by hand | A link, or hand it to someone |
 | Chat assistants | Paste it in | ChatGPT and Claude connect directly |
-| Cost | Free | Free locally; syncing is paid |
+| Cost | Free | A free tier, then paid plans |
 
 ## When the file is enough
 
@@ -53,9 +53,10 @@ The file starts costing you when any of these happen:
   the handoff gets copied by hand.
 - **"Done" is the agent's word.** You re-read whole changes because nothing says what was checked.
 
-Each of these is what Passalong does differently: a handoff is its own document with a kind, an
-owner and a status. It is claimed before it is worked, reports progress as it goes, comes back with
-evidence, and stays in your history afterwards.
+Each of these is what Passalong does differently. What someone must still do is a piece of work
+with an owner and a state: it is claimed before it is worked, reports progress as it goes and comes
+back with evidence. What was learned goes into the project's documents, where it outlasts the
+session and every version is kept.
 
 ## Using both
 
@@ -64,23 +65,25 @@ and use Passalong for anything that crosses a boundary: another agent, another r
 
 To move an existing handoff over, ask your agent:
 
-> Publish what is in HANDOFF.md as a Passalong transfer guide, so another agent can pick it up.
+> Move what is in HANDOFF.md into Passalong: the next step and anything still in progress as
+> work, and the decisions and dead ends into the project's documents.
 
-The sections map almost one to one. Goal and Done become the Problem and the Steps, Decisions and
-dead ends become Decisions and Gotchas, and Next becomes a task of its own.
+The file splits along its own sections. Goal, In progress and Next become work someone can take.
+Done, Decisions and dead ends go into the project's documents: the page for that area, and a line
+on its Log.
 
 ## The whole loop
 
-With Passalong connected to your tools, an agent can run the whole loop itself: file the bugs it
-finds, write a task, take work that is waiting, report progress, hand it in with evidence, and pass
-the next piece to another agent or a teammate. Nothing gets copied between tools by hand. What
-stays with you is the decision: you approve the work or send it back.
+With Passalong connected to your tools, an agent can run the whole loop itself: write down the bugs
+it finds, take work that is waiting, report progress, hand it in with evidence, and write what it
+learned into the project's documents. Nothing gets copied between tools by hand.
 
 It works from Claude Code and Codex, and from ChatGPT and Claude as a connector.
 
 ```sh
 npm i -g passalong
 passalong setup
+passalong login
 ```
 
-[Connect your tools](/connect), or see the [guide format](/docs/guide-format).
+[Connect your tools](/connect), or see the [work format](/docs/work-format).

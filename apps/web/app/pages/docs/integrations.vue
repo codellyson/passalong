@@ -1,6 +1,6 @@
 <!--
-  Integrations, for people: turning email, Sentry, PostHog and any JSON webhook into guides.
-  public/llms.txt "Guides from email and webhooks" is the same material written for an agent.
+  Integrations, for people: turning email, Sentry, PostHog and any JSON webhook into work.
+  public/llms.txt "Work from email and webhooks" is the same material written for an agent.
 
   The behaviour is defined in apps/api/src/inbound.ts (what each sender is read as) and
   receiveEmail / intake / POST /v1/in in apps/api/src/index.ts; if a rule changes there, this page
@@ -15,27 +15,36 @@ import { publicPage } from "#shared/pages";
 const self = publicPage("/docs/integrations");
 
 usePage({
-  title: "Passalong integrations — email, Sentry and PostHog into tasks and bugs",
+  title: "Turn email, Sentry and PostHog alerts into work · Passalong",
   description:
-    "Turn errors from Sentry and PostHog, emails and your own webhooks into Passalong tasks, bugs and transfers an AI coding agent can take.",
+    "Forward an email or connect an alert, and each one becomes work with a plain summary, sent to the right person or group.",
   url: `${APEX}${self.path}`,
   image: `${APEX}/og.png`,
   noindex: self.draft,
 });
 
-/** What each address or URL makes. The kind is in the address, because it is never guessed. */
-const KINDS = [
+/** The two email addresses, and the one webhook URL. */
+const ADDRESSES = [
   {
-    name: "+task  /task",
-    note: "Work to do. Arrives Ready, so anyone it is for can take it at once.",
+    name: "key+new@",
+    note: "Anything: an alert, a forwarded email, a screenshot shared from a phone. The reader names it and sends it to the right group.",
   },
-  { name: "+bug  /bug", note: "A defect to fix. The usual one for errors and alerts." },
-  { name: "+transfer  /transfer", note: "Context to hand over. Never merged with another." },
+  {
+    name: "key+support@",
+    note: "Your customers. Anyone may write; each request gets a tracking number, and you answer from the work in the hub.",
+  },
+  {
+    name: "/v1/in/key",
+    note: "The webhook URL, for Sentry, PostHog and your own code. Sorted the same way as email.",
+  },
 ];
 
-/** What a Sentry webhook makes a guide from, and what it ignores. */
+/** What a Sentry webhook makes work from, and what it ignores. */
 const SENTRY = [
-  { name: "issue", note: "Created, or unresolved (it came back). One guide per Sentry issue." },
+  {
+    name: "issue",
+    note: "Created, or unresolved (it came back). One piece of work per Sentry issue.",
+  },
   { name: "event_alert", note: "An alert rule fired. Merges with the issue it is about." },
   {
     name: "error",
@@ -48,7 +57,7 @@ const SENTRY = [
   },
 ];
 
-const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api" \\
+const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>?repo=acme/api" \\
   -H 'content-type: application/json' \\
   -d '{
     "title": "Checkout returns 500",
@@ -68,9 +77,10 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api
         <span class="turn">arriving as work an agent can take.</span>
       </h1>
       <p class="lede">
-        Point Sentry, PostHog, an email or your own code at Passalong and each one becomes a guide:
-        a task, a bug or a transfer, with what was sent quoted in it. Tasks wait as Drafts until a
-        person marks them Ready, so nothing reaches an agent that nobody chose.
+        Point Sentry, PostHog, an email or your own code at Passalong and each one becomes a piece
+        of work, with what was sent quoted in it. The reader gives it a title, a summary and a label
+        such as bug, and sends it to the group that should act. It arrives Ready, so whoever it is
+        for can take it at once.
       </p>
     </header>
 
@@ -80,21 +90,23 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api
         <div class="say">
           <p>
             In the hub, open <b>Settings → Integrations</b> and choose <b>Get your addresses</b>. You
-            get one key, written two ways: email addresses like
-            <code>key+bug@in.passalong.dev</code> and webhook URLs like
-            <code>https://passalong.dev/v1/in/key/bug</code>. The end of each says what it makes.
-            To put what arrives on a team's board, name the team: <code>key+bug+team@…</code> or
-            <code>…/v1/in/key/bug?team=team</code>; the hub's copies already carry the team you are in.
+            get one key, written three ways: <code>key+new@in.passalong.dev</code>,
+            <code>key+support@in.passalong.dev</code> and the webhook URL
+            <code>https://passalong.dev/v1/in/key</code>. To put what arrives on a team's board, name
+            the team: <code>key+new+team@…</code> or <code>…/v1/in/key?team=team</code>, with
+            <code>&amp;to=@handle</code> or <code>#group</code> if you like; the hub's copies already
+            carry the team you are in.
           </p>
           <dl class="kinds">
-            <template v-for="k in KINDS" :key="k.name">
+            <template v-for="k in ADDRESSES" :key="k.name">
               <dt>{{ k.name }}</dt>
               <dd>{{ k.note }}</dd>
             </template>
           </dl>
           <p>
-            Mail to the bare <code>key@</code> states no kind and is dropped. <b>New addresses</b>
-            replaces the key, and every old address and URL stops working at once.
+            Mail to the bare <code>key@</code>, or any other <code>+word</code>, is dropped.
+            <b>New addresses</b> replaces the key, and every old address and URL stops working at
+            once.
           </p>
         </div>
       </section>
@@ -110,9 +122,15 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api
             sender, and a filter does the rest.
           </p>
           <p>
-            A sender's first email makes nothing. It appears under <b>Asking to email you guides</b>,
-            with a notification, until you allow or block it. Mail from your own confirmed address
-            is allowed from the start. Nothing is ever bounced.
+            A sender's first email to <code>+new</code> makes nothing. It appears under
+            <b>Asking to email you work</b>, with a notification, until you allow or block it. Mail
+            from your own confirmed address is allowed from the start. Nothing is ever bounced.
+          </p>
+          <p>
+            <code>+support</code> is different, on purpose: it is where your customers write, so
+            every sender is let in. Forward your support inbox to it. Each customer gets an email
+            with a tracking number, and a reply carrying it joins the same request. Nothing goes
+            back to a customer until a person presses Send.
           </p>
         </div>
       </section>
@@ -122,7 +140,7 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api
         <div class="say">
           <p>
             In Sentry, open <b>Settings → Developer Settings → Custom Integrations</b> and create an
-            <b>Internal Integration</b>. Paste your Bug URL as its <b>Webhook URL</b>. Under
+            <b>Internal Integration</b>. Paste your webhook URL as its <b>Webhook URL</b>. Under
             <b>Webhooks</b>, tick <b>issue</b> for every new issue, or turn on <b>Alert Rule
             Action</b> and add the integration to an alert rule to send only what the rule picks.
           </p>
@@ -133,7 +151,7 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api
             </template>
           </dl>
           <p>
-            The guide quotes the issue's title, level, culprit, project and link. Ignored events
+            The work quotes the issue's title, level, culprit, project and link. Ignored events
             still get a 200, because Sentry turns off a webhook that keeps failing.
           </p>
         </div>
@@ -144,9 +162,9 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api
         <div class="say">
           <p>
             In PostHog, open <b>Error tracking → Configuration → Alerting</b>, add an
-            <b>HTTP Webhook</b> for issues created, paste your Bug URL and leave the body as it is.
+            <b>HTTP Webhook</b> for issues created, paste your webhook URL and leave the body as it is.
             Use <b>Test function</b>, then <b>Create &amp; enable</b>. A destination that sends
-            <code>$exception</code> events works the same way. One PostHog issue stays one guide.
+            <code>$exception</code> events works the same way. One PostHog issue stays one piece of work.
           </p>
         </div>
       </section>
@@ -156,28 +174,28 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api
         <div class="say">
           <p>
             POST JSON to a URL. Only <code>title</code> is required. Send the same <code>id</code>
-            again and it adds to the open guide instead of making a new one; without an
+            again and it adds to the open work instead of making a new one; without an
             <code>id</code>, the same title with different numbers counts as the same thing.
           </p>
           <pre><code>{{ CURL }}</code></pre>
           <p>
-            An unknown key or kind answers 404, a body that is not JSON 400, and anything over 1 MB
+            An unknown key answers 404, a body that is not JSON 400, and anything over 1 MB
             413.
           </p>
         </div>
       </section>
 
       <section>
-        <h2>Which repo a task is for</h2>
+        <h2>Which repo it is for</h2>
         <div class="say">
           <p>
-            An agent asking for work with no id is only offered tasks for the repo it is in, so a
-            task needs one before an agent finds it on its own. Add <code>?repo=owner/repo</code> to
-            a task URL — one Sentry or PostHog project per repo — and its tasks arrive pointed at it.
-            Otherwise choose the repo when you mark the task Ready: its page suggests the repos your
-            tasks and agents already use. Add <code>?team=&lt;slug&gt;</code> to any URL to put what
-            arrives on that team's board; without it, it is yours alone. A task with no repo is still taken when an agent is given
-            its id.
+            An agent asking for work with no id is only offered work for the repo it is in, so work
+            needs one before an agent finds it on its own. Add <code>?repo=owner/repo</code> to the
+            URL — one Sentry or PostHog project per repo — and what it sends arrives pointed at it.
+            Otherwise choose the repo on the work's page, which suggests the repos your work and
+            agents already use. Add <code>?team=&lt;slug&gt;</code> to put what arrives on that
+            team's board; without it, it is yours alone. Work with no repo is still taken when an
+            agent is given its id.
           </p>
         </div>
       </section>
@@ -187,12 +205,10 @@ const CURL = `curl -X POST "https://passalong.dev/v1/in/<key>/task?repo=acme/api
         <div class="say">
           <ul>
             <li>
-              What was sent is quoted as evidence, never as instructions, and it cannot add a
-              <code>Steps</code> section of its own.
+              What was sent is quoted into the work by code, as evidence, never as instructions.
             </li>
             <li>
-              Repeats of a task or a bug add to the open one: a count, and at most one note an hour
-              on its thread. A transfer is always new.
+              Repeats add to the open work: a count, and at most one note an hour on its thread.
             </li>
             <li>
               The key in the address is the credential. Sentry's request signature is not checked

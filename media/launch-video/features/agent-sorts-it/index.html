@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1200, height=750" />
+    <script src="assets/gsap.min.js"></script>
+    <style>
+@font-face { font-family: "Onest"; src: url("assets/fonts/onest-var.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Newsreader"; src: url("assets/fonts/newsreader-var.woff2") format("woff2"); font-weight: 200 800; }
+:root { --white:#ffffff; --paper:#f1f1ef; --ink:#252522; --coral:#f2805d; --coral-text:#b8481f; --coral-soft:#fce9e0;
+  --green:#3a7a2a; --amber:#e3b23c; --muted:#6e6c68; --line:#e4e3df; }
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:1200px; height:750px; overflow:hidden; background:var(--white); }
+#root { position:relative; width:100%; height:100%; overflow:hidden; font-family:"Onest",sans-serif; color:var(--ink); }
+.layer { position:absolute; inset:0; }
+.abs { position:absolute; }
+.card { width:560px; padding:22px 28px 26px; border:5px solid var(--ink); border-radius:20px; background:var(--white);
+  color:var(--ink); box-shadow:0 20px 44px rgba(37,37,34,.14); }
+.card .k { display:inline-block; padding:5px 16px 7px; border-radius:10px; background:var(--kc); color:var(--kt,var(--white));
+  font-size:30px; font-weight:700; }
+.card .t { margin-top:12px; font-size:50px; font-weight:700; letter-spacing:-.03em; line-height:1.05; white-space:nowrap; }
+.card .s { margin-top:12px; font-size:32px; font-weight:500; line-height:1.25; color:var(--muted); }
+.card.hot { border-color:var(--coral-text); box-shadow:0 24px 54px rgba(184,72,31,.28); }
+.email { --kc:var(--coral-text); } .bug { --kc:var(--ink); } .alert { --kc:var(--amber); --kt:var(--ink); }
+.ask { --kc:var(--green); } .hub { --kc:#5a5753; }
+.row { display:flex; align-items:center; gap:18px; width:640px; padding:18px 24px; border:5px solid var(--ink);
+  border-radius:18px; background:var(--white); box-shadow:0 14px 30px rgba(37,37,34,.12); }
+.row .k { flex-shrink:0; padding:5px 14px 7px; border-radius:10px; background:var(--kc); color:var(--kt,var(--white)); font-size:28px; font-weight:700; }
+.row .t { font-size:40px; font-weight:700; letter-spacing:-.025em; white-space:nowrap; }
+.pill { display:flex; align-items:center; gap:14px; padding:16px 26px; border-radius:999px; background:var(--white);
+  border:4px solid var(--ink); font-size:34px; font-weight:700; white-space:nowrap; box-shadow:0 14px 30px rgba(37,37,34,.15); }
+.pill i { width:22px; height:22px; border-radius:50%; background:var(--kc); }
+.av { display:grid; place-items:center; border-radius:50%; background:var(--ink); color:var(--white); font-weight:700; }
+.stamp { border:8px solid var(--ink); border-radius:16px; padding:8px 26px 12px; font-size:48px; font-weight:700;
+  letter-spacing:-.03em; white-space:nowrap; }
+.tick { display:grid; place-items:center; border-radius:50%; background:var(--green); }
+.tick svg { fill:none; stroke:var(--white); stroke-width:2.8; stroke-linecap:round; stroke-linejoin:round; }
+.tick path { stroke-dasharray:16; stroke-dashoffset:16; }
+.caret { display:inline-block; width:.08em; height:.9em; margin-left:.05em; vertical-align:-.08em; background:var(--coral); }
+
+      #root { background: var(--coral); }
+      .raw { left: 60px; top: 110px; width: 520px; height: 440px; padding: 30px 34px; border-radius: 18px; background: var(--white);
+        box-shadow: 0 24px 50px rgba(120,40,10,.25); overflow: hidden; }
+      .raw-k { font-size: 28px; font-weight: 600; color: var(--muted); }
+      .raw-b { margin-top: 18px; font-family: "Newsreader", serif; font-size: 46px; line-height: 1.18; }
+      .scan { left: 0; top: 20px; width: 100%; height: 6px; background: var(--coral-text); box-shadow: 0 0 30px 8px rgba(184,72,31,.35); opacity: 0; }
+      .chip { display: flex; align-items: center; gap: 12px; padding: 10px 22px 12px; border-radius: 12px; background: var(--white);
+        font-size: 36px; font-weight: 700; box-shadow: 0 10px 24px rgba(37,37,34,.15); }
+      .chip i { width: 8px; height: 36px; border-radius: 4px; background: #2f8582; }
+      .check { left: 560px; top: 620px; width: 580px; padding: 18px 24px; border-radius: 14px; background: var(--ink); color: var(--white);
+        font-size: 32px; line-height: 1.25; }
+      .check b { color: var(--coral); margin-right: 8px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="agent-sorts-it" data-start="0" data-duration="9" data-width="1200" data-height="750">
+      <div id="scene" class="layer clip" data-start="0" data-duration="9" data-track-index="0">
+        <div class="abs raw" id="raw">
+          <p class="raw-k">From kemi@… · 09:12</p>
+          <p class="raw-b serif">hey since yesterday i cant get into my account, the reset link says expired?? pls help</p>
+          <span class="abs scan" id="scan"></span>
+        </div>
+        <div class="abs card email hot" id="sorted" style="left: 560px; top: 150px">
+          <p class="k">Email · Kemi</p><p class="t">Can’t log in</p>
+          <p class="s">Reset links expire too fast, so Kemi is locked out.</p>
+        </div>
+        <p class="abs stamp" id="team" style="left: 820px; top: 470px">Accounts</p>
+        <p class="abs chip" id="proj" style="left: 560px; top: 490px"><i></i>Web app</p>
+        <div class="abs check" id="check"><b>Worth checking</b> Same as Tunde’s QA report?</div>
+      </div>
+    </div>
+    <script>
+
+const tl = gsap.timeline({ paused: true });
+const IN = "expo.out", OUT = "power3.in";
+// A thing lands: it falls into place and squashes once.
+const land = (el, at, from = { y: -700, rotation: 12 }, rot = 0) => {
+  tl.fromTo(el, { ...from, opacity: 0 }, { x: 0, y: 0, rotation: rot, opacity: 1, duration: 0.6, ease: "power3.out" }, at);
+};
+const pop = (el, at) => tl.fromTo(el, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45, ease: "back.out(2.6)" }, at);
+const stamp = (el, at, rot) => {
+  tl.fromTo(el, { opacity: 0, scale: 1.6, rotation: rot * 3 }, { opacity: 1, scale: 1, rotation: rot, duration: 0.3, ease: "power4.in" }, at);
+  tl.to(el, { keyframes: [{ scaleX: 1.05, scaleY: 0.93, duration: 0.06 }, { scaleX: 1, scaleY: 1, duration: 0.22, ease: "back.out(3)" }] }, at + 0.3);
+};
+const type = (el, text, at, dur) => {
+  const p = { n: 0 };
+  tl.fromTo(p, { n: 0 }, { n: text.length, duration: dur, ease: "none", onUpdate: () => {
+    const n = Math.round(p.n);
+    el.innerHTML = text.slice(0, n) + (n > 0 && n < text.length ? '<span class="caret"></span>' : "");
+  } }, at);
+};
+// Every loop ends by clearing back to its empty ground, so the start of the next pass meets it.
+const clear = (sel, at) => tl.to(sel, { opacity: 0, y: -24, duration: 0.5, ease: OUT, stagger: 0.03 }, at);
+
+tl.fromTo("#raw", { x: -700, rotation: -10, opacity: 0 }, { x: 0, rotation: -3, opacity: 1, duration: 0.7, ease: "power3.out" }, 0.3);
+tl.set("#scan", { opacity: 1 }, 1.1);
+tl.fromTo("#scan", { y: 0 }, { y: 330, duration: 1.0, ease: "sine.inOut" }, 1.1);
+tl.to("#scan", { opacity: 0, duration: 0.2 }, 2.1);
+tl.to("#raw", { x: -120, scale: 0.86, opacity: 0.55, duration: 0.6, ease: "power2.inOut" }, 2.2);
+land("#sorted", 2.4, { x: -300, y: 0, rotation: -8 }, 2);
+stamp("#team", 3.5, -5);
+pop("#proj", 4.1);
+tl.fromTo("#check", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.6, ease: "back.out(1.6)" }, 4.9);
+clear(["#raw", "#sorted", "#team", "#proj", "#check"], 8.2);
+      window.__timelines = window.__timelines || {};
+      window.__timelines["agent-sorts-it"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

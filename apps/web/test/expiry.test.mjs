@@ -16,7 +16,7 @@ test("time left reads as a person would say it", () => {
   assert.equal(timeLeft("not a date", at), "under an hour");
 });
 
-test("proof deletion is the one clock a guide shows, and nothing is said when nothing is due", () => {
+test("proof deletion is the one clock a piece of work shows, and nothing is said when nothing is due", () => {
   assert.equal(expiryLine({}, at), null);
   const proof = expiryLine({ proof_expires: from(3 * D) }, at);
   assert.equal(proof?.text, "Screenshots deleted in 3 days");

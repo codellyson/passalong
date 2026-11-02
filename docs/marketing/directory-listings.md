@@ -33,11 +33,11 @@ write-up with evidence that you approve or send back.
 Passalong is a CLI, an MCP server and a sync service for handing work between AI coding agents and
 the people running them.
 
-You describe the work once, as a guide: a task (what needs doing and what done looks like), a bug
-(what is broken and how to see it), or a transfer (finished work worth repeating in another repo).
+You describe the work once, as a piece of work: a title, a one-line summary for people, and whatever the agent needs —
+text, pictures and files.
 Any agent with the Passalong MCP server can pick it up.
 
-- **One agent per job.** An agent takes a guide before working on it, so two agents never do the
+- **One agent per job.** An agent takes a piece of work before working on it, so two agents never do the
   same work, and everyone can see who has what.
 - **Progress you can see.** The agent posts a note at each milestone. Thirty minutes of silence
   marks the work as stalled.
@@ -45,7 +45,7 @@ Any agent with the Passalong MCP server can pick it up.
   lines that decided it, a test summary, a link, or a screenshot. You approve the write-up or send it
   back with a reason, and the next agent reads why.
 - **Works across tools.** Claude Code, Codex, ChatGPT, Claude, or anything that speaks MCP or
-  HTTP. Local mode needs no account; guides are markdown files on your machine.
+  HTTP. Local mode needs no account; work is markdown files on your machine.
 
 ### Install
 
@@ -64,18 +64,18 @@ Any MCP client, by hand:
 
 Remote (Streamable HTTP, OAuth or a bearer token): `https://passalong.dev/v1/mcp`
 
-### Tools (18)
+### Tools (17)
 
-- Working a guide: `take`, `progress`, `hand_in`, `pass`
-- Writing and finding guides: `publish_guide`, `guide_template`, `get_guide`, `search_guides`,
-  `plan_tasks`, `file_bugs`, `attach_screenshot`, `set_guide_status`
-- Seeing what is going on: `inbox`, `board`, `activity`, `clear_activity`, `log`
-- Handing out: `assign`
+- Working a piece of work: `take`, `progress`, `hand_in`, `pass`, `ask`
+- Writing and finding work: `create_work`, `find_work`, `update_work`
+- Projects: `find_projects`, `save_project`, `read_document`, `save_document`, `delete_document`
+- Files: `add_file`, `read_file`, `delete_file`
+- Accounts: `accounts`
 
 ### Categories and tags
 
 - Category: Developer tools. Second choice: Project and task management.
-- Tags: coding agents, task management, handoff, claude code, codex, chatgpt, multi-agent, code review
+- Tags: coding agents, task management, delegation, claude code, codex, chatgpt, multi-agent, code review
 
 ### Links
 

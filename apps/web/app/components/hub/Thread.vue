@@ -1,13 +1,13 @@
 <!--
-  What happened to a guide, as the conversation it was.
+  What happened to a piece of work, as the conversation it was.
 
-  The record was a set of documents and states — a task, a claim, a write-up, evidence — and a
+  The record was a set of documents and states — a piece of work, a claim, evidence — and a
   person had to assemble the story from them. This reads it the way a chat reads: the agent says it
   is taking the work, says what it is doing, says it is done; you say it is not, and why. One line
-  each, in order, from GET /v1/guides/:id/thread.
+  each, in order, from GET /v1/work/:id/thread.
 
-  Folded, never dropped: this is the short version. The write-up, the evidence and the task's own
-  sections are one click away wherever this is shown, and nothing here replaces them.
+  This is the short version: the work itself, what was handed in and the evidence are one click away
+  wherever this is shown, and nothing here replaces them.
 
   Your words sit on the right and everyone else's, including your own agent's, on the left: an
   agent working for you is still not you speaking. A run from one speaker shares a name.
@@ -17,7 +17,7 @@ import type { ThreadItem } from "~/types/hub";
 
 const props = defineProps<{
   id: string;
-  /** Anything that changes when the guide does, so the thread is read again. */
+  /** Anything that changes when the work does, so the thread is read again. */
   stamp?: string;
   /** Somebody holds it and you may write to them, or you may leave a note on it: shows the box. */
   reply?: boolean;
@@ -32,40 +32,11 @@ const props = defineProps<{
   focus?: boolean;
 }>();
 const { api, onReply, token } = useHub();
-const { load: loadDoc, sectionsFor } = useTaskDocs();
 
 /** Whether you wrote it, from the same answer: it decides which side the first bubble sits on. */
 const mine = ref(false);
-/** What the guide says to a person: the first bubble, with the document behind "Show details". */
+/** What the work says to a person: the first bubble. Empty on work from before summaries. */
 const summary = ref("");
-onMounted(() => watch(() => props.id, loadDoc, { immediate: true }));
-/**
- * The first message: what was asked, in one bubble. A task leads with its Goal and a handoff with its
- * Problem; everything else it says is behind "Show details", never dropped.
- */
-const LEAD = ["Goal", "Problem"];
-const brief = computed(() => {
-  const doc = sectionsFor(props.id);
-  const said = summary.value.trim();
-  // The summary leads when there is one, and then every section is behind the fold, the Goal with
-  // the rest. A guide from before summaries leads with its Goal or Problem as it always did.
-  if (said)
-    return {
-      lead: said,
-      rest: Object.entries(doc ?? {})
-        .filter(([, v]) => v.trim())
-        .map(([k, v]) => ({ k, v: v.trim() })),
-    };
-  if (!doc) return null;
-  const lead = LEAD.find((k) => doc[k]?.trim());
-  if (!lead) return null;
-  return {
-    lead: (doc[lead] ?? "").trim(),
-    rest: Object.entries(doc)
-      .filter(([k, v]) => k !== lead && v.trim())
-      .map(([k, v]) => ({ k, v: v.trim() })),
-  };
-});
 
 const items = ref<ThreadItem[] | null>(null);
 const failed = ref(false);
@@ -74,9 +45,9 @@ async function load() {
   const ask = ++latest;
   try {
     const got = await api<{ thread: ThreadItem[]; mine?: boolean; summary?: string }>(
-      `/v1/guides/${encodeURIComponent(props.id)}/thread`,
+      `/v1/work/${encodeURIComponent(props.id)}/thread`,
     );
-    // A slow answer for a guide you have since left is dropped, not shown.
+    // A slow answer for work you have since left is dropped, not shown.
     if (ask === latest) {
       items.value = got?.thread ?? [];
       mine.value = Boolean(got?.mine);
@@ -212,26 +183,15 @@ async function send() {
     <p v-if="failed" class="m-0 text-sm text-muted">The conversation could not be loaded.</p>
     <p v-else-if="items === null" class="m-0 text-sm text-muted">Loading…</p>
     <ol v-else class="m-0 flex list-none flex-col gap-4 p-0">
-      <li v-if="brief" class="flex flex-col gap-2" :class="mine ? 'items-end' : 'items-start'">
+      <li v-if="summary.trim()" class="flex flex-col gap-2" :class="mine ? 'items-end' : 'items-start'">
         <p class="m-0 flex items-baseline gap-2 text-xs text-muted">
           <span class="font-semibold text-fg">{{ mine ? "You" : "The author" }}</span>
           <span>asked</span>
         </p>
         <p
           class="m-0 line-clamp-4 max-w-[85%] rounded-3 px-3 py-2 text-sm leading-snug break-words whitespace-pre-line"
-          :class="mine ? 'bg-accent-soft text-fg' : 'bg-surface text-fg shadow-edge'"
-        >{{ brief.lead }}</p>
-        <details v-if="brief.rest.length" class="max-w-[85%] text-sm" :class="mine ? 'text-right' : ''">
-          <summary class="cursor-pointer text-xs text-muted hover:text-fg">
-            Show details · {{ brief.rest.map((r) => r.k).join(", ") }}
-          </summary>
-          <div class="mt-2 flex flex-col gap-3 text-left">
-            <section v-for="r in brief.rest" :key="r.k">
-              <h4 class="m-0 text-xs font-semibold tracking-widest text-muted uppercase">{{ r.k }}</h4>
-              <p class="m-0 mt-1 break-words whitespace-pre-line text-fg">{{ r.v }}</p>
-            </section>
-          </div>
-        </details>
+          :class="mine ? 'bg-field text-fg shadow-edge' : 'bg-surface text-fg shadow-edge'"
+        >{{ summary.trim() }}</p>
       </li>
       <li v-if="!items.length" class="m-0 text-sm text-muted">
         Nothing yet. What an agent says shows here once it takes this.
@@ -257,7 +217,7 @@ async function send() {
               : m.tone === 'bad'
                 ? 'bg-danger-soft text-fg'
                 : m.mine
-                  ? 'bg-accent-soft text-fg'
+                  ? 'bg-field text-fg shadow-edge'
                   : 'bg-surface text-fg shadow-edge'
           "
         >
@@ -271,7 +231,7 @@ async function send() {
             <li v-for="f in m.files" :key="f.url">
               <button
                 type="button"
-                class="inline-flex max-w-56 items-center gap-2 rounded-1 border-0 bg-raised px-3 py-2 text-xs text-fg shadow-edge hover:text-accent"
+                class="inline-flex max-w-56 items-center gap-2 rounded-1 border-0 bg-raised px-3 py-2 text-xs text-fg shadow-edge hover:underline"
                 :title="`Download ${f.name}`"
                 @click="download(f)"
               >
@@ -294,7 +254,7 @@ async function send() {
       :class="fill ? 'border-t border-line bg-raised px-5 py-4' : 'mt-5'"
       @submit.prevent="send"
     >
-      <label class="sr-only" :for="`reply-${id}`">{{ noting ? "Leave a note on the task" : "Write to the agent" }}</label>
+      <label class="sr-only" :for="`reply-${id}`">{{ noting ? "Leave a note on the work" : "Write to the agent" }}</label>
       <textarea
         :id="`reply-${id}`"
         ref="box"

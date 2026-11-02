@@ -1,57 +1,82 @@
 <!--
-  The conversation with a customer, and the one way to answer them (docs/LOOP.md §1a): their words
-  on the left, ours on the right, the reply box under it. A person presses Send — nothing reaches a
-  customer before somebody has read it. Above the box, any fix made from the request that finished
-  since the customer was last answered, because telling them is the one thing left — when the team
-  asked for that reminder (opt-in per team, on the Support page).
+  The conversation with a customer, and the one way to answer them (docs/LOOP.md §1a). Their words
+  and ours in order, each headed by who said it and when; the reply box pinned under it. A person
+  presses Send — nothing reaches a customer before somebody has read it. When the next word is ours
+  the agent's draft is already in the box, labelled as the agent's until someone changes it.
+
+  The thread comes from the page (`GET /v1/work/:id/thread`), which also reads the reader's note
+  from it for the side panel; after a send the page refetches it.
 -->
 <script setup lang="ts">
 import type { ThreadItem } from "~/types/hub";
 import { messageOf } from "~/utils/thread";
 
 const props = defineProps<{
-  guideId: string;
+  workId: string;
+  /** Every line of the request's thread, oldest first; null while it loads. */
+  thread: ThreadItem[] | null;
   /** What to call the customer in the conversation: their name, else their address. */
   name: string;
-  /** Guides made from this request that are finished: a fix sent on to development, say. */
-  finished?: { id: string; title: string; at: string }[];
+  /** Their address, said above the box so the person sees where Send goes; shown only to the team. */
+  address?: string;
+  /** The subject the reply goes out under, tracking number included, as the server will send it. */
+  subject?: string;
+  /** Work made from this request that finished since the customer was last answered, when the team asked to be told. */
+  ready?: { id: string; title: string }[];
   /** Where the request stands; a draft is started by itself when the next word is ours. */
   state?: string;
-  /** Whether the team asked to be reminded to tell the customer when a fix is done. */
-  tell?: boolean;
+  /** The next request waiting on us, oldest first, offered once this one is answered; else the register. */
+  next?: { id: string; name: string } | null;
 }>();
 const emit = defineEmits<{ sent: [] }>();
 const { api, json, token } = useHub();
 const busy = ref(false);
 const problem = ref("");
-const done = ref(false);
+/** When the last reply went, for "Sent to … · time" in place of the To line; "" before one or once typing starts again. */
+const sentAt = ref("");
 
-/** What the customer wrote and what they were sent, oldest first, from the guide's thread. */
-const said = ref<ThreadItem[]>([]);
-const loaded = ref(false);
-async function load() {
-  const t = await api<{ thread: ThreadItem[] }>(`/v1/guides/${props.guideId}/thread`);
-  said.value = (t?.thread ?? []).filter((i) => i.kind === "customer" || i.kind === "answered");
-  loaded.value = true;
-}
-onMounted(() => load().catch((e) => (problem.value = (e as Error).message)));
+/** What the customer wrote and what they were sent, oldest first. */
+const said = computed(() =>
+  (props.thread ?? []).filter((i) => i.kind === "customer" || i.kind === "answered"),
+);
 
 /**
  * Each line with its pictures and files picked out, the way the thread reads every message — read as
- * the speaker's own words (the side says who spoke, so no "To the customer:" lead), with emphasis
+ * the speaker's own words (the header says who spoke, so no "To the customer:" lead), with emphasis
  * marks dropped the way the customer's plain-text email drops them.
  */
 const plain = (t: string) =>
   t
     .replace(/(\*\*|__)(.+?)\1/g, "$2")
     .replace(/`([^`\n]+)`/g, "$1")
+    // A link reads as its words and its address, as the customer's plain-text email shows it.
+    .replace(/(?<!!)\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, "$1 ($2)")
     .replace(/\\([\\`*_[\]])/g, "$1");
 const lines = computed(() =>
   said.value.map((m) => {
     const msg = messageOf({ ...m, kind: "customer" });
-    return { m, msg: { ...msg, text: plain(msg.text) } };
+    const ours = m.kind === "answered";
+    return {
+      m,
+      ours,
+      who: ours
+        ? m.by.you
+          ? "You"
+          : m.by.name || (m.by.handle ? `@${m.by.handle}` : "Your team")
+        : props.name,
+      msg: { ...msg, text: plain(msg.text) },
+    };
   }),
 );
+
+/** "28 Oct, 14:02": a time someone can quote back to the customer. */
+const when = (iso: string) =>
+  new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
 
 async function save(f: { name: string; url: string }) {
   problem.value = "";
@@ -62,15 +87,11 @@ async function save(f: { name: string; url: string }) {
   }
 }
 
-const ready = computed(() => {
-  const answered = said.value
-    .filter((m) => m.kind === "answered")
-    .reduce((last, m) => (m.at > last ? m.at : last), "");
-  return props.tell ? (props.finished ?? []).filter((f) => f.at > answered) : [];
-});
-
 /** The reply as markdown from the editor; a pasted picture travels in it as a link. */
 const reply = ref("");
+watch(reply, (r) => {
+  if (r.trim()) sentAt.value = "";
+});
 const writer = ref<{
   addPicture: (f: File) => Promise<void>;
   clear: () => void;
@@ -91,7 +112,7 @@ async function draft(quiet = false) {
   if (!quiet) problem.value = "";
   try {
     const got = await api<{ draft: string }>(
-      `/v1/guides/${props.guideId}/customer/draft`,
+      `/v1/work/${props.workId}/customer/draft`,
       json("POST", {}),
     );
     if (got?.draft) {
@@ -129,14 +150,13 @@ async function send() {
   if (!body || busy.value) return;
   busy.value = true;
   problem.value = "";
-  done.value = false;
+  sentAt.value = "";
   try {
-    await api(`/v1/guides/${props.guideId}/customer`, json("POST", { body }));
+    await api(`/v1/work/${props.workId}/customer`, json("POST", { body }));
     writer.value?.clear();
     reply.value = "";
     drafted.value = "";
-    done.value = true;
-    await load();
+    sentAt.value = new Date().toISOString();
     emit("sent");
   } catch (err) {
     problem.value = (err as Error).message;
@@ -145,35 +165,122 @@ async function send() {
   }
 }
 
+/**
+ * The conversation opens on its latest message, just above the pinned reply box, and comes back to
+ * it after a send. Whatever scrolls — the window on a phone, an inner container if a layout adds
+ * one — is scrolled so the last message's foot sits the box's height above the bottom of the view.
+ * The editor and pictures arrive after the thread does and change the heights, so for a moment
+ * after each trigger it is placed again whenever the box resizes or a picture loads — until the
+ * reader moves (wheel, touch or a key), which ends it at once so nothing pulls them back down. The
+ * page's scroll-padding-bottom is the box's height too, so focus and find-in-page stop above it.
+ */
+const list = ref<HTMLElement | null>(null);
+const composer = ref<HTMLElement | null>(null);
+let settling = 0;
+function scrollerOf(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const y = getComputedStyle(p).overflowY;
+    if ((y === "auto" || y === "scroll") && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+function place() {
+  const last = list.value?.lastElementChild as HTMLElement | null | undefined;
+  if (!last || !composer.value) return;
+  const box = scrollerOf(last);
+  const bottom = box ? box.getBoundingClientRect().bottom : window.innerHeight;
+  const delta = last.getBoundingClientRect().bottom - (bottom - composer.value.offsetHeight - 16);
+  if (Math.abs(delta) < 1) return;
+  if (box) box.scrollTop += delta;
+  else window.scrollBy({ top: delta, behavior: "instant" });
+}
+function toLatest() {
+  settling = Date.now() + 2500;
+  void nextTick(() => {
+    place();
+    requestAnimationFrame(again);
+    setTimeout(again, 400);
+  });
+}
+const again = () => {
+  if (Date.now() < settling) place();
+};
+let sized: ResizeObserver | undefined;
+const moved = () => {
+  settling = 0;
+};
+const MOVES = ["wheel", "touchstart", "keydown"] as const;
+onMounted(() => {
+  for (const e of MOVES) window.addEventListener(e, moved, { passive: true });
+});
+onBeforeUnmount(() => {
+  for (const e of MOVES) window.removeEventListener(e, moved);
+});
+onMounted(() => {
+  if (!composer.value || typeof ResizeObserver === "undefined") return;
+  sized = new ResizeObserver(([e]) => {
+    document.documentElement.style.scrollPaddingBottom = `${Math.ceil(e?.borderBoxSize?.[0]?.blockSize ?? 0) + 16}px`;
+    again();
+  });
+  sized.observe(composer.value);
+});
+onBeforeUnmount(() => {
+  sized?.disconnect();
+  document.documentElement.style.scrollPaddingBottom = "";
+});
+// Solved: a draft nobody touched no longer has anyone to go to, so it leaves the box and the next
+// waiting customer is the obvious move.
+watch(
+  () => props.state,
+  (s) => {
+    if (s !== "solved" || !untouched.value) return;
+    writer.value?.clear();
+    reply.value = "";
+    drafted.value = "";
+  },
+);
+let shown = 0;
+watch(
+  () => said.value.length,
+  (n) => {
+    if (n > shown) toLatest();
+    shown = n;
+  },
+  { immediate: true, flush: "post" },
+);
+
 // The next word is ours: have a draft ready rather than an empty box. Once, when the request's state
 // and the conversation are both known and the editor is there.
 let autoDrafted = false;
 watchEffect(() => {
-  if (autoDrafted || !loaded.value || !writer.value || reply.value.trim()) return;
-  if (!["new", "needs_reply"].includes(props.state ?? "") && !ready.value.length) return;
+  if (autoDrafted || !props.thread || !writer.value || reply.value.trim()) return;
+  if (!["new", "needs_reply"].includes(props.state ?? "") && !props.ready?.length) return;
   autoDrafted = true;
   draft(true);
 });
 </script>
 
 <template>
-  <section class="flex flex-col gap-4" aria-label="Conversation">
-    <HubSkeleton v-if="!loaded && !problem" variant="lines" :rows="3" label="Loading the conversation" />
-    <p v-else-if="!said.length" class="m-0 font-ui text-sm text-muted">Nothing has been said yet.</p>
-    <ol v-else class="m-0 flex list-none flex-col gap-4 p-0">
+  <section class="flex min-w-0 flex-col" aria-label="Conversation">
+    <HubSkeleton v-if="!thread" variant="lines" :rows="4" label="Loading the conversation" />
+    <p v-else-if="!said.length" class="m-0 border-t border-line py-6 font-ui text-sm text-muted">
+      Nothing has been said yet.
+    </p>
+    <ol v-else ref="list" class="m-0 flex list-none flex-col gap-5 p-0" @load.capture="again">
       <li
-        v-for="{ m, msg } in lines"
+        v-for="{ m, ours, who, msg } in lines"
         :key="m.id"
-        class="flex max-w-[36rem] flex-col gap-1"
-        :class="m.kind === 'answered' ? 'self-end items-end' : 'self-start'"
+        class="flex w-full max-w-[40rem] flex-col gap-1"
       >
-        <span class="px-1 font-ui text-xs text-muted">
-          {{ m.kind === "customer" ? name : m.by.you ? "You" : m.by.name || "Your team" }} · {{ rel(m.at) }}
-        </span>
+        <p class="m-0 flex flex-wrap items-baseline gap-x-2 px-1 font-ui text-xs">
+          <span class="font-medium text-fg">{{ who }}</span>
+          <span class="text-muted">{{ ours ? `to ${name}` : "customer" }}</span>
+          <time :datetime="m.at" class="ml-auto text-muted tabular-nums">{{ when(m.at) }}</time>
+        </p>
         <div
           v-if="msg.text"
-          class="rounded-3 px-4 py-3 font-ui text-sm whitespace-pre-wrap"
-          :class="m.kind === 'answered' ? 'bg-raised shadow-edge' : 'bg-field shadow-edge'"
+          class="rounded-3 border px-4 py-3 font-ui text-sm leading-relaxed break-words whitespace-pre-wrap text-fg"
+          :class="ours ? 'border-line bg-raised' : 'border-line-strong bg-field'"
         >
           <!-- Their screenshots are drawn, through the renderer that only fetches our own. -->
           <HubEvidence v-if="msg.pictures" :text="msg.text" prose label="A message with pictures" class="!mt-0" />
@@ -181,34 +288,37 @@ watchEffect(() => {
         </div>
         <ul v-if="msg.files.length" class="m-0 flex list-none flex-wrap gap-2 p-0">
           <li v-for="f in msg.files" :key="f.url">
-            <button
-              type="button"
-              class="inline-flex max-w-56 items-center gap-2 rounded-1 border-0 bg-raised px-3 py-2 font-ui text-xs text-fg shadow-edge hover:text-accent"
-              @click="save(f)"
-            >
+            <button type="button" class="btn sm max-w-64" @click="save(f)">
               <span class="truncate">{{ f.name }}</span>
-              <span class="shrink-0 text-muted">download</span>
+              <span class="shrink-0 text-muted">Download</span>
             </button>
           </li>
         </ul>
       </li>
     </ol>
 
-    <p
-      v-for="f in ready"
-      :key="f.id"
-      class="m-0 font-ui text-sm"
-      role="status"
-    >
-      <NuxtLink :to="`/hub/g/${f.id}`">{{ f.title }}</NuxtLink> is done. Tell {{ name }}.
-    </p>
-
-    <form class="flex flex-col gap-2" @submit.prevent="send">
+    <!-- The reply box, pinned to the foot of the window while the thread scrolls under it. -->
+    <form ref="composer" class="sticky bottom-[var(--dock)] z-10 mt-8 flex flex-col gap-2 border-t border-line bg-bg pt-3 pb-4" @submit.prevent="send">
+      <!-- Where Send goes, said before it is pressed; after a send, that it went, in the same place. -->
+      <p class="m-0 font-ui text-sm break-words text-muted" role="status">
+        <template v-if="sentAt">
+          <span class="font-medium text-fg">Sent to {{ name }}</span> · <time :datetime="sentAt" class="tabular-nums">{{ when(sentAt) }}</time> ·
+          <NuxtLink v-if="next" :to="`/hub/support/${next.id}`" class="font-medium text-fg">Next request · {{ next.name }}</NuxtLink>
+          <NuxtLink v-else to="/hub/support" class="font-medium text-fg">Back to Support</NuxtLink>
+        </template>
+        <template v-else>
+          To <span class="text-fg">{{ name }}</span><template v-if="address && address !== name"> &lt;{{ address }}&gt;</template><template v-if="subject"> · {{ subject }}</template>
+        </template>
+      </p>
+      <p v-for="f in ready" :key="f.id" class="m-0 font-ui text-sm" role="status">
+        <NuxtLink :to="`/hub/w/${f.id}`">{{ f.title }}</NuxtLink> is done. Tell {{ name }}.
+      </p>
       <!-- The same editor as the box, without @ and #: a customer has no use for the team's names. -->
       <ClientOnly>
         <HubWriter
           ref="writer"
-          :placeholder="`Reply to ${name}. Paste a screenshot or a link if it helps.`"
+          class="reply"
+          :placeholder="`Reply to ${name}. Paste a screenshot if it helps.`"
           :people="[]"
           :groups="[]"
           @change="reply = $event"
@@ -225,20 +335,21 @@ watchEffect(() => {
               </button>
             </span>
             <span class="flex items-center gap-3">
-              <span v-if="done" class="font-ui text-sm text-muted" role="status">Sent</span>
               <button class="btn primary" :disabled="busy || !reply.trim()">{{ busy ? "Sending…" : "Send" }}</button>
             </span>
           </template>
         </HubWriter>
         <template #fallback>
-          <div class="writer-shell"><div class="writer" aria-hidden="true" /></div>
+          <div class="writer-shell reply"><div class="writer" aria-hidden="true" /></div>
         </template>
       </ClientOnly>
-      <p v-if="drafting && !drafted" class="m-0 font-ui text-sm text-muted" role="status">The agent is drafting a reply…</p>
-      <p v-else-if="untouched" class="m-0 font-ui text-sm" role="status">
-        Drafted by the agent from the conversation{{ ready.length ? " and the finished fix" : "" }}. Read it, change anything, then send.
+      <p class="m-0 font-ui text-xs text-muted" role="status">
+        <template v-if="drafting && !drafted">The agent is drafting a reply…</template>
+        <template v-else-if="untouched">
+          <span class="font-medium text-fg">Drafted by the agent</span> from the conversation{{ ready?.length ? " and the finished fix" : "" }}. Read it and change anything before you send.
+        </template>
+        <template v-else>Sent by email with the tracking number. Their answer comes back here.</template>
       </p>
-      <span class="font-ui text-xs text-muted">Sent by email with the tracking number. Their answer comes back here.</span>
       <p v-if="problem" class="m-0 font-ui text-sm text-danger" role="alert">{{ problem }}</p>
     </form>
   </section>

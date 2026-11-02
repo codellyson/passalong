@@ -6,7 +6,7 @@
   "start_url": "/hub",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#fffcfa",
+  "background_color": "#ffffff",
   "theme_color": "#b5451b",
   "share_target": {
     "action": "/hub/share",

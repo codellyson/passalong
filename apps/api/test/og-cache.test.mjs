@@ -20,7 +20,7 @@ function fakeCache() {
 
 const png = (body = "png") =>
   new Response(body, { status: 200, headers: { "content-type": "image/png" } });
-const BASE = "https://passalong.dev/g/abcd2345/secretsharekey0000000/og.png";
+const BASE = "https://passalong.dev/w/abcd2345/secretsharekey0000000/og.png";
 
 test("the same card is drawn once and then served from the cache", async () => {
   const cards = fakeCache();

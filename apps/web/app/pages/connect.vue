@@ -20,15 +20,15 @@
   cards in a grid. A page where every block is a card has no hierarchy left to spend, and this one
   is a list of alternatives — peers, which read as peers when nothing is boxed.
 
-  Script-free, like the landing and the guide view — its route rule is `noScripts` with the strict
+  Script-free, like the landing and the share page — its route rule is `noScripts` with the strict
   CSP. Nothing here is interactive, so nothing here needs to be.
 -->
 <script setup lang="ts">
 import { APEX } from "#api/hosts";
-import { published } from "#shared/pages";
+import { isPublic } from "#shared/pages";
 
-/** The kinds section links the full format once that page is written, and not before. */
-const formatPublished = published("/docs/guide-format");
+/** The closing section links the full format once that page is live, and not before. */
+const formatPublished = isPublic("/docs/work-format");
 
 usePage({
   title: "Set up Passalong in Claude Code, Codex, ChatGPT or Claude",
@@ -120,8 +120,8 @@ useHead({
         <div class="say">
           <p>
             For Claude Code, Codex and other coding agents, and worth doing where you can: a local
-            server works offline, reads and writes
-            <code>.passalong/</code> in the repo you are standing in, and knows which repo that is.
+            server knows which repo you are standing in, keeps what this worktree holds in its
+            <code>.passalong/</code>, and runs a hand-in's checks there.
             <code>passalong setup</code> wires Claude Code for you, and Codex takes one command.
             Anything else runs the command <code>passalong</code> with the argument
             <code>mcp</code>.
@@ -147,11 +147,10 @@ codex mcp add passalong -- passalong mcp</code></pre>
           <p>
             Claude, ChatGPT and any assistant with MCP connectors add outside tools as MCP
             servers reached over a URL. Paste
-            this as the server URL. You get every tool that does not need a working directory: take
-            work, report progress, hand it in or pass it, see your work as a live board where the app
-            can draw one, search and read guides,
-            your inbox, board and log, publish a guide, and file a set of bugs with their
-            screenshots.
+            this as the server URL. You get every tool but the one that switches accounts on a
+            machine: take work, report progress, ask, hand it in or pass it, write work down, find
+            it — drawn as a live board where the app can draw one — and read and write a project's
+            documents and files, screenshots included.
           </p>
           <pre><code>https://passalong.dev/v1/mcp</code></pre>
           <!-- Written once, for whichever assistant you use. It read as a Claude page with ChatGPT
@@ -197,9 +196,9 @@ codex mcp add passalong -- passalong mcp</code></pre>
         <h2>Attach the screenshot</h2>
         <div class="say">
           <p>
-            Attach the image in your chat and ask for the bug to be filed with it. The screenshot
-            goes into the guide itself, under Problem, so whoever opens the link sees it. How the
-            file gets there depends on the assistant.
+            Attach the image in your chat and ask for the work to be written down with it. The
+            screenshot goes into the work itself, so whoever opens the link sees it. How the file
+            gets there depends on the assistant.
           </p>
           <p>
             <b>ChatGPT</b> hands the file to Passalong itself. Attach it in ChatGPT on the web; the
@@ -223,7 +222,7 @@ codex mcp add passalong -- passalong mcp</code></pre>
   https://passalong.dev/v1/shots</code></pre>
           <p>
             Either way the answer includes the markdown line that points at the image. Put it in the
-            guide, and publishing keeps the file for as long as the guide exists.
+            work, and saving it keeps the file for as long as the work exists.
           </p>
         </div>
       </section>
@@ -237,54 +236,45 @@ codex mcp add passalong -- passalong mcp</code></pre>
             <a href="/hub/settings">your hub</a>; they are named and revocable.
           </p>
           <pre><code>curl -H "authorization: Bearer $TOKEN" \
-  https://passalong.dev/v1/inbox</code></pre>
+  https://passalong.dev/v1/tasks</code></pre>
           <p>
-            Reading a guide someone shared needs no account at all — the key in the share link is
+            Reading work someone shared needs no account at all — the key in the share link is
             the authorisation, and appending <code>.md</code> gives you the document.
           </p>
-          <pre><code>curl https://passalong.dev/g/&lt;id&gt;/&lt;key&gt;.md</code></pre>
+          <pre><code>curl https://passalong.dev/w/&lt;id&gt;/&lt;key&gt;.md</code></pre>
         </div>
       </section>
     </div>
 
     <section class="statement">
       <h2>
-        A task says do this.
-        <span class="turn">A bug says fix this.</span>
+        Work says what to do.
+        <span class="turn">Documents say what to know.</span>
       </h2>
       <p>
-        Whatever you connect, tell it to read <code>kind</code> before acting — each asks for
-        something different, and an agent that confuses them will carefully reproduce a defect and
-        report success. Every kind is worked with the same four calls: <b>take</b> it,
-        <b>progress</b> at each milestone, <b>hand_in</b> when done, or <b>pass</b> with the reason.
+        Whatever you connect works with the same few calls. A piece of work has no kinds or required
+        sections: the agent reads it and works out what done means.
       </p>
       <dl class="kinds">
-        <dt>task</dt>
+        <dt>work</dt>
         <dd>
-          Work nobody has done yet, and the default. Reach its <b>Goal</b> within its
-          <b>Constraints</b>, leave <b>Out of scope</b> alone, and hand in a write-up of how each line
-          of <b>Acceptance</b> was checked. Its author approves it or sends it back.
+          Something someone must still do. <b>take</b> it, <b>progress</b> at each milestone,
+          <b>ask</b> when it needs a person's answer, <b>hand_in</b> with the evidence when it is
+          done, or <b>pass</b> it back with the reason. A finished piece of work that is not right is
+          reopened with why.
         </dd>
-        <dt>transfer</dt>
+        <dt>project</dt>
         <dd>
-          Finished work to repeat here. Follow its <b>Steps</b>, run its <b>Verification</b>, and
-          hand in whether it held up.
+          A place for one product or body of work. Its <b>documents</b> are what to know: a README
+          saying what it is and how it is built, a page per area, a Log of what changed. Agents read
+          them when they take work and update them when they hand it in.
         </dd>
-        <dt>bug</dt>
-        <dd>
-          A defect to fix. <b>Reproduce</b> shows you the problem and is not a procedure to apply;
-          <b>Verification</b> is the behaviour that should have happened. A bug report is not broken
-          because you reproduced it.
-        </dd>
+        <dt>file</dt>
+        <dd>A picture or other file, on a piece of work or in a project.</dd>
       </dl>
-      <p class="caveat">
-        Agents that pull a guide through MCP are told this before they see the document, and the
-        document says it too — so a tool that fetched a share link over plain HTTP is not left
-        guessing.
-      </p>
       <p v-if="formatPublished" class="caveat">
-        Every field and heading, and what a receiving agent does with each, is in
-        <a href="/docs/guide-format">the guide format</a>.
+        Every field, and what a receiving agent does with each, is in
+        <a href="/docs/work-format">the work format</a>.
       </p>
     </section>
 
@@ -298,7 +288,7 @@ codex mcp add passalong -- passalong mcp</code></pre>
         <a class="quiet" href="/v1/openapi.json">or read the API document</a>
       </p>
       <p class="reassure">
-        A guide is markdown with frontmatter, and a share key is what makes a link work. No plugin
+        Work is markdown with frontmatter, and a share key is what makes a link work. No plugin
         directory, no integration to wait for.
       </p>
     </section>

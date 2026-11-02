@@ -39,7 +39,7 @@ test("notes and changes go out in time order, each carrying the cursor it moved 
     changes: async () => {
       if (served) return [];
       served = true;
-      return [{ guide_id: "g1", at: T(3) }];
+      return [{ work_id: "g1", at: T(3) }];
     },
   };
   const got = frames(

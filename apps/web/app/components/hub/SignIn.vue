@@ -34,7 +34,7 @@ const COPY: Record<Mode, { title: string; lede: string; submit: string; busy: st
   signup: {
     busy: "Creating your account…",
     title: "Create your account",
-    lede: "Somewhere to keep the guides you send, and to receive the ones sent to you.",
+    lede: "Somewhere to keep the work you send, and to receive what is sent to you.",
     submit: "Create account",
   },
   forgot: {
@@ -143,7 +143,7 @@ const { mutate: demo, isPending: startingDemo } = useMutation({
       v-if="expired && !device"
       class="mx-auto mb-5 max-w-sm rounded-2 border border-warn bg-warn-soft px-3 py-3 font-ui text-sm text-muted"
     >
-      Nothing was lost — guides live on the server, not in this tab.
+      Nothing was lost — your work lives on the server, not in this tab.
     </p>
 
     <div class="authcard">

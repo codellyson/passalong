@@ -3,9 +3,9 @@
 export interface ThreadTarget {
   id: string;
   title: string;
-  /** The guide's own page, for whoever wants the document and not the conversation. */
+  /** The work's own page, for whoever wants the document and not the conversation. */
   url?: string;
-  /** What the row knows of the guide's state, so the panel refreshes when it changes. */
+  /** What the row knows of the work's state, so the panel refreshes when it changes. */
   stamp: string;
   /** Somebody holds it, or it is yours to leave a note on: shows the box. */
   reply: boolean;

@@ -14,7 +14,7 @@ export interface PageMeta {
   image?: string;
   /** A share link is for whoever holds it, not for search engines. */
   noindex?: boolean;
-  /** `article` for a guide; everything else is the site itself. */
+  /** `article` for a piece of work; everything else is the site itself. */
   type?: "website" | "article";
 }
 

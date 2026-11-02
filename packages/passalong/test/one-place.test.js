@@ -1,16 +1,16 @@
 // A field with a default has one place that applies it.
 //
-// `kind` was absent-means-transfer, and six files each decided that for themselves — one of them
+// `kind` was absent-means-one-kind, and six files each decided that for themselves — one of them
 // decided `task`. No single edit was wrong; the shape was. A field whose absence means something
 // gets re-interpreted by every new reader, and the interpretations drift apart quietly, because
-// nothing fails when they disagree.
+// nothing fails when they disagree. `kind` is gone now (docs/WORK.md), but the rule it taught stays.
 //
-// So the rule is not "kind has a default". It is: **the default is applied at the boundary, the
-// answer is written into the record, and nothing downstream may apply it again.** The boundary is
-// `parseFrontmatter` in src/guide.js and `parseMeta` in apps/api/src/guide.ts, which mirrors it.
+// The rule is: **the default is applied at the boundary, the answer is written into the record, and
+// nothing downstream may apply it again.** The boundary is `parseFrontmatter` in src/work.js and
+// `parseMeta` in apps/api/src/work.ts, which mirrors it.
 //
 // This test is what makes that a rule rather than a comment. It reads the source — the way
-// oauth.test.mjs holds the internal-call marker and guide.test.mjs holds the notify rule — and
+// oauth.test.mjs holds the internal-call marker and work.test.mjs holds the notify rule — and
 // fails when a defaulted field grows a second opinion somewhere else. Add a field to GUARDED when
 // it becomes one that absence speaks for.
 import assert from "node:assert/strict";
@@ -22,16 +22,17 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 /** Where the defaults are allowed to live: the format, and the mirror of it. */
-const BOUNDARY = ["packages/passalong/src/guide.js", "apps/api/src/guide.ts"];
+const BOUNDARY = ["packages/passalong/src/work.js", "apps/api/src/work.ts"];
 
 /**
  * Fields whose absence means something, and the shapes that mean somebody decided it again.
  *
- * The patterns are deliberately about the *value*, not the field name: `|| "transfer"` is the
- * decision, wherever it is written and whatever it is assigned to. A comparison is not a decision
- * — `kind === "bug"` asks a question and is everywhere on purpose.
+ * The patterns are deliberately about the *value*, not the field name: `|| "task"` is the
+ * decision, wherever it is written and whatever it is assigned to. Empty since `kind` went: no
+ * field's absence speaks for it today. `summary:` is refused when absent rather than defaulted, and
+ * `status:` is stamped once where a document is first stored.
  */
-const GUARDED = [{ field: "kind", values: ["transfer", "bug", "task"] }];
+const GUARDED = [];
 
 const SOURCE = [
   "packages/passalong/src",
@@ -128,7 +129,7 @@ test("a defaulted field is defaulted in one place", () => {
       const src = code(readFileSync(file, "utf8"));
       for (const { field, values } of GUARDED) {
         for (const value of values) {
-          // `|| "transfer"` and `?? "transfer"`, with any spacing.
+          // `|| "task"` and `?? "task"`, with any spacing.
           const re = new RegExp(`(\\|\\||\\?\\?)\\s*["'\`]${value}["'\`]`, "g");
           for (const m of src.matchAll(re)) {
             const line = src.slice(0, m.index).split("\n").length;
@@ -143,34 +144,37 @@ test("a defaulted field is defaulted in one place", () => {
     offences,
     [],
     "A default applied outside the boundary is a second opinion about what absence means.\n" +
-      "Read it at the boundary instead — parseFrontmatter in src/guide.js, parseMeta in\n" +
-      "apps/api/src/guide.ts — and let the value travel. If the fallback is really an\n" +
+      "Read it at the boundary instead — parseFrontmatter in src/work.js, parseMeta in\n" +
+      "apps/api/src/work.ts — and let the value travel. If the fallback is really an\n" +
       "invariant of the caller rather than a default (the task queue only ever hands out\n" +
       "tasks, say), write that down where it is and give the constant a different shape.\n\n" +
       `Found:\n  ${offences.join("\n  ")}`,
   );
 });
 
-test("the boundary normalises kind in one place, and invents nothing", () => {
-  // This test used to demand the opposite — `meta.kind = "transfer"` in both parsers — and that
-  // demand was the bug. The concern behind it still holds: if NOTHING normalises, every reader
-  // decides for itself again. So the invariant moved rather than went away. Both parsers put kind
-  // into one shape, neither supplies a value nobody wrote, and validate() refuses what is missing.
-  const js = readFileSync(join(root, "packages/passalong/src/guide.js"), "utf8");
-  const ts = readFileSync(join(root, "apps/api/src/guide.ts"), "utf8");
+/** Where kinds used to be decided, and must not come back. */
+const NO_KINDS = ["packages/passalong/src/work.js", "apps/api/src", "apps/web/server"];
+
+test("work has no kinds: both boundaries refuse the field, and nothing reads one", () => {
+  const js = readFileSync(join(root, "packages/passalong/src/work.js"), "utf8");
+  const ts = readFileSync(join(root, "apps/api/src/work.ts"), "utf8");
   for (const [name, src] of [
-    ["guide.js", js],
-    ["guide.ts", ts],
+    ["work.js", js],
+    ["work.ts", ts],
   ]) {
-    assert.match(
-      src,
-      /meta\.kind = String\(meta\.kind \?\? ""\)\.trim\(\)/,
-      `${name} must normalise kind, or nothing does and every reader guesses again`,
-    );
-    assert.doesNotMatch(
-      src,
-      /meta\.kind = "(transfer|task|bug)"/,
-      `${name} must not decide a kind its author did not write`,
-    );
+    assert.match(src, /RETIRED = \["kind"\]/, `${name} must refuse kind: by name`);
+    assert.doesNotMatch(src, /meta\.kind\b/, `${name} must not read or write a kind`);
   }
+  const offences = [];
+  for (const dir of NO_KINDS) {
+    const paths = dir.endsWith(".js") ? [join(root, dir)] : files(dir);
+    for (const file of paths) {
+      const src = code(readFileSync(file, "utf8"));
+      for (const m of src.matchAll(/kind\b[^\n]{0,40}["'`](bug|task)["'`]/g)) {
+        const line = src.slice(0, m.index).split("\n").length;
+        offences.push(`${relative(root, file)}:${line}  ${m[0]}`);
+      }
+    }
+  }
+  assert.deepEqual(offences, [], `a kind is decided or read again:\n  ${offences.join("\n  ")}`);
 });

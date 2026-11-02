@@ -1,21 +1,20 @@
 <!--
-  Everything the hub pages have in common: the credential, the load, the sign-in gate, the top
-  bar, the error line and the plan banners. It is a component rather than a Nuxt layout because
-  the signed-out state is not a page — every /hub route collapses to the same sign-in card, and a
-  layout would have to render a heading above it that describes a screen the visitor cannot see.
+  Everything the hub pages have in common: the credential, the load, the sign-in gate, the rail,
+  the error line and the plan banners. It is a component rather than a Nuxt layout because the
+  signed-out state is not a page — every /hub route collapses to the same sign-in card, and a layout
+  would have to render a heading above it that describes a screen the visitor cannot see.
 
-  The top bar holds only places (Guides, Activities, Settings) and two menus: New, for making a
-  guide, and you. It used to carry a large "Your transfers" heading, a sentence of counts computed
-  differently from the counts below it, team chips labelled with slugs, and a "Report a bug" tab
-  that was a verb among places. Each page now names itself, and the guides page counts its own
-  sections.
+  The rail (HubSidebar) holds the places: Needs you, the projects, Work, Support, the box, and you.
+  On a phone the places are a dock along the bottom (HubDock), as in a phone app, and the rest of the
+  rail — Go to id, each project, Settings, you — is a drawer behind the top bar's menu. The hub's tokens
+  (`.hub-app` in styles.css) go on <body>, so what a page teleports there draws the same way.
 -->
 <script setup lang="ts">
 import { useMutation, useQuery } from "@tanstack/vue-query";
 
 withDefaults(
   defineProps<{
-    /** The page's own title. The guides page draws its own, with the team picker in it. */
+    /** The page's own title. The Work page draws its own, with the team picker in it. */
     heading?: string;
   }>(),
   { heading: "" },
@@ -33,7 +32,7 @@ useHead({
     {
       tagPosition: "bodyOpen",
       innerHTML:
-        "<p><b>Passalong</b> needs JavaScript to show your guides. A guide's own link still opens without it.</p>",
+        "<p><b>Passalong</b> needs JavaScript to show your work. A share link still opens without it.</p>",
     },
   ],
 });
@@ -68,28 +67,42 @@ const { data: billing } = useQuery({
 const plansOffered = computed(() => !!billing.value?.mode && billing.value.mode !== "unset");
 const route = useRoute();
 
-/**
- * The reading column, named once. The navbar sits outside <main> so that its background can span
- * the viewport without `100vw` — see the template. The bar itself always takes the wide measure:
- * when it followed each page's, the logo and links jumped sideways on every switch between a wide
- * page and a narrow one, which reads as the whole app shifting.
- */
-// 90rem since the Work page became a board: five columns wide enough to read need it, and the bar
-// takes the widest page's measure so nothing moves when you switch pages.
-const barMeasure = "max-w-[90rem]";
-// A guide's own page is wide for the same reason Settings is: the guide and what surrounds it sit
-// side by side.
+/** How wide each page reads. The board takes all of it; Needs you holds a register and a column. */
 const measure = computed(() =>
   route.path === "/hub/work"
-    ? "max-w-[90rem]"
-    : route.path.startsWith("/hub/settings") ||
-        route.path === "/hub" ||
-        route.path === "/hub/work" ||
-        route.path.startsWith("/hub/g/") ||
-        route.path.startsWith("/hub/folders") ||
-        route.path.startsWith("/hub/support")
-      ? "max-w-[70rem]"
-      : "max-w-[54rem]",
+    ? "max-w-none"
+    : route.path === "/hub"
+      ? "max-w-[78rem]"
+      : route.path.startsWith("/hub/settings") ||
+          route.path.startsWith("/hub/w/") ||
+          route.path.startsWith("/hub/projects") ||
+          route.path.startsWith("/hub/support") ||
+          route.path === "/hub/new" ||
+          route.path === "/hub/start"
+        ? "max-w-[70rem]"
+        : "max-w-[54rem]",
+);
+
+useHead({
+  bodyAttrs: { class: "hub-app" },
+  // `viewport-fit=cover` is what makes `env(safe-area-inset-bottom)` real, so the dock clears a
+  // phone's home indicator. Hub pages only: the landing and share pages keep the plain viewport.
+  meta: [{ name: "viewport", content: "width=device-width,initial-scale=1,viewport-fit=cover" }],
+});
+
+/** The rail as a drawer on a phone: closed on every move, and by Escape. */
+const drawer = ref(false);
+/** Focus goes into the drawer with it, so Escape and the keyboard reach what was opened. */
+async function openDrawer() {
+  drawer.value = true;
+  await nextTick();
+  document.querySelector<HTMLElement>("#hub-rail a")?.focus();
+}
+watch(
+  () => route.fullPath,
+  () => {
+    drawer.value = false;
+  },
 );
 /**
  * One standing notice: a row, not a card. Shared with HubClaim so the two read as one band.
@@ -166,113 +179,55 @@ const lapsed = computed(() => (data.value.me?.teams ?? []).filter((t) => t.plan 
 const noPlan = computed(() => data.value.me?.sync === "none");
 const full = computed(() => {
   const me = data.value.me;
-  return Boolean(me && me.sync === "free" && me.guides >= me.limit);
+  return Boolean(me && me.sync === "free" && me.work >= me.limit);
 });
 const nearLimit = computed(() => {
   const me = data.value.me;
-  return Boolean(me && me.sync === "free" && me.guides >= me.limit * 0.8);
+  return Boolean(me && me.sync === "free" && me.work >= me.limit * 0.8);
 });
-
-// Home is the overview; Work is one page for all work, whatever its kind (docs/V2.md §11).
-const tabs = [
-  { to: "/hub", label: "Home" },
-  { to: "/hub/work", label: "Work" },
-  { to: "/hub/support", label: "Support" },
-  { to: "/hub/folders", label: "Folders" },
-  // Six tabs share a phone's width, so the bottom bar says it in fewer letters.
-  { to: "/hub/log", label: "Activities", short: "Activity" },
-  { to: "/hub/settings", label: "Settings" },
-];
-
-/** The pages that are about one guide or one report belong under Work. */
-const active = (to: string) =>
-  to === "/hub/work"
-    ? route.path === "/hub/work" ||
-      route.path.startsWith("/hub/g/") ||
-      route.path.startsWith("/hub/answer") ||
-      route.path.startsWith("/hub/report")
-    : to === "/hub/folders" || to === "/hub/settings" || to === "/hub/support"
-      ? route.path.startsWith(to)
-      : route.path === to;
 </script>
 
 <template>
-  <!-- Wider than the 46rem the rest of the product reads at. That measure is right for a guide
-       and wrong for a list: this is the one surface that is scanned rather than read. -->
-  <!-- Settings is wider again: it has a section nav beside its content, and the connect sheet puts
-       an app picker beside its steps. Tasks too: its review puts an inbox beside a pane that holds
-       two columns, what was asked against what came back, and at 54rem each column wrapped every
-       Acceptance line to four or five lines. -->
-  <!-- The navbar, outside <main> and spanning the viewport by being a block in the page rather
-       than a box one viewport wide. `100vw` counts the vertical scrollbar, so the old full-bleed
-       pseudo-element was about eight pixels wider than the page and the browser drew a horizontal
-       scrollbar on every screen. A plain block has no such opinion. Its content keeps one width on
-       every page (`barMeasure`), so switching pages never moves it. -->
-  <div
-    v-if="framed"
-    class="hub-bar sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md"
-  >
-    <div class="mx-auto flex h-16 w-full items-center gap-2 px-[var(--s-5)] sm:gap-6" :class="barMeasure">
-      <!-- One row at every width. On a phone the brand is its mark, New is a plus, the account
-           is an avatar, and the theme switch moves into the account menu. -->
-      <AppBrand to="/hub" compact />
-      <!-- Below md the links are a bar at the bottom of the screen instead (below): five of them
-           beside the brand, New and the account did not fit, and scrolled out of sight. -->
-      <nav
-        class="marked flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] max-md:hidden sm:gap-1"
-        aria-label="Hub"
-      >
-        <NuxtLink
-          v-for="t in tabs"
-          :key="t.to"
-          :to="t.to"
-          class="rounded-1 px-2.5 py-1.5 font-ui text-sm whitespace-nowrap no-underline transition-colors sm:px-3"
-          :class="active(t.to) ? 'font-semibold text-fg' : 'font-medium text-muted hover:text-fg'"
-          :aria-current="active(t.to) ? 'page' : undefined"
-        >
-          {{ t.label }}
-        </NuxtLink>
-      </nav>
-      <div class="ml-auto flex shrink-0 items-center gap-2">
-        <!-- Reachable signed in or out: the sign-in screen is as likely as any to be too bright.
-             Signed in on a phone it is in the account menu instead, to keep the bar one row. -->
-        <AppThemeToggle :class="signedIn ? 'max-lg:hidden' : ''" />
-        <template v-if="signedIn">
-          <HubGoTo />
-          <HubNewMenu />
-          <HubAccountMenu />
-        </template>
-      </div>
-    </div>
-  </div>
-
-  <!-- Less room above than the 48px every other page gets: those open on a heading with nothing
-       over it, and this one opens under a navbar that is already a band of its own. -->
-  <!-- The hub's links on a phone: a tab bar at the bottom, in reach of a thumb, with room for all
-       six. `env(safe-area-inset-bottom)` keeps it above the home indicator. -->
-  <nav
-    v-if="framed && signedIn"
-    class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
-    aria-label="Hub"
-  >
-    <NuxtLink
-      v-for="t in tabs"
-      :key="t.to"
-      :to="t.to"
-      class="flex min-w-0 flex-col items-center gap-1 px-1 py-3 font-ui text-xs no-underline"
-      :class="active(t.to) ? 'font-semibold text-fg' : 'font-medium text-muted'"
-      :aria-current="active(t.to) ? 'page' : undefined"
-    >
-      <span
+  <div :class="framed ? 'md:grid md:min-h-dvh md:grid-cols-[15rem_minmax(0,1fr)]' : ''">
+    <!-- The rail. Sticky beside the page from md up; below that a drawer over it. -->
+    <template v-if="framed">
+      <!-- Always there, faded in and out with the drawer, so closing is the opening run backwards. -->
+      <div
+        class="fixed inset-0 z-40 bg-[oklch(0_0_0/0.4)] transition-opacity duration-200 ease-out motion-reduce:transition-none md:hidden"
+        :class="drawer ? 'opacity-100' : 'pointer-events-none opacity-0'"
         aria-hidden="true"
-        class="size-1 rounded-pill"
-        :class="active(t.to) ? 'bg-[var(--coral)]' : 'bg-transparent'"
+        @click="drawer = false"
       />
-      <span class="max-w-full truncate">{{ t.short ?? t.label }}</span>
-    </NuxtLink>
-  </nav>
+      <aside
+        id="hub-rail"
+        class="z-50 w-60 transition-[translate,visibility] duration-200 ease-out motion-reduce:transition-none max-md:fixed max-md:inset-y-0 max-md:right-0 md:sticky md:top-0 md:h-dvh"
+        :class="drawer ? '' : 'max-md:invisible max-md:translate-x-full'"
+        @keydown.esc="drawer = false"
+      >
+        <HubSidebar />
+      </aside>
+    </template>
 
-  <main class="pt-8 max-md:pb-24" :class="measure">
+    <div class="min-w-0">
+      <!-- A phone's top bar: the mark, and the menu at the right, where the thumb is. -->
+      <div
+        v-if="framed"
+        class="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-bg px-4 md:hidden"
+      >
+        <AppBrand to="/hub" />
+        <button
+          type="button"
+          class="btn icon -mr-2 ml-auto"
+          aria-controls="hub-rail"
+          :aria-expanded="drawer"
+          aria-label="Open the menu"
+          @click="openDrawer"
+        >
+          <AppIcon name="menu" />
+        </button>
+      </div>
+
+  <main class="max-md:pt-6 max-md:pb-[calc(var(--dock)+var(--s-7))] md:pt-10" :class="measure">
     <!-- `maybe` is the server saying a session cookie arrived with the request. Rendering the
          signed-out screen to someone who is signed in, and then replacing it, is a flash on every
          refresh. -->
@@ -302,7 +257,7 @@ const active = (to: string) =>
       >
         <div class="min-w-0 grow basis-64">
           <p class="m-0 font-ui text-sm font-semibold text-danger">
-            {{ error ? "That didn't work" : "Your guides didn't load" }}
+            {{ error ? "That didn't work" : "Your work didn't load" }}
           </p>
           <p class="mt-1 mb-0 font-ui text-sm text-muted">{{ error || loadError }}</p>
         </div>
@@ -356,11 +311,11 @@ const active = (to: string) =>
 
       <div v-if="lapsed.length || noPlan || nearLimit" class="mb-8 flex flex-col">
         <!-- Specific about which half stops: everything in the team can still be read and answered,
-             and only new guides are refused. -->
+             and only new work is refused. -->
         <p v-for="t in lapsed" :key="t.slug" :class="notice">
           <span :class="dot" aria-hidden="true" />
           <span class="min-w-0 grow">
-            <b class="text-fg">{{ t.name }} can't take new guides right now.</b>
+            <b class="text-fg">{{ t.name }} can't take new work right now.</b>
             Its plan has lapsed. Everything already in it can still be read and answered, and nobody
             new can join.
             {{ t.role === "owner" ? "Renew it in Settings." : "Ask the team owner to renew it." }}
@@ -370,8 +325,8 @@ const active = (to: string) =>
         <p v-if="noPlan" :class="notice">
           <span :class="dot" aria-hidden="true" />
           <span class="min-w-0 grow">
-            <b class="text-fg">Sending guides needs a plan.</b>
-            Guides you already have stay where they are.
+            <b class="text-fg">Sending work needs a plan.</b>
+            Work you already have stays where it is.
           </span>
           <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">Choose a plan</NuxtLink>
         </p>
@@ -379,9 +334,9 @@ const active = (to: string) =>
         <p v-if="nearLimit" :class="notice">
           <span :class="dot" aria-hidden="true" />
           <span class="min-w-0 grow">
-            <b class="text-fg">You're using {{ data.me?.guides }} of {{ data.me?.limit }} guides on the free plan.</b>
-            <template v-if="full"> New guides can't be sent until you make room.</template>
-            Archiving a finished guide frees a space.
+            <b class="text-fg">You're using {{ data.me?.work }} of {{ data.me?.limit }} pieces of work on the free plan.</b>
+            <template v-if="full"> New work can't be sent until you make room.</template>
+            Archiving finished work frees a space.
           </span>
           <NuxtLink class="shrink-0 font-medium" :to="{ path: '/hub/work', query: { done: '1' } }">Show finished work</NuxtLink>
           <NuxtLink v-if="plansOffered" class="shrink-0 font-medium" to="/hub/settings#plan">See plans</NuxtLink>
@@ -395,13 +350,16 @@ const active = (to: string) =>
            skeleton under it would promise a list that is not coming. -->
       <div v-if="!signedIn && !meFailed" class="flex flex-col gap-6">
         <span class="block h-6 w-48 rounded-pill bg-line-strong" aria-hidden="true" />
-        <HubSkeleton :rows="4" label="Loading your guides" />
+        <HubSkeleton :rows="4" label="Loading your work" />
       </div>
       <!-- Only for a known session. After a failed session check the banner is the page: the
            slot would render its empty states ("Nothing is waiting on you") as if they were facts. -->
       <slot v-else-if="signedIn" />
     </section>
   </main>
+    </div>
+  </div>
+  <HubDock v-if="signedIn" />
   <HubToasts v-if="framed" />
   <!-- The one conversation panel for every page of the hub. -->
   <HubThreadDrawer v-if="signedIn" />

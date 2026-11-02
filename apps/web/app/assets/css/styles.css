@@ -5,7 +5,7 @@
 /* ---- fonts ---------------------------------------------------------------------------------
    Three variable faces, latin subset, all OFL. Onest carries the interface: a soft, warm
    grotesque that holds its shape at 480 with tight tracking, which is the whole display voice.
-   Newsreader carries guide prose and the italic turn in a headline — a reading face, and one with
+   Newsreader carries work prose and the italic turn in a headline — a reading face, and one with
    a real italic, where the old serif had none and the browser slanted the roman to fake it.
    JetBrains Mono carries everything the machine wrote — ids, tags, commands, code.
    `swap` so a slow font never blanks the text. */
@@ -168,23 +168,37 @@
      Coral itself (`--coral`) is 2.6:1 on the canvas, which is fine for a mark and illegible as
      text, so `--accent` is the same hue taken down to a readable 5:1 for the places a word has to
      be coral. The spec's muted grey (#858481, 3.7:1) is darkened for the same reason. */
-  --bg: light-dark(#fffcfa, #191816);
-  --surface: light-dark(#f2ebe3, #2c2a26);
-  --surface-raised: light-dark(#f7f2ed, #23211e);
-  --field: light-dark(#fffefe, #1e1d1a);
+  --bg: light-dark(#ffffff, #191816);
+  --surface: light-dark(#f1f1ef, #2c2a26);
+  --surface-raised: light-dark(#f7f7f6, #23211e);
+  --field: light-dark(#ffffff, #1e1d1a);
   --fg: light-dark(#252522, #f4efe9);
   --muted: light-dark(#6e6c68, #a39f98);
-  --line: light-dark(#efe6dc, #33302c);
-  --line-strong: light-dark(#e0d4c7, #45413c);
+  --line: light-dark(#ececea, #33302c);
+  --line-strong: light-dark(#dcdbd7, #45413c);
   --coral: #f2805d;
   --accent: light-dark(#b8481f, #f2805d);
   --accent-hover: light-dark(#9c3b17, #f7a077);
-  --accent-fg: light-dark(#fffcfa, #1a1410);
+  --accent-fg: light-dark(#ffffff, #1a1410);
   --accent-soft: light-dark(#fce9e0, #3a261e);
+  /* What a global rule means, not which colour it is, for the rules the hub shares with the landing:
+     the keyboard ring and a focused field's border and halo, a chosen checkbox or radio, a link's
+     underline under the pointer, and an emphasised word or edge. Here they are coral; `.hub-app`
+     redraws each in ink, because coral in the hub means only "changed since you last looked". */
+  --focus: var(--accent);
+  --focus-halo: var(--accent-soft);
+  --chosen: var(--accent);
+  --link-hover: var(--coral);
+  --emphasis: var(--accent);
+  --emphasis-hover: var(--accent-hover);
+  --emphasis-soft: var(--accent-soft);
   /* The primary action. Ink on the canvas in light, and the canvas inverted in dark: the button is
      always the highest-contrast thing on the page, which is what makes it the one to press. */
   --ink: var(--fg);
   --on-ink: var(--bg);
+  /* The filled action and a chosen chip. Ink here; the hub makes them coral (.hub-app). */
+  --primary: var(--ink);
+  --on-primary: var(--on-ink);
   --danger: light-dark(#b8322a, #ef7a6c);
   /* Semantic status, deliberately separate from the brand accent. Rust coral is the brand; these
      three carry meaning, and each is taken to a readable text weight on the cream. */
@@ -193,7 +207,7 @@
   --ok-soft: light-dark(#e6f0dc, #1f2a1b);
   --warn: light-dark(#86750f, #d6c530);
   --warn-soft: light-dark(#f5efcc, #2d2a17);
-  --code: light-dark(#f2ebe3, #2c2a26);
+  --code: light-dark(#f1f1ef, #2c2a26);
   /* The hairline around an image. Pure black on light, pure white on dark, at a tenth: a tinted
      neutral picks up the surface behind it and reads as dirt on the picture's edge. */
   --image-edge: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
@@ -221,6 +235,91 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
+}
+
+/* ---- the hub's tokens ----------------------------------------------------------------------
+   The signed-in screens keep the palette and draw it tighter: square-ish corners (2, 3, 4px and
+   nothing round but a dot), a one-pixel rule where a raised surface used to have a soft edge (the
+   deeper cream of a raised surface stays, so the ground has something against it), the
+   grotesque for everything (no serif in the app). Counts and ages take `tabular-nums` where they
+   stand in a column; prose keeps proportional figures, where tabular ones read as "1 1". Set on
+   <body> by the hub's shell, so what it teleports to the body inherits it too. The landing and the
+   share pages keep the tokens above. Each final token is restated rather than its parts, because a
+   custom property resolves where it is declared and overriding a part here would change nothing.
+
+   Coral keeps one meaning in here: changed since you last looked. A project's line colour is one of
+   the six below and never coral or anything near it. The sidebar is a solid ink rail in both themes; in dark it sits
+   below the page rather than above it. */
+.hub-app {
+  /* The phone's bottom dock (HubDock): what fixed and sticky things at the foot stand clear of. */
+  --dock: 0px;
+  --r-1: 0.125rem;
+  --r-2: 0.1875rem;
+  --r-3: 0.25rem;
+  --r-pill: 0.25rem;
+  --font-serif: var(--font-sans);
+  --edge-shadow: 0 0 0 1px var(--line-strong);
+  --edge-shadow-hover: 0 0 0 1px light-dark(#c8c6c1, #57524b);
+
+  --rail: light-dark(#252522, #11100e);
+  --on-rail: #f4efe9;
+  --on-rail-muted: light-dark(#aaa59d, #9d988f);
+  --rail-line: oklch(1 0 0 / 0.1);
+  --rail-hover: oklch(1 0 0 / 0.06);
+  --rail-current: oklch(1 0 0 / 0.11);
+
+  --project-amber: light-dark(#b07a12, #d8a440);
+  --project-green: light-dark(#3f7d52, #6fb487);
+  --project-blue: light-dark(#3e6fa6, #7aa4d8);
+  --project-violet: light-dark(#7a5bb0, #a68ad8);
+  --project-teal: light-dark(#2f8582, #5fb3ae);
+  --project-stone: light-dark(#7b6e5f, #b8aa98);
+
+  /* Coral means active in the hub: where you are, what you chose, the one action to take. A change
+     since you last looked is ink (`--changed`), a bar and a "Changed" line. Focus stays a 2px ink
+     ring, because coral is too light against the ground to be the only edge a keyboard user sees. */
+  --primary: var(--accent);
+  --on-primary: var(--accent-fg);
+  --changed: var(--fg);
+  --focus: var(--fg);
+  --focus-halo: color-mix(in oklab, var(--fg) 14%, transparent);
+  --chosen: var(--accent);
+  --link-hover: var(--fg);
+  --emphasis: var(--fg);
+  --emphasis-hover: var(--muted);
+  --emphasis-soft: var(--surface);
+}
+/* On the rail the marks sit on ink in both themes, so they take their light-on-dark half. */
+.rail {
+  --project-amber: #d8a440;
+  --project-green: #6fb487;
+  --project-blue: #7aa4d8;
+  --project-violet: #a68ad8;
+  --project-teal: #5fb3ae;
+  --project-stone: #b8aa98;
+  --focus: var(--on-rail);
+  --changed: var(--on-rail);
+}
+.project-mark {
+  background: var(--muted);
+}
+.project-mark[data-tone="amber"] {
+  background: var(--project-amber);
+}
+.project-mark[data-tone="green"] {
+  background: var(--project-green);
+}
+.project-mark[data-tone="blue"] {
+  background: var(--project-blue);
+}
+.project-mark[data-tone="violet"] {
+  background: var(--project-violet);
+}
+.project-mark[data-tone="teal"] {
+  background: var(--project-teal);
+}
+.project-mark[data-tone="stone"] {
+  background: var(--project-stone);
 }
 
 *,
@@ -305,7 +404,7 @@ a {
 }
 a:hover {
   color: var(--fg);
-  text-decoration-color: var(--coral);
+  text-decoration-color: var(--link-hover);
 }
 
 .brand {
@@ -362,7 +461,7 @@ header.hero {
   font: 500 var(--t-xs) / 1.6 var(--font-mono);
 }
 .status {
-  color: var(--accent);
+  color: var(--emphasis);
   font-weight: 500;
 }
 .muted {
@@ -483,8 +582,8 @@ button.primary,
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
-  --tone: var(--accent);
-  --tone-soft: var(--accent-soft);
+  --tone: var(--emphasis);
+  --tone-soft: var(--emphasis-soft);
   transition:
     background-color var(--motion) ease,
     border-color var(--motion) ease,
@@ -512,7 +611,7 @@ button.primary,
   border-color: var(--line-strong);
 }
 
-/* Sizes. A row of guides is mostly text, and a button at full padding inside one is most of a
+/* Sizes. A row of work is mostly text, and a button at full padding inside one is most of a
    line tall. */
 .btn.sm {
   height: var(--control-h-sm);
@@ -555,16 +654,16 @@ button.primary,
    the ink the same ink. */
 button.primary,
 .btn.primary {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--on-ink);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
   font-weight: 500;
 }
 button.primary:hover,
 .btn.primary:hover {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--on-ink);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
   opacity: 0.9;
 }
 button.primary:active,
@@ -624,7 +723,9 @@ button.primary[disabled],
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 20;
+  /* Above sticky page chrome (the board's column heads sit at 20), level with the phone's top bar
+     and the bulk bar, below drawers, toasts and the phone's rail. */
+  z-index: 30;
   margin-top: var(--s-1);
   width: 18rem;
   display: flex;
@@ -720,11 +821,6 @@ button.primary[disabled],
   box-shadow: inset 0 0 0 1px
     light-dark(oklch(0.42 0.1 var(--h) / 0.16), oklch(0.87 0.07 var(--h) / 0.22));
 }
-/* You, in a list of other people: the accent, so your own row reads as yours. */
-.avatar.you {
-  color: light-dark(oklch(0.42 0.1 40), oklch(0.87 0.07 40));
-  background: light-dark(oklch(0.93 0.05 40), oklch(0.32 0.055 40));
-}
 
 /* Filter toggles. Pill-shaped so they never read as actions. */
 .chips {
@@ -791,7 +887,7 @@ input[type="radio"] {
   padding: 0;
   border: 0;
   background: none;
-  accent-color: var(--accent);
+  accent-color: var(--chosen);
 }
 
 input::placeholder {
@@ -801,7 +897,7 @@ input:hover {
   border-color: color-mix(in oklab, var(--muted) 55%, var(--line-strong));
 }
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 /* One ring. This set both the border *and* an inset outline in the same colour, so a focused field
@@ -812,9 +908,9 @@ input:hover {
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--accent);
+  border-color: var(--focus);
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--focus-halo);
 }
 /* A field with something fixed in front of the value, like the @ before a handle. The wrapper is the
    field — border, hover, focus ring, error — and the input inside it is bare. The wrapper used to be
@@ -837,8 +933,8 @@ select:focus {
   border-color: color-mix(in oklab, var(--muted) 55%, var(--line-strong));
 }
 .affix:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--focus-halo);
 }
 .affix.invalid {
   border-color: var(--danger);
@@ -945,8 +1041,8 @@ input[name="token"],
   --head: var(--fg);
 }
 .identity.needed {
-  --edge: var(--accent);
-  --head: var(--accent);
+  --edge: var(--emphasis);
+  --head: var(--emphasis);
 }
 
 /* ---- hub ------------------------------------------------------------------------------------ */
@@ -967,46 +1063,46 @@ input[name="token"],
   margin-bottom: var(--s-4);
 }
 
-.guides {
+.work {
   list-style: none;
   padding: 0;
   margin: 0;
 }
-.guide {
+.work {
   padding: var(--s-4) 0;
   border-top: 1px solid var(--line);
   margin: 0;
 }
-.guide:last-child {
+.work:last-child {
   border-bottom: 1px solid var(--line);
 }
-.guide .head {
+.work .head {
   display: flex;
   justify-content: space-between;
   gap: var(--s-4);
   align-items: baseline;
 }
-.guide .title {
+.work .title {
   font-size: var(--t-h3);
   font-weight: 500;
   letter-spacing: -0.015em;
   color: var(--fg);
   text-decoration: none;
 }
-.guide .title:hover {
-  color: var(--accent);
+.work .title:hover {
+  color: var(--emphasis);
 }
-.guide .meta {
+.work .meta {
   margin-top: var(--s-2);
 }
-.guide .actions {
+.work .actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
   margin-top: var(--s-3);
 }
-.guide.consumed .title,
-.status.consumed {
+.work.done .title,
+.status.done {
   color: var(--muted);
 }
 
@@ -1047,13 +1143,13 @@ input[name="token"],
   border: 0;
   padding: 0;
   font: inherit;
-  color: var(--accent);
+  color: var(--emphasis);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
 .linkish:hover {
-  color: var(--accent-hover);
+  color: var(--emphasis-hover);
 }
 /* A shortened value that can be opened. It keeps the size, family and colour of the line it sits
    in — this is reference text, not a control — and carries a dotted underline, which is the one
@@ -1149,11 +1245,11 @@ details.more summary:hover {
 }
 
 /* ---- board ------------------------------------------------------------------------------------
-   Nothing here. The board — the waiting lane and the handoff list — is the one region of the app
+   Nothing here. The board — its four columns — is the one region of the app
    built from Tailwind utilities, in app/components/hub/. Its semantic colours are the `--ok`,
    `--warn` and `--danger` tokens above, bridged into utility names by assets/css/tailwind.css. */
 
-/* ---- teams, activity, tokens ---------------------------------------------------------------- */
+/* ---- teams, tokens ------------------------------------------------------------------------- */
 /* The form on the three screens outside the hub — sign in, reset, join. They were written before
    the hub had a field pattern; this is that pattern, so a labelled field looks the same wherever
    it appears. `form.join` was declared twice here, flex and then grid, and the flex one had never
@@ -1175,13 +1271,6 @@ form.join label {
   margin: 0 0 var(--s-3);
 }
 
-.notes {
-  list-style: none;
-  padding: 0;
-  margin: var(--s-2) 0 0;
-  font-size: var(--t-sm);
-  line-height: 1.9;
-}
 .note {
   color: var(--muted);
   border: 0;
@@ -1190,31 +1279,6 @@ form.join label {
 .note a {
   color: inherit;
 }
-.note.unread {
-  color: var(--fg);
-}
-.note.unread::marker {
-  content: "";
-}
-.note .when {
-  display: inline-block;
-  min-width: 6.5rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-/* Drawn, not typed: a bullet character is a different size and baseline in every font, and this
-   one has to line up with a row of timestamps. */
-.note.unread .when::before {
-  content: "";
-  display: inline-block;
-  width: 0.375rem;
-  height: 0.375rem;
-  margin-right: var(--s-2);
-  border-radius: 50%;
-  background: var(--accent);
-  vertical-align: 0.1em;
-}
-
 .invite-paste {
   display: flex;
   gap: var(--s-2);
@@ -1226,7 +1290,7 @@ form.join label {
   min-width: 0;
 }
 
-/* ---- guide views ---------------------------------------------------------------------------- */
+/* ---- work views ---------------------------------------------------------------------------- */
 .pull {
   margin-top: var(--s-7);
   padding: var(--s-4) var(--s-5);
@@ -1260,7 +1324,7 @@ form.join label {
    until you notice it is also the brief: what this product makes is written prose, so the page
    that sells it should be able to carry its claim in type alone.
 
-   What went: a drawn browser window with traffic-light dots and a fake address bar around a guide
+   What went: a drawn browser window with traffic-light dots and a fake address bar around a piece of work
    by a person who does not exist. A picture of software that was never photographed is the tell of
    a template. The artifact is shown as the file it is instead.
 
@@ -1305,7 +1369,7 @@ form.join label {
 }
 .hero h1 {
   /* Sans at 480, tracked in hard: a soft, compact display line rather than a blunt one. The serif
-     is kept for the turn alone, where it is an accent — the face guides are read in, arriving in
+     is kept for the turn alone, where it is an accent — the face work are read in, arriving in
      the one phrase that says what is wrong. */
   font-family: var(--font-sans);
   font-size: var(--t-display);
@@ -1483,153 +1547,28 @@ form.join label {
   text-wrap: pretty;
 }
 
-/* The artifact. Not a rendering of a guide, not a screenshot of one: the file. */
-/* A guide as the product renders one, on the page that has to make it look worth having.
-
-   Deliberately not the markdown source. A slab of monospace is what a config file looks like, and
-   it made the loudest claim on this page "we produce text files" — which is both true and the
-   smallest possible reading of the thing. The document is the product; the file format is the
-   promise underneath it, and it is stated in one line below rather than shown at full size.
-
-   Everything here is a device the guide page already uses, so this is the product rather than a
-   picture of it: the serif headings, the labelled fact row, the tags. */
-.specimen {
-  margin: var(--gap) 0 var(--s-4);
+/* The launch film, right under the hero: the claim, then the claim played. Its caption sits under it,
+   centred on the page's axis like every heading here. */
+.film {
+  margin: var(--s-8) auto 0;
+  max-width: 64rem;
+}
+.film video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
   border-radius: var(--r-3);
   box-shadow: var(--edge-shadow);
-  background: var(--surface-raised);
-  padding: var(--s-6) var(--s-6) var(--s-7);
+  background: var(--surface);
 }
-.specimen article {
-  max-width: 42rem;
-  margin: 0 auto;
-}
-.specimen h2 {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-size: clamp(1.35rem, 1.1rem + 1vw, 1.75rem);
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
-}
-/* The same labelled row the guide page carries, and for the same reason: the repo a guide came out
-   of and the stack it assumes are different facts, and a reader should not have to tell two grey
-   strings apart by guessing. */
-.specimen .facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: var(--s-3) var(--s-6);
-  margin: var(--s-4) 0 0;
-  padding: var(--s-3) 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-/* The landing's small labels are set in the sans, in sentence case. Tracked mono capitals read as
-   decoration on a page whose headings already say what each block is. */
-.specimen dt {
-  font: 500 var(--t-sm) / 1.3 var(--font-sans);
+.film figcaption {
+  margin: var(--s-4) auto 0;
+  max-width: 40rem;
   color: var(--muted);
-}
-.specimen dd {
-  margin: var(--s-1) 0 0;
   font-size: var(--t-sm);
-  color: var(--fg);
-}
-.specimen .tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  margin: var(--s-3) 0 0;
-}
-/* The five headings every guide has. They are the argument this block makes — that finished work
-   arrives in the same shape every time — so they carry the serif and the weight. */
-.specimen .sec {
-  margin-top: var(--s-5);
-}
-.specimen h3 {
-  margin: 0 0 var(--s-2);
-  font-family: var(--font-serif);
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: normal;
-}
-.specimen .sec p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.7;
-  text-wrap: pretty;
-}
-
-/* Out and back, side by side: what was asked for against what came back. One column on a narrow
-   screen, where the task still comes first. The rule between them is structure, so it is a border. */
-.specimen.pair {
-  display: grid;
-  gap: var(--s-7) var(--s-6);
-  grid-template-columns: minmax(0, 1fr);
-}
-.specimen.pair article {
-  max-width: none;
-  margin: 0;
-}
-@media (min-width: 52rem) {
-  .specimen.pair {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(5, auto);
-    row-gap: 0;
-  }
-  /* Each side's label, title, facts, checks and prose share rows with the other side's, so the
-     two checklists start level however many lines either title takes. */
-  .specimen.pair article {
-    display: grid;
-    grid-row: span 5;
-    grid-template-rows: subgrid;
-    align-content: start;
-  }
-  .specimen.pair article + article {
-    padding-inline-start: var(--s-6);
-    border-inline-start: 1px solid var(--line);
-  }
-}
-.specimen .side {
-  margin: 0 0 var(--s-3);
-  font: 500 var(--t-sm) / 1.3 var(--font-sans);
-  color: var(--accent);
-}
-.specimen .checks {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--muted);
   line-height: 1.6;
-}
-.specimen .checks li {
-  position: relative;
-  padding-inline-start: 1.5em;
-}
-.specimen .checks li + li {
-  margin-top: var(--s-2);
-}
-/* An open box for a line of done, a tick for a line checked: the two columns differ in exactly the
-   mark, which is what a reviewer compares. */
-.specimen .checks li::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 0;
-  top: 0.35em;
-  width: 0.8em;
-  height: 0.8em;
-  border: 1.5px solid var(--line-strong);
-  border-radius: 3px;
-}
-.specimen .checks.met li::before {
-  content: "\2713";
-  border: 0;
-  top: 0;
-  width: auto;
-  height: auto;
-  color: var(--ok);
-  font-weight: 700;
+  text-align: center;
+  text-wrap: pretty;
 }
 .proof {
   max-width: 40rem;
@@ -1642,63 +1581,109 @@ form.join label {
   color: var(--fg);
 }
 
-.under {
-  max-width: 40rem;
-  margin: 0 auto;
-  font: var(--t-sm) / 1.65 var(--font-sans);
-  color: var(--muted);
+/* The five ideas, each a row of its words and its loop. The loop takes the wider column and the
+   rows alternate sides, so the eye zigzags down the section rather than reading one long column of
+   videos; a hairline separates rows. Same width as the film, so the page's two pieces of motion
+   share their edges. */
+.ideas {
+  max-width: 64rem;
+  margin: var(--gap) auto 0;
+}
+.ideas h2,
+.for h2 {
+  margin: 0 0 var(--s-7);
+  font-family: var(--font-sans);
+  font-size: var(--t-section);
+  font-weight: 480;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
   text-align: center;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
-/* A command broken across two lines stops being a command you could type. */
-.under code {
-  white-space: nowrap;
+.ideas article {
+  display: grid;
+  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-8) 0;
+  border-top: 1px solid var(--line);
 }
-
-.steps {
+.ideas article:nth-of-type(even) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+}
+.ideas article:nth-of-type(even) .idea-text {
+  grid-column: 2;
+  grid-row: 1;
+}
+.idea-text {
   display: grid;
   gap: var(--s-3);
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  margin: var(--gap) 0 0;
 }
-.steps article {
-  max-width: none;
-  padding: var(--s-6);
+.ideas .clip {
+  display: block;
+  width: 100%;
+  aspect-ratio: 8 / 5;
   border-radius: var(--r-3);
-  background: var(--surface-raised);
+  box-shadow: var(--edge-shadow);
+  background: var(--surface);
 }
-/* Four steps wrap as three and a stray one under auto-fit, which reads as a step left over. So a
-   row of four is two by two, and one column on a phone. Never four across: in this container that
-   is a 28-character measure, and each step became a six-line column of 14px text. */
-.steps:has(> article:nth-child(4)) {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.steps:has(> article:nth-child(4)) article {
-  max-width: none;
-}
-@media (max-width: 36rem) {
-  .steps:has(> article:nth-child(4)) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-/* A numeral, not a filled circle. The count is the only thing the number has to say, and three
-   accent discs down a page spend the accent on ordinal information. */
-.steps .n {
-  margin: 0 0 var(--s-3);
-  font: 500 var(--t-sm) / 1.3 var(--font-sans);
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-.steps h2 {
-  margin: 0 0 var(--s-2);
+.ideas h3,
+.for h3 {
+  margin: 0;
   font: 500 1.0625rem / 1.4 var(--font-sans);
   letter-spacing: normal;
+  color: var(--fg);
 }
-.steps p {
+.ideas p,
+.for p {
   margin: 0;
   color: var(--muted);
-  font-size: var(--t-sm);
   line-height: 1.65;
+  text-wrap: pretty;
+}
+/* Beside a loop the size of half the page, an idea's heading has to hold its own. */
+.ideas h3 {
+  font-size: 1.625rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+@media (max-width: 48rem) {
+  .ideas article,
+  .ideas article:nth-of-type(even) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-4);
+    padding: var(--s-6) 0;
+  }
+  .ideas article:nth-of-type(even) .idea-text {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+/* Who it is for: three peers in columns under a hairline each, no fills, so they read as one
+   team rather than three plans to pick between. */
+.for {
+  margin: var(--gap) auto 0;
+  max-width: 58rem;
+}
+.for > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--s-6);
+}
+.for article {
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line-strong);
+}
+.for h3 {
+  margin-bottom: var(--s-2);
+}
+.for p {
+  font-size: var(--t-sm);
+}
+.for code {
+  white-space: nowrap;
 }
 
 /* The claim restated as a pair, once, in the middle of the page. It carries no link and asks for
@@ -1992,15 +1977,11 @@ form.join label {
    adjusts. Keeping these last is what stops the file from growing descending-specificity pairs,
    where a later, plainer selector silently loses to an earlier, sharper one. */
 
-/* ---- guide prose -------------------------------------------------------------------------------
-   The body of a guide is the only long-form reading in the product, and the only place set in the
-   serif. Everything below styles HTML that came out of remark, from markdown a stranger wrote —
-   so it is written against the elements markdown can produce, not against one nice-looking guide.
-
-   The six canonical sections are marked by the renderer with `data-kind`. Only two are typeset
-   differently: Verification is what you check the work against, Gotchas is what bites you. The
-   rest are the author's argument and read as prose. A section nobody planned for carries no
-   attribute and renders as a plain heading, which is the whole point of doing it this way. */
+/* ---- document prose ----------------------------------------------------------------------------
+   The body of a piece of work is the only long-form reading in the product, and the only place set
+   in the serif. Everything below styles HTML that came out of remark, from markdown a stranger
+   wrote — so it is written against the elements markdown can produce, not against one nice-looking
+   document. No heading means anything here: every section reads as plain prose. */
 article.prose {
   font-family: var(--font-serif);
   font-size: 1.125rem;
@@ -2038,19 +2019,6 @@ article.prose h6 {
   font-size: 1.0625rem;
   line-height: 1.35;
   margin: var(--s-4) 0 var(--s-2);
-}
-
-article.prose h2[data-kind="verification"],
-article.prose h2[data-kind="gotchas"] {
-  border-left: 3px solid var(--line-strong);
-  padding-left: var(--s-4);
-  margin-left: calc(-1 * (var(--s-4) + 3px));
-}
-article.prose h2[data-kind="verification"] {
-  border-left-color: var(--ok);
-}
-article.prose h2[data-kind="gotchas"] {
-  border-left-color: var(--warn);
 }
 
 article.prose p {
@@ -2114,7 +2082,7 @@ article.prose .markdown-alert-tip {
   --alert: var(--ok);
 }
 article.prose .markdown-alert-important {
-  --alert: var(--accent);
+  --alert: var(--emphasis);
 }
 article.prose .markdown-alert-warning {
   --alert: var(--warn);
@@ -2141,7 +2109,7 @@ article.prose section[data-footnotes] > h2 {
 }
 
 /* Markdown has no caption syntax, so a standalone image's alt text becomes one — see figures() in
-   server/utils/guide-html.ts. Guides carry screenshots of the thing that was broken. */
+   server/utils/work-html.ts. Work carry screenshots of the thing that was broken. */
 article.prose figure {
   margin: var(--s-5) 0;
 }
@@ -2182,83 +2150,9 @@ article.prose td {
   vertical-align: top;
 }
 
-/* The verify view's fold. Everything it hides is still in the document. */
-article.prose details.rest {
-  margin: var(--s-6) 0;
-  border-top: 1px solid var(--line);
-  padding-top: var(--s-4);
-}
-article.prose details.rest > summary {
-  cursor: pointer;
-  font: 500 var(--t-sm) / 1.5 var(--font-sans);
-  color: var(--muted);
-}
-
-/* Somebody ran this guide and it did not hold. Above the Steps, and in the danger colour, because
-   it is the one thing a reader has to know before following them — the page showed no verdict at
-   all before this, so a guide already found broken read as authoritative and the only way to warn
-   anyone was to publish a second guide titled "Correction: …". */
-.notworking {
-  margin: 0 0 var(--s-6);
-  padding: var(--s-4);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-3);
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.notworking time {
-  font-variant-numeric: tabular-nums;
-}
-
-/* What people had to change to make this work. Not a warning — it held — so it is the page's own
-   quiet voice rather than the danger colour: read before you start, and worth less alarm than a
-   guide somebody could not get to work at all. */
-.adapted {
-  margin: 0 0 var(--s-6);
-  padding: var(--s-4);
-  border: 1px solid var(--line);
-  border-radius: var(--r-3);
-  background: var(--surface-raised);
-}
-
-.adapted time {
-  font-variant-numeric: tabular-nums;
-}
-
-.adapted-said {
-  margin: var(--s-2) 0 0;
-  font: var(--t-sm) / 1.7 var(--font-sans);
-  color: var(--fg);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* "ran" on a check the runner executed: its exit code decided the hand-in, so the badge is the
-   page's one claim of fact about that line. The command and what it returned are in the title. */
-.adapted-badge {
-  flex-shrink: 0;
-  padding: 0.1em 0.45em;
-  border: 1px solid var(--ok);
-  border-radius: var(--r-1);
-  color: var(--ok);
-  font: 600 var(--t-xs) / 1.4 var(--font-ui);
-}
-
-/* The seam in the verify view: the point where the guide stops being re-ordered and goes back to
-   the author's own sequence. Set apart from the prose because it is the page talking, not the
-   guide. */
-article.prose .handover {
-  margin: var(--s-7) 0 var(--s-5);
-  padding-top: var(--s-4);
-  border-top: 1px solid var(--line);
-  font: var(--t-sm) / 1.6 var(--font-sans);
-  color: var(--muted);
-}
-
 article.prose .note,
 .note.lead {
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--emphasis);
   padding-left: var(--s-4);
   color: var(--muted);
 }
@@ -2362,190 +2256,15 @@ tbody tr {
     border-color var(--motion) ease;
 }
 
-/* ---- follow-up dock -----------------------------------------------------------------------------
-   A guide with its follow-ups open beside it, one column each, like a TweetDeck column. Drawn by
-   the server from `?with=` — this page runs no script — so everything here is layout: columns in a
-   row that scrolls sideways, each column scrolling on its own, and on a phone one full-width column
-   at a time that snaps into place as you swipe. Nothing animates. */
-.dock {
-  display: flex;
-  height: 100dvh;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x proximity;
-  background: var(--surface);
-}
-/* An equal split that fills the screen: the guide and every open follow-up share the width, so one
-   follow-up is 50/50, two are thirds, three are quarters. Fixed widths left a wide screen with a
-   60/40 split and empty space beside it, and cut the last column off on a narrow one. No column goes
-   below 22rem, where a paragraph stops being readable; past that the dock scrolls sideways. Text
-   inside a wide column keeps a reading measure rather than running the full width. */
-.dock > main.dock-guide,
-.dock > .dock-col {
-  flex: 1 0 22rem;
-  min-width: 0;
-  height: 100%;
-  overflow-y: auto;
-  scroll-snap-align: start;
-  border-right: 1px solid var(--line);
-}
-.dock > main.dock-guide {
-  max-width: none;
-  margin: 0;
-  padding: 0 var(--s-5) var(--s-7);
-  background: var(--bg);
-}
-.dock > main.dock-guide > *,
-.dock-col-body {
-  max-width: 46rem;
-}
-.dock-col {
-  background: var(--surface-raised);
-}
-.dock-col-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s-2);
-  padding: var(--s-3) var(--s-4);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-raised);
-}
-.dock-col-body {
-  padding: var(--s-4) var(--s-4) var(--s-7);
-  font-size: var(--t-sm);
-}
-.dock-icon {
-  display: grid;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--r-1);
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 1rem;
-}
-.dock-icon:hover {
-  background: var(--surface);
-  color: var(--fg);
-}
-@media (max-width: 40rem) {
-  .dock {
-    scroll-snap-type: x mandatory;
-  }
-  .dock > main.dock-guide,
-  .dock > .dock-col {
-    flex: 0 0 100vw;
-  }
-}
-
-/* The dock's scrollbars. A row of columns has one scrollbar per column plus one along the bottom,
-   and the browser's default bar — a wide grey track on every one of them — turned the dock into a
-   stack of gutters. They are thin, take the line colour rather than their own grey, have no track,
-   and stay faint until you point at the column that scrolls. Scrolling itself is unchanged: wheel,
-   trackpad, keyboard and swipe all still work, and the bar is still there to grab. */
-.dock,
-.dock > main.dock-guide,
-.dock > .dock-col {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-  transition: scrollbar-color var(--motion) ease;
-}
-.dock:hover,
-.dock > main.dock-guide:hover,
-.dock > .dock-col:hover,
-.dock:focus-within {
-  scrollbar-color: var(--line-strong) transparent;
-}
-/* Engines without `scrollbar-color` (older Safari) take the same shape through the prefixed
-   pseudo-elements. */
-.dock::-webkit-scrollbar,
-.dock > main.dock-guide::-webkit-scrollbar,
-.dock > .dock-col::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.dock::-webkit-scrollbar-track,
-.dock > main.dock-guide::-webkit-scrollbar-track,
-.dock > .dock-col::-webkit-scrollbar-track {
-  background: transparent;
-}
-.dock::-webkit-scrollbar-thumb,
-.dock > main.dock-guide::-webkit-scrollbar-thumb,
-.dock > .dock-col::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-.dock:hover::-webkit-scrollbar-thumb,
-.dock > main.dock-guide:hover::-webkit-scrollbar-thumb,
-.dock > .dock-col:hover::-webkit-scrollbar-thumb {
-  background-color: var(--line-strong);
-}
-@media (prefers-reduced-motion: reduce) {
-  .dock,
-  .dock > main.dock-guide,
-  .dock > .dock-col {
-    transition: none;
-  }
-}
-
-/* The dock's motion. Opening or closing a follow-up is a page load — this page runs no script — so
-   the movement comes from cross-document view transitions, which the browser runs between the two
-   pages with CSS alone. Columns keep their place by position (the CSP allows no inline styles, so a
-   column cannot carry its own name): the columns already open slide and resize to their new widths,
-   a column that appears slides in from the right, one that goes fades out, and the guide moves
-   between its full-page layout and its column. A browser without cross-document view transitions
-   simply loads the page, as before. Off entirely for anyone who asked for less motion. */
+/* Moving between pages runs a cross-document view transition, with CSS alone: no page here needs
+   script for it. A browser without them simply loads the page. Off entirely for anyone who asked
+   for less motion. */
 @view-transition {
   navigation: auto;
-}
-main.guide-page {
-  view-transition-name: dock-guide;
-}
-.dock > section.dock-col:nth-of-type(1) {
-  view-transition-name: dock-col-1;
-}
-.dock > section.dock-col:nth-of-type(2) {
-  view-transition-name: dock-col-2;
-}
-.dock > section.dock-col:nth-of-type(3) {
-  view-transition-name: dock-col-3;
-}
-.dock > section.dock-col:nth-of-type(4) {
-  view-transition-name: dock-col-4;
 }
 ::view-transition-group(*) {
   animation-duration: 260ms;
   animation-timing-function: var(--ease-out);
-}
-@keyframes dock-in {
-  from {
-    opacity: 0;
-    transform: translateX(2.5rem);
-  }
-}
-@keyframes dock-out {
-  to {
-    opacity: 0;
-    transform: translateX(1.5rem);
-  }
-}
-::view-transition-new(dock-col-1):only-child,
-::view-transition-new(dock-col-2):only-child,
-::view-transition-new(dock-col-3):only-child,
-::view-transition-new(dock-col-4):only-child {
-  animation: dock-in 260ms var(--ease-out) both;
-}
-::view-transition-old(dock-col-1):only-child,
-::view-transition-old(dock-col-2):only-child,
-::view-transition-old(dock-col-3):only-child,
-::view-transition-old(dock-col-4):only-child {
-  animation: dock-out 180ms ease-in both;
 }
 /* Page to page, in the hub and between public pages alike: the bar stays put and only the page
    under it changes, the old one fading quickly and the new one settling in from a few pixels down.
@@ -2571,16 +2290,9 @@ main.guide-page {
   animation: page-in 220ms var(--ease-out) both;
 }
 
-/* The jump to a newly opened column, from its #f-<id> fragment. */
-.dock {
-  scroll-behavior: smooth;
-}
 @media (prefers-reduced-motion: reduce) {
   @view-transition {
     navigation: none;
-  }
-  .dock {
-    scroll-behavior: auto;
   }
 }
 
@@ -2656,8 +2368,8 @@ table.rows thead th {
     box-shadow var(--motion) ease;
 }
 .writer-shell:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--focus-halo);
 }
 .writer {
   font: 1rem / 1.55 var(--font-sans);
@@ -2704,4 +2416,166 @@ table.rows thead th {
   padding: 0 2px;
   background: var(--surface-raised);
   font-weight: 500;
+}
+/* A project document in the editor (components/hub/DocEditor.vue): set as it reads, in Onest at
+   body size, its headings below the page's own. Mono only inside code. */
+.doc-writer {
+  font: 0.9375rem / 1.65 var(--font-sans);
+  min-height: 28rem;
+  padding: var(--s-5) var(--s-6);
+  white-space: normal;
+}
+.doc-writer > * + * {
+  margin-top: var(--s-3);
+}
+.doc-writer h1 {
+  margin-bottom: 0;
+  font: 500 1.125rem / 1.4 var(--font-sans);
+  letter-spacing: -0.015em;
+}
+.doc-writer h2 {
+  margin-top: var(--s-5);
+  margin-bottom: 0;
+  font: 550 1rem / 1.4 var(--font-sans);
+  letter-spacing: -0.01em;
+}
+.doc-writer h3 {
+  margin-top: var(--s-4);
+  margin-bottom: 0;
+  font: 550 0.875rem / 1.4 var(--font-sans);
+  letter-spacing: 0;
+}
+.doc-writer p {
+  margin-bottom: 0;
+}
+.doc-writer :not(pre) > code {
+  padding: 0 3px;
+  border-radius: var(--r-1);
+  background: var(--surface-raised);
+  font: 0.8125rem / 1 var(--font-mono);
+}
+.doc-writer blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: var(--s-3);
+  border-left: 1px solid var(--line-strong);
+  color: var(--muted);
+}
+.doc-writer a {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.doc-writer hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.doc-writer li > p {
+  margin: 0;
+}
+
+/* The box (/hub/new): the editor is the page, so it starts tall and grows with what is written. */
+.writer-shell.box .writer {
+  min-height: 11rem;
+}
+@media (min-width: 64rem) {
+  .writer-shell.box .writer {
+    min-height: 20rem;
+  }
+}
+
+/* The reply box under a customer conversation: pinned to the window's foot, so it starts short and
+   scrolls inside itself before it can push the thread off the screen. */
+.writer-shell.reply .writer {
+  font-size: 0.9375rem;
+  min-height: 6rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+/* A board card that has just moved settles into the place the server gave it: a short rise from
+   where the drop left it, once. Nothing for those who asked for less motion. */
+@keyframes settle {
+  from {
+    opacity: 0.6;
+    transform: translateY(4px);
+  }
+}
+.settle {
+  animation: settle 200ms var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .settle {
+    animation: none;
+  }
+}
+
+/* A choice among a few, drawn as chips: unchosen is a hairline edge and muted text, chosen is ink
+   (the Chosen Rule). The radio inside stays in the page for the keyboard and a screen reader.
+   Used for a project's line colour and for where work comes from in Integrations. */
+.chip-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 2rem;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  color: var(--muted);
+  cursor: pointer;
+}
+.chip-pick input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+/* The same chip as a toggle button, for picking several (who is in a group): aria-pressed says it. */
+button.chip-pick {
+  background: transparent;
+  font: inherit;
+}
+.chip-pick:has(input:checked),
+.chip-pick[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.chip-pick:has(input:focus-visible),
+button.chip-pick:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* A field that takes a machine string (a repo): the value in mono, the hint in the sans, because a
+   placeholder is words to a person and not a value yet. The invite paste is the same. */
+.code-field {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+}
+.code-field::placeholder,
+.invite-paste input::placeholder {
+  font-family: var(--font-sans);
+}
+
+/* Setup's steps on a phone: a row that scrolls sideways, fading at its right edge to say it goes on. */
+@media (max-width: 767px) {
+  .setup-rail {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+    scrollbar-width: none;
+  }
+}
+
+/* A register's column labels in Settings: named once over the top, uppercase at the label size. */
+.register-label {
+  font: 500 0.6875rem / 1.4 var(--font-sans);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Below md the hub's places are a dock along the bottom, as on a phone app. */
+@media (max-width: 47.99rem) {
+  .hub-app {
+    --dock: calc(3.5rem + env(safe-area-inset-bottom));
+  }
 }

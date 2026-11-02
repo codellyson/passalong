@@ -5,15 +5,15 @@ import { test } from "node:test";
 import { HttpError, SignedOut, shouldRetry } from "../app/utils/http.ts";
 import { dropFromBoard, withStatus } from "../app/utils/optimistic.ts";
 
-const guide = (id, over = {}) => ({ id, mine: false, status: "published", ...over });
+const work = (id, over = {}) => ({ id, mine: false, status: "ready", ...over });
 const board = () => ({
-  waiting: [guide("a"), guide("b")],
+  waiting: [work("a"), work("b")],
   failing: [],
-  in_flight: [guide("c", { mine: true })],
+  in_flight: [work("c", { mine: true })],
   landed: [],
 });
 
-test("passing, answering or deleting takes a guide off the board", () => {
+test("passing, answering or deleting takes a piece of work off the board", () => {
   const b = dropFromBoard(board(), "a");
   assert.deepEqual(
     b.waiting.map((g) => g.id),
@@ -23,7 +23,7 @@ test("passing, answering or deleting takes a guide off the board", () => {
 });
 
 test("an archive is what the list would say once the server agrees", () => {
-  assert.equal(withStatus(guide("a"), "consumed").status, "consumed");
+  assert.equal(withStatus(work("a"), "done").status, "done");
 });
 
 test("a failed load is retried, but not a signed-out session or a refusal", () => {

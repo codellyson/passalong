@@ -4,10 +4,10 @@
 // that name a `footer` label. A draft page still renders — so it can be written and reviewed on the
 // real site — but it is `noindex`, has no canonical link, is left out of the sitemap and is not
 // linked from anywhere: the footer, the masthead's Docs link, the landing's closer and /connect all
-// ask `published()` first. Publishing one is flipping `draft` to false.
+// ask `isPublic()` first. Publishing one is flipping `draft` to false.
 //
 // The one place that cannot ask is public/llms.txt, which is a static file. test/public-pages.test.mjs
-// fails when it links a draft or misses a published page, so flipping the flag tells you to add the
+// fails when it links a draft or misses a live page, so flipping the flag tells you to add the
 // line there too.
 //
 // Anything not listed here is private by default: share links, the hub, invites, resets.
@@ -27,43 +27,46 @@ export interface PublicPage {
 }
 
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "/", draft: false, updated: "2026-10-03" },
+  { path: "/", draft: false, updated: "2026-10-30" },
   { path: "/mcp-server", draft: false, updated: "2026-10-03" },
   { path: "/connect", draft: false, updated: "2026-10-03" },
   { path: "/docs", draft: false, footer: "Docs", updated: "2026-10-14" },
-  { path: "/docs/guide-format", draft: false, footer: "Guide format", updated: "2026-10-14" },
+  { path: "/docs/work-format", draft: false, footer: "Work format", updated: "2026-10-29" },
   { path: "/docs/integrations", draft: false, footer: "Integrations", updated: "2026-10-14" },
   { path: "/faq", draft: false, footer: "FAQ", updated: "2026-10-03" },
-  // A draft until its first post is published. The posts themselves are content/blog/*.md, each
-  // with its own `draft`, and the sitemap lists the published ones once /blog is.
+  // A draft until its first post is live. The posts themselves are content/blog/*.md, each
+  // with its own `draft`, and the sitemap lists the live ones once /blog is.
   { path: "/blog", draft: true, footer: "Blog", updated: "2026-09-27" },
-  // The /learn guides, one entry each: content/learn/<slug>.md renders at its address either way,
+  // The /learn work, one entry each: content/learn/<slug>.md renders at its address either way,
   // and this flag is what indexes it.
   {
     path: "/learn/ai-agent-handoff",
     draft: false,
     footer: "Handing work to agents",
-    updated: "2026-10-03",
+    updated: "2026-10-30",
   },
-  { path: "/learn/handoff-md", draft: false, updated: "2026-10-03" },
-  { path: "/learn/write-tasks-for-ai-coding-agents", draft: false, updated: "2026-10-03" },
-  { path: "/learn/bug-report-template-for-ai-agents", draft: false, updated: "2026-10-03" },
+  { path: "/learn/handoff-md", draft: false, updated: "2026-10-30" },
+  { path: "/learn/write-tasks-for-ai-coding-agents", draft: false, updated: "2026-10-30" },
+  { path: "/learn/bug-report-template-for-ai-agents", draft: false, updated: "2026-10-30" },
   {
     path: "/learn/run-multiple-ai-coding-agents",
     draft: false,
     footer: "Running several agents",
-    updated: "2026-10-03",
+    updated: "2026-10-30",
   },
-  { path: "/learn/setup-claude-code", draft: false, updated: "2026-10-03" },
-  { path: "/learn/setup-codex", draft: false, updated: "2026-10-03" },
-  { path: "/learn/setup-chatgpt", draft: false, updated: "2026-10-03" },
-  { path: "/learn/setup-claude", draft: false, updated: "2026-10-03" },
-  { path: "/learn/passalong-vs-handoff-md", draft: false, updated: "2026-10-03" },
-  { path: "/learn/passalong-vs-issue-tracker", draft: false, updated: "2026-10-03" },
+  { path: "/learn/setup-claude-code", draft: false, updated: "2026-10-30" },
+  { path: "/learn/setup-codex", draft: false, updated: "2026-10-30" },
+  { path: "/learn/setup-chatgpt", draft: false, updated: "2026-10-30" },
+  { path: "/learn/setup-claude", draft: false, updated: "2026-10-30" },
+  { path: "/learn/passalong-vs-handoff-md", draft: false, updated: "2026-10-30" },
+  { path: "/learn/passalong-vs-issue-tracker", draft: false, updated: "2026-10-30" },
+  { path: "/learn/email-to-tasks-for-small-teams", draft: true, updated: "2026-10-30" },
+  { path: "/learn/ai-drafted-support-replies", draft: true, updated: "2026-10-30" },
+  { path: "/learn/product-knowledge-base-for-ai-agents", draft: true, updated: "2026-10-30" },
 ];
 
 /** Whether a page may be linked: listed here and no longer a draft. */
-export function published(path: string): boolean {
+export function isPublic(path: string): boolean {
   return PUBLIC_PAGES.some((p) => p.path === path && !p.draft);
 }
 

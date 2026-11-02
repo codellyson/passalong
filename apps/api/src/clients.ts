@@ -4,7 +4,7 @@
  * The server's rules deploy the minute they merge; the text that tells an agent how to follow them
  * ships inside the CLI and reaches a machine only when somebody reinstalls it. For two weeks that
  * gap was the product: a hand-in was refused with a rule, the stdio MCP on 0.9.0 still told agents
- * the opposite, and the agents did what the older text said — published a second guide to carry
+ * the opposite, and the agents did what the older text said — published a second work to carry
  * their evidence. The update notice existed and could not help, because `passalong mcp` never
  * prints one and an agent never reads stderr.
  *
@@ -31,29 +31,28 @@ export const CLIENT_HEADER = "x-passalong-version";
  *
  * Before that, 0.19.0, since it went `latest` on 2026-10-16. There is no review stage now: a hand-in is final
  * and needs proof, and older CLIs tell their agents a hand-in waits for review, describe the write-up
- * guide a task no longer needs, and have no `reopen`. 0.19.0 says finishing is final and shows proof.
+ * work a task no longer needs, and have no `reopen`. 0.19.0 says finishing is final and shows proof.
  *
- * Before that, 0.18.0, since it went `latest` on 2026-10-14. Every guide is now a draft until a person marks
- * it Ready, and an older CLI shares a handoff or bug as Ready, which the server refuses with a 409
- * an agent cannot get past. Older CLIs also answer `take` and `pass` with the retired ack rather
- * than holding the work. 0.18.0 shares every kind as a draft and takes every kind with a claim.
+ * Before that, 0.18.0, since it went `latest` on 2026-10-14. Every piece of work is now a draft until a person marks
+ * it Ready, and an older CLI shares work as Ready, which the server refuses with a 409
+ * an agent cannot get past. Older CLIs also answer `take` and `pass` without holding the work. 0.18.0 shares every kind as a draft and takes every kind with a claim.
  *
- * Before that, 0.16.0: agent-first folders, and the installed MCP and capture instructions. An
- * older stdio server has no folder tools, and a cached instruction can lead an agent to the old
- * guide rules.
+ * Before that, 0.16.0: agent-first projects, and the installed MCP and capture instructions. An
+ * older stdio server has no project tools, and a cached instruction can lead an agent to the old
+ * work rules.
  *
  * Before that, 0.15.0 since it went `latest` on 2026-10-08. Older CLIs file a bug or task for nobody when no
  * `--to` is given, so a member of a team records issues the team never sees; 0.15.0 sends them to
  * the current team.
  *
  * Before that, 0.13.1 since 0.14.0 went `latest` on 2026-10-08. 0.13.0 and older cannot file a bug against this
- * server: they write no `summary:`, a new guide without one is refused, and `file_bugs` has no field
+ * server: they write no `summary:`, a new work without one is refused, and `file_bugs` has no field
  * to give one — agents on them were publishing a bug by hand to get past it. 0.13.1 is the first
  * that says it. 0.14.0 adds nothing the server depends on, so it is not forced.
  *
  * Before that, 0.12.0 since it went `latest` on 2026-09-25: the first release that sends its
  * version, and the first whose follow-up note stopped telling agents to publish what they found as
- * a new guide.
+ * a new work.
  */
 export const MIN_CLIENT = "0.20.0";
 
@@ -122,9 +121,9 @@ export function tooOld(
 }
 
 /**
- * What wrote a guide, in one string: `cli@<version>`, `mcp`, `hub` or `api`.
+ * What wrote a piece of work, in one string: `cli@<version>`, `mcp`, `hub` or `api`.
  *
- * Stored on the guide row at every publish (migration 0035), so a malformed guide can be traced to
+ * Stored on the work row at every publish (migration 0035), so a malformed work can be traced to
  * the release that produced it. The surface is known from the credential, which the server checked
  * itself; the version is what the CLI said, and it is diagnostic, not a permission — nothing is
  * decided by it that `tooOld` does not already decide.

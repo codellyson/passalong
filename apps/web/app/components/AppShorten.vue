@@ -14,7 +14,7 @@ const props = defineProps<{ value: string | null | undefined; max?: number }>();
 const short = computed(() => shorten(props.value, props.max));
 const open = ref(false);
 
-// A row rebound to a different guide must not keep the last one's disclosure open.
+// A row rebound to a different work must not keep the last one's disclosure open.
 watch(
   () => props.value,
   () => {

@@ -10,12 +10,10 @@
 import {
   askedCopy,
   doneCopy,
-  FIX_AND_RESEND,
-  handoffCopy,
   hubUrl,
   openedCopy,
   repliedCopy,
-  verdictCopy,
+  sentToYouCopy,
 } from "./mail-copy.js";
 import { b, button, footnote, link, p, quote, shell } from "./mail-html.js";
 import { type MailEnv, sendMail } from "./mail-send.js";
@@ -29,11 +27,11 @@ const MUTED = "#6b6862";
 const seeEverything = (env: MailEnv) =>
   footnote(`See everything in one place: ${link("your hub", hubUrl(env.PUBLIC_ORIGIN))}.`);
 
-export function sendHandoff(
+export function sendSentToYou(
   env: MailEnv,
   o: { to: string; fromName: string; title: string; id: string; url: string; team: string },
 ) {
-  const copy = handoffCopy(o);
+  const copy = sentToYouCopy(o);
   return sendMail(
     env,
     o.to,
@@ -45,7 +43,7 @@ export function sendHandoff(
       eyebrow: copy.eyebrow,
       heading: o.title,
       body: [
-        button("Open the guide", o.url),
+        button("Open it", o.url),
         p(
           `Take it there when you start: nobody else can take it while you hold it, and ` +
             `${b(o.fromName)} sees you have it.`,
@@ -83,15 +81,15 @@ export function sendPulled(
       tone: "ok",
       body: [
         p("They have it. What's still open is whether it worked for them."),
-        button("Open the guide", o.url),
+        button("Open it", o.url),
       ],
       foot: [seeEverything(env)],
     }),
   );
 }
 
-/** Somebody who is not the author is done with a guide. */
-export function sendConsumed(
+/** Somebody who is not the author is done with a piece of work. */
+export function sendArchived(
   env: MailEnv,
   o: { to: string; byName: string; title: string; url: string },
 ) {
@@ -109,7 +107,7 @@ export function sendConsumed(
       tone: "ok",
       body: [
         p(`${b(o.byName)} is done with what you sent. Nothing is waiting on either of you.`),
-        button("Open the guide", o.url),
+        button("Open it", o.url),
       ],
       foot: [seeEverything(env)],
     }),
@@ -162,41 +160,7 @@ export function sendReplied(
       body: [
         quote(o.body, "ok"),
         p("Your agent reads it the next time it checks in.", MUTED),
-        button("Open the guide", o.url),
-      ],
-      foot: [seeEverything(env)],
-    }),
-  );
-}
-
-/** The verdict mail. A failure is the one notification nobody should have to go looking for. */
-export function sendVerdict(
-  env: MailEnv,
-  o: {
-    to: string;
-    byName: string;
-    title: string;
-    url: string;
-    ok: boolean;
-    note: string;
-  },
-) {
-  const copy = verdictCopy({ ...o, hub: hubUrl(env.PUBLIC_ORIGIN) });
-  return sendMail(
-    env,
-    o.to,
-    copy.subject,
-    copy.text,
-    shell({
-      origin: env.PUBLIC_ORIGIN,
-      preview: copy.preview,
-      eyebrow: copy.eyebrow,
-      heading: o.title,
-      tone: o.ok ? "ok" : "danger",
-      body: [
-        ...(o.note ? [quote(o.note, o.ok ? "ok" : "danger")] : []),
-        button("Open the guide", o.url),
-        ...(o.ok ? [] : [p(FIX_AND_RESEND, MUTED)]),
+        button("Open it", o.url),
       ],
       foot: [seeEverything(env)],
     }),

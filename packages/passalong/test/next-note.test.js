@@ -42,16 +42,16 @@ test("an answer to stop says so first, and nothing to say adds nothing", () => {
   assert.equal(nextNote({}), "");
 });
 
-// A session that fixed something on a branch the team can already see has crossed no boundary, and
-// "update the passalong" is not a request to publish one. Both are the same costly misread: a guide
-// nobody asked for, for work nobody has to repeat. The instructions have to say so before the tool
-// descriptions are read, so this pins them.
-test("the server tells an agent to check what it holds before publishing, and to ask when the ask is vague", async () => {
+// A session that finished something it holds should hand that in, not write a second piece of work
+// about it, and "update the passalong" is not a request to write anything in particular. The
+// instructions have to say so before the tool descriptions are read, so this pins them.
+test("the server tells an agent to check what it holds before writing, and to ask when the ask is vague", async () => {
   const { readFile } = await import("node:fs/promises");
   const src = await readFile(new URL("../src/mcp.js", import.meta.url), "utf8");
-  const instructions = src.slice(src.indexOf("instructions:"), src.indexOf("registerTool("));
-  assert.match(instructions, /BEFORE PUBLISHING ANYTHING/);
-  assert.match(instructions, /never publish a second guide about it/);
-  assert.match(instructions, /crossed no boundary/);
+  const instructions = src
+    .slice(src.indexOf("instructions:"), src.indexOf("registerTool("))
+    .replace(/"\s*\+\s*\n?\s*"/g, "");
+  assert.match(instructions, /BEFORE WRITING ANYTHING DOWN, CHECK WHAT IS ALREADY OPEN/);
+  assert.match(instructions, /never write a second piece of work about it/);
   assert.match(instructions, /Ask which/);
 });

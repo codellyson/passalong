@@ -52,7 +52,7 @@ export async function alertAdmins(env: AlertEnv, e: Omit<Event, "to" | "mail">):
 /**
  * The same notice for named accounts: a feed row each, mailed the first time. For what a person has
  * to act on or it is left behind — work that keeps going quiet, work nobody took — where the feed
- * alone is a place it can sit unread. The mail opens the guide when there is one, the admin page
+ * alone is a place it can sit unread. The mail opens the work when there is one, the admin page
  * when there is not. Never throws.
  */
 export async function alertPeople(
@@ -87,8 +87,8 @@ export async function alertPeople(
     };
     const text = line(facts);
     const origin = (env.PUBLIC_ORIGIN || "https://passalong.dev").replace(/\/$/, "");
-    const url = e.guide_id ? `${origin}/hub/g/${e.guide_id}` : `${origin}/admin`;
-    const label = e.guide_id ? "Open it" : "Open the admin page";
+    const url = e.work_id ? `${origin}/hub/w/${e.work_id}` : `${origin}/admin`;
+    const label = e.work_id ? "Open it" : "Open the admin page";
     for (const person of results)
       await notify(env, {
         ...e,

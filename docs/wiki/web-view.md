@@ -1,12 +1,12 @@
 # Web view
 
 `apps/web` is a Nuxt 4 app on a Cloudflare Worker. It serves every page a person looks at, and
-mounts the Hono app from `apps/api` for the machine routes. There is no editor, and guide pages run
+mounts the Hono app from `apps/api` for the machine routes. There is no editor, and work pages run
 no script at all.
 
 ## The constraint everything else follows from
 
-A guide page renders **markdown one person wrote, for another person to read**. That is a hostile
+A piece of work page renders **markdown one person wrote, for another person to read**. That is a hostile
 shape. Rather than trusting a sanitiser, the page's CSP makes anything script-like inert:
 
 ```
@@ -14,7 +14,7 @@ default-src 'none'; style-src 'self'; font-src 'self';
 img-src 'self' https: data:; manifest-src 'self'; base-uri 'none'; form-action 'none'
 ```
 
-Note what is missing: there is no `script-src` at all. That is only possible because `/` and `/g/**`
+Note what is missing: there is no `script-src` at all. That is only possible because `/` and `/w/**`
 carry the **`noScripts` route rule** (`nuxt.config.ts`), which drops Nuxt's entry script, its import
 map, the inlined payload and the JS resource hints. The page still server-renders; it simply never
 hydrates, so nothing on those routes may be interactive.
@@ -42,7 +42,7 @@ either:
 
 ```sh
 sh apps/web/scripts/probe.sh https://passalong.dev
-sh apps/web/scripts/probe.sh https://passalong.dev /g/<id>/<key>
+sh apps/web/scripts/probe.sh https://passalong.dev /w/<id>/<key>
 ```
 
 `font-src 'self'` is the reason the site can have typography at all: with `default-src 'none'` and
@@ -62,28 +62,28 @@ One thing to know before editing it: **it is lint-clean under `biome check`, inc
 rule added mid-file will usually trip that rule, and the fix is ordering, not `!important`.
 
 Fonts are self-hosted in `public/fonts/`, all OFL, latin subset. Onest (variable woff2) carries the
-interface. Newsreader (variable woff2, roman and a real italic) carries guide prose
+interface. Newsreader (variable woff2, roman and a real italic) carries work prose
 (`article.prose`), where the reading is long enough to earn a serif, and the italic turn in a
 landing headline. JetBrains Mono carries ids, tags and code. **The static `onest-{400,600}.woff`
 pair is not dead weight** — see OG cards below.
 
-## What a guide page does
+## What a piece of work page does
 
 `app/pages/g/[id]/[key].vue` produces two views of the same markdown:
 
-- **Full guide** — the whole thing, rendered in order.
+- **Full work** — the whole thing, rendered in order.
 - **Verify** (`?view=verify`) — leads with what the reader has to check and folds the
-  implementation into a `<details>`. `verifyLayout()` in `apps/api/src/guide.ts` decides what leads
-  and what folds; `server/utils/guide-html.ts` only turns that into HTML.
+  implementation into a `<details>`. `verifyLayout()` in `apps/api/src/work.ts` decides what leads
+  and what folds; `server/utils/work-html.ts` only turns that into HTML.
 
-A guide with no `Verification` section gets a note saying so. That is a feature: silently rendering
+A piece of work with no `Verification` section gets a note saying so. That is a feature: silently rendering
 it would hide the fact that nobody can tell whether it worked.
 
 It is a link, not a toggle, because these pages run no script.
 
-The Markdown pipeline (remark with GFM and GitHub's alerts, in `server/utils/guide-html.ts`) lives in
+The Markdown pipeline (remark with GFM and GitHub's alerts, in `server/utils/work-html.ts`) lives in
 the server util rather than the page, so it never enters the client bundle of a page that ships no
-client bundle. Raw HTML in a guide passes through unsanitised, as it did under `marked`: the policy,
+client bundle. Raw HTML in a piece of work passes through unsanitised, as it did under `marked`: the policy,
 not a sanitiser, is what keeps it inert.
 
 ## The hub
@@ -93,7 +93,7 @@ visible from the server: the session cookie is HttpOnly and the bearer token liv
 `localStorage`. So nothing is fetched during SSR. The first render is always the signed-out screen,
 and the client decides from there. Each state renders its own framing; there is no server-rendered
 heading that could describe only one of them, which is how a signed-out visitor once came to be
-told these were "Your transfers".
+told the list was theirs.
 
 `app/composables/useHub.ts` holds the state and every mutation. Status changes **reload rather than
 patch state by hand**: the board's buckets are defined in SQL, and guessing them on the client is
@@ -106,7 +106,7 @@ in the dev console.
 
 ## OG cards
 
-`apps/api/src/og.ts`, served at `/g/:id/:key/og.png` through the mount. A guide travels by being
+`apps/api/src/og.ts`, served at `/w/:id/:key/og.png` through the mount. A piece of work travels by being
 pasted into Slack or a DM, so the unfurl card is the first thing most people see of one.
 
 - `workers-og` (satori + resvg) is ~1.7MB of JS and wasm, so it is behind a **dynamic import** —
@@ -130,7 +130,7 @@ out under the old host must keep resolving.
 
 Serving an old link and creating a new one are different jobs, and only the first is worth keeping.
 `origin()` used to build each link from the host that served it, which meant the old host minted
-share links, invites, resets and screenshot URLs under its own name — one guide with two links,
+share links, invites, resets and screenshot URLs under its own name — one work with two links,
 each carrying a key, which is exactly what the `www` redirect exists to prevent. `PUBLIC_ORIGIN`
 now names the apex, so both hosts produce the same link and only the apex appears in anything new.
 

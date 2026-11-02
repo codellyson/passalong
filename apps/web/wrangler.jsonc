@@ -27,14 +27,14 @@
     }
   ],
 
-  // Outbound mail (handoffs, pulls, invites) through Cloudflare Email Service. No API key: the
+  // Outbound mail (work sent to someone, invites) through Cloudflare Email Service. No API key: the
   // binding is the credential. EMAIL_FROM's domain must be onboarded to Email Service, and
   // sending to addresses outside the account needs the Workers Paid plan.
   "send_email": [{ "name": "EMAIL" }],
 
   // The product's one database. Both halves used to bind it; now only this Worker does.
   // Hourly, at a minute nobody else picked. It was nightly, when the only scheduled work was
-  // deleting screenshots nobody attached to a guide; telling somebody their work has gone quiet
+  // deleting screenshots nobody attached to a piece of work; telling somebody their work has gone quiet
   // is the job that cares when it runs, and a lease lapses after thirty minutes. See
   // server/plugins/sweep.ts — the sweeps are idempotent and delete nothing sooner than their own
   // cutoffs allow, so running them twenty-four times as often changes how much they find, not
@@ -65,30 +65,30 @@
     //
     // `origin()` used to fall back to the request's own origin, so `passalong.kreativekorna.com`
     // minted share links, invite links, reset links and screenshot URLs under itself — which is
-    // the same problem the www route exists to avoid, one guide with two links and a share key in
+    // the same problem the www route exists to avoid, one piece of work with two links and a share key in
     // each. The old host keeps serving what was handed out before the move; it no longer creates
     // anything new.
     "PUBLIC_ORIGIN": "https://passalong.dev",
     "ENVIRONMENT": "production",
-    // The free tier, open again (2026-10-08). New accounts may keep FREE_SYNC_LIMIT guides synced
+    // The free tier, open again (2026-10-08). New accounts may keep FREE_SYNC_LIMIT work synced
     // without a plan; archived ones do not count. It was closed on 2026-09-11 to make Solo the way
     // in, and what that bought was a wall: a new account's first task was refused with "Syncing
-    // guides needs a plan" while Settings said paid plans were not available, so nobody got as far
+    // work needs a plan" while Settings said paid plans were not available, so nobody got as far
     // as seeing a task move. See docs/PRD.md §10.
     //
     // Set to "0" to close it again. That is the whole of the switch; see `ceilingFor` in quota.ts.
     // Accounts carrying `grandfathered` (migration 0016) were never affected either way.
     "FREE_SIGNUP": "1",
     // What a free account may keep synced: grandfathered ones always, and everyone else while the
-    // line above is "1". Local guides are unlimited; this gates the hosted copy.
+    // line above is "1". Local work are unlimited; this gates the hosted copy.
     "FREE_SYNC_LIMIT": "25",
-    // Sender for handoff/invite mail. Must be on a domain onboarded to Email Service.
+    // Sender for notification and invite mail. Must be on a domain onboarded to Email Service.
     "EMAIL_FROM": "no-reply@passalong.dev",
     // How the sender reads in an inbox list. Without it Gmail shows the local part, so every mail
     // arrived from "no-reply" — the one thing the sender cannot do, rather than who it is.
     "EMAIL_FROM_NAME": "Passalong",
-    // Email in (apps/api/src/inbound.ts): mail to <key>+task|bug|transfer@ this domain becomes a
-    // guide. Email Routing on the subdomain must send it to this Worker (a catch-all rule, "Send to
+    // Email in (apps/api/src/inbound.ts): mail to <key>+new@ or <key>+support@ this domain becomes
+    // work. Email Routing on the subdomain must send it to this Worker (a catch-all rule, "Send to
     // a Worker"); until it does, Settings shows the addresses and mail to them bounces.
     "INBOUND_DOMAIN": "in.passalong.dev"
   },

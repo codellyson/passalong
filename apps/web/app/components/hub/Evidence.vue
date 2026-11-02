@@ -1,7 +1,7 @@
 <!--
-  What a hand-in ran, as it was sent (docs/V2.md §11).
+  What a hand-in ran, as it was sent.
 
-  One renderer for both places evidence is read: the review pane and the handed-in row. Output
+  One renderer for everywhere evidence is read: what work was finished with, and the thread. Output
   stays monospace and literal — a reviewer is reading a terminal, and reflowing it would lose the
   alignment that makes it readable. Links are followable where they sit, and screenshots are drawn
   rather than printed as a URL nobody can see.
@@ -18,7 +18,7 @@ const props = defineProps<{
    * A check with no command behind it is the agent's sentence about what it saw, and the share
    * page says so by setting it in the reading face instead of the mono one. It still comes through
    * here, because a screenshot in it has to become a picture wherever it was written — that was
-   * the bug: the guide page printed `![Sales Order PDF](https://…/v1/shots/d2eg7b2xaqx7)` as text.
+   * the bug: the work page printed `![Sales Order PDF](https://…/v1/shots/d2eg7b2xaqx7)` as text.
    */
   prose?: boolean;
   /** What a screen reader calls this region. It was always "What it ran", which is wrong for a chat. */
@@ -53,6 +53,8 @@ const shots = computed(() => parts.value.filter((p) => p.kind === "shot").length
 /** Folded only when there is enough to be worth folding: a short run is just shown. */
 const long = computed(() => lines.value > FOLD + 4 || shots.value > 1);
 const open = ref(false);
+/** Pictures whose file is gone (proof is swept after a while): said in a line, not drawn broken. */
+const gone = ref(new Set<number>());
 
 /**
  * A screenshot, opened over the page at full size. The review is the whole point of proof, and a
@@ -103,7 +105,10 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
         <!-- A screenshot is the part of the evidence a reviewer reads fastest, so it is shown whole,
              capped at a thumbnail's height so one picture does not fill the page, and a click
              opens it full size over the page. -->
-        <figure v-else class="my-3 first:mt-0 last:mb-0">
+        <p v-else-if="gone.has(i)" class="my-3 font-ui text-xs text-muted first:mt-0 last:mb-0">
+          {{ p.alt || "A picture" }} · no longer available
+        </p>
+        <figure v-else class="mx-0 my-3 first:mt-0 last:mb-0">
           <a
             :href="p.url"
             target="_blank"
@@ -116,6 +121,7 @@ function enlarge(e: MouseEvent, url: string, alt: string) {
               :src="p.url"
               :alt="p.alt || 'a screenshot from the hand-in'"
               loading="lazy"
+              @error="gone = new Set(gone).add(i)"
               class="block max-h-72 w-auto max-w-full rounded-1 outline outline-image-edge"
             />
           </a>

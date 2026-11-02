@@ -80,6 +80,7 @@ jobs:
     if: >-
       github.event_name == 'push' && github.ref == 'refs/heads/master'
       && needs.check.outputs.deploy-ready == 'true'
+      && vars.PAUSE_DEPLOY != 'true'
     runs-on: ubuntu-latest
     environment: production
     # One deploy at a time, and a newer push supersedes a queued one.
@@ -99,10 +100,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Migrations still live with the schema in apps/api, and its wrangler.jsonc still names the
       # database. Only the deploy moved.
-      - name: Apply D1 migrations
-        run: pnpm -C apps/api db:migrate:remote
       - name: Build
         run: pnpm -C apps/web build
+      - name: Apply D1 migrations
+        run: pnpm -C apps/api db:migrate:remote
       - name: Deploy Worker
         run: pnpm -C apps/web run deploy
       - name: Smoke test
@@ -121,4 +122,5 @@ jobs:
           # The brand's class, not its whole attribute: utilities ride along on it (`brand shrink-0`),
           # and matching the full string failed a good deploy when one was added.
           curl -fsS https://passalong.dev/ | grep -qE 'class="brand[ "]'
-          curl -fsS https://passalong.dev/v1/me -o /dev/null -w '%{http_code}' | grep -q 401
+          # A 401 is expected; curl -f would fail the pipeline on success.
+          curl -sS https://passalong.dev/v1/me -o /dev/null -w '%{http_code}' | grep -qx 401
