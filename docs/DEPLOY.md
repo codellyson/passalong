@@ -1,6 +1,6 @@
 # Deploying Passalong
 
-Two deployables: the Worker (`apps/api`) and the npm package (`packages/passalong`). The Worker goes
+Two deployables: the Worker (`apps/web`) and the npm package (`packages/passalong`). The Worker goes
 first, because the package's default API URL points at it.
 
 ## Production shape
@@ -8,7 +8,7 @@ first, because the package's default API URL points at it.
 | Piece | Where | Config |
 | --- | --- | --- |
 | API + web view | Worker `passalong-web` on `passalong.dev` (and `passalong.kreativekorna.com`) | `apps/web/wrangler.jsonc` |
-| Database | D1 `passalong` (id `2b2c58a0-…`, WEUR) | binding in `apps/web`, migrations in `apps/api` |
+| Database | D1 `passalong` (id `1c3e3932-…`) | binding in `apps/web`, migrations in `apps/api` |
 | Screenshots | R2 `passalong-shots` — evidence attached to bug reports | `apps/web/wrangler.jsonc` |
 | Hourly cron | `17 * * * *` → `apps/web/server/plugins/sweep.ts` | sweeps, and tells an author when work has gone quiet |
 | CLI + MCP | npm `passalong`, binary `passalong` | `packages/passalong/package.json` |
@@ -53,7 +53,7 @@ It is the only way to catch runtime restrictions that local `workerd` does not e
 PBKDF2 iteration cap was found this way — but anything it writes is real. Clean up after yourself.
 
 **Analytics.** `APTABASE_KEY` is a Worker secret (`wrangler secret put APTABASE_KEY` in
-`apps/api`). Unset, nothing is sent — dev and anyone else's deployment stay silent. Events go
+`apps/web`). Unset, nothing is sent — dev and anyone else's deployment stay silent. Events go
 straight from the Worker to Aptabase's ingest endpoint; there is no SDK and no browser involvement,
 deliberately. See the rule about what may go in a prop in AGENTS.md before adding an event.
 
@@ -98,7 +98,7 @@ plan — so a subscription only takes effect once the event arrives.
 ## Preflight (run before every deploy)
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
 pnpm -r test                    # CLI + API unit tests
 pnpm -C apps/api lint           # tsc over the mounted app
 pnpm -C apps/web lint           # vue-tsc over the pages, and apps/api through the mount
@@ -107,15 +107,21 @@ pnpm -C apps/web build          # the dry run needs the build output to exist
 pnpm -C apps/web deploy:check   # wrangler dry run: bindings, assets, routes
 ```
 
-## Cutover: 1.0 (migrations 0061–0068, passalong 0.22.0)
+## Cutover: 1.0 (migrations 0061–0068, passalong 1.0.0)
 
 1.0 is one model and one set of words: work, projects, documents, files and proof; the statuses
 `draft`, `ready` and `done`; `/v1/work` and `/v1/projects`; share links `/w/:id/:key` and
 `/p/:id/:key`. It removes kinds and about forty-five agent tools (docs/WORK.md), and **migration
 0068 renames the tables, columns, indexes, statuses and notification kinds** to those words. Two
 things stop working, by decision: **every share link minted before 0068** (the old link paths are
-not served) and **every CLI below 0.22.0** (the routes it calls are gone). Do it in this order, by
+not served) and **every CLI below 1.0.0** (the routes it calls are gone). Do it in this order, by
 hand, not through an unattended CI push:
+
+Before merging the cutover, set the repository variable `PAUSE_DEPLOY=true` (`gh variable set
+PAUSE_DEPLOY --body true`). CI still runs every check, but cannot migrate or deploy while the
+CLI waits for npm approval. Build and dry-run the Worker before opening the migration window.
+Merge the tested branch, then run `pnpm release major` from clean, synchronized `master` to stage
+1.0.0. Wait until a maintainer is ready to approve that staged package before proceeding below.
 
 1. **Bookmark the database.** D1 Time Travel restores to any minute in the last 30 days, but a
    bookmark taken now is the exact point to go back to:
@@ -140,8 +146,8 @@ hand, not through an unattended CI push:
      "SELECT status, COUNT(*) AS n FROM work GROUP BY status"     # draft, ready, done only
    ```
 
-3. **Deploy the Worker** (`pnpm -C apps/web build && pnpm -C apps/web run deploy`) and run the
-   checks under "Verify" below. From here installed CLIs below 0.22.0 fail on every call; that
+3. **Deploy the already-built Worker** (`pnpm -C apps/web run deploy`) and run the
+   checks under "Verify" below. From here installed CLIs below 1.0.0 fail on every call; that
    window should be minutes.
 4. **Move the project files.** R2 keeps each project file at `projects/<project>/<file>` now; until
    this runs, a project's files answer 404. Look first, then act (it copies, reads the copy back,
@@ -152,12 +158,14 @@ hand, not through an unattended CI push:
    node scripts/move-project-files.mjs --apply   # ends "failed 0"
    ```
 
-5. **Release the CLI.** `passalong` 0.22.0 to npm (section 2), approve the staged version, and
-   check `npx -y passalong@latest version` prints 0.22.0.
-6. **Raise the floor.** Set `MIN_CLIENT` in `apps/api/src/clients.ts` to `"0.22.0"`, commit, and
+5. **Publish the staged CLI.** Approve passalong 1.0.0 on npm (section 2), and
+   check `npx -y passalong@latest version` prints 1.0.0.
+6. **Raise the floor.** Set `MIN_CLIENT` in `apps/api/src/clients.ts` to `"1.0.0"`, commit, and
    deploy again. Every older CLI now gets the 426 with the install command instead of a bare
    failure. Never before step 5: a floor above what npm hands out refuses every agent with nothing
    it can install.
+7. **Resume automatic deployment.** Remove `PAUSE_DEPLOY` (`gh variable delete PAUSE_DEPLOY`)
+   only after production smoke checks pass and the client floor is deployed.
 
 To undo before step 6: `npx wrangler rollback` in `apps/web` and
 `npx wrangler d1 time-travel restore passalong --bookmark=<bookmark>`. A restore discards every
@@ -192,7 +200,7 @@ Verify:
 ```sh
 curl -s https://passalong.dev/health                 # {"ok":true}
 curl -s https://passalong.kreativekorna.com/health   # {"ok":true} — the old host still answers
-curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/g/abcdefgh/wrongkey0000000000000000   # 404
+curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/w/abcdefgh/wrongkey0000000000000000   # 404
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://passalong.dev/v1/accounts   # 400: needs a real invite code
 curl -s -o /dev/null -w '%{http_code}\n' https://passalong.dev/v1/tokens   # 401 unauthenticated
 curl -sI https://www.passalong.dev/ | head -1        # 308 to the apex
@@ -216,7 +224,7 @@ Then switch your own machine from the local Worker to production:
 passalong login            # approve this machine in the signed-in hub
 ```
 
-Rollback: `wrangler rollback` in `apps/api`, or `wrangler deployments list` to pick a version.
+Rollback: `wrangler rollback` in `apps/web`, or `wrangler deployments list` to pick a version.
 Migrations are forward-only; write a new migration rather than editing an applied one.
 
 ### Signing in locally without making an account
@@ -309,7 +317,7 @@ and runs `claude mcp add passalong -- passalong mcp`, so those two paths are par
 
 - Update the README install line if the package name changes.
 - The free-tier cap is `FREE_SYNC_LIMIT` in `wrangler.jsonc`; account creation is throttled to
-  5 per IP per minute via the `ACCOUNT_LIMIT` rate-limit binding.
+  15 per IP per minute via the `ACCOUNT_LIMIT` rate-limit binding.
 
 ### Raising one account's limit
 

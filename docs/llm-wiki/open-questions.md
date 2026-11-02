@@ -21,8 +21,8 @@ page it belongs to, and into [decisions.md](decisions.md).
 - **The loop** — [docs/LOOP.md](../LOOP.md) §0 build order. Step 1, one thing: work, is built
   (2026-10-29). Next: the agent tidies the board (closes finished work, archives abandoned work,
   judges hand-ins, and the proof gate goes), then onboarding, then projects as the home of all work.
-- **Cutover for one thing, work** — migrate production (0061, 0062) behind a Time Travel bookmark,
-  deploy, publish passalong 0.22.0, then raise `MIN_CLIENT` to 0.22.0 ([docs/DEPLOY.md](../DEPLOY.md)).
+- **Cutover for one thing, work** — migrate production (0061–0068) behind a Time Travel bookmark,
+  deploy, publish passalong 1.0.0, then raise `MIN_CLIENT` to 1.0.0 ([docs/DEPLOY.md](../DEPLOY.md)).
   Until then installed CLIs call routes and tools that are gone.
 
 ## Known gaps

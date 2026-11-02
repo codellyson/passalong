@@ -6,7 +6,7 @@ send. Sending to a customer is the one deliberate exception: the hub only.
 
 ## CLI — `packages/passalong`
 
-Published to npm as `passalong` (0.22.0 speaks work). Plain ESM, few flags on purpose. Work lives on
+Published to npm as `passalong` (1.0.0 speaks work). Plain ESM, few flags on purpose. Work lives on
 the server and the CLI keeps no copy unless asked: `take --save` writes `.passalong/<id>.md`, and
 `export` walks `GET /v1/export`. Writing work needs an account. `tidy()` clears copies older CLIs
 left, once per machine. Prints the id on stdout and everything else on stderr, so
@@ -19,7 +19,7 @@ left, once per machine. Prints the id on stdout and everything else on stderr, s
 - `passalong setup` installs the Claude Code capture skill, the MCP server and hooks. The skill writes
   what a session learned into the project's documents, with a line on its Log — never a document for one person.
 - **Too old is refused, not warned.** Every call carries `x-passalong-version`; below `MIN_CLIENT`
-  (currently 0.20.0; 0.22.0 once it is `latest` on npm) the API answers 426 with the install
+  (currently 0.20.0; 1.0.0 once it is `latest` on npm) the API answers 426 with the install
   command. An agent never reads stderr, so the refusal is the one text it is sure to see. The
   package release is staged by CI and requires a maintainer's npm approval.
 

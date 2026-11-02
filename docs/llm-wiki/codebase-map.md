@@ -10,7 +10,8 @@ Three pieces, **one Worker**, one origin, one deploy.
 
 `apps/web/server/middleware/1.api.ts` hands `/v1/*`, `/health` and the two `/w/**` machine routes to
 the Hono app and lets everything else fall through to Nuxt. `apps/api/wrangler.jsonc` survives only
-because `wrangler d1 migrations` reads it; CI applies migrations before each deploy.
+because `wrangler d1 migrations` reads it; CI builds before applying migrations and deploying. The repository variable `PAUSE_DEPLOY=true`
+keeps checks running but pauses production changes during the 1.0 cutover.
 
 ## Where a concept lives
 
