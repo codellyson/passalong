@@ -23,7 +23,13 @@ export const CLIENT_HEADER = "x-passalong-version";
  * deploys on merge, and a floor above what npm hands out refuses every agent with nothing it can
  * install to get past it.
  *
- * 0.20.0, since it went `latest` on 2026-10-16. An agent may hold several things now, and older
+ * 1.0.0, since it went `latest` on 2026-11-02. Work is one thing now: no kinds, no sections, no
+ * templates, and an older CLI tells its agent the opposite — it files under a kind the server no
+ * longer has, pads a short note out to a template, and calls `approve`, `reject`, `done`, `share`
+ * and `task`, which went. 1.0.0 is `new`, `board` and the 17 tools over work, project, document
+ * and file.
+ *
+ * Before that, 0.20.0, since it went `latest` on 2026-10-16. An agent may hold several things now, and older
  * CLIs tell it the opposite: their session-start hook steers a new session onto whatever the
  * worktree holds, their Stop hook blocks it over another session's work, and their instructions
  * say to check what you hold with a no-id take, which now claims new work. 0.20.0 lists every hold,
@@ -54,7 +60,7 @@ export const CLIENT_HEADER = "x-passalong-version";
  * version, and the first whose follow-up note stopped telling agents to publish what they found as
  * a new work.
  */
-export const MIN_CLIENT = "0.20.0";
+export const MIN_CLIENT = "1.0.0";
 
 /**
  * What a CLI that sends no version is counted as: the last release that did not send one.
