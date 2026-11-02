@@ -85,6 +85,25 @@ async function mark(as: "done" | "skipped") {
   if (next) await router.push({ query: { step: next.id } });
   else await navigateTo({ path: "/hub", query: { setup: "done" } });
 }
+/**
+ * "Finish later": leave setup without answering a step. It has to say so to the server, because
+ * /hub sends anyone back here who has no team and has touched nothing — so a plain link to /hub
+ * bounced straight back and the only way out was to Skip something.
+ */
+const leaving = ref(false);
+async function finishLater() {
+  problem.value = "";
+  leaving.value = true;
+  try {
+    const got = await api<{ setup: SetupState }>("/v1/me/setup", json("PUT", { deferred: true }));
+    if (got && me.value) setMe({ ...me.value, setup: got.setup });
+    await navigateTo("/hub");
+  } catch (e) {
+    problem.value = (e as Error).message;
+    leaving.value = false;
+  }
+}
+
 /** Skip on "What to know" with words typed asks first, naming whose words would go. */
 const skipAsk = ref(false);
 async function skip() {
@@ -443,7 +462,7 @@ const label = "font-ui text-sm font-medium text-fg";
             <span class="tabular-nums">{{ doneCount }} of {{ STEPS.length }}</span> done · skip anything, it's saved as you go
           </p>
         </div>
-        <NuxtLink to="/hub" class="font-ui text-sm text-muted">Finish later</NuxtLink>
+        <button type="button" class="font-ui text-sm text-muted" :disabled="leaving" @click="finishLater">Finish later</button>
       </div>
 
       <div v-if="invitedOnly" class="flex flex-col gap-3 border-t border-fg py-8">

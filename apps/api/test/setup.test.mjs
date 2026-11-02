@@ -47,7 +47,12 @@ test("0066 puts setup away for accounts already in a team, and only them", async
   run(sql, files.slice(at));
   const db = d1(sql);
   assert.equal((await getSetup(db, "lead")).dismissed, true);
-  assert.deepEqual(await getSetup(db, "loner"), { done: [], skipped: [], dismissed: false });
+  assert.deepEqual(await getSetup(db, "loner"), {
+    done: [],
+    skipped: [],
+    dismissed: false,
+    deferred: false,
+  });
 });
 
 test("steps are remembered, and done outranks skipped", async () => {
@@ -59,22 +64,43 @@ test("steps are remembered, and done outranks skipped", async () => {
   await saveSetup(db, "new", { step: "groups", as: "skipped" });
   await saveSetup(db, "new", { step: "team", as: "skipped" });
   let s = await getSetup(db, "new");
-  assert.deepEqual(s, { done: ["team"], skipped: ["groups"], dismissed: false });
+  assert.deepEqual(s, { done: ["team"], skipped: ["groups"], dismissed: false, deferred: false });
   await saveSetup(db, "new", { step: "groups", as: "done" });
   s = await saveSetup(db, "new", { dismissed: true });
-  assert.deepEqual(s, { done: ["team", "groups"], skipped: [], dismissed: true });
+  assert.deepEqual(s, { done: ["team", "groups"], skipped: [], dismissed: true, deferred: false });
 });
 
 test("a change is refused by name, and a stored value it cannot hold reads as not started", () => {
   assert.match(setupProblem({ step: "billing", as: "done" }), /no setup step called "billing"/);
   assert.match(setupProblem({ step: "team", as: "maybe" }), /done or skipped/);
   assert.match(setupProblem({ dismissed: "yes" }), /true or false/);
+  assert.match(setupProblem({ deferred: "later" }), /true or false/);
+  assert.equal(setupProblem({ deferred: true }), "");
   assert.equal(setupProblem({ step: "know", as: "skipped" }), "");
-  assert.deepEqual(readSetup("{nope"), { done: [], skipped: [], dismissed: false });
+  assert.deepEqual(readSetup("{nope"), {
+    done: [],
+    skipped: [],
+    dismissed: false,
+    deferred: false,
+  });
   assert.deepEqual(readSetup('{"done":["team","ghost"],"skipped":["team"]}'), {
     done: ["team"],
     skipped: [],
     dismissed: false,
+    deferred: false,
   });
   assert.deepEqual(applySetup(readSetup(""), { step: "inbox", as: "skipped" }).skipped, ["inbox"]);
+});
+
+test("Finish later is remembered on its own, and does not put the register away", async () => {
+  const sql = new DatabaseSync(":memory:");
+  run(sql, files);
+  addAccount(sql, "later");
+  const db = d1(sql);
+  const s = await saveSetup(db, "later", { deferred: true });
+  assert.deepEqual(s, { done: [], skipped: [], dismissed: false, deferred: true });
+  // It survives a read, so /hub stops sending them back on every later visit too.
+  assert.equal((await getSetup(db, "later")).deferred, true);
+  // And a step answered afterwards leaves it alone.
+  assert.equal((await saveSetup(db, "later", { step: "team", as: "done" })).deferred, true);
 });
