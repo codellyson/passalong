@@ -143,7 +143,9 @@ minted before it stop working.
 - **16 tools over HTTP.** `/v1/mcp` has every tool but `accounts`: there the bearer token is the
   account, so there is nothing to list or switch. Stdio has all 17.
 - **`key+new@` without a reader** files by the fixed rule: titled by its subject, the mail quoted as
-  it came, sent to the team without a group. The reader is a deployment's configuration
+  it came with its pictures after it, sent to the team without a group. So does `key+new@` when the
+  reader is there but cannot sort it this time (a timeout, an error, an answer no check passes): it
+  used to be logged and lost, and the fixed rule used to drop the pictures. The reader is a deployment's configuration
   (`READER_*`), not something every install has.
 - **Report sets.** A set whose bugs were all Done became Done parent work (`outcome = finished`), so
   the untaken reminder does not chase it; every other set became Ready parent work.

@@ -183,6 +183,16 @@ export function emailBody(a: {
   });
 }
 
+/**
+ * Pictures after the words, each drawn where it is named, the way the box places a paste. For mail
+ * filed by the fixed rule, whose screenshots used to be dropped: the reader saw them, and a mail it
+ * could not sort lost them with the rest of it.
+ */
+export function withPictures(markdown: string, pictures: string[]): string {
+  if (!pictures.length) return markdown;
+  return `${markdown.trimEnd()}\n\n${pictures.map((u, n) => `![picture ${n + 1}](${u})`).join("\n")}\n`;
+}
+
 export interface Received {
   /** The sender as people know it: the From header's address, lowercased. */
   sender: string;
